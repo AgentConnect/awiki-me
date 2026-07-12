@@ -6,8 +6,18 @@ import '../../app/app_services.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../friends/friends_provider.dart';
+import '../app_shell/providers/session_provider.dart';
+import 'peer_display_profile_provider.dart';
 import 'profile_provider.dart';
 import '../../domain/entities/user_profile.dart';
+
+final peerPublicProfileProvider = FutureProvider.autoDispose
+    .family<UserProfile, String>((ref, did) {
+      return ref
+          .watch(profileApplicationServiceProvider)
+          .loadPublicProfile(did)
+          .timeout(const Duration(seconds: 12));
+    });
 
 class PeerProfileState {
   const PeerProfileState({
@@ -56,9 +66,7 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     state = state.copyWith(isLoading: true, clearError: true);
     final UserProfile profile;
     try {
-      profile = await ref
-          .read(profileApplicationServiceProvider)
-          .loadPublicProfile(did);
+      profile = await ref.read(peerPublicProfileProvider(did).future);
     } catch (error) {
       if (!mounted) {
         return;
@@ -69,6 +77,14 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     if (!mounted) {
       return;
     }
+    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    ref
+        .read(peerDisplayProfileProvider.notifier)
+        .updateFromRemote(
+          ownerDid: ownerDid,
+          profile: profile,
+          requestedDid: did,
+        );
     state = state.copyWith(profile: profile, clearError: true);
 
     try {
@@ -114,8 +130,16 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
 
   Future<void> unfollow() async {
     state = state.copyWith(isActionBusy: true);
-    await ref.read(friendsProvider.notifier).unfollow(did);
-    state = state.copyWith(relationship: 'none', isActionBusy: false);
+    try {
+      await ref.read(friendsProvider.notifier).unfollow(did);
+      if (mounted) {
+        state = state.copyWith(relationship: 'none');
+      }
+    } finally {
+      if (mounted) {
+        state = state.copyWith(isActionBusy: false);
+      }
+    }
   }
 
   void showLinkOpenError(Object error) {

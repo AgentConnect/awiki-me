@@ -41,6 +41,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../unit/test_support.dart' as test_support;
 import '../support/fake_app_bootstrap.dart';
+import '../../case_attestation.dart';
 
 const String _messageAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
@@ -305,7 +306,10 @@ void runMessageAgentRealBackendE2e() {
     (tester) async {
       final config = _MessageAgentRealBackendConfig.tryLoad();
       if (config == null || !config.realBackend) {
-        return;
+        fail(
+          'Message Agent full UI acceptance requires a real-backend runner '
+          'config and cannot pass as a skipped/no-op test.',
+        );
       }
       if (!File(config.daemonBinary).existsSync()) {
         fail('daemon binary was not found: ${config.daemonBinary}');
@@ -407,6 +411,14 @@ void runMessageAgentRealBackendE2e() {
         await agents.load();
         await _pumpFrame(tester);
         expect(find.text('Hermes Message Agent'), findsWidgets);
+        await E2eCaseAttestationWriter.markPassed(
+          'MSGAGENT-E2E-001',
+          phases: const <String>[
+            'daemon_selected_in_ui',
+            'message_agent_enabled_in_ui',
+            'binding_active_verified',
+          ],
+        );
 
         final sourceText =
             'message agent ui real backend ${config.runId} ${DateTime.now().millisecondsSinceEpoch}';
@@ -444,6 +456,14 @@ void runMessageAgentRealBackendE2e() {
         await _waitForMessageAgentRuntimeFinalInApp(
           tester: tester,
           sourceText: sourceText,
+        );
+        await E2eCaseAttestationWriter.markPassed(
+          'MSGAGENT-E2E-002',
+          phases: const <String>[
+            'cli_peer_message_sent',
+            'app_history_exact_source_verified',
+            'runtime_final_visible_in_app',
+          ],
         );
 
         await _tapFirstFound(tester, <Finder>[
@@ -485,6 +505,14 @@ void runMessageAgentRealBackendE2e() {
           userDid: session.did,
           daemonDid: install.daemonDid,
         );
+        await E2eCaseAttestationWriter.markPassed(
+          'MSGAGENT-E2E-004',
+          phases: const <String>[
+            'revoke_action_confirmed_in_ui',
+            'user_service_binding_revoked',
+            'daemon_binding_revoked',
+          ],
+        );
       } finally {
         if (daemon != null) {
           _terminateProcess(daemon);
@@ -494,9 +522,6 @@ void runMessageAgentRealBackendE2e() {
         await tester.binding.setSurfaceSize(null);
       }
     },
-    // Message Agent daemon-detail management UI is hidden; lifecycle code
-    // remains below the UI layer.
-    skip: true,
     timeout: const Timeout(Duration(minutes: 15)),
   );
 }

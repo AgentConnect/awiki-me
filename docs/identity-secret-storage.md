@@ -3,155 +3,100 @@
 Status: active  
 Authority: authoritative for AWiki Me App-side identity vault integration
 
-本文档记录 AWiki Me 当前如何接入 Flutter SDK / Rust `im-core` 的 identity
-SecretVault，以及 App 代码必须遵守的本地 secret 边界。SDK、CLI 和 daemon 的完整端侧方案见
-`awiki-cli-rs2/docs/architecture/identity-secret-storage.md`。
+本文档记录 AWiki Me 首发 Storage Scope runtime 如何接入 Flutter SDK / Rust
+`im-core` SecretVault。长期 locator、schema 与 lifecycle 以
+[Storage Scope / Keychain / Vault Contract](storage-scope-vault-contract.md) 为准；平台细节见
+[Scope Secret Platform Provider](scope-secret-platform.md)。
 
-## 1. 当前结论
-
-AWiki Me 不直接读写 DID 私钥、JWT 文件、vault record 或 daemon subkey package
-文件。App 只负责提供 no-prompt root key 和稳定 host context，然后用
-`VaultRequired` 打开 Dart SDK：
+## 1. 当前架构
 
 ```text
-AWiki Me
-  -> StoredAwikiImCoreVaultSecretProvider
-    -> one namespace-scoped secret bundle
+Tenant Registry
+  -> immutable storage_scope_id
+    -> storage-scopes/<uuid>/im-core/identity-vault
+    -> platform account scope/<uuid>
+    -> workspace awiki-me.scope.v1.<uuid>
+    -> device context awiki-me.scope-device.v1.<uuid>
       -> AwikiImCoreOpenOptions.vaultRequired
-        -> packages/awiki_im_core
-          -> im-core identity SecretVault
+        -> im-core identity SecretVault
 ```
 
-`im-core` 拥有 DID 私钥、E2EE static key material、auth/JWT state、daemon
-subkey package persistence 和 Direct E2EE session/prekey local state 的加密落盘。App
-层只做 root key provider、身份激活前校验和错误处理。
+租户显示名称、backend URL、DID Host、`awiki.ai` 和 `tenant-default` 都不参与上述 locator。
+App 不直接读写 DID 私钥、JWT 文件、vault record、Direct E2EE key material 或 daemon
+subkey package。
 
-## 2. Root Key Provider
+## 2. Provision 与 OpenExisting
 
-生产和普通 custom state root 使用 `SecureAppKeyValueStore`，底层为平台 secure storage；
-macOS 通过 App 的 native Keychain bridge 写入一个 namespace-scoped item。App 只保存打开
-vault 所需的最小 host secret/context：
+只有 `StorageScopeProvisioner` 可以生成 root key，并通过
+`ScopeSecretRepository.createExclusive` 创建 envelope v1。Runtime 的顺序固定为：
 
-- `awiki_me.im_core.identity_vault.<namespace>.secrets_v1`
+1. 按 Registry 找到 active profile 与 `storage_scope_id`；
+2. 校验 ready manifest、owner 与 scope path；
+3. `readExisting(scopeId)` 并严格解码 envelope；
+4. 由 scope UUID 派生 workspace/device context；
+5. 使用 `VaultRequired` 打开 im-core；
+6. 枚举已有 identity，逐个调用 `verifyIdentityVault`；
+7. 只有全部通过后才向 App 暴露 runtime。
 
-`secrets_v1` 的值是一个结构化 JSON bundle：
+Runtime 没有 `getOrCreate`、upsert、legacy scan 或 migration。missing、denied、corrupt、scope
+mismatch、unknown schema、wrong root、metadata/context mismatch 全部 fail closed。已有 scope 缺 key
+返回 `vault_key_missing`，绝不生成替代 key。
 
-```json
-{
-  "schema": 1,
-  "root_key_b64": "...",
-  "device_id": "app-device-..."
-}
-```
+## 3. 平台与宿主隔离
 
-root key 是 32-byte 随机值，只在打开 SDK 时作为 `DeviceVaultRootKey` 传给 Dart SDK。它不能进入
-App ordinary JSON state、日志、UI、E2E report、generated DTO dump 或测试 fixture。
-device id 是稳定 host context，和 root key 一起放入同一个 bundle，避免 macOS 为同一
-namespace 的多个 Keychain item 分别弹出授权。
+- macOS/iOS/Android production application identity：`ai.awiki.awikime`；
+- debug/profile：`ai.awiki.awikime.dev`；
+- production service：`ai.awiki.awikime.scope-secrets`；
+- development service：`ai.awiki.awikime.dev.scope-secrets`；
+- account：`scope/<canonical-uuid-v4>`；
+- E2E：显式 state root 下 `awiki-me/e2e-scope-secrets/<scope>.json`，目录 `0700`、文件和锁 `0600`。
 
-当前版本不迁移、不读取、也不删除旧的拆分 key：
+App、CLI、daemon 是独立 host，不共享 secure-storage item、root key 或 locator namespace。
 
-- `awiki_me.im_core.identity_vault.<namespace>.root_key_b64`
-- `awiki_me.im_core.identity_vault.<namespace>.device_id`
+## 4. 身份验证 Gate
 
-这是一次不向后兼容的本地 vault secret 存储模型调整。旧本地 vault 数据不会被新版本自动恢复；
-需要重新登录、重新注册或重新导入身份。
+`AwikiImCoreRuntime.open()` 会验证所有已有 identity；身份激活前
+`ensureIdentityVault()` 还会再次调用 `verifyIdentityVault`。App 按 SDK 的 stable error code
+处理 unavailable、metadata missing/unverified、workspace/device mismatch、record-open 和
+verification failure，不解析 human message，也不执行旧 identity migration。
 
-只有显式 E2E mode，也就是设置 `AWIKI_E2E_APP_STATE_ROOT` 时，App 才使用
-`awiki_me_im_core_vault.json` 私有 file test provider。这个 JSON 可能包含 `secrets_v1`
-bundle 以及其中的 base64 root key，必须留在本地并保持 untracked。
+## 5. Tenant 切换与本地状态
 
-普通 `appStateRoot` override 不会把 root key 移到 JSON；它仍使用平台 secure
-storage provider。
+切换顺序是 stop realtime → 等待 active core operations → dispose client/core → close Product
+SQLite → open new scope。旧 runtime 完全释放前不得打开新 runtime。Product DB、attachments、
+active identity、im-core state/cache/temp 都从统一 `AwikiStorageScopeLayout` 获取或由 scope UUID
+派生，不能自行拼接域名目录。
 
-## 3. Vault Context
+切换 active tenant 或修改 active tenant route 时先生成未持久化 registry candidate；只有旧
+runtime 已释放且 candidate runtime 已成功打开后，才用 revision CAS 提交 registry。打开或提交
+失败时销毁 candidate，并按旧 registry 重新打开原 scope，避免“UI 回滚但磁盘已切换”的半提交。
 
-App state namespace 决定 vault 目录、workspace id 和 device id：
+## 6. E2E 与发布 Gate
 
-```text
-<app support>/im-core/<namespace>/identity-vault
-vaultWorkspaceId = awiki-me-<namespace>
-deviceId = app-device-<stable-random>
-```
-
-`AwikiImCoreRuntime.open()` 的顺序：
-
-1. 创建并验证 App / im-core 路径。
-2. 从 `StoredAwikiImCoreVaultSecretProvider` 读取或创建单个 `secrets_v1` bundle，并从
-   bundle 获取 root key 和 device id。
-3. 用 `AwikiImCoreOpenOptions.vaultRequired(...)` 打开 `AwikiImCore`。
-
-如果 bundle 损坏、root key 长度不对，或 strict file provider 已存在但缺少 `secrets_v1`，
-App 必须 fail closed，不重新生成一个新 root key 覆盖已有状态。
-
-## 4. 身份激活 Gate
-
-App 在切换 active identity 前必须先验证 vault：
-
-```text
-identityVaultStatus
-  -> migrateIdentityVault when legacy metadata is absent
-  -> verifyIdentityVault
-  -> switchIdentity
-  -> ensureSession
-```
-
-当前实现入口：
-
-- `lib/src/data/im_core/awiki_im_core_runtime.dart`
-- `lib/src/application/app_session_service.dart`
-
-重要事项：
-
-- `identityVaultStatus` 显示已有 vault metadata 但 metadata 无法选择或验证时，App
-  fail closed。
-- App 不能先切换 active session，再补做 vault verify。
-- App 不能在 verify 失败后用新 root key 重新 seal 旧明文。
-
-## 5. Daemon Subkey Bootstrap 例外
-
-当前 App bootstrap path 仍可能收到 daemon subkey private key plaintext DTO，例如
-`user_subkey_package.private_key_pem`。这是临时传输兼容例外，不代表本地持久化可以明文：
-
-- 传输层后续应改为端到端加密 bootstrap envelope。
-- 即使传输暂时明文，daemon 接收后的持久化也必须用 daemon SecretVault 的 vault ref
-  存储，不能写明文 DB 字段。
-- App 侧日志、UI、E2E report 和 debug dump 不能输出该 DTO 中的 private key。
-
-## 6. E2E 和测试状态
-
-E2E runner 设置 `AWIKI_E2E_APP_STATE_ROOT` 后，Flutter shim 使用
-`awiki_me_im_core_vault.json` 保存 App-local `secrets_v1` bundle。该文件在 E2E
-状态目录下，必须保持本地私有。
+Native smoke 覆盖显式 provision、native `VaultRequired` open、同一进程重新创建 runtime 后读取同一
+root，以及删除 key 后 openExisting 不重建。Debug smoke 不是 production Team-signing 或真实 App
+进程重启证据；`scripts/run_macos_production_scope_restart_gate.sh` 是独立 release Gate：每个阶段重新
+构建并用同一稳定 identity签名production bundle，分别启动 provision/reopen/cleanup App进程，校验
+Team/bundle identity、dev/prod service隔离、revision 1持续存在和duplicate create拒绝。
 
 相关测试：
 
-- `tests/unit/bootstrap_test.dart`
+- `tests/unit/data/storage/`
 - `tests/unit/data/im_core/awiki_im_core_secret_storage_test.dart`
 - `tests/unit/data/im_core/awiki_im_core_runtime_test.dart`
-- `tests/unit/application/app_session_service_test.dart`
+- `tests/unit/data/tenant/app_tenant_store_test.dart`
+- `tests/unit/tenant_runtime_transition_test.dart`
 - `tests/e2e/flutter/native/im_core_open_smoke_test.dart`
-
-涉及 App identity vault 的变更应至少运行：
-
-```bash
-dart analyze
-dart run tests/unit/runner.dart
-dart run tests/e2e/runner.dart --case full
-```
+- `tests/e2e/flutter/native/secure_storage_smoke_test.dart`
+- `tests/e2e/flutter/native/production_scope_restart_probe.dart`
 
 ## 7. 安全红线
 
-AWiki Me 代码不得：
+AWiki Me 不得：
 
-- 直接读取 `private.key`、`key-*-private.pem`、`auth.json`、vault record 或
-  daemon subkey package 文件。
-- 在 App ordinary JSON state 中保存 identity vault root key。
-- 在日志、UI、E2E report、performance trace、error detail 或 generated DTO dump 中输出
-  root key、private key、JWT、bearer token、raw `SecretRef`、Direct E2EE session/prekey
-  secret 或 daemon subkey plaintext DTO。
-- 假设 CLI、daemon 和 App 能读取同一个系统 keychain item。App、CLI、daemon 是不同宿主进程，
-  必须各自有自己的 no-prompt root key provider。
-
-允许 App 输出的诊断只包括 redacted 状态，例如 vault 是否可用、metadata 是否存在/已验证、
-warning code、missing item、workspace/device context 和测试 provider 类型。
+- 读取预发布 split item、namespace bundle 或域名目录作为 production fallback；
+- 在 ordinary JSON、日志、UI、E2E report、performance trace、error detail 或 DTO dump 中输出
+  envelope、root key、private key、JWT、bearer token、raw `SecretRef` 或 Direct E2EE secret；
+- 在 verify/open 失败后生成新 root key、回退明文或重跑旧 migration；
+- 将删除 Keychain item 宣称为已经物理擦除 SQLite/attachments；
+- 假设 App、CLI、daemon 可以读取同一个平台 secret。

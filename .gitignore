@@ -85,6 +85,7 @@ venv/
 /awiki_me/
 /icons/
 /dist/
+/coverage/
 /.e2e/
 /awiki_e2e.local.yaml
 # Local E2E configuration files

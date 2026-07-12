@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "2026-07-10.flutter-unit-branch-baseline-v1",
+  "overall": {
+    "minimumLinePercent": 76.5,
+    "minimumBranchPercent": 61.8
+  },
+  "files": {
+    "lib/src/presentation/chat/chat_provider.dart": {
+      "minimumLinePercent": 78.5,
+      "minimumBranchPercent": 65.8
+    },
+    "lib/src/presentation/conversation_list/conversation_provider.dart": {
+      "minimumLinePercent": 91.0,
+      "minimumBranchPercent": 83.0
+    },
+    "lib/src/presentation/friends/friends_provider.dart": {
+      "minimumLinePercent": 86.0,
+      "minimumBranchPercent": 72.0
+    },
+    "lib/src/application/message_sync_service.dart": {
+      "minimumLinePercent": 100.0,
+      "minimumBranchPercent": 100.0
+    },
+    "lib/src/application/relationship_application_service.dart": {
+      "minimumLinePercent": 100.0,
+      "minimumBranchPercent": 100.0
+    }
+  }
+}

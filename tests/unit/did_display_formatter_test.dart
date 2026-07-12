@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/shared/formatters/display_formatters.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,84 @@ void main() {
         ),
       ),
       'bob.awiki.ai',
+    );
+  });
+
+  test('relationship title prefers nickname then Handle then DID', () {
+    expect(
+      DidDisplayFormatter.relationshipTitle(
+        const RelationshipSummary(
+          did: 'did:wba:awiki.ai:user:alice:e1_key',
+          displayName: 'Alice',
+          handle: 'alice.awiki.ai',
+          relationship: 'following',
+        ),
+      ),
+      'Alice',
+    );
+    expect(
+      DidDisplayFormatter.relationshipTitle(
+        const RelationshipSummary(
+          did: 'did:wba:awiki.ai:user:bob:e1_key',
+          displayName: 'did:wba:awiki.ai:user:bob:e1_key',
+          handle: '@bob.awiki.ai',
+          relationship: 'follower',
+        ),
+      ),
+      'bob.awiki.ai',
+    );
+    expect(
+      DidDisplayFormatter.relationshipTitle(
+        const RelationshipSummary(
+          did: 'did:wba:awiki.ai:user:carol:e1_key',
+          displayName: '',
+          relationship: 'follower',
+        ),
+      ),
+      'carol',
+    );
+  });
+
+  test('compactDidPath preserves DID path and fingerprint tail', () {
+    const did =
+        'did:wba:awiki.ai:user:alice:e1_abcdefghijklmnopqrstuvwxyz0123456789';
+
+    final compact = DidDisplayFormatter.compactDidPath(did);
+
+    expect(compact, startsWith('did:wba:awiki.ai:user:alice:e1_'));
+    expect(compact, contains('…'));
+    expect(compact, endsWith('yz0123456789'));
+    expect(compact.length, lessThan(did.length));
+  });
+
+  test('profile handle label prefers fullHandle and name stays secondary', () {
+    const profile = UserProfile(
+      did: 'did:wba:awiki.ai:alice:e1_key',
+      displayName: 'Alice Zhang',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'alice',
+      fullHandle: '@alice.awiki.ai',
+    );
+
+    expect(DidDisplayFormatter.profileHandleLabel(profile), '@alice.awiki.ai');
+    expect(DidDisplayFormatter.secondaryProfileName(profile), 'Alice Zhang');
+  });
+
+  test('profile metadata cleaner only removes exact handle and DID lines', () {
+    const markdown = '''
+# About me
+
+我的短号(handle)：alice.awiki.ai
+DID: did:wba:awiki.ai:alice:e1_key
+
+I use DID: examples in free-form prose.
+''';
+
+    expect(
+      DidDisplayFormatter.withoutRedundantIdentityMetadata(markdown),
+      '# About me\n\nI use DID: examples in free-form prose.',
     );
   });
 

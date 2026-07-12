@@ -1,0 +1,1331 @@
+part of '../desktop_cli_peer_e2e.dart';
+
+/// A small page object for real desktop product actions.
+///
+/// It only performs visible input, tap, navigation, lifecycle, and drop
+/// operations. Business services remain read-only oracles outside this class.
+class _DesktopAppRobot {
+  _DesktopAppRobot(this.tester);
+
+  final WidgetTester tester;
+
+  ProviderContainer get container =>
+      ProviderScope.containerOf(tester.element(find.byType(AppShell)));
+
+  ConversationSummary get selectedConversation {
+    final selected = container.read(selectedConversationProvider);
+    if (selected == null) {
+      fail('No conversation is selected in the App UI.');
+    }
+    return selected;
+  }
+
+  Future<void> activate(AppSession session) async {
+    await container
+        .read(appRuntimeProvider.notifier)
+        .activateSession(session.toLegacySessionIdentity());
+    await pumpUntil(
+      description: 'authenticated App shell',
+      condition: () =>
+          find.bySemanticsIdentifier('e2e-authenticated').evaluate().length ==
+          1,
+    );
+  }
+
+  Future<ConversationSummary> startDirectConversation(String peerHandle) async {
+    await tapOne(
+      find.byKey(const Key('start-conversation-button')),
+      description: 'start conversation button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('identity-lookup-input')),
+      description: 'identity lookup input',
+    );
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      peerHandle,
+    );
+    await tapOne(
+      find.byKey(const Key('identity-lookup-search-button')),
+      description: 'identity lookup search button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('identity-start-chat-button')),
+      description: 'resolved start-chat action',
+      enabled: true,
+    );
+    await tapOne(
+      find.byKey(const Key('identity-start-chat-button')),
+      description: 'start-chat action',
+    );
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-chat-input'),
+      description: 'chat composer after start conversation',
+    );
+    final selected = selectedConversation;
+    if (selected.isGroup || (selected.targetDid?.trim().isEmpty ?? true)) {
+      fail('UI resolved an invalid direct conversation: $selected');
+    }
+    return selected;
+  }
+
+  Future<void> sendText(String content) async {
+    final input = find.bySemanticsIdentifier('e2e-chat-input');
+    await pumpUntilFinder(input, description: 'chat input');
+    final inputField = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntilFinder(
+      inputField,
+      description: 'enabled chat input',
+      enabled: true,
+    );
+    await _enterExactComposerText(
+      inputField,
+      content,
+      description: 'chat message input',
+    );
+    await tapOne(
+      find.bySemanticsIdentifier('e2e-chat-send-button'),
+      description: 'chat send button',
+    );
+    await _waitForComposerClear(input, description: 'text send completion');
+  }
+
+  Future<void> retryFailedText() async {
+    final retry = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is Key &&
+          widget.key.toString().contains('chat-retry-message:'),
+      description: 'failed message retry action',
+    );
+    await tapOne(retry, description: 'failed message retry action');
+  }
+
+  Future<void> expectMessageContentVisible(
+    ChatMessage message, {
+    String? expectedText,
+  }) async {
+    final text = expectedText ?? message.content;
+    final content = find.byKey(Key('chat-message-content:${message.localId}'));
+    await pumpUntilFinder(
+      content,
+      description: 'message content container ${message.localId}',
+    );
+    await pumpUntilFinder(
+      find.descendant(
+        of: content,
+        matching: find.text(text, findRichText: true),
+      ),
+      description: 'message ${message.localId} exact visible text "$text"',
+    );
+    expectExactlyOneVisibleMessageContent(
+      localId: message.localId,
+      expectedText: text,
+    );
+  }
+
+  Future<String> sendMention({
+    required String handle,
+    required String suffix,
+  }) async {
+    final input = find.bySemanticsIdentifier('e2e-chat-input');
+    final inputField = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntilFinder(
+      inputField,
+      description: 'enabled mention composer field',
+      enabled: true,
+    );
+    await _enterExactComposerText(
+      inputField,
+      '@',
+      description: 'mention trigger input',
+    );
+    try {
+      await pumpUntilFinder(
+        find.byKey(const Key('chat-mention-candidate-panel')),
+        description: 'mention candidate panel for typed @ trigger',
+      );
+    } on Object catch (error) {
+      final selected = selectedConversation;
+      final groupDid = selected.groupId?.trim();
+      if (groupDid == null || groupDid.isEmpty) {
+        fail('Mention panel failed without a canonical selected group: $error');
+      }
+      final field = tester.widget<CupertinoTextField>(inputField);
+      final value = field.controller?.value ?? const TextEditingValue();
+      final trigger = ChatMentionTrigger.detect(
+        text: value.text,
+        selectionBaseOffset: value.selection.baseOffset,
+        selectionExtentOffset: value.selection.extentOffset,
+        composingStart: value.composing.start,
+        composingEnd: value.composing.end,
+        isGroup: selected.isGroup,
+      );
+      final members = await container
+          .read(groupApplicationServiceProvider)
+          .listMembers(groupDid, limit: 100);
+      final session = container.read(sessionProvider).session;
+      final candidates = ChatMentionCandidate.forGroupMembers(
+        members,
+        query: handle,
+        currentUserDid: session?.did,
+        currentUserHandle: session?.handle,
+      );
+      final matchingMembers = members
+          .where((member) {
+            return normalizeDidOrHandleInput(member.handle).toLowerCase() ==
+                normalizeDidOrHandleInput(handle).toLowerCase();
+          })
+          .toList(growable: false);
+      fail(
+        'Mention candidate panel was not visible; member_count='
+        '${members.length} matching_member_count=${matchingMembers.length} '
+        'candidate_count=${candidates.length} target_active_count='
+        '${matchingMembers.where((member) => member.membershipStatus == GroupMemberMembershipStatus.active).length} '
+        'target_human_count='
+        '${matchingMembers.where((member) => member.subjectType == GroupMemberSubjectType.human).length} '
+        'selected_is_group=${selected.isGroup} input_exact_at='
+        '${value.text == '@'} selection_collapsed_at_end='
+        '${value.selection.isCollapsed && value.selection.end == value.text.length} '
+        'trigger_detected=${trigger != null}.',
+      );
+    }
+    await _enterExactComposerText(
+      inputField,
+      '@$handle',
+      description: 'mention filter input',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('chat-mention-candidate-panel')),
+      description: 'filtered mention candidate panel',
+    );
+    final candidate = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is Key &&
+          widget.key.toString().contains('chat-mention-candidate-') &&
+          !widget.key.toString().contains('candidate-panel'),
+      description: 'enabled mention candidate',
+    );
+    await pumpUntilFinder(candidate, description: 'mention candidate');
+    await tester.tap(candidate.first);
+    await tester.pump();
+    final field = tester.widget<CupertinoTextField>(
+      find.byType(CupertinoTextField).last,
+    );
+    final selectedSurface = field.controller?.text ?? '';
+    if (!selectedSurface.startsWith('@') || selectedSurface.trim().isEmpty) {
+      fail('Mention candidate did not update the composer.');
+    }
+    await _enterExactComposerText(
+      inputField,
+      '$selectedSurface $suffix',
+      description: 'mention message input',
+    );
+    await tapOne(
+      find.bySemanticsIdentifier('e2e-chat-send-button'),
+      description: 'mention send button',
+    );
+    await _waitForComposerClear(input, description: 'mention send completion');
+    return '$selectedSurface $suffix';
+  }
+
+  Future<void> _waitForComposerClear(
+    Finder input, {
+    required String description,
+  }) async {
+    final field = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntil(
+      description: description,
+      condition: () {
+        final elements = field.evaluate().toList(growable: false);
+        if (elements.length != 1 ||
+            elements.single.widget is! CupertinoTextField) {
+          return false;
+        }
+        final widget = elements.single.widget as CupertinoTextField;
+        return widget.controller?.text.isEmpty ?? false;
+      },
+    );
+  }
+
+  Future<void> _enterExactComposerText(
+    Finder field,
+    String value, {
+    required String description,
+  }) async {
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      await pumpUntilFinder(
+        field,
+        description: 'enabled $description',
+        enabled: true,
+      );
+      await tester.tap(field);
+      await tester.pump();
+      await tester.showKeyboard(field);
+      tester.testTextInput.enterText(value);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      final widget = tester.widget<CupertinoTextField>(field);
+      if (widget.controller?.text == value) {
+        return;
+      }
+      await tester.pump(Duration(milliseconds: 150 * (attempt + 1)));
+    }
+    final widget = tester.widget<CupertinoTextField>(field);
+    final observed = widget.controller?.value ?? const TextEditingValue();
+    fail(
+      'Composer did not retain exact $description after three bounded visible '
+      'input attempts; expected_length=${value.length} observed_length='
+      '${observed.text.length} selection_collapsed_at_end='
+      '${observed.selection.isCollapsed && observed.selection.end == observed.text.length}.',
+    );
+  }
+
+  Future<void> navigateToContacts() => tapOne(
+    find.bySemanticsIdentifier('e2e-contacts-tab'),
+    description: 'Contacts tab',
+  );
+
+  Future<void> navigateToMessages() => tapOne(
+    find.bySemanticsIdentifier('e2e-messages-tab'),
+    description: 'Messages tab',
+  );
+
+  Future<void> refreshRelationshipProjection({
+    required String peerDid,
+    required bool expectedFollowing,
+  }) async {
+    await container.read(friendsProvider.notifier).refresh();
+    final actual = container.read(friendsProvider).isFollowing(peerDid);
+    if (actual != expectedFollowing) {
+      fail(
+        'Refreshed UI relationship projection for the exact peer did not '
+        'match expected following=$expectedFollowing.',
+      );
+    }
+  }
+
+  Future<void> expectConversationUnreadBadge({
+    required String conversationId,
+    required int unreadCount,
+  }) async {
+    if (unreadCount <= 0) {
+      fail('Unread badge oracle requires a positive count, got $unreadCount.');
+    }
+    final row = find.byKey(Key('conversation-row:$conversationId'));
+    await pumpUntilFinder(
+      row,
+      description: 'conversation row $conversationId',
+      timeout: const Duration(seconds: 90),
+    );
+    final unreadBadge = find.descendant(
+      of: row,
+      matching: find.byKey(const Key('conversation-preview-tag-unread')),
+    );
+    await pumpUntilFinder(
+      unreadBadge,
+      description: 'conversation row unread badge',
+    );
+    final l10n = AppLocalizations.of(tester.element(unreadBadge));
+    final countLabel = unreadCount > 999 ? '999+' : '$unreadCount';
+    final expectedLabel = l10n.conversationsUnreadTag(countLabel);
+    final exactLabel = find.descendant(
+      of: unreadBadge,
+      matching: find.text(expectedLabel),
+    );
+    await pumpUntilFinder(
+      exactLabel,
+      description:
+          'conversation row exact localized unread badge "$expectedLabel"',
+    );
+    expect(exactLabel, findsOneWidget);
+  }
+
+  Future<void> openConversationRow(String conversationId) => tapOne(
+    find.byKey(Key('conversation-row:$conversationId')),
+    description: 'conversation row $conversationId',
+  );
+
+  Future<ConversationSummary> openContactConversation(String peerDid) async {
+    await navigateToContacts();
+    await container.read(friendsProvider.notifier).refresh();
+    await tester.pump();
+    final row = find.byKey(Key('contact-row:${peerDid.trim()}'));
+    if (row.evaluate().isEmpty) {
+      await tapOne(
+        find.byKey(const Key('friends-following-view-all')),
+        description: 'following contacts view-all action',
+      );
+    }
+    await tapOne(row, description: 'exact contact row');
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-chat-input'),
+      description: 'chat composer after contact-row open',
+      timeout: const Duration(seconds: 90),
+    );
+    final selected = selectedConversation;
+    if (selected.isGroup || selected.targetDid?.trim() != peerDid.trim()) {
+      fail('Contact row opened the wrong Direct peer: $selected');
+    }
+    if (!selected.effectiveConversationId.startsWith('dm:peer-scope:v1:')) {
+      fail('Contact row did not open a canonical peer-scope conversation.');
+    }
+    return selected;
+  }
+
+  Future<void> openSelectedPeerInfo() async {
+    await tapOne(
+      find.byKey(const Key('chat-peer-info-avatar-button')),
+      description: 'peer info button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('peer-info-dialog-handle-value')),
+      description: 'handle-first peer identity header',
+    );
+  }
+
+  Future<void> followSelectedPeer() async {
+    await openSelectedPeerInfo();
+    await pumpUntilFinder(
+      find.byKey(const Key('chat-follow-button')),
+      description: 'follow button',
+    );
+    await tapOne(
+      find.byKey(const Key('chat-follow-button')),
+      description: 'follow button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('chat-unfollow-button')),
+      description: 'following state',
+    );
+    expect(
+      find.byKey(const Key('chat-relationship-action-progress')),
+      findsNothing,
+      reason: 'follow mutation must release its busy indicator',
+    );
+  }
+
+  Future<void> unfollowSelectedPeer() async {
+    final unfollow = find.byKey(const Key('chat-unfollow-button'));
+    await pumpUntilFinder(unfollow, description: 'unfollow button');
+    await tapOne(unfollow, description: 'unfollow button');
+    await pumpUntilFinder(
+      find.byKey(const Key('confirm-unfollow-button')),
+      description: 'unfollow confirmation',
+    );
+    await tapOne(
+      find.byKey(const Key('confirm-unfollow-button')),
+      description: 'confirm unfollow',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('chat-follow-button')),
+      description: 'unfollowed state',
+    );
+    expect(
+      find.byKey(const Key('chat-relationship-action-progress')),
+      findsNothing,
+      reason: 'unfollow mutation must release its busy indicator',
+    );
+  }
+
+  Future<void> closePeerInfo() => tapOne(
+    find.byKey(const Key('peer-info-close-button')),
+    description: 'peer info close button',
+  );
+
+  Future<ConversationSummary> createGroup(String name) async {
+    await navigateToContacts();
+    await pumpUntilFinder(
+      find.byKey(const Key('friends-groups-row')),
+      description: 'Groups row',
+    );
+    await tapOne(
+      find.byKey(const Key('friends-groups-row')),
+      description: 'Groups row',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('group-list-create-button')),
+      description: 'create group button',
+    );
+    await tapOne(
+      find.byKey(const Key('group-list-create-button')),
+      description: 'create group button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('create-group-name-input')),
+      description: 'group name input',
+    );
+    await tester.enterText(
+      find.byKey(const Key('create-group-name-input')),
+      name,
+    );
+    await tapOne(
+      find.byKey(const Key('create-group-submit-button')),
+      description: 'create group submit button',
+    );
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-chat-input'),
+      description: 'new group chat composer',
+      timeout: const Duration(seconds: 90),
+    );
+    final selected = selectedConversation;
+    if (!selected.isGroup || (selected.groupId?.trim().isEmpty ?? true)) {
+      fail('UI group creation did not select a canonical group: $selected');
+    }
+    final groupDid = selected.groupId!.trim();
+    await pumpUntil(
+      description: 'canonical group conversation projection',
+      timeout: const Duration(seconds: 90),
+      condition: () {
+        final current = selectedConversation;
+        return current.isGroup &&
+            current.groupId?.trim() == groupDid &&
+            current.threadId.trim() == 'group:$groupDid' &&
+            current.effectiveConversationId == 'group:$groupDid';
+      },
+    );
+    return selectedConversation;
+  }
+
+  Future<void> addGroupMember(String handle) async {
+    final preflight = await container
+        .read(directoryApplicationServiceProvider)
+        .resolvePeer(handle);
+    if (preflight.did.trim().isEmpty) {
+      fail('Read-only group member preflight returned no DID.');
+    }
+    final expectedHandles = <String>{
+      normalizeDidOrHandleInput(handle).toLowerCase(),
+      if (preflight.handle?.trim().isNotEmpty ?? false)
+        normalizeDidOrHandleInput(preflight.handle!).toLowerCase(),
+    };
+    await tapOne(
+      find.byKey(const Key('chat-header-add-group-member-button')),
+      description: 'add group member button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('identity-lookup-input')),
+      description: 'group member lookup input',
+    );
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      handle,
+    );
+    final search = find.byKey(const Key('identity-lookup-search-button'));
+    final addMember = find.byKey(const Key('identity-add-group-member-button'));
+    final dialog = find.ancestor(
+      of: addMember,
+      matching: find.byType(AppDialogScaffold),
+    );
+    final candidateLabel = find.byWidgetPredicate((widget) {
+      if (widget is! Text || widget.data == null) {
+        return false;
+      }
+      return expectedHandles.contains(
+        normalizeDidOrHandleInput(widget.data!).toLowerCase(),
+      );
+    });
+    final candidateTile = find.descendant(
+      of: dialog,
+      matching: find.byType(AppPressableTile),
+    );
+    final exactCandidateLabel = find.descendant(
+      of: candidateTile,
+      matching: candidateLabel,
+    );
+    Object? lastResolutionError;
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      await pumpUntilFinder(
+        search,
+        description: 'group member search action',
+        enabled: true,
+      );
+      await tapOne(search, description: 'group member search action');
+      try {
+        await pumpUntilFinder(
+          candidateTile,
+          description: 'exact resolved group member candidate',
+          enabled: true,
+          timeout: const Duration(seconds: 20),
+        );
+        if (exactCandidateLabel.evaluate().isEmpty) {
+          fail(
+            'Resolved group member candidate did not render an exact handle.',
+          );
+        }
+        lastResolutionError = null;
+        break;
+      } on Object catch (error) {
+        lastResolutionError = error;
+        if (attempt < 2) {
+          await pumpUntilFinder(
+            search,
+            description: 'group member search retry action',
+            enabled: true,
+          );
+        }
+      }
+    }
+    if (lastResolutionError != null) {
+      String resolverDiagnostic;
+      try {
+        await container
+            .read(directoryApplicationServiceProvider)
+            .resolvePeer(handle);
+        resolverDiagnostic = 'application_resolver_succeeded';
+      } on Object catch (error) {
+        resolverDiagnostic = error is core.AwikiImCoreException
+            ? error.code
+            : error.runtimeType.toString();
+      }
+      final actionElements = addMember.evaluate().toList(growable: false);
+      final actionEnabled = actionElements.length == 1
+          ? actionElements.single.widget is AppPrimaryButton &&
+                (actionElements.single.widget as AppPrimaryButton).onPressed !=
+                    null
+          : false;
+      final input = tester.widget<CupertinoTextField>(
+        find.byType(CupertinoTextField).last,
+      );
+      final candidateCount = candidateTile.evaluate().length;
+      fail(
+        'Group member resolution did not expose one exact enabled candidate '
+        'after three bounded visible search attempts; resolver='
+        '$resolverDiagnostic action_count=${actionElements.length} '
+        'action_enabled=$actionEnabled input_exact='
+        '${input.controller?.text == handle} candidate_count=$candidateCount.',
+      );
+    }
+    await tapOne(candidateTile, description: 'exact resolved group member');
+    await pumpUntilFinder(
+      addMember,
+      description: 'selected add-member action',
+      enabled: true,
+    );
+    await tapOne(addMember, description: 'add resolved group member');
+    await pumpUntil(
+      description: 'group member dialog closes',
+      condition: () => find
+          .byKey(const Key('identity-add-group-member-button'))
+          .evaluate()
+          .isEmpty,
+    );
+  }
+
+  Future<void> stageAttachmentByDesktopDrop({
+    required String filename,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    final dropTarget = find.byWidgetPredicate(
+      (widget) =>
+          widget.key is Key &&
+          widget.key.toString().contains('chat-attachment-drop-target:'),
+      description: 'chat attachment drop target',
+    );
+    await pumpUntilFinder(dropTarget, description: 'attachment drop target');
+    final center = tester.getCenter(dropTarget.first);
+    await _sendDesktopDropMethod('entered', <double>[center.dx, center.dy]);
+    await _sendDesktopDropMethod('updated', <double>[center.dx, center.dy]);
+    await pumpUntilFinder(
+      find.byKey(const Key('chat-attachment-drop-overlay')),
+      description: 'attachment drop overlay',
+    );
+    final sourceDirectory = await Directory.systemTemp.createTemp(
+      'awiki-e2e-drop-',
+    );
+    final source = File('${sourceDirectory.path}/$filename');
+    await source.writeAsBytes(bytes, flush: true);
+    try {
+      if (Platform.isMacOS) {
+        await _sendDesktopDropMethod(
+          'performOperation_macos',
+          <Map<String, Object?>>[
+            <String, Object?>{
+              'path': source.path,
+              'isDirectory': false,
+              'fromPromise': false,
+            },
+          ],
+        );
+      } else {
+        await _sendDesktopDropMethod('performOperation', <String>[source.path]);
+      }
+      await pumpUntilFinder(
+        find.byKey(const Key('chat-pending-attachment-preview')),
+        description: 'pending attachment preview',
+      );
+    } finally {
+      if (await sourceDirectory.exists()) {
+        await sourceDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<void> expectPendingAttachmentFilename(String expectedFilename) async {
+    final preview = find.byKey(const Key('chat-pending-attachment-preview'));
+    await pumpUntilFinder(preview, description: 'pending attachment preview');
+    final draft = container
+        .read(chatComposerDraftsProvider.notifier)
+        .draftFor(selectedConversation)
+        .pendingAttachment;
+    if (draft == null || draft.filename != expectedFilename) {
+      fail(
+        'Pending attachment model did not preserve the exact dropped '
+        'filename; draft_present=${draft != null} exact_filename='
+        '${draft?.filename == expectedFilename}.',
+      );
+    }
+    await pumpUntilFinder(
+      find.descendant(of: preview, matching: find.text(expectedFilename)),
+      description: 'exact pending attachment filename',
+    );
+  }
+
+  Future<void> sendStagedAttachment({String? caption}) async {
+    if (caption != null && caption.isNotEmpty) {
+      await tester.enterText(
+        find.bySemanticsIdentifier('e2e-chat-input'),
+        caption,
+      );
+    }
+    await tapOne(
+      find.bySemanticsIdentifier('e2e-chat-send-button'),
+      description: 'attachment send button',
+    );
+    await pumpUntil(
+      description: 'pending attachment clears after send',
+      condition: () => find
+          .byKey(const Key('chat-pending-attachment-preview'))
+          .evaluate()
+          .isEmpty,
+      timeout: const Duration(seconds: 90),
+    );
+  }
+
+  Future<void> simulateReconnect() async {
+    // Desktop integration tests use the legal foreground -> hidden ->
+    // foreground path. Entering `paused` suspends the test binding's frame
+    // scheduler and cannot be used as a synthetic reconnect boundary.
+    for (final state in const <AppLifecycleState>[
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-authenticated'),
+      description: 'App shell after lifecycle reconnect',
+    );
+  }
+
+  /// Rebuilds the Widget tree and App shell in this integration-test process.
+  /// This is intentionally not evidence of a native OS process restart.
+  Future<void> restart({
+    required AppBootstrap bootstrap,
+    required List<Override> providerOverrides,
+    required AppSession session,
+  }) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      AwikiMeApp(bootstrap: bootstrap, providerOverrides: providerOverrides),
+    );
+    await pumpUntilFinder(
+      find.byType(AppShell),
+      description: 'AppShell after widget restart',
+      timeout: const Duration(seconds: 90),
+    );
+    if (find.bySemanticsIdentifier('e2e-authenticated').evaluate().isEmpty) {
+      await activate(session);
+    }
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-authenticated'),
+      description: 'authenticated App after widget restart',
+      timeout: const Duration(seconds: 90),
+    );
+  }
+
+  Future<void> _sendDesktopDropMethod(String method, Object? arguments) async {
+    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .handlePlatformMessage(
+          'desktop_drop',
+          const StandardMethodCodec().encodeMethodCall(
+            MethodCall(method, arguments),
+          ),
+          (_) {},
+        );
+    await tester.pump();
+  }
+
+  Future<void> tapOne(Finder finder, {required String description}) async {
+    await pumpUntilFinder(finder, description: description, enabled: true);
+    final elements = finder.evaluate().toList(growable: false);
+    if (elements.length != 1) {
+      fail(
+        'Expected exactly one $description before tap, found '
+        '${elements.length}.',
+      );
+    }
+    await tester.ensureVisible(finder);
+    final widget = elements.single.widget;
+    final pressableDescendant = find.descendant(
+      of: finder,
+      matching: find.byType(AppPressable),
+    );
+    final pressableCount = pressableDescendant.evaluate().length;
+    final requiresPressableDescendant =
+        widget is AppPrimaryButton ||
+        widget is AppSecondaryButton ||
+        widget is AppIconButton ||
+        widget is AppPressableTile;
+    if (requiresPressableDescendant && pressableCount != 1) {
+      fail(
+        'Expected exactly one interactive target for $description, found '
+        '$pressableCount.',
+      );
+    }
+    final tapTarget = pressableCount == 1 ? pressableDescendant : finder;
+    await tester.tap(tapTarget);
+    await tester.pump();
+  }
+
+  Future<void> pumpUntilFinder(
+    Finder finder, {
+    required String description,
+    bool enabled = false,
+    Duration timeout = const Duration(seconds: 45),
+  }) {
+    return pumpUntil(
+      description: description,
+      timeout: timeout,
+      condition: () {
+        final elements = finder.evaluate().toList(growable: false);
+        if (elements.length != 1) {
+          return false;
+        }
+        if (enabled) {
+          final widget = elements.single.widget;
+          if (widget is AppPrimaryButton && widget.onPressed == null) {
+            return false;
+          }
+          if (widget is AppSecondaryButton && widget.onPressed == null) {
+            return false;
+          }
+          if (widget is AppPressableTile && widget.onTap == null) {
+            return false;
+          }
+          if (widget is CupertinoTextField && widget.enabled == false) {
+            return false;
+          }
+          if (widget is AppPressable &&
+              (!widget.enabled || widget.onTap == null)) {
+            return false;
+          }
+          if (widget is AppIconButton && widget.onPressed == null) {
+            return false;
+          }
+        }
+        return true;
+      },
+    );
+  }
+
+  Future<void> pumpUntil({
+    required String description,
+    required bool Function() condition,
+    Duration timeout = const Duration(seconds: 45),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    Object? lastError;
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        await tester.pump(const Duration(milliseconds: 200));
+        if (condition()) {
+          return;
+        }
+      } on Object catch (error) {
+        lastError = error;
+      }
+    }
+    fail(
+      'Timed out waiting for $description.'
+      '${lastError == null ? '' : ' Last error: $lastError'}',
+    );
+  }
+}
+
+/// Deterministic E2E-only transport fault. It emits a real timeline patch so
+/// the production failed/retry UI is exercised, then delegates the retry to
+/// the real awiki.info-backed messaging service.
+class _FailOnceMessagingService
+    implements
+        MessagingService,
+        LocalHistoryMessagingService,
+        ThreadPatchMessagingService,
+        ConversationTimelineMessagingService {
+  _FailOnceMessagingService({
+    required MessagingService delegate,
+    required this.ownerDid,
+  }) : _delegate = delegate;
+
+  final MessagingService _delegate;
+  final String ownerDid;
+  bool _failNextConversationText = false;
+  int delegatedConversationTextAttempts = 0;
+  bool conversationTextAttemptPending = false;
+  String? lastConversationTextFailureCode;
+  final Map<String, List<_PatchSink>> _patchSinks =
+      <String, List<_PatchSink>>{};
+  final Map<String, int> _patchVersions = <String, int>{};
+  final Map<String, Map<String, ChatMessage>> _injectedFailedMessages =
+      <String, Map<String, ChatMessage>>{};
+
+  void failNextConversationText() {
+    _failNextConversationText = true;
+  }
+
+  @override
+  Future<ChatMessage> sendConversationText({
+    required AppConversationReadRef conversation,
+    required String content,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) async {
+    if (_failNextConversationText) {
+      _failNextConversationText = false;
+      final localId = clientMessageId?.trim();
+      if (localId == null || localId.isEmpty) {
+        throw StateError('Controlled E2E failure requires clientMessageId.');
+      }
+      final presentationConversationId = _presentationConversationIdForSend(
+        conversation.conversationId,
+      );
+      final target = _threadTarget(conversation.conversationId);
+      final failed = ChatMessage(
+        localId: localId,
+        conversationId: presentationConversationId,
+        threadId: presentationConversationId,
+        senderDid: ownerDid,
+        receiverDid: target.kind == 'direct' ? target.id : null,
+        groupId: target.kind == 'group' ? target.id : null,
+        content: content,
+        createdAt: DateTime.now(),
+        isMine: true,
+        sendState: MessageSendState.failed,
+      );
+      _injectedFailedMessages.putIfAbsent(
+        presentationConversationId,
+        () => <String, ChatMessage>{},
+      )[localId] = failed;
+      final version = _nextPatchVersion(presentationConversationId);
+      for (final sink
+          in _patchSinks[presentationConversationId] ?? const <_PatchSink>[]) {
+        sink.emit(
+          ThreadMessagePatch(
+            kind: ThreadMessagePatchKind.upsert,
+            ownerDid: ownerDid,
+            version: version,
+            threadKind: 'conversation',
+            threadId: presentationConversationId,
+            conversationId: presentationConversationId,
+            message: failed,
+          ),
+        );
+      }
+      throw StateError('controlled_e2e_transport_failure');
+    }
+    delegatedConversationTextAttempts += 1;
+    conversationTextAttemptPending = true;
+    lastConversationTextFailureCode = null;
+    try {
+      final sent = await _delegate.sendConversationText(
+        conversation: conversation,
+        content: content,
+        clientMessageId: clientMessageId,
+        idempotencyKey: idempotencyKey,
+      );
+      _removeInjectedFailedMessage(
+        _presentationConversationIdForSend(conversation.conversationId),
+        clientMessageId,
+      );
+      return sent;
+    } on Object catch (error) {
+      lastConversationTextFailureCode = error is core.AwikiImCoreException
+          ? error.code
+          : error.runtimeType.toString();
+      rethrow;
+    } finally {
+      conversationTextAttemptPending = false;
+    }
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    final timeline = _timelineDelegate;
+    late final StreamController<ThreadMessagePatch> controller;
+    StreamSubscription<ThreadMessagePatch>? subscription;
+    late final _PatchSink sink;
+    controller = StreamController<ThreadMessagePatch>(
+      onListen: () {
+        sink = _PatchSink(controller);
+        _patchSinks
+            .putIfAbsent(conversation.conversationId, () => <_PatchSink>[])
+            .add(sink);
+        subscription = timeline
+            .watchConversationTimelinePatches(conversation, limit: limit)
+            .listen(
+              (patch) => sink.emit(
+                _withPatchVersion(
+                  _retainInjectedFailures(conversation.conversationId, patch),
+                  _nextPatchVersion(conversation.conversationId),
+                ),
+              ),
+              onError: controller.addError,
+              onDone: controller.close,
+            );
+      },
+      onCancel: () async {
+        _patchSinks[conversation.conversationId]?.remove(sink);
+        await subscription?.cancel();
+      },
+    );
+    return controller.stream;
+  }
+
+  ConversationTimelineMessagingService get _timelineDelegate {
+    final delegate = _delegate;
+    if (delegate is! ConversationTimelineMessagingService) {
+      throw StateError('Real messaging service lacks conversation timeline.');
+    }
+    return delegate as ConversationTimelineMessagingService;
+  }
+
+  LocalHistoryMessagingService get _localDelegate {
+    final delegate = _delegate;
+    if (delegate is! LocalHistoryMessagingService) {
+      throw StateError('Real messaging service lacks local history.');
+    }
+    return delegate as LocalHistoryMessagingService;
+  }
+
+  ThreadPatchMessagingService get _threadPatchDelegate {
+    final delegate = _delegate;
+    if (delegate is! ThreadPatchMessagingService) {
+      throw StateError('Real messaging service lacks thread patches.');
+    }
+    return delegate as ThreadPatchMessagingService;
+  }
+
+  @override
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) async => _mergeInjectedFailures(
+    conversation.conversationId,
+    await _timelineDelegate.loadConversationTimeline(
+      conversation,
+      limit: limit,
+      cursor: cursor,
+      includeControlPayloads: includeControlPayloads,
+    ),
+  );
+
+  @override
+  Future<ThreadMessagePatch> repairConversationTimelineStore(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) async {
+    final patch = await _timelineDelegate.repairConversationTimelineStore(
+      conversation,
+      limit: limit,
+    );
+    return _withPatchVersion(
+      _retainInjectedFailures(conversation.conversationId, patch),
+      _nextPatchVersion(conversation.conversationId),
+    );
+  }
+
+  @override
+  Future<List<ChatMessage>> loadLocalHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) => _localDelegate.loadLocalHistory(
+    thread,
+    limit: limit,
+    cursor: cursor,
+    includeControlPayloads: includeControlPayloads,
+  );
+
+  @override
+  Stream<ThreadMessagePatch> watchThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) => _threadPatchDelegate.watchThreadPatches(thread, limit: limit);
+
+  @override
+  Future<ThreadMessagePatch> repairThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) => _threadPatchDelegate.repairThreadStore(thread, limit: limit);
+
+  @override
+  Future<ChatMessage> sendText({
+    required AppThreadRef thread,
+    required String content,
+  }) => _delegate.sendText(thread: thread, content: content);
+
+  @override
+  Future<ChatMessage> sendAttachment({
+    required AppThreadRef thread,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? idempotencyKey,
+  }) => _delegate.sendAttachment(
+    thread: thread,
+    attachment: attachment,
+    caption: caption,
+    mentions: mentions,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ChatMessage> sendConversationAttachment({
+    required AppConversationReadRef conversation,
+    required AttachmentDraft attachment,
+    String? caption,
+    List<ChatMentionDraft> mentions = const <ChatMentionDraft>[],
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) => _delegate.sendConversationAttachment(
+    conversation: conversation,
+    attachment: attachment,
+    caption: caption,
+    mentions: mentions,
+    clientMessageId: clientMessageId,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ChatMessage> sendPayload({
+    required AppThreadRef thread,
+    required Map<String, Object?> payload,
+    bool secure = true,
+    String? idempotencyKey,
+  }) => _delegate.sendPayload(
+    thread: thread,
+    payload: payload,
+    secure: secure,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ChatMessage> sendMentionText({
+    required AppThreadRef thread,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? idempotencyKey,
+  }) => _delegate.sendMentionText(
+    thread: thread,
+    text: text,
+    mentions: mentions,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ChatMessage> sendConversationMentionText({
+    required AppConversationReadRef conversation,
+    required String text,
+    required List<ChatMentionDraft> mentions,
+    String? clientMessageId,
+    String? idempotencyKey,
+  }) => _delegate.sendConversationMentionText(
+    conversation: conversation,
+    text: text,
+    mentions: mentions,
+    clientMessageId: clientMessageId,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) => _delegate.downloadAttachment(
+    thread: thread,
+    messageId: messageId,
+    attachmentId: attachmentId,
+    localPath: localPath,
+  );
+
+  @override
+  Future<List<ChatMessage>> loadHistory(
+    AppThreadRef thread, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) => _delegate.loadHistory(
+    thread,
+    limit: limit,
+    cursor: cursor,
+    includeControlPayloads: includeControlPayloads,
+  );
+
+  @override
+  Future<ChatMessage> retryByResendOriginalContent(ChatMessage failed) =>
+      _delegate.retryByResendOriginalContent(failed);
+
+  ThreadMessagePatch _retainInjectedFailures(
+    String conversationId,
+    ThreadMessagePatch patch,
+  ) {
+    final message = patch.message;
+    if (message != null && message.sendState == MessageSendState.sent) {
+      _removeInjectedFailedMessage(conversationId, message.localId);
+      _removeInjectedFailedMessage(conversationId, message.remoteId);
+    }
+    if (patch.kind != ThreadMessagePatchKind.reset) {
+      return patch;
+    }
+    return ThreadMessagePatch(
+      kind: patch.kind,
+      ownerDid: patch.ownerDid,
+      version: patch.version,
+      threadKind: patch.threadKind,
+      threadId: patch.threadId,
+      conversationId: patch.conversationId,
+      messages: _mergeInjectedFailures(conversationId, patch.messages),
+      message: patch.message,
+      index: patch.index,
+      messageId: patch.messageId,
+      reason: patch.reason,
+    );
+  }
+
+  List<ChatMessage> _mergeInjectedFailures(
+    String conversationId,
+    List<ChatMessage> messages,
+  ) {
+    final injected = _injectedFailedMessages[conversationId];
+    if (injected == null || injected.isEmpty) {
+      return messages;
+    }
+    final merged = <ChatMessage>[...messages];
+    for (final failed in injected.values) {
+      final alreadyPresent = merged.any(
+        (message) =>
+            message.localId == failed.localId ||
+            message.remoteId == failed.localId,
+      );
+      if (!alreadyPresent) {
+        merged.add(failed);
+      }
+    }
+    return merged;
+  }
+
+  void _removeInjectedFailedMessage(String conversationId, String? messageId) {
+    final normalized = messageId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return;
+    }
+    final injected = _injectedFailedMessages[conversationId];
+    injected?.remove(normalized);
+    if (injected != null && injected.isEmpty) {
+      _injectedFailedMessages.remove(conversationId);
+    }
+  }
+
+  String _presentationConversationIdForSend(String writeConversationId) {
+    final normalized = writeConversationId.trim();
+    if (_patchSinks.containsKey(normalized)) {
+      return normalized;
+    }
+    final activeConversationIds = _patchSinks.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .map((entry) => entry.key)
+        .toSet();
+    if (activeConversationIds.length != 1) {
+      throw StateError(
+        'Controlled E2E failure requires exactly one active canonical '
+        'conversation timeline, found ${activeConversationIds.length}.',
+      );
+    }
+    return activeConversationIds.single;
+  }
+
+  int _nextPatchVersion(String conversationId) {
+    final next = (_patchVersions[conversationId] ?? 0) + 1;
+    _patchVersions[conversationId] = next;
+    return next;
+  }
+}
+
+class _PatchSink {
+  _PatchSink(this.controller);
+
+  final StreamController<ThreadMessagePatch> controller;
+
+  void emit(ThreadMessagePatch patch) {
+    if (!controller.isClosed) {
+      controller.add(patch);
+    }
+  }
+}
+
+class _RecordingAttachmentOpenService extends AttachmentOpenService {
+  String? lastOpenedPath;
+
+  @override
+  Future<void> open(String pathOrUri) async {
+    lastOpenedPath = pathOrUri;
+  }
+}
+
+({String kind, String id}) _threadTarget(String conversationId) {
+  final separator = conversationId.indexOf(':');
+  if (separator <= 0 || separator == conversationId.length - 1) {
+    return (kind: 'unknown', id: conversationId);
+  }
+  final prefix = conversationId.substring(0, separator).toLowerCase();
+  return (
+    kind: prefix == 'dm' ? 'direct' : prefix,
+    id: conversationId.substring(separator + 1),
+  );
+}
+
+ThreadMessagePatch _withPatchVersion(ThreadMessagePatch patch, int version) =>
+    ThreadMessagePatch(
+      kind: patch.kind,
+      ownerDid: patch.ownerDid,
+      version: version,
+      threadKind: patch.threadKind,
+      threadId: patch.threadId,
+      conversationId: patch.conversationId,
+      messages: patch.messages,
+      message: patch.message,
+      index: patch.index,
+      messageId: patch.messageId,
+      reason: patch.reason,
+    );

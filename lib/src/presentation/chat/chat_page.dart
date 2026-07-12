@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
@@ -18,6 +19,7 @@ import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/conversation_identity.dart';
@@ -42,6 +44,7 @@ import '../friends/friends_provider.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/app_dialog.dart';
@@ -60,7 +63,56 @@ part 'parts/chat_message_part.dart';
 part 'parts/chat_composer_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
-const _macChatMessageListBottomInset = 10.0;
+const _macChatMessageListBottomInset = 4.0;
+
+typedef ChatImageWidgetBuilder =
+    Widget Function({
+      String? path,
+      Uint8List? bytes,
+      double? width,
+      double? height,
+      required BoxFit fit,
+      required Widget errorFallback,
+    });
+
+final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
+  return ({
+    String? path,
+    Uint8List? bytes,
+    double? width,
+    double? height,
+    required BoxFit fit,
+    required Widget errorFallback,
+  }) {
+    final cacheWidth = ((width ?? 480) * 3).ceil().clamp(64, 1440);
+    if (bytes != null) {
+      return Image.memory(
+        bytes,
+        width: width,
+        height: height,
+        cacheWidth: cacheWidth,
+        fit: fit,
+        errorBuilder: (_, _, _) => errorFallback,
+      );
+    }
+    final value = path?.trim();
+    if (value == null || value.isEmpty) {
+      return errorFallback;
+    }
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme && uri.scheme != 'file') {
+      return errorFallback;
+    }
+    return Image.file(
+      uri != null && uri.scheme == 'file' ? File.fromUri(uri) : File(value),
+      width: width,
+      height: height,
+      cacheWidth: cacheWidth,
+      fit: fit,
+      errorBuilder: (_, _, _) => errorFallback,
+    );
+  };
+});
 
 class ChatPage extends StatelessWidget {
   const ChatPage({super.key, required this.conversation});
@@ -477,6 +529,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final displayThreadId = _displayThreadId;
     final thread = ref.watch(chatThreadProvider(displayThreadId));
     final currentConversation = _currentConversationForTitle();
+    final headerNickname = _headerNickname(currentConversation);
     _requestAgentsIfNeeded(currentConversation);
     final agents = ref.watch(agentsProvider).agents;
     final isDeletedAgentConversation =
@@ -560,6 +613,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         children: <Widget>[
           _ChatHeader(
             conversation: currentConversation,
+            nickname: headerNickname,
             embedded: widget.embedded,
             macStyle: macStyle,
             classification: peerClassification,
@@ -767,6 +821,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                             message,
                                           )
                                         : null,
+                                    onResolveImagePreview:
+                                        message.attachment != null &&
+                                            message.sendState ==
+                                                MessageSendState.sent
+                                        ? () => _resolveAttachmentPreview(
+                                            currentConversation,
+                                            message,
+                                          )
+                                        : null,
                                     isDownloading:
                                         _downloadingAttachmentMessageIds
                                             .contains(message.localId),
@@ -837,6 +900,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
             onAttach: () async {
               await _pickAndStageAttachment();
             },
+            onScreenshot: _captureAndStageScreenshot,
             onPasteAttachment: _pasteClipboardAttachment,
             onRemoveAttachment: _clearPendingAttachment,
           ),
@@ -1049,6 +1113,26 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return;
       }
       if (!mounted) {
+        return;
+      }
+      _stageAttachmentDraft(conversation, draft);
+    } catch (error) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.fromError(error));
+    }
+  }
+
+  Future<void> _captureAndStageScreenshot({required bool hideApp}) async {
+    final conversation = _currentConversationSnapshot();
+    if (!_canAcceptExternalAttachment(conversation)) {
+      return;
+    }
+    try {
+      final draft = await ref
+          .read(attachmentPickerServiceProvider)
+          .captureScreenshot(hideApp: hideApp);
+      if (draft == null || !mounted) {
         return;
       }
       _stageAttachmentDraft(conversation, draft);
@@ -1309,6 +1393,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
         });
       }
     }
+  }
+
+  Future<String> _resolveAttachmentPreview(
+    ConversationSummary conversation,
+    ChatMessage message,
+  ) {
+    return ref
+        .read(attachmentPreviewServiceProvider)
+        .previewPathFor(
+          message: message,
+          download: () => ref
+              .read(chatThreadsProvider.notifier)
+              .downloadAttachment(conversation: conversation, message: message),
+        );
   }
 
   AppMessage _attachmentOpenErrorMessage(Object error) {
@@ -1788,6 +1886,22 @@ class _ChatViewState extends ConsumerState<ChatView> {
       displayName: groupName ?? base.displayName,
       avatarUri: groupAvatarUri ?? base.avatarUri,
     );
+  }
+
+  String? _headerNickname(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      return null;
+    }
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return null;
+    }
+    final nickname = peerDisplayName(
+      ref.watch(peerDisplayProfileProvider),
+      did: targetDid,
+      fallback: '',
+    );
+    return nickname.isEmpty ? null : nickname;
   }
 
   ConversationSummary _currentConversationSnapshot() {

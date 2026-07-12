@@ -502,7 +502,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/awiki_me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/awiki_me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
 			};
 			name = Debug;
 		};
@@ -517,7 +517,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/awiki_me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/awiki_me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
 			};
 			name = Release;
 		};
@@ -532,7 +532,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/awiki_me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/awiki_me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
 			};
 			name = Profile;
 		};
@@ -589,6 +589,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 33E5194F232828860026EE4D /* AppInfo.xcconfig */;
 			buildSettings = {
+				AWIKI_APP_DISPLAY_NAME = "AWiki Me (Development)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
@@ -600,6 +601,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime.dev;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Profile;
@@ -721,17 +723,21 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 33E5194F232828860026EE4D /* AppInfo.xcconfig */;
 			buildSettings = {
+				AWIKI_APP_DISPLAY_NAME = "AWiki Me (Development)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = DT9HA3J8KE;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime.dev;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};
@@ -741,6 +747,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 33E5194F232828860026EE4D /* AppInfo.xcconfig */;
 			buildSettings = {
+				AWIKI_APP_DISPLAY_NAME = "AWiki Me";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
@@ -752,6 +759,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

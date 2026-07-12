@@ -15,6 +15,7 @@ import '../friends/friends_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
+import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -61,13 +62,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     _syncHomepage(profile);
     _syncRelationshipCounts();
 
-    final title = DidDisplayFormatter.profileName(profile);
+    final handleLabel = DidDisplayFormatter.profileHandleLabel(profile);
+    final secondaryName = DidDisplayFormatter.secondaryProfileName(profile);
     final homepageUrl = ref
         .watch(profileHomepageResolverProvider)
         .homepageUrl(profile);
-    final profileContent = ref
-        .read(profileProvider.notifier)
-        .visibleProfileContent();
+    final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
+      ref.read(profileProvider.notifier).visibleProfileContent(),
+    );
     final responsive = context.awikiResponsive;
     final friendsState = ref.watch(friendsProvider);
 
@@ -86,7 +88,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 AvatarBadge(
-                  seed: title,
+                  seed: handleLabel,
                   size: responsive.isPhone ? 54 : 44,
                   avatarUri: profile.avatarUri,
                 ),
@@ -98,16 +100,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
-                            Flexible(
+                            Expanded(
                               child: Text(
-                                title,
+                                handleLabel,
+                                key: const Key('profile-handle-value'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontSize: responsive.isPhone ? 20 : 18,
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: responsive.isPhone ? 24 : 21,
+                                  fontWeight: FontWeight.w700,
                                   color: theme.title,
                                 ),
                               ),
@@ -130,15 +132,38 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                             ),
                           ],
                         ),
-                        SizedBox(height: responsive.spacing(4)),
-                        Text(
-                          profile.did,
-                          softWrap: true,
-                          style: TextStyle(
-                            fontSize: responsive.bodyMd,
+                        if (secondaryName.isNotEmpty) ...<Widget>[
+                          SizedBox(height: responsive.spacing(3)),
+                          Text(
+                            secondaryName,
+                            key: const Key('profile-display-name'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: responsive.bodyMd,
+                              fontWeight: FontWeight.w500,
+                              color: theme.body,
+                            ),
+                          ),
+                        ],
+                        SizedBox(height: responsive.spacing(6)),
+                        CopyableDidLine(
+                          value: profile.did,
+                          displayValue: DidDisplayFormatter.compactDidPath(
+                            profile.did,
+                          ),
+                          maxLines: 2,
+                          copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                          copiedMessage: context.l10n.chatPeerInfoDidCopied,
+                          textKey: const Key('profile-did-value'),
+                          buttonKey: const Key('profile-copy-did-button'),
+                          textStyle: TextStyle(
+                            fontSize: responsive.bodySm,
                             height: 1.35,
                             color: theme.tertiaryText,
                           ),
+                          buttonSize: responsive.displayScaled(30),
+                          iconSize: responsive.displayScaled(14),
                         ),
                       ],
                     ),

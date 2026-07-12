@@ -115,6 +115,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('群组'), findsOneWidget);
+    expect(find.byKey(const Key('friends-groups-row')), findsOneWidget);
     expect(find.text('我关注的'), findsOneWidget);
     expect(find.text('关注我的'), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
@@ -165,7 +166,7 @@ void main() {
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:follower-1');
     expect(gateway.following.single.did, 'did:test:follower-1');
-    expect(find.text('Erin'), findsNothing);
+    expect(find.text('Erin'), findsOneWidget);
   });
 
   testWidgets('回关联系人成功后列表刷新失败也保持乐观关注态', (tester) async {
@@ -208,7 +209,58 @@ void main() {
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:follower-1');
     expect(gateway.following.single.did, 'did:test:follower-1');
-    expect(find.text('Erin'), findsNothing);
+    expect(find.text('Erin'), findsOneWidget);
+  });
+
+  testWidgets('互相关注联系人同时显示在我关注的和关注我的', (tester) async {
+    const mutual = RelationshipSummary(
+      did: 'did:test:mutual',
+      displayName: 'Mutual Alice',
+      relationship: 'mutual',
+    );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[mutual],
+                followers: <RelationshipSummary>[mutual],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mutual Alice'), findsNWidgets(2));
+    expect(find.text('我关注的'), findsOneWidget);
+    expect(find.text('关注我的'), findsOneWidget);
+    expect(find.text('关注'), findsNothing);
+  });
+
+  testWidgets('联系人预览区分加载失败与真实空列表并支持重试', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              FriendsState(followersError: StateError('followers failed')),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('还没有关注任何人。'), findsOneWidget);
+    expect(find.text('操作失败，请稍后重试。'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
   });
 
   testWidgets('点击我关注的联系人会打开被点击对象的直聊', (tester) async {
@@ -222,6 +274,18 @@ void main() {
       credentialName: 'default',
     );
     final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        'did:test:alice': UserProfile(
+          did: 'did:test:alice',
+          displayName: 'Alice',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+        ),
+      }
+      ..directoryConversationIdsByQuery = <String, String>{
+        'did:test:alice': 'dm:peer-scope:v1:alice',
+      }
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: 'dm:did:test:alice:did:test:me',
@@ -271,7 +335,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Alice'));
+    await tester.tap(find.byKey(const Key('contact-row:did:test:alice')));
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
@@ -280,7 +344,7 @@ void main() {
     final selected = container.read(selectedConversationProvider);
     expect(selected?.targetDid, 'did:test:alice');
     expect(selected?.displayName, 'Alice');
-    expect(selected?.effectiveConversationId, 'dm:did:test:alice');
+    expect(selected?.effectiveConversationId, 'dm:peer-scope:v1:alice');
   });
 
   testWidgets('macOS 点击我关注的在右侧展示完整联系人列表并可取消关注', (tester) async {
@@ -338,6 +402,65 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
+  });
+
+  testWidgets('查看全部会并发补齐缺失 profile 并显示昵称', (tester) async {
+    const peerDid = 'did:test:profile-missing';
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+    );
+    final gateway = FakeAwikiGateway()
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: peerDid,
+          displayName: peerDid,
+          relationship: 'following',
+        ),
+      ]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        peerDid: UserProfile(
+          did: peerDid,
+          displayName: '远端昵称',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: 'profile-missing.awiki.ai',
+        ),
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: peerDid,
+                    displayName: peerDid,
+                    relationship: 'following',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('friends-following-view-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('远端昵称'), findsOneWidget);
+    expect(gateway.loadPublicProfileQueries, <String>[peerDid]);
   });
 
   testWidgets('关注列表加载失败时显示错误并支持重试', (tester) async {

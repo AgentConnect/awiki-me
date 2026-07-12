@@ -50,6 +50,10 @@ class AwikiMeApp extends StatelessWidget {
           bootstrap.localePreferenceService,
         ),
         updateServiceProvider.overrideWithValue(bootstrap.updateService),
+        if (bootstrap.attachmentCacheService != null)
+          attachmentCacheServiceProvider.overrideWithValue(
+            bootstrap.attachmentCacheService!,
+          ),
         if (bootstrap.appSessionService != null)
           appSessionServiceProvider.overrideWithValue(
             bootstrap.appSessionService!,

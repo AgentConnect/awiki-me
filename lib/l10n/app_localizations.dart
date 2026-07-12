@@ -2198,6 +2198,24 @@ abstract class AppLocalizations {
   /// **'添加附件'**
   String get chatAddAttachment;
 
+  /// No description provided for @chatAddEmoji.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择表情'**
+  String get chatAddEmoji;
+
+  /// No description provided for @chatCaptureScreenshot.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图'**
+  String get chatCaptureScreenshot;
+
+  /// No description provided for @screenshotPermissionRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。'**
+  String get screenshotPermissionRequired;
+
   /// No description provided for @chatRemoveAttachment.
   ///
   /// In zh, this message translates to:

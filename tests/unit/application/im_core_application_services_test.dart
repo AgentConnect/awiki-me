@@ -15,6 +15,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
@@ -71,11 +72,15 @@ void main() {
       await profileService.updateProfile(const ProfilePatch(nickName: 'Alice'));
       await directoryService.lookupHandle(' Alice.AWiki ');
       await directoryService.resolvePeer(' did:bob ');
+      await directoryService.loadCachedDisplayProfiles(<String>['did:bob']);
 
       expect(profiles.loadedPublic, ['did:alice']);
       expect(profiles.patches.single.nickName, 'Alice');
       expect(directory.lookups, ['alice.awiki']);
       expect(directory.resolutions, ['did:bob']);
+      expect(directory.cachedProfileRequests, [
+        <String>['did:bob'],
+      ]);
     },
   );
 
@@ -189,6 +194,15 @@ class _FakeProfiles implements ProfileCorePort {
 class _FakeDirectory implements DirectoryCorePort {
   final List<String> lookups = <String>[];
   final List<String> resolutions = <String>[];
+  final List<List<String>> cachedProfileRequests = <List<String>>[];
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async {
+    cachedProfileRequests.add(dids.toList());
+    return const <PeerDisplayProfile>[];
+  }
 
   @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) async {

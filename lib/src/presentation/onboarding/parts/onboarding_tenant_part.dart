@@ -251,13 +251,11 @@ class _TenantManagementDialogState
                   active: tenant.id == activeTenant.id,
                   busy: _busyTenantIds.contains(tenant.id),
                   onUse: () => _useTenant(tenant),
-                  onEdit: tenant.id == defaultTenantId || tenant.isPrimaryTenant
+                  onEdit: tenant.isPrimaryTenant
                       ? null
                       : () => _openForm(tenant: tenant),
                   onDelete:
-                      tenant.id == defaultTenantId ||
-                          tenant.isPrimaryTenant ||
-                          tenant.id == activeTenant.id
+                      tenant.isPrimaryTenant || tenant.id == activeTenant.id
                       ? null
                       : () => _deleteTenant(tenant),
                 );
@@ -568,7 +566,7 @@ class _TenantListTile extends StatelessWidget {
     AppTenantProfile tenant,
     bool active,
   ) {
-    if (tenant.id == defaultTenantId || tenant.isPrimaryTenant) {
+    if (tenant.isPrimaryTenant) {
       return context.l10n.tenantCannotDeleteDefault;
     }
     if (active) {

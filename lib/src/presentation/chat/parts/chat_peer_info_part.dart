@@ -71,13 +71,31 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final profileName = profile == null
         ? ''
         : DidDisplayFormatter.profileName(profile);
-    final handle = profile?.handle?.trim();
+    final handleLabel = profile == null
+        ? ''
+        : DidDisplayFormatter.profileHandleLabel(profile);
     final avatarUri = profile?.avatarUri ?? widget.conversation.avatarUri;
-    final profileContent = profile == null
+    final rawProfileContent = profile == null
         ? ''
         : (profile.profileMarkdown.trim().isNotEmpty
               ? profile.profileMarkdown.trim()
               : profile.bio.trim());
+    final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
+      rawProfileContent,
+    );
+    final primaryIdentity = handleLabel.isEmpty ? displayName : handleLabel;
+    final secondaryIdentity = _secondaryIdentityLabel(
+      primary: primaryIdentity,
+      displayName: displayName,
+      profileName: profileName,
+    );
+    final agentAlias = runtimeAgent?.displayName.trim() ?? '';
+    final showAgentAlias =
+        agentAlias.isNotEmpty &&
+        _normalizedIdentityLabel(agentAlias) !=
+            _normalizedIdentityLabel(primaryIdentity) &&
+        _normalizedIdentityLabel(agentAlias) !=
+            _normalizedIdentityLabel(secondaryIdentity);
     final homepageUrl = profile == null
         ? ''
         : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
@@ -120,7 +138,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                             children: <Widget>[
                               Expanded(
                                 child: Text(
-                                  displayName,
+                                  primaryIdentity,
+                                  key: const Key(
+                                    'peer-info-dialog-handle-value',
+                                  ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -139,12 +160,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               ],
                             ],
                           ),
-                          if (runtimeAgent != null &&
-                              profileName.isNotEmpty &&
-                              profileName != displayName) ...<Widget>[
+                          if (secondaryIdentity.isNotEmpty) ...<Widget>[
                             const SizedBox(height: 4),
                             Text(
-                              profileName,
+                              secondaryIdentity,
+                              key: const Key('peer-info-dialog-display-name'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -154,10 +174,28 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               ),
                             ),
                           ],
+                          if (showAgentAlias) ...<Widget>[
+                            const SizedBox(height: 3),
+                            Text(
+                              agentAlias,
+                              key: const Key('peer-info-dialog-agent-alias'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF8A96AA),
+                                fontSize: 11.5,
+                                height: 1.25,
+                              ),
+                            ),
+                          ],
                           if (profileDid.isNotEmpty) ...<Widget>[
                             const SizedBox(height: 8),
                             CopyableDidLine(
                               value: profileDid,
+                              displayValue: DidDisplayFormatter.compactDidPath(
+                                profileDid,
+                              ),
+                              maxLines: 2,
                               copySemanticLabel:
                                   context.l10n.chatPeerInfoCopyDid,
                               copiedMessage: context.l10n.chatPeerInfoDidCopied,
@@ -226,11 +264,6 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                           runtimeStatus,
                         ),
                         tone: SemanticPillTone.status,
-                      ),
-                    if (handle != null && handle.isNotEmpty)
-                      SemanticPill(
-                        label: '@$handle',
-                        tone: SemanticPillTone.metadata,
                       ),
                   ],
                 ),
@@ -339,6 +372,25 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     }
     return fallbackDid.trim();
   }
+
+  String _secondaryIdentityLabel({
+    required String primary,
+    required String displayName,
+    required String profileName,
+  }) {
+    final normalizedPrimary = _normalizedIdentityLabel(primary);
+    for (final candidate in <String>[profileName, displayName]) {
+      final value = candidate.trim();
+      if (value.isNotEmpty &&
+          _normalizedIdentityLabel(value) != normalizedPrimary) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  String _normalizedIdentityLabel(String value) =>
+      value.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
 
   Widget _profilePlaceholder(PeerProfileState state) {
     const textStyle = TextStyle(
@@ -468,6 +520,7 @@ class _PeerInfoHeader extends StatelessWidget {
             0,
           ),
           child: AppDialogHeader(
+            closeButtonKey: const Key('peer-info-close-button'),
             title: title,
             closeLabel: context.l10n.chatPeerInfoClose,
             onClose: () => Navigator.of(context).pop(),
@@ -1012,6 +1065,9 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
         ? CupertinoColors.white
         : theme.primary;
     return AppPressable(
+      key: Key(
+        widget.isFollowing ? 'chat-unfollow-button' : 'chat-follow-button',
+      ),
       onTap: _isBusy
           ? null
           : () async {
@@ -1058,6 +1114,7 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
         ),
         child: _isBusy
             ? CupertinoActivityIndicator(
+                key: const Key('chat-relationship-action-progress'),
                 radius: responsive.displayScaled(7),
                 color: widget.isFollowing ? const Color(0xFF34415C) : null,
               )

@@ -6,7 +6,6 @@ class AwikiImCoreEnvironmentConfig {
   const AwikiImCoreEnvironmentConfig({
     required this.serviceBaseUrl,
     required this.didDomain,
-    this.stateNamespace = 'default',
     this.userServiceEndpoint,
     this.messageServiceEndpoint,
     this.mailServiceEndpoint,
@@ -29,7 +28,6 @@ class AwikiImCoreEnvironmentConfig {
       messageServiceEndpoint: environment.messageServiceUrl,
       mailServiceEndpoint: environment.mailServiceUrl,
       didDomain: environment.didDomain,
-      stateNamespace: environment.stateNamespace,
       anpServiceEndpoint: environment.anpServiceUrl,
       anpServiceDid: environment.anpServiceDid,
     );
@@ -37,7 +35,6 @@ class AwikiImCoreEnvironmentConfig {
 
   final String serviceBaseUrl;
   final String didDomain;
-  final String stateNamespace;
   final String? userServiceEndpoint;
   final String? messageServiceEndpoint;
   final String? mailServiceEndpoint;

@@ -1,5 +1,8 @@
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('私聊资料页完整显示 DID 并支持一键复制', (tester) async {
+  testWidgets('私聊资料页以 handle 为主并紧凑显示 DID，复制保留全值', (tester) async {
     const longDid =
         'did:awiki:user:cgw-agent-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
     const profile = UserProfile(
@@ -51,8 +54,24 @@ void main() {
     final didFinder = find.byKey(const Key('peer-profile-did-value'));
     expect(didFinder, findsOneWidget);
     final didText = tester.widget<Text>(didFinder);
-    expect(didText.data, longDid);
-    expect(didText.maxLines, isNull);
+    expect(didText.data, isNot(longDid));
+    expect(didText.data, startsWith('did:awiki:user:cgw-agent-lab:e1_'));
+    expect(didText.data, contains('…'));
+    expect(didText.data, endsWith('yz0123456789'));
+    expect(didText.maxLines, 2);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-handle-value')))
+          .data,
+      '@cgw.awiki.ai',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
+          .data,
+      'CGW Agent',
+    );
+    expect(find.text('@cgw.awiki.ai'), findsOneWidget);
     expect(
       find.byKey(const Key('peer-profile-copy-did-button')),
       findsOneWidget,
@@ -96,6 +115,53 @@ void main() {
 
     expect(requestedHomepageUrl, 'https://zhuocheng.anpclaw.com');
     expect(find.text('https://zhuocheng.anpclaw.com'), findsOneWidget);
+  });
+
+  testWidgets('私聊资料页发消息使用 Core 解析的 canonical ID', (tester) async {
+    const did = 'did:wba:awiki.info:alice:e1_key';
+    const profile = UserProfile(
+      did: did,
+      nickName: 'Alice',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'alice',
+      fullHandle: 'alice.awiki.info',
+    );
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        did: profile,
+        'alice.awiki.info': profile,
+      }
+      ..directoryConversationIdsByQuery = <String, String>{
+        'alice.awiki.info': 'dm:peer-scope:v1:alice',
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const PeerProfilePage(did: did),
+        gateway: gateway,
+        session: const SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'me.json',
+          displayName: 'Me',
+        ),
+        homepageMarkdownLoader: (_) async => null,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(PeerProfilePage)),
+    );
+
+    await tester.tap(find.text('发消息'));
+    await tester.pumpAndSettle();
+
+    final selected = container.read(selectedConversationProvider);
+    expect(selected?.effectiveConversationId, 'dm:peer-scope:v1:alice');
+    final rows = container.read(conversationListProvider).conversations;
+    expect(rows, hasLength(1));
+    expect(rows.single.effectiveConversationId, 'dm:peer-scope:v1:alice');
   });
 
   testWidgets('私聊资料页删除未知会话使用 peer DID conversation id', (tester) async {

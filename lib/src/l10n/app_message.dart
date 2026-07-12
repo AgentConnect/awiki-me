@@ -194,6 +194,9 @@ class AppMessage {
   factory AppMessage.attachmentOpenFailed() =>
       const AppMessage._('attachmentOpenFailed');
 
+  factory AppMessage.screenshotPermissionRequired() =>
+      const AppMessage._('screenshotPermissionRequired');
+
   factory AppMessage.fromError(Object error) {
     final raw = normalizeAppError(error);
     if (raw.isEmpty) {
@@ -321,6 +324,9 @@ class AppMessage {
         raw == 'attachment_open_failed' ||
         raw.startsWith('attachment_open_failed:')) {
       return AppMessage.attachmentOpenFailed();
+    }
+    if (raw == 'screenshot_screen_recording_permission_required') {
+      return AppMessage.screenshotPermissionRequired();
     }
     if (raw == 'document_picker_failed') {
       return AppMessage.documentPickerFailed();
@@ -469,6 +475,8 @@ class AppMessage {
         return l10n.attachmentUnavailable;
       case 'attachmentOpenFailed':
         return l10n.attachmentOpenFailed;
+      case 'screenshotPermissionRequired':
+        return l10n.screenshotPermissionRequired;
       case 'raw':
         return detail ?? l10n.operationFailedRetry;
       default:

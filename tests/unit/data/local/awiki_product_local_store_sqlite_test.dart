@@ -360,7 +360,7 @@ void main() {
     },
   );
 
-  test('migrates legacy product store into configured app support path', () async {
+  test('configured scope path never imports a legacy product store', () async {
     final legacyPath =
         '${databaseDir.path}/legacy/${AwikiProductLocalStoreSqlite.databaseName}';
     final targetPath =
@@ -375,20 +375,9 @@ void main() {
         updatedAt: DateTime.utc(2026, 6, 16),
       ),
     );
-    await legacyStore.upsertConversationOverlayByConversationId(
-      ProductConversationOverlay(
-        ownerDid: 'did:alice',
-        threadId: 'legacy-thread',
-        conversationId: 'dm:peer-scope:v1:legacy',
-        customTitle: 'Legacy conversation',
-        updatedAt: DateTime.utc(2026, 6, 16),
-      ),
-    );
+    await legacyStore.close();
 
-    final store = AwikiProductLocalStoreSqlite(
-      databasePath: targetPath,
-      legacyDatabasePath: legacyPath,
-    );
+    final store = AwikiProductLocalStoreSqlite(databasePath: targetPath);
     final states = await store.loadAgentStates(ownerDid: 'did:alice');
     await store.saveAgentState(
       LocalAgentState(
@@ -398,22 +387,12 @@ void main() {
         updatedAt: DateTime.utc(2026, 6, 17),
       ),
     );
-    final overlay = await store.loadConversationOverlayByConversationId(
-      ownerDid: 'did:alice',
-      conversationId: 'dm:peer-scope:v1:legacy',
-    );
-
-    expect(states, hasLength(1));
-    expect(states.single.valueJson, '{"state":"legacy"}');
-    expect(overlay?.customTitle, 'Legacy conversation');
+    expect(states, isEmpty);
     expect(await File(targetPath).exists(), isTrue);
     final targetRows = await AwikiProductLocalStoreSqlite(
       databasePath: targetPath,
     ).loadAgentStates(ownerDid: 'did:alice');
-    expect(targetRows.map((state) => state.agentDid), <String>[
-      'did:agent-2',
-      'did:agent',
-    ]);
+    expect(targetRows.map((state) => state.agentDid), <String>['did:agent-2']);
   });
 
   test(

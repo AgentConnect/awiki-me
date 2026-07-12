@@ -1,10 +1,12 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:awiki_me/src/data/services/method_channel_attachment_picker_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test(
     'draftFromExternalSource copies local files and infers metadata',
     () async {
@@ -48,5 +50,225 @@ void main() {
     expect(draft.sizeBytes, bytes.length);
     expect(draft.bytes, bytes);
     expect(draft.localPath, isNull);
+  });
+
+  test(
+    'captureScreenshot stages a successful macOS interactive capture',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-screenshot-test-',
+      );
+      String? executable;
+      List<String>? arguments;
+      final service = MethodChannelAttachmentPickerService(
+        screenshotSupported: true,
+        temporaryDirectoryProvider: () async => tempDir,
+        processRunner: (nextExecutable, nextArguments) async {
+          executable = nextExecutable;
+          arguments = nextArguments;
+          await File(nextArguments.last).writeAsBytes(<int>[137, 80, 78, 71]);
+          return ProcessResult(1, 0, '', '');
+        },
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final draft = await service.captureScreenshot();
+
+      expect(executable, '/usr/sbin/screencapture');
+      expect(arguments?.take(2), <String>['-i', '-x']);
+      expect(draft, isNotNull);
+      expect(draft!.filename, startsWith('screenshot-'));
+      expect(draft.mimeType, 'image/png');
+      expect(draft.sizeBytes, 4);
+      expect(await File(draft.localPath!).exists(), isTrue);
+      addTearDown(() async {
+        final staged = File(draft.localPath!);
+        if (await staged.exists()) {
+          await staged.delete();
+        }
+      });
+    },
+  );
+
+  test(
+    'captureScreenshot never hides the app even when legacy hideApp is true',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-screenshot-visible-test-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      const channel = MethodChannel('test.awiki/attachment-picker-visible');
+      final channelCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            channelCalls.add(call);
+            return call.method == 'preflightScreenCapturePermission';
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        screenshotSupported: true,
+        temporaryDirectoryProvider: () async => tempDir,
+        processRunner: (_, arguments) async {
+          await File(arguments.last).writeAsBytes(<int>[137, 80, 78, 71]);
+          return ProcessResult(1, 0, '', '');
+        },
+      );
+
+      final draft = await service.captureScreenshot(hideApp: true);
+
+      expect(draft, isNotNull);
+      expect(channelCalls.map((call) => call.method), <String>[
+        'preflightScreenCapturePermission',
+      ]);
+      addTearDown(() async {
+        final staged = File(draft!.localPath!);
+        if (await staged.exists()) {
+          await staged.delete();
+        }
+      });
+    },
+  );
+
+  test('captureScreenshot keeps the app visible when capture fails', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'awiki-screenshot-failure-test-',
+    );
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+    const channel = MethodChannel('test.awiki/attachment-picker-failure');
+    final channelCalls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          channelCalls.add(call);
+          return call.method == 'preflightScreenCapturePermission';
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+    final service = MethodChannelAttachmentPickerService(
+      channel: channel,
+      screenshotSupported: true,
+      temporaryDirectoryProvider: () async => tempDir,
+      processRunner: (_, _) async =>
+          throw const ProcessException('screencapture', <String>[]),
+    );
+
+    await expectLater(
+      service.captureScreenshot(hideApp: true),
+      throwsA(isA<StateError>()),
+    );
+    expect(channelCalls.map((call) => call.method), <String>[
+      'preflightScreenCapturePermission',
+    ]);
+  });
+
+  test(
+    'captureScreenshot requests permission once and never captures desktop when denied',
+    () async {
+      const channel = MethodChannel('test.awiki/attachment-picker-permission');
+      final channelCalls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            channelCalls.add(call);
+            return false;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      var processCalls = 0;
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        screenshotSupported: true,
+        processRunner: (_, _) async {
+          processCalls += 1;
+          return ProcessResult(1, 0, '', '');
+        },
+      );
+
+      await expectLater(
+        service.captureScreenshot(),
+        throwsA(isA<StateError>()),
+      );
+      await expectLater(
+        service.captureScreenshot(),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(processCalls, 0);
+      expect(channelCalls.map((call) => call.method), <String>[
+        'preflightScreenCapturePermission',
+        'requestScreenCapturePermission',
+        'preflightScreenCapturePermission',
+      ]);
+    },
+  );
+
+  test(
+    'macOS clipboard prefers a copied image file over its Finder icon',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-clipboard-file-test-',
+      );
+      final source = File('${tempDir.path}/actual-picture.png');
+      final actualBytes = Uint8List.fromList(<int>[137, 80, 78, 71, 1, 2, 3]);
+      final finderIconBytes = Uint8List.fromList(<int>[137, 80, 78, 71, 9]);
+      await source.writeAsBytes(actualBytes);
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final service = MethodChannelAttachmentPickerService(
+        preferClipboardFiles: true,
+        clipboardFilesReader: () async => <String>[source.path],
+        clipboardImageReader: () async => finderIconBytes,
+      );
+
+      final draft = await service.readClipboardAttachment();
+
+      expect(draft, isNotNull);
+      expect(draft!.filename, 'actual-picture.png');
+      expect(draft.bytes, isNull);
+      expect(await File(draft.localPath!).readAsBytes(), actualBytes);
+      addTearDown(() async {
+        final staged = File(draft.localPath!);
+        if (await staged.exists()) {
+          await staged.delete();
+        }
+      });
+    },
+  );
+
+  test('macOS clipboard falls back to direct screenshot image bytes', () async {
+    final screenshotBytes = Uint8List.fromList(<int>[137, 80, 78, 71, 4]);
+    final service = MethodChannelAttachmentPickerService(
+      preferClipboardFiles: true,
+      clipboardFilesReader: () async => const <String>[],
+      clipboardImageReader: () async => screenshotBytes,
+    );
+
+    final draft = await service.readClipboardAttachment();
+
+    expect(draft, isNotNull);
+    expect(draft!.filename, startsWith('pasted-image-'));
+    expect(draft.mimeType, 'image/png');
+    expect(draft.bytes, screenshotBytes);
   });
 }

@@ -9,7 +9,7 @@ if ! command -v "$flutter_bin" >/dev/null 2>&1; then
   cat >&2 <<'MSG'
 error: flutter is not on PATH.
 Set FLUTTER_BIN to your Flutter executable, for example:
-  FLUTTER_BIN=/path/to/flutter/bin/flutter scripts/bootstrap_macos.sh
+  FLUTTER_BIN=/path/to/flutter/bin/flutter scripts/prepare_macos_build.sh
 MSG
   exit 1
 fi
@@ -30,7 +30,7 @@ error: xcodebuild was not found.
 Install/open full Xcode, then either select it globally:
   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 or run this script with:
-  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/bootstrap_macos.sh
+  DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/prepare_macos_build.sh
 MSG
   exit 1
 fi

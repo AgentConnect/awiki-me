@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
@@ -568,6 +569,20 @@ void main() {
   testWidgets('runtime actions open chat and send control commands', (
     tester,
   ) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        'did:agent:runtime': UserProfile(
+          did: 'did:agent:runtime',
+          displayName: 'Hermes',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'awiki-agent-hermes.awiki.ai',
+        ),
+      }
+      ..directoryConversationIdsByQuery = <String, String>{
+        'did:agent:runtime': 'dm:peer-scope:v1:hermes-runtime',
+      };
     final control = FakeAgentControlService()
       ..agents = <AgentSummary>[
         const AgentSummary(
@@ -597,6 +612,7 @@ void main() {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AgentsWorkspacePage(),
+        gateway: gateway,
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -626,7 +642,7 @@ void main() {
     );
     expect(
       container.read(selectedConversationProvider)?.effectiveConversationId,
-      'dm:did:agent:runtime',
+      'dm:peer-scope:v1:hermes-runtime',
     );
     expect(
       container.read(selectedConversationProvider)?.targetPeer,

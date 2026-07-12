@@ -31,6 +31,7 @@ import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../settings/settings_page.dart';
+import '../profile/peer_display_profile_provider.dart';
 import 'conversation_list_ordering.dart';
 import 'conversation_peer_classifier.dart';
 import 'conversation_provider.dart';
@@ -398,7 +399,11 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           widget.composerDrafts,
                         );
                         return _MacConversationRow(
-                          title: DidDisplayFormatter.conversationTitle(
+                          key: Key(
+                            'conversation-row:${item.effectiveConversationId}',
+                          ),
+                          title: _conversationPresentationTitle(
+                            ref,
                             item,
                             context.l10n,
                           ),
@@ -437,6 +442,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
         ? widget.conversations
         : widget.conversations.where((conversation) {
             return _conversationSearchText(
+              ref,
               context,
               conversation,
             ).contains(query);
@@ -588,6 +594,7 @@ class _ConversationRefreshViewState
         ? widget.conversations
         : widget.conversations.where((conversation) {
             return _conversationSearchText(
+              ref,
               context,
               conversation,
             ).contains(query);
@@ -688,7 +695,9 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   composerDrafts,
                 );
                 return _ConversationRow(
-                  title: DidDisplayFormatter.conversationTitle(
+                  key: Key('conversation-row:${item.effectiveConversationId}'),
+                  title: _conversationPresentationTitle(
+                    ref,
                     item,
                     context.l10n,
                   ),
@@ -811,6 +820,7 @@ class _MacListIconButton extends StatelessWidget {
 
 class _MacConversationRow extends StatelessWidget {
   const _MacConversationRow({
+    super.key,
     required this.title,
     required this.avatarUri,
     required this.preview,
@@ -989,6 +999,7 @@ class _MacConversationEmptyState extends StatelessWidget {
 
 class _ConversationRow extends StatelessWidget {
   const _ConversationRow({
+    super.key,
     required this.title,
     required this.avatarUri,
     required this.preview,
@@ -1203,18 +1214,40 @@ class _ConversationContextMenuRegionState
 }
 
 String _conversationSearchText(
+  WidgetRef ref,
   BuildContext context,
   ConversationSummary conversation,
 ) {
   return _normalizedConversationSearchText(
     <String>[
-      DidDisplayFormatter.conversationTitle(conversation, context.l10n),
+      _conversationPresentationTitle(ref, conversation, context.l10n),
       conversation.displayName,
       conversation.lastMessagePreview,
       conversation.targetDid ?? '',
       conversation.groupId ?? '',
       conversation.threadId,
     ].join(' '),
+  );
+}
+
+String _conversationPresentationTitle(
+  WidgetRef ref,
+  ConversationSummary conversation,
+  AppLocalizations l10n,
+) {
+  String? cachedPeerName;
+  final targetDid = conversation.targetDid?.trim() ?? '';
+  if (!conversation.isGroup && targetDid.isNotEmpty) {
+    cachedPeerName = peerDisplayName(
+      ref.watch(peerDisplayProfileProvider),
+      did: targetDid,
+      fallback: '',
+    );
+  }
+  return DidDisplayFormatter.conversationTitle(
+    conversation,
+    l10n,
+    peerDisplayName: cachedPeerName,
   );
 }
 
@@ -1462,7 +1495,7 @@ class _ConversationPreviewTagBadge extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final palette = _conversationPreviewTagPalette(tag.tone);
     return Container(
-      key: Key('conversation-preview-tag:${tag.text}'),
+      key: Key('conversation-preview-tag-${tag.tone.name}'),
       padding: EdgeInsets.symmetric(
         horizontal: compact
             ? responsive.displayScaled(4.5)

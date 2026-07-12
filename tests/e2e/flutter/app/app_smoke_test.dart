@@ -5,20 +5,26 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show Key, Size;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/widgets.dart' show Key, ListView, Size, Text;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../../unit/test_support.dart' as test_support;
+import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
 
 class _StaticConversationListController extends ConversationListController {
@@ -33,6 +39,12 @@ class _StaticConversationListController extends ConversationListController {
   Future<void> refresh() async {
     // The integration smoke seeds the list synchronously so AppRuntime
     // initialization cannot race the UI flow under test.
+  }
+}
+
+class _StaticFriendsController extends FriendsController {
+  _StaticFriendsController(super.ref, FriendsState initialState) {
+    state = initialState;
   }
 }
 
@@ -58,6 +70,14 @@ void main() {
     expect(find.text('登录或注册'), findsWidgets);
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
+    await E2eCaseAttestationWriter.markPassed(
+      'SMOKE-E2E-001',
+      phases: const <String>[
+        'app_shell_visible',
+        'onboarding_visible',
+        'unauthenticated_realtime_disconnected',
+      ],
+    );
   });
 
   testWidgets('AwikiMeApp starts authenticated shell', (tester) async {
@@ -81,6 +101,148 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsNothing);
   });
+
+  testWidgets(
+    'AwikiMeApp start conversation stays in recents before first send',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await tester.binding.setSurfaceSize(const Size(1280, 820));
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        handle: 'me',
+        displayName: 'Me',
+        jwtToken: 'test-jwt',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+      harness.gateway.publicProfilesByQuery['did:test:smoke-peer.awiki.ai'] =
+          const UserProfile(
+            did: 'did:test:smoke-peer.awiki.ai',
+            nickName: 'Smoke Peer Nickname',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+            handle: 'smoke-peer',
+            fullHandle: 'smoke-peer.awiki.ai',
+          );
+      final picker = test_support.FakeAttachmentPickerService();
+
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: <Override>[
+              ...harness.providerOverrides,
+              attachmentPickerServiceProvider.overrideWithValue(picker),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('start-conversation-button')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('identity-lookup-input')),
+          '@smoke-peer.awiki.ai',
+        );
+        await tester.tap(
+          find.byKey(const Key('identity-lookup-search-button')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('identity-start-chat-button')));
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        );
+        var conversations = container
+            .read(conversationListProvider)
+            .conversations;
+        expect(conversations, hasLength(1));
+        expect(conversations.single.lastMessagePreview, isEmpty);
+        final headerTitle = tester.widget<Text>(
+          find.byKey(const Key('chat-header-title')),
+        );
+        expect(headerTitle.data, 'Smoke Peer Nickname');
+        expect(find.byKey(const Key('chat-emoji-button')), findsOneWidget);
+        expect(find.byKey(const Key('chat-screenshot-button')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('chat-emoji-button')));
+        await _pumpSmokeFrame(tester);
+        expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
+        await tester.tap(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is ListView &&
+                widget.key is ValueKey<String> &&
+                (widget.key! as ValueKey<String>).value.startsWith(
+                  'chat-messages:',
+                ),
+          ),
+        );
+        await _pumpSmokeFrame(tester);
+        expect(find.byKey(const Key('chat-emoji-picker')), findsNothing);
+        await tester.tap(find.byKey(const Key('chat-emoji-button')));
+        await _pumpSmokeFrame(tester);
+        await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
+        await _pumpSmokeFrame(tester);
+        await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+        await _pumpSmokeFrame(tester);
+        expect(picker.screenshotCalls, 1);
+        expect(picker.lastScreenshotHideApp, isFalse);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+        await tester.tap(find.byKey(const Key('chat-screenshot-button')));
+        await _pumpSmokeFrame(tester);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+        expect(picker.screenshotCalls, 2);
+        expect(picker.lastScreenshotHideApp, isTrue);
+
+        harness.gateway.conversations = <ConversationSummary>[
+          ConversationSummary(
+            conversationId: 'dm:peer-scope:v1:smoke-peer',
+            threadId: 'dm:peer-scope:v1:smoke-peer',
+            displayName: 'smoke-peer.awiki.ai',
+            lastMessagePreview: '',
+            lastMessageAt: DateTime.utc(2026, 7, 10, 15),
+            unreadCount: 0,
+            isGroup: false,
+            targetDid: 'did:test:smoke-peer:previous',
+            targetPeer: 'smoke-peer.awiki.ai',
+          ),
+        ];
+        await container.read(conversationListProvider.notifier).refresh();
+        await _pumpSmokeFrame(tester);
+
+        conversations = container.read(conversationListProvider).conversations;
+        expect(conversations, hasLength(1));
+        final started = conversations.single;
+        expect(started.conversationId, 'dm:peer-scope:v1:smoke-peer');
+        expect(
+          container.read(selectedConversationProvider)?.effectiveConversationId,
+          'dm:peer-scope:v1:smoke-peer',
+        );
+        expect(
+          find.byKey(
+            Key('conversation-row:${started.effectiveConversationId}'),
+          ),
+          findsOneWidget,
+        );
+
+        harness.gateway.conversations = const <ConversationSummary>[];
+        await container.read(conversationListProvider.notifier).refresh();
+        await _pumpSmokeFrame(tester);
+
+        conversations = container.read(conversationListProvider).conversations;
+        expect(conversations, hasLength(1));
+        expect(
+          conversations.single.conversationId,
+          'dm:peer-scope:v1:smoke-peer',
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        await tester.binding.setSurfaceSize(null);
+      }
+    },
+  );
 
   testWidgets('AwikiMeApp authenticated smoke opens profile and settings', (
     tester,
@@ -292,6 +454,79 @@ void main() {
     }
   });
 
+  testWidgets('AwikiMeApp 查看全部会补齐并缓存关注用户资料', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    const peerDid = 'did:test:following-profile';
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.gateway
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: peerDid,
+          displayName: peerDid,
+          relationship: 'following',
+        ),
+      ]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        peerDid: UserProfile(
+          did: peerDid,
+          displayName: '关注用户昵称',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: 'following-profile.awiki.ai',
+        ),
+      };
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            friendsProvider.overrideWith(
+              (ref) => _StaticFriendsController(
+                ref,
+                const FriendsState(
+                  following: <RelationshipSummary>[
+                    RelationshipSummary(
+                      did: peerDid,
+                      displayName: peerDid,
+                      relationship: 'following',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(harness.gateway.loadPublicProfileQueries, isEmpty);
+
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsLabel('联系人'),
+        find.text('联系人'),
+      ]);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('friends-following-view-all')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('关注用户昵称'), findsWidgets);
+      expect(harness.gateway.loadPublicProfileQueries, <String>[peerDid]);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
   testWidgets('AwikiMeApp smoke recovers Message Agent action into chat', (
     tester,
   ) async {
@@ -435,7 +670,7 @@ void main() {
       const runtimeDid = 'did:test:agent:hermes-ui';
       final conversation = ConversationSummary(
         threadId: 'dm:$runtimeDid',
-        displayName: 'Hermes UI',
+        displayName: 'hermes-ui.awiki.ai',
         lastMessagePreview: 'latest runtime reply',
         lastMessageAt: DateTime(2026, 6, 15, 10, 30),
         unreadCount: 0,
@@ -505,6 +740,21 @@ void main() {
                   <ConversationSummary>[conversation],
                 ),
               ),
+              peerDisplayProfileProvider.overrideWith((ref) {
+                final controller = PeerDisplayProfileController(ref);
+                controller.updateFromRemote(
+                  ownerDid: session.did,
+                  profile: const UserProfile(
+                    did: runtimeDid,
+                    nickName: 'Hermes Cached',
+                    bio: '',
+                    tags: <String>[],
+                    profileMarkdown: '',
+                    fullHandle: 'hermes-ui.awiki.ai',
+                  ),
+                );
+                return controller;
+              }),
             ],
           ),
         );
@@ -512,7 +762,8 @@ void main() {
 
         expect(find.byType(AppShell), findsOneWidget);
         expect(find.text('最近会话'), findsOneWidget);
-        await tester.tap(find.text('Hermes UI').first);
+        expect(find.text('Hermes Cached'), findsOneWidget);
+        await tester.tap(find.text('Hermes Cached').first);
         await tester.pumpAndSettle();
 
         expect(find.text('会话信息'), findsNothing);
@@ -529,6 +780,7 @@ void main() {
         await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
         await tester.pumpAndSettle();
 
+        expect(find.text('Hermes UI'), findsWidgets);
         expect(find.text('智能体信息'), findsOneWidget);
         expect(find.text('Hermes'), findsOneWidget);
         expect(find.text('Agent 收件箱'), findsOneWidget);

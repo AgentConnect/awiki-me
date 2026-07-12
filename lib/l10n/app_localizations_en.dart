@@ -1176,6 +1176,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAddAttachment => 'Add attachment';
 
   @override
+  String get chatAddEmoji => 'Choose emoji';
+
+  @override
+  String get chatCaptureScreenshot => 'Capture screenshot';
+
+  @override
+  String get screenshotPermissionRequired =>
+      'Screen Recording permission is not active. Allow the current AWiki Me app under Screen & System Audio Recording in System Settings, then quit and reopen it.';
+
+  @override
   String get chatRemoveAttachment => 'Remove attachment';
 
   @override

@@ -31,7 +31,7 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
       (client) => client.directory.listFollowers(
         limit: limit,
         offset: offset,
-        hydrateProfiles: true,
+        hydrateProfiles: false,
       ),
     );
     return _mappers.relationshipPageFromCore(
@@ -50,7 +50,7 @@ class AwikiImCoreRelationshipAdapter implements RelationshipCorePort {
       (client) => client.directory.listFollowing(
         limit: limit,
         offset: offset,
-        hydrateProfiles: true,
+        hydrateProfiles: false,
       ),
     );
     return _mappers.relationshipPageFromCore(

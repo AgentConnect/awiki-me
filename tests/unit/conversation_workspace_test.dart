@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
@@ -1784,6 +1785,31 @@ void main() {
     expect(find.text('最近会话'), findsOneWidget);
     expect(find.text('智能体'), findsOneWidget);
     expect(find.text('Agents'), findsNothing);
+    expect(find.byKey(const Key('mac-messages-unread-badge')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mac-messages-unread-badge')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+    final conversationRow = find.byKey(
+      Key('conversation-row:${conversation.effectiveConversationId}'),
+    );
+    expect(conversationRow, findsOneWidget);
+    final unreadTag = find.descendant(
+      of: conversationRow,
+      matching: find.byKey(const Key('conversation-preview-tag-unread')),
+    );
+    expect(unreadTag, findsOneWidget);
+    final l10n = AppLocalizations.of(tester.element(unreadTag));
+    expect(
+      find.descendant(
+        of: unreadTag,
+        matching: find.text(l10n.conversationsUnreadTag('3')),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('任务'));
     await tester.pumpAndSettle();

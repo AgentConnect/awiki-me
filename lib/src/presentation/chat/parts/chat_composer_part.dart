@@ -12,6 +12,7 @@ class _Composer extends ConsumerStatefulWidget {
     this.disabledReason,
     required this.onSend,
     required this.onAttach,
+    required this.onScreenshot,
     required this.onPasteAttachment,
     required this.onRemoveAttachment,
   });
@@ -26,6 +27,7 @@ class _Composer extends ConsumerStatefulWidget {
   final String? disabledReason;
   final Future<void> Function() onSend;
   final Future<void> Function() onAttach;
+  final Future<void> Function({required bool hideApp}) onScreenshot;
   final Future<bool> Function() onPasteAttachment;
   final VoidCallback onRemoveAttachment;
 
@@ -35,8 +37,10 @@ class _Composer extends ConsumerStatefulWidget {
 
 class _ComposerState extends ConsumerState<_Composer> {
   final FocusNode _inputFocusNode = FocusNode();
+  final Object _emojiTapRegionGroup = Object();
   bool _isSending = false;
   bool _isPastingFromClipboard = false;
+  bool _showEmojiPicker = false;
   ChatMentionTrigger? _activeMentionTrigger;
   List<ChatMentionCandidate> _mentionCandidates =
       const <ChatMentionCandidate>[];
@@ -309,6 +313,50 @@ class _ComposerState extends ConsumerState<_Composer> {
     });
   }
 
+  Future<void> _captureScreenshotIfNeeded() async {
+    if (!widget.enabled) {
+      return;
+    }
+    if (_showEmojiPicker) {
+      setState(() => _showEmojiPicker = false);
+    }
+    await widget.onScreenshot(hideApp: false);
+    if (!mounted || !widget.enabled) {
+      return;
+    }
+    _inputFocusNode.requestFocus();
+  }
+
+  void _toggleEmojiPicker() {
+    if (!widget.enabled) {
+      return;
+    }
+    setState(() => _showEmojiPicker = !_showEmojiPicker);
+  }
+
+  void _dismissEmojiPicker() {
+    if (!mounted || !_showEmojiPicker) {
+      return;
+    }
+    setState(() => _showEmojiPicker = false);
+  }
+
+  Widget _emojiTapRegion({
+    required Widget child,
+    bool dismissOnOutside = false,
+  }) {
+    return TapRegion(
+      groupId: _emojiTapRegionGroup,
+      onTapOutside: dismissOnOutside ? (_) => _dismissEmojiPicker() : null,
+      child: child,
+    );
+  }
+
+  void _insertEmoji(String emoji) {
+    _insertTextAtSelection(emoji);
+    _inputFocusNode.requestFocus();
+  }
+
   Future<void> _pasteFromClipboard() async {
     if (!widget.enabled || _isPastingFromClipboard) {
       return;
@@ -370,6 +418,10 @@ class _ComposerState extends ConsumerState<_Composer> {
           return KeyEventResult.handled;
         }
       }
+    }
+    if (key == LogicalKeyboardKey.escape && _showEmojiPicker) {
+      setState(() => _showEmojiPicker = false);
+      return KeyEventResult.handled;
     }
     if (key != LogicalKeyboardKey.enter &&
         key != LogicalKeyboardKey.numpadEnter) {
@@ -452,9 +504,9 @@ class _ComposerState extends ConsumerState<_Composer> {
             return Padding(
               padding: EdgeInsets.fromLTRB(
                 horizontal,
-                responsive.displayScaled(8),
+                responsive.displayScaled(2),
                 horizontal,
-                responsive.displayScaled(16),
+                responsive.displayScaled(10),
               ),
               child: Container(
                 padding: EdgeInsets.fromLTRB(
@@ -490,6 +542,16 @@ class _ComposerState extends ConsumerState<_Composer> {
                       ),
                       SizedBox(height: responsive.displayScaled(8)),
                     ],
+                    if (_showEmojiPicker && widget.enabled) ...<Widget>[
+                      _emojiTapRegion(
+                        dismissOnOutside: true,
+                        child: _EmojiPickerPanel(
+                          macStyle: true,
+                          onSelected: _insertEmoji,
+                        ),
+                      ),
+                      SizedBox(height: responsive.displayScaled(6)),
+                    ],
                     if (!widget.enabled)
                       _DisabledComposerNotice(
                         message: disabledReason,
@@ -503,9 +565,35 @@ class _ComposerState extends ConsumerState<_Composer> {
                       ),
                       SizedBox(height: responsive.displayScaled(8)),
                     ],
-                    if (widget.enabled)
+                    if (widget.enabled) ...<Widget>[
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: responsive.displayScaled(38),
+                        ),
+                        child: _ComposerTextField(
+                          controller: widget.controller,
+                          focusNode: _inputFocusNode,
+                          onKeyEvent: _handleInputKeyEvent,
+                          placeholder: context.l10n.chatInputPlaceholder,
+                          textStyle: TextStyle(
+                            color: const Color(0xFF17213A),
+                            fontSize: responsive.displayScaled(13.5),
+                            height: 1.32,
+                          ),
+                          placeholderStyle: TextStyle(
+                            color: const Color(0xFF8A96AA),
+                            fontSize: responsive.displayScaled(13.5),
+                          ),
+                          padding: EdgeInsets.symmetric(
+                            vertical: responsive.displayScaled(5),
+                          ),
+                          maxLines: 5,
+                          onSubmitted: (_) async => _submitIfNeeded(),
+                        ),
+                      ),
+                      SizedBox(height: responsive.displayScaled(2)),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                        key: const Key('chat-composer-tool-row'),
                         children: <Widget>[
                           if (showAttachment) ...<Widget>[
                             AppIconButton(
@@ -513,41 +601,58 @@ class _ComposerState extends ConsumerState<_Composer> {
                               onPressed: _attachIfNeeded,
                               semanticLabel: context.l10n.chatAddAttachment,
                               tooltip: context.l10n.chatAddAttachment,
-                              size: responsive.displayScaled(34),
+                              size: responsive.displayScaled(29),
                               borderRadius: BorderRadius.circular(
-                                responsive.displayScaled(9),
+                                responsive.displayScaled(7),
                               ),
                               child: Icon(
                                 CupertinoIcons.paperclip,
                                 color: const Color(0xFF34415C),
-                                size: responsive.displayScaled(22),
+                                size: responsive.displayScaled(17),
                               ),
                             ),
-                            SizedBox(width: responsive.displayScaled(10)),
+                            SizedBox(width: responsive.displayScaled(3)),
+                            _emojiTapRegion(
+                              child: AppIconButton(
+                                key: const Key('chat-emoji-button'),
+                                onPressed: _toggleEmojiPicker,
+                                semanticLabel: context.l10n.chatAddEmoji,
+                                tooltip: context.l10n.chatAddEmoji,
+                                size: responsive.displayScaled(29),
+                                borderRadius: BorderRadius.circular(
+                                  responsive.displayScaled(7),
+                                ),
+                                backgroundColor: _showEmojiPicker
+                                    ? const Color(0xFFEAF2FF)
+                                    : CupertinoColors.transparent,
+                                child: Icon(
+                                  CupertinoIcons.smiley,
+                                  color: const Color(0xFF34415C),
+                                  size: responsive.displayScaled(17),
+                                ),
+                              ),
+                            ),
+                            if (constraints.maxWidth >= 420) ...<Widget>[
+                              SizedBox(width: responsive.displayScaled(3)),
+                              AppIconButton(
+                                key: const Key('chat-screenshot-button'),
+                                onPressed: _captureScreenshotIfNeeded,
+                                semanticLabel:
+                                    context.l10n.chatCaptureScreenshot,
+                                tooltip: context.l10n.chatCaptureScreenshot,
+                                size: responsive.displayScaled(29),
+                                borderRadius: BorderRadius.circular(
+                                  responsive.displayScaled(7),
+                                ),
+                                child: Icon(
+                                  CupertinoIcons.scissors,
+                                  color: const Color(0xFF34415C),
+                                  size: responsive.displayScaled(16),
+                                ),
+                              ),
+                            ],
                           ],
-                          Expanded(
-                            child: _ComposerTextField(
-                              controller: widget.controller,
-                              focusNode: _inputFocusNode,
-                              onKeyEvent: _handleInputKeyEvent,
-                              placeholder: context.l10n.chatInputPlaceholder,
-                              textStyle: TextStyle(
-                                color: const Color(0xFF17213A),
-                                fontSize: responsive.displayScaled(13.5),
-                                height: 1.32,
-                              ),
-                              placeholderStyle: TextStyle(
-                                color: const Color(0xFF8A96AA),
-                                fontSize: responsive.displayScaled(13.5),
-                              ),
-                              padding: EdgeInsets.symmetric(
-                                vertical: responsive.displayScaled(7),
-                              ),
-                              maxLines: 5,
-                              onSubmitted: (_) async => _submitIfNeeded(),
-                            ),
-                          ),
-                          SizedBox(width: responsive.displayScaled(10)),
+                          const Spacer(),
                           AppPressable(
                             key: const Key('chat-send-button'),
                             onTap: canUseSendButton ? _submitIfNeeded : null,
@@ -572,8 +677,8 @@ class _ComposerState extends ConsumerState<_Composer> {
                               );
                             },
                             child: Container(
-                              width: responsive.displayScaled(36),
-                              height: responsive.displayScaled(36),
+                              width: responsive.displayScaled(31),
+                              height: responsive.displayScaled(31),
                               decoration: BoxDecoration(
                                 color: highlightSendButton
                                     ? const Color(0xFF0B65F8)
@@ -587,12 +692,13 @@ class _ComposerState extends ConsumerState<_Composer> {
                                 color: highlightSendButton
                                     ? CupertinoColors.white
                                     : const Color(0xFF8A96AA),
-                                size: responsive.displayScaled(18),
+                                size: responsive.displayScaled(15),
                               ),
                             ),
                           ),
                         ],
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -648,6 +754,16 @@ class _ComposerState extends ConsumerState<_Composer> {
                 ),
                 SizedBox(height: responsive.spacing(8)),
               ],
+              if (_showEmojiPicker && widget.enabled) ...<Widget>[
+                _emojiTapRegion(
+                  dismissOnOutside: true,
+                  child: _EmojiPickerPanel(
+                    macStyle: false,
+                    onSelected: _insertEmoji,
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(8)),
+              ],
               if (!widget.enabled)
                 _DisabledComposerNotice(
                   message: disabledReason,
@@ -678,7 +794,26 @@ class _ComposerState extends ConsumerState<_Composer> {
                         ),
                       ),
                     ),
-                    SizedBox(width: responsive.spacing(8)),
+                    SizedBox(width: responsive.spacing(4)),
+                    _emojiTapRegion(
+                      child: TopBarActionButton(
+                        key: const Key('chat-emoji-button'),
+                        onTap: _toggleEmojiPicker,
+                        semanticsLabel: context.l10n.chatAddEmoji,
+                        tooltip: context.l10n.chatAddEmoji,
+                        child: Padding(
+                          padding: EdgeInsets.all(responsive.spacing(6)),
+                          child: Icon(
+                            CupertinoIcons.smiley,
+                            color: _showEmojiPicker
+                                ? theme.primary
+                                : theme.secondaryText,
+                            size: responsive.iconMd,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: responsive.spacing(4)),
                     Expanded(
                       child: _ComposerTextField(
                         controller: widget.controller,
@@ -727,6 +862,101 @@ class _ComposerState extends ConsumerState<_Composer> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+const List<String> _composerEmojis = <String>[
+  '😀',
+  '😄',
+  '😂',
+  '😊',
+  '😍',
+  '🥰',
+  '😎',
+  '🤔',
+  '🥳',
+  '😭',
+  '😅',
+  '😴',
+  '👍',
+  '👏',
+  '🙏',
+  '💪',
+  '👌',
+  '❤️',
+  '🔥',
+  '🎉',
+  '✨',
+  '💡',
+  '✅',
+  '🚀',
+  '👀',
+  '🤝',
+  '🌟',
+  '💬',
+  '📎',
+  '☕',
+];
+
+class _EmojiPickerPanel extends StatelessWidget {
+  const _EmojiPickerPanel({required this.macStyle, required this.onSelected});
+
+  final bool macStyle;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      key: const Key('chat-emoji-picker'),
+      width: double.infinity,
+      constraints: BoxConstraints(
+        maxHeight: macStyle
+            ? responsive.displayScaled(132)
+            : responsive.scaled(156),
+      ),
+      padding: EdgeInsets.all(
+        macStyle ? responsive.displayScaled(8) : responsive.spacing(8),
+      ),
+      decoration: BoxDecoration(
+        color: macStyle ? const Color(0xFFF7F9FC) : const Color(0xFFFBFCFF),
+        borderRadius: BorderRadius.circular(
+          macStyle ? responsive.displayScaled(9) : responsive.radius(12),
+        ),
+        border: Border.all(color: const Color(0xFFDDE5F0)),
+      ),
+      child: SingleChildScrollView(
+        child: Wrap(
+          spacing: macStyle
+              ? responsive.displayScaled(3)
+              : responsive.spacing(4),
+          runSpacing: macStyle
+              ? responsive.displayScaled(3)
+              : responsive.spacing(4),
+          children: <Widget>[
+            for (var index = 0; index < _composerEmojis.length; index += 1)
+              CupertinoButton(
+                key: Key('chat-emoji-option:$index'),
+                minimumSize: Size.zero,
+                padding: EdgeInsets.all(
+                  macStyle
+                      ? responsive.displayScaled(6)
+                      : responsive.spacing(7),
+                ),
+                onPressed: () => onSelected(_composerEmojis[index]),
+                child: Text(
+                  _composerEmojis[index],
+                  style: TextStyle(
+                    fontSize: macStyle
+                        ? responsive.displayScaled(20)
+                        : responsive.scaled(22),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -1244,7 +1474,7 @@ String? _localizedMentionDisabledReason(
   };
 }
 
-class _PendingAttachmentPreview extends StatelessWidget {
+class _PendingAttachmentPreview extends ConsumerWidget {
   const _PendingAttachmentPreview({
     required this.attachment,
     required this.macStyle,
@@ -1256,9 +1486,10 @@ class _PendingAttachmentPreview extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
     final radius = responsive.radius(macStyle ? 8 : 12);
+    final previewSize = responsive.displayScaled(macStyle ? 36 : 42);
     return Container(
       key: const Key('chat-pending-attachment-preview'),
       padding: EdgeInsets.fromLTRB(
@@ -1274,18 +1505,9 @@ class _PendingAttachmentPreview extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Container(
-            width: responsive.displayScaled(macStyle ? 28 : 32),
-            height: responsive.displayScaled(macStyle ? 28 : 32),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF2FF),
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-            ),
-            child: Icon(
-              CupertinoIcons.doc,
-              color: const Color(0xFF0B65F8),
-              size: responsive.displayScaled(macStyle ? 16 : 18),
-            ),
+          SizedBox.square(
+            dimension: previewSize,
+            child: _pendingAttachmentLeading(context, ref, previewSize),
           ),
           SizedBox(width: responsive.spacing(9)),
           Expanded(
@@ -1337,6 +1559,49 @@ class _PendingAttachmentPreview extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _pendingAttachmentLeading(
+    BuildContext context,
+    WidgetRef ref,
+    double size,
+  ) {
+    final radius = BorderRadius.circular(context.awikiResponsive.radius(8));
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: radius,
+      ),
+      child: Icon(
+        CupertinoIcons.doc,
+        color: const Color(0xFF0B65F8),
+        size: context.awikiResponsive.displayScaled(macStyle ? 16 : 18),
+      ),
+    );
+    if (!_isSupportedInlineImage(
+      mimeType: attachment.mimeType,
+      filename: attachment.filename,
+    )) {
+      return fallback;
+    }
+    final bytes = attachment.bytes;
+    final localPath = attachment.localPath?.trim();
+    if (bytes == null && (localPath == null || localPath.isEmpty)) {
+      return fallback;
+    }
+    final image = ref.watch(chatImageWidgetBuilderProvider)(
+      path: localPath,
+      bytes: bytes,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorFallback: fallback,
+    );
+    return ClipRRect(
+      key: const Key('chat-pending-image-preview'),
+      borderRadius: radius,
+      child: image,
     );
   }
 }

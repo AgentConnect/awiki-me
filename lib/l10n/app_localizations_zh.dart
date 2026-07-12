@@ -1120,6 +1120,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAddAttachment => '添加附件';
 
   @override
+  String get chatAddEmoji => '选择表情';
+
+  @override
+  String get chatCaptureScreenshot => '截图';
+
+  @override
+  String get screenshotPermissionRequired =>
+      '录屏权限尚未生效。请在系统设置的“录屏与系统录音”中允许当前 AWiki Me 应用，然后完全退出并重新打开。';
+
+  @override
   String get chatRemoveAttachment => '移除附件';
 
   @override

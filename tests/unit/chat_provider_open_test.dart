@@ -716,6 +716,11 @@ void main() {
   });
 
   test('thread patch upsert updates sent result without duplicating', () async {
+    final canonicalConversation = conversation.copyWith(
+      conversationId: 'dm:peer-scope:v1:canonical-peer',
+      threadId: 'dm:peer-scope:v1:canonical-peer',
+      lastMessagePreview: '',
+    );
     final patchMessaging = _PatchMessagingService(
       localHistory: <ChatMessage>[],
     );
@@ -742,23 +747,42 @@ void main() {
 
     await patchContainer
         .read(chatThreadsProvider.notifier)
-        .openConversation(conversation);
+        .openConversation(canonicalConversation);
     await pumpEventQueue();
     await patchContainer
         .read(chatThreadsProvider.notifier)
-        .sendMessage(conversation: conversation, content: 'hello patch');
+        .sendMessage(
+          conversation: canonicalConversation,
+          content: 'hello patch',
+        );
     await pumpEventQueue();
 
     expect(patchMessaging.sendConversationTextCalls, 1);
     expect(
       patchMessaging.lastSendConversation?.conversationId,
-      conversation.effectiveConversationId,
+      canonicalConversation.effectiveConversationId,
     );
     expect(patchMessaging.lastClientMessageId, isNotEmpty);
+    var messages = patchContainer
+        .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.content, 'hello patch');
+    expect(messages.single.sendState, MessageSendState.sent);
+    final canonicalPreview = patchContainer
+        .read(conversationListProvider)
+        .conversations
+        .singleWhere(
+          (item) =>
+              item.effectiveConversationId ==
+              canonicalConversation.effectiveConversationId,
+        );
+    expect(canonicalPreview.lastMessagePreview, 'hello patch');
     expect(
       patchContainer
-          .read(chatThreadProvider(_timelineThreadId(conversation)))
-          .messages,
+          .read(conversationListProvider)
+          .conversations
+          .where((item) => item.effectiveConversationId == 'dm:did:peer'),
       isEmpty,
     );
 
@@ -769,13 +793,13 @@ void main() {
         ownerDid: 'did:me',
         version: 2,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: canonicalConversation.effectiveConversationId,
+        conversationId: canonicalConversation.effectiveConversationId,
         message: ChatMessage(
           localId: clientMessageId,
           remoteId: clientMessageId,
-          conversationId: conversation.effectiveConversationId,
-          threadId: conversation.threadId,
+          conversationId: canonicalConversation.effectiveConversationId,
+          threadId: canonicalConversation.threadId,
           senderDid: 'did:me',
           receiverDid: 'did:peer',
           content: 'hello patch',
@@ -787,12 +811,12 @@ void main() {
     );
     await pumpEventQueue();
 
-    var messages = patchContainer
-        .read(chatThreadProvider(_timelineThreadId(conversation)))
+    messages = patchContainer
+        .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.localId, clientMessageId);
-    expect(messages.single.sendState, MessageSendState.sending);
+    expect(messages.single.sendState, MessageSendState.sent);
 
     patchMessaging.emitPatch(
       ThreadMessagePatch(
@@ -800,13 +824,13 @@ void main() {
         ownerDid: 'did:me',
         version: 3,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: canonicalConversation.effectiveConversationId,
+        conversationId: canonicalConversation.effectiveConversationId,
         message: ChatMessage(
           localId: clientMessageId,
           remoteId: 'sent-patched',
-          conversationId: conversation.effectiveConversationId,
-          threadId: conversation.threadId,
+          conversationId: canonicalConversation.effectiveConversationId,
+          threadId: canonicalConversation.threadId,
           senderDid: 'did:me',
           receiverDid: 'did:peer',
           content: 'hello patch',
@@ -820,12 +844,106 @@ void main() {
     await pumpEventQueue();
 
     messages = patchContainer
-        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
         .messages;
     expect(messages, hasLength(1));
     expect(messages.single.remoteId, 'sent-patched');
     expect(messages.single.sendState, MessageSendState.sent);
     expect(messages.single.serverSequence, 2);
+  });
+
+  test(
+    'send result settles a pending patch without waiting for final patch',
+    () async {
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[],
+        emitPendingBeforeTextResult: true,
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+
+      await patchContainer
+          .read(chatThreadsProvider.notifier)
+          .openConversation(conversation);
+      await pumpEventQueue();
+      final repairCallsBeforeSend = patchMessaging.repairConversationCalls;
+      await patchContainer
+          .read(chatThreadsProvider.notifier)
+          .sendMessage(conversation: conversation, content: 'settle result');
+      await pumpEventQueue();
+
+      final messages = patchContainer
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .messages;
+      expect(messages, hasLength(1));
+      expect(messages.single.content, 'settle result');
+      expect(messages.single.sendState, MessageSendState.sent);
+      expect(patchMessaging.repairConversationCalls, repairCallsBeforeSend);
+    },
+  );
+
+  test('send error settles a pending patch as failed', () async {
+    final patchMessaging = _PatchMessagingService(
+      localHistory: <ChatMessage>[],
+      emitPendingBeforeTextResult: true,
+      textSendError: StateError('send failed'),
+    );
+    final patchContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(gateway),
+        notificationFacadeProvider.overrideWithValue(notificationFacade),
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(patchMessaging),
+        sessionProvider.overrideWith((ref) {
+          final controller = SessionController();
+          controller.setSession(
+            const SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+            ),
+          );
+          return controller;
+        }),
+      ],
+    );
+    addTearDown(patchContainer.dispose);
+
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+    final repairCallsBeforeSend = patchMessaging.repairConversationCalls;
+    await patchContainer
+        .read(chatThreadsProvider.notifier)
+        .sendMessage(conversation: conversation, content: 'failed result');
+    await pumpEventQueue();
+
+    final messages = patchContainer
+        .read(chatThreadProvider(_timelineThreadId(conversation)))
+        .messages;
+    expect(messages, hasLength(1));
+    expect(messages.single.content, 'failed result');
+    expect(messages.single.sendState, MessageSendState.failed);
+    expect(patchMessaging.repairConversationCalls, repairCallsBeforeSend);
   });
 
   test('群聊回执先于本地失败 echo 到达时只展示已发送消息', () async {
@@ -3225,7 +3343,7 @@ void main() {
     );
   });
 
-  test('发送后不触发 full refresh 或 force history 补拉', () async {
+  test('发送成功后精确展示一条已发送消息且不触发 full refresh 或 history 补拉', () async {
     final reply = ChatMessage(
       localId: 'reply-1',
       remoteId: 'reply-1',
@@ -3281,13 +3399,15 @@ void main() {
     final messages = sendContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages, isEmpty);
+    expect(messages, hasLength(1));
+    expect(messages.single.content, '你好');
+    expect(messages.single.sendState, MessageSendState.sent);
     expect(messages.map((item) => item.content), isNot(contains('你好。欢迎')));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
-  test('发送后不会直接覆盖最近会话预览，等待 core summary patch', () async {
+  test('发送成功后立即用权威发送结果更新最近会话预览', () async {
     gateway.conversations = const <ConversationSummary>[];
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -3323,10 +3443,7 @@ void main() {
         .conversations;
     expect(conversations, hasLength(1));
     expect(conversations.single.threadId, conversation.threadId);
-    expect(
-      conversations.single.lastMessagePreview,
-      conversation.lastMessagePreview,
-    );
+    expect(conversations.single.lastMessagePreview, '你好');
     expect(conversations.single.targetDid, conversation.targetDid);
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -3401,17 +3518,16 @@ void main() {
     final refreshedThread = sendContainer.read(
       chatThreadProvider(refreshedConversation.threadId),
     );
-    expect(openedThread.messages, isEmpty);
+    expect(openedThread.messages, hasLength(1));
+    expect(openedThread.messages.single.content, '你好');
+    expect(openedThread.messages.single.sendState, MessageSendState.sent);
     expect(refreshedThread.messages, isEmpty);
     expect(openedThread.isAgentProcessing, isTrue);
     expect(refreshedThread.isAgentProcessing, isFalse);
-    expect(
-      gateway.lastSentThreadId,
-      refreshedConversation.effectiveConversationId,
-    );
+    expect(gateway.lastSentThreadId, refreshedConversation.threadId);
     expect(
       sendContainer.read(selectedConversationProvider)?.threadId,
-      openedConversation.threadId,
+      refreshedConversation.threadId,
     );
     expect(
       sendContainer
@@ -3419,11 +3535,11 @@ void main() {
           .conversations
           .single
           .lastMessagePreview,
-      '旧预览',
+      '你好',
     );
   });
 
-  test('发送后不会用本地 pending 预览覆盖 core 会话摘要', () async {
+  test('发送成功后用权威发送结果更新会话摘要且不触发远端刷新', () async {
     final staleConversation = ConversationSummary(
       threadId: conversation.threadId,
       displayName: conversation.displayName,
@@ -3471,8 +3587,8 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .single;
-    expect(latest.lastMessagePreview, conversation.lastMessagePreview);
-    expect(latest.lastMessageAt, conversation.lastMessageAt);
+    expect(latest.lastMessagePreview, '正在处理的问题');
+    expect(latest.lastMessageAt.isAfter(conversation.lastMessageAt), isTrue);
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
   });
@@ -3552,7 +3668,9 @@ void main() {
     thread = sendContainer.read(
       chatThreadProvider(_timelineThreadId(conversation)),
     );
-    expect(thread.messages, isEmpty);
+    expect(thread.messages, hasLength(1));
+    expect(thread.messages.single.content, '总结一下');
+    expect(thread.messages.single.sendState, MessageSendState.sent);
     expect(thread.isAgentProcessing, isTrue);
     expect(thread.pendingAgentReplyCount, 1);
   });
@@ -3899,7 +4017,7 @@ void main() {
     expect(thread.agentPendingTurns, isEmpty);
   });
 
-  test('连续发送不会用旧快照覆盖后续 pending', () async {
+  test('并发发送精确保留每条权威发送结果且不残留 pending', () async {
     gateway.sendDelay = const Duration(milliseconds: 10);
     final sendContainer = ProviderContainer(
       overrides: <Override>[
@@ -3938,7 +4056,16 @@ void main() {
     final messages = sendContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages, isEmpty);
+    expect(messages, hasLength(3));
+    expect(messages.map((item) => item.content).toSet(), <String>{
+      '5',
+      '6',
+      '7',
+    });
+    expect(
+      messages.where((item) => item.sendState == MessageSendState.sent),
+      hasLength(3),
+    );
     expect(
       messages.where((item) => item.sendState == MessageSendState.sending),
       isEmpty,
@@ -4066,7 +4193,11 @@ void main() {
     final messages = sendContainer
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
-    expect(messages.where((item) => item.content == '1'), isEmpty);
+    expect(messages.where((item) => item.content == '1'), hasLength(1));
+    expect(
+      messages.singleWhere((item) => item.content == '1').sendState,
+      MessageSendState.sent,
+    );
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
@@ -4951,7 +5082,7 @@ void main() {
     expect(flakyGateway.fetchDmHistoryCalls, 0);
   });
 
-  test('发送群聊附件使用 conversation id 且不手动更新会话预览', () async {
+  test('发送群聊附件使用 conversation id 并用权威发送结果更新预览', () async {
     const groupId = 'did:test:group:send-attachment';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
@@ -5010,7 +5141,7 @@ void main() {
     final conversations = sendContainer
         .read(conversationListProvider)
         .conversations;
-    expect(conversations.single.lastMessagePreview, '');
+    expect(conversations.single.lastMessagePreview, 'diagram.png');
     expect(gateway.listConversationsCalls, listConversationsCallsBeforeSend);
   });
 
@@ -5126,6 +5257,10 @@ void main() {
         .read(chatThreadProvider(_timelineThreadId(conversation)))
         .messages;
     expect(messages.map((item) => item.content), contains('重试文本'));
+    expect(
+      messages.singleWhere((item) => item.content == '重试文本').sendState,
+      MessageSendState.sent,
+    );
     expect(messages.map((item) => item.content), isNot(contains('远端补拉消息')));
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -5914,7 +6049,12 @@ void main() {
         .messages;
     expect(gateway.listConversationsCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
-    expect(messages, isEmpty);
+    expect(messages, hasLength(2));
+    expect(messages.map((item) => item.content), <String>['第一条', '第二条']);
+    expect(
+      messages.every((item) => item.sendState == MessageSendState.sent),
+      isTrue,
+    );
     expect(messages.map((item) => item.content), isNot(contains('批量回复')));
   });
 }
@@ -5941,6 +6081,8 @@ class _PatchMessagingService
   _PatchMessagingService({
     required this.localHistory,
     ThreadMessagePatch? repairPatch,
+    this.emitPendingBeforeTextResult = false,
+    this.textSendError,
   }) : repairPatch =
            repairPatch ??
            const ThreadMessagePatch(
@@ -5952,6 +6094,8 @@ class _PatchMessagingService
            );
 
   final List<ChatMessage> localHistory;
+  final bool emitPendingBeforeTextResult;
+  final Object? textSendError;
   ThreadMessagePatch repairPatch;
   final Map<String, List<ChatMessage>> projectionByConversationId =
       <String, List<ChatMessage>>{};
@@ -6237,11 +6381,30 @@ class _PatchMessagingService
     lastSendMentions = const <ChatMentionDraft>[];
     lastClientMessageId = clientMessageId;
     lastIdempotencyKey = idempotencyKey;
-    return _sentConversationMessage(
+    final sent = _sentConversationMessage(
       conversation: conversation,
       content: content,
       clientMessageId: clientMessageId,
     );
+    if (emitPendingBeforeTextResult) {
+      emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          message: sent.copyWith(sendState: MessageSendState.sending),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+    }
+    final error = textSendError;
+    if (error != null) {
+      throw error;
+    }
+    return sent;
   }
 
   @override

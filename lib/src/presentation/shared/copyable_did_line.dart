@@ -10,6 +10,8 @@ class CopyableDidLine extends StatelessWidget {
     required this.value,
     required this.copySemanticLabel,
     required this.copiedMessage,
+    this.displayValue,
+    this.maxLines,
     this.textKey,
     this.buttonKey,
     this.textStyle,
@@ -20,6 +22,8 @@ class CopyableDidLine extends StatelessWidget {
   });
 
   final String value;
+  final String? displayValue;
+  final int? maxLines;
   final String copySemanticLabel;
   final String copiedMessage;
   final Key? textKey;
@@ -38,8 +42,9 @@ class CopyableDidLine extends StatelessWidget {
         Expanded(
           child: Text(
             key: textKey,
-            value,
+            displayValue ?? value,
             softWrap: true,
+            maxLines: maxLines,
             style:
                 textStyle ??
                 const TextStyle(

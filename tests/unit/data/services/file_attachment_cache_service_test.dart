@@ -66,4 +66,33 @@ void main() {
       );
     },
   );
+
+  test('identical attachment ids never cross storage-scope roots', () async {
+    final sandbox = await Directory.systemTemp.createTemp('awiki-attachments-');
+    addTearDown(() async {
+      if (await sandbox.exists()) await sandbox.delete(recursive: true);
+    });
+    final first = FileAttachmentCacheService(
+      rootDirectory: () async => Directory('${sandbox.path}/scope-a'),
+    );
+    final second = FileAttachmentCacheService(
+      rootDirectory: () async => Directory('${sandbox.path}/scope-b'),
+    );
+
+    await first.cacheDownloadedBytes(
+      messageId: 'same-message',
+      attachmentId: 'same-attachment',
+      filename: 'a.txt',
+      mimeType: 'text/plain',
+      bytes: Uint8List.fromList('scope-a'.codeUnits),
+    );
+
+    expect(
+      await second.lookup(
+        messageId: 'same-message',
+        attachmentId: 'same-attachment',
+      ),
+      isNull,
+    );
+  });
 }

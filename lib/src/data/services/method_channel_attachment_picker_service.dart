@@ -7,12 +7,44 @@ import 'package:path/path.dart' as p;
 import '../../application/attachment_picker_service.dart';
 import '../../application/models/attachment_models.dart';
 
+typedef AttachmentProcessRunner =
+    Future<ProcessResult> Function(String executable, List<String> arguments);
+typedef AttachmentTemporaryDirectoryProvider = Future<Directory> Function();
+typedef AttachmentClipboardImageReader = Future<Uint8List?> Function();
+typedef AttachmentClipboardFilesReader = Future<List<String>> Function();
+
 class MethodChannelAttachmentPickerService implements AttachmentPickerService {
-  MethodChannelAttachmentPickerService({MethodChannel? channel})
-    : _channel =
-          channel ?? const MethodChannel('ai.awiki.awikime/attachment_picker');
+  MethodChannelAttachmentPickerService({
+    MethodChannel? channel,
+    bool? screenshotSupported,
+    AttachmentProcessRunner? processRunner,
+    AttachmentTemporaryDirectoryProvider? temporaryDirectoryProvider,
+    AttachmentClipboardImageReader? clipboardImageReader,
+    AttachmentClipboardFilesReader? clipboardFilesReader,
+    bool? preferClipboardFiles,
+  }) : _channel =
+           channel ?? const MethodChannel('ai.awiki.awikime/attachment_picker'),
+       _screenshotSupported = screenshotSupported ?? Platform.isMacOS,
+       _processRunner =
+           processRunner ??
+           ((executable, arguments) => Process.run(executable, arguments)),
+       _temporaryDirectoryProvider =
+           temporaryDirectoryProvider ??
+           (() async => Directory(
+             p.join(Directory.systemTemp.path, 'awiki-screenshots'),
+           )),
+       _clipboardImageReader = clipboardImageReader ?? (() => Pasteboard.image),
+       _clipboardFilesReader = clipboardFilesReader ?? Pasteboard.files,
+       _preferClipboardFiles = preferClipboardFiles ?? Platform.isMacOS;
 
   final MethodChannel _channel;
+  final bool _screenshotSupported;
+  final AttachmentProcessRunner _processRunner;
+  final AttachmentTemporaryDirectoryProvider _temporaryDirectoryProvider;
+  final AttachmentClipboardImageReader _clipboardImageReader;
+  final AttachmentClipboardFilesReader _clipboardFilesReader;
+  final bool _preferClipboardFiles;
+  bool _screenCapturePermissionRequested = false;
   static const String _fallbackMimeType = 'application/octet-stream';
 
   @override
@@ -47,6 +79,78 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       throw StateError(
         _friendlyMessage(error, fallback: 'attachment_picker_failed'),
       );
+    }
+  }
+
+  @override
+  Future<AttachmentDraft?> captureScreenshot({bool hideApp = false}) async {
+    if (!_screenshotSupported) {
+      return null;
+    }
+    if (!await _ensureScreenCapturePermission()) {
+      throw StateError('screenshot_screen_recording_permission_required');
+    }
+    final directory = await _temporaryDirectoryProvider();
+    await directory.create(recursive: true);
+    await _cleanupOldAttachmentTempFiles(directory);
+    final filename = 'screenshot-${DateTime.now().microsecondsSinceEpoch}.png';
+    final source = File(p.join(directory.path, filename));
+    try {
+      final result = await _processRunner('/usr/sbin/screencapture', <String>[
+        '-i',
+        '-x',
+        source.path,
+      ]);
+      if (result.exitCode != 0 || !await source.exists()) {
+        return null;
+      }
+      final sizeBytes = await source.length();
+      if (sizeBytes <= 0) {
+        return null;
+      }
+      return await draftFromExternalSource(
+        path: source.path,
+        filename: filename,
+        mimeType: 'image/png',
+        sizeBytes: sizeBytes,
+      );
+    } on ProcessException catch (error) {
+      throw StateError('screenshot_capture_failed: ${error.errorCode}');
+    } finally {
+      try {
+        if (await source.exists()) {
+          await source.delete();
+        }
+      } catch (_) {
+        // Best-effort source cleanup. The attachment copy has its own TTL.
+      }
+    }
+  }
+
+  Future<bool> _ensureScreenCapturePermission() async {
+    try {
+      final granted =
+          await _channel.invokeMethod<bool>(
+            'preflightScreenCapturePermission',
+          ) ??
+          false;
+      if (granted) {
+        return true;
+      }
+      if (_screenCapturePermissionRequested) {
+        return false;
+      }
+      _screenCapturePermissionRequested = true;
+      return await _channel.invokeMethod<bool>(
+            'requestScreenCapturePermission',
+          ) ??
+          false;
+    } on MissingPluginException {
+      // Non-macOS/unit environments do not install the native permission
+      // bridge. Screenshot support is injected explicitly in those tests.
+      return true;
+    } on PlatformException {
+      return false;
     }
   }
 
@@ -96,7 +200,13 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   @override
   Future<AttachmentDraft?> readClipboardAttachment() async {
     try {
-      final imageBytes = await Pasteboard.image;
+      if (_preferClipboardFiles) {
+        final fileDraft = await _firstClipboardFileDraft();
+        if (fileDraft != null) {
+          return fileDraft;
+        }
+      }
+      final imageBytes = await _clipboardImageReader();
       if (imageBytes != null && imageBytes.isNotEmpty) {
         return draftFromExternalSource(
           filename: _pastedImageFilename(),
@@ -105,12 +215,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
           sizeBytes: imageBytes.length,
         );
       }
-      final files = await Pasteboard.files();
-      for (final filePath in files) {
-        final draft = await draftFromExternalSource(path: filePath);
-        if (draft != null) {
-          return draft;
-        }
+      if (!_preferClipboardFiles) {
+        return _firstClipboardFileDraft();
       }
       return null;
     } on PlatformException catch (error) {
@@ -124,6 +230,17 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     } on MissingPluginException {
       return null;
     }
+  }
+
+  Future<AttachmentDraft?> _firstClipboardFileDraft() async {
+    final files = await _clipboardFilesReader();
+    for (final filePath in files) {
+      final draft = await draftFromExternalSource(path: filePath);
+      if (draft != null) {
+        return draft;
+      }
+    }
+    return null;
   }
 
   @override
@@ -202,6 +319,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         '${DateTime.now().microsecondsSinceEpoch}-$safeName',
       ),
     );
+    await destination.parent.create(recursive: true);
     return sourceFile.copy(destination.path).then((file) => file.path);
   }
 

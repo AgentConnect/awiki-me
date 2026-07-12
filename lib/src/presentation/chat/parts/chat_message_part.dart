@@ -877,6 +877,7 @@ class _MessageBubble extends StatelessWidget {
     this.macStyle = false,
     this.onRetry,
     this.onDownload,
+    this.onResolveImagePreview,
     this.isDownloading = false,
     this.onPeerInfoTap,
   });
@@ -887,6 +888,7 @@ class _MessageBubble extends StatelessWidget {
   final bool macStyle;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onDownload;
+  final Future<String> Function()? onResolveImagePreview;
   final bool isDownloading;
   final VoidCallback? onPeerInfoTap;
 
@@ -970,14 +972,12 @@ class _MessageBubble extends StatelessWidget {
     }
     final responsive = context.awikiResponsive;
     final gap = macStyle ? responsive.displayScaled(7) : responsive.spacing(8);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: <Widget>[
-        _SendingMessageIndicator(macStyle: macStyle),
-        SizedBox(width: gap),
-        Flexible(child: child),
-      ],
+    return _DelayedSendingMessageRow(
+      key: ValueKey<String>('chat-delayed-send:${message.localId}'),
+      messageId: message.localId,
+      macStyle: macStyle,
+      gap: gap,
+      child: child,
     );
   }
 
@@ -1000,6 +1000,7 @@ class _MessageBubble extends StatelessWidget {
             message: message,
             macStyle: true,
             onDownload: onDownload,
+            onResolveImagePreview: onResolveImagePreview,
             isDownloading: isDownloading,
           );
     final bubble = Column(
@@ -1050,6 +1051,7 @@ class _MessageBubble extends StatelessWidget {
               if (onRetry != null) ...<Widget>[
                 SizedBox(width: responsive.displayScaled(10)),
                 AppPressableText(
+                  key: Key('chat-retry-message:${message.localId}'),
                   onTap: onRetry,
                   semanticLabel: context.l10n.chatRetrySend,
                   child: Text(
@@ -1198,6 +1200,7 @@ class _MessageBubble extends StatelessWidget {
                                   message: message,
                                   macStyle: false,
                                   onDownload: onDownload,
+                                  onResolveImagePreview: onResolveImagePreview,
                                   isDownloading: isDownloading,
                                 ),
                         ),
@@ -1222,6 +1225,7 @@ class _MessageBubble extends StatelessWidget {
                           if (onRetry != null) ...<Widget>[
                             SizedBox(width: responsive.spacing(10)),
                             AppPressableText(
+                              key: Key('chat-retry-message:${message.localId}'),
                               onTap: onRetry,
                               semanticLabel: context.l10n.chatRetrySend,
                               child: Text(
@@ -1248,8 +1252,84 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _DelayedSendingMessageRow extends StatefulWidget {
+  const _DelayedSendingMessageRow({
+    super.key,
+    required this.messageId,
+    required this.macStyle,
+    required this.gap,
+    required this.child,
+  });
+
+  static const Duration delay = Duration(seconds: 3);
+
+  final String messageId;
+  final bool macStyle;
+  final double gap;
+  final Widget child;
+
+  @override
+  State<_DelayedSendingMessageRow> createState() =>
+      _DelayedSendingMessageRowState();
+}
+
+class _DelayedSendingMessageRowState extends State<_DelayedSendingMessageRow> {
+  Timer? _timer;
+  bool _showIndicator = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleIndicator();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DelayedSendingMessageRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.messageId != widget.messageId) {
+      _scheduleIndicator();
+    }
+  }
+
+  void _scheduleIndicator() {
+    _timer?.cancel();
+    _showIndicator = false;
+    _timer = Timer(_DelayedSendingMessageRow.delay, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _showIndicator = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showIndicator) {
+      return widget.child;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: <Widget>[
+        _SendingMessageIndicator(
+          key: Key('chat-sending-indicator:${widget.messageId}'),
+          macStyle: widget.macStyle,
+        ),
+        SizedBox(width: widget.gap),
+        Flexible(child: widget.child),
+      ],
+    );
+  }
+}
+
 class _SendingMessageIndicator extends StatelessWidget {
-  const _SendingMessageIndicator({required this.macStyle});
+  const _SendingMessageIndicator({super.key, required this.macStyle});
 
   final bool macStyle;
 
@@ -1279,43 +1359,100 @@ class _SendingMessageIndicator extends StatelessWidget {
   }
 }
 
-class _AttachmentContent extends StatelessWidget {
+const int _maxInlineImageBytes = 20 * 1024 * 1024;
+
+class _AttachmentContent extends StatefulWidget {
   const _AttachmentContent({
     required this.message,
     required this.macStyle,
     required this.onDownload,
+    required this.onResolveImagePreview,
     required this.isDownloading,
   });
 
   final ChatMessage message;
   final bool macStyle;
   final Future<void> Function()? onDownload;
+  final Future<String> Function()? onResolveImagePreview;
   final bool isDownloading;
 
   @override
+  State<_AttachmentContent> createState() => _AttachmentContentState();
+}
+
+class _AttachmentContentState extends State<_AttachmentContent> {
+  Future<String?>? _previewPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _preparePreview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AttachmentContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldAttachment = oldWidget.message.attachment;
+    final attachment = widget.message.attachment;
+    if (oldWidget.message.localId != widget.message.localId ||
+        oldAttachment?.attachmentId != attachment?.attachmentId ||
+        oldAttachment?.localPath != attachment?.localPath) {
+      _preparePreview();
+    }
+  }
+
+  void _preparePreview() {
+    final attachment = widget.message.attachment!;
+    if (!_isInlineImageAttachment(attachment)) {
+      _previewPath = null;
+      return;
+    }
+    final localPath = attachment.localPath?.trim();
+    if (localPath != null && localPath.isNotEmpty) {
+      _previewPath = Future<String?>.value(localPath);
+      return;
+    }
+    final sizeBytes = attachment.sizeBytes;
+    final resolve = widget.onResolveImagePreview;
+    if (resolve == null ||
+        sizeBytes == null ||
+        sizeBytes <= 0 ||
+        sizeBytes > _maxInlineImageBytes) {
+      _previewPath = null;
+      return;
+    }
+    _previewPath = resolve().then<String?>((path) => path);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final message = widget.message;
     final attachment = message.attachment!;
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final caption = attachment.caption?.trim();
     final titleStyle = TextStyle(
-      color: macStyle ? const Color(0xFF17213A) : theme.title,
-      fontSize: macStyle ? responsive.displayScaled(13.5) : responsive.bodyMd,
+      color: widget.macStyle ? const Color(0xFF17213A) : theme.title,
+      fontSize: widget.macStyle
+          ? responsive.displayScaled(13.5)
+          : responsive.bodyMd,
       fontWeight: FontWeight.w500,
       height: 1.25,
     );
     final metaStyle = TextStyle(
-      color: macStyle ? const Color(0xFF66728A) : theme.secondaryText,
-      fontSize: macStyle ? responsive.displayScaled(12) : responsive.metaSm,
+      color: widget.macStyle ? const Color(0xFF66728A) : theme.secondaryText,
+      fontSize: widget.macStyle
+          ? responsive.displayScaled(12)
+          : responsive.metaSm,
       fontWeight: FontWeight.w500,
       height: 1.25,
     );
     return ConstrainedBox(
       constraints: BoxConstraints(
-        minWidth: macStyle
+        minWidth: widget.macStyle
             ? responsive.displayScaled(220)
             : responsive.scaled(210),
-        maxWidth: macStyle
+        maxWidth: widget.macStyle
             ? responsive.displayScaled(360)
             : responsive.scaled(420),
       ),
@@ -1329,8 +1466,8 @@ class _AttachmentContent extends StatelessWidget {
               mentions: message.mentions,
               payloadJson: message.payloadJson,
               style: TextStyle(
-                color: macStyle ? const Color(0xFF17213A) : theme.title,
-                fontSize: macStyle
+                color: widget.macStyle ? const Color(0xFF17213A) : theme.title,
+                fontSize: widget.macStyle
                     ? responsive.displayScaled(14)
                     : responsive.bodyMd,
                 height: 1.4,
@@ -1338,96 +1475,286 @@ class _AttachmentContent extends StatelessWidget {
               renderMarkdown: !message.isMine,
             ),
             SizedBox(
-              height: macStyle
+              height: widget.macStyle
                   ? responsive.displayScaled(9)
                   : responsive.spacing(9),
             ),
-            _AttachmentCaptionDivider(macStyle: macStyle),
+            _AttachmentCaptionDivider(macStyle: widget.macStyle),
             SizedBox(
-              height: macStyle
+              height: widget.macStyle
                   ? responsive.displayScaled(9)
                   : responsive.spacing(9),
             ),
           ],
-          Row(
-            children: <Widget>[
-              Container(
-                width: macStyle
-                    ? responsive.displayScaled(38)
-                    : responsive.scaled(40),
-                height: macStyle
-                    ? responsive.displayScaled(38)
-                    : responsive.scaled(40),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: macStyle
-                      ? const Color(0xFFEAF2FF)
-                      : theme.surface.withValues(alpha: 0.72),
-                  borderRadius: BorderRadius.circular(
-                    macStyle ? responsive.displayScaled(8) : 10,
-                  ),
-                  border: Border.all(
-                    color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
-                  ),
-                ),
-                child: Icon(
-                  CupertinoIcons.doc_fill,
-                  color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
-                  size: macStyle
-                      ? responsive.displayScaled(20)
-                      : responsive.iconSm,
-                ),
-              ),
-              SizedBox(
-                width: macStyle
-                    ? responsive.displayScaled(10)
-                    : responsive.spacing(10),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _MessagePlainText(
-                      text: localizeAttachmentName(context.l10n, attachment),
-                      maxLines: 2,
-                      style: titleStyle,
-                    ),
-                    SizedBox(
-                      height: macStyle
-                          ? responsive.displayScaled(4)
-                          : responsive.spacing(4),
-                    ),
-                    Text(
-                      _formatAttachmentMeta(
-                        context.l10n,
-                        attachment.mimeType,
-                        attachment.sizeBytes,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: metaStyle,
-                    ),
-                  ],
-                ),
-              ),
-              if (onDownload != null) ...<Widget>[
-                SizedBox(
-                  width: macStyle
-                      ? responsive.displayScaled(10)
-                      : responsive.spacing(10),
-                ),
-                _AttachmentActionButton(
-                  macStyle: macStyle,
-                  isLoading: isDownloading,
-                  onTap: onDownload!,
-                ),
-              ],
-            ],
+          _buildAttachmentBody(
+            context,
+            attachment: attachment,
+            titleStyle: titleStyle,
+            metaStyle: metaStyle,
           ),
         ],
       ),
     );
   }
+
+  Widget _buildAttachmentBody(
+    BuildContext context, {
+    required ChatAttachment attachment,
+    required TextStyle titleStyle,
+    required TextStyle metaStyle,
+  }) {
+    final future = _previewPath;
+    if (future == null) {
+      return _AttachmentFileCard(
+        message: widget.message,
+        macStyle: widget.macStyle,
+        onDownload: widget.onDownload,
+        isDownloading: widget.isDownloading,
+        titleStyle: titleStyle,
+        metaStyle: metaStyle,
+      );
+    }
+    return FutureBuilder<String?>(
+      future: future,
+      builder: (context, snapshot) {
+        final path = snapshot.data?.trim();
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _InlineImageLoading(macStyle: widget.macStyle);
+        }
+        if (snapshot.hasError || path == null || path.isEmpty) {
+          return _AttachmentFileCard(
+            message: widget.message,
+            macStyle: widget.macStyle,
+            onDownload: widget.onDownload,
+            isDownloading: widget.isDownloading,
+            titleStyle: titleStyle,
+            metaStyle: metaStyle,
+          );
+        }
+        return _InlineImagePreview(
+          message: widget.message,
+          path: path,
+          macStyle: widget.macStyle,
+          onOpen: widget.onDownload,
+          errorFallback: _AttachmentFileCard(
+            message: widget.message,
+            macStyle: widget.macStyle,
+            onDownload: widget.onDownload,
+            isDownloading: widget.isDownloading,
+            titleStyle: titleStyle,
+            metaStyle: metaStyle,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _InlineImageLoading extends StatelessWidget {
+  const _InlineImageLoading({required this.macStyle});
+
+  final bool macStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      key: const Key('chat-inline-image-loading'),
+      height: macStyle ? responsive.displayScaled(150) : responsive.scaled(170),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F4F8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: const CupertinoActivityIndicator(),
+    );
+  }
+}
+
+class _InlineImagePreview extends ConsumerWidget {
+  const _InlineImagePreview({
+    required this.message,
+    required this.path,
+    required this.macStyle,
+    required this.onOpen,
+    required this.errorFallback,
+  });
+
+  final ChatMessage message;
+  final String path;
+  final bool macStyle;
+  final Future<void> Function()? onOpen;
+  final Widget errorFallback;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final responsive = context.awikiResponsive;
+    final image = ref.watch(chatImageWidgetBuilderProvider)(
+      path: path,
+      fit: BoxFit.contain,
+      errorFallback: errorFallback,
+    );
+    final preview = ClipRRect(
+      key: Key('chat-inline-image:${message.localId}'),
+      borderRadius: BorderRadius.circular(
+        macStyle ? responsive.displayScaled(9) : responsive.radius(12),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: macStyle
+              ? responsive.displayScaled(320)
+              : responsive.scaled(360),
+          maxHeight: macStyle
+              ? responsive.displayScaled(300)
+              : responsive.scaled(340),
+        ),
+        child: image,
+      ),
+    );
+    final open = onOpen;
+    if (open == null) {
+      return preview;
+    }
+    return Semantics(
+      button: true,
+      label: context.l10n.chatViewAttachment,
+      child: GestureDetector(onTap: () => unawaited(open()), child: preview),
+    );
+  }
+}
+
+class _AttachmentFileCard extends StatelessWidget {
+  const _AttachmentFileCard({
+    required this.message,
+    required this.macStyle,
+    required this.onDownload,
+    required this.isDownloading,
+    required this.titleStyle,
+    required this.metaStyle,
+  });
+
+  final ChatMessage message;
+  final bool macStyle;
+  final Future<void> Function()? onDownload;
+  final bool isDownloading;
+  final TextStyle titleStyle;
+  final TextStyle metaStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final attachment = message.attachment!;
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Row(
+      children: <Widget>[
+        Container(
+          width: macStyle
+              ? responsive.displayScaled(38)
+              : responsive.scaled(40),
+          height: macStyle
+              ? responsive.displayScaled(38)
+              : responsive.scaled(40),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: macStyle
+                ? const Color(0xFFEAF2FF)
+                : theme.surface.withValues(alpha: 0.72),
+            borderRadius: BorderRadius.circular(
+              macStyle ? responsive.displayScaled(8) : 10,
+            ),
+            border: Border.all(
+              color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
+            ),
+          ),
+          child: Icon(
+            CupertinoIcons.doc_fill,
+            color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
+            size: macStyle ? responsive.displayScaled(20) : responsive.iconSm,
+          ),
+        ),
+        SizedBox(
+          width: macStyle
+              ? responsive.displayScaled(10)
+              : responsive.spacing(10),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _MessagePlainText(
+                text: localizeAttachmentName(context.l10n, attachment),
+                maxLines: 2,
+                style: titleStyle,
+              ),
+              SizedBox(
+                height: macStyle
+                    ? responsive.displayScaled(4)
+                    : responsive.spacing(4),
+              ),
+              Text(
+                _formatAttachmentMeta(
+                  context.l10n,
+                  attachment.mimeType,
+                  attachment.sizeBytes,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: metaStyle,
+              ),
+            ],
+          ),
+        ),
+        if (onDownload != null) ...<Widget>[
+          SizedBox(
+            width: macStyle
+                ? responsive.displayScaled(10)
+                : responsive.spacing(10),
+          ),
+          _AttachmentActionButton(
+            key: Key('chat-open-attachment:${message.localId}'),
+            macStyle: macStyle,
+            isLoading: isDownloading,
+            onTap: onDownload!,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+bool _isInlineImageAttachment(ChatAttachment attachment) {
+  return _isSupportedInlineImage(
+    mimeType: attachment.mimeType,
+    filename: attachment.filename,
+  );
+}
+
+bool _isSupportedInlineImage({
+  required String mimeType,
+  required String filename,
+}) {
+  final normalizedMimeType = mimeType.trim().toLowerCase();
+  if (<String>{
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/gif',
+    'image/webp',
+  }.contains(normalizedMimeType)) {
+    return true;
+  }
+  if (normalizedMimeType.isNotEmpty &&
+      normalizedMimeType != 'application/octet-stream') {
+    return false;
+  }
+  final normalizedFilename = filename.trim().toLowerCase();
+  return <String>[
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+  ].any(normalizedFilename.endsWith);
 }
 
 class _MessageTextContent extends StatelessWidget {
@@ -1768,6 +2095,7 @@ class _AttachmentCaptionDivider extends StatelessWidget {
 
 class _AttachmentActionButton extends StatelessWidget {
   const _AttachmentActionButton({
+    super.key,
     required this.macStyle,
     required this.isLoading,
     required this.onTap,

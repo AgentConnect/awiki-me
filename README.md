@@ -56,7 +56,7 @@ The ANP 1.1 release line organizes protocol capabilities around identity, naming
 - **Account and identity**: registration/login, DID identity initialization, active identity vault checks, profile display and editing.
 - **Trusted IM**: direct chat, group chat, conversation list, local-first first paint, realtime patches, reliable sync, unread waterlines, retry, and failure states.
 - **Group collaboration**: group creation, member summaries hydrated from public profile Display Name, group messages, group system events, group mentions, and Agent group collaboration entry points.
-- **Contacts and profiles**: friends/relationship state, peer profile, Display Name-first identity labels with handle / DID fallback, copy actions, identity cards, and optimistic follow/unfollow UI state so optional relationship-list refresh failures do not make successful taps appear inert.
+- **Contacts and profiles**: friends/relationship state, peer profile, tenant/owner-scoped local display-profile projections, Display Name-only conversation labels (handles remain identity metadata), copy actions, identity cards, independently recoverable follower/following lists whose rows prefer nicknames and fall back to handles, and optimistic follow/unfollow UI state. Conversation previews read only the local projection; opening a full relationship list concurrently fetches only missing peer profiles and caches them, while opening peer details explicitly refreshes an individual profile.
 - **Attachments**: attachment picking plus desktop drag-and-drop or clipboard image/file paste into the chat composer, upload/send, download, save, native open, and App + CLI E2E interoperability.
 - **Agent console**: Agent inventory, local-first refresh, daemon install command rendering, runtime status, Agent inbox, and control payload projection.
 - **Local security**: platform secure storage, native macOS Keychain bridge, E2E private file provider, and secret redaction.
@@ -147,20 +147,25 @@ Tenant configuration is managed inside the app, not through Flutter `--dart-defi
 - local display name (1-40 visible characters)
 - backend base URL
 - DID host
-- an isolated local state namespace
+- an immutable UUID Storage Scope
 
 The default tenant is `AWiki`:
 
 ```text
 backend base URL: https://awiki.ai
 DID host: awiki.ai
+storage scope: generated UUID (not derived from the domain)
 ```
 
-Switching tenants rebuilds the app runtime and uses a separate im-core / product local-state namespace, so identities, conversations, groups, and local caches stay separated. Tenant names are local display labels and can be renamed later. Tenants with local data cannot have their backend URL or DID host edited; add a tenant configuration instead.
+Every tenant profile owns a different immutable `storage_scope_id`. Paths, the platform-secret account, and the im-core workspace/device context derive only from that UUID; tenant names and backend URLs never act as local locators. Switching tenants fully disposes the old runtime before opening the new scope. Names can be changed in place. A DID-host change requires a new tenant profile and scope; a backend route cannot be changed after local data exists without a future verified realm-binding flow.
 
 Agent and Daemon features are currently supported only on the default AWiki tenant. Other tenants show a friendly unsupported state on the Agents page and do not call Agent backend APIs.
 
 The app still supports non-tenant build flags such as `AWIKI_E2E` and `AWIKI_E2E_APP_STATE_ROOT` for test harnesses.
+
+The first production storage generation is the UUID Storage Scope clean cut. It does not read the pre-release `awiki.ai`, `tenant-default`, split-item, or namespace-bundle formats. See [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md).
+
+Pre-release namespace data is never migrated during startup. Developers can inventory or explicitly archive/delete it with the dry-run-first [storage cleanup runbook](docs/pre-release-storage-cleanup.md).
 
 ## Testing
 
@@ -170,7 +175,8 @@ See [docs/testing.md](docs/testing.md) for the full testing strategy.
 | --- | --- | --- | --- |
 | Unit / Widget / Provider | `dart run tests/unit/runner.dart` | Dart logic, mappers, providers, widgets, fake services, E2E runner planning/redaction | Real backend, OTP, CLI, devices |
 | Desktop smoke E2E | `dart run tests/e2e/runner.dart --case smoke` | App shell, Flutter platform shims, native im-core open smoke | Real accounts, OTP, CLI peer |
-| Real backend App + CLI E2E | `dart run tests/e2e/runner.dart --case full` | direct, group, attachment, contacts, real App + CLI peer flows | Unconfigured account pools or committed local credentials |
+| Signed production Keychain | `scripts/run_macos_production_scope_restart_gate.sh` | Release rebuild/process restart, production service isolation, exclusive create | Local AWiki services, secret output, ad-hoc signing |
+| Remote App + CLI product E2E | `dart run tests/e2e/runner.dart --case full` | UI-driven direct/unread/read/retry, contacts, group/mention, attachment and exact-one App + CLI checks against `awiki.info` | Unconfigured account pools or committed local credentials |
 
 Prepare real-backend E2E config locally:
 
@@ -178,6 +184,35 @@ Prepare real-backend E2E config locally:
 cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 dart run tests/e2e/runner.dart --case full
 ```
+
+Live App + CLI cases accept only the audited remote `awiki.info` target. Set
+`cliPeer.sourceRef` in the ignored config to the exact commit that built both
+the debug CLI and `awiki_im_core` artifacts. Suite membership, owners, timeout,
+and cleanup policy live in `tests/e2e/suite_manifest.json`; reports include the
+source ref, isolated `awiki.info` CLI tenant identity preflight, and a redacted
+`resource_ledger.json`. Dry-run
+and prepare-only output remain non-passing orchestration evidence.
+
+The traceable case source is `tests/e2e/case_catalog.json`; the generated human
+catalog is [docs/test-case-catalog.md](docs/test-case-catalog.md). Validate
+manifest/catalog/implementation/report-ID drift with
+`dart run tool/validate_test_catalog.dart`. Unit quality is guarded by a
+checked-in line + branch baseline:
+
+```bash
+dart run tests/unit/runner.dart --branch-coverage
+dart run tool/test_coverage_gate.dart
+```
+
+The baseline protects the whole suite plus chat, conversation, relationship,
+read/sync state machines individually. Coverage is a regression floor, not a
+claim that every product behavior has E2E coverage.
+
+For the maintained remote gate, configure `service.baseUrl` as
+`https://awiki.info` and `service.didDomain` as `awiki.info`. The App-side
+actions in `full` must be visible input/tap/drop actions; service calls are
+read-only result oracles. See [docs/testing.md](docs/testing.md) for the exact
+message, unread/read, retry, relationship, mention, and attachment contracts.
 
 Local YAML config is ignored by Git and may contain OTP, test accounts, backend URLs, and `awiki-cli` paths. Do not commit it. On macOS, choose an explicit macOS config such as `tests/e2e/configs/e2e.codex-macos-allowed.local.yaml`; do not accidentally use a Linux local config.
 
@@ -191,18 +226,18 @@ Entrypoint:
 scripts/package_app.sh
 ```
 
-Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit `AWIKI_DOMAIN` and, when needed, `PACKAGE_TARGETS`:
+Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit `PACKAGE_RELEASE_DOMAIN` and, when needed, `PACKAGE_TARGETS`:
 
 ```text
-AWIKI_DOMAIN="awiki.ai"    # current checked-in default
-AWIKI_DOMAIN="awiki.info"  # internal mirror / integration package downloads
+PACKAGE_RELEASE_DOMAIN="awiki.ai"    # current checked-in default
+PACKAGE_RELEASE_DOMAIN="awiki.info"  # internal mirror / integration package downloads
 
 PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64"  # all targets
 PACKAGE_TARGETS="android-arm64"                        # Android only
 PACKAGE_TARGETS="macos-arm64,macos-x64"                # macOS only
 ```
 
-The script uses `AWIKI_DOMAIN` only for release metadata: daemon download URL, update manifest URL, and the download page. It does not inject backend base URL, DID host, or state namespace into the app; those are controlled by the in-app tenant registry after launch.
+The script uses `PACKAGE_RELEASE_DOMAIN` only for release artifact metadata: package download URLs, the generated update manifest location, and the download page. It does not inject backend base URL, DID host, state namespace, or update-check endpoint into the app; those are controlled by the app runtime and in-app tenant registry after launch.
 
 Packaging behavior:
 
@@ -224,13 +259,15 @@ dist/latest.json
 Generate CocoaPods support files before opening Xcode:
 
 ```bash
-scripts/bootstrap_macos.sh
+scripts/prepare_macos_build.sh
 open macos/Runner.xcworkspace
 ```
 
 Open `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`, the generated `macos/Pods` support files are missing or CocoaPods is not on `PATH`; rerun the bootstrap script.
 
-macOS debug/profile builds are usually ad-hoc signed. To avoid a successful backend registration surfacing as a registration failure because a local unsigned runner cannot write Keychain, debug/profile account credentials are stored in `awiki_me_credentials.json` under the app support directory. Release builds still use platform secure storage. The im-core identity vault root key and device id are stored as one namespace-scoped macOS Keychain secret bundle by default; without Developer ID signing, reinstalling the app may require one system authorization prompt for that bundle. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+macOS debug/profile builds use the separate `ai.awiki.awikime.dev` application identity and development Keychain service; Release uses `ai.awiki.awikime` and `ai.awiki.awikime.scope-secrets`. Each scope has one versioned envelope at account `scope/<uuid>`. Runtime only reads an existing envelope; only explicit scope provisioning may create it. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+
+The Debug target is signed with the repository's Apple Development team instead of an ad-hoc CDHash identity. This keeps the macOS Screen Recording TCC identity stable across rebuilds, so interactive screenshots do not request permission after every binary change or silently capture only the desktop. Debug is displayed as `AWiki Me (Development)` in macOS privacy settings so it cannot be confused with an installed Release `AWiki Me`; grant Screen Recording to the Development entry. After moving from an older ad-hoc build, reset `ScreenCapture` once, launch the newly signed App, grant access, and restart the App.
 
 After changing macOS signing, entitlements, or secure-storage options, run:
 
@@ -246,7 +283,7 @@ AWiki Me must follow these constraints:
 - Do not add Python CLI tools, Python dependency manifests, legacy credential migrations, or old RPC gateway paths.
 - The App must not directly read or persist DID private keys, JWT files, vault records, Direct E2EE session/prekey secrets, or daemon subkey packages.
 - Root keys must not appear in ordinary JSON state, logs, UI, E2E reports, performance traces, DTO dumps, or fixtures.
-- Only explicit `AWIKI_E2E_APP_STATE_ROOT` E2E mode may use the private file test provider `awiki_me_im_core_vault.json`; that file must remain local and untracked.
+- Only an explicit E2E state root may select the private per-scope file provider under `awiki-me/e2e-scope-secrets`; those `0600` envelope files must remain local and untracked.
 - Group E2EE opaque messages must not be decrypted and delivered to Agent prompts without a separate security design.
 - Before changing platform runners, Pod/Gradle/Xcode metadata, entitlements, bundle IDs, or signing settings, confirm the task truly requires it. Revert unrelated platform files generated by tools.
 
@@ -256,6 +293,8 @@ AWiki Me must follow these constraints:
 | --- | --- |
 | [docs/testing.md](docs/testing.md) | Unit, desktop smoke, and real-backend E2E domains and gate policy |
 | [docs/identity-secret-storage.md](docs/identity-secret-storage.md) | App-side identity vault, root key provider, E2E file provider, and security red lines |
+| [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md) | First-release UUID Storage Scope, stable Keychain locator, provision/open, and lifecycle contract |
+| [docs/scope-secret-platform.md](docs/scope-secret-platform.md) | Typed scope envelope, platform provider isolation, and native/E2E security gates |
 | [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md) | Conversation display, local-first path, timeline, read waterline, attachment / mention / control payload rendering boundaries |
 | [docs/performance-tracing.md](docs/performance-tracing.md) | Startup, list, chat-open, sync/realtime performance trace keys and diagnosis |
 | [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md) | Message Agent MVP, daemon binding, delegated key, secure bootstrap, disable/delete behavior |

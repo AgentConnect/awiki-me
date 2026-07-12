@@ -2,8 +2,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const scopeValue = '11111111-1111-4111-8111-111111111111';
 
 void main() {
   test('fromRoots builds the expected awiki-me im-core layout', () {
@@ -11,39 +14,37 @@ void main() {
       appSupportRoot: '/app/support/',
       cacheRoot: '/cache/',
       tempRoot: '/tmp/',
-      stateNamespace: 'Tenant Alpha / US',
+      scopeId: StorageScopeId.parse(scopeValue),
     );
 
-    expect(layout.stateNamespace, 'tenant-alpha-us');
+    expect(layout.scopeId.value, scopeValue);
     expect(
       layout.identityRootDir,
-      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities',
+      '/app/support/awiki-me/storage-scopes/$scopeValue/im-core/identities',
     );
     expect(
       layout.vaultDir,
-      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identity-vault',
+      '/app/support/awiki-me/storage-scopes/$scopeValue/im-core/identity-vault',
     );
-    expect(layout.vaultWorkspaceId, 'awiki-me-tenant-alpha-us');
+    expect(layout.vaultWorkspaceId, 'awiki-me.scope.v1.$scopeValue');
+    expect(layout.vaultContextDeviceId, 'awiki-me.scope-device.v1.$scopeValue');
     expect(
       layout.registryPath,
-      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities/registry.json',
+      '/app/support/awiki-me/storage-scopes/$scopeValue/im-core/identities/registry.json',
     );
     expect(
       layout.defaultIdentityPath,
-      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/identities/default',
+      '/app/support/awiki-me/storage-scopes/$scopeValue/im-core/identities/default',
     );
     expect(
       layout.sqlitePath,
-      '/app/support/awiki-me/environments/tenant-alpha-us/im-core/state/im_core.sqlite',
+      '/app/support/awiki-me/storage-scopes/$scopeValue/im-core/state/im_core.sqlite',
     );
     expect(
       layout.cacheDir,
-      '/cache/awiki-me/environments/tenant-alpha-us/im-core',
+      '/cache/awiki-me/storage-scopes/$scopeValue/im-core',
     );
-    expect(
-      layout.tempDir,
-      '/tmp/awiki-me/environments/tenant-alpha-us/im-core',
-    );
+    expect(layout.tempDir, '/tmp/awiki-me/storage-scopes/$scopeValue/im-core');
 
     final corePaths = layout.toCorePaths();
     expect(corePaths, isA<core.AwikiImCorePaths>());
@@ -67,15 +68,17 @@ void main() {
         appSupportRoot: '${root.path}/support',
         cacheRoot: '${root.path}/cache',
         tempRoot: '${root.path}/tmp',
+        scopeId: StorageScopeId.parse(scopeValue),
       );
 
+      await layout.scopeLayout.createScopeRootExclusive();
       await layout.ensureDirectories();
 
       expect(await Directory(layout.identityRootDir).exists(), isTrue);
       expect(await Directory(layout.vaultDir).exists(), isTrue);
       expect(
         await Directory(
-          '${root.path}/support/awiki-me/environments/default/im-core/state',
+          '${root.path}/support/awiki-me/storage-scopes/$scopeValue/im-core/state',
         ).exists(),
         isTrue,
       );
@@ -96,7 +99,9 @@ void main() {
       appSupportRoot: '${root.path}/support',
       cacheRoot: '${root.path}/cache',
       tempRoot: '${root.path}/tmp',
+      scopeId: StorageScopeId.parse(scopeValue),
     );
+    await layout.scopeLayout.createScopeRootExclusive();
     await layout.ensureDirectories();
     await _writeSqliteHeaderWithUserVersion(layout.sqlitePath, 15);
     await File('${layout.sqlitePath}-wal').writeAsString('wal');
@@ -129,7 +134,9 @@ void main() {
       appSupportRoot: '${root.path}/support',
       cacheRoot: '${root.path}/cache',
       tempRoot: '${root.path}/tmp',
+      scopeId: StorageScopeId.parse(scopeValue),
     );
+    await layout.scopeLayout.createScopeRootExclusive();
     await layout.ensureDirectories();
     await _writeSqliteHeaderWithUserVersion(
       layout.sqlitePath,
@@ -140,14 +147,6 @@ void main() {
 
     expect(archived, isNull);
     expect(await File(layout.sqlitePath).exists(), isTrue);
-  });
-
-  test('normalizes arbitrary namespace values into safe path segments', () {
-    expect(
-      normalizeAwikiStateNamespace('https://Tenant.Example:8443/a?b=c'),
-      'tenant.example-8443-a-b-c',
-    );
-    expect(normalizeAwikiStateNamespace(''), 'default');
   });
 
   test('normalizes relative E2E state root against the runner cwd', () {
@@ -174,7 +173,7 @@ void main() {
           isMacOS: true,
           temporaryDirectory: '/tmp',
         ),
-        '/Users/alice/Library/Application Support/ai.awiki.awikiMe/.e2e/manual/app',
+        '/Users/alice/Library/Application Support/ai.awiki.awikime/.e2e/manual/app',
       );
     },
   );
@@ -190,7 +189,7 @@ void main() {
           isMacOS: true,
           temporaryDirectory: '/tmp',
         ),
-        '/tmp/ai.awiki.awikiMe/.e2e/manual/app',
+        '/tmp/ai.awiki.awikime/.e2e/manual/app',
       );
     },
   );

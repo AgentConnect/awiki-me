@@ -51,6 +51,7 @@ import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
@@ -67,6 +68,7 @@ import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
@@ -217,18 +219,27 @@ Widget buildLocalizedTestApp({
       attachmentPickerServiceProvider.overrideWithValue(
         FakeAttachmentPickerService(),
       ),
+      chatImageWidgetBuilderProvider.overrideWithValue(
+        ({
+          String? path,
+          Uint8List? bytes,
+          double? width,
+          double? height,
+          required BoxFit fit,
+          required Widget errorFallback,
+        }) => SizedBox(
+          width: width ?? 120,
+          height: height ?? 80,
+          child: const ColoredBox(color: Color(0xFF0B65F8)),
+        ),
+      ),
       ...fakeApplicationServiceOverrides(
         resolvedGateway,
         realtimeGateway: resolvedRealtime,
         attachmentCacheService: attachmentCacheService,
       ),
       appLocaleModeProvider.overrideWith((ref) => localeMode),
-      appTenantRegistryProvider.overrideWithValue(
-        AppTenantRegistry(
-          activeTenantId: defaultTenantId,
-          tenants: <AppTenantProfile>[defaultTenantProfile()],
-        ),
-      ),
+      appTenantRegistryProvider.overrideWithValue(_defaultTestTenantRegistry()),
       activeAppTenantProvider.overrideWithValue(defaultTenantProfile()),
       appTenantActionsProvider.overrideWithValue(FakeAppTenantActions()),
       sessionProvider.overrideWith((ref) {
@@ -422,10 +433,13 @@ class FakeUpdateService implements UpdateService {
 
 class FakeAttachmentPickerService implements AttachmentPickerService {
   AttachmentDraft? nextPick;
+  AttachmentDraft? nextScreenshot;
   AttachmentDraft? nextExternalDraft;
   AttachmentDraft? nextClipboardAttachment;
   String? nextSavedPath = '/tmp/attachment';
   int pickCalls = 0;
+  int screenshotCalls = 0;
+  bool? lastScreenshotHideApp;
   int externalSourceCalls = 0;
   int clipboardReadCalls = 0;
   int saveCalls = 0;
@@ -442,6 +456,13 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   Future<AttachmentDraft?> pickAttachment() async {
     pickCalls += 1;
     return nextPick;
+  }
+
+  @override
+  Future<AttachmentDraft?> captureScreenshot({bool hideApp = false}) async {
+    screenshotCalls += 1;
+    lastScreenshotHideApp = hideApp;
+    return nextScreenshot;
   }
 
   @override
@@ -570,6 +591,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   Map<String, List<GroupMemberSummary>> groupMembersByGroupId =
       <String, List<GroupMemberSummary>>{};
   Map<String, UserProfile> publicProfilesByQuery = <String, UserProfile>{};
+  final List<String> loadPublicProfileQueries = <String>[];
+  Map<String, String> directoryConversationIdsByQuery = <String, String>{};
   Map<String, RelationshipSummary> relationshipsByDidOrHandle =
       <String, RelationshipSummary>{};
   SessionIdentity? importedCredential;
@@ -1087,6 +1110,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<UserProfile> loadPublicProfile(String didOrHandle) async {
+    loadPublicProfileQueries.add(didOrHandle);
     final normalized = normalizeTestIdentity(didOrHandle);
     if (publicProfilesByQuery.containsKey(didOrHandle)) {
       return publicProfilesByQuery[didOrHandle]!;
@@ -1480,6 +1504,11 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   final FakeAwikiGateway gateway;
 
   @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
+
+  @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) {
     return resolvePeer(handle);
   }
@@ -1492,6 +1521,9 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
       input: peer,
       did: profile.did,
       handle: profile.fullHandle ?? profile.handle,
+      conversationId:
+          gateway.directoryConversationIdsByQuery[normalized] ??
+          gateway.directoryConversationIdsByQuery[profile.did],
       profile: profile,
     );
   }
@@ -1735,6 +1767,9 @@ class FakeMessagingService
   String? lastConversationTimelineId;
   int conversationTimelineCalls = 0;
   int sendConversationAttachmentCalls = 0;
+  int downloadAttachmentCalls = 0;
+  AppThreadRef? lastDownloadedAttachmentThread;
+  AttachmentDownloadResult? nextAttachmentDownloadResult;
   AppConversationReadRef? lastAttachmentConversation;
   String? lastSentAttachmentClientMessageId;
   String? lastSentAttachmentIdempotencyKey;
@@ -1760,6 +1795,12 @@ class FakeMessagingService
     String? attachmentId,
     String? localPath,
   }) async {
+    downloadAttachmentCalls += 1;
+    lastDownloadedAttachmentThread = thread;
+    final configured = nextAttachmentDownloadResult;
+    if (configured != null) {
+      return configured;
+    }
     return AttachmentDownloadResult(
       attachmentId: attachmentId ?? 'attachment-1',
       filename: 'download.txt',
@@ -2743,12 +2784,7 @@ class FakeAgentControlService implements AgentControlService {
 
 class FakeAppTenantActions implements AppTenantActions {
   FakeAppTenantActions({AppTenantRegistry? initialRegistry, this.onChanged})
-    : registry =
-          initialRegistry ??
-          AppTenantRegistry(
-            activeTenantId: defaultTenantId,
-            tenants: <AppTenantProfile>[defaultTenantProfile()],
-          );
+    : registry = initialRegistry ?? _defaultTestTenantRegistry();
 
   AppTenantRegistry registry;
   VoidCallback? onChanged;
@@ -2769,22 +2805,18 @@ class FakeAppTenantActions implements AppTenantActions {
       throw error;
     }
     final name = input.name.trim();
-    final id = _fakeTenantIdFor(
-      registry,
-      name: name,
-      backendBaseUrl: input.backendBaseUrl,
-      didHost: input.didHost,
-    );
     final now = DateTime.utc(2026, 7, 1).toIso8601String();
     final tenant = AppTenantProfile(
-      id: id,
+      tenantProfileId: TenantProfileId.generate(),
+      storageScopeId: StorageScopeId.generate(),
+      kind: AppTenantKind.custom,
       name: name,
       backendBaseUrl: input.backendBaseUrl.trim().replaceAll(
         RegExp(r'/+$'),
         '',
       ),
       didHost: input.didHost.trim().toLowerCase(),
-      stateNamespace: 'tenant-$id',
+      lifecycle: AppTenantLifecycle.active,
       createdAt: now,
       updatedAt: now,
     );
@@ -2803,7 +2835,9 @@ class FakeAppTenantActions implements AppTenantActions {
       nextUseError = null;
       throw error;
     }
-    registry = registry.copyWith(activeTenantId: tenantId);
+    registry = registry.copyWith(
+      activeTenantProfileId: TenantProfileId.parse(tenantId),
+    );
     onChanged?.call();
     return registry;
   }
@@ -2844,46 +2878,15 @@ class FakeAppTenantActions implements AppTenantActions {
   Future<bool> tenantHasData(String tenantId) async {
     return tenantsWithData.contains(tenantId);
   }
+}
 
-  String _fakeTenantIdFor(
-    AppTenantRegistry registry, {
-    required String name,
-    required String backendBaseUrl,
-    required String didHost,
-  }) {
-    final backendHost = Uri.tryParse(backendBaseUrl)?.host ?? '';
-    final base =
-        _fakeSafeTenantSegment(name) ??
-        _fakeSafeTenantSegment(didHost) ??
-        _fakeSafeTenantSegment(backendHost) ??
-        'tenant';
-    final used = registry.tenants.map((tenant) => tenant.id).toSet();
-    if (!used.contains(base)) {
-      return base;
-    }
-    var suffix = 2;
-    while (used.contains('$base-$suffix')) {
-      suffix += 1;
-    }
-    return '$base-$suffix';
-  }
-
-  String? _fakeSafeTenantSegment(String raw) {
-    final safe = raw
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9_-]+'), '-')
-        .replaceAll(RegExp(r'-+'), '-')
-        .replaceAll(RegExp(r'^[-_]+|[-_]+$'), '');
-    if (safe.isEmpty) {
-      return null;
-    }
-    if (safe.length <= 48) {
-      return safe;
-    }
-    final capped = safe.substring(0, 48).replaceAll(RegExp(r'[-_]+$'), '');
-    return capped.isEmpty ? null : capped;
-  }
+AppTenantRegistry _defaultTestTenantRegistry() {
+  final tenant = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
+  return AppTenantRegistry(
+    revision: 1,
+    activeTenantProfileId: tenant.tenantProfileId,
+    tenants: <AppTenantProfile>[tenant],
+  );
 }
 
 class FakeProductLocalStore implements ProductLocalStore {

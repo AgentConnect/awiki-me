@@ -10,8 +10,10 @@ Current groups:
 - `app/`: App shell smoke with fake bootstrap, onboarding/authenticated shell,
   basic profile/settings navigation, Message Agent full-UI harness, Codex
   Agent, and Claude Code Agent user-visible reply acceptance.
-- `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` peer integration
-  implementations for direct, group, attachment, and follow/contact flows.
+- `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` product E2E for
+  UI-driven direct/unread/read/retry, group/mention, attachment, and
+  follow/contact flows, plus strict read-only App/CLI oracles. The maintained
+  remote gate targets `awiki.info`.
 - `native/`: native SDK/plugin smoke such as `AwikiImCore.open` and macOS
   secure storage Keychain access.
 - `support/`: integration-only helpers.
@@ -34,8 +36,11 @@ the direct native smoke:
 flutter test --no-pub integration_test/secure_storage_smoke_test.dart -d macos
 ```
 
-This test exercises `flutter_secure_storage` through the signed macOS runner and
-guards against Keychain authorization failures such as OSStatus `-34018`.
+This test exercises the dedicated development scope-secret channel through the
+macOS runner. It validates tamper rejection, exclusive create, read, CAS, stale
+CAS, and delete. A local Debug pass is not production-signing or process-restart
+evidence; the release gate must repeat persistence/ACL checks with the stable
+Team-signed application.
 
 `--case performance` is the startup/conversation performance acceptance gate for
 the real desktop App + CLI peer + backend flow. It writes product-level metrics
@@ -84,9 +89,11 @@ budget overrun, or any full conversation refresh counted during the App
 send/receive window. Soft budget overruns remain warnings so local real-backend
 variance can be tracked before thresholds are tightened.
 
-`--case full` is still the AWiki Me full E2E entry for the real backend App +
-CLI peer message exchange. Use `--case performance` for the performance/cache
-gate and `--case full` for the broader product E2E flow:
+`--case full` is the AWiki Me UI-driven product E2E entry for the real backend
+App + CLI peer exchange. It must not replace App user actions with direct
+application-service calls. `--case performance` is intentionally a
+service-driven timing/backend integration diagnostic and does not count as UI
+acceptance. Use the two gates for their distinct purposes:
 
 ```bash
 dart run tests/e2e/runner.dart --case performance
@@ -95,15 +102,28 @@ dart run tests/e2e/runner.dart --case full
 
 `--case message-agent` is the durable acceptance entry for Message Agent
 product behavior. It must exercise the App UI path for selecting a daemon,
-enabling the Message Agent, recovering `message.sync` / `runtime_final` /
-`app.action` payloads, confirming or rejecting App actions, and the
-pause/delete/revoke lifecycle entries. Lower-level probes such as
+enabling the Message Agent, recovering the exact source plus `runtime_final`,
+and revoking authorization through the visible confirmation flow. Lower-level probes such as
 `tool/daemon_control_probe.dart` and daemon pytest probes may support payload,
 security, or backend diagnostics, but they do not replace this full UI E2E gate.
 The real-backend branch must also prove the received/returned/content contract:
 the App local history contains the exact CLI source message, the daemon records
 a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
 and the final text equals the deterministic expected reply.
+
+The executable case IDs are `MSGAGENT-E2E-001/002/004`. The visible
+action/draft confirmation `MSGAGENT-E2E-003` is cataloged as planned and is not
+in the executable manifest because the current real scenario has no such UI
+action. Fake-backed Widget tests, an outer `flutter test` exit code, a missing
+config, or a partial runnable lifecycle cannot attest a pass. Lower-level
+backend coverage remains separate and must not be relabeled as UI acceptance.
+
+Every runner-owned Flutter invocation receives an ignored local attestation
+path through dart-defines. Durable scenarios call
+`E2eCaseAttestationWriter.markPassed` only after the case's business assertions
+complete. Schema-v2 `timings.json` is derived from that scenario-owned evidence:
+`dry_run`, `prepared`, missing, duplicate, skipped, or incomplete case results
+are never converted to `passed`.
 
 `--case codex-agent` is the durable acceptance entry for Codex Agent direct-chat
 behavior. It must create/select a Codex runtime Agent, send a deterministic

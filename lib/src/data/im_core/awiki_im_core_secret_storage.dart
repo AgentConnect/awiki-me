@@ -1,187 +1,69 @@
-import 'dart:convert';
-import 'dart:math';
-
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
-import '../services/app_key_value_store.dart';
-import 'awiki_im_core_paths.dart';
-
-const int awikiImCoreVaultRootKeyLength = 32;
-const int _vaultSecretBundleSchema = 1;
+import '../../application/tenant/app_tenant.dart';
+import '../storage/scope_secret_repository.dart';
 
 class AwikiImCoreVaultSecrets {
-  const AwikiImCoreVaultSecrets({
-    required this.rootKey,
-    required this.deviceId,
-  });
+  const AwikiImCoreVaultSecrets({required this.rootKey});
 
   final core.DeviceVaultRootKey rootKey;
-  final String deviceId;
 }
 
 abstract interface class AwikiImCoreVaultSecretProvider {
-  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
-    required String stateNamespace,
-  });
+  Future<AwikiImCoreVaultSecrets> openExisting(StorageScopeId scopeId);
 }
 
-class StoredAwikiImCoreVaultSecretProvider
+/// Runtime adapter over the typed scope repository. It never provisions,
+/// migrates, upserts, or falls back to another secret backend.
+class ScopeAwikiImCoreVaultSecretProvider
     implements AwikiImCoreVaultSecretProvider {
-  StoredAwikiImCoreVaultSecretProvider({
-    required AppKeyValueStore storage,
-    List<int> Function(int length)? randomBytes,
-    String keyPrefix = 'awiki_me.im_core.identity_vault',
-  }) : _storage = storage,
-       _randomBytes = randomBytes ?? _secureRandomBytes,
-       _keyPrefix = keyPrefix;
+  const ScopeAwikiImCoreVaultSecretProvider({required this.repository});
 
-  final AppKeyValueStore _storage;
-  final List<int> Function(int length) _randomBytes;
-  final String _keyPrefix;
-  final Map<String, Future<AwikiImCoreVaultSecrets>> _inFlight =
-      <String, Future<AwikiImCoreVaultSecrets>>{};
+  final ScopeSecretRepository repository;
 
   @override
-  Future<AwikiImCoreVaultSecrets> getOrCreateSecrets({
-    required String stateNamespace,
-  }) {
-    final namespace = normalizeAwikiStateNamespace(stateNamespace);
-    final existing = _inFlight[namespace];
-    if (existing != null) {
-      return existing;
-    }
-    final created = _getOrCreateSecrets(namespace);
-    _inFlight[namespace] = created;
-    return created.whenComplete(() {
-      if (identical(_inFlight[namespace], created)) {
-        _inFlight.remove(namespace);
-      }
-    });
-  }
-
-  Future<AwikiImCoreVaultSecrets> _getOrCreateSecrets(String namespace) async {
-    final key = _bundleKey(namespace);
-    final existing = await _storage.read(key: key);
-    if (existing != null) {
-      return _secretsFromBundle(_decodeBundle(existing));
-    }
-    if (await _strictStoreAlreadyExists()) {
-      throw StateError('identity_vault_secret_bundle_unavailable');
-    }
-    final rootKeyBytes = _generateRootKeyBytes();
-    final deviceId = _generateDeviceId();
-    final bundle = _StoredVaultSecretBundle(
-      schema: _vaultSecretBundleSchema,
-      rootKeyB64: base64Encode(rootKeyBytes),
-      deviceId: deviceId,
-    );
-    await _storage.write(key: key, value: jsonEncode(bundle.toJson()));
-    return AwikiImCoreVaultSecrets(
-      rootKey: core.DeviceVaultRootKey.fromList(rootKeyBytes),
-      deviceId: deviceId,
-    );
-  }
-
-  String _bundleKey(String namespace) {
-    return '$_keyPrefix.$namespace.secrets_v1';
-  }
-
-  AwikiImCoreVaultSecrets _secretsFromBundle(_StoredVaultSecretBundle bundle) {
-    final rootKeyBytes = _decodeRootKey(bundle.rootKeyB64);
-    return AwikiImCoreVaultSecrets(
-      rootKey: core.DeviceVaultRootKey.fromList(rootKeyBytes),
-      deviceId: bundle.deviceId,
-    );
-  }
-
-  List<int> _generateRootKeyBytes() {
-    final generated = _randomBytes(awikiImCoreVaultRootKeyLength);
-    if (generated.length != awikiImCoreVaultRootKeyLength) {
-      throw StateError(
-        'identity_vault_secret_bundle_generation_failed: expected '
-        '$awikiImCoreVaultRootKeyLength bytes of root key material.',
-      );
-    }
-    return List<int>.from(generated);
-  }
-
-  String _generateDeviceId() {
-    final random = _randomBytes(16);
-    final encoded = base64UrlEncode(random).replaceAll('=', '');
-    return 'app-device-$encoded';
-  }
-
-  Future<bool> _strictStoreAlreadyExists() async {
-    final storage = _storage;
-    if (storage is! FileAppKeyValueStore || !storage.strictRead) {
-      return false;
-    }
-    return storage.storeExists();
-  }
-}
-
-List<int> _decodeRootKey(String encoded) {
-  try {
-    final decoded = base64Decode(encoded.trim());
-    if (decoded.length != awikiImCoreVaultRootKeyLength) {
-      throw const FormatException('wrong root key length');
-    }
-    return decoded;
-  } catch (_) {
-    throw StateError(
-      'identity_vault_secret_bundle_invalid: stored root key must decode to '
-      '$awikiImCoreVaultRootKeyLength bytes.',
-    );
-  }
-}
-
-_StoredVaultSecretBundle _decodeBundle(String raw) {
-  try {
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map) {
-      throw const FormatException('bundle must be an object');
-    }
-    final schema = decoded['schema'];
-    final rootKeyB64 = decoded['root_key_b64'];
-    final deviceId = decoded['device_id'];
-    if (schema != _vaultSecretBundleSchema ||
-        rootKeyB64 is! String ||
-        rootKeyB64.trim().isEmpty ||
-        deviceId is! String ||
-        deviceId.trim().isEmpty) {
-      throw const FormatException('invalid bundle fields');
-    }
-    return _StoredVaultSecretBundle(
-      schema: schema,
-      rootKeyB64: rootKeyB64,
-      deviceId: deviceId.trim(),
-    );
-  } catch (_) {
-    throw StateError('identity_vault_secret_bundle_invalid');
-  }
-}
-
-class _StoredVaultSecretBundle {
-  const _StoredVaultSecretBundle({
-    required this.schema,
-    required this.rootKeyB64,
-    required this.deviceId,
-  });
-
-  final int schema;
-  final String rootKeyB64;
-  final String deviceId;
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'schema': schema,
-      'root_key_b64': rootKeyB64,
-      'device_id': deviceId,
+  Future<AwikiImCoreVaultSecrets> openExisting(StorageScopeId scopeId) async {
+    final result = await repository.readExisting(scopeId);
+    final record = switch (result.status) {
+      ScopeSecretReadStatus.present => result.record,
+      ScopeSecretReadStatus.missing => throw const AwikiVaultOpenException(
+        'vault_key_missing',
+      ),
+      ScopeSecretReadStatus.accessDenied => throw const AwikiVaultOpenException(
+        'vault_key_access_denied',
+      ),
+      ScopeSecretReadStatus.corrupt => throw const AwikiVaultOpenException(
+        'vault_key_bundle_corrupt',
+      ),
+      ScopeSecretReadStatus.scopeMismatch =>
+        throw const AwikiVaultOpenException('vault_key_scope_mismatch'),
+      ScopeSecretReadStatus.schemaUnsupported =>
+        throw const AwikiVaultOpenException('vault_key_schema_unsupported'),
+      ScopeSecretReadStatus.providerUnavailable =>
+        throw const AwikiVaultOpenException('vault_key_provider_unavailable'),
+      ScopeSecretReadStatus.unsupported => throw const AwikiVaultOpenException(
+        'vault_key_platform_unsupported',
+      ),
     };
+    if (record == null || record.scopeId != scopeId) {
+      throw const AwikiVaultOpenException('vault_key_bundle_corrupt');
+    }
+    final material = record.envelope.identityVaultRoot.copyMaterial();
+    try {
+      return AwikiImCoreVaultSecrets(
+        rootKey: core.DeviceVaultRootKey.fromList(material),
+      );
+    } finally {
+      material.fillRange(0, material.length, 0);
+    }
   }
 }
 
-List<int> _secureRandomBytes(int length) {
-  final random = Random.secure();
-  return List<int>.generate(length, (_) => random.nextInt(256));
+class AwikiVaultOpenException implements Exception {
+  const AwikiVaultOpenException(this.code);
+
+  final String code;
+
+  @override
+  String toString() => code;
 }

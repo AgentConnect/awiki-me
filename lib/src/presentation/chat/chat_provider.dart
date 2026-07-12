@@ -1,3 +1,6 @@
+// [INPUT]: Conversation projections, messaging/timeline services, session state, and user chat actions.
+// [OUTPUT]: Canonical chat thread state, including immediate authoritative settlement of successful sends.
+// [POS]: Riverpod presentation controller for chat history, sending, realtime patches, read state, and retries.
 import 'dart:async';
 import 'dart:convert';
 
@@ -2791,13 +2794,21 @@ class ChatThreadsController
                   idempotencyKey: idempotencyKey,
                 )
                 .timeout(_sendTimeout);
+      final deliveredMessage = _settleVisibleSendingMessage(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
+        result: sent,
+      );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: validMentionDrafts,
         submittedLocalMessageId: clientMessageId,
-        deliveredMessage: _withThreadId(sent, targetThreadId),
+        deliveredMessage: deliveredMessage,
       );
     } catch (error) {
       _chatProviderTrace(
@@ -2810,6 +2821,10 @@ class ChatThreadsController
           ),
           'error': error.toString(),
         },
+      );
+      _settleVisibleSendingFailure(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
       );
     }
   }
@@ -2906,6 +2921,9 @@ class ChatThreadsController
         pending.localId,
         sentInThread,
       );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
@@ -2943,7 +2961,7 @@ class ChatThreadsController
     return ref
         .read(messagingServiceProvider)
         .downloadAttachment(
-          thread: _historyThreadRefFor(conversation),
+          thread: _attachmentThreadRefFor(conversation),
           messageId: messageId,
           attachmentId: attachment.attachmentId,
         );
@@ -3010,13 +3028,21 @@ class ChatThreadsController
                   idempotencyKey: 'retry-$clientMessageId',
                 )
                 .timeout(_sendTimeout);
+      final deliveredMessage = _settleVisibleSendingMessage(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
+        result: retried,
+      );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
         expectedAgentReplyDid: expectedAgentReplyDid,
         mentions: _messageMentionsToDrafts(message.mentions),
         submittedLocalMessageId: clientMessageId,
-        deliveredMessage: _withThreadId(retried, targetThreadId),
+        deliveredMessage: deliveredMessage,
       );
     } catch (error) {
       _chatProviderTrace(
@@ -3030,7 +3056,67 @@ class ChatThreadsController
           'error': error.toString(),
         },
       );
+      _settleVisibleSendingFailure(
+        displayThreadId: targetThreadId,
+        submittedLocalMessageId: clientMessageId,
+      );
     }
+  }
+
+  ChatMessage _settleVisibleSendingMessage({
+    required String displayThreadId,
+    required String submittedLocalMessageId,
+    required ChatMessage result,
+  }) {
+    final delivered = _withThreadId(result, displayThreadId);
+    if (delivered.sendState == MessageSendState.sending) {
+      return delivered;
+    }
+    final current = thread(displayThreadId).messages;
+    var index = current.indexWhere(
+      (message) =>
+          message.localId == submittedLocalMessageId ||
+          message.remoteId == submittedLocalMessageId,
+    );
+    if (index < 0) {
+      index = _matchingMessageIndex(current, delivered);
+    }
+    if (index < 0) {
+      // A successful send result is authoritative even when the realtime
+      // pending patch has not arrived. Persist it immediately so the sender's
+      // timeline cannot remain empty because of patch timing or delivery loss.
+      return _replaceMessage(
+        displayThreadId,
+        submittedLocalMessageId,
+        delivered,
+      );
+    }
+    if (current[index].sendState == MessageSendState.sent) {
+      return delivered;
+    }
+    return _replaceMessage(displayThreadId, current[index].localId, delivered);
+  }
+
+  void _settleVisibleSendingFailure({
+    required String displayThreadId,
+    required String submittedLocalMessageId,
+  }) {
+    final current = thread(displayThreadId).messages;
+    final index = current.indexWhere(
+      (message) =>
+          message.sendState == MessageSendState.sending &&
+          (message.localId == submittedLocalMessageId ||
+              message.remoteId == submittedLocalMessageId),
+    );
+    if (index < 0) {
+      return;
+    }
+    final pending = current[index];
+    _replaceMessage(
+      displayThreadId,
+      pending.localId,
+      pending.copyWith(sendState: MessageSendState.failed),
+    );
   }
 
   Future<void> retryAttachment({
@@ -3108,6 +3194,9 @@ class ChatThreadsController
         message.localId,
         retriedInThread,
       );
+      _updateConversationPreviewFromMessages(conversation, <ChatMessage>[
+        deliveredMessage,
+      ]);
       _startAgentProcessingForDeliveredMessage(
         conversation: conversation,
         displayThreadId: targetThreadId,
@@ -6095,8 +6184,10 @@ class ChatThreadsController
     if (!sameConversationTarget(candidate, fallback)) {
       return false;
     }
-    return !(isPeerScopedDirectConversation(candidate) &&
-        isPeerScopedDirectConversation(fallback));
+    // Once the caller holds a canonical peer-scoped identity, state lookup
+    // must never downgrade it to a legacy dm:<DID> row. The canonical preview
+    // upsert will replace that stale alias in the conversation list.
+    return !isPeerScopedDirectConversation(fallback);
   }
 
   ConversationSummary _conversationIdentityForThread(
@@ -6439,6 +6530,25 @@ AppThreadRef _localHistoryThreadRefFor(ConversationSummary conversation) {
   // same direct target. History, patch repair, and thread-after must therefore
   // address the exact thread id to avoid mixing agent controller/runtime rows.
   return _historyThreadRefFor(conversation);
+}
+
+AppThreadRef _attachmentThreadRefFor(ConversationSummary conversation) {
+  // Peer-scoped ids identify local timeline ownership and are intentionally
+  // not reversible. Remote attachment lookup instead requires a direct peer
+  // (or group) network address.
+  final groupId = conversation.groupId?.trim();
+  if (conversation.isGroup && groupId != null && groupId.isNotEmpty) {
+    return AppThreadRef.group(groupId);
+  }
+  final peer = conversation.targetPeer?.trim();
+  if (!conversation.isGroup && peer != null && peer.isNotEmpty) {
+    return AppThreadRef.direct(peer);
+  }
+  final peerDid = conversation.targetDid?.trim();
+  if (!conversation.isGroup && peerDid != null && peerDid.isNotEmpty) {
+    return AppThreadRef.direct(peerDid);
+  }
+  return AppThreadRef.thread(conversation.threadId);
 }
 
 ({String kind, String id}) _threadPatchKeyFor(AppThreadRef thread) {

@@ -949,6 +949,14 @@ void main() {
     final relationship = mapper.relationshipFromCore(
       const core.RelationStatus(
         peer: 'did:bob',
+        did: 'did:bob',
+        isFollowing: true,
+        isFollower: false,
+        isFriend: false,
+        isBlocked: false,
+        isBlockedBy: false,
+        isContact: true,
+        messaged: false,
         relationship: 'following',
         displayName: 'Bob',
       ),
@@ -979,6 +987,7 @@ void main() {
     expect(patch.displayName, 'New Alice');
     expect(patch.markdown, 'new md');
     expect(patch.avatarUri, 'https://cdn.example/new-alice.png');
+    expect(relationship.did, 'did:bob');
     expect(relationship.relationship, 'following');
     expect(relationshipPage.items.single.displayName, 'carol.awiki');
     expect(
@@ -987,6 +996,48 @@ void main() {
     );
     expect(relationshipPage.items.single.relationship, 'follower');
     expect(relationshipPage.nextCursor, '11');
+  });
+
+  test('relationship mapping derives reciprocal state from exact flags', () {
+    core.RelationStatus status({
+      required bool following,
+      required bool follower,
+      required bool friend,
+    }) => core.RelationStatus(
+      peer: 'bob.awiki',
+      did: 'did:bob',
+      isFollowing: following,
+      isFollower: follower,
+      isFriend: friend,
+      isBlocked: false,
+      isBlockedBy: false,
+      isContact: true,
+      messaged: false,
+      relationship: following ? 'following' : 'none',
+    );
+
+    expect(
+      mapper
+          .relationshipFromCore(
+            status(following: false, follower: true, friend: false),
+          )
+          .relationship,
+      'follower',
+    );
+    expect(
+      mapper
+          .relationshipFromCore(
+            status(following: true, follower: true, friend: true),
+          )
+          .relationship,
+      'friend',
+    );
+    expect(
+      () => mapper.relationshipFromCore(
+        status(following: false, follower: true, friend: true),
+      ),
+      throwsStateError,
+    );
   });
 
   test('profile display fields fall back without becoming identity source', () {

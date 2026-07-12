@@ -4,11 +4,14 @@ import 'dart:typed_data';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:path_provider/path_provider.dart';
 
+import '../../application/tenant/app_tenant.dart';
+import '../storage/awiki_storage_roots.dart';
+import '../storage/awiki_storage_scope_layout.dart';
+
+export '../storage/awiki_storage_roots.dart'
+    show awikiE2eAppStateRoot, normalizeAwikiE2eAppStateRootForLaunch;
+
 const int identityOwnedLocalStateSchemaVersion = 17;
-const bool _awikiE2eEnabled = bool.fromEnvironment('AWIKI_E2E');
-const String _awikiE2eAppStateRoot = String.fromEnvironment(
-  'AWIKI_E2E_APP_STATE_ROOT',
-);
 const String _sqliteHeader = 'SQLite format 3\u0000';
 const List<String> _sqliteSidecarSuffixes = <String>[
   '-wal',
@@ -16,74 +19,39 @@ const List<String> _sqliteSidecarSuffixes = <String>[
   '-journal',
 ];
 
+/// im-core view over the single authoritative Storage Scope layout.
 class AwikiImCorePathLayout {
-  const AwikiImCorePathLayout({
-    required this.stateNamespace,
-    required this.identityRootDir,
-    required this.vaultDir,
-    required this.vaultWorkspaceId,
-    required this.registryPath,
-    required this.defaultIdentityPath,
-    required this.sqlitePath,
-    required this.cacheDir,
-    required this.tempDir,
-  });
+  const AwikiImCorePathLayout._(this.scopeLayout);
+
+  factory AwikiImCorePathLayout.fromStorageScope(
+    AwikiStorageScopeLayout scopeLayout,
+  ) => AwikiImCorePathLayout._(scopeLayout);
 
   factory AwikiImCorePathLayout.fromRoots({
     required String appSupportRoot,
     required String cacheRoot,
     required String tempRoot,
-    String? stateNamespace,
-  }) {
-    final namespace = normalizeAwikiStateNamespace(stateNamespace);
-    final appSupportImCoreRoot = _joinAll(<String>[
-      appSupportRoot,
-      'awiki-me',
-      'environments',
-      namespace,
-      'im-core',
-    ]);
-    final identityRoot = _joinAll(<String>[appSupportImCoreRoot, 'identities']);
-    return AwikiImCorePathLayout(
-      stateNamespace: namespace,
-      identityRootDir: identityRoot,
-      vaultDir: _joinAll(<String>[appSupportImCoreRoot, 'identity-vault']),
-      vaultWorkspaceId: 'awiki-me-$namespace',
-      registryPath: _joinAll(<String>[identityRoot, 'registry.json']),
-      defaultIdentityPath: _joinAll(<String>[identityRoot, 'default']),
-      sqlitePath: _joinAll(<String>[
-        appSupportImCoreRoot,
-        'state',
-        'im_core.sqlite',
-      ]),
-      cacheDir: _joinAll(<String>[
-        cacheRoot,
-        'awiki-me',
-        'environments',
-        namespace,
-        'im-core',
-      ]),
-      tempDir: _joinAll(<String>[
-        tempRoot,
-        'awiki-me',
-        'environments',
-        namespace,
-        'im-core',
-      ]),
-    );
-  }
+    required StorageScopeId scopeId,
+  }) => AwikiImCorePathLayout.fromStorageScope(
+    AwikiStorageScopeLayout.fromRoots(
+      appSupportRoot: appSupportRoot,
+      cacheRoot: cacheRoot,
+      tempRoot: tempRoot,
+      scopeId: scopeId,
+    ),
+  );
 
   static Future<AwikiImCorePathLayout> fromPlatform({
+    required StorageScopeId scopeId,
     String? appStateRoot,
-    String? stateNamespace,
   }) async {
-    final stateRoot = _firstNonEmpty(appStateRoot, _e2eAppStateRoot());
+    final stateRoot = explicitAwikiAppStateRoot(appStateRoot);
     if (stateRoot != null) {
       return AwikiImCorePathLayout.fromRoots(
         appSupportRoot: _joinAll(<String>[stateRoot, 'support']),
         cacheRoot: _joinAll(<String>[stateRoot, 'cache']),
         tempRoot: _joinAll(<String>[stateRoot, 'tmp']),
-        stateNamespace: stateNamespace,
+        scopeId: scopeId,
       );
     }
     final appSupport = await getApplicationSupportDirectory();
@@ -93,55 +61,44 @@ class AwikiImCorePathLayout {
       appSupportRoot: appSupport.path,
       cacheRoot: cache.path,
       tempRoot: temp.path,
-      stateNamespace: stateNamespace,
+      scopeId: scopeId,
     );
   }
 
-  final String stateNamespace;
-  final String identityRootDir;
-  final String vaultDir;
-  final String vaultWorkspaceId;
-  final String registryPath;
-  final String defaultIdentityPath;
-  final String sqlitePath;
-  final String cacheDir;
-  final String tempDir;
+  final AwikiStorageScopeLayout scopeLayout;
 
-  Future<void> ensureDirectories() async {
-    await Future.wait(<Future<Directory>>[
-      Directory(identityRootDir).create(recursive: true),
-      Directory(vaultDir).create(recursive: true),
-      Directory(_dirname(sqlitePath)).create(recursive: true),
-      Directory(cacheDir).create(recursive: true),
-      Directory(tempDir).create(recursive: true),
-    ]);
-  }
+  StorageScopeId get scopeId => scopeLayout.scopeId;
+  String get identityRootDir => scopeLayout.identitiesRoot;
+  String get vaultDir => scopeLayout.identityVaultRoot;
+  String get vaultWorkspaceId => scopeLayout.vaultWorkspaceId;
+  String get vaultContextDeviceId => scopeLayout.vaultContextDeviceId;
+  String get registryPath => scopeLayout.identityRegistryPath;
+  String get defaultIdentityPath => scopeLayout.defaultIdentityPath;
+  String get sqlitePath => scopeLayout.imCoreSqlitePath;
+  String get cacheDir => scopeLayout.cacheImCoreRoot;
+  String get tempDir => scopeLayout.tempImCoreRoot;
+
+  Future<void> ensureDirectories() => scopeLayout.ensureDataDirectories();
 
   Future<ArchivedLocalState?> archiveIncompatibleLocalStateIfNeeded({
     int minimumSchemaVersion = identityOwnedLocalStateSchemaVersion,
     DateTime Function()? clock,
   }) async {
     final sqliteFile = File(sqlitePath);
-    if (!await sqliteFile.exists()) {
-      return null;
-    }
-
+    if (!await sqliteFile.exists()) return null;
     final schemaVersion = await _readSqliteUserVersion(sqliteFile);
     if (schemaVersion == null ||
         schemaVersion == 0 ||
         schemaVersion >= minimumSchemaVersion) {
       return null;
     }
-
     final archiveDir = Directory(
       _joinAll(<String>[_dirname(sqlitePath), 'legacy-state']),
     );
     await archiveDir.create(recursive: true);
     final timestamp = _archiveTimestamp((clock ?? DateTime.now).call());
     final baseName = _basename(sqlitePath);
-    final archivedPaths = <String>[];
-
-    archivedPaths.add(
+    final archivedPaths = <String>[
       await _archiveFile(
         sqliteFile,
         _joinAll(<String>[
@@ -149,13 +106,10 @@ class AwikiImCorePathLayout {
           '$baseName.schema$schemaVersion.$timestamp',
         ]),
       ),
-    );
-
+    ];
     for (final suffix in _sqliteSidecarSuffixes) {
       final sidecar = File('$sqlitePath$suffix');
-      if (!await sidecar.exists()) {
-        continue;
-      }
+      if (!await sidecar.exists()) continue;
       archivedPaths.add(
         await _archiveFile(
           sidecar,
@@ -166,7 +120,6 @@ class AwikiImCorePathLayout {
         ),
       );
     }
-
     return ArchivedLocalState(
       schemaVersion: schemaVersion,
       minimumSchemaVersion: minimumSchemaVersion,
@@ -174,86 +127,14 @@ class AwikiImCorePathLayout {
     );
   }
 
-  core.AwikiImCorePaths toCorePaths() {
-    return core.AwikiImCorePaths(
-      identityRootDir: identityRootDir,
-      registryPath: registryPath,
-      defaultIdentityPath: defaultIdentityPath,
-      sqlitePath: sqlitePath,
-      cacheDir: cacheDir,
-      tempDir: tempDir,
-    );
-  }
-}
-
-String? awikiE2eAppStateRoot() => _e2eAppStateRoot();
-
-String? _e2eAppStateRoot() {
-  if (!_awikiE2eEnabled) {
-    return null;
-  }
-  final root = _awikiE2eAppStateRoot.trim();
-  return root.isEmpty ? null : normalizeAwikiE2eAppStateRootForLaunch(root);
-}
-
-String? _firstNonEmpty(String? first, String? second) {
-  final firstTrimmed = first?.trim();
-  if (firstTrimmed != null && firstTrimmed.isNotEmpty) {
-    return firstTrimmed;
-  }
-  final secondTrimmed = second?.trim();
-  if (secondTrimmed != null && secondTrimmed.isNotEmpty) {
-    return secondTrimmed;
-  }
-  return null;
-}
-
-String normalizeAwikiStateNamespace(String? value) {
-  final raw = value?.trim().toLowerCase();
-  if (raw == null || raw.isEmpty) {
-    return 'default';
-  }
-  final safe = raw
-      .replaceAll(RegExp(r'^https?://'), '')
-      .replaceAll(RegExp(r'[/\\:*?"<>|#?&=%]+'), '-')
-      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
-  return safe.isEmpty ? 'default' : safe;
-}
-
-String normalizeAwikiE2eAppStateRootForLaunch(
-  String root, {
-  String? currentDirectory,
-  String? homeDirectory,
-  bool? isMacOS,
-  String? temporaryDirectory,
-}) {
-  final trimmed = root.trim();
-  if (trimmed.isEmpty || _isAbsolutePath(trimmed)) {
-    return trimmed;
-  }
-
-  final expandedHome = _expandHomeRelativePath(trimmed, homeDirectory);
-  if (expandedHome != null) {
-    return expandedHome;
-  }
-
-  final cwd = (currentDirectory ?? Directory.current.path).trim();
-  if (_canAnchorRelativeE2eRootToCurrentDirectory(cwd)) {
-    return _joinAll(<String>[cwd, trimmed]);
-  }
-
-  final appSupportFallback = _appSupportFallbackRoot(
-    homeDirectory ?? Platform.environment['HOME'],
-    isMacOS: isMacOS ?? Platform.isMacOS,
+  core.AwikiImCorePaths toCorePaths() => core.AwikiImCorePaths(
+    identityRootDir: identityRootDir,
+    registryPath: registryPath,
+    defaultIdentityPath: defaultIdentityPath,
+    sqlitePath: sqlitePath,
+    cacheDir: cacheDir,
+    tempDir: tempDir,
   );
-  if (appSupportFallback != null) {
-    return _joinAll(<String>[appSupportFallback, trimmed]);
-  }
-
-  final temp = (temporaryDirectory ?? Directory.systemTemp.path).trim();
-  return _joinAll(<String>[temp, 'ai.awiki.awikiMe', trimmed]);
 }
 
 class ArchivedLocalState {
@@ -282,55 +163,6 @@ String _joinAll(List<String> parts) {
       .skip(1)
       .map((part) => part.replaceAll(RegExp(r'^/+'), ''));
   return <String>[first, ...rest].join('/');
-}
-
-bool _isAbsolutePath(String path) {
-  return path.startsWith('/') ||
-      path.startsWith(r'\\') ||
-      RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
-}
-
-String? _expandHomeRelativePath(String path, String? homeDirectory) {
-  if (path != '~' && !path.startsWith('~/')) {
-    return null;
-  }
-  final home = homeDirectory?.trim() ?? Platform.environment['HOME']?.trim();
-  if (home == null || home.isEmpty) {
-    return null;
-  }
-  if (path == '~') {
-    return home;
-  }
-  return _joinAll(<String>[home, path.substring(2)]);
-}
-
-bool _canAnchorRelativeE2eRootToCurrentDirectory(String currentDirectory) {
-  if (currentDirectory.isEmpty ||
-      currentDirectory == '/' ||
-      currentDirectory == r'\') {
-    return false;
-  }
-  final lower = currentDirectory.toLowerCase();
-  return !lower.contains('.app/contents');
-}
-
-String? _appSupportFallbackRoot(
-  String? homeDirectory, {
-  required bool isMacOS,
-}) {
-  final home = homeDirectory?.trim();
-  if (home == null || home.isEmpty) {
-    return null;
-  }
-  if (isMacOS) {
-    return _joinAll(<String>[
-      home,
-      'Library',
-      'Application Support',
-      'ai.awiki.awikiMe',
-    ]);
-  }
-  return _joinAll(<String>[home, '.awiki-me']);
 }
 
 String _dirname(String path) {

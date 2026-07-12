@@ -1,3 +1,6 @@
+// [INPUT]: DID/handle queries, directory/profile services, relationship state, and conversation projections.
+// [OUTPUT]: Resolved identity UI state and canonical direct-conversation navigation.
+// [POS]: Shared identity lookup and Direct chat entry flow for contacts and conversation surfaces.
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
@@ -30,9 +33,10 @@ import 'widgets/app_widgets.dart';
 enum IdentityFlowMode { startConversation, followContact }
 
 class IdentityFlowResult {
-  const IdentityFlowResult({required this.profile});
+  const IdentityFlowResult({required this.profile, this.conversationId});
 
   final UserProfile profile;
+  final String? conversationId;
 }
 
 typedef IdentityConfirmAction = Future<void> Function(UserProfile profile);
@@ -141,18 +145,48 @@ Future<UserProfile> resolveIdentityProfile(
   WidgetRef ref,
   String rawQuery,
 ) async {
+  return (await _resolveIdentityProfile(ref, rawQuery)).profile;
+}
+
+Future<_ResolvedIdentity> _resolveIdentityProfile(
+  WidgetRef ref,
+  String rawQuery,
+) async {
   final query = normalizeDidOrHandleInput(rawQuery);
   if (query.isEmpty) {
     throw ArgumentError('identity_query_required');
   }
-  try {
-    final resolution = await ref
-        .read(directoryApplicationServiceProvider)
-        .resolvePeer(query);
-    return resolution.profile ?? identityProfileFromResolution(resolution);
-  } catch (_) {
-    return ref.read(profileApplicationServiceProvider).loadPublicProfile(query);
+  Object? directoryError;
+  for (var attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      final resolution = await ref
+          .read(directoryApplicationServiceProvider)
+          .resolvePeer(query);
+      return _ResolvedIdentity(
+        profile:
+            resolution.profile ?? identityProfileFromResolution(resolution),
+        conversationId: resolution.conversationId,
+      );
+    } catch (error) {
+      directoryError = error;
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
+      }
+    }
   }
+  if (!query.startsWith('did:')) {
+    // A handle lookup owns the user-id/full-handle peer scope. Falling back to
+    // a public profile here would silently reopen the legacy dm:<DID> alias.
+    Error.throwWithStackTrace(
+      directoryError ?? StateError('directory_resolution_failed'),
+      StackTrace.current,
+    );
+  }
+  return _ResolvedIdentity(
+    profile: await ref
+        .read(profileApplicationServiceProvider)
+        .loadPublicProfile(query),
+  );
 }
 
 UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
@@ -178,8 +212,9 @@ UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
 Future<void> openDirectConversationForProfile(
   BuildContext context,
   WidgetRef ref,
-  UserProfile profile,
-) async {
+  UserProfile profile, {
+  String? conversationId,
+}) async {
   await openDirectConversationForDid(
     context,
     ref,
@@ -188,6 +223,7 @@ Future<void> openDirectConversationForProfile(
     peerName: DidDisplayFormatter.profileName(profile),
     avatarUri: profile.avatarUri,
     avatarSeed: profile.handle ?? profile.did,
+    conversationId: conversationId,
   );
 }
 
@@ -199,6 +235,7 @@ Future<void> openDirectConversationForDid(
   String? peerHandle,
   String? avatarUri,
   String? avatarSeed,
+  String? conversationId,
 }) async {
   final session = ref.read(sessionProvider).session;
   if (session == null) {
@@ -218,17 +255,36 @@ Future<void> openDirectConversationForDid(
     return;
   }
 
-  final peerTarget = _directPeerTarget(peerDid: peer, peerHandle: peerHandle);
-  final conversationId = _directConversationIdForDid(peer);
+  late final _ResolvedDirectPeer resolvedPeer;
+  try {
+    resolvedPeer = await _resolveDirectPeer(
+      ref,
+      peerDid: peer,
+      peerHandle: peerHandle,
+      resolvedConversationId: conversationId,
+    );
+  } catch (error) {
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.fromError(error));
+    return;
+  }
+  final resolvedDid = resolvedPeer.did;
+  final resolvedHandle = resolvedPeer.handle;
+  final peerTarget = _directPeerTarget(
+    peerDid: resolvedDid,
+    peerHandle: resolvedHandle,
+  );
+  final canonicalConversationId = resolvedPeer.conversationId;
   final existing = ref
       .read(conversationListProvider)
       .conversations
       .where(
         (item) =>
-            item.conversationId?.trim() == conversationId ||
-            item.threadId == conversationId ||
+            item.conversationId?.trim() == canonicalConversationId ||
+            item.threadId == canonicalConversationId ||
             item.targetPeer?.trim() == peerTarget ||
-            item.targetDid?.trim() == peer,
+            item.targetDid?.trim() == resolvedDid,
       )
       .toList(growable: false);
   final existingConversation = existing.isEmpty
@@ -237,31 +293,28 @@ Future<void> openDirectConversationForDid(
   final conversation = existing.isNotEmpty
       ? _directConversationForPeer(
           existingConversation!,
-          peerDid: peer,
+          peerDid: resolvedDid,
           peerTarget: peerTarget,
           peerName: peerName,
           avatarUri: avatarUri,
           avatarSeed: avatarSeed,
-          fallbackConversationId: conversationId,
+          fallbackConversationId: canonicalConversationId,
         )
       : ConversationSummary(
-          conversationId: conversationId,
-          threadId: conversationId,
-          displayName: _directConversationName(peerName, peer),
+          conversationId: canonicalConversationId,
+          threadId: canonicalConversationId,
+          displayName: _directConversationName(peerName, resolvedDid),
           lastMessagePreview: '',
           lastMessageAt: DateTime.now(),
           unreadCount: 0,
           isGroup: false,
-          targetDid: peer,
+          targetDid: resolvedDid,
           avatarUri: avatarUri,
           targetPeer: peerTarget,
-          avatarSeed: avatarSeed ?? peer,
+          avatarSeed: avatarSeed ?? resolvedDid,
         );
 
-  ref
-      .read(conversationListProvider.notifier)
-      .restoreConversationBestEffort(conversation);
-  ref.read(conversationListProvider.notifier).upsertConversation(conversation);
+  ref.read(conversationListProvider.notifier).startConversation(conversation);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {
     return;
@@ -287,8 +340,14 @@ ConversationSummary _directConversationForPeer(
   required String fallbackConversationId,
 }) {
   final existingConversationId = existing.conversationId?.trim();
-  final conversationId =
-      existingConversationId != null && existingConversationId.isNotEmpty
+  final fallbackIsPeerScoped = fallbackConversationId.startsWith(
+    'dm:peer-scope:',
+  );
+  final existingIsPeerScoped =
+      existingConversationId?.startsWith('dm:peer-scope:') ?? false;
+  final conversationId = fallbackIsPeerScoped && !existingIsPeerScoped
+      ? fallbackConversationId
+      : existingConversationId != null && existingConversationId.isNotEmpty
       ? existingConversationId
       : fallbackConversationId;
   final existingTarget = existing.targetDid?.trim() ?? '';
@@ -319,8 +378,92 @@ ConversationSummary _directConversationForPeer(
   );
 }
 
-String _directConversationIdForDid(String peerDid) {
-  return 'dm:${peerDid.trim()}';
+Future<_ResolvedDirectPeer> _resolveDirectPeer(
+  WidgetRef ref, {
+  required String peerDid,
+  String? peerHandle,
+  String? resolvedConversationId,
+}) async {
+  final providedHandle = _normalizedOptionalHandle(peerHandle);
+  final providedConversationId = resolvedConversationId?.trim();
+  if (providedConversationId != null && providedConversationId.isNotEmpty) {
+    _validateResolvedDirectConversation(
+      conversationId: providedConversationId,
+      resolvedDid: peerDid,
+      resolvedHandle: providedHandle,
+    );
+    return _ResolvedDirectPeer(
+      did: peerDid,
+      handle: providedHandle,
+      conversationId: providedConversationId,
+    );
+  }
+
+  final selector = _isDomainQualifiedHandle(providedHandle)
+      ? providedHandle!
+      : peerDid;
+  final resolution = await ref
+      .read(directoryApplicationServiceProvider)
+      .resolvePeer(selector);
+  final resolvedDid = resolution.did.trim();
+  if (!resolvedDid.startsWith('did:')) {
+    throw StateError('identity_invalid_contact');
+  }
+  if (selector.startsWith('did:') && resolvedDid != peerDid) {
+    throw StateError('identity_resolution_did_mismatch');
+  }
+  final resolvedHandle = _normalizedOptionalHandle(resolution.handle);
+  final canonicalConversationId = resolution.conversationId?.trim() ?? '';
+  _validateResolvedDirectConversation(
+    conversationId: canonicalConversationId,
+    resolvedDid: resolvedDid,
+    resolvedHandle: resolvedHandle,
+  );
+  return _ResolvedDirectPeer(
+    did: resolvedDid,
+    handle: resolvedHandle ?? providedHandle,
+    conversationId: canonicalConversationId,
+  );
+}
+
+void _validateResolvedDirectConversation({
+  required String conversationId,
+  required String resolvedDid,
+  required String? resolvedHandle,
+}) {
+  if (!conversationId.startsWith('dm:') || conversationId.length <= 3) {
+    throw StateError('identity_missing_canonical_conversation');
+  }
+  if (_isDomainQualifiedHandle(resolvedHandle)) {
+    if (!conversationId.startsWith('dm:peer-scope:v1:')) {
+      throw StateError('identity_handle_conversation_not_canonical');
+    }
+    return;
+  }
+  if (conversationId.startsWith('dm:peer-scope:v1:')) {
+    return;
+  }
+  final legacyPeerDid = conversationId.substring(3).trim();
+  if (legacyPeerDid != resolvedDid) {
+    throw StateError('identity_conversation_did_mismatch');
+  }
+}
+
+String? _normalizedOptionalHandle(String? value) {
+  var handle = value?.trim();
+  if (handle == null || handle.isEmpty) {
+    return null;
+  }
+  while (handle!.startsWith('@')) {
+    handle = handle.substring(1).trimLeft();
+  }
+  return handle.isEmpty ? null : handle.toLowerCase();
+}
+
+bool _isDomainQualifiedHandle(String? value) {
+  final handle = value?.trim() ?? '';
+  final separator = handle.indexOf('.');
+  return separator > 0 && separator < handle.length - 1;
 }
 
 ConversationSummary _preferAuthoritativeDirectConversation(
@@ -360,7 +503,12 @@ Future<void> showStartConversationDialog(
   if (result == null || !context.mounted) {
     return;
   }
-  await openDirectConversationForProfile(context, ref, result.profile);
+  await openDirectConversationForProfile(
+    context,
+    ref,
+    result.profile,
+    conversationId: result.conversationId,
+  );
 }
 
 Future<void> showFollowIdentityDialog(
@@ -377,7 +525,6 @@ Future<void> showFollowIdentityDialog(
 
   try {
     await ref.read(friendsProvider.notifier).follow(result.profile.did);
-    await ref.read(friendsProvider.notifier).refresh();
     ref
         .read(uiFeedbackProvider.notifier)
         .showInfo(AppMessage.followContactSucceeded());
@@ -410,6 +557,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   bool _isResolving = false;
   bool _isSubmitting = false;
   UserProfile? _profile;
+  String? _conversationId;
   RelationshipSummary? _relationship;
   String? _errorText;
 
@@ -433,6 +581,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       _isResolving = true;
       _errorText = null;
       _profile = null;
+      _conversationId = null;
       _relationship = null;
     });
     try {
@@ -453,6 +602,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       }
       setState(() {
         _profile = profile;
+        _conversationId = resolved.conversationId;
         _relationship = relationship;
         _isResolving = false;
       });
@@ -468,8 +618,7 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   }
 
   Future<_ResolvedIdentity> _resolveIdentity(String query) async {
-    final profile = await resolveIdentityProfile(ref, query);
-    return _ResolvedIdentity(profile: profile);
+    return _resolveIdentityProfile(ref, query);
   }
 
   Future<void> _submit() async {
@@ -489,7 +638,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
     }
     final confirm = widget.onConfirm;
     if (confirm == null) {
-      Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+      Navigator.of(context).pop(
+        IdentityFlowResult(profile: profile, conversationId: _conversationId),
+      );
       return;
     }
     setState(() {
@@ -501,7 +652,9 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop(IdentityFlowResult(profile: profile));
+      Navigator.of(context).pop(
+        IdentityFlowResult(profile: profile, conversationId: _conversationId),
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -616,9 +769,22 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
 }
 
 class _ResolvedIdentity {
-  const _ResolvedIdentity({required this.profile});
+  const _ResolvedIdentity({required this.profile, this.conversationId});
 
   final UserProfile profile;
+  final String? conversationId;
+}
+
+class _ResolvedDirectPeer {
+  const _ResolvedDirectPeer({
+    required this.did,
+    required this.handle,
+    required this.conversationId,
+  });
+
+  final String did;
+  final String? handle;
+  final String conversationId;
 }
 
 class _IdentitySearchInput extends StatelessWidget {
@@ -700,7 +866,8 @@ class _IdentityPreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final displayName = DidDisplayFormatter.profileName(profile);
-    final handle = profile.handle?.trim();
+    final handleLabel = DidDisplayFormatter.profileHandleLabel(profile);
+    final secondaryName = DidDisplayFormatter.secondaryProfileName(profile);
     final relationshipLabel = relationship?.relationship.trim();
     return Container(
       width: double.infinity,
@@ -726,7 +893,8 @@ class _IdentityPreviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      displayName,
+                      handleLabel,
+                      key: const Key('identity-preview-handle-value'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -735,18 +903,19 @@ class _IdentityPreviewCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      handle == null || handle.isEmpty
-                          ? profile.did
-                          : '@$handle',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF66728A),
-                        fontSize: 12,
+                    if (secondaryName.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 5),
+                      Text(
+                        secondaryName,
+                        key: const Key('identity-preview-display-name'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF66728A),
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -754,7 +923,10 @@ class _IdentityPreviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          _IdentityMetaLine(label: 'DID', value: profile.did),
+          _IdentityMetaLine(
+            label: 'DID',
+            value: DidDisplayFormatter.compactDidPath(profile.did),
+          ),
           _IdentityMetaLine(
             label: context.l10n.identityTypeLabel,
             value: _inferIdentityType(context.l10n, profile),
