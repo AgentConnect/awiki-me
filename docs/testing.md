@@ -141,6 +141,10 @@ Supported E2E cases:
 - `contacts`: App and CLI peer follow/contact flow.
 - `full`: all App + CLI peer flows.
 
+群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
+
+`group` / `full` case 会通过当前 tenant-scoped CLI workspace 建群和添加成员。Handle-backed recovery 的跨域 P4 continuity 由 `awiki-system-test/tests_v2/multi_tenant/test_cross_domain_message_flows.py` 负责；AWiki Me full case负责证明真实 App/CLI peer产品入口仍发送完整 Handle并完成后续群消息。
+
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
 must not be committed because they may contain OTP values.
