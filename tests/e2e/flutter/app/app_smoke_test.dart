@@ -12,6 +12,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversat
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
@@ -588,7 +589,7 @@ void main() {
       const runtimeDid = 'did:test:agent:hermes-ui';
       final conversation = ConversationSummary(
         threadId: 'dm:$runtimeDid',
-        displayName: 'Hermes UI',
+        displayName: 'hermes-ui.awiki.ai',
         lastMessagePreview: 'latest runtime reply',
         lastMessageAt: DateTime(2026, 6, 15, 10, 30),
         unreadCount: 0,
@@ -658,6 +659,21 @@ void main() {
                   <ConversationSummary>[conversation],
                 ),
               ),
+              peerDisplayProfileProvider.overrideWith((ref) {
+                final controller = PeerDisplayProfileController(ref);
+                controller.updateFromRemote(
+                  ownerDid: session.did,
+                  profile: const UserProfile(
+                    did: runtimeDid,
+                    nickName: 'Hermes Cached',
+                    bio: '',
+                    tags: <String>[],
+                    profileMarkdown: '',
+                    fullHandle: 'hermes-ui.awiki.ai',
+                  ),
+                );
+                return controller;
+              }),
             ],
           ),
         );
@@ -665,7 +681,8 @@ void main() {
 
         expect(find.byType(AppShell), findsOneWidget);
         expect(find.text('最近会话'), findsOneWidget);
-        await tester.tap(find.text('Hermes UI').first);
+        expect(find.text('Hermes Cached'), findsOneWidget);
+        await tester.tap(find.text('Hermes Cached').first);
         await tester.pumpAndSettle();
 
         expect(find.text('会话信息'), findsNothing);
@@ -682,6 +699,7 @@ void main() {
         await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
         await tester.pumpAndSettle();
 
+        expect(find.text('Hermes UI'), findsWidgets);
         expect(find.text('智能体信息'), findsOneWidget);
         expect(find.text('Hermes'), findsOneWidget);
         expect(find.text('Agent 收件箱'), findsOneWidget);

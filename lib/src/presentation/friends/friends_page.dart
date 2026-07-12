@@ -8,6 +8,7 @@ import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../group/group_list_page.dart';
 import '../settings/settings_page.dart';
+import '../profile/peer_display_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
@@ -45,8 +46,8 @@ class FriendsPage extends ConsumerWidget {
       ref,
       peerDid: item.did,
       peerHandle: item.handle,
-      peerName: _displayName(item),
-      avatarUri: item.avatarUri,
+      peerName: _displayName(ref, item),
+      avatarUri: _avatarUri(ref, item),
     );
   }
 
@@ -97,9 +98,9 @@ class FriendsPage extends ConsumerWidget {
                   .map(
                     (item) => _FriendRow.contact(
                       rowKey: Key('contact-row:${item.did.trim()}'),
-                      seed: _displayName(item),
-                      title: _displayName(item),
-                      avatarUri: item.avatarUri,
+                      seed: _displayName(ref, item),
+                      title: _displayName(ref, item),
+                      avatarUri: _avatarUri(ref, item),
                       onTap: () => _openContact(context, ref, item),
                     ),
                   )
@@ -134,9 +135,9 @@ class FriendsPage extends ConsumerWidget {
                   .map(
                     (item) => _FriendRow.contact(
                       rowKey: Key('contact-row:${item.did.trim()}'),
-                      seed: _displayName(item),
-                      title: _displayName(item),
-                      avatarUri: item.avatarUri,
+                      seed: _displayName(ref, item),
+                      title: _displayName(ref, item),
+                      avatarUri: _avatarUri(ref, item),
                       trailing: state.isFollowing(item.did)
                           ? null
                           : _RelationshipActionButton(
@@ -243,8 +244,17 @@ class FriendsPage extends ConsumerWidget {
 
 const int _previewLimit = 3;
 
-String _displayName(RelationshipSummary item) {
-  return DidDisplayFormatter.relationshipTitle(item);
+String _displayName(WidgetRef ref, RelationshipSummary item) {
+  return peerDisplayName(
+    ref.watch(peerDisplayProfileProvider),
+    did: item.did,
+    fallback: DidDisplayFormatter.relationshipTitle(item),
+  );
+}
+
+String? _avatarUri(WidgetRef ref, RelationshipSummary item) {
+  return peerAvatarUri(ref.watch(peerDisplayProfileProvider), item.did) ??
+      item.avatarUri;
 }
 
 class _FriendsSection extends StatelessWidget {
@@ -719,7 +729,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
               );
             }
             final item = items[index - 1];
-            final displayName = _displayName(item);
+            final displayName = _displayName(ref, item);
             final isFollowing = friendsState.isFollowing(item.did);
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -727,7 +737,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                 rowKey: Key('contact-row:${item.did.trim()}'),
                 seed: displayName,
                 title: displayName,
-                avatarUri: item.avatarUri,
+                avatarUri: _avatarUri(ref, item),
                 trailing: isFollowing
                     ? _RelationshipActionButton(
                         label: context.l10n.friendsUnfollow,
@@ -790,8 +800,8 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
       ref,
       peerDid: item.did,
       peerHandle: item.handle,
-      peerName: _displayName(item),
-      avatarUri: item.avatarUri,
+      peerName: _displayName(ref, item),
+      avatarUri: _avatarUri(ref, item),
     );
   }
 }

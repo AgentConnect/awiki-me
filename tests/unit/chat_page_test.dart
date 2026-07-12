@@ -30,6 +30,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -651,7 +652,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('单聊页头等待 profile 时不闪现 handle，返回后显示昵称', (tester) async {
+  testWidgets('单聊页头同步使用本地 profile 投影且不发起远端查询', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
     final gateway = FakeAwikiGateway();
@@ -681,6 +682,21 @@ void main() {
         session: session,
         providerOverrides: <Override>[
           profileApplicationServiceProvider.overrideWithValue(profileService),
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              profile: const UserProfile(
+                did: 'did:test:zsy',
+                nickName: '张盛毅',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'zsy.awiki.ai',
+              ),
+            );
+            return controller;
+          }),
         ],
       ),
     );
@@ -688,28 +704,12 @@ void main() {
 
     Text headerTitle() =>
         tester.widget<Text>(find.byKey(const Key('chat-header-title')));
-    expect(headerTitle().data, isNot('zsy.awiki.ai'));
-    expect(find.text('zsy.awiki.ai'), findsNothing);
-    expect(profileService.loadPublicProfileCalls, 1);
-
-    profileCompleter.complete(
-      const UserProfile(
-        did: 'did:test:zsy',
-        nickName: '张盛毅',
-        bio: '',
-        tags: <String>[],
-        profileMarkdown: '',
-        handle: 'zsy',
-        fullHandle: 'zsy.awiki.ai',
-      ),
-    );
-    await tester.pumpAndSettle();
-
     expect(headerTitle().data, '张盛毅');
-    expect(profileService.loadPublicProfileCalls, 1);
+    expect(find.text('zsy.awiki.ai'), findsNothing);
+    expect(profileService.loadPublicProfileCalls, 0);
   });
 
-  testWidgets('最近会话等待 profile 时不显示 handle，并统一使用昵称', (tester) async {
+  testWidgets('最近会话同步使用本地 profile 投影且不发起远端查询', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
     final conversation = ConversationSummary(
@@ -728,6 +728,21 @@ void main() {
         home: const ConversationListPage(embedded: true, bottomInset: 0),
         providerOverrides: <Override>[
           profileApplicationServiceProvider.overrideWithValue(profileService),
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: 'did:test:me',
+              profile: const UserProfile(
+                did: 'did:test:lzc',
+                displayName: 'zhuocheng',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'lzc.awiki.ai',
+              ),
+            );
+            return controller;
+          }),
           conversationListProvider.overrideWith(
             (ref) => _StaticConversationListController(
               ref,
@@ -739,23 +754,9 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('lzc.awiki.ai'), findsNothing);
-
-    profileCompleter.complete(
-      const UserProfile(
-        did: 'did:test:lzc',
-        displayName: 'zhuocheng',
-        bio: '',
-        tags: <String>[],
-        profileMarkdown: '',
-        fullHandle: 'lzc.awiki.ai',
-      ),
-    );
-    await tester.pumpAndSettle();
-
     expect(find.text('zhuocheng'), findsOneWidget);
     expect(find.text('lzc.awiki.ai'), findsNothing);
-    expect(profileService.loadPublicProfileCalls, 1);
+    expect(profileService.loadPublicProfileCalls, 0);
   });
 
   testWidgets('群聊页头不查询个人 profile 并保留群名', (tester) async {

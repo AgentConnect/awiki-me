@@ -44,6 +44,7 @@ import '../friends/friends_provider.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/app_dialog.dart';
@@ -1895,10 +1896,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (targetDid == null || targetDid.isEmpty) {
       return null;
     }
-    final profile = ref
-        .watch(peerPublicProfileProvider(targetDid))
-        .maybeWhen(data: (value) => value, orElse: () => null);
-    final nickname = profile?.displayName.trim() ?? '';
+    final nickname = peerDisplayName(
+      ref.watch(peerDisplayProfileProvider),
+      did: targetDid,
+      fallback: '',
+    );
     return nickname.isEmpty ? null : nickname;
   }
 

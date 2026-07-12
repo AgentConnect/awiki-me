@@ -6,6 +6,7 @@ import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
@@ -107,6 +108,11 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
 
 class FakeDirectoryApplicationService implements DirectoryApplicationService {
   const FakeDirectoryApplicationService();
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
 
   @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) async {

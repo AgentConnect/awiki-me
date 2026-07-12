@@ -6,6 +6,8 @@ import '../../app/app_services.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
 import '../friends/friends_provider.dart';
+import '../app_shell/providers/session_provider.dart';
+import 'peer_display_profile_provider.dart';
 import 'profile_provider.dart';
 import '../../domain/entities/user_profile.dart';
 
@@ -75,6 +77,14 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     if (!mounted) {
       return;
     }
+    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    ref
+        .read(peerDisplayProfileProvider.notifier)
+        .updateFromRemote(
+          ownerDid: ownerDid,
+          profile: profile,
+          requestedDid: did,
+        );
     state = state.copyWith(profile: profile, clearError: true);
 
     try {

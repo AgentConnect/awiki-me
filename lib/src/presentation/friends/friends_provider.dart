@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import '../../app/app_services.dart';
 import '../../application/ports/relationship_core_port.dart';
 import '../../domain/entities/relationship_summary.dart';
+import '../app_shell/providers/session_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 
 enum FriendsRelationshipListType { following, followers }
 
@@ -72,10 +74,7 @@ class FriendsController extends StateNotifier<FriendsState> {
   FriendsController(
     this.ref, {
     this.mutationTimeout = const Duration(seconds: 15),
-    // Relationship pages hydrate every peer profile so rows can prefer the
-    // nickname and fall back to Handle. A 12-second whole-page deadline was
-    // too short for larger lists over the remote service.
-    this.refreshTimeout = const Duration(seconds: 30),
+    this.refreshTimeout = const Duration(seconds: 12),
   }) : super(const FriendsState());
 
   final Ref ref;
@@ -102,6 +101,13 @@ class FriendsController extends StateNotifier<FriendsState> {
     }
     final followersResult = results[0];
     final followingResult = results[1];
+    await _loadCachedPeerProfiles(<RelationshipSummary>[
+      ...?followersResult.page?.items,
+      ...?followingResult.page?.items,
+    ]);
+    if (!mounted || generation != _refreshGeneration) {
+      return;
+    }
     final followingItems = followingResult.page?.items;
     var followingAliases = state.followingAliases;
     var notFollowingAliases = state.notFollowingAliases;
@@ -145,6 +151,15 @@ class FriendsController extends StateNotifier<FriendsState> {
     } catch (error) {
       return _RelationshipRefreshResult(error: error);
     }
+  }
+
+  Future<void> _loadCachedPeerProfiles(
+    Iterable<RelationshipSummary> items,
+  ) async {
+    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    await ref
+        .read(peerDisplayProfileProvider.notifier)
+        .loadCached(ownerDid: ownerDid, dids: items.map((item) => item.did));
   }
 
   Future<void> follow(String didOrHandle) async {
@@ -329,6 +344,7 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     );
     try {
       final page = await _loadPage(cursor: null);
+      await _loadCachedPeerProfiles(page.items);
       if (!mounted) {
         return;
       }
@@ -352,6 +368,7 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     state = state.copyWith(isLoadingMore: true, clearError: true);
     try {
       final page = await _loadPage(cursor: state.nextCursor);
+      await _loadCachedPeerProfiles(page.items);
       if (!mounted) {
         return;
       }
@@ -381,6 +398,15 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
             .listFollowers(limit: pageSize, cursor: cursor)
             .timeout(requestTimeout);
     }
+  }
+
+  Future<void> _loadCachedPeerProfiles(
+    Iterable<RelationshipSummary> items,
+  ) async {
+    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    await ref
+        .read(peerDisplayProfileProvider.notifier)
+        .loadCached(ownerDid: ownerDid, dids: items.map((item) => item.did));
   }
 }
 

@@ -21,6 +21,7 @@ import '../../domain/services/notification_facade.dart';
 import '../agents/agents_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import 'conversation_list_ordering.dart';
 
 const bool _conversationTraceEnabled = bool.fromEnvironment(
@@ -207,6 +208,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           'conversation_list.refresh.service',
           () => conversationService.listConversations(ownerDid: session.did),
         );
+        await _loadCachedPeerProfiles(session.did, conversations);
         if (generation != _refreshGeneration) {
           return;
         }
@@ -235,6 +237,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         ),
         level: AwikiPerformanceLogLevel.verbose,
       );
+      await _loadCachedPeerProfiles(session.did, conversations);
       if (generation != _refreshGeneration) {
         return;
       }
@@ -290,6 +293,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       fields: <String, Object?>{'base': base.length},
       level: AwikiPerformanceLogLevel.verbose,
     );
+    await _loadCachedPeerProfiles(ownerDid, enriched);
     if (generation != _refreshGeneration) {
       return;
     }
@@ -327,6 +331,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           .loadConversationSnapshot(ownerDid: ownerDid),
       level: AwikiPerformanceLogLevel.verbose,
     );
+    await _loadCachedPeerProfiles(ownerDid, conversations);
     if (!_canApplySnapshotBootstrap(
           generation: generation,
           ownerDid: ownerDid,
@@ -353,6 +358,20 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       },
       level: AwikiPerformanceLogLevel.verbose,
     );
+  }
+
+  Future<void> _loadCachedPeerProfiles(
+    String ownerDid,
+    Iterable<ConversationSummary> conversations,
+  ) {
+    return ref
+        .read(peerDisplayProfileProvider.notifier)
+        .loadCached(
+          ownerDid: ownerDid,
+          dids: conversations
+              .where((conversation) => !conversation.isGroup)
+              .map((conversation) => conversation.targetDid ?? ''),
+        );
   }
 
   void _ensurePatchSubscriptionForCurrentSession() {

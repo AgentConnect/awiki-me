@@ -24,6 +24,7 @@ import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
 import '../../profile/profile_provider.dart';
+import '../../profile/peer_display_profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
@@ -184,6 +185,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         await ref.read(conversationListProvider.notifier).clear();
         ref.read(chatThreadsProvider.notifier).clear();
         ref.read(friendsProvider.notifier).clear();
+        ref.read(peerDisplayProfileProvider.notifier).clear();
         ref.read(groupProvider.notifier).clear();
         await ref
             .read(appSessionServiceProvider)
@@ -204,6 +206,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ref.read(conversationListProvider.notifier).clearLocal();
     ref.read(chatThreadsProvider.notifier).clear();
     ref.read(friendsProvider.notifier).clear();
+    ref.read(peerDisplayProfileProvider.notifier).clear();
     ref.read(groupProvider.notifier).clear();
   }
 

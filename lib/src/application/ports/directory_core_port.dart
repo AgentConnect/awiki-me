@@ -1,3 +1,4 @@
+import '../../domain/entities/peer_display_profile.dart';
 import '../../domain/entities/user_profile.dart';
 
 class DirectoryPeerResolution {
@@ -19,6 +20,10 @@ class DirectoryPeerResolution {
 }
 
 abstract interface class DirectoryCorePort {
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  );
+
   Future<DirectoryPeerResolution> resolvePeer(String peer);
 
   Future<DirectoryPeerResolution> lookupHandle(String handle);

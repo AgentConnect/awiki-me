@@ -31,7 +31,7 @@ import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../settings/settings_page.dart';
-import '../profile/peer_profile_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import 'conversation_list_ordering.dart';
 import 'conversation_peer_classifier.dart';
 import 'conversation_provider.dart';
@@ -1235,20 +1235,19 @@ String _conversationPresentationTitle(
   ConversationSummary conversation,
   AppLocalizations l10n,
 ) {
-  String? peerDisplayName;
+  String? cachedPeerName;
   final targetDid = conversation.targetDid?.trim() ?? '';
   if (!conversation.isGroup && targetDid.isNotEmpty) {
-    peerDisplayName = ref
-        .watch(peerPublicProfileProvider(targetDid))
-        .maybeWhen(
-          data: (profile) => profile.displayName.trim(),
-          orElse: () => null,
-        );
+    cachedPeerName = peerDisplayName(
+      ref.watch(peerDisplayProfileProvider),
+      did: targetDid,
+      fallback: '',
+    );
   }
   return DidDisplayFormatter.conversationTitle(
     conversation,
     l10n,
-    peerDisplayName: peerDisplayName,
+    peerDisplayName: cachedPeerName,
   );
 }
 
