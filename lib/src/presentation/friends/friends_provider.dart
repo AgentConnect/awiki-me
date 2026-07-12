@@ -72,7 +72,10 @@ class FriendsController extends StateNotifier<FriendsState> {
   FriendsController(
     this.ref, {
     this.mutationTimeout = const Duration(seconds: 15),
-    this.refreshTimeout = const Duration(seconds: 12),
+    // Relationship pages hydrate every peer profile so rows can prefer the
+    // nickname and fall back to Handle. A 12-second whole-page deadline was
+    // too short for larger lists over the remote service.
+    this.refreshTimeout = const Duration(seconds: 30),
   }) : super(const FriendsState());
 
   final Ref ref;

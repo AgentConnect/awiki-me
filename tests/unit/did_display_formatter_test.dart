@@ -1,3 +1,4 @@
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/shared/formatters/display_formatters.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,41 @@ void main() {
         ),
       ),
       'bob.awiki.ai',
+    );
+  });
+
+  test('relationship title prefers nickname then Handle then DID', () {
+    expect(
+      DidDisplayFormatter.relationshipTitle(
+        const RelationshipSummary(
+          did: 'did:wba:awiki.ai:user:alice:e1_key',
+          displayName: 'Alice',
+          handle: 'alice.awiki.ai',
+          relationship: 'following',
+        ),
+      ),
+      'Alice',
+    );
+    expect(
+      DidDisplayFormatter.relationshipTitle(
+        const RelationshipSummary(
+          did: 'did:wba:awiki.ai:user:bob:e1_key',
+          displayName: 'did:wba:awiki.ai:user:bob:e1_key',
+          handle: '@bob.awiki.ai',
+          relationship: 'follower',
+        ),
+      ),
+      'bob.awiki.ai',
+    );
+    expect(
+      DidDisplayFormatter.relationshipTitle(
+        const RelationshipSummary(
+          did: 'did:wba:awiki.ai:user:carol:e1_key',
+          displayName: '',
+          relationship: 'follower',
+        ),
+      ),
+      'carol',
     );
   });
 

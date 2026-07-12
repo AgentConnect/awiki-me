@@ -244,10 +244,7 @@ class FriendsPage extends ConsumerWidget {
 const int _previewLimit = 3;
 
 String _displayName(RelationshipSummary item) {
-  return DidDisplayFormatter.compactDisplayName(
-    displayName: item.displayName,
-    fallbackDid: item.did,
-  );
+  return DidDisplayFormatter.relationshipTitle(item);
 }
 
 class _FriendsSection extends StatelessWidget {

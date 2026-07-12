@@ -1,6 +1,7 @@
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../../domain/entities/conversation_summary.dart';
+import '../../../domain/entities/relationship_summary.dart';
 import '../../../domain/entities/user_profile.dart';
 
 class DidDisplayFormatter {
@@ -97,6 +98,20 @@ class DidDisplayFormatter {
       return normalized;
     }
     return compactDid(fallbackDid);
+  }
+
+  /// Relationship rows prefer the hydrated nickname and only fall back to
+  /// the protocol Handle when the profile has no nickname.
+  static String relationshipTitle(RelationshipSummary relationship) {
+    final nickname = relationship.displayName.trim();
+    if (nickname.isNotEmpty && !nickname.startsWith('did:')) {
+      return nickname;
+    }
+    final handle = _cleanHandle(relationship.handle);
+    if (handle.isNotEmpty) {
+      return handle;
+    }
+    return compactDid(relationship.did);
   }
 
   static String conversationTitle(
