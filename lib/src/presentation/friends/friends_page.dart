@@ -75,6 +75,7 @@ class FriendsPage extends ConsumerWidget {
         _FriendsSection(
           title: context.l10n.friendsFollowing,
           trailingLabel: context.l10n.friendsViewAll,
+          trailingKey: const Key('friends-following-view-all'),
           onTrailingTap: () => _openRelationshipList(
             context,
             FriendsRelationshipListType.following,
@@ -82,6 +83,7 @@ class FriendsPage extends ConsumerWidget {
           children: following
               .map(
                 (item) => _FriendRow.contact(
+                  rowKey: Key('contact-row:${item.did.trim()}'),
                   seed: _displayName(item),
                   title: _displayName(item),
                   avatarUri: item.avatarUri,
@@ -94,6 +96,7 @@ class FriendsPage extends ConsumerWidget {
         _FriendsSection(
           title: context.l10n.friendsFollowers,
           trailingLabel: context.l10n.friendsViewAll,
+          trailingKey: const Key('friends-followers-view-all'),
           onTrailingTap: () => _openRelationshipList(
             context,
             FriendsRelationshipListType.followers,
@@ -101,6 +104,7 @@ class FriendsPage extends ConsumerWidget {
           children: followers
               .map(
                 (item) => _FriendRow.contact(
+                  rowKey: Key('contact-row:${item.did.trim()}'),
                   seed: _displayName(item),
                   title: _displayName(item),
                   avatarUri: item.avatarUri,
@@ -218,12 +222,14 @@ class _FriendsSection extends StatelessWidget {
     required this.title,
     required this.children,
     this.trailingLabel,
+    this.trailingKey,
     this.onTrailingTap,
   });
 
   final String title;
   final List<Widget> children;
   final String? trailingLabel;
+  final Key? trailingKey;
   final VoidCallback? onTrailingTap;
 
   @override
@@ -254,6 +260,7 @@ class _FriendsSection extends StatelessWidget {
                 ),
                 if (trailingLabel != null && onTrailingTap != null)
                   AppPressableText(
+                    key: trailingKey,
                     onTap: onTrailingTap,
                     semanticLabel: trailingLabel,
                     child: Padding(
@@ -283,6 +290,7 @@ class _FriendsSection extends StatelessWidget {
 
 class _FriendRow extends StatelessWidget {
   const _FriendRow.contact({
+    required this.rowKey,
     required this.seed,
     required this.title,
     required this.onTap,
@@ -292,11 +300,13 @@ class _FriendRow extends StatelessWidget {
 
   const _FriendRow.group({required this.title, required this.onTap})
     : isGroup = true,
+      rowKey = const Key('friends-groups-row'),
       seed = 'group',
       trailing = null,
       avatarUri = null;
 
   final bool isGroup;
+  final Key rowKey;
   final String seed;
   final String title;
   final VoidCallback onTap;
@@ -308,7 +318,7 @@ class _FriendRow extends StatelessWidget {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return Container(
-      key: isGroup ? const Key('friends-groups-row') : null,
+      key: rowKey,
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: theme.border)),
@@ -642,6 +652,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18),
               child: _FriendRow.contact(
+                rowKey: Key('contact-row:${item.did.trim()}'),
                 seed: displayName,
                 title: displayName,
                 avatarUri: item.avatarUri,

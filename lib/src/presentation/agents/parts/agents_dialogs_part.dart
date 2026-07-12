@@ -10,25 +10,18 @@ Future<void> _openRuntimeChat(
     context,
     ref,
     peerDid: agent.agentDid,
-    peerHandle: _agentFullHandle(ref, agent),
+    peerHandle: _agentFullHandle(agent),
     peerName: title,
     avatarSeed: agent.handle ?? agent.agentDid,
   );
 }
 
-String? _agentFullHandle(WidgetRef ref, AgentSummary agent) {
+String? _agentFullHandle(AgentSummary agent) {
   final handle = _trimLeadingAt(agent.handle);
-  if (handle == null || handle.isEmpty) {
+  if (handle == null || handle.isEmpty || !handle.contains('.')) {
     return null;
   }
-  if (handle.contains('.')) {
-    return handle.toLowerCase();
-  }
-  final domain = ref.read(awikiEnvironmentConfigProvider).didDomain.trim();
-  if (domain.isEmpty) {
-    return handle.toLowerCase();
-  }
-  return '$handle.$domain'.toLowerCase();
+  return handle.toLowerCase();
 }
 
 String? _trimLeadingAt(String? value) {

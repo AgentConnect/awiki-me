@@ -37,6 +37,7 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'CONTACT-E2E-001',
   'CONTACT-E2E-002',
   'CONTACT-REG-001',
+  'CONTACT-MSG-E2E-001',
   'ATTACH-E2E-001',
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
@@ -70,6 +71,7 @@ const List<String> _desktopCliPeerContactsCaseIds = <String>[
   'CONTACT-E2E-001',
   'CONTACT-E2E-002',
   'CONTACT-REG-001',
+  'CONTACT-MSG-E2E-001',
 ];
 const List<String> _desktopCliPeerPerformanceCaseIds = <String>[
   'PERF-E2E-001', // real backend App + CLI peer performance gate.

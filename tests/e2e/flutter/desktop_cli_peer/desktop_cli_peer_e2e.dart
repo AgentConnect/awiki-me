@@ -281,8 +281,15 @@ void runDesktopCliPeerE2e({
         await _verifyContactRegression(
           robot: robot,
           relationships: relationships,
+          messaging: faultMessaging!,
+          conversations: bootstrap.conversationService!,
+          ownerDid: session.did,
+          session: session,
+          bootstrap: bootstrap,
+          providerOverrides: appProviderOverrides,
           canonicalCliDid: canonicalCliDid!,
           config: config,
+          nonce: messageNonce,
         );
         await _attestPassedCases(<String, List<String>>{
           'CONTACT-E2E-001': const <String>[
@@ -295,6 +302,11 @@ void runDesktopCliPeerE2e({
           ],
           'CONTACT-REG-001': const <String>[
             'exact_friend_follower_none_transitions_checked',
+          ],
+          'CONTACT-MSG-E2E-001': const <String>[
+            'exact_contact_row_clicked',
+            'canonical_send_message_summary_ui_overlay_exact_one',
+            'restart_unread_read_closed_loop_verified',
           ],
         });
       }

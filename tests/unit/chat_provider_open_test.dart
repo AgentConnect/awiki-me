@@ -758,7 +758,10 @@ void main() {
     await pumpEventQueue();
 
     expect(patchMessaging.sendConversationTextCalls, 1);
-    expect(patchMessaging.lastSendConversation?.conversationId, 'dm:did:peer');
+    expect(
+      patchMessaging.lastSendConversation?.conversationId,
+      canonicalConversation.effectiveConversationId,
+    );
     expect(patchMessaging.lastClientMessageId, isNotEmpty);
     var messages = patchContainer
         .read(chatThreadProvider(_timelineThreadId(canonicalConversation)))
@@ -3521,7 +3524,7 @@ void main() {
     expect(refreshedThread.messages, isEmpty);
     expect(openedThread.isAgentProcessing, isTrue);
     expect(refreshedThread.isAgentProcessing, isFalse);
-    expect(gateway.lastSentThreadId, 'dm:$agentDid');
+    expect(gateway.lastSentThreadId, refreshedConversation.threadId);
     expect(
       sendContainer.read(selectedConversationProvider)?.threadId,
       refreshedConversation.threadId,

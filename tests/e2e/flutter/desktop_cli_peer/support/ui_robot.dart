@@ -354,7 +354,34 @@ class _DesktopAppRobot {
     description: 'conversation row $conversationId',
   );
 
-  Future<void> followSelectedPeer() async {
+  Future<ConversationSummary> openContactConversation(String peerDid) async {
+    await navigateToContacts();
+    await container.read(friendsProvider.notifier).refresh();
+    await tester.pump();
+    final row = find.byKey(Key('contact-row:${peerDid.trim()}'));
+    if (row.evaluate().isEmpty) {
+      await tapOne(
+        find.byKey(const Key('friends-following-view-all')),
+        description: 'following contacts view-all action',
+      );
+    }
+    await tapOne(row, description: 'exact contact row');
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-chat-input'),
+      description: 'chat composer after contact-row open',
+      timeout: const Duration(seconds: 90),
+    );
+    final selected = selectedConversation;
+    if (selected.isGroup || selected.targetDid?.trim() != peerDid.trim()) {
+      fail('Contact row opened the wrong Direct peer: $selected');
+    }
+    if (!selected.effectiveConversationId.startsWith('dm:peer-scope:v1:')) {
+      fail('Contact row did not open a canonical peer-scope conversation.');
+    }
+    return selected;
+  }
+
+  Future<void> openSelectedPeerInfo() async {
     await tapOne(
       find.byKey(const Key('chat-peer-info-avatar-button')),
       description: 'peer info button',
@@ -363,6 +390,10 @@ class _DesktopAppRobot {
       find.byKey(const Key('peer-info-dialog-handle-value')),
       description: 'handle-first peer identity header',
     );
+  }
+
+  Future<void> followSelectedPeer() async {
+    await openSelectedPeerInfo();
     await pumpUntilFinder(
       find.byKey(const Key('chat-follow-button')),
       description: 'follow button',

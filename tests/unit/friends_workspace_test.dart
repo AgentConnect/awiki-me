@@ -223,6 +223,18 @@ void main() {
       credentialName: 'default',
     );
     final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        'did:test:alice': UserProfile(
+          did: 'did:test:alice',
+          displayName: 'Alice',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+        ),
+      }
+      ..directoryConversationIdsByQuery = <String, String>{
+        'did:test:alice': 'dm:peer-scope:v1:alice',
+      }
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: 'dm:did:test:alice:did:test:me',
@@ -272,7 +284,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Alice'));
+    await tester.tap(find.byKey(const Key('contact-row:did:test:alice')));
     await tester.pumpAndSettle();
 
     final container = ProviderScope.containerOf(
@@ -281,7 +293,7 @@ void main() {
     final selected = container.read(selectedConversationProvider);
     expect(selected?.targetDid, 'did:test:alice');
     expect(selected?.displayName, 'Alice');
-    expect(selected?.effectiveConversationId, 'dm:did:test:alice');
+    expect(selected?.effectiveConversationId, 'dm:peer-scope:v1:alice');
   });
 
   testWidgets('macOS 点击我关注的在右侧展示完整联系人列表并可取消关注', (tester) async {

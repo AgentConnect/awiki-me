@@ -1080,6 +1080,7 @@ cliPeer:
         'CONTACT-E2E-001',
         'CONTACT-E2E-002',
         'CONTACT-REG-001',
+        'CONTACT-MSG-E2E-001',
         'ATTACH-E2E-001',
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
@@ -1089,7 +1090,7 @@ cliPeer:
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
       final caseResults = decoded['caseResults'] as List<dynamic>;
-      expect(caseResults, hasLength(15));
+      expect(caseResults, hasLength(16));
       expect(
         caseResults.every(
           (value) =>
@@ -1593,6 +1594,7 @@ performance:
         'CONTACT-E2E-001',
         'CONTACT-E2E-002',
         'CONTACT-REG-001',
+        'CONTACT-MSG-E2E-001',
       ]);
     });
 

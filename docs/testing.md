@@ -187,7 +187,7 @@ Supported E2E cases:
 - `direct`: App and CLI peer direct-message flow.
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
-- `contacts`: App and CLI peer follow/contact flow.
+- `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `full`: all App + CLI peer flows.
 
 ### UI-driven full acceptance
@@ -222,6 +222,10 @@ The product oracle is fail-closed:
   remains the caller's outbound `following|none` projection; reused identities
   may enter the scenario only after both remote perspectives report `none` and
   the App `friendsProvider` projection has been refreshed to that baseline;
+- contact-message checks must click the exact DID-keyed visible contact row,
+  keep one `dm:peer-scope:v1:*` identity across Core summary, UI row, timeline,
+  and Product overlay, reject a legacy `dm:<DID>` overlay, and preserve the
+  exact-one + unread/read result across an App-shell restart;
 - group-member setup may perform one read-only resolver preflight and retry at
   most three visible search submissions, but the member action itself stays in the
   product dialog, selects one exact enabled candidate, and requires the selected

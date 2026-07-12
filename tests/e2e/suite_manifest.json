@@ -36,7 +36,7 @@
       "allowedHosts": ["awiki.info"],
       "allowedDidDomains": ["awiki.info"],
       "resourceCategories": ["direct_messages", "groups", "relationships", "attachments", "read_state"],
-      "caseIds": ["AUTH-E2E-001", "MSG-E2E-001", "MSG-E2E-002", "MSG-REG-001", "GROUP-E2E-001", "GROUP-E2E-002", "GROUP-P9-001", "GROUP-P9-002", "GROUP-REG-001", "CONTACT-E2E-001", "CONTACT-E2E-002", "CONTACT-REG-001", "ATTACH-E2E-001", "ATTACH-E2E-002", "ATTACH-REG-001"]
+      "caseIds": ["AUTH-E2E-001", "MSG-E2E-001", "MSG-E2E-002", "MSG-REG-001", "GROUP-E2E-001", "GROUP-E2E-002", "GROUP-P9-001", "GROUP-P9-002", "GROUP-REG-001", "CONTACT-E2E-001", "CONTACT-E2E-002", "CONTACT-REG-001", "CONTACT-MSG-E2E-001", "ATTACH-E2E-001", "ATTACH-E2E-002", "ATTACH-REG-001"]
     },
     "direct": {
       "tier": "product_ui",
@@ -83,8 +83,8 @@
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": ["awiki.info"],
       "allowedDidDomains": ["awiki.info"],
-      "resourceCategories": ["relationships"],
-      "caseIds": ["AUTH-E2E-001", "CONTACT-E2E-001", "CONTACT-E2E-002", "CONTACT-REG-001"]
+      "resourceCategories": ["relationships", "direct_messages", "read_state"],
+      "caseIds": ["AUTH-E2E-001", "CONTACT-E2E-001", "CONTACT-E2E-002", "CONTACT-REG-001", "CONTACT-MSG-E2E-001"]
     },
     "performance": {
       "tier": "integration_diagnostic",

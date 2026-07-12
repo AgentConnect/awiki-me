@@ -348,6 +348,32 @@
       "catalogStatus": "active"
     },
     {
+      "caseId": "CONTACT-MSG-E2E-001",
+      "feature": "Contact row canonical Direct message closed loop",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the exact CLI peer is visible in the App Contacts UI after canonical relationship convergence.",
+      "action": "Click the exact visible contact row, send one run-unique message through the App, restart, then receive and read one run-unique CLI message.",
+      "exactOracles": [
+        "The contact row opens one dm:peer-scope:v1 conversation and App send reaches terminal sent.",
+        "CLI inbox/history contain exactly one matching sender, receiver, body, type, message id, and thread.",
+        "Core conversation summary, App UI row, timeline message, and Product overlay each have exactly one canonical identity with no dm:<DID> overlay.",
+        "Restart preserves one canonical row/message; closed-view incoming unread is exactly +1, restart preserves 1, and opening clears it to 0 without rebound."
+      ],
+      "negativeChecks": [
+        "A legacy DID row/overlay, duplicate message/summary/UI row, wrong peer/content/type, nonterminal send, missing restart restoration, or inaccurate unread/read state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-contacts+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
       "caseId": "GROUP-E2E-001",
       "feature": "App group create/member/send",
       "layer": "product_ui",

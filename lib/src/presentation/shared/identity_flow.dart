@@ -255,11 +255,27 @@ Future<void> openDirectConversationForDid(
     return;
   }
 
-  final peerTarget = _directPeerTarget(peerDid: peer, peerHandle: peerHandle);
-  final canonicalConversationId = _directConversationId(
-    peerDid: peer,
-    resolvedConversationId: conversationId,
+  late final _ResolvedDirectPeer resolvedPeer;
+  try {
+    resolvedPeer = await _resolveDirectPeer(
+      ref,
+      peerDid: peer,
+      peerHandle: peerHandle,
+      resolvedConversationId: conversationId,
+    );
+  } catch (error) {
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.fromError(error));
+    return;
+  }
+  final resolvedDid = resolvedPeer.did;
+  final resolvedHandle = resolvedPeer.handle;
+  final peerTarget = _directPeerTarget(
+    peerDid: resolvedDid,
+    peerHandle: resolvedHandle,
   );
+  final canonicalConversationId = resolvedPeer.conversationId;
   final existing = ref
       .read(conversationListProvider)
       .conversations
@@ -268,7 +284,7 @@ Future<void> openDirectConversationForDid(
             item.conversationId?.trim() == canonicalConversationId ||
             item.threadId == canonicalConversationId ||
             item.targetPeer?.trim() == peerTarget ||
-            item.targetDid?.trim() == peer,
+            item.targetDid?.trim() == resolvedDid,
       )
       .toList(growable: false);
   final existingConversation = existing.isEmpty
@@ -277,7 +293,7 @@ Future<void> openDirectConversationForDid(
   final conversation = existing.isNotEmpty
       ? _directConversationForPeer(
           existingConversation!,
-          peerDid: peer,
+          peerDid: resolvedDid,
           peerTarget: peerTarget,
           peerName: peerName,
           avatarUri: avatarUri,
@@ -287,15 +303,15 @@ Future<void> openDirectConversationForDid(
       : ConversationSummary(
           conversationId: canonicalConversationId,
           threadId: canonicalConversationId,
-          displayName: _directConversationName(peerName, peer),
+          displayName: _directConversationName(peerName, resolvedDid),
           lastMessagePreview: '',
           lastMessageAt: DateTime.now(),
           unreadCount: 0,
           isGroup: false,
-          targetDid: peer,
+          targetDid: resolvedDid,
           avatarUri: avatarUri,
           targetPeer: peerTarget,
-          avatarSeed: avatarSeed ?? peer,
+          avatarSeed: avatarSeed ?? resolvedDid,
         );
 
   ref.read(conversationListProvider.notifier).startConversation(conversation);
@@ -362,19 +378,92 @@ ConversationSummary _directConversationForPeer(
   );
 }
 
-String _directConversationIdForDid(String peerDid) {
-  return 'dm:${peerDid.trim()}';
+Future<_ResolvedDirectPeer> _resolveDirectPeer(
+  WidgetRef ref, {
+  required String peerDid,
+  String? peerHandle,
+  String? resolvedConversationId,
+}) async {
+  final providedHandle = _normalizedOptionalHandle(peerHandle);
+  final providedConversationId = resolvedConversationId?.trim();
+  if (providedConversationId != null && providedConversationId.isNotEmpty) {
+    _validateResolvedDirectConversation(
+      conversationId: providedConversationId,
+      resolvedDid: peerDid,
+      resolvedHandle: providedHandle,
+    );
+    return _ResolvedDirectPeer(
+      did: peerDid,
+      handle: providedHandle,
+      conversationId: providedConversationId,
+    );
+  }
+
+  final selector = _isDomainQualifiedHandle(providedHandle)
+      ? providedHandle!
+      : peerDid;
+  final resolution = await ref
+      .read(directoryApplicationServiceProvider)
+      .resolvePeer(selector);
+  final resolvedDid = resolution.did.trim();
+  if (!resolvedDid.startsWith('did:')) {
+    throw StateError('identity_invalid_contact');
+  }
+  if (selector.startsWith('did:') && resolvedDid != peerDid) {
+    throw StateError('identity_resolution_did_mismatch');
+  }
+  final resolvedHandle = _normalizedOptionalHandle(resolution.handle);
+  final canonicalConversationId = resolution.conversationId?.trim() ?? '';
+  _validateResolvedDirectConversation(
+    conversationId: canonicalConversationId,
+    resolvedDid: resolvedDid,
+    resolvedHandle: resolvedHandle,
+  );
+  return _ResolvedDirectPeer(
+    did: resolvedDid,
+    handle: resolvedHandle ?? providedHandle,
+    conversationId: canonicalConversationId,
+  );
 }
 
-String _directConversationId({
-  required String peerDid,
-  String? resolvedConversationId,
+void _validateResolvedDirectConversation({
+  required String conversationId,
+  required String resolvedDid,
+  required String? resolvedHandle,
 }) {
-  final resolved = resolvedConversationId?.trim();
-  if (resolved != null && resolved.startsWith('dm:') && resolved.length > 3) {
-    return resolved;
+  if (!conversationId.startsWith('dm:') || conversationId.length <= 3) {
+    throw StateError('identity_missing_canonical_conversation');
   }
-  return _directConversationIdForDid(peerDid);
+  if (_isDomainQualifiedHandle(resolvedHandle)) {
+    if (!conversationId.startsWith('dm:peer-scope:v1:')) {
+      throw StateError('identity_handle_conversation_not_canonical');
+    }
+    return;
+  }
+  if (conversationId.startsWith('dm:peer-scope:v1:')) {
+    return;
+  }
+  final legacyPeerDid = conversationId.substring(3).trim();
+  if (legacyPeerDid != resolvedDid) {
+    throw StateError('identity_conversation_did_mismatch');
+  }
+}
+
+String? _normalizedOptionalHandle(String? value) {
+  var handle = value?.trim();
+  if (handle == null || handle.isEmpty) {
+    return null;
+  }
+  while (handle!.startsWith('@')) {
+    handle = handle.substring(1).trimLeft();
+  }
+  return handle.isEmpty ? null : handle.toLowerCase();
+}
+
+bool _isDomainQualifiedHandle(String? value) {
+  final handle = value?.trim() ?? '';
+  final separator = handle.indexOf('.');
+  return separator > 0 && separator < handle.length - 1;
 }
 
 ConversationSummary _preferAuthoritativeDirectConversation(
@@ -684,6 +773,18 @@ class _ResolvedIdentity {
 
   final UserProfile profile;
   final String? conversationId;
+}
+
+class _ResolvedDirectPeer {
+  const _ResolvedDirectPeer({
+    required this.did,
+    required this.handle,
+    required this.conversationId,
+  });
+
+  final String did;
+  final String? handle;
+  final String conversationId;
 }
 
 class _IdentitySearchInput extends StatelessWidget {

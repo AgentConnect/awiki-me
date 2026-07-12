@@ -2764,7 +2764,7 @@ class ChatThreadsController
               )
               .toList()
         : const <ChatMentionDraft>[];
-    final conversationRef = _conversationWriteRefFor(conversation);
+    final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
       _chatProviderTrace(
         'send.skip_presentation_alias',
@@ -2859,7 +2859,7 @@ class ChatThreadsController
             text: captionText,
             draftMentions: validMentionDrafts,
           );
-    final conversationRef = _conversationWriteRefFor(conversation);
+    final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
       _chatProviderTrace(
         'send_attachment.skip_missing_conversation_ref',
@@ -2983,7 +2983,7 @@ class ChatThreadsController
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
-    final conversationRef = _conversationWriteRefFor(conversation);
+    final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
       _chatProviderTrace(
         'send.retry_skip_presentation_alias',
@@ -3126,7 +3126,7 @@ class ChatThreadsController
     String? displayThreadId,
   }) async {
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
-    final conversationRef = _conversationWriteRefFor(conversation);
+    final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
       _chatProviderTrace(
         'send_attachment.retry_skip_missing_conversation_ref',
@@ -6477,22 +6477,6 @@ AppConversationReadRef? _conversationReadRefFor(
     return null;
   }
   return AppConversationReadRef.fromConversationId(conversationId);
-}
-
-AppConversationReadRef? _conversationWriteRefFor(
-  ConversationSummary conversation,
-) {
-  // A peer-scoped id is canonical but intentionally non-reversible. Before
-  // the first message exists, core cannot derive its direct target from that
-  // hash alone. Use the resolved DID alias for the write while retaining the
-  // canonical id for presentation, history, patches, and persisted results.
-  if (isPeerScopedDirectConversation(conversation)) {
-    final targetDid = conversation.targetDid?.trim();
-    if (targetDid != null && targetDid.isNotEmpty) {
-      return AppConversationReadRef.fromConversationId('dm:$targetDid');
-    }
-  }
-  return _conversationReadRefFor(conversation);
 }
 
 ConversationSummary _withConversationPreview(
