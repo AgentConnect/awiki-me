@@ -5,6 +5,25 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:flutter/widgets.dart' show Key;
 import 'package:flutter_test/flutter_test.dart';
 
+enum DesktopPlatformVariant { macOS, other }
+
+DesktopPlatformVariant requireDesktopPlatformVariant({
+  required int macOSCount,
+  required int otherCount,
+  required String element,
+}) {
+  if (macOSCount == 1 && otherCount == 0) {
+    return DesktopPlatformVariant.macOS;
+  }
+  if (macOSCount == 0 && otherCount == 1) {
+    return DesktopPlatformVariant.other;
+  }
+  throw StateError(
+    'Expected exactly one $element platform variant; '
+    'macos=$macOSCount other=$otherCount.',
+  );
+}
+
 /// Strict, reusable product oracles for the UI-driven App + CLI E2E flows.
 ///
 /// These helpers deliberately reject zero and duplicate matches. A visible

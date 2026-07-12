@@ -89,8 +89,25 @@ Future<void> _verifyDirectTextRegression({
     expectedConversationUnread: 1,
     expectedTotalUnread: unreadBaseline + 1,
   );
-  final badge = find.byKey(const Key('mac-messages-unread-badge'));
-  expect(badge, findsOneWidget);
+  final macOSBadge = find.byKey(const Key('mac-messages-unread-badge'));
+  final otherBadge = find.byKey(const Key('mobile-messages-unread-badge'));
+  await robot.pumpUntil(
+    description: 'global messages unread badge',
+    condition: () {
+      final macOSCount = macOSBadge.evaluate().length;
+      final otherCount = otherBadge.evaluate().length;
+      return (macOSCount == 1 && otherCount == 0) ||
+          (macOSCount == 0 && otherCount == 1);
+    },
+  );
+  final badgeVariant = requireDesktopPlatformVariant(
+    macOSCount: macOSBadge.evaluate().length,
+    otherCount: otherBadge.evaluate().length,
+    element: 'global messages unread badge',
+  );
+  final badge = badgeVariant == DesktopPlatformVariant.macOS
+      ? macOSBadge
+      : otherBadge;
   expect(
     find.descendant(
       of: badge,

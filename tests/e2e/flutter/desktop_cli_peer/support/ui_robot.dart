@@ -33,10 +33,34 @@ class _DesktopAppRobot {
   }
 
   Future<ConversationSummary> startDirectConversation(String peerHandle) async {
-    await tapOne(
-      find.byKey(const Key('start-conversation-button')),
-      description: 'start conversation button',
+    final directButton = find.byKey(const Key('start-conversation-button'));
+    final quickActionsButton = find.bySemanticsIdentifier(
+      'e2e-quick-actions-button',
     );
+    await pumpUntil(
+      description: 'start conversation entry',
+      condition: () {
+        final directCount = directButton.evaluate().length;
+        final quickActionsCount = quickActionsButton.evaluate().length;
+        return (directCount == 1 && quickActionsCount == 0) ||
+            (directCount == 0 && quickActionsCount == 1);
+      },
+    );
+    final variant = requireDesktopPlatformVariant(
+      macOSCount: directButton.evaluate().length,
+      otherCount: quickActionsButton.evaluate().length,
+      element: 'start-conversation entry',
+    );
+    switch (variant) {
+      case DesktopPlatformVariant.macOS:
+        await tapOne(directButton, description: 'start conversation button');
+      case DesktopPlatformVariant.other:
+        await tapOne(quickActionsButton, description: 'quick actions button');
+        await tapOne(
+          find.bySemanticsIdentifier('e2e-start-conversation-menu-item'),
+          description: 'start conversation menu item',
+        );
+    }
     await pumpUntilFinder(
       find.byKey(const Key('identity-lookup-input')),
       description: 'identity lookup input',
@@ -289,10 +313,28 @@ class _DesktopAppRobot {
     );
   }
 
-  Future<void> navigateToContacts() => tapOne(
-    find.bySemanticsIdentifier('e2e-contacts-tab'),
-    description: 'Contacts tab',
-  );
+  Future<void> navigateToContacts() async {
+    final macOSTab = find.bySemanticsIdentifier('e2e-contacts-tab');
+    final otherTab = find.bySemanticsIdentifier('e2e-friends-tab');
+    await pumpUntil(
+      description: 'Contacts tab',
+      condition: () {
+        final macOSCount = macOSTab.evaluate().length;
+        final otherCount = otherTab.evaluate().length;
+        return (macOSCount == 1 && otherCount == 0) ||
+            (macOSCount == 0 && otherCount == 1);
+      },
+    );
+    final variant = requireDesktopPlatformVariant(
+      macOSCount: macOSTab.evaluate().length,
+      otherCount: otherTab.evaluate().length,
+      element: 'Contacts tab',
+    );
+    await tapOne(
+      variant == DesktopPlatformVariant.macOS ? macOSTab : otherTab,
+      description: 'Contacts tab',
+    );
+  }
 
   Future<void> navigateToMessages() => tapOne(
     find.bySemanticsIdentifier('e2e-messages-tab'),

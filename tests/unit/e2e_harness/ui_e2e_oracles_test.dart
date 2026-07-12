@@ -9,6 +9,41 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/flutter/desktop_cli_peer/support/ui_oracles.dart';
 
 void main() {
+  test('desktop platform oracle requires exactly one variant', () {
+    expect(
+      requireDesktopPlatformVariant(
+        macOSCount: 1,
+        otherCount: 0,
+        element: 'test entry',
+      ),
+      DesktopPlatformVariant.macOS,
+    );
+    expect(
+      requireDesktopPlatformVariant(
+        macOSCount: 0,
+        otherCount: 1,
+        element: 'test entry',
+      ),
+      DesktopPlatformVariant.other,
+    );
+    expect(
+      () => requireDesktopPlatformVariant(
+        macOSCount: 0,
+        otherCount: 0,
+        element: 'test entry',
+      ),
+      throwsStateError,
+    );
+    expect(
+      () => requireDesktopPlatformVariant(
+        macOSCount: 1,
+        otherCount: 1,
+        element: 'test entry',
+      ),
+      throwsStateError,
+    );
+  });
+
   ChatMessage message({
     String localId = 'local-1',
     String? remoteId = 'remote-1',
