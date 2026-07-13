@@ -20,7 +20,6 @@ import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
-import 'group_identity_selector.dart';
 import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
@@ -203,82 +202,61 @@ class GroupListPage extends ConsumerWidget {
       handle: session?.handle,
       did: session?.did ?? '',
     );
-    var identityMode = activeHandle == null
-        ? GroupIdentityMode.didOnly
-        : GroupIdentityMode.handle;
     try {
       await AppNavigator.showDialog<void>(
         context,
-        (ctx) => StatefulBuilder(
-          builder: (context, setDialogState) => CupertinoAlertDialog(
-            title: Text(context.l10n.groupJoinDialogTitle),
-            content: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Column(
-                children: <Widget>[
-                  AppTextField(
-                    controller: textController,
-                    label: context.l10n.groupJoinDialogTitle,
-                    placeholder: context.l10n.groupJoinDialogPlaceholder,
-                    keyboardType: TextInputType.text,
-                  ),
-                  const SizedBox(height: 14),
-                  GroupIdentitySelector(
-                    handle: activeHandle,
-                    value: identityMode,
-                    enabled: true,
-                    onChanged: (value) =>
-                        setDialogState(() => identityMode = value),
-                  ),
-                ],
-              ),
+        (ctx) => CupertinoAlertDialog(
+          title: Text(context.l10n.groupJoinDialogTitle),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: AppTextField(
+              controller: textController,
+              label: context.l10n.groupJoinDialogTitle,
+              placeholder: context.l10n.groupJoinDialogPlaceholder,
+              keyboardType: TextInputType.text,
             ),
-            actions: <Widget>[
-              CupertinoDialogAction(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: Text(context.l10n.commonCancel),
-              ),
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                onPressed: () async {
-                  final groupDid = textController.text.trim();
-                  if (groupDid.isEmpty) {
+          ),
+          actions: <Widget>[
+            CupertinoDialogAction(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(context.l10n.commonCancel),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: () async {
+                final groupDid = textController.text.trim();
+                if (groupDid.isEmpty) {
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                try {
+                  final identity = GroupIdentitySelection.handle(
+                    activeHandle ?? '',
+                  );
+                  final group = await ref
+                      .read(groupProvider.notifier)
+                      .joinGroup(groupDid, identity: identity);
+                  await ref
+                      .read(groupProvider.notifier)
+                      .loadGroupMembers(group.groupId);
+                  if (!context.mounted) {
                     return;
                   }
-                  final identity = switch (identityMode) {
-                    GroupIdentityMode.handle => GroupIdentitySelection.handle(
-                      activeHandle ?? '',
-                    ),
-                    GroupIdentityMode.didOnly =>
-                      const GroupIdentitySelection.didOnly(),
-                  };
-                  Navigator.of(ctx).pop();
-                  try {
-                    final group = await ref
-                        .read(groupProvider.notifier)
-                        .joinGroup(groupDid, identity: identity);
-                    await ref
-                        .read(groupProvider.notifier)
-                        .loadGroupMembers(group.groupId);
-                    if (!context.mounted) {
-                      return;
-                    }
-                    await openGroupChat(
-                      context,
-                      ref,
-                      group,
-                      closeCurrentRouteOnDesktop: true,
-                    );
-                  } catch (error) {
-                    ref
-                        .read(uiFeedbackProvider.notifier)
-                        .showError(AppMessage.fromError(error));
-                  }
-                },
-                child: Text(context.l10n.commonJoin),
-              ),
-            ],
-          ),
+                  await openGroupChat(
+                    context,
+                    ref,
+                    group,
+                    closeCurrentRouteOnDesktop: true,
+                  );
+                } catch (error) {
+                  ref
+                      .read(uiFeedbackProvider.notifier)
+                      .showError(AppMessage.fromError(error));
+                }
+              },
+              child: Text(context.l10n.commonJoin),
+            ),
+          ],
         ),
       );
     } finally {
@@ -705,7 +683,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
   }
 }
 
-class AddGroupMemberDialog extends StatelessWidget {
+class AddGroupMemberDialog extends ConsumerWidget {
   const AddGroupMemberDialog({
     super.key,
     required this.groupId,
@@ -718,10 +696,14 @@ class AddGroupMemberDialog extends StatelessWidget {
   final ValueChanged<GroupSummary> onGroupUpdated;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groupState = ref.watch(groupProvider);
+    final members = groupState.membersByGroup.containsKey(groupId)
+        ? groupState.membersByGroup[groupId]!
+        : existingMembers;
     return GroupMemberInviteDialog(
       groupId: groupId,
-      existingMembers: existingMembers,
+      existingMembers: members,
       onGroupUpdated: onGroupUpdated,
     );
   }
@@ -848,6 +830,7 @@ class GroupMemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = _memberTitle(item);
+    final identityLabel = _memberIdentityLabel(item);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return Row(
@@ -864,13 +847,15 @@ class GroupMemberRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AwikiMeTextStyles.cardTitle,
               ),
-              const SizedBox(height: 2),
-              Text(
-                _memberIdentityLabel(item),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AwikiMeTextStyles.cardSubtitle,
-              ),
+              if (identityLabel != null) ...<Widget>[
+                const SizedBox(height: 2),
+                Text(
+                  identityLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AwikiMeTextStyles.cardSubtitle,
+                ),
+              ],
             ],
           ),
         ),
@@ -959,13 +944,13 @@ String _memberDisplayLabel(GroupMemberSummary member) {
   return DidDisplayFormatter.compactDid(did);
 }
 
-String _memberIdentityLabel(GroupMemberSummary member) {
+String? _memberIdentityLabel(GroupMemberSummary member) {
   final handle = member.handle.trim();
   final did = member.did.trim();
   if (handle.isEmpty || handle == did) {
-    return did;
+    return null;
   }
-  return '@$handle · $did';
+  return '@$handle';
 }
 
 String _memberProtocolRef(GroupMemberSummary member) {

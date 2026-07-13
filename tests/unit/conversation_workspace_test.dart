@@ -1212,8 +1212,8 @@ void main() {
     );
     expect(find.text('owner.awiki'), findsOneWidget);
     expect(find.text('member.awiki'), findsOneWidget);
-    expect(find.text('did:test:owner'), findsNothing);
-    expect(find.text('did:test:member'), findsNothing);
+    expect(find.textContaining('did:test:owner'), findsNothing);
+    expect(find.textContaining('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
 
     await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
@@ -1255,7 +1255,7 @@ void main() {
 
     expect(gateway.lastAddedGroupId, group.groupId);
     expect(gateway.lastAddedMemberRef, memberHandle);
-    expect(find.textContaining(memberHandle), findsOneWidget);
+    expect(find.text('Bob'), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
 
@@ -1266,9 +1266,100 @@ void main() {
 
     expect(gateway.lastRemovedGroupId, group.groupId);
     expect(gateway.lastRemovedMemberRef, memberHandle);
-    expect(find.textContaining(memberHandle), findsNothing);
+    expect(find.text('Bob'), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
 
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 群聊头部添加成员弹窗不等待远端成员刷新', (tester) async {
+    const groupId = 'did:test:group:instant-invite';
+    final group = GroupSummary(
+      groupId: groupId,
+      name: '即时邀请群',
+      description: '',
+      memberCount: 1,
+      lastMessageAt: DateTime(2026, 7, 13, 18),
+      myRole: 'owner',
+      membershipStatus: 'active',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'group:instant-invite',
+      displayName: '即时邀请群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 13, 18),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupId,
+    );
+    final memberRefresh = Completer<void>();
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..groups = <GroupSummary>[group]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupId: const <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: 'did:test:owner',
+            did: 'did:test:owner',
+            handle: 'owner.awiki',
+            role: 'owner',
+          ),
+        ],
+      };
+    addTearDown(() {
+      if (!memberRefresh.isCompleted) {
+        memberRefresh.complete();
+      }
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('即时邀请群').first);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('chat-header-add-group-member-button')),
+      findsOneWidget,
+    );
+
+    gateway.listGroupMembersCompleter = memberRefresh;
+    await tester.tap(
+      find.byKey(const Key('chat-header-add-group-member-button')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(memberRefresh.isCompleted, isFalse);
+    expect(find.text('添加群成员'), findsOneWidget);
+
+    memberRefresh.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AddGroupMemberDialog),
+        matching: find.byIcon(CupertinoIcons.xmark),
+      ),
+    );
+    await tester.pumpAndSettle();
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
@@ -1595,7 +1686,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(feedback, isNull);
     expect(find.text('late-member.awiki'), findsOneWidget);
-    expect(find.text('did:test:late-member'), findsNothing);
+    expect(find.textContaining('did:test:late-member'), findsNothing);
     expect(find.text('late-role-hidden'), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;

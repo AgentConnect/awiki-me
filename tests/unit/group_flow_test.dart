@@ -60,6 +60,11 @@ void main() {
       expect(find.text('目标'), findsNothing);
       expect(find.text('规则'), findsNothing);
       expect(find.text('提示'), findsNothing);
+      expect(find.text('入群身份'), findsNothing);
+      expect(
+        find.byKey(const Key('group-identity-mode-control')),
+        findsNothing,
+      );
       expect(find.byKey(const Key('create-group-name-input')), findsOneWidget);
       expect(
         tester
@@ -108,6 +113,11 @@ void main() {
 
       await tester.tap(find.byIcon(CupertinoIcons.link));
       await tester.pumpAndSettle();
+      expect(find.text('入群身份'), findsNothing);
+      expect(
+        find.byKey(const Key('group-identity-mode-control')),
+        findsNothing,
+      );
 
       const groupDid = 'did:wba:awiki.ai:group:e1_group';
       await tester.enterText(find.byType(CupertinoTextField).last, groupDid);
@@ -125,32 +135,7 @@ void main() {
     }
   });
 
-  testWidgets('入群可以显式选择 DID-only 且不携带 Handle', (tester) async {
-    final gateway = FakeAwikiGateway()..loginResult = session;
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const GroupListPage(),
-        gateway: gateway,
-        session: session,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byIcon(CupertinoIcons.link));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('DID'));
-    await tester.pumpAndSettle();
-    const groupDid = 'did:wba:awiki.ai:group:e1_did_only';
-    await tester.enterText(find.byType(CupertinoTextField).last, groupDid);
-    await tester.tap(find.text('加入'));
-    await tester.pumpAndSettle();
-
-    expect(gateway.lastJoinedGroupDid, groupDid);
-    expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
-    expect(gateway.lastGroupIdentityHandle, isNull);
-  });
-
-  testWidgets('无 Handle 时建群只提供 DID-only 且长身份布局不溢出', (tester) async {
+  testWidgets('无 Handle 时建群不会静默降级为 DID-only', (tester) async {
     const didOnlySession = SessionIdentity(
       did: 'did:web:identity.example.com:users:a-very-long-identity-value',
       credentialName: 'did-only.json',
@@ -171,16 +156,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('group-list-create-button')));
     await tester.pumpAndSettle();
-    expect(
-      find.descendant(
-        of: find.byKey(const Key('group-identity-mode-control')),
-        matching: find.byType(
-          CupertinoSlidingSegmentedControl<GroupIdentityMode>,
-        ),
-      ),
-      findsNothing,
-    );
-    expect(find.text('DID'), findsOneWidget);
+    expect(find.byKey(const Key('group-identity-mode-control')), findsNothing);
     expect(tester.takeException(), isNull);
 
     await tester.enterText(
@@ -189,11 +165,12 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('create-group-submit-button')));
     await tester.pumpAndSettle();
-    expect(gateway.lastGroupIdentityMode, GroupIdentityMode.didOnly);
+    expect(gateway.lastGroupIdentityMode, isNull);
     expect(gateway.lastGroupIdentityHandle, isNull);
+    expect(find.byType(ChatView), findsNothing);
   });
 
-  testWidgets('窄屏建群会省略长 Handle 且不遮挡操作', (tester) async {
+  testWidgets('窄屏建群隐藏身份选择且不遮挡操作', (tester) async {
     const longHandle =
         'alice-with-a-very-long-persona-name.identity-provider.example.com';
     const longHandleSession = SessionIdentity(
@@ -217,11 +194,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('group-list-create-button')));
     await tester.pumpAndSettle();
-    final handleText = tester.widget<Text>(
-      find.byKey(const Key('group-identity-handle-value')),
-    );
-    expect(handleText.maxLines, 1);
-    expect(handleText.overflow, TextOverflow.ellipsis);
+    expect(find.byKey(const Key('group-identity-mode-control')), findsNothing);
     expect(find.byKey(const Key('create-group-submit-button')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -419,6 +392,11 @@ void main() {
 
     expect(find.text('李智诚'), findsOneWidget);
     expect(find.text('lzc'), findsNothing);
+    expect(find.text('@lzc'), findsOneWidget);
+    expect(
+      find.textContaining('did:wba:awiki.ai:user:lzc:e1_member'),
+      findsNothing,
+    );
   });
 
   testWidgets('群详情可以添加成员并刷新成员列表', (tester) async {
@@ -507,7 +485,7 @@ void main() {
 
     expect(gateway.lastAddedGroupId, groupDid);
     expect(gateway.lastAddedMemberRef, memberHandle);
-    expect(find.textContaining(memberHandle), findsOneWidget);
+    expect(find.text('Bob'), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('2 人'), findsOneWidget);
   });
@@ -627,6 +605,12 @@ void main() {
     expect(find.text('用户'), findsWidgets);
     expect(find.text('智能体'), findsOneWidget);
     expect(find.text('已在群中'), findsOneWidget);
+    expect(
+      tester.getSize(
+        find.byKey(const Key('group-invite-selection-mark')).first,
+      ),
+      const Size.square(18),
+    );
 
     await tester.tap(find.text('关注联系人'));
     await tester.pumpAndSettle();
@@ -947,7 +931,10 @@ void main() {
     expect(find.text('alice'), findsOneWidget);
     expect(find.text('owner'), findsOneWidget);
     expect(find.text('owner-role-hidden'), findsNothing);
-    expect(find.text('did:wba:awiki.ai:user:alice:e1_member'), findsOneWidget);
+    expect(
+      find.textContaining('did:wba:awiki.ai:user:alice:e1_member'),
+      findsNothing,
+    );
 
     gateway
       ..listGroupMembersCompleter = memberRefresh
@@ -981,7 +968,10 @@ void main() {
 
     expect(gateway.listConversationsCalls, 0);
     expect(find.text('carol'), findsOneWidget);
-    expect(find.text('did:wba:awiki.ai:user:carol:e1_member'), findsOneWidget);
+    expect(
+      find.textContaining('did:wba:awiki.ai:user:carol:e1_member'),
+      findsNothing,
+    );
     expect(find.text('member-role-hidden'), findsNothing);
     expect(
       find.descendant(

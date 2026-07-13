@@ -1260,19 +1260,20 @@ class _SelectionMark extends StatelessWidget {
         ? const Color(0xFF0B65F8)
         : const Color(0xFFB9C2D0);
     return AnimatedContainer(
+      key: const Key('group-invite-selection-mark'),
       duration: const Duration(milliseconds: 140),
-      width: 24,
-      height: 24,
+      width: 18,
+      height: 18,
       decoration: BoxDecoration(
         color: selected ? color : CupertinoColors.transparent,
         shape: BoxShape.circle,
-        border: Border.all(color: color, width: 1.4),
+        border: Border.all(color: color, width: 1.2),
       ),
       child: selected
           ? const Icon(
               CupertinoIcons.check_mark,
               color: CupertinoColors.white,
-              size: 15,
+              size: 11,
             )
           : null,
     );

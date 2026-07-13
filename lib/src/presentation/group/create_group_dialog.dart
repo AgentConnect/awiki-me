@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/ui_feedback.dart';
-import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/group_identity.dart';
+import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../shared/app_dialog.dart';
@@ -17,7 +17,6 @@ import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'group_chat_navigation.dart';
-import 'group_identity_selector.dart';
 import 'group_provider.dart';
 
 Future<void> showCreateGroupDialog(
@@ -53,14 +52,10 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   final _nameController = TextEditingController();
   final _nameFocusNode = FocusNode();
   bool _isLoading = false;
-  late GroupIdentityMode _identityMode;
 
   @override
   void initState() {
     super.initState();
-    _identityMode = _activeHandle == null
-        ? GroupIdentityMode.didOnly
-        : GroupIdentityMode.handle;
     _nameFocusNode.addListener(_handleFocusChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -131,12 +126,7 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
   }
 
   GroupIdentitySelection _identitySelection() {
-    return switch (_identityMode) {
-      GroupIdentityMode.handle => GroupIdentitySelection.handle(
-        _activeHandle ?? '',
-      ),
-      GroupIdentityMode.didOnly => const GroupIdentitySelection.didOnly(),
-    };
+    return GroupIdentitySelection.handle(_activeHandle ?? '');
   }
 
   @override
@@ -175,13 +165,6 @@ class _CreateGroupDialogState extends ConsumerState<CreateGroupDialog> {
             label: context.l10n.groupFieldName,
             placeholder: context.l10n.groupFieldNamePlaceholder,
             onSubmitted: _create,
-          ),
-          SizedBox(height: responsive.spacing(16)),
-          GroupIdentitySelector(
-            handle: _activeHandle,
-            value: _identityMode,
-            enabled: !_isLoading,
-            onChanged: (value) => setState(() => _identityMode = value),
           ),
           SizedBox(height: responsive.spacing(20)),
           Row(

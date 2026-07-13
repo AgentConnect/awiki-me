@@ -1030,20 +1030,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     setState(() => _isOpeningGroupInvite = true);
     try {
-      final latestGroup = await ref
-          .read(groupProvider.notifier)
-          .refreshGroup(group.groupId);
-      if (!canManageGroupMembers(latestGroup)) {
-        return;
-      }
       final members = ref.read(groupMembersProvider(group.groupId));
-      if (!mounted) {
-        return;
-      }
+      unawaited(_refreshGroupInviteSnapshot(group.groupId));
       await AppNavigator.showDialog<void>(
         context,
         (dialogContext) => AddGroupMemberDialog(
-          groupId: latestGroup.groupId,
+          groupId: group.groupId,
           existingMembers: members,
           onGroupUpdated: (updated) {
             if (!mounted) {
@@ -1069,6 +1061,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (mounted) {
         setState(() => _isOpeningGroupInvite = false);
       }
+    }
+  }
+
+  Future<void> _refreshGroupInviteSnapshot(String groupId) async {
+    try {
+      await ref.read(groupProvider.notifier).refreshGroup(groupId);
+    } catch (_) {
+      AwikiPerformanceLogger.log(
+        'chat.group_invite.background_refresh.error',
+        fields: <String, Object?>{
+          'group_hash': AwikiPerformanceLogger.safeHash(groupId),
+        },
+      );
     }
   }
 
