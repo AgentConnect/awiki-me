@@ -2,23 +2,58 @@ import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('defaults to awiki.ai service root and Message Agent enabled', () {
-    final config = AwikiEnvironmentConfig();
-
-    expect(config.baseUrl, 'https://awiki.ai');
-    expect(config.userServiceUrl, 'https://awiki.ai');
-    expect(config.messageServiceUrl, 'https://awiki.ai');
-    expect(config.mailServiceUrl, 'https://awiki.ai');
-    expect(config.didDomain, 'awiki.ai');
-    expect(config.anpServiceUrl, 'https://awiki.ai/anp-im/rpc');
-    expect(config.anpServiceDid, 'did:wba:awiki.ai');
-    expect(config.daemonDownloadBaseUrl, 'https://awiki.ai/daemon');
-    expect(
-      config.updateManifestUrl,
-      'https://awiki.ai/downloads/awiki-me/latest.json',
+  test('keeps awiki.ai as the default primary tenant domain', () {
+    const hasBuildOverride = bool.hasEnvironment(
+      primaryTenantDomainEnvironmentKey,
     );
-    expect(config.releasesUrl, 'https://awiki.ai/#download');
+
+    if (!hasBuildOverride) {
+      expect(primaryTenantDomain, 'awiki.ai');
+    }
+  });
+
+  test('derives default services from the primary tenant domain', () {
+    final config = AwikiEnvironmentConfig();
+    const baseUrl = primaryTenantBaseUrl;
+    const domain = primaryTenantDomain;
+
+    expect(config.baseUrl, baseUrl);
+    expect(config.userServiceUrl, baseUrl);
+    expect(config.messageServiceUrl, baseUrl);
+    expect(config.mailServiceUrl, baseUrl);
+    expect(config.didDomain, domain);
+    expect(config.anpServiceUrl, '$baseUrl/anp-im/rpc');
+    expect(config.anpServiceDid, 'did:wba:$domain');
+    expect(config.daemonDownloadBaseUrl, '$baseUrl/daemon');
+    expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
+    expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
+  });
+
+  test('bundled realm allowlist enables Agent and Daemon capabilities', () {
+    for (final domain in agentDaemonTenantDomainAllowlist) {
+      final config = AwikiEnvironmentConfig(baseUrl: 'https://$domain');
+
+      expect(config.didDomain, domain);
+      expect(config.daemonDownloadBaseUrl, 'https://$domain/daemon');
+      expect(config.agentImEnabled, isTrue, reason: domain);
+    }
+  });
+
+  test('Agent and Daemon realm allowlist fails closed', () {
+    for (final config in <AwikiEnvironmentConfig>[
+      AwikiEnvironmentConfig(baseUrl: 'https://example.com'),
+      AwikiEnvironmentConfig(
+        baseUrl: 'https://awiki.info',
+        didDomain: 'awiki.ai',
+      ),
+      AwikiEnvironmentConfig(baseUrl: 'http://awiki.info'),
+      AwikiEnvironmentConfig(baseUrl: 'https://awiki.info:8443'),
+      AwikiEnvironmentConfig(baseUrl: 'https://awiki.info/api'),
+      AwikiEnvironmentConfig(baseUrl: 'https://subdomain.awiki.info'),
+    ]) {
+      expect(config.agentImEnabled, isFalse, reason: config.baseUrl);
+    }
   });
 
   test('base URL derives backend endpoints and daemon download root', () {

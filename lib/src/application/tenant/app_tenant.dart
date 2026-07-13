@@ -2,9 +2,11 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/awiki_environment_config.dart';
+
 const String primaryTenantName = 'AWiki';
-const String primaryTenantBackendBaseUrl = 'https://awiki.ai';
-const String primaryTenantDidHost = 'awiki.ai';
+const String primaryTenantBackendBaseUrl = primaryTenantBaseUrl;
+const String primaryTenantDidHost = primaryTenantDomain;
 
 final RegExp _canonicalUuidV4 = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',

@@ -86,7 +86,6 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       environment: AwikiEnvironmentConfig(
         baseUrl: tenant.backendBaseUrl,
         didDomain: tenant.didHost,
-        agentImEnabled: tenant.isPrimaryTenant,
       ),
     );
     final localeMode = await bootstrap.localePreferenceService.loadMode();

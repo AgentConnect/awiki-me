@@ -809,27 +809,25 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: _MessagesStub(),
-        environment: AwikiEnvironmentConfig(
-          baseUrl: 'https://tenant.example.com',
-        ),
+        environment: AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
       );
 
       final command = await service.createDaemonInstallCommand(
         controllerDid: 'did:human:me',
-        controllerHandle: 'alice.tenant.example.com',
+        controllerHandle: 'alice.anpclaw.com',
         clientPlatform: 'macos',
       );
 
       expect(
         command.command,
-        "curl -fsSL 'https://tenant.example.com/daemon/install.sh' | "
-        "AWIKI_DAEMON_BASE_URL='https://tenant.example.com' "
-        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://tenant.example.com/daemon' "
+        "curl -fsSL 'https://anpclaw.com/daemon/install.sh' | "
+        "AWIKI_DAEMON_BASE_URL='https://anpclaw.com' "
+        "AWIKI_DAEMON_DOWNLOAD_BASE_URLS='https://anpclaw.com/daemon' "
         "sh -s -- --token 'daemon-token'",
       );
       expect(
         command.fallbackCommand,
-        'awiki-deamon install --token daemon-token --base-url https://tenant.example.com',
+        'awiki-deamon install --token daemon-token --base-url https://anpclaw.com',
       );
     },
   );
