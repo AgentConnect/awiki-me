@@ -438,6 +438,7 @@
   "groupInviteSearchResults": "搜索结果",
   "groupInviteSelectHint": "选择一个或多个身份后，统一确认添加。",
   "groupInviteNoLocalCandidates": "暂无可邀请的本地身份。",
+  "groupInviteIdentityUnavailable": "该身份已被删除或当前不可邀请。",
   "groupInviteNoMatches": "没有匹配的本地身份，可以尝试匹配 handle / DID。",
   "groupInviteAlreadyInGroup": "已在群中",
   "groupInviteUnnamedAgent": "未命名智能体",
@@ -462,8 +463,29 @@
   "chatGroupSendDisabled": "当前群聊暂时不能发送消息",
   "chatAgentProcessing": "智能体正在处理...",
   "chatAgentStillProcessing": "智能体仍在处理，稍后可刷新查看",
+  "chatAgentExternalServiceWorking": "智能体正在访问外部服务...",
+  "chatAgentExternalServiceDelayed": "外部服务响应较慢，智能体仍在等待或重试...",
+  "chatAgentExternalServiceResumed": "外部服务已恢复，智能体正在继续处理...",
   "chatSubjectProcessing": "{subject} 正在处理...",
   "@chatSubjectProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectExternalServiceWorking": "{subject} 正在访问外部服务...",
+  "@chatSubjectExternalServiceWorking": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectExternalServiceDelayed": "外部服务响应较慢，{subject} 仍在等待或重试...",
+  "@chatSubjectExternalServiceDelayed": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectExternalServiceResumed": "外部服务已恢复，{subject} 正在继续处理...",
+  "@chatSubjectExternalServiceResumed": {
     "placeholders": {
       "subject": {}
     }

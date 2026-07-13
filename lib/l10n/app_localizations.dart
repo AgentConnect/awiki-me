@@ -2048,6 +2048,12 @@ abstract class AppLocalizations {
   /// **'暂无可邀请的本地身份。'**
   String get groupInviteNoLocalCandidates;
 
+  /// No description provided for @groupInviteIdentityUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'该身份已被删除或当前不可邀请。'**
+  String get groupInviteIdentityUnavailable;
+
   /// No description provided for @groupInviteNoMatches.
   ///
   /// In zh, this message translates to:
@@ -2162,11 +2168,47 @@ abstract class AppLocalizations {
   /// **'智能体仍在处理，稍后可刷新查看'**
   String get chatAgentStillProcessing;
 
+  /// No description provided for @chatAgentExternalServiceWorking.
+  ///
+  /// In zh, this message translates to:
+  /// **'智能体正在访问外部服务...'**
+  String get chatAgentExternalServiceWorking;
+
+  /// No description provided for @chatAgentExternalServiceDelayed.
+  ///
+  /// In zh, this message translates to:
+  /// **'外部服务响应较慢，智能体仍在等待或重试...'**
+  String get chatAgentExternalServiceDelayed;
+
+  /// No description provided for @chatAgentExternalServiceResumed.
+  ///
+  /// In zh, this message translates to:
+  /// **'外部服务已恢复，智能体正在继续处理...'**
+  String get chatAgentExternalServiceResumed;
+
   /// No description provided for @chatSubjectProcessing.
   ///
   /// In zh, this message translates to:
   /// **'{subject} 正在处理...'**
   String chatSubjectProcessing(Object subject);
+
+  /// No description provided for @chatSubjectExternalServiceWorking.
+  ///
+  /// In zh, this message translates to:
+  /// **'{subject} 正在访问外部服务...'**
+  String chatSubjectExternalServiceWorking(Object subject);
+
+  /// No description provided for @chatSubjectExternalServiceDelayed.
+  ///
+  /// In zh, this message translates to:
+  /// **'外部服务响应较慢，{subject} 仍在等待或重试...'**
+  String chatSubjectExternalServiceDelayed(Object subject);
+
+  /// No description provided for @chatSubjectExternalServiceResumed.
+  ///
+  /// In zh, this message translates to:
+  /// **'外部服务已恢复，{subject} 正在继续处理...'**
+  String chatSubjectExternalServiceResumed(Object subject);
 
   /// No description provided for @chatSubjectStillProcessing.
   ///

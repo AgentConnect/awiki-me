@@ -1037,6 +1037,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupInviteNoLocalCandidates => '暂无可邀请的本地身份。';
 
   @override
+  String get groupInviteIdentityUnavailable => '该身份已被删除或当前不可邀请。';
+
+  @override
   String get groupInviteNoMatches => '没有匹配的本地身份，可以尝试匹配 handle / DID。';
 
   @override
@@ -1096,8 +1099,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAgentStillProcessing => '智能体仍在处理，稍后可刷新查看';
 
   @override
+  String get chatAgentExternalServiceWorking => '智能体正在访问外部服务...';
+
+  @override
+  String get chatAgentExternalServiceDelayed => '外部服务响应较慢，智能体仍在等待或重试...';
+
+  @override
+  String get chatAgentExternalServiceResumed => '外部服务已恢复，智能体正在继续处理...';
+
+  @override
   String chatSubjectProcessing(Object subject) {
     return '$subject 正在处理...';
+  }
+
+  @override
+  String chatSubjectExternalServiceWorking(Object subject) {
+    return '$subject 正在访问外部服务...';
+  }
+
+  @override
+  String chatSubjectExternalServiceDelayed(Object subject) {
+    return '外部服务响应较慢，$subject 仍在等待或重试...';
+  }
+
+  @override
+  String chatSubjectExternalServiceResumed(Object subject) {
+    return '外部服务已恢复，$subject 正在继续处理...';
   }
 
   @override

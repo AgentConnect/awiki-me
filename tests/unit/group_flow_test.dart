@@ -630,6 +630,114 @@ void main() {
     expect(find.text('4 人'), findsOneWidget);
   });
 
+  testWidgets('群详情邀请候选排除已删除智能体的所有本地来源', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:deleted_agent_filter';
+    const deletedAgentDid = 'did:wba:awiki.ai:agent:runtime:deleted:e1_deleted';
+    const humanDid = 'did:wba:awiki.ai:user:active:e1_active';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: deletedAgentDid,
+          displayName: '已删除智能体候选',
+          relationship: 'following',
+          handle: 'deleted-agent.awiki.ai',
+        ),
+        RelationshipSummary(
+          did: humanDid,
+          displayName: '正常联系人',
+          relationship: 'following',
+          handle: 'active-user.awiki.ai',
+        ),
+      ]
+      ..conversations = <ConversationSummary>[
+        ConversationSummary(
+          threadId: 'dm:deleted-agent',
+          displayName: '已删除智能体候选',
+          lastMessagePreview: 'history',
+          lastMessageAt: DateTime(2026, 7, 13),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: deletedAgentDid,
+          targetPeer: 'deleted-agent.awiki.ai',
+          peerLifecycleState: ConversationPeerLifecycleState.deletedAgent,
+        ),
+      ]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        'deleted-agent.awiki.ai': UserProfile(
+          did: deletedAgentDid,
+          nickName: '已删除智能体候选',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'deleted-agent.awiki.ai',
+          fullHandle: 'deleted-agent.awiki.ai',
+          subjectType: 'agent',
+        ),
+      }
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          name: '生命周期测试群',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 7, 13),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+            profileUrl: null,
+          ),
+        ],
+      };
+    final agentControl = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: deletedAgentDid,
+          kind: AgentKind.runtime,
+          handle: 'deleted-agent.awiki.ai',
+          displayName: '已删除智能体候选',
+          activeState: 'archived',
+          latest: AgentLatestStatus(status: 'archived'),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(agentControl),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('正常联系人'), findsOneWidget);
+    expect(find.text('已删除智能体候选'), findsNothing);
+    expect(find.text('@deleted-agent.awiki.ai'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      'deleted-agent.awiki.ai',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('该身份已被删除或当前不可邀请。'), findsOneWidget);
+    expect(find.text('已删除智能体候选'), findsNothing);
+  });
+
   testWidgets('群详情添加成员搜索框支持一键清空', (tester) async {
     const groupDid = 'did:wba:awiki.ai:group:e1_group';
     const followerDid = 'did:wba:awiki.ai:user:follower:e1_member';

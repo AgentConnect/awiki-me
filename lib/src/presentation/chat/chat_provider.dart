@@ -213,6 +213,7 @@ class AgentPendingTurn {
     this.remoteMessageId,
     this.mentionId,
     this.agentHandle,
+    this.progress,
     this.isOverdue = false,
   });
 
@@ -221,6 +222,7 @@ class AgentPendingTurn {
   final String? remoteMessageId;
   final String? mentionId;
   final String? agentHandle;
+  final AgentRunProgress? progress;
   final DateTime startedAt;
   final bool isOverdue;
 
@@ -247,6 +249,7 @@ class AgentPendingTurn {
       remoteMessageId: remoteMessageId,
       mentionId: mentionId,
       agentHandle: agentHandle,
+      progress: progress,
       startedAt: startedAt,
       isOverdue: true,
     );
@@ -4841,6 +4844,7 @@ class ChatThreadsController
     final agentHandle =
         run['runtime_agent_handle']?.toString().trim().ifNotEmpty ??
         run['agent_handle']?.toString().trim().ifNotEmpty;
+    final progress = AgentRunProgress.fromJson(run['progress']);
     if (_isActiveRunStatus(status)) {
       _upsertAgentPendingTurnFromStatus(
         agentDid: agentDid,
@@ -4849,6 +4853,7 @@ class ChatThreadsController
         messageId: messageId,
         mentionId: mentionId,
         agentHandle: agentHandle,
+        progress: progress,
         startedAt: startedAt,
       );
       return;
@@ -5026,6 +5031,7 @@ class ChatThreadsController
         messageId: record.runId,
         mentionId: null,
         agentHandle: null,
+        progress: null,
         startedAt: DateTime.now(),
       );
       return;
@@ -5447,6 +5453,7 @@ class ChatThreadsController
     required String? messageId,
     required String? mentionId,
     required String? agentHandle,
+    required AgentRunProgress? progress,
     required DateTime startedAt,
   }) {
     final threadId = _threadIdForAgentRunStatus(
@@ -5483,6 +5490,7 @@ class ChatThreadsController
             remoteMessageId: turn.remoteMessageId ?? pendingRemoteMessageId,
             mentionId: turn.mentionId ?? mentionId,
             agentHandle: turn.agentHandle ?? agentHandle,
+            progress: progress ?? turn.progress,
             startedAt: turn.startedAt,
             isOverdue: turn.isOverdue,
           ),
@@ -5499,6 +5507,7 @@ class ChatThreadsController
           remoteMessageId: pendingRemoteMessageId,
           mentionId: mentionId,
           agentHandle: agentHandle,
+          progress: progress,
           startedAt: startedAt,
         ),
       );

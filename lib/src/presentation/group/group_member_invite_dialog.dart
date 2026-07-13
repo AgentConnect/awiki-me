@@ -6,6 +6,7 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../l10n/l10n.dart';
 import '../../app/e2e_semantics.dart';
+import '../../application/group_invite_eligibility.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/conversation_summary.dart';
@@ -143,6 +144,13 @@ class _GroupMemberInviteDialogState
       if (!mounted) {
         return;
       }
+      if (!_currentEligibilityPolicy().allowsIdentity(did: candidate.did)) {
+        setState(() {
+          _isResolving = false;
+          _errorText = context.l10n.groupInviteIdentityUnavailable;
+        });
+        return;
+      }
       setState(() {
         _resolvedCandidates[_normalizeDid(candidate.did)] = candidate;
         _isResolving = false;
@@ -231,7 +239,8 @@ class _GroupMemberInviteDialogState
     final visibleCandidates = hasMore
         ? candidates.take(_defaultVisibleLimit).toList()
         : candidates;
-    final selectedCount = _selectedRefs.length;
+    final selectedCandidates = _selectedCandidates(candidates);
+    final selectedCount = selectedCandidates.length;
     final candidateSectionTitle = _normalizedQuery.isEmpty
         ? context.l10n.groupInviteCandidates
         : context.l10n.groupInviteSearchResults;
@@ -264,7 +273,7 @@ class _GroupMemberInviteDialogState
           ],
           SizedBox(height: responsive.spacing(14)),
           _SelectedInviteStrip(
-            selected: _selectedCandidates(candidates),
+            selected: selectedCandidates,
             onRemove: _isSubmitting
                 ? null
                 : (candidate) => _toggleCandidate(candidate),
@@ -414,23 +423,36 @@ class _GroupMemberInviteDialogState
 
   List<GroupInviteCandidate> _allCandidates({bool watch = true}) {
     final byDid = <String, GroupInviteCandidate>{};
+    final agentsState = watch
+        ? ref.watch(agentsProvider)
+        : ref.read(agentsProvider);
+    final conversationState = watch
+        ? ref.watch(conversationListProvider)
+        : ref.read(conversationListProvider);
+    final conversations = conversationState.conversations;
+    final eligibility = GroupInviteEligibilityPolicy.fromSources(
+      agents: agentsState.agents,
+      pendingDeletionAgentDids: agentsState.pendingDeletionAgentDids,
+      conversations: conversations,
+    );
     void add(GroupInviteCandidate? candidate) {
       if (candidate == null) {
         return;
       }
       final did = _normalizeDid(candidate.did);
-      if (did.isEmpty || _looksLikeGroupDid(did)) {
+      if (did.isEmpty ||
+          _looksLikeGroupDid(did) ||
+          !eligibility.allowsIdentity(did: did)) {
         return;
       }
       final existing = byDid[did];
       byDid[did] = existing == null ? candidate : existing.merge(candidate);
     }
 
-    final agentsState = watch
-        ? ref.watch(agentsProvider)
-        : ref.read(agentsProvider);
     for (final agent in agentsState.agents) {
-      add(GroupInviteCandidate.fromAgent(agent));
+      if (eligibility.allowsAgent(agent)) {
+        add(GroupInviteCandidate.fromAgent(agent));
+      }
     }
 
     final friendsState = watch
@@ -453,13 +475,10 @@ class _GroupMemberInviteDialogState
       );
     }
 
-    final conversations =
-        (watch
-                ? ref.watch(conversationListProvider)
-                : ref.read(conversationListProvider))
-            .conversations;
     for (final conversation in conversations) {
-      add(GroupInviteCandidate.fromConversation(conversation));
+      if (eligibility.allowsConversation(conversation)) {
+        add(GroupInviteCandidate.fromConversation(conversation));
+      }
     }
 
     for (final candidate in _resolvedCandidates.values) {
@@ -486,6 +505,15 @@ class _GroupMemberInviteDialogState
       return a.displayName.compareTo(b.displayName);
     });
     return candidates;
+  }
+
+  GroupInviteEligibilityPolicy _currentEligibilityPolicy() {
+    final agentsState = ref.read(agentsProvider);
+    return GroupInviteEligibilityPolicy.fromSources(
+      agents: agentsState.agents,
+      pendingDeletionAgentDids: agentsState.pendingDeletionAgentDids,
+      conversations: ref.read(conversationListProvider).conversations,
+    );
   }
 }
 

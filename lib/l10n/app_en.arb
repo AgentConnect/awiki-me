@@ -438,6 +438,7 @@
   "groupInviteSearchResults": "Search results",
   "groupInviteSelectHint": "Select one or more identities, then confirm once to add them.",
   "groupInviteNoLocalCandidates": "No local identities available to invite.",
+  "groupInviteIdentityUnavailable": "This identity has been deleted or is not currently invitable.",
   "groupInviteNoMatches": "No local identities matched. Try resolving a handle or DID.",
   "groupInviteAlreadyInGroup": "Already in group",
   "groupInviteUnnamedAgent": "Unnamed agent",
@@ -462,8 +463,29 @@
   "chatGroupSendDisabled": "This group is temporarily unavailable for sending messages.",
   "chatAgentProcessing": "Agent is processing...",
   "chatAgentStillProcessing": "Agent is still processing. Refresh later to check the result.",
+  "chatAgentExternalServiceWorking": "Agent is using an external service...",
+  "chatAgentExternalServiceDelayed": "The external service is responding slowly. The agent is still waiting or retrying...",
+  "chatAgentExternalServiceResumed": "The external service recovered. The agent is continuing...",
   "chatSubjectProcessing": "{subject} is processing...",
   "@chatSubjectProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectExternalServiceWorking": "{subject} is using an external service...",
+  "@chatSubjectExternalServiceWorking": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectExternalServiceDelayed": "The external service is responding slowly. {subject} is still waiting or retrying...",
+  "@chatSubjectExternalServiceDelayed": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectExternalServiceResumed": "The external service recovered. {subject} is continuing...",
+  "@chatSubjectExternalServiceResumed": {
     "placeholders": {
       "subject": {}
     }

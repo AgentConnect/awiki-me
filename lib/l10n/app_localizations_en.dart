@@ -1088,6 +1088,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'No local identities available to invite.';
 
   @override
+  String get groupInviteIdentityUnavailable =>
+      'This identity has been deleted or is not currently invitable.';
+
+  @override
   String get groupInviteNoMatches =>
       'No local identities matched. Try resolving a handle or DID.';
 
@@ -1152,8 +1156,35 @@ class AppLocalizationsEn extends AppLocalizations {
       'Agent is still processing. Refresh later to check the result.';
 
   @override
+  String get chatAgentExternalServiceWorking =>
+      'Agent is using an external service...';
+
+  @override
+  String get chatAgentExternalServiceDelayed =>
+      'The external service is responding slowly. The agent is still waiting or retrying...';
+
+  @override
+  String get chatAgentExternalServiceResumed =>
+      'The external service recovered. The agent is continuing...';
+
+  @override
   String chatSubjectProcessing(Object subject) {
     return '$subject is processing...';
+  }
+
+  @override
+  String chatSubjectExternalServiceWorking(Object subject) {
+    return '$subject is using an external service...';
+  }
+
+  @override
+  String chatSubjectExternalServiceDelayed(Object subject) {
+    return 'The external service is responding slowly. $subject is still waiting or retrying...';
+  }
+
+  @override
+  String chatSubjectExternalServiceResumed(Object subject) {
+    return 'The external service recovered. $subject is continuing...';
   }
 
   @override

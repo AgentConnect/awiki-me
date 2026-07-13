@@ -2224,6 +2224,25 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final overdue = turns.any((turn) => turn.isOverdue);
     final subject = _agentProcessingSubject(context, turns);
+    final progressCodes = turns
+        .map((turn) => turn.progress?.code)
+        .whereType<String>()
+        .toSet();
+    if (progressCodes.contains('external_service_delayed')) {
+      return subject == context.l10n.chatAgentSubject
+          ? context.l10n.chatAgentExternalServiceDelayed
+          : context.l10n.chatSubjectExternalServiceDelayed(subject);
+    }
+    if (progressCodes.contains('external_service_resumed')) {
+      return subject == context.l10n.chatAgentSubject
+          ? context.l10n.chatAgentExternalServiceResumed
+          : context.l10n.chatSubjectExternalServiceResumed(subject);
+    }
+    if (progressCodes.contains('external_tool_running')) {
+      return subject == context.l10n.chatAgentSubject
+          ? context.l10n.chatAgentExternalServiceWorking
+          : context.l10n.chatSubjectExternalServiceWorking(subject);
+    }
     if (subject == context.l10n.chatAgentSubject) {
       return overdue
           ? context.l10n.chatAgentStillProcessing

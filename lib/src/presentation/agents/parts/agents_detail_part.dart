@@ -856,6 +856,17 @@ class _RunStatusPanel extends StatelessWidget {
               ),
             ),
           ],
+          if (run.progress case final progress?) ...<Widget>[
+            SizedBox(height: responsive.spacing(7)),
+            Text(
+              _runProgressLabel(context, progress),
+              maxLines: 2,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.metaSm,
+              ),
+            ),
+          ],
           if (run.lastErrorCode != null ||
               run.lastErrorSummary != null) ...<Widget>[
             SizedBox(height: responsive.spacing(7)),
@@ -876,4 +887,13 @@ class _RunStatusPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+String _runProgressLabel(BuildContext context, AgentRunProgress progress) {
+  return switch (progress.code) {
+    'external_service_delayed' => context.l10n.chatAgentExternalServiceDelayed,
+    'external_service_resumed' => context.l10n.chatAgentExternalServiceResumed,
+    'external_tool_running' => context.l10n.chatAgentExternalServiceWorking,
+    _ => context.l10n.chatAgentProcessing,
+  };
 }

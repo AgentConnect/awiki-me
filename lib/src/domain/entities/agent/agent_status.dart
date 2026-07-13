@@ -13,6 +13,50 @@ enum RuntimeStatus { creating, ready, failed, disabled, needsConfig }
 
 enum RunStatus { queued, running, succeeded, failed }
 
+class AgentRunProgress {
+  const AgentRunProgress({
+    required this.code,
+    required this.phase,
+    required this.state,
+    this.tool,
+    this.retryable = false,
+  });
+
+  final String code;
+  final String phase;
+  final String state;
+  final String? tool;
+  final bool retryable;
+
+  static AgentRunProgress? fromJson(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final json = value.map((key, value) => MapEntry(key.toString(), value));
+    final code = _optionalString(json['code']);
+    final phase = _optionalString(json['phase']);
+    final state = _optionalString(json['state']);
+    if (code == null || phase == null || state == null) {
+      return null;
+    }
+    return AgentRunProgress(
+      code: code,
+      phase: phase,
+      state: state,
+      tool: _optionalString(json['tool']),
+      retryable: json['retryable'] == true,
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'code': code,
+    'phase': phase,
+    'state': state,
+    'tool': tool,
+    'retryable': retryable,
+  };
+}
+
 class AgentRunStatus {
   const AgentRunStatus({
     required this.runId,
@@ -27,6 +71,7 @@ class AgentRunStatus {
     this.updatedAt,
     this.lastErrorCode,
     this.lastErrorSummary,
+    this.progress,
   });
 
   final String runId;
@@ -41,6 +86,7 @@ class AgentRunStatus {
   final DateTime? updatedAt;
   final String? lastErrorCode;
   final String? lastErrorSummary;
+  final AgentRunProgress? progress;
 
   factory AgentRunStatus.fromJson(Map<String, Object?> json) {
     return AgentRunStatus(
@@ -56,6 +102,7 @@ class AgentRunStatus {
       updatedAt: parseAgentStatusTimestamp(json['updated_at']),
       lastErrorCode: _optionalString(json['last_error_code']),
       lastErrorSummary: _optionalString(json['last_error_summary']),
+      progress: AgentRunProgress.fromJson(json['progress']),
     );
   }
 
@@ -73,6 +120,7 @@ class AgentRunStatus {
       'updated_at': updatedAt?.toUtc().toIso8601String(),
       'last_error_code': lastErrorCode,
       'last_error_summary': lastErrorSummary,
+      'progress': progress?.toJson(),
     };
   }
 }

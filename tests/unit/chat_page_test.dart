@@ -2691,15 +2691,70 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
+    final delivered = _latestProjectedConversationMessage(
+      messagingService,
+      conversation,
+    );
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
-          _latestProjectedConversationMessage(messagingService, conversation),
+          delivered,
           threadId: conversation.effectiveConversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('智能体正在处理...'), findsOneWidget);
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_external_service_delayed',
+            'runtime_agent_did': 'did:agent:runtime',
+            'conversation_id': conversation.effectiveConversationId,
+            'source_message_id': delivered.remoteId,
+            'status': 'running',
+            'progress': <String, Object?>{
+              'code': 'external_service_delayed',
+              'phase': 'external_tool',
+              'state': 'delayed',
+              'tool': 'web_search',
+              'retryable': true,
+            },
+          },
+        ],
+      },
+    );
+    await tester.pump();
+
+    expect(find.text('外部服务响应较慢，智能体仍在等待或重试...'), findsOneWidget);
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_external_service_delayed',
+            'runtime_agent_did': 'did:agent:runtime',
+            'conversation_id': conversation.effectiveConversationId,
+            'source_message_id': delivered.remoteId,
+            'status': 'running',
+            'progress': <String, Object?>{
+              'code': 'external_service_resumed',
+              'phase': 'external_tool',
+              'state': 'resumed',
+              'tool': 'web_search',
+            },
+          },
+        ],
+      },
+    );
+    await tester.pump();
+
+    expect(find.text('外部服务已恢复，智能体正在继续处理...'), findsOneWidget);
   });
 
   testWidgets('发送给远端 Agent 私聊时显示处理中提示', (tester) async {
