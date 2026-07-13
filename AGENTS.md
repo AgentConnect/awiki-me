@@ -21,6 +21,13 @@ dart run tests/unit/runner.dart
 flutter run
 ```
 
+On the current Intel macOS development machine, routine AWiki Me Debug builds
+must build only `x86_64-apple-darwin`, including the sibling
+`awiki-cli-rs2/packages/awiki_im_core` native artifact. Do not compile ARM or a
+universal macOS XCFramework during debugging unless the user explicitly asks
+for ARM, universal, Release, or packaging output. Keep the Flutter App itself
+as a Debug incremental build.
+
 ## Coding Style & Naming Conventions
 Target Dart 3.8+ and Flutter 3.24+. Follow the repository lint rules in
 `analysis_options.yaml`. Keep files and functions in `snake_case`, classes in
