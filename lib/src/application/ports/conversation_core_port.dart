@@ -5,6 +5,8 @@ import '../models/app_thread_read_watermark.dart';
 import '../models/conversation_patch.dart';
 
 abstract interface class ConversationCorePort {
+  Future<void> ensureConversation(String conversationId);
+
   Future<List<ConversationSummary>> loadConversationSnapshot();
 
   Future<void> clearConversationSnapshot();

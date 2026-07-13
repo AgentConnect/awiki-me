@@ -319,9 +319,7 @@ void main() {
     ) async {
       final gateway = FakeAwikiGateway();
       final realtimeGateway = FakeRealtimeGateway();
-      final environment = AwikiEnvironmentConfig(
-        baseUrl: 'https://awiki.ai',
-      );
+      final environment = AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai');
       final inventory = FakeAgentInventoryPort();
       final messaging = FakeMessagingService(gateway);
       final app = AwikiMeApp(
@@ -387,6 +385,9 @@ void main() {
 }
 
 class _StaticConversationCore implements ConversationCorePort {
+  @override
+  Future<void> ensureConversation(String conversationId) async {}
+
   const _StaticConversationCore(this.items);
 
   final List<ConversationSummary> items;

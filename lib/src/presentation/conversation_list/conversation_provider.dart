@@ -875,25 +875,24 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         source: 'start_conversation',
       );
     }
-    unawaited(
-      _restoreAndNormalizeStartedConversation(conversation).catchError((_) {}),
-    );
   }
 
-  Future<void> _restoreAndNormalizeStartedConversation(
+  Future<void> commitStartedConversation(
     ConversationSummary conversation,
   ) async {
+    startConversation(conversation);
     try {
       await restoreConversation(conversation);
+      await _normalizeAndUpsertConversation(
+        conversation,
+        preferLocalTitle: true,
+        source: 'start_conversation_committed',
+      );
     } catch (_) {
-      // The foreground row is still useful when the presentation overlay
-      // store is temporarily unavailable.
+      _forgetLocallyStartedConversation(conversation);
+      _removeConversationLocally(conversation);
+      rethrow;
     }
-    await _normalizeAndUpsertConversation(
-      conversation,
-      preferLocalTitle: true,
-      source: 'start_conversation_normalized',
-    );
   }
 
   void upsertConversation(ConversationSummary conversation) {
@@ -924,7 +923,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final locallyStarted = _isLocallyStartedConversation(conversation);
     final normalized = await _normalizeConversationForRecents(conversation);
     if (normalized == null) {
-      _removeConversationLocally(conversation);
       return;
     }
     if (locallyStarted) {
@@ -1071,7 +1069,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> restoreConversation(ConversationSummary conversation) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
-      return;
+      throw StateError('No active awiki session. Please sign in first.');
     }
     _removeHiddenKeysFor(conversation);
     await ref

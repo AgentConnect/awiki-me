@@ -382,11 +382,12 @@
       "exactOracles": [
         "A read-only resolver preflight yields a non-empty DID; the member action itself still performs at most three visible search submissions, selects the one exact enabled candidate, and then requires the selected add-member action to be enabled before tapping it.",
         "The selected group converges to its canonical conversation id before messaging.",
+        "The empty group row exists exactly once before member addition, remains exact-one after member refresh, and survives App restart before the first message.",
         "One canonical group and correct member exist.",
         "App send reaches terminal state and CLI observes exactly one message with exact sender/content/group."
       ],
       "negativeChecks": [
-        "Wrong group/member, direct service shortcut, send nonterminal, or duplicate message fails."
+        "Wrong group/member, missing or duplicate empty row, disappearance after member refresh/restart, direct service shortcut, send nonterminal, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -501,13 +502,14 @@
       "feature": "Direct App to CLI message",
       "layer": "product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Type and send a run-unique direct message through visible App controls.",
+      "action": "Open a canonical Direct conversation, verify it before the first message and after App restart, then type and send a run-unique message through visible App controls.",
       "exactOracles": [
+        "Before the first send, the empty canonical Direct row exists exactly once with unread 0 and empty preview; App restart preserves the same exact row.",
         "App send reaches terminal sent state.",
         "CLI inbox contains exactly one canonical message with exact body, sender, receiver, thread and type."
       ],
       "negativeChecks": [
-        "Rejected/final-nonaccepted send, wrong identity/content, zero matches, or duplicates fail."
+        "Missing/duplicate empty row, loss on restart, rejected/final-nonaccepted send, wrong identity/content, zero message matches, or duplicates fail."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",

@@ -82,6 +82,24 @@ class _DesktopAppRobot {
       find.byKey(const Key('identity-start-chat-button')),
       description: 'start-chat action',
     );
+    final expectedPeer = normalizeDidOrHandleInput(peerHandle).toLowerCase();
+    await pumpUntil(
+      description: 'selected direct conversation after start-chat action',
+      timeout: const Duration(seconds: 90),
+      condition: () {
+        final selected = container.read(selectedConversationProvider);
+        if (selected == null ||
+            selected.isGroup ||
+            (selected.targetDid?.trim().isEmpty ?? true)) {
+          return false;
+        }
+        final targetPeer = normalizeDidOrHandleInput(
+          selected.targetPeer ?? '',
+        ).toLowerCase();
+        return targetPeer == expectedPeer ||
+            targetPeer.startsWith('$expectedPeer.');
+      },
+    );
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-chat-input'),
       description: 'chat composer after start conversation',

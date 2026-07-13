@@ -60,6 +60,19 @@ void main() {
     expect(coreThreadKind(const core.ThreadRef.thread('thread-1')), 'thread');
   });
 
+  test('ensureConversation forwards canonical id to SDK', () async {
+    final client = _FakeClient();
+    final adapter = AwikiImCoreConversationAdapter(
+      runtime: _FakeRuntime(client),
+    );
+
+    await adapter.ensureConversation('dm:peer-scope:v1:bob');
+
+    expect(client.messages.ensuredConversationIds, <String>[
+      'dm:peer-scope:v1:bob',
+    ]);
+  });
+
   test(
     'mark-read delegates to SDK thread API without history lookup',
     () async {
@@ -244,6 +257,43 @@ void main() {
     expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
     expect(patch.item?.effectiveConversationId, 'dm:peer-scope:v1:bob');
   });
+
+  test(
+    'empty conversation patch uses registry activity for ordering',
+    () async {
+      final client = _FakeClient();
+      final adapter = AwikiImCoreConversationAdapter(
+        runtime: _FakeRuntime(client),
+      );
+      final patchFuture = adapter.watchConversationPatches().first;
+      await Future<void>.delayed(Duration.zero);
+
+      client.messages.emitPatch(
+        const core.ConversationStorePatch(
+          kind: core.ConversationStorePatchKind.upsert,
+          ownerIdentityId: 'alice-id',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          item: core.ConversationSnapshotItem(
+            threadKind: 'group',
+            threadId: 'did:group',
+            participants: <String>['did:alice'],
+            unreadCount: 0,
+            messageCount: 0,
+            activityAt: '2026-07-13T12:34:56Z',
+          ),
+        ),
+      );
+
+      final patch = await patchFuture.timeout(const Duration(seconds: 1));
+      expect(patch.item?.lastMessagePreview, isEmpty);
+      expect(
+        patch.item?.lastMessageAt.toUtc(),
+        DateTime.utc(2026, 7, 13, 12, 34, 56),
+      );
+    },
+  );
 
   test('visible control patch removes hidden recents row', () async {
     final client = _FakeClient();
@@ -442,6 +492,7 @@ class _FakeMessageApi implements core.MessageApi {
   int markConversationReadCalls = 0;
   int historyCalls = 0;
   int markReadCalls = 0;
+  final List<String> ensuredConversationIds = <String>[];
   core.ThreadRef? lastMarkThreadReadThread;
   core.ReadWatermark? lastMarkThreadReadWatermark;
   core.ConversationReadRef? lastMarkConversationReadConversation;
@@ -449,6 +500,11 @@ class _FakeMessageApi implements core.MessageApi {
 
   void emitPatch(core.ConversationStorePatch patch) {
     _patches.add(patch);
+  }
+
+  @override
+  Future<void> ensureConversation(String conversationId) async {
+    ensuredConversationIds.add(conversationId);
   }
 
   @override

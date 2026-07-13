@@ -275,6 +275,7 @@ class AwikiImCoreMappers {
           : _messagePreview(lastMessage),
       lastMessageAt: _parseDateTime(
         conversation.lastMessageAt ??
+            conversation.activityAt ??
             lastMessage?.sentAt ??
             lastMessage?.receivedAt,
       ),
@@ -355,6 +356,7 @@ class AwikiImCoreMappers {
           : _snapshotMessagePreview(lastMessage),
       lastMessageAt: _parseDateTime(
         conversation.lastMessageAt ??
+            conversation.activityAt ??
             lastMessage?.sentAt ??
             lastMessage?.receivedAt,
       ),

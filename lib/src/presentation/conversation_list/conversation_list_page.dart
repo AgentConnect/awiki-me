@@ -409,9 +409,11 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           ),
                           avatarUri: item.avatarUri,
                           preview: preview,
-                          timeLabel: DateTimeFormatter.conversationTime(
-                            item.lastMessageAt,
-                          ),
+                          timeLabel: item.lastMessagePreview.trim().isEmpty
+                              ? ''
+                              : DateTimeFormatter.conversationTime(
+                                  item.lastMessageAt,
+                                ),
                           isDeletedAgentConversation:
                               item.isDeletedAgentConversation,
                           classification: classification,
@@ -703,9 +705,9 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   ),
                   avatarUri: item.avatarUri,
                   preview: preview,
-                  timeLabel: DateTimeFormatter.conversationTime(
-                    item.lastMessageAt,
-                  ),
+                  timeLabel: item.lastMessagePreview.trim().isEmpty
+                      ? ''
+                      : DateTimeFormatter.conversationTime(item.lastMessageAt),
                   isDeletedAgentConversation: item.isDeletedAgentConversation,
                   classification: classification,
                   agentStatus: agentStatus,

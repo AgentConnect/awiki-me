@@ -712,6 +712,7 @@ class ImCoreConversationService
     final projection = await _loadAgentConversationProjection();
     final normalized = _conversationWithVisibilityKey(conversation, projection);
     final now = updatedAt ?? DateTime.now().toUtc();
+    await _conversations.ensureConversation(normalized.effectiveConversationId);
     await _setConversationHiddenByCanonicalId(
       ownerDid: ownerDid,
       conversation: normalized,

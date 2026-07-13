@@ -33,9 +33,36 @@ Future<void> _verifyDirectTextRegression({
   );
   await E2eScenarioProgressWriter.record('direct_canonical_conversation_open');
 
-  // Opening an empty direct chat may be presentation-only until the first
-  // message is persisted. Do not require a conversation-list row before the
-  // product has created one through the outbound send.
+  final committedEmpty = await conversations.listConversations(
+    ownerDid: ownerDid,
+  );
+  requireExactlyOneConversation(
+    conversations: committedEmpty,
+    conversationId: conversationId,
+    unreadCount: 0,
+    lastMessage: '',
+  );
+
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversationId,
+    expectedUnread: 0,
+    expectedLastMessage: '',
+  );
+  await robot.restart(
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+  );
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversationId,
+    expectedUnread: 0,
+    expectedLastMessage: '',
+  );
+  await robot.openConversationRow(conversationId);
+  await E2eScenarioProgressWriter.record('direct_empty_restart_exact_one');
+
   await robot.sendText(appToCliText);
   await E2eScenarioProgressWriter.record('direct_app_send_submitted');
   final appMessage = await _waitForUiMessage(

@@ -211,6 +211,52 @@ void main() {
   );
 
   test(
+    'rejected group control hint does not remove a committed empty group',
+    () async {
+      final committed = _conversation(
+        conversationId: 'group:did:group:one',
+        threadId: 'group:did:group:one',
+        displayName: 'Group one',
+        isGroup: true,
+        groupId: 'did:group:one',
+      ).copyWith(lastMessagePreview: '');
+      final controlHint = committed.copyWith(
+        lastMessagePreview: 'member_added',
+        lastMessagePayloadJson:
+            '{"schema":"awiki.group.system_event.v1","type":"member_added"}',
+      );
+      final service = _NormalizingConversationService(
+        normalize: (conversation) async =>
+            conversation.lastMessagePayloadJson == null ? conversation : null,
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:human',
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      notifier.upsertConversation(committed);
+      await pumpEventQueue();
+      expect(container.read(conversationListProvider).conversations, [
+        committed,
+      ]);
+
+      notifier.upsertConversation(controlHint);
+      await pumpEventQueue();
+
+      final rows = container.read(conversationListProvider).conversations;
+      expect(rows, hasLength(1));
+      expect(
+        rows.single.effectiveConversationId,
+        committed.effectiveConversationId,
+      );
+      expect(rows.single.lastMessagePreview, isEmpty);
+    },
+  );
+
+  test(
     'ambiguous peer-scoped direct targets are not merged by target alias',
     () {
       final notifications = FakeNotificationFacade();
@@ -2261,6 +2307,69 @@ void main() {
   );
 
   test(
+    'committed empty conversation rolls back optimistic row on ensure failure',
+    () async {
+      final service = _CommitConversationService(failRestore: true);
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+      final conversation = _conversation(
+        conversationId: 'group:g1',
+        threadId: 'group:g1',
+        displayName: 'G1',
+        groupId: 'g1',
+        isGroup: true,
+        lastMessageAt: DateTime.utc(2026, 7, 13),
+      ).copyWith(lastMessagePreview: '');
+
+      await expectLater(
+        container
+            .read(conversationListProvider.notifier)
+            .commitStartedConversation(conversation),
+        throwsStateError,
+      );
+
+      expect(service.restoreCalls, 1);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    },
+  );
+
+  test(
+    'committed empty conversation rejects a missing session and rolls back',
+    () async {
+      final service = _CommitConversationService(failRestore: false);
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        authenticated: false,
+      );
+      addTearDown(container.dispose);
+      final conversation = _conversation(
+        conversationId: 'dm:peer-scope:v1:bob',
+        threadId: 'dm:peer-scope:v1:bob',
+        displayName: 'Bob',
+        targetDid: 'did:bob',
+        targetPeer: 'bob.awiki.example',
+        lastMessageAt: DateTime.utc(2026, 7, 13),
+      ).copyWith(lastMessagePreview: '');
+
+      await expectLater(
+        container
+            .read(conversationListProvider.notifier)
+            .commitStartedConversation(conversation),
+        throwsStateError,
+      );
+
+      expect(service.restoreCalls, 0);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    },
+  );
+
+  test(
     'verified handle start collapses a delayed canonical row after DID rotation',
     () async {
       final service = _MutableConversationService(
@@ -3318,6 +3427,7 @@ ProviderContainer _conversationContainer({
   required String ownerDid,
   List<AgentSummary> agents = const <AgentSummary>[],
   AwikiEnvironmentConfig? environment,
+  bool authenticated = true,
 }) {
   return ProviderContainer(
     overrides: <Override>[
@@ -3330,13 +3440,15 @@ ProviderContainer _conversationContainer({
       ),
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
-        controller.setSession(
-          SessionIdentity(
-            did: ownerDid,
-            credentialName: 'alice',
-            displayName: 'Alice',
-          ),
-        );
+        if (authenticated) {
+          controller.setSession(
+            SessionIdentity(
+              did: ownerDid,
+              credentialName: 'alice',
+              displayName: 'Alice',
+            ),
+          );
+        }
         return controller;
       }),
     ],
@@ -3810,5 +3922,25 @@ class _PatchConversationService extends _StaticConversationService {
       conversations: repaired,
       version: repairVersion,
     );
+  }
+}
+
+class _CommitConversationService extends _StaticConversationService {
+  _CommitConversationService({required this.failRestore})
+    : super(conversations: const <ConversationSummary>[]);
+
+  final bool failRestore;
+  int restoreCalls = 0;
+
+  @override
+  Future<void> restoreConversationToRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    restoreCalls += 1;
+    if (failRestore) {
+      throw StateError('ensure failed');
+    }
   }
 }

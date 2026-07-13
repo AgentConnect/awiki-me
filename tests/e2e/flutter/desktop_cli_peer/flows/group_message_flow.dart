@@ -4,6 +4,9 @@ Future<void> _verifyGroupTextRegression({
   required _DesktopAppRobot robot,
   required GroupApplicationService groups,
   required MessagingService messaging,
+  required AppSession session,
+  required AppBootstrap bootstrap,
+  required List<Override> providerOverrides,
   required String ownerDid,
   required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
@@ -24,6 +27,12 @@ Future<void> _verifyGroupTextRegression({
   final conversation = await robot.createGroup(groupName);
   final groupDid = conversation.groupId!.trim();
   expect(groupDid, isNotEmpty);
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversation.effectiveConversationId,
+    expectedUnread: 0,
+    expectedLastMessage: '',
+  );
 
   final ownerMember = await _findGroupMember(
     groups: groups,
@@ -36,6 +45,12 @@ Future<void> _verifyGroupTextRegression({
   );
 
   await robot.addGroupMember(cliFullHandle);
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversation.effectiveConversationId,
+    expectedUnread: 0,
+    expectedLastMessage: '',
+  );
   final cliMember = await _findGroupMember(
     groups: groups,
     groupDid: groupDid,
@@ -49,6 +64,22 @@ Future<void> _verifyGroupTextRegression({
   final appGroupText = 'e2e app group ${config.runId} $nonce';
   final cliGroupText = 'e2e cli group ${config.runId} $nonce';
   final groupThread = AppThreadRef.group(groupDid);
+
+  await robot.restart(
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+  );
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversation.effectiveConversationId,
+    expectedUnread: 0,
+    expectedLastMessage: '',
+  );
+  await robot.openConversationRow(conversation.effectiveConversationId);
+  await E2eScenarioProgressWriter.record(
+    'group_empty_member_restart_exact_one',
+  );
 
   await robot.sendText(appGroupText);
   final appGroupMessage = await _waitForUiMessage(

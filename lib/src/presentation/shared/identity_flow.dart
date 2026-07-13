@@ -314,7 +314,9 @@ Future<void> openDirectConversationForDid(
           avatarSeed: avatarSeed ?? resolvedDid,
         );
 
-  ref.read(conversationListProvider.notifier).startConversation(conversation);
+  await ref
+      .read(conversationListProvider.notifier)
+      .commitStartedConversation(conversation);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {
     return;

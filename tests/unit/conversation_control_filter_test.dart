@@ -259,6 +259,9 @@ ConversationSummary _conversation(
 }
 
 class _FakeConversations implements ConversationCorePort {
+  @override
+  Future<void> ensureConversation(String conversationId) async {}
+
   const _FakeConversations({required this.items});
 
   final List<ConversationSummary> items;

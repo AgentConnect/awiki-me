@@ -28,6 +28,13 @@ class AwikiImCoreConversationAdapter
   final AwikiImCoreMappers _mappers;
 
   @override
+  Future<void> ensureConversation(String conversationId) async {
+    await _runtime.withCurrentClient((client) {
+      return client.messages.ensureConversation(conversationId);
+    });
+  }
+
+  @override
   Future<List<ConversationSummary>> loadConversationSnapshot() async {
     return _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();

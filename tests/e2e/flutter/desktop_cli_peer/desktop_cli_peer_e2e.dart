@@ -263,6 +263,7 @@ void runDesktopCliPeerE2e({
         );
         await _attestPassedCases(<String, List<String>>{
           'MSG-E2E-001': const <String>[
+            'empty_direct_restart_exact_one_before_first_message',
             'app_ui_send_terminal_sent',
             'cli_inbox_canonical_exact_one_verified',
           ],
@@ -318,6 +319,9 @@ void runDesktopCliPeerE2e({
           robot: robot,
           groups: groups,
           messaging: faultMessaging!,
+          session: session,
+          bootstrap: bootstrap,
+          providerOverrides: appProviderOverrides,
           ownerDid: session.did,
           canonicalCliDid: canonicalCliDid!,
           config: config,
@@ -326,6 +330,7 @@ void runDesktopCliPeerE2e({
         await _attestPassedCases(<String, List<String>>{
           'GROUP-E2E-001': const <String>[
             'group_created_and_member_added_through_ui',
+            'empty_group_survives_member_refresh_and_restart_exact_one',
             'app_group_ui_send_exact_one_verified',
           ],
           'GROUP-E2E-002': const <String>['cli_group_send_verified_in_app_ui'],

@@ -849,10 +849,14 @@ void main() {
         ownerDid: 'did:alice',
         conversation: conversation,
       );
+      expect(core.ensuredConversationIds, isEmpty);
+
       await service.restoreConversationToRecents(
         ownerDid: 'did:alice',
         conversation: conversation,
       );
+
+      expect(core.ensuredConversationIds, <String>['dm:alice:old-did']);
 
       final conversations = await service.listConversations(
         ownerDid: 'did:alice',
@@ -1569,6 +1573,11 @@ ChatMessage _message(String id) {
 }
 
 class _FakeConversations implements ConversationCorePort {
+  @override
+  Future<void> ensureConversation(String conversationId) async {
+    ensuredConversationIds.add(conversationId);
+  }
+
   _FakeConversations({
     this.items = const <ConversationSummary>[],
     this.snapshotItems = const <ConversationSummary>[],
@@ -1583,6 +1592,7 @@ class _FakeConversations implements ConversationCorePort {
   final StreamController<CoreConversationPatch> _patches =
       StreamController<CoreConversationPatch>.broadcast(sync: true);
   int listCount = 0;
+  final List<String> ensuredConversationIds = <String>[];
   int snapshotCount = 0;
   int markReadCount = 0;
   AppThreadReadWatermark? lastMarkReadWatermark;
