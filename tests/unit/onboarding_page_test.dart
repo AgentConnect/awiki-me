@@ -22,7 +22,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('macOS 桌面登录页使用参考图左右分栏布局', (tester) async {
+  testWidgets('macOS 桌面登录页使用新稿左右分栏和单层认证入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
@@ -46,19 +46,48 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
-    expect(find.text('身份凭证'), findsOneWidget);
-    expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-mac-auth-method-tabs')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
+    expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-mac-credential-mode')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      findsOneWidget,
+    );
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text('+86'), findsOneWidget);
     expect(find.text('安全可靠'), findsOneWidget);
-    expect(find.text('需求调研 Agent'), findsOneWidget);
-    expect(find.text('任务拆分 Agent'), findsOneWidget);
-    expect(find.text('编码实现 Agent'), findsOneWidget);
-    expect(find.text('UI 设计 Agent'), findsOneWidget);
+    expect(find.text('高效协作'), findsOneWidget);
+    expect(find.text('权限可控'), findsOneWidget);
+    expect(find.text('已验证'), findsNothing);
+    expect(find.text('用户协议'), findsNothing);
+    expect(find.text('隐私政策'), findsNothing);
+
+    final heroRect = tester.getRect(
+      find.byKey(const Key('onboarding-mac-hero-title')),
+    );
+    final cardRect = tester.getRect(
+      find.byKey(const Key('onboarding-mac-auth-card')),
+    );
+    final languageRect = tester.getRect(
+      find.byKey(const Key('onboarding-language-switcher-button')),
+    );
+    final tenantRect = tester.getRect(find.byTooltip('管理租户'));
+    expect(heroRect.right, lessThan(cardRect.left));
+    expect(languageRect.left, lessThan(tenantRect.left));
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 桌面登录页空间偏紧时 Agent 示例使用紧凑名称', (tester) async {
+  testWidgets('macOS 单层认证入口可切换邮箱、身份凭证和手机号', (tester) async {
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -71,14 +100,78 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('需求调研'), findsOneWidget);
-    expect(find.text('任务拆分'), findsOneWidget);
-    expect(find.text('编码实现'), findsOneWidget);
-    expect(find.text('UI 设计'), findsOneWidget);
-    expect(find.text('需求调研 Agent'), findsNothing);
-    expect(find.text('任务拆分 Agent'), findsNothing);
-    expect(find.text('编码实现 Agent'), findsNothing);
-    expect(find.text('UI 设计 Agent'), findsNothing);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(container.read(onboardingProvider).authMode, 'phone');
+
+    await tester.tap(find.byKey(const Key('auth-mode-email')));
+    await tester.pumpAndSettle();
+    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(container.read(onboardingProvider).authMode, 'email');
+    expect(find.text('发送激活邮件'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('onboarding-mac-credential-mode')));
+    await tester.pumpAndSettle();
+    expect(container.read(onboardingProvider).entryMode, 'login');
+    expect(find.text('导入身份凭证'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('auth-mode-phone')));
+    await tester.pumpAndSettle();
+    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(container.read(onboardingProvider).authMode, 'phone');
+    expect(find.text('发送验证码'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 手机号入口下的本机身份卡可直接登录', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:123',
+      credentialName: 'default',
+      displayName: 'Alice',
+      handle: 'alice',
+      jwtToken: 'token-123',
+    );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[session]
+      ..loginResult = session
+      ..myProfile = const UserProfile(
+        did: 'did:test:123',
+        nickName: 'Alice',
+        bio: '',
+        profileMarkdown: '',
+        tags: <String>[],
+      );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(
+      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      findsOneWidget,
+    );
+
+    final tileRect = tester.getRect(find.text('Alice'));
+    await tester.tapAt(Offset(tileRect.left + 20, tileRect.center.dy));
+    await tester.pumpAndSettle();
+
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, 'default');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -534,7 +627,7 @@ void main() {
     expect(listRect.width, lessThanOrEqualTo(420));
   });
 
-  testWidgets('macOS 窄窗口下入口 tab 保持单行并切到紧凑卡片布局', (tester) async {
+  testWidgets('macOS 窄窗口下单层认证入口保持单行并隐藏品牌列', (tester) async {
     final gateway = FakeAwikiGateway();
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -551,16 +644,21 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsNothing);
 
-    final registerRect = tester.getRect(find.text('登录或注册'));
-    final switchRect = tester.getRect(find.text('切换身份'));
+    final phoneRect = tester.getRect(find.byKey(const Key('auth-mode-phone')));
+    final emailRect = tester.getRect(find.byKey(const Key('auth-mode-email')));
+    final credentialRect = tester.getRect(
+      find.byKey(const Key('onboarding-mac-credential-mode')),
+    );
     final tabsRect = tester.getRect(
-      find.byKey(const Key('onboarding-mac-entry-tabs')),
+      find.byKey(const Key('onboarding-mac-auth-method-tabs')),
     );
 
-    expect(registerRect.height, lessThan(24));
-    expect(switchRect.height, lessThan(24));
-    expect(registerRect.left, greaterThanOrEqualTo(tabsRect.left));
-    expect(switchRect.right, lessThanOrEqualTo(tabsRect.right));
+    expect(phoneRect.left, greaterThanOrEqualTo(tabsRect.left));
+    expect(emailRect.left, greaterThan(phoneRect.left));
+    expect(credentialRect.left, greaterThan(emailRect.left));
+    expect(credentialRect.right, lessThanOrEqualTo(tabsRect.right));
+    expect(phoneRect.center.dy, moreOrLessEquals(emailRect.center.dy));
+    expect(emailRect.center.dy, moreOrLessEquals(credentialRect.center.dy));
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

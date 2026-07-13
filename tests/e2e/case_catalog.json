@@ -981,10 +981,11 @@
       "action": "Launch the real Flutter desktop app shim without backend credentials.",
       "exactOracles": [
         "App shell and onboarding are visible exactly once.",
+        "The onboarding authentication entry is visible; macOS exposes the single phone, email, and identity-credential method selector.",
         "Unauthenticated realtime remains disconnected."
       ],
       "negativeChecks": [
-        "A missing shell/onboarding surface or an unexpected realtime connection fails the case."
+        "A missing shell/onboarding/authentication-entry surface or an unexpected realtime connection fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",

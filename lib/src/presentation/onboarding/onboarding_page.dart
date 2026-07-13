@@ -115,6 +115,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!runtime.isInitialized && credentials.isEmpty) {
       return;
     }
+    if (context.awikiResponsive.isMacDesktop) {
+      ref.read(onboardingProvider.notifier).setEntryMode('register');
+      return;
+    }
     ref
         .read(onboardingProvider.notifier)
         .setEntryModeFromLocalCredentials(credentials);
@@ -134,6 +138,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final automaticEntryMode = responsive.isMacDesktop
+        ? 'register'
+        : credentials.isEmpty
+        ? 'register'
+        : 'login';
+    if (_autoEntryModeEnabled && onboarding.entryMode != automaticEntryMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _resolveEntryModeFromLocalCredentials();
+        }
+      });
+    }
     if (responsive.isMacDesktop) {
       return _MacOnboardingScaffold(
         onboarding: onboarding,

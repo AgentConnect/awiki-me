@@ -66,8 +66,21 @@ void main() {
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsOneWidget);
-    expect(find.text('切换身份'), findsWidgets);
     expect(find.text('登录或注册'), findsWidgets);
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      expect(
+        find.byKey(const Key('onboarding-mac-auth-method-tabs')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
+      expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
+      expect(
+        find.byKey(const Key('onboarding-mac-credential-mode')),
+        findsOneWidget,
+      );
+    } else {
+      expect(find.text('切换身份'), findsWidgets);
+    }
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
     await E2eCaseAttestationWriter.markPassed(
@@ -75,6 +88,7 @@ void main() {
       phases: const <String>[
         'app_shell_visible',
         'onboarding_visible',
+        'onboarding_auth_entry_visible',
         'unauthenticated_realtime_disconnected',
       ],
     );
