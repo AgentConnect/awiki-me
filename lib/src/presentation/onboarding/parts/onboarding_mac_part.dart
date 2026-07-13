@@ -418,7 +418,7 @@ class _MacAuthCard extends StatelessWidget {
     final usingCredential = onboarding.entryMode == 'login';
     return Container(
       key: const Key('onboarding-mac-auth-card'),
-      constraints: BoxConstraints(maxWidth: 620, maxHeight: maxHeight),
+      constraints: BoxConstraints(maxWidth: 540, maxHeight: maxHeight),
       decoration: BoxDecoration(
         color: CupertinoColors.white.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(20),
@@ -434,7 +434,7 @@ class _MacAuthCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(42, 34, 42, 38),
+          padding: const EdgeInsets.fromLTRB(34, 28, 34, 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -445,7 +445,7 @@ class _MacAuthCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: Color(0xFF101B32),
-                  fontSize: 27,
+                  fontSize: 25,
                   height: 1.2,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,
@@ -464,13 +464,13 @@ class _MacAuthCard extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 20),
               _MacAuthMethodSelector(
                 onboarding: onboarding,
                 onModeChanged: onModeChanged,
                 onAuthModeChanged: onAuthModeChanged,
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 20),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 switchInCurve: Curves.easeOutCubic,
@@ -500,7 +500,7 @@ class _MacAuthCard extends StatelessWidget {
                       ),
               ),
               if (!usingCredential && credentials.isNotEmpty) ...<Widget>[
-                const SizedBox(height: 28),
+                const SizedBox(height: 22),
                 _MacLocalIdentityShortcut(
                   credentials: credentials,
                   onLogin: onLogin,
@@ -531,7 +531,7 @@ class _MacAuthMethodSelector extends StatelessWidget {
     final usingCredential = onboarding.entryMode == 'login';
     return Container(
       key: const Key('onboarding-mac-auth-method-tabs'),
-      height: 52,
+      height: 48,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFD),
@@ -678,7 +678,7 @@ class _MacLoginForm extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _MacCredentialPicker(credentials: credentials, onLogin: onLogin),
-        const SizedBox(height: 18),
+        const SizedBox(height: 14),
         Row(
           children: <Widget>[
             Expanded(
@@ -838,12 +838,12 @@ class _MacCredentialTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(11),
       backgroundColor: CupertinoColors.white,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 74),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        constraints: const BoxConstraints(minHeight: 68),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
         decoration: _macFieldDecoration(),
         child: Row(
           children: <Widget>[
-            AvatarBadge(seed: identity.displayName, size: 42),
+            AvatarBadge(seed: identity.displayName, size: 38),
             const SizedBox(width: 13),
             Expanded(
               child: Column(
@@ -1148,7 +1148,7 @@ class _MacOutlinedField extends StatelessWidget {
         _MacFieldLabel(label),
         const SizedBox(height: 9),
         Container(
-          height: 52,
+          height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: _macFieldDecoration(),
           child: Row(
@@ -1301,7 +1301,7 @@ class _MacPrimaryAction extends StatelessWidget {
         child: child,
       ),
       child: Container(
-        height: 52,
+        height: 48,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: <Color>[Color(0xFF0B65F8), Color(0xFF0752F0)],
@@ -1367,7 +1367,7 @@ class _MacSecondaryAction extends StatelessWidget {
         child: child,
       ),
       child: Container(
-        height: 52,
+        height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: CupertinoColors.white,

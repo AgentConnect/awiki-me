@@ -81,6 +81,8 @@ void main() {
     );
     final tenantRect = tester.getRect(find.byTooltip('管理租户'));
     expect(heroRect.right, lessThan(cardRect.left));
+    expect(cardRect.width, moreOrLessEquals(540, epsilon: 0.1));
+    expect(cardRect.height, lessThan(900 * 0.8));
     expect(languageRect.left, lessThan(tenantRect.left));
 
     debugDefaultTargetPlatformOverride = null;
