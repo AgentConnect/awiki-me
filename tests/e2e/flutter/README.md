@@ -166,6 +166,11 @@ reports must never include the env file's secret values.
 Root `integration_test/*.dart` files are Flutter tooling shims only. Use them
 only for focused debugging of an individual Flutter test implementation:
 
+Prefer `dart run tests/e2e/runner.dart --case ...`: the runner isolates Flutter
+build products under `.e2e/flutter-build/<platform>`, so its test-host App
+cannot replace the normal Debug `AWikiMe.app`. Raw `flutter test` commands below
+bypass that protection and are intended only for deliberate low-level debugging.
+
 ```bash
 flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/message_agent_full_ui_test.dart -d macos

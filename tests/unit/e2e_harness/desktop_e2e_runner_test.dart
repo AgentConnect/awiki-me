@@ -7,6 +7,87 @@ import '../../e2e/case_attestation.dart';
 import '../../e2e/runner.dart';
 
 void main() {
+  group('DesktopFlutterBuildIsolation', () {
+    test(
+      'writes an isolated macOS build directory without changing build/',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_flutter_build_isolation_',
+        );
+        final home = await Directory.systemTemp.createTemp(
+          'awiki_flutter_build_isolation_home_',
+        );
+        addTearDown(() async {
+          await root.delete(recursive: true);
+          await home.delete(recursive: true);
+        });
+        final isolation = DesktopFlutterBuildIsolation(
+          root: root,
+          platform: DesktopE2ePlatform.macos,
+          userHome: home.path,
+        );
+
+        isolation.prepare(dryRun: false);
+
+        final settings =
+            jsonDecode(isolation.settingsFile.readAsStringSync())
+                as Map<String, dynamic>;
+        expect(settings['build-dir'], '.e2e/flutter-build/macos');
+        expect(settings['enable-macos-desktop'], isTrue);
+        expect(
+          isolation.environment['XDG_CONFIG_HOME'],
+          isolation.configDirectory.path,
+        );
+        expect(Directory('${root.path}/build').existsSync(), isFalse);
+      },
+    );
+
+    test('dry-run does not create Flutter isolation settings', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_flutter_build_isolation_dry_run_',
+      );
+      addTearDown(() => root.delete(recursive: true));
+      final isolation = DesktopFlutterBuildIsolation(
+        root: root,
+        platform: DesktopE2ePlatform.linux,
+        userHome: root.path,
+      );
+
+      isolation.prepare(dryRun: true);
+
+      expect(isolation.settingsFile.existsSync(), isFalse);
+    });
+
+    test(
+      'fails closed when legacy Flutter settings bypass XDG isolation',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_flutter_build_isolation_legacy_',
+        );
+        final home = Directory('${root.path}/home')..createSync();
+        File('${home.path}/.flutter_settings').writeAsStringSync('{}');
+        addTearDown(() => root.delete(recursive: true));
+        final isolation = DesktopFlutterBuildIsolation(
+          root: root,
+          platform: DesktopE2ePlatform.macos,
+          userHome: home.path,
+        );
+
+        expect(
+          () => isolation.prepare(dryRun: false),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('legacy'),
+            ),
+          ),
+        );
+        expect(isolation.settingsFile.existsSync(), isFalse);
+      },
+    );
+  });
+
   group('DesktopE2eOptions', () {
     test('parses run-control options only', () {
       final options = DesktopE2eOptions.parse(const <String>[

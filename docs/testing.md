@@ -293,6 +293,15 @@ on the same desktop device concurrently. The runner supplies a UTF-8 locale
 when the parent shell omits one, so CocoaPods does not depend on interactive
 shell initialization.
 
+The E2E runner also gives Flutter an isolated XDG settings directory and pins
+its build output to `.e2e/flutter-build/<platform>`. Integration-test host Apps
+therefore never overwrite the normal developer artifact under
+`build/macos/Build/Products/Debug/AWikiMe.app`. The isolated build directory is
+stable per platform so repeated E2E runs remain incremental. A legacy
+`$HOME/.flutter_settings` file bypasses XDG configuration, so the runner fails
+closed instead of risking the normal App bundle; migrate that legacy file to
+the current XDG Flutter settings location before running E2E.
+
 On any non-zero child exit or timeout, redacted `command-failure-*.json`,
 `*.stdout.log`, and `*.stderr.log` artifacts are retained in the run report
 directory. The Flutter scenario also writes `scenario_progress.json` after

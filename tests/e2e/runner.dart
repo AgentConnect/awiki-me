@@ -224,6 +224,7 @@ class DesktopE2eRunner {
   late final File caseAttestationFile;
   late final File scenarioProgressFile;
   late final File resourceLedgerFile;
+  late final DesktopFlutterBuildIsolation flutterBuildIsolation;
   late final DesktopE2eSuiteManifest suiteManifest;
   late final DesktopE2eSuiteDefinition suiteDefinition;
   final List<DesktopTimingEntry> _timings = <DesktopTimingEntry>[];
@@ -251,6 +252,10 @@ class DesktopE2eRunner {
     _addRuntimeSecret(fileConfig.otpPhone ?? '');
     _addRuntimeSecret(fileConfig.otpCode ?? '');
     platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
+    flutterBuildIsolation = DesktopFlutterBuildIsolation(
+      root: root,
+      platform: platform,
+    );
     runId = options.runId ?? _newRunId();
     final runScope = options.e2eCase.reportScope;
     reportDir = Directory('${root.path}/.e2e/$runScope/$runId/reports')
@@ -362,6 +367,7 @@ class DesktopE2eRunner {
     _line('platform: ${platform.name}');
     _line('reports: ${redactor.redact(reportDir.path)}');
     _line('case: ${options.e2eCase.caseName}');
+    _line('flutter build dir: ${flutterBuildIsolation.buildDirectory}');
 
     await _timed('Checking desktop tooling', () async {
       await commands.requireExecutable('flutter');
@@ -408,6 +414,7 @@ class DesktopE2eRunner {
     _line('app handle: ${peerConfig.appHandle}');
     _line('cli handle: ${peerConfig.cliHandle}');
     _line('case: ${peerConfig.e2eCase.caseName}');
+    _line('flutter build dir: ${flutterBuildIsolation.buildDirectory}');
     _line('service base: ${peerConfig.serviceBaseUrl}');
     _line(
       'user service: ${peerConfig.userServiceUrl ?? peerConfig.serviceBaseUrl}',
@@ -894,6 +901,7 @@ class DesktopE2eRunner {
     Duration timeout = const Duration(minutes: 5),
   }) async {
     await _withFlutterExecutionLease(platform, runId, () async {
+      flutterBuildIsolation.prepare(dryRun: options.dryRun || commands.dryRun);
       final competingPids = await competingFlutterIntegrationTestPids();
       if (competingPids.isNotEmpty) {
         throw E2eFailure(
@@ -912,6 +920,7 @@ class DesktopE2eRunner {
         'LC_ALL': Platform.environment['LC_ALL']?.trim().isNotEmpty == true
             ? Platform.environment['LC_ALL']!
             : locale,
+        ...flutterBuildIsolation.environment,
       };
       if (platform == DesktopE2ePlatform.linux) {
         await commands.run(
@@ -1988,6 +1997,83 @@ Future<T> _withFlutterExecutionLease<T>(
       await handle.unlock();
     }
     await handle.close();
+  }
+}
+
+/// Keeps Flutter integration-test products away from the normal `build/`
+/// directory so a test host can never replace the developer-launchable App.
+class DesktopFlutterBuildIsolation {
+  DesktopFlutterBuildIsolation({
+    required this.root,
+    required this.platform,
+    String? userHome,
+  }) : userHome = userHome ?? Platform.environment['HOME'];
+
+  final Directory root;
+  final DesktopE2ePlatform platform;
+  final String? userHome;
+
+  String get buildDirectory => '.e2e/flutter-build/${platform.name}';
+
+  Directory get configDirectory =>
+      Directory('${root.path}/.e2e/flutter-config/${platform.name}');
+
+  File get settingsFile => File('${configDirectory.path}/settings');
+
+  Map<String, String> get environment => <String, String>{
+    'XDG_CONFIG_HOME': configDirectory.path,
+  };
+
+  void prepare({required bool dryRun}) {
+    if (dryRun) {
+      return;
+    }
+    final home = userHome?.trim();
+    if (home != null && home.isNotEmpty) {
+      final legacySettings = File('$home/.flutter_settings');
+      if (legacySettings.existsSync()) {
+        throw E2eFailure(
+          'Flutter E2E build isolation cannot override the legacy '
+          '${legacySettings.path} config. Move it to the XDG Flutter config '
+          'location before running E2E so the normal build/ App remains safe.',
+        );
+      }
+    }
+
+    final settings = <String, Object?>{};
+    if (settingsFile.existsSync()) {
+      try {
+        final decoded = jsonDecode(settingsFile.readAsStringSync());
+        if (decoded is! Map) {
+          throw const FormatException('Flutter settings must be an object.');
+        }
+        settings.addAll(
+          decoded.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      } on Object catch (error) {
+        throw E2eFailure(
+          'Could not load isolated Flutter E2E settings: '
+          '${error.runtimeType}.',
+        );
+      }
+    }
+    settings['build-dir'] = buildDirectory;
+    switch (platform) {
+      case DesktopE2ePlatform.macos:
+        settings['enable-macos-desktop'] = true;
+        break;
+      case DesktopE2ePlatform.linux:
+        settings['enable-linux-desktop'] = true;
+        break;
+    }
+
+    configDirectory.createSync(recursive: true);
+    final temporary = File('${settingsFile.path}.tmp');
+    temporary.writeAsStringSync(
+      const JsonEncoder.withIndent('  ').convert(settings),
+      flush: true,
+    );
+    temporary.renameSync(settingsFile.path);
   }
 }
 
