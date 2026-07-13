@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'AWiki Me';
+  String get appTitle => 'AWikiMe';
 
   @override
   String get commonCancel => 'Cancel';

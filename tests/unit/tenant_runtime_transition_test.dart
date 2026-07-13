@@ -4,6 +4,18 @@ import 'package:awiki_me/src/app/tenant_aware_awiki_me_app.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('bootstrap error app renders selectable diagnostics', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildTenantBootstrapErrorApp(StateError('native bridge mismatch')),
+    );
+
+    expect(find.text('AWikiMe failed to start.'), findsOneWidget);
+    expect(find.textContaining('native bridge mismatch'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   test(
     'tenant runtime opens only after previous dispose barrier completes',
     () async {

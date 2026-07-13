@@ -251,7 +251,7 @@ open macos/Runner.xcworkspace
 
 macOS debug/profile 使用独立的 `ai.awiki.awikime.dev` 应用身份和开发 Keychain service；Release 使用 `ai.awiki.awikime` 与 `ai.awiki.awikime.scope-secrets`。每个 scope 在 `scope/<uuid>` account 下只有一个版本化 envelope；runtime 只能读取已有 envelope，只有显式 scope provisioning 可以创建。具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
 
-Debug target 使用仓库配置的 Apple Development Team 签名，不再使用随二进制变化的 ad-hoc CDHash 身份。这样 macOS“录屏”TCC 权限可以跨重新编译稳定复用，避免每次截图都重新授权或只能捕获桌面。Debug 在 macOS 隐私设置中显示为 `AWiki Me (Development)`，不会再与已安装的 Release `AWiki Me` 混淆；录屏权限必须授予 Development 项。从旧 ad-hoc 构建切换后，需要重置一次 `ScreenCapture` 权限，启动新签名 App、允许访问并重启 App。
+Debug target 使用仓库配置的 Apple Development Team 签名，不再使用随二进制变化的 ad-hoc CDHash 身份。这样 macOS“录屏”TCC 权限可以跨重新编译稳定复用，避免每次截图都重新授权或只能捕获桌面。Debug 在 macOS 隐私设置中显示为 `AWikiMe (Development)`，不会再与已安装的 Release `AWikiMe` 混淆；录屏权限必须授予 Development 项。从旧 ad-hoc 构建切换后，需要重置一次 `ScreenCapture` 权限，启动新签名 App、允许访问并重启 App。
 
 修改 macOS 签名、entitlements 或 secure-storage 选项后，至少运行：
 

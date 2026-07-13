@@ -62,7 +62,7 @@ final class MenuBarStatusController: NSObject {
     _ = button.sendAction(on: [.leftMouseUp])
     button.imagePosition = .imageLeft
     button.imageScaling = .scaleProportionallyDown
-    button.toolTip = "AWiki Me"
+    button.toolTip = "AWikiMe"
   }
 
   private func activateMainWindow() {

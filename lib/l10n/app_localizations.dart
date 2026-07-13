@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:
-  /// **'AWiki Me'**
+  /// **'AWikiMe'**
   String get appTitle;
 
   /// No description provided for @commonCancel.

@@ -3,6 +3,30 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('macOS product and bundle are named AWikiMe', () {
+    final appInfo = File(
+      'macos/Runner/Configs/AppInfo.xcconfig',
+    ).readAsStringSync();
+    final project = File(
+      'macos/Runner.xcodeproj/project.pbxproj',
+    ).readAsStringSync();
+    final scheme = File(
+      'macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme',
+    ).readAsStringSync();
+
+    expect(appInfo, contains('PRODUCT_NAME = AWikiMe'));
+    expect(project, contains('AWIKI_APP_DISPLAY_NAME = AWikiMe;'));
+    expect(project, contains('/AWikiMe.app/'));
+    expect(project, contains('/AWikiMe";'));
+    expect(scheme, contains('BuildableName = "AWikiMe.app"'));
+    expect(scheme, isNot(contains('BuildableName = "AWiki Me.app"')));
+    expect(
+      'BlueprintName = "awiki-me"'.allMatches(scheme),
+      hasLength(4),
+    );
+    expect(scheme, isNot(contains('BlueprintName = "Runner"')));
+  });
+
   test('macOS main window defaults to the larger chat workspace', () {
     final source = File(
       'macos/Runner/Base.lproj/MainMenu.xib',
@@ -48,7 +72,7 @@ void main() {
     );
     expect(
       debugTarget,
-      contains('AWIKI_APP_DISPLAY_NAME = "AWiki Me (Development)";'),
+      contains('AWIKI_APP_DISPLAY_NAME = "AWikiMe (Development)";'),
     );
     expect(debugTarget, isNot(contains('CODE_SIGN_IDENTITY = "-";')));
 

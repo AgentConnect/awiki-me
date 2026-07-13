@@ -502,7 +502,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWikiMe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWikiMe";
 			};
 			name = Debug;
 		};
@@ -517,7 +517,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWikiMe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWikiMe";
 			};
 			name = Release;
 		};
@@ -532,7 +532,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWiki Me.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWiki Me";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AWikiMe.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/AWikiMe";
 			};
 			name = Profile;
 		};
@@ -589,7 +589,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 33E5194F232828860026EE4D /* AppInfo.xcconfig */;
 			buildSettings = {
-				AWIKI_APP_DISPLAY_NAME = "AWiki Me (Development)";
+				AWIKI_APP_DISPLAY_NAME = "AWikiMe (Development)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
@@ -723,7 +723,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 33E5194F232828860026EE4D /* AppInfo.xcconfig */;
 			buildSettings = {
-				AWIKI_APP_DISPLAY_NAME = "AWiki Me (Development)";
+				AWIKI_APP_DISPLAY_NAME = "AWikiMe (Development)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
@@ -747,7 +747,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 33E5194F232828860026EE4D /* AppInfo.xcconfig */;
 			buildSettings = {
-				AWIKI_APP_DISPLAY_NAME = "AWiki Me";
+				AWIKI_APP_DISPLAY_NAME = AWikiMe;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/tenant/app_tenant.dart';
 import '../data/tenant/app_tenant_store.dart';
@@ -234,7 +235,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         final runtime = _runtime ?? snapshot.data;
         if (runtime == null) {
           if (snapshot.hasError) {
-            return _TenantBootstrapErrorApp(error: snapshot.error);
+            return buildTenantBootstrapErrorApp(snapshot.error);
           }
           return const _TenantBootstrapLoadingApp();
         }
@@ -266,6 +267,8 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
     return CupertinoApp(
       debugShowCheckedModeBanner: false,
       theme: AwikiMeTheme.cupertinoTheme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: CupertinoPageScaffold(
         backgroundColor: AwikiMePalette.ivory,
         child: AwikiAdaptiveScaffold(
@@ -276,7 +279,7 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 const Text(
-                  'AWiki failed to start.',
+                  'AWikiMe failed to start.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AwikiMePalette.actionInk,
@@ -306,6 +309,10 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
     );
   }
 }
+
+@visibleForTesting
+Widget buildTenantBootstrapErrorApp(Object? error) =>
+    _TenantBootstrapErrorApp(error: error);
 
 Future<T> openTenantRuntimeAfterDispose<T>({
   required T? previous,
