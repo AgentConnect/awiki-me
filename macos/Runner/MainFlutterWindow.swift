@@ -4,13 +4,31 @@ import Security
 import UniformTypeIdentifiers
 
 enum ScopeSecretKeychainPresentation {
+  enum ApplicationChannel {
+    case production
+    case development
+  }
+
+  static func applicationChannel(for bundleIdentifier: String?) -> ApplicationChannel? {
+    guard let bundleIdentifier else { return nil }
+    if bundleIdentifier == "ai.awiki.awikime" {
+      return .production
+    }
+    if bundleIdentifier == "ai.awiki.awikime.dev"
+      || bundleIdentifier.hasPrefix("ai.awiki.awikime.dev.")
+    {
+      return .development
+    }
+    return nil
+  }
+
   static func applicationLabel(for bundleIdentifier: String?) -> String? {
-    switch bundleIdentifier {
-    case "ai.awiki.awikime":
+    switch applicationChannel(for: bundleIdentifier) {
+    case .production:
       return "AWiki Me secure storage"
-    case "ai.awiki.awikime.dev":
+    case .development:
       return "AWiki Me secure storage (Development)"
-    default:
+    case nil:
       return nil
     }
   }
@@ -284,12 +302,14 @@ class MainFlutterWindow: NSWindow {
   }
 
   private func isScopeServiceAllowedForCurrentApplication(_ service: String) -> Bool {
-    switch Bundle.main.bundleIdentifier {
-    case "ai.awiki.awikime":
+    switch ScopeSecretKeychainPresentation.applicationChannel(
+      for: Bundle.main.bundleIdentifier
+    ) {
+    case .production:
       return service == "ai.awiki.awikime.scope-secrets"
-    case "ai.awiki.awikime.dev":
+    case .development:
       return service == "ai.awiki.awikime.dev.scope-secrets"
-    default:
+    case nil:
       return false
     }
   }

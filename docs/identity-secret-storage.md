@@ -45,7 +45,7 @@ mismatch、unknown schema、wrong root、metadata/context mismatch 全部 fail c
 ## 3. 平台与宿主隔离
 
 - macOS/iOS/Android production application identity：`ai.awiki.awikime`；
-- debug/profile：`ai.awiki.awikime.dev`；
+- debug/profile：`ai.awiki.awikime.dev` 或受控的 `ai.awiki.awikime.dev.<suffix>`；
 - production service：`ai.awiki.awikime.scope-secrets`；
 - development service：`ai.awiki.awikime.dev.scope-secrets`；
 - account：`scope/<canonical-uuid-v4>`；

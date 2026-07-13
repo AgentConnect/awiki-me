@@ -67,6 +67,12 @@ macos/.symlinks/
 macos/Runner.xcworkspace/xcuserdata/
 macos/Runner.xcodeproj/xcuserdata/
 macos/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+macos/Runner/Configs/LocalSigning.xcconfig
+
+# Local Apple signing configuration and transferable private-key bundles
+scripts/package_app.local.config
+*.p12
+*.pfx
 
 # Web and desktop transient outputs
 web/.dart_tool/

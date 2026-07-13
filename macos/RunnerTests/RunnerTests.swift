@@ -1,7 +1,7 @@
 import Cocoa
 import FlutterMacOS
 import XCTest
-@testable import AWiki_Me
+@testable import AWikiMe
 
 class RunnerTests: XCTestCase {
 
@@ -13,6 +13,15 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(
       ScopeSecretKeychainPresentation.applicationLabel(for: "ai.awiki.awikime.dev"),
       "AWiki Me secure storage (Development)"
+    )
+    XCTAssertEqual(
+      ScopeSecretKeychainPresentation.applicationLabel(
+        for: "ai.awiki.awikime.dev.alice"
+      ),
+      "AWiki Me secure storage (Development)"
+    )
+    XCTAssertNil(
+      ScopeSecretKeychainPresentation.applicationLabel(for: "ai.awiki.awikime.developer")
     )
     XCTAssertNil(
       ScopeSecretKeychainPresentation.applicationLabel(for: "untrusted.bundle")

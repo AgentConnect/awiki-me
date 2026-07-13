@@ -4,17 +4,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_PATH="$SCRIPT_DIR/package_app.config"
+LOCAL_CONFIG_PATH="$SCRIPT_DIR/package_app.local.config"
+SIGNING_LIB_PATH="$SCRIPT_DIR/lib/macos_signing.sh"
 cd "$ROOT_DIR"
 
-PACKAGE_APP_DISPLAY_NAME="AWiki Me"
+PACKAGE_APP_DISPLAY_NAME="AWikiMe"
 PACKAGE_ANDROID_APP_ID="ai.awiki.awikime"
-PACKAGE_MACOS_BUNDLE_ID="ai.awiki.awikiMe"
+PACKAGE_MACOS_BUNDLE_ID="ai.awiki.awikime"
 PACKAGE_FLUTTER_BIN="flutter"
 PACKAGE_SDK_REPO_DIR="../awiki-cli-rs2"
 PACKAGE_ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
 PACKAGE_ANDROID_BUILD_MODE="release"
-PACKAGE_MACOS_BUILD_MODE="profile"
-XCODE_CONFIGURATION="Profile"
+PACKAGE_MACOS_BUILD_MODE="release"
+XCODE_CONFIGURATION="Release"
 DIST_ROOT="$ROOT_DIR/dist"
 ANDROID_PLUGIN_REGISTRANT="$ROOT_DIR/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java"
 ANDROID_PLUGIN_REGISTRANT_BACKUP=""
@@ -63,6 +65,13 @@ fi
 [[ -f "$CONFIG_PATH" ]] || fail "missing config file: $CONFIG_PATH"
 # shellcheck source=scripts/package_app.config
 source "$CONFIG_PATH"
+if [[ -f "$LOCAL_CONFIG_PATH" ]]; then
+  # shellcheck source=scripts/package_app.local.config
+  source "$LOCAL_CONFIG_PATH"
+fi
+[[ -f "$SIGNING_LIB_PATH" ]] || fail "missing signing library: $SIGNING_LIB_PATH"
+# shellcheck source=scripts/lib/macos_signing.sh
+source "$SIGNING_LIB_PATH"
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
@@ -221,7 +230,9 @@ for required_name in \
   PACKAGE_RELEASE_DOMAIN \
   PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
-  PACKAGE_VERSION_BUMP; do
+  PACKAGE_VERSION_BUMP \
+  AWIKI_MACOS_SIGNING_IDENTITY \
+  AWIKI_MACOS_DEVELOPMENT_TEAM; do
   require_config_var "$required_name"
 done
 
@@ -236,7 +247,9 @@ for value_name in \
   PACKAGE_DOWNLOAD_PAGE_URL \
   PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
-  PACKAGE_VERSION_BUMP; do
+  PACKAGE_VERSION_BUMP \
+  AWIKI_MACOS_SIGNING_IDENTITY \
+  AWIKI_MACOS_DEVELOPMENT_TEAM; do
   if [[ "${!value_name+x}" ]]; then
     validate_no_newline "$value_name" "${!value_name}"
   fi
@@ -904,11 +917,18 @@ build_macos_arch() {
     -destination 'platform=macOS' \
     ARCHS="$arch" \
     ONLY_ACTIVE_ARCH=NO \
+    CODE_SIGN_STYLE=Manual \
+    CODE_SIGN_IDENTITY="$AWIKI_MACOS_SIGNING_FINGERPRINT" \
+    DEVELOPMENT_TEAM="$AWIKI_MACOS_DEVELOPMENT_TEAM" \
     FLUTTER_BUILD_NAME="$VERSION_NAME" \
     FLUTTER_BUILD_NUMBER="$BUILD_NUMBER" \
     build
 
   verify_macos_app "$app" "$arch"
+  awiki_verify_macos_app_signature \
+    "$app" \
+    "$AWIKI_MACOS_DEVELOPMENT_TEAM" \
+    "$PACKAGE_MACOS_BUNDLE_ID" || fail "macOS trial-release signature verification failed"
   create_dmg "$app" "$arch_label" "$output_dmg"
 }
 
@@ -1054,10 +1074,19 @@ require_cmd sed
 require_cmd "$PACKAGE_FLUTTER_BIN"
 require_cmd shasum
 if needs_macos; then
+  require_cmd codesign
   require_cmd hdiutil
   require_cmd lipo
+  require_cmd security
   require_cmd xcodebuild
   require_cmd /usr/libexec/PlistBuddy
+  require_non_empty_config_var AWIKI_MACOS_SIGNING_IDENTITY
+  require_non_empty_config_var AWIKI_MACOS_DEVELOPMENT_TEAM
+  [[ "$AWIKI_MACOS_DEVELOPMENT_TEAM" =~ ^[A-Z0-9]{10}$ ]] ||
+    fail "AWIKI_MACOS_DEVELOPMENT_TEAM must be a 10-character Team ID"
+  AWIKI_MACOS_SIGNING_FINGERPRINT="$(
+    awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY"
+  )" || fail "macOS trial-release signing identity is unavailable"
 fi
 
 CURRENT_VERSION="$(read_pubspec_version)"
@@ -1073,6 +1102,9 @@ fi
 check_source_identity
 
 log "config:          $CONFIG_PATH"
+if [[ -f "$LOCAL_CONFIG_PATH" ]]; then
+  log "local config:    $LOCAL_CONFIG_PATH"
+fi
 log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
 log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
 log "release domain:  $PACKAGE_RELEASE_DOMAIN"
@@ -1083,6 +1115,10 @@ log "current version: $CURRENT_VERSION"
 log "next version:    $NEXT_VERSION"
 log "dist root:       $DIST_ROOT"
 log "SDK repo:        $SDK_REPO_DIR"
+if needs_macos; then
+  log "macOS signer:    $AWIKI_MACOS_SIGNING_IDENTITY"
+  log "macOS Team ID:   $AWIKI_MACOS_DEVELOPMENT_TEAM"
+fi
 log "targets:"
 for target in ${PACKAGE_TARGET_LIST[@]+"${PACKAGE_TARGET_LIST[@]}"}; do
   log "  - $(target_description "$target")"

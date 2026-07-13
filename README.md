@@ -237,12 +237,24 @@ PACKAGE_TARGETS="android-arm64"                        # Android only
 PACKAGE_TARGETS="macos-arm64,macos-x64"                # macOS only
 ```
 
+macOS trial packages require one stable, non-ad-hoc signing identity. Import the
+certificate and private key into the Keychain, then copy
+`scripts/package_app.local.config.example` to the Git-ignored
+`scripts/package_app.local.config` and set the identity and Team ID. `.p12` and
+`.pfx` bundles are transfer/backup artifacts and must not live in the repository.
+Regular developers do not need the release identity: shared Debug builds default
+to ad-hoc signing, with an optional Git-ignored
+`macos/Runner/Configs/LocalSigning.xcconfig` for a developer's own stable TCC
+identity. See [`docs/macos-signing.md`](docs/macos-signing.md).
+
 The script uses `PACKAGE_RELEASE_DOMAIN` only for release artifact metadata: package download URLs, the generated update manifest location, and the download page. It does not inject backend base URL, DID host, state namespace, or update-check endpoint into the app; those are controlled by the app runtime and in-app tenant registry after launch.
 
 Packaging behavior:
 
 - Android arm64: Flutter release APK, signed through `android/key.properties` for internal distribution.
-- macOS arm64 / x64: profile DMG.
+- macOS arm64 / x64: release DMG signed by the fixed Team ID; packaging fails
+  before release if the Keychain identity is unavailable or the resulting app
+  is ad-hoc, has the wrong Bundle ID, or has the wrong Team ID.
 - Native SDK artifacts are rebuilt only for the selected targets.
 - Android release packaging validates the production plugin registrant and blocks dev-only plugins such as `integration_test` from shipping.
 - If exactly one Android emulator is connected, the script installs the APK, clears app data, and launches a startup smoke test by default.
@@ -265,9 +277,9 @@ open macos/Runner.xcworkspace
 
 Open `Runner.xcworkspace`, not `Runner.xcodeproj`. If Xcode reports `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`, the generated `macos/Pods` support files are missing or CocoaPods is not on `PATH`; rerun the bootstrap script.
 
-macOS debug/profile builds use the separate `ai.awiki.awikime.dev` application identity and development Keychain service; Release uses `ai.awiki.awikime` and `ai.awiki.awikime.scope-secrets`. Each scope has one versioned envelope at account `scope/<uuid>`. Runtime only reads an existing envelope; only explicit scope provisioning may create it. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
+macOS Debug/Profile builds use the separate `ai.awiki.awikime.dev` application identity and development Keychain service. User trial packages and future formal packages both use Release, `ai.awiki.awikime`, and `ai.awiki.awikime.scope-secrets`. Each scope has one versioned envelope at account `scope/<uuid>`. Runtime only reads an existing envelope; only explicit scope provisioning may create it. See [docs/identity-secret-storage.md](docs/identity-secret-storage.md).
 
-The Debug target is signed with the repository's Apple Development team instead of an ad-hoc CDHash identity. This keeps the macOS Screen Recording TCC identity stable across rebuilds, so interactive screenshots do not request permission after every binary change or silently capture only the desktop. Debug is displayed as `AWikiMe (Development)` in macOS privacy settings so it cannot be confused with an installed Release `AWikiMe`; grant Screen Recording to the Development entry. After moving from an older ad-hoc build, reset `ScreenCapture` once, launch the newly signed App, grant access, and restart the App.
+Shared Debug defaults to ad-hoc signing so every developer can build. Developers who need a stable macOS Screen Recording TCC identity across rebuilds configure their own Apple Development identity, Team ID, and development Bundle ID through the Git-ignored `LocalSigning.xcconfig`. Debug is displayed as `AWikiMe (Development)` in macOS privacy settings so it cannot be confused with an installed Release `AWikiMe`. Reauthorize `ScreenCapture` after changing the signing identity or development Bundle ID. See [docs/macos-signing.md](docs/macos-signing.md).
 
 After changing macOS signing, entitlements, or secure-storage options, run:
 

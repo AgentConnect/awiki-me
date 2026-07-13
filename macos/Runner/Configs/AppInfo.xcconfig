@@ -14,7 +14,7 @@
 PRODUCT_NAME = AWikiMe
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikiMe
+PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime
 
 // Fallback CocoaPods paths for direct Xcode builds.
 //

@@ -6,6 +6,9 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT_DIR"
 
+# shellcheck source=scripts/lib/macos_signing.sh
+source "$ROOT_DIR/scripts/lib/macos_signing.sh"
+
 [[ "$(uname -s)" == "Darwin" ]] || {
   echo "production_scope_restart_gate_failed: macOS required" >&2
   exit 2
@@ -14,7 +17,9 @@ cd "$ROOT_DIR"
 : "${AWIKI_MACOS_SIGNING_IDENTITY:?set AWIKI_MACOS_SIGNING_IDENTITY to a stable codesigning identity}"
 : "${AWIKI_MACOS_DEVELOPMENT_TEAM:?set AWIKI_MACOS_DEVELOPMENT_TEAM to the matching Team ID}"
 
-security find-identity -v -p codesigning | grep -Fq "\"$AWIKI_MACOS_SIGNING_IDENTITY\"" || {
+signing_fingerprint="$(
+  awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY"
+)" || {
   echo "production_scope_restart_gate_failed: signing identity unavailable" >&2
   exit 2
 }
@@ -49,12 +54,10 @@ find_release_app() {
 
 verify_signature() {
   local app=$1
-  codesign --verify --deep --strict "$app"
-  local details
-  details=$(codesign -dvvv "$app" 2>&1)
-  grep -Fq "Identifier=ai.awiki.awikime" <<<"$details"
-  grep -Fq "TeamIdentifier=$AWIKI_MACOS_DEVELOPMENT_TEAM" <<<"$details"
-  ! grep -Fq "Signature=adhoc" <<<"$details"
+  awiki_verify_macos_app_signature \
+    "$app" \
+    "$AWIKI_MACOS_DEVELOPMENT_TEAM" \
+    "ai.awiki.awikime"
 }
 
 run_phase() {
@@ -72,7 +75,7 @@ run_phase() {
     exit 2
   }
   codesign --force --deep --options runtime \
-    --sign "$AWIKI_MACOS_SIGNING_IDENTITY" "$app_path"
+    --sign "$signing_fingerprint" "$app_path"
   verify_signature "$app_path"
   local executable
   executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' \

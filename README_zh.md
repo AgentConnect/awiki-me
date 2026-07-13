@@ -221,12 +221,20 @@ PACKAGE_TARGETS="android-arm64"                        # 只打 Android
 PACKAGE_TARGETS="macos-arm64,macos-x64"                # 只打 macOS
 ```
 
+macOS 试用包必须使用固定的非 ad-hoc 签名身份。先把证书和私钥导入 Keychain，再复制
+`scripts/package_app.local.config.example` 为 Git 忽略的
+`scripts/package_app.local.config`，填写 identity 和 Team ID。`.p12/.pfx` 只用于安全
+转移和备份，不能放进仓库。普通开发者不需要发布证书：共享 Debug 默认 ad-hoc；需要稳定
+录屏权限时再通过 Git 忽略的 `macos/Runner/Configs/LocalSigning.xcconfig` 配置自己的
+本地签名。完整说明见 [`docs/macos-signing.md`](docs/macos-signing.md)。
+
 脚本只用 `PACKAGE_RELEASE_DOMAIN` 生成发布产物元数据：安装包下载地址、生成后的更新清单地址和下载页。它不会把后端地址、DID Host、本地状态命名空间或更新检查地址注入到 App；这些由 App runtime 和启动后的租户注册表控制。
 
 打包行为：
 
 - Android arm64：Flutter release APK；读取 `android/key.properties` 中的内部分发签名。
-- macOS arm64 / x64：profile DMG。
+- macOS arm64 / x64：固定 Team ID 签名的 release DMG；缺少有效 Keychain identity、
+  使用 ad-hoc、Bundle ID 或 Team ID 不匹配时立即失败。
 - 只为本次选择的目标重建 native SDK artifacts。
 - Android release 打包会校验生产插件 registrant，并阻止 `integration_test` 等 dev-only 插件进入用户包。
 - 当且仅当检测到一个 Android 模拟器时，默认安装 APK、清数据并启动做 startup smoke。
@@ -249,9 +257,9 @@ open macos/Runner.xcworkspace
 
 请打开 `Runner.xcworkspace`，不要直接打开 `Runner.xcodeproj`。如果 Xcode 报告 `Unable to load contents of file list: '/Target Support Files/Pods-Runner/...'`，通常是 `macos/Pods` 生成文件缺失或 CocoaPods 不在 `PATH`，重新执行 bootstrap 即可。
 
-macOS debug/profile 使用独立的 `ai.awiki.awikime.dev` 应用身份和开发 Keychain service；Release 使用 `ai.awiki.awikime` 与 `ai.awiki.awikime.scope-secrets`。每个 scope 在 `scope/<uuid>` account 下只有一个版本化 envelope；runtime 只能读取已有 envelope，只有显式 scope provisioning 可以创建。具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
+macOS Debug/Profile 使用独立的 `ai.awiki.awikime.dev` 应用身份和开发 Keychain service；给用户的试用包与未来正式包都使用 Release、`ai.awiki.awikime` 和 `ai.awiki.awikime.scope-secrets`。每个 scope 在 `scope/<uuid>` account 下只有一个版本化 envelope；runtime 只能读取已有 envelope，只有显式 scope provisioning 可以创建。具体边界见 [docs/identity-secret-storage.md](docs/identity-secret-storage.md)。
 
-Debug target 使用仓库配置的 Apple Development Team 签名，不再使用随二进制变化的 ad-hoc CDHash 身份。这样 macOS“录屏”TCC 权限可以跨重新编译稳定复用，避免每次截图都重新授权或只能捕获桌面。Debug 在 macOS 隐私设置中显示为 `AWikiMe (Development)`，不会再与已安装的 Release `AWikiMe` 混淆；录屏权限必须授予 Development 项。从旧 ad-hoc 构建切换后，需要重置一次 `ScreenCapture` 权限，启动新签名 App、允许访问并重启 App。
+共享 Debug 默认使用 ad-hoc，确保所有开发者都能直接构建；需要跨重新编译稳定复用 macOS 录屏 TCC 权限时，开发者通过 Git 忽略的 `LocalSigning.xcconfig` 配置自己的 Apple Development identity、Team ID 和开发 Bundle ID。Debug 在 macOS 隐私设置中显示为 `AWikiMe (Development)`，不会与已安装的 Release `AWikiMe` 混淆。签名或开发 Bundle ID 变化后，需要对新身份重新授权 `ScreenCapture`。完整签名流程见 [docs/macos-signing.md](docs/macos-signing.md)。
 
 修改 macOS 签名、entitlements 或 secure-storage 选项后，至少运行：
 

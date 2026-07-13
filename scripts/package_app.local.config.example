@@ -1,0 +1,11 @@
+# Local/CI macOS trial-release signing configuration.
+#
+# Copy this file to package_app.local.config, or provide the same variables as
+# CI secrets. The copied file is Git-ignored. The certificate and private key
+# must already be imported into a Keychain; never store .p12/.pfx files here.
+
+# Full identity name from: security find-identity -v -p codesigning
+AWIKI_MACOS_SIGNING_IDENTITY="Apple Development: REPLACE_WITH_CERTIFICATE_NAME"
+
+# The 10-character Team ID shown by codesign -dvvv on a signed app.
+AWIKI_MACOS_DEVELOPMENT_TEAM="REPLACE_ME"

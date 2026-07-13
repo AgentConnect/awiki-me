@@ -100,24 +100,28 @@ dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
 `tests/unit/attachment_picker_service_test.dart`；真实 App + CLI 附件互通仍由
 `dart run tests/e2e/runner.dart --case attachment` 或 `--case full` 验证。
 
-macOS 录屏权限绑定代码签名 designated requirement，而不只是 bundle ID。Debug App
-必须由 `DT9HA3J8KE` Team 的 Apple Development identity 签名；ad-hoc 签名会把 CDHash
-写进 requirement，二进制每次变化都会让 TCC 把它视为新的调用方，并在未授权时只返回
-桌面画面。Debug 的系统显示名必须是 `AWikiMe (Development)`，避免与已安装的
-Release `AWikiMe` 在“屏幕与系统音频录制”列表中同名，导致用户将权限授予错误的
-bundle ID。由旧构建切换时执行一次：
+macOS 录屏权限绑定代码签名 designated requirement，而不只是 bundle ID。共享 Debug
+配置默认使用 ad-hoc，使没有共享证书的开发者也能直接构建；ad-hoc 会把 CDHash 写进
+requirement，二进制变化后 TCC 可能把它视为新的调用方。需要稳定录屏权限的开发者应复制
+`macos/Runner/Configs/LocalSigning.xcconfig.example` 为 Git 忽略的
+`LocalSigning.xcconfig`，并填写自己 Keychain 中可用的 Apple Development identity、
+Team ID 和开发者专用 Bundle ID。任何具体 Team ID 都不得写入共享 Debug 配置。
+
+Debug 的系统显示名必须是 `AWikiMe (Development)`，避免与已安装的 Release
+`AWikiMe` 在“屏幕与系统音频录制”列表中同名，导致用户将权限授予错误的 bundle ID。
+签名或开发 Bundle ID 变化时，对实际 Bundle ID 执行一次：
 
 ```bash
-tccutil reset ScreenCapture ai.awiki.awikime.dev
+tccutil reset ScreenCapture <developer-bundle-id>
 open "build/macos/Build/Products/Debug/AWikiMe.app"
 ```
 
 系统设置中必须在上方的“录屏与系统录音”列表授权给
 `AWikiMe (Development)`，不能只加到下方的“仅系统录音”列表，也不能授权给旧的
 Release `AWikiMe`。允许后必须完全退出
-并重新启动 App。验证时同时检查 `codesign -dvvv` 中不存在
-`Signature=adhoc`、`TeamIdentifier=DT9HA3J8KE`，并检查 `codesign -dr -` 的 requirement
-由证书和 identifier 构成而不是 `cdhash`。截图服务还必须先调用 native preflight；权限
+并重新启动 App。启用本地稳定签名时，验证 `codesign -dvvv` 中不存在
+`Signature=adhoc`、`TeamIdentifier` 与本地配置一致，并检查 `codesign -dr -` 的
+requirement 由证书和 identifier 构成而不是 `cdhash`。截图服务还必须先调用 native preflight；权限
 未生效时单进程只请求一次授权，并且不得启动 `/usr/sbin/screencapture` 或接收只有桌面的
 图片。
 
@@ -354,7 +358,10 @@ scripts/run_macos_production_scope_restart_gate.sh
 
 The script never prints the Keychain value and deletes its run-unique production
 item on success or best-effort failure cleanup. An ad-hoc signature or mismatched
-Team ID fails the gate.
+Team ID fails the gate. Trial-package signing follows the same contract through
+`scripts/package_app.local.config` or CI environment variables. See
+`docs/macos-signing.md`; certificate bundles and private keys must never be
+stored in the repository.
 
 Unit coverage lives in:
 

@@ -1,2 +1,12 @@
 #include "../../Flutter/Flutter-Debug.xcconfig"
 #include "Warnings.xcconfig"
+
+// Portable defaults: every developer can build without a shared certificate.
+AWIKI_MACOS_CODE_SIGN_IDENTITY = -
+AWIKI_MACOS_CODE_SIGN_STYLE = Manual
+AWIKI_MACOS_DEVELOPMENT_TEAM =
+AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.awikime.dev
+
+// Copy LocalSigning.xcconfig.example to LocalSigning.xcconfig to opt into a
+// stable, machine-local Apple Development identity for TCC continuity.
+#include? "LocalSigning.xcconfig"

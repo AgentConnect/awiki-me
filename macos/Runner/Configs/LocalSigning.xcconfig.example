@@ -1,0 +1,10 @@
+// Optional developer-local signing override.
+//
+// Copy this file to LocalSigning.xcconfig. The copied file is Git-ignored.
+// Install the matching certificate and private key in the macOS Keychain;
+// never place a .p12 or .pfx file in this repository.
+
+AWIKI_MACOS_CODE_SIGN_IDENTITY = Apple Development
+AWIKI_MACOS_CODE_SIGN_STYLE = Automatic
+AWIKI_MACOS_DEVELOPMENT_TEAM = REPLACE_WITH_TEAM_ID
+AWIKI_MACOS_DEV_BUNDLE_ID = ai.awiki.awikime.dev.REPLACE_WITH_UNIQUE_SUFFIX

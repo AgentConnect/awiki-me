@@ -12,7 +12,7 @@ Keychain bridge。长期 schema 与生命周期仍以
 | Build channel | Application identity | Provider locator |
 |---|---|---|
 | production/release | `ai.awiki.awikime` | service `ai.awiki.awikime.scope-secrets` |
-| development/profile | `ai.awiki.awikime.dev` | service `ai.awiki.awikime.dev.scope-secrets` |
+| development/profile | `ai.awiki.awikime.dev` 或 `ai.awiki.awikime.dev.<suffix>` | service `ai.awiki.awikime.dev.scope-secrets` |
 | E2E | 显式测试 state root | private file provider，不访问平台 item |
 
 macOS Keychain item 使用不参与定位的友好显示标签：production/release 为
