@@ -141,7 +141,7 @@ dart run tests/e2e/runner.dart --case smoke
 
 ## 运行环境配置
 
-租户配置在 App 内管理，不再通过 Flutter `--dart-define` 传入服务地址。登录页右下角有一个低强调的租户切换入口。每个租户保存：
+租户配置在 App 内管理，不再通过多组 Flutter 服务地址参数传入。登录页右下角有一个低强调的租户切换入口。每个租户保存：
 
 - 本地显示名称（1-40 个可见字符）
 - 后端地址
@@ -156,9 +156,24 @@ DID Host：awiki.ai
 Storage Scope：安装时生成的 UUID（不由域名派生）
 ```
 
+内置主租户提供一个统一的编译期域名覆盖参数。参数只接受小写 hostname，
+不传时仍默认使用 `awiki.ai`：
+
+```bash
+flutter build macos --debug \
+  --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.info
+```
+
+App 会从这一个值统一派生内置主租户的后端地址（`https://<domain>`）、DID
+Host、服务 DID、更新地址和 Daemon 下载地址。该参数只在创建全新租户注册表
+时生效，不会改写已有的 `tenant-registry.json`，也不会迁移已有 Storage Scope。
+
 每个租户配置拥有不同且不可变的 `storage_scope_id`。数据路径、平台 secret account、im-core workspace/device context 只由该 UUID 派生，租户名和后端地址不再是本地 locator。切换租户时会先完整释放旧 runtime，再打开新 scope。显示名称可以原位修改；DID Host 变化必须创建新的租户配置和 scope；已有本地数据时，后端地址也不能在缺少稳定 realm 证明的情况下原位修改。
 
-Agent 和 Daemon 功能目前只支持默认 AWiki 主租户。其他租户进入智能体页面时会显示友好的暂不支持状态，并且不会调用 Agent 后端接口。
+Agent 和 Daemon 功能使用打包进 App 的精确租户域名白名单：`awiki.ai`、
+`awiki.info` 和 `anpclaw.com`。只有后端为白名单域名的 HTTPS 根地址，且 DID
+Host 与后端域名完全一致时才启用；其他租户保持 fail-closed，显示暂不支持状态，
+也不会调用 Agent 后端接口。
 
 测试 harness 仍可使用 `AWIKI_E2E`、`AWIKI_E2E_APP_STATE_ROOT` 等非租户构建参数。
 
@@ -208,6 +223,12 @@ live 产品用例只允许连接 `awiki.info`。
 
 ```bash
 scripts/package_app.sh
+```
+
+如需临时打一个使用其他主租户域名的安装包：
+
+```bash
+scripts/package_app.sh --primary-tenant-domain awiki.info
 ```
 
 配置文件：[`scripts/package_app.config`](scripts/package_app.config)。日常打包主要改 `PACKAGE_RELEASE_DOMAIN`，需要选择平台时改 `PACKAGE_TARGETS`：

@@ -161,7 +161,6 @@ class AppBootstrap {
         AwikiEnvironmentConfig(
           baseUrl: registeredTenant.backendBaseUrl,
           didDomain: registeredTenant.didHost,
-          agentImEnabled: registeredTenant.isPrimaryTenant,
         );
     final preferenceStorage = await AwikiPerformanceLogger.async(
       'bootstrap.preference_store',

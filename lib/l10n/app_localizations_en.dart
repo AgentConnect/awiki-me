@@ -230,7 +230,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tenantPrimaryAgentNote =>
-      'Agent features are available only on the AWiki tenant.';
+      'Agent and Daemon features are available on approved AWiki realms.';
 
   @override
   String get tenantCreate => 'Add tenant configuration';
@@ -1765,7 +1765,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentTenantUnsupportedSubtitle =>
-      'Switch back to the AWiki tenant on the login page to manage Daemons and Agents.';
+      'Switch to a tenant on an approved AWiki realm to manage Daemons and Agents.';
 
   @override
   String get agentErrorTenantUnsupported =>
@@ -2094,7 +2094,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get messageAgentPermissionSummaryDisabled =>
-      'Switch back to the AWiki tenant to configure Message Agent.';
+      'Switch to a tenant on an approved AWiki realm to configure Message Agent.';
 
   @override
   String get messageAgentPauseTitle => 'Pause message processing';

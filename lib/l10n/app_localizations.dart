@@ -509,7 +509,7 @@ abstract class AppLocalizations {
   /// No description provided for @tenantPrimaryAgentNote.
   ///
   /// In zh, this message translates to:
-  /// **'智能体功能目前只支持 AWiki 主租户。'**
+  /// **'Agent 和 Daemon 功能支持已批准的 AWiki 租户域名。'**
   String get tenantPrimaryAgentNote;
 
   /// No description provided for @tenantCreate.
@@ -3227,7 +3227,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentTenantUnsupportedSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'请回到登录页切换到 AWiki 主租户后，再管理 Daemon 和智能体。'**
+  /// **'请回到登录页切换到已批准 AWiki 域名的租户后，再管理 Daemon 和智能体。'**
   String get agentTenantUnsupportedSubtitle;
 
   /// No description provided for @agentErrorTenantUnsupported.
@@ -3821,7 +3821,7 @@ abstract class AppLocalizations {
   /// No description provided for @messageAgentPermissionSummaryDisabled.
   ///
   /// In zh, this message translates to:
-  /// **'切回 AWiki 主租户后可配置消息处理 Agent。'**
+  /// **'切换到已批准 AWiki 域名的租户后可配置消息处理 Agent。'**
   String get messageAgentPermissionSummaryDisabled;
 
   /// No description provided for @messageAgentPauseTitle.

@@ -58,9 +58,41 @@ on_exit() {
 
 trap 'on_exit $?' EXIT
 
-if [[ "$#" -ne 0 ]]; then
-  fail "package settings must be edited in scripts/package_app.config; this script accepts no arguments"
-fi
+usage() {
+  cat <<'USAGE'
+Usage: scripts/package_app.sh [--primary-tenant-domain DOMAIN]
+
+Options:
+  --primary-tenant-domain DOMAIN  Override the built-in AWiki tenant domain
+                                  for this build only.
+  -h, --help                      Show this help.
+USAGE
+}
+
+PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE=""
+PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE_SET=0
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --primary-tenant-domain)
+      [[ "$#" -ge 2 ]] || fail "--primary-tenant-domain requires a value"
+      PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE="$2"
+      PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE_SET=1
+      shift 2
+      ;;
+    --primary-tenant-domain=*)
+      PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE="${1#*=}"
+      PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE_SET=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "unknown argument: $1"
+      ;;
+  esac
+done
 
 [[ -f "$CONFIG_PATH" ]] || fail "missing config file: $CONFIG_PATH"
 # shellcheck source=scripts/package_app.config
@@ -68,6 +100,9 @@ source "$CONFIG_PATH"
 if [[ -f "$LOCAL_CONFIG_PATH" ]]; then
   # shellcheck source=scripts/package_app.local.config
   source "$LOCAL_CONFIG_PATH"
+fi
+if [[ "$PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE_SET" -eq 1 ]]; then
+  PACKAGE_PRIMARY_TENANT_DOMAIN="$PACKAGE_PRIMARY_TENANT_DOMAIN_OVERRIDE"
 fi
 [[ -f "$SIGNING_LIB_PATH" ]] || fail "missing signing library: $SIGNING_LIB_PATH"
 # shellcheck source=scripts/lib/macos_signing.sh
@@ -124,6 +159,14 @@ derive_release_base_url() {
       printf 'https://%s\n' "$domain"
       ;;
   esac
+}
+
+validate_primary_tenant_domain() {
+  local domain="$1"
+  if [[ "${#domain}" -gt 253 ]] ||
+    [[ ! "$domain" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$ ]]; then
+    fail "PACKAGE_PRIMARY_TENANT_DOMAIN must be a lowercase hostname without scheme, port, or path"
+  fi
 }
 
 resolve_repo_path() {
@@ -228,6 +271,7 @@ fi
 
 for required_name in \
   PACKAGE_RELEASE_DOMAIN \
+  PACKAGE_PRIMARY_TENANT_DOMAIN \
   PACKAGE_TARGETS \
   PACKAGE_ANDROID_STARTUP_SMOKE_TEST \
   PACKAGE_VERSION_BUMP \
@@ -237,12 +281,14 @@ for required_name in \
 done
 
 require_non_empty_config_var PACKAGE_RELEASE_DOMAIN
+require_non_empty_config_var PACKAGE_PRIMARY_TENANT_DOMAIN
 require_non_empty_config_var PACKAGE_TARGETS
 require_non_empty_config_var PACKAGE_ANDROID_STARTUP_SMOKE_TEST
 require_non_empty_config_var PACKAGE_VERSION_BUMP
 
 for value_name in \
   PACKAGE_RELEASE_DOMAIN \
+  PACKAGE_PRIMARY_TENANT_DOMAIN \
   PACKAGE_UPDATE_MANIFEST_PUBLIC_URL \
   PACKAGE_DOWNLOAD_PAGE_URL \
   PACKAGE_TARGETS \
@@ -254,6 +300,8 @@ for value_name in \
     validate_no_newline "$value_name" "${!value_name}"
   fi
 done
+
+validate_primary_tenant_domain "$PACKAGE_PRIMARY_TENANT_DOMAIN"
 
 parse_package_targets "$PACKAGE_TARGETS"
 
@@ -882,6 +930,7 @@ build_android_arm64() {
     --no-pub \
     --target-platform android-arm64 \
     --split-per-abi \
+    --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PACKAGE_PRIMARY_TENANT_DOMAIN" \
     --build-name "$VERSION_NAME" \
     --build-number "$BUILD_NUMBER"
 
@@ -907,6 +956,7 @@ build_macos_arch() {
     "--$PACKAGE_MACOS_BUILD_MODE" \
     --no-pub \
     --config-only \
+    --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PACKAGE_PRIMARY_TENANT_DOMAIN" \
     --build-name "$VERSION_NAME" \
     --build-number "$BUILD_NUMBER"
   xcodebuild \
@@ -1108,6 +1158,7 @@ fi
 log "android mode:    $PACKAGE_ANDROID_BUILD_MODE"
 log "macOS mode:      $PACKAGE_MACOS_BUILD_MODE"
 log "release domain:  $PACKAGE_RELEASE_DOMAIN"
+log "tenant domain:   $PACKAGE_PRIMARY_TENANT_DOMAIN"
 log "download base:   $PACKAGE_RELEASE_BASE_URL"
 log "manifest URL:    $PACKAGE_UPDATE_MANIFEST_PUBLIC_URL"
 log "download page:   $PACKAGE_DOWNLOAD_PAGE_URL"

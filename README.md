@@ -142,7 +142,7 @@ The `smoke` E2E case uses Flutter desktop shims and native im-core smoke. It doe
 
 ## Runtime Configuration
 
-Tenant configuration is managed inside the app, not through Flutter `--dart-define` service URL flags. The login page has a low-emphasis tenant switcher in the bottom-right corner. Each tenant stores:
+Tenant configuration is managed inside the app, not through separate Flutter service URL flags. The login page has a low-emphasis tenant switcher in the bottom-right corner. Each tenant stores:
 
 - local display name (1-40 visible characters)
 - backend base URL
@@ -157,9 +157,26 @@ DID host: awiki.ai
 storage scope: generated UUID (not derived from the domain)
 ```
 
+The built-in tenant domain has one compile-time override. It accepts a lowercase
+hostname only and keeps `awiki.ai` as the default:
+
+```bash
+flutter build macos --debug \
+  --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.info
+```
+
+The App derives the built-in backend URL (`https://<domain>`), DID host, service
+DID, update URL, and Daemon download URL from that single value. The override is
+used only when creating a fresh tenant registry; it does not rewrite an existing
+`tenant-registry.json` or move an existing Storage Scope.
+
 Every tenant profile owns a different immutable `storage_scope_id`. Paths, the platform-secret account, and the im-core workspace/device context derive only from that UUID; tenant names and backend URLs never act as local locators. Switching tenants fully disposes the old runtime before opening the new scope. Names can be changed in place. A DID-host change requires a new tenant profile and scope; a backend route cannot be changed after local data exists without a future verified realm-binding flow.
 
-Agent and Daemon features are currently supported only on the default AWiki tenant. Other tenants show a friendly unsupported state on the Agents page and do not call Agent backend APIs.
+Agent and Daemon features use an exact, bundled tenant-realm allowlist:
+`awiki.ai`, `awiki.info`, and `anpclaw.com`. A tenant is enabled only when its
+backend is the HTTPS origin for the allowlisted hostname and its DID host is the
+same hostname. All other tenants fail closed, show the unsupported state, and do
+not call Agent backend APIs.
 
 The app still supports non-tenant build flags such as `AWIKI_E2E` and `AWIKI_E2E_APP_STATE_ROOT` for test harnesses.
 
@@ -224,6 +241,12 @@ Entrypoint:
 
 ```bash
 scripts/package_app.sh
+```
+
+For a one-off package whose fresh built-in tenant uses another domain:
+
+```bash
+scripts/package_app.sh --primary-tenant-domain awiki.info
 ```
 
 Config file: [`scripts/package_app.config`](scripts/package_app.config). For normal packaging, edit `PACKAGE_RELEASE_DOMAIN` and, when needed, `PACKAGE_TARGETS`:

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/data/storage/scope_secret_repository.dart';
 import 'package:awiki_me/src/data/storage/scope_manifest.dart';
@@ -30,6 +31,8 @@ void main() {
     final layout = await store.layoutForScope(tenant.storageScopeId);
 
     expect(registry.revision, 1);
+    expect(tenant.backendBaseUrl, primaryTenantBaseUrl);
+    expect(tenant.didHost, primaryTenantDomain);
     expect(tenant.tenantProfileId.value, isNot(tenant.storageScopeId.value));
     expect(
       layout.scopeRoot,

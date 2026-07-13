@@ -219,7 +219,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantManagementSubtitle => '切换这个 App 使用的后端和 DID Host。';
 
   @override
-  String get tenantPrimaryAgentNote => '智能体功能目前只支持 AWiki 主租户。';
+  String get tenantPrimaryAgentNote => 'Agent 和 Daemon 功能支持已批准的 AWiki 租户域名。';
 
   @override
   String get tenantCreate => '添加租户配置';
@@ -1687,7 +1687,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentTenantUnsupportedSubtitle =>
-      '请回到登录页切换到 AWiki 主租户后，再管理 Daemon 和智能体。';
+      '请回到登录页切换到已批准 AWiki 域名的租户后，再管理 Daemon 和智能体。';
 
   @override
   String get agentErrorTenantUnsupported => '当前租户暂不支持智能体功能。';
@@ -1994,7 +1994,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get messageAgentPermissionSummaryDisabled =>
-      '切回 AWiki 主租户后可配置消息处理 Agent。';
+      '切换到已批准 AWiki 域名的租户后可配置消息处理 Agent。';
 
   @override
   String get messageAgentPauseTitle => '暂停处理消息';

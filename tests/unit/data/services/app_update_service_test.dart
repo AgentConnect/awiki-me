@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
 import 'package:awiki_me/src/data/services/app_update_service.dart';
 import 'package:awiki_me/src/data/services/platform_update_bridge.dart';
@@ -14,11 +15,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('default update URLs follow the default AWiki environment', () {
+    const baseUrl = primaryTenantBaseUrl;
     expect(
       kDefaultUpdateManifestUrl,
-      'https://awiki.ai/downloads/awiki-me/latest.json',
+      '$baseUrl/downloads/awiki-me/latest.json',
     );
-    expect(kDefaultReleasesUrl, 'https://awiki.ai/#download');
+    expect(kDefaultReleasesUrl, '$baseUrl/#download');
   });
 
   test('checkForUpdates fetches manifest and caches it', () async {

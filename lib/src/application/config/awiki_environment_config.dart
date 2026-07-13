@@ -1,3 +1,15 @@
+const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
+const String primaryTenantDomain = String.fromEnvironment(
+  primaryTenantDomainEnvironmentKey,
+  defaultValue: 'awiki.ai',
+);
+const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
+const Set<String> agentDaemonTenantDomainAllowlist = <String>{
+  'awiki.ai',
+  'anpclaw.com',
+  'awiki.info',
+};
+
 class AwikiEnvironmentConfig {
   AwikiEnvironmentConfig({
     String? baseUrl,
@@ -14,7 +26,7 @@ class AwikiEnvironmentConfig {
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl,
-      fallback: 'https://awiki.ai',
+      fallback: primaryTenantBaseUrl,
     );
     this.baseUrl = normalizedBase;
     this.userServiceUrl = _normalizeBaseUrl(
@@ -50,7 +62,12 @@ class AwikiEnvironmentConfig {
       releasesUrl,
       fallback: _joinUrl(normalizedBase, '/#download'),
     );
-    this.agentImEnabled = agentImEnabled ?? true;
+    this.agentImEnabled =
+        agentImEnabled ??
+        isAgentDaemonTenantRealmAllowed(
+          backendBaseUrl: normalizedBase,
+          didHost: this.didDomain,
+        );
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -70,6 +87,30 @@ class AwikiEnvironmentConfig {
   late final bool agentImEnabled;
 }
 
+bool isAgentDaemonTenantRealmAllowed({
+  required String backendBaseUrl,
+  required String didHost,
+}) {
+  final backend = Uri.tryParse(backendBaseUrl.trim());
+  if (backend == null ||
+      backend.scheme.toLowerCase() != 'https' ||
+      backend.host.isEmpty ||
+      backend.hasPort ||
+      backend.userInfo.isNotEmpty ||
+      (backend.path.isNotEmpty && backend.path != '/') ||
+      backend.hasQuery ||
+      backend.hasFragment) {
+    return false;
+  }
+  final backendHost = backend.host.toLowerCase();
+  final normalizedDidHost = didHost
+      .trim()
+      .replaceAll(RegExp(r'^\.+|\.+$'), '')
+      .toLowerCase();
+  return backendHost == normalizedDidHost &&
+      agentDaemonTenantDomainAllowlist.contains(backendHost);
+}
+
 String _normalizeBaseUrl(String? value, {required String fallback}) {
   final raw = _firstNonEmpty(value, fallback);
   return raw.replaceAll(RegExp(r'/+$'), '');
@@ -86,7 +127,7 @@ String _firstNonEmpty(String? value, String fallback) {
 String _hostFromUrl(String baseUrl) {
   final host = Uri.tryParse(baseUrl.trim())?.host.trim().toLowerCase();
   if (host == null || host.isEmpty) {
-    return 'awiki.ai';
+    return primaryTenantDomain;
   }
   return host;
 }
