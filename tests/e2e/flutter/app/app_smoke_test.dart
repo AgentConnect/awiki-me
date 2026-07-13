@@ -115,6 +115,8 @@ void main() {
         jwtToken: 'test-jwt',
       );
       final harness = createFakeAwikiMeAppHarness(session: session);
+      harness.gateway.directoryConversationIdsByQuery['smoke-peer.awiki.ai'] =
+          'dm:peer-scope:v1:smoke-peer';
       harness.gateway.publicProfilesByQuery['did:test:smoke-peer.awiki.ai'] =
           const UserProfile(
             did: 'did:test:smoke-peer.awiki.ai',
@@ -194,7 +196,8 @@ void main() {
         await _pumpSmokeFrame(tester);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
         expect(picker.screenshotCalls, 2);
-        expect(picker.lastScreenshotHideApp, isTrue);
+        // Shift must not hide the App; otherwise macOS captures only the desktop.
+        expect(picker.lastScreenshotHideApp, isFalse);
 
         harness.gateway.conversations = <ConversationSummary>[
           ConversationSummary(

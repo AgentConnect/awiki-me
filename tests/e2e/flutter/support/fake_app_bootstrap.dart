@@ -66,7 +66,7 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
     groupApplicationService: FakeGroupApplicationService(gateway),
     profileApplicationService: FakeProfileApplicationService(gateway),
     peerIdentityService: FakePeerIdentityService(),
-    directoryApplicationService: const FakeDirectoryApplicationService(),
+    directoryApplicationService: FakeDirectoryApplicationService(gateway),
     relationshipApplicationService: FakeRelationshipApplicationService(gateway),
     realtimeApplicationService: FakeRealtimeApplicationService(
       gateway: gateway,
@@ -107,7 +107,9 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
 }
 
 class FakeDirectoryApplicationService implements DirectoryApplicationService {
-  const FakeDirectoryApplicationService();
+  const FakeDirectoryApplicationService(this.gateway);
+
+  final FakeAwikiGateway gateway;
 
   @override
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
@@ -115,22 +117,26 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   ) async => const <PeerDisplayProfile>[];
 
   @override
-  Future<DirectoryPeerResolution> lookupHandle(String handle) async {
-    final normalized = handle.trim().toLowerCase();
-    return DirectoryPeerResolution(
-      input: handle,
-      did: 'did:test:$normalized',
-      handle: normalized,
-    );
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    return resolvePeer(handle);
   }
 
   @override
   Future<DirectoryPeerResolution> resolvePeer(String peer) async {
-    final normalized = peer.trim();
+    final normalized = peer.trim().toLowerCase();
+    final isDid = normalized.startsWith('did:');
+    final did = isDid ? normalized : 'did:test:$normalized';
+    final profile = gateway.publicProfilesByQuery[did];
     return DirectoryPeerResolution(
       input: peer,
-      did: normalized.startsWith('did:') ? normalized : 'did:test:$normalized',
-      handle: normalized.startsWith('did:') ? null : normalized,
+      did: did,
+      handle:
+          profile?.fullHandle ?? profile?.handle ?? (isDid ? null : normalized),
+      conversationId:
+          gateway.directoryConversationIdsByQuery[normalized] ??
+          gateway.directoryConversationIdsByQuery[did] ??
+          (isDid ? 'dm:$normalized' : 'dm:peer-scope:v1:$normalized'),
+      profile: profile,
     );
   }
 }
