@@ -240,7 +240,10 @@ Future<void> _verifyDirectTextRegression({
   );
   final retryFailureCode = messaging.lastConversationTextFailureCode;
   if (retryFailureCode != null) {
-    fail('Real retry transport failed with typed code "$retryFailureCode".');
+    fail(
+      'Real retry transport failed with typed code "$retryFailureCode": '
+      '${messaging.lastConversationTextFailureDetail}',
+    );
   }
   final retried = await _waitForUiMessage(
     robot: robot,

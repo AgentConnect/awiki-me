@@ -967,6 +967,7 @@ class _FailOnceMessagingService
   int delegatedConversationTextAttempts = 0;
   bool conversationTextAttemptPending = false;
   String? lastConversationTextFailureCode;
+  String? lastConversationTextFailureDetail;
   final Map<String, List<_PatchSink>> _patchSinks =
       <String, List<_PatchSink>>{};
   final Map<String, int> _patchVersions = <String, int>{};
@@ -1030,6 +1031,7 @@ class _FailOnceMessagingService
     delegatedConversationTextAttempts += 1;
     conversationTextAttemptPending = true;
     lastConversationTextFailureCode = null;
+    lastConversationTextFailureDetail = null;
     try {
       final sent = await _delegate.sendConversationText(
         conversation: conversation,
@@ -1046,6 +1048,7 @@ class _FailOnceMessagingService
       lastConversationTextFailureCode = error is core.AwikiImCoreException
           ? error.code
           : error.runtimeType.toString();
+      lastConversationTextFailureDetail = error.toString();
       rethrow;
     } finally {
       conversationTextAttemptPending = false;
