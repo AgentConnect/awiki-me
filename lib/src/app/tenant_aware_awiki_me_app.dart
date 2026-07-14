@@ -234,7 +234,10 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         final runtime = _runtime ?? snapshot.data;
         if (runtime == null) {
           if (snapshot.hasError) {
-            return buildTenantBootstrapErrorApp(snapshot.error);
+            return buildTenantBootstrapErrorApp(
+              snapshot.error,
+              onRetry: () => setState(_startInitialLoad),
+            );
           }
           return const _TenantBootstrapLoadingApp();
         }
@@ -256,9 +259,10 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
 }
 
 class _TenantBootstrapErrorApp extends StatelessWidget {
-  const _TenantBootstrapErrorApp({required this.error});
+  const _TenantBootstrapErrorApp({required this.error, this.onRetry});
 
   final Object? error;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -300,6 +304,13 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (onRetry != null) ...<Widget>[
+                  const SizedBox(height: 20),
+                  CupertinoButton.filled(
+                    onPressed: onRetry,
+                    child: const Text('Retry'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -310,8 +321,8 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
 }
 
 @visibleForTesting
-Widget buildTenantBootstrapErrorApp(Object? error) =>
-    _TenantBootstrapErrorApp(error: error);
+Widget buildTenantBootstrapErrorApp(Object? error, {VoidCallback? onRetry}) =>
+    _TenantBootstrapErrorApp(error: error, onRetry: onRetry);
 
 Future<T> openTenantRuntimeAfterDispose<T>({
   required T? previous,

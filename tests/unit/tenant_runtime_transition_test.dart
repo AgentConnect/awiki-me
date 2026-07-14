@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_use_of_visible_for_testing_member
+
 import 'dart:async';
 
 import 'package:awiki_me/src/app/tenant_aware_awiki_me_app.dart';
@@ -13,6 +15,24 @@ void main() {
 
     expect(find.text('AWikiMe failed to start.'), findsOneWidget);
     expect(find.textContaining('native bridge mismatch'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bootstrap error app exposes retry when provided', (
+    tester,
+  ) async {
+    var retryCount = 0;
+    await tester.pumpWidget(
+      buildTenantBootstrapErrorApp(
+        StateError('upgrade failed'),
+        onRetry: () => retryCount += 1,
+      ),
+    );
+
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+
+    expect(retryCount, 1);
     expect(tester.takeException(), isNull);
   });
 
