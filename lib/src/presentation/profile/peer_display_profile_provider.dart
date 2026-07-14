@@ -233,18 +233,38 @@ class PeerDisplayProfileController
     if (peerPersonaIdsByDid.isEmpty) {
       return;
     }
+    final byPersona = <String, PeerDisplayProfile>{
+      ...state.profilesByPersonaId,
+    };
+    final unresolvedByDid = <String, PeerDisplayProfile>{
+      ...state.unresolvedProfilesByDid,
+    };
     final routes = <String, String>{...state.personaIdByDid};
     for (final entry in peerPersonaIdsByDid.entries) {
       final did = entry.key.trim();
       final personaId = entry.value.trim();
       if (did.isNotEmpty && personaId.isNotEmpty) {
+        final existingPersonaId = routes[did];
+        if (existingPersonaId != null && existingPersonaId != personaId) {
+          continue;
+        }
         routes[did] = personaId;
+        final unresolved = unresolvedByDid.remove(did);
+        if (unresolved != null && !byPersona.containsKey(personaId)) {
+          byPersona[personaId] = PeerDisplayProfile(
+            did: did,
+            peerPersonaId: personaId,
+            displayName: unresolved.displayName,
+            handle: unresolved.handle,
+            avatarUri: unresolved.avatarUri,
+          );
+        }
       }
     }
     state = PeerDisplayProfileState(
       ownerDid: state.ownerDid,
-      profilesByPersonaId: state.profilesByPersonaId,
-      unresolvedProfilesByDid: state.unresolvedProfilesByDid,
+      profilesByPersonaId: byPersona,
+      unresolvedProfilesByDid: unresolvedByDid,
       personaIdByDid: routes,
       localNotesByPersonaId: state.localNotesByPersonaId,
     );

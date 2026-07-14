@@ -315,6 +315,11 @@ Peer 名称只由纯 `PeerDisplayNameResolver` 和 `peerDisplayNameProvider`
 与 cached Persona profile 完成后才发布首个内容帧，避免
 `Unknown/Handle -> 昵称` 闪烁。
 
+如果 DID-only profile 先于 verified Persona route 到达，后续 Core
+conversation/profile bundle 必须在发布会话行前把该投影迁入 Persona-keyed store。
+若 App 已记录的 DID→Persona route 与后到 route 冲突，App 不移动展示资料也不覆盖
+原 route；绑定冲突只能由 Core 的权威身份投影解析或诊断。
+
 ## 12. 不引入 Flutter MMKV 双缓存
 
 AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，也不引入 MMKV 作为 conversation snapshot 或 presentation truth。

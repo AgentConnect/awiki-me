@@ -163,6 +163,52 @@ void main() {
     expect(state.forDid('did:test:alice-new')?.displayName, 'Alice New');
   });
 
+  test('后到的 Persona 路由会接管同 DID 的未解析 profile', () async {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      profile: const UserProfile(
+        did: 'did:test:alice',
+        displayName: 'Alice cached first',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        fullHandle: 'alice.awiki.info',
+      ),
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).unresolvedProfilesByDid,
+      contains('did:test:alice'),
+    );
+
+    await controller.loadCached(
+      ownerDid: 'did:test:owner',
+      dids: const <String>['did:test:alice'],
+      peerPersonaIdsByDid: const <String, String>{
+        'did:test:alice': 'persona:alice',
+      },
+    );
+
+    final state = container.read(peerDisplayProfileProvider);
+    expect(state.unresolvedProfilesByDid, isEmpty);
+    expect(state.profilesByPersonaId, hasLength(1));
+    expect(
+      state
+          .forPeer(peerPersonaId: 'persona:alice', did: 'did:test:alice')
+          ?.displayName,
+      'Alice cached first',
+    );
+  });
+
   test('统一 View Provider 在所有 DID 路由上优先使用 Persona 本地备注', () async {
     final container = ProviderContainer(
       overrides: <Override>[
