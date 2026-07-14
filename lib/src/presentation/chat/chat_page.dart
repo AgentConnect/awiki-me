@@ -1101,7 +1101,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         ? _PeerInfoTarget(
             targetDid: targetDid,
             displayName: senderLabel,
-            avatarSeed: senderLabel,
+            peerPersonaId: message.senderPeerPersonaId,
           )
         : _PeerInfoTarget.fromConversation(conversation);
     return () => AppNavigator.showDialog<void>(
@@ -1843,11 +1843,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (targetDid == null || targetDid.isEmpty) {
       return null;
     }
-    final nickname = peerDisplayName(
-      ref.watch(peerDisplayProfileProvider),
-      peerPersonaId: conversation.peerPersonaId,
-      did: targetDid,
-      fallback: '',
+    final nickname = ref.watch(
+      peerDisplayNameProvider(
+        PeerDisplayNameRequest(
+          peerPersonaId: conversation.peerPersonaId,
+          did: targetDid,
+          nickname: conversation.displayName,
+          fullHandle: conversation.targetPeer,
+        ),
+      ),
     );
     return nickname.isEmpty ? null : nickname;
   }
@@ -2036,29 +2040,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   String _displayNameForMessage(BuildContext context, ChatMessage message) {
     final senderDid = message.senderDid.trim();
-    final cached = peerDisplayName(
-      ref.watch(peerDisplayProfileProvider),
-      peerPersonaId: message.senderPeerPersonaId,
-      did: senderDid,
-      fallback: '',
+    return ref.watch(
+      peerDisplayNameProvider(
+        PeerDisplayNameRequest(
+          peerPersonaId: message.senderPeerPersonaId,
+          did: senderDid,
+          senderNameSnapshot: message.senderName,
+          unknownLabel: context.l10n.chatUnknownUser,
+        ),
+      ),
     );
-    if (cached.isNotEmpty) {
-      return cached;
-    }
-    final senderName = message.senderName?.trim() ?? '';
-    if (senderName.isNotEmpty) {
-      if (!senderName.startsWith('did:')) {
-        return senderName;
-      }
-      return DidDisplayFormatter.compactDisplayName(
-        displayName: senderName,
-        fallbackDid: senderDid.isNotEmpty ? senderDid : senderName,
-      );
-    }
-    if (!senderDid.startsWith('did:')) {
-      return senderDid.isNotEmpty ? senderDid : context.l10n.chatUnknownUser;
-    }
-    return DidDisplayFormatter.compactDid(senderDid);
   }
 
   GroupSummary _groupSummaryForConversation(ConversationSummary conversation) {

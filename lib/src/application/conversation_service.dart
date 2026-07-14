@@ -931,7 +931,7 @@ ConversationSummary _applyOverlay(
     return item;
   }
   return item.copyWith(
-    displayName: overlay.customTitle ?? item.displayName,
+    peerLocalNote: item.isGroup ? null : overlay.customTitle,
     avatarSeed: overlay.avatarSeed ?? item.avatarSeed,
   );
 }

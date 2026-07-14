@@ -22,6 +22,61 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  test(
+    'conversation list state indexes canonical entities and order atomically',
+    () {
+      final first = _conversation(
+        conversationId: 'conv:first',
+        threadId: 'wire:first',
+        displayName: 'First',
+      );
+      final second = _conversation(
+        conversationId: 'conv:second',
+        threadId: 'wire:second',
+        displayName: 'Second',
+      );
+
+      final state = ConversationListState(
+        conversations: <ConversationSummary>[second, first],
+        version: 7,
+      );
+
+      expect(state.orderedIds, <String>['conv:second', 'conv:first']);
+      expect(state.entitiesById, <String, ConversationSummary>{
+        'conv:second': second,
+        'conv:first': first,
+      });
+      expect(state.conversations, <ConversationSummary>[second, first]);
+      expect(state.version, 7);
+    },
+  );
+
+  test('conversation list state rejects duplicate canonical ids', () {
+    final first = _conversation(
+      conversationId: 'conv:same',
+      threadId: 'wire:first',
+      displayName: 'First',
+    );
+    final second = _conversation(
+      conversationId: 'conv:same',
+      threadId: 'wire:second',
+      displayName: 'Second',
+    );
+
+    expect(
+      () => ConversationListState(
+        conversations: <ConversationSummary>[first, second],
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'duplicate_canonical_conversation_id',
+        ),
+      ),
+    );
+  });
+
   test('ensureLoaded hydrates once and reuses canonical state', () async {
     final conversation = _conversation(
       conversationId: 'conv:bob',
@@ -59,8 +114,11 @@ void main() {
     await container.read(conversationListProvider.notifier).ensureLoaded();
     await pumpEventQueue();
 
-    expect(container.read(conversationListProvider).conversations, isEmpty);
-    expect(container.read(conversationListProvider).isLoading, isFalse);
+    final state = container.read(conversationListProvider);
+    expect(state.conversations, isEmpty);
+    expect(state.isLoading, isFalse);
+    expect(state.loadState, ConversationListLoadState.error);
+    expect(state.errorCode, 'conversation_load_failed');
   });
 
   test(
@@ -1725,6 +1783,7 @@ void main() {
     expect(conversations, hasLength(1));
     expect(conversations.single.displayName, 'Bob');
     expect(conversations.single.unreadCount, 3);
+    expect(container.read(conversationListProvider).version, 1);
     expect(notifications.lastBadgeCount, 3);
     expect(service.watchCalls, 1);
   });
@@ -1782,6 +1841,7 @@ void main() {
       expect(container.read(conversationListProvider).conversations, [
         resetConversation,
       ]);
+      expect(container.read(conversationListProvider).version, 2);
       expect(service.repairCalls, 0);
     },
   );
@@ -1944,6 +2004,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(container.read(conversationListProvider).version, 1);
 
     final newerMessageAt = DateTime.now().toUtc().add(
       const Duration(minutes: 1),

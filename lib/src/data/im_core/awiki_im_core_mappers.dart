@@ -280,7 +280,6 @@ class AwikiImCoreMappers {
         fallbackThreadId: conversation.threadId,
       ),
       displayName:
-          overlay?.customTitle ??
           _nonEmpty(conversation.title) ??
           groupId ??
           targetPeer ??
@@ -302,6 +301,7 @@ class AwikiImCoreMappers {
       targetDid: targetDid,
       targetPeer: targetPeer,
       peerPersonaId: conversation.peerPersonaId,
+      peerLocalNote: isGroup ? null : overlay?.customTitle,
       canonicalGroupDid: conversation.canonicalGroupDid,
       groupId: groupId,
       avatarUri: null,
@@ -383,12 +383,7 @@ class AwikiImCoreMappers {
         groupId: groupId,
         fallbackThreadId: conversation.threadId,
       ),
-      displayName:
-          overlay?.customTitle ??
-          groupId ??
-          targetPeer ??
-          targetDid ??
-          conversation.threadId,
+      displayName: groupId ?? targetPeer ?? targetDid ?? conversation.threadId,
       lastMessagePreview: lastMessage == null
           ? ''
           : _snapshotMessagePreview(lastMessage),
@@ -405,6 +400,7 @@ class AwikiImCoreMappers {
       targetDid: targetDid,
       targetPeer: targetPeer,
       peerPersonaId: conversation.peerPersonaId,
+      peerLocalNote: isGroup ? null : overlay?.customTitle,
       canonicalGroupDid: conversation.canonicalGroupDid,
       groupId: groupId,
       avatarUri: null,

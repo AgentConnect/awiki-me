@@ -62,6 +62,13 @@ class _StaticConversationListController extends ConversationListController {
     ref.read(selectedConversationProvider.notifier).clearSelection();
   }
 
+  void showLoadError() {
+    state = ConversationListState(
+      loadState: ConversationListLoadState.error,
+      errorCode: 'conversation_load_failed',
+    );
+  }
+
   @override
   Future<void> refresh() async {}
 
@@ -121,6 +128,37 @@ void main() {
       sendState: MessageSendState.sent,
     ),
   ];
+
+  testWidgets('会话加载失败不会伪装成真实空列表', (tester) async {
+    late _StaticConversationListController controller;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: FakeAwikiGateway(),
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            controller = _StaticConversationListController(
+              ref,
+              const <ConversationSummary>[],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    controller.showLoadError();
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('conversation-list-load-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('conversation-list-load-retry')),
+      findsOneWidget,
+    );
+    expect(find.text('暂无会话'), findsNothing);
+  });
 
   testWidgets('最近会话显示未读 @ 我提示', (tester) async {
     final mentionConversation = ConversationSummary(

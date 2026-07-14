@@ -66,7 +66,8 @@ void main() {
         'thread-pinned',
         'thread-normal',
       ]);
-      expect(conversations.first.displayName, 'Pinned title');
+      expect(conversations.first.displayName, 'thread-pinned');
+      expect(conversations.first.peerLocalNote, 'Pinned title');
       expect(conversations.first.avatarSeed, 'seed-pinned');
       expect(core.listCount, 1);
     });
@@ -209,7 +210,8 @@ void main() {
         expect(core.snapshotCount, 1);
         expect(core.listCount, 0);
         expect(conversations, hasLength(1));
-        expect(conversations.single.displayName, 'Bob local title');
+        expect(conversations.single.displayName, 'Bob from snapshot');
+        expect(conversations.single.peerLocalNote, 'Bob local title');
         expect(conversations.single.avatarSeed, 'local-seed');
         expect(snapshotRow.displayName, 'Bob from snapshot');
         expect(snapshotRow.avatarSeed, isNull);
@@ -254,7 +256,8 @@ void main() {
         'thread-pinned',
         'thread-recent',
       ]);
-      expect(conversations.first.displayName, 'Pinned local');
+      expect(conversations.first.displayName, 'Pinned from snapshot');
+      expect(conversations.first.peerLocalNote, 'Pinned local');
       expect(pinnedRow.displayName, 'Pinned from snapshot');
     });
 
@@ -297,7 +300,8 @@ void main() {
         );
         final patch = await firstPatch.timeout(const Duration(seconds: 1));
         expect(patch.kind, ConversationListPatchKind.upsert);
-        expect(patch.item?.displayName, 'Patched local title');
+        expect(patch.item?.displayName, 'Patched core title');
+        expect(patch.item?.peerLocalNote, 'Patched local title');
 
         final repairPatchStream = service.watchConversationPatches(
           ownerDid: 'did:alice',
@@ -582,7 +586,8 @@ void main() {
           'thread-pinned',
           'thread-normal',
         ]);
-        expect(conversations.first.displayName, 'Pinned local title');
+        expect(conversations.first.displayName, 'thread-pinned');
+        expect(conversations.first.peerLocalNote, 'Pinned local title');
         expect(conversations.first.avatarSeed, 'pinned-seed');
       },
     );
@@ -653,7 +658,8 @@ void main() {
           'thread-pinned',
           'dm:alice:runtime',
         ]);
-        expect(enriched.first.displayName, '置顶会话');
+        expect(enriched.first.displayName, 'thread-pinned');
+        expect(enriched.first.peerLocalNote, '置顶会话');
         expect(enriched.last.displayName, '写作助手');
       },
     );
@@ -756,7 +762,8 @@ void main() {
       );
 
       expect(conversations, hasLength(1));
-      expect(conversations.single.displayName, 'Canonical title');
+      expect(conversations.single.displayName, 'dm:alice:old-did');
+      expect(conversations.single.peerLocalNote, 'Canonical title');
       expect(conversations.single.avatarSeed, 'seed-canonical');
     });
 

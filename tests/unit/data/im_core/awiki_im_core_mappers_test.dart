@@ -569,7 +569,8 @@ void main() {
         ),
       );
 
-      expect(mapped.displayName, 'Pinned Bob');
+      expect(mapped.displayName, 'Bob');
+      expect(mapped.peerLocalNote, 'Pinned Bob');
       expect(mapped.threadId, 'did:bob');
       expect(mapped.lastMessagePreview, 'hi');
       expect(mapped.lastMessageSnapshot, isNotNull);
@@ -640,7 +641,8 @@ void main() {
       );
 
       expect(mapped.threadId, 'dm:peer-scope:v1:bob');
-      expect(mapped.displayName, 'Bob local');
+      expect(mapped.displayName, 'bob.awiki.test');
+      expect(mapped.peerLocalNote, 'Bob local');
       expect(mapped.avatarSeed, 'seed-local');
       expect(mapped.lastMessagePreview, '@bob 看这里');
       expect(mapped.targetPeer, 'bob.awiki.test');

@@ -110,12 +110,14 @@ void main() {
           ),
         );
 
-    final state = container.read(peerDisplayProfileProvider);
     expect(
-      peerDisplayName(
-        state,
-        did: 'did:wba:awiki.ai:user:bob:e1_key',
-        fallback: 'unknown',
+      container.read(
+        peerDisplayNameProvider(
+          const PeerDisplayNameRequest(
+            did: 'did:wba:awiki.ai:user:bob:e1_key',
+            senderNameSnapshot: 'unknown',
+          ),
+        ),
       ),
       'bob.awiki.ai',
     );
@@ -159,6 +161,54 @@ void main() {
     expect(state.profilesByPersonaId, hasLength(1));
     expect(state.forDid('did:test:alice-old')?.displayName, 'Alice New');
     expect(state.forDid('did:test:alice-new')?.displayName, 'Alice New');
+  });
+
+  test('统一 View Provider 在所有 DID 路由上优先使用 Persona 本地备注', () async {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _CachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    await controller.loadCached(
+      ownerDid: 'did:test:owner-a',
+      dids: const <String>['did:test:alice'],
+      peerPersonaIdsByDid: const <String, String>{
+        'did:test:alice': 'persona:alice',
+      },
+    );
+    controller.registerLocalNotes(
+      ownerDid: 'did:test:owner-a',
+      localNotesByPersonaId: const <String, String>{
+        'persona:alice': 'Alice local note',
+      },
+    );
+
+    expect(
+      container.read(
+        peerDisplayNameProvider(
+          const PeerDisplayNameRequest(
+            did: 'did:test:alice',
+            nickname: 'Different page nickname',
+            fullHandle: 'alice.awiki.info',
+          ),
+        ),
+      ),
+      'Alice local note',
+    );
+
+    await controller.loadCached(
+      ownerDid: 'did:test:owner-b',
+      dids: const <String>['did:test:bob'],
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).localNotesByPersonaId,
+      isEmpty,
+    );
   });
 
   test('查看全部并发刷新本地缺失 profile 并缓存成功结果', () async {

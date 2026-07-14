@@ -25,14 +25,59 @@ const bool _conversationTraceEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
-class ConversationListState {
-  const ConversationListState({
-    this.conversations = const <ConversationSummary>[],
-    this.isLoading = false,
-  });
+enum ConversationListLoadState { initializing, ready, stale, error }
 
-  final List<ConversationSummary> conversations;
-  final bool isLoading;
+class ConversationListState {
+  factory ConversationListState({
+    List<ConversationSummary> conversations = const <ConversationSummary>[],
+    ConversationListLoadState loadState = ConversationListLoadState.ready,
+    int version = 0,
+    String? errorCode,
+  }) {
+    final entitiesById = <String, ConversationSummary>{};
+    final orderedIds = <String>[];
+    for (final conversation in conversations) {
+      final conversationId = conversation.conversationId.trim();
+      if (conversationId.isEmpty) {
+        throw StateError('canonical_conversation_id_missing');
+      }
+      if (entitiesById.containsKey(conversationId)) {
+        throw StateError('duplicate_canonical_conversation_id');
+      }
+      entitiesById[conversationId] = conversation;
+      orderedIds.add(conversationId);
+    }
+    return ConversationListState._(
+      entitiesById: Map<String, ConversationSummary>.unmodifiable(entitiesById),
+      orderedIds: List<String>.unmodifiable(orderedIds),
+      conversations: List<ConversationSummary>.unmodifiable(conversations),
+      loadState: loadState,
+      version: version,
+      errorCode: errorCode,
+    );
+  }
+
+  const ConversationListState._({
+    required this.entitiesById,
+    required this.orderedIds,
+    required List<ConversationSummary> conversations,
+    required this.loadState,
+    required this.version,
+    required this.errorCode,
+  }) : _conversations = conversations;
+
+  final Map<String, ConversationSummary> entitiesById;
+  final List<String> orderedIds;
+  final List<ConversationSummary> _conversations;
+  final ConversationListLoadState loadState;
+  final int version;
+  final String? errorCode;
+
+  List<ConversationSummary> get conversations => _conversations;
+
+  bool get isLoading =>
+      loadState == ConversationListLoadState.initializing ||
+      loadState == ConversationListLoadState.stale;
 
   int get unreadCount =>
       conversations.fold<int>(0, (sum, item) => sum + item.unreadCount);
@@ -40,19 +85,42 @@ class ConversationListState {
   ConversationListState copyWith({
     List<ConversationSummary>? conversations,
     bool? isLoading,
+    ConversationListLoadState? loadState,
+    int? version,
+    Object? errorCode = _conversationListStateUnset,
   }) {
+    final nextConversations = conversations ?? this.conversations;
+    final nextLoadState =
+        loadState ??
+        (isLoading == null
+            ? this.loadState
+            : isLoading
+            ? (nextConversations.isEmpty
+                  ? ConversationListLoadState.initializing
+                  : ConversationListLoadState.stale)
+            : ConversationListLoadState.ready);
     return ConversationListState(
-      conversations: conversations ?? this.conversations,
-      isLoading: isLoading ?? this.isLoading,
+      conversations: nextConversations,
+      loadState: nextLoadState,
+      version: version ?? this.version,
+      errorCode: identical(errorCode, _conversationListStateUnset)
+          ? this.errorCode
+          : errorCode as String?,
     );
   }
 }
+
+const Object _conversationListStateUnset = Object();
 
 class ConversationListController extends StateNotifier<ConversationListState> {
   ConversationListController(
     this.ref, {
     this.refreshTimeout = _defaultRefreshTimeout,
-  }) : super(const ConversationListState());
+  }) : super(
+         ConversationListState(
+           loadState: ConversationListLoadState.initializing,
+         ),
+       );
 
   static const Duration _defaultRefreshTimeout = Duration(seconds: 12);
 
@@ -96,7 +164,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
     if (!state.isLoading) {
       _publishConversationListState(
-        state.copyWith(isLoading: true),
+        state.copyWith(isLoading: true, errorCode: null),
         source: 'refresh.loading_request',
         updateBadge: false,
       );
@@ -130,7 +198,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
     if (!state.isLoading) {
       _publishConversationListState(
-        state.copyWith(isLoading: true),
+        state.copyWith(isLoading: true, errorCode: null),
         source: 'refresh_fast_local.loading_request',
         updateBadge: false,
       );
@@ -147,7 +215,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         _refreshOperation = null;
         _refreshOperationFastLocal = false;
         _publishConversationListState(
-          state.copyWith(isLoading: false),
+          state.copyWith(
+            loadState: ConversationListLoadState.error,
+            errorCode: 'conversation_load_timeout',
+          ),
           source: 'refresh.timeout',
           updateBadge: false,
         );
@@ -173,7 +244,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> _refresh(int generation, {required bool fastLocal}) async {
     final totalWatch = Stopwatch()..start();
     _publishConversationListState(
-      state.copyWith(isLoading: true),
+      state.copyWith(isLoading: true, errorCode: null),
       source: 'refresh.loading',
       updateBadge: false,
     );
@@ -187,7 +258,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         _publishConversationListState(
           state.copyWith(
             conversations: const <ConversationSummary>[],
-            isLoading: false,
+            loadState: ConversationListLoadState.ready,
+            errorCode: null,
           ),
           source: 'refresh.no_session',
         );
@@ -260,7 +332,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     } catch (_) {
       if (generation == _refreshGeneration) {
         _publishConversationListState(
-          state.copyWith(isLoading: false),
+          state.copyWith(
+            loadState: ConversationListLoadState.error,
+            errorCode: 'conversation_load_failed',
+          ),
           source: 'refresh.error',
           updateBadge: false,
         );
@@ -337,7 +412,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         conversations: sortConversationsForPresentation(
           _filterLocallyHiddenConversations(conversations),
         ),
-        isLoading: true,
+        loadState: ConversationListLoadState.stale,
+        errorCode: null,
       ),
       source: 'snapshot',
     );
@@ -355,23 +431,32 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> _loadCachedPeerProfiles(
     String ownerDid,
     Iterable<ConversationSummary> conversations,
-  ) {
-    return ref
-        .read(peerDisplayProfileProvider.notifier)
-        .loadCached(
-          ownerDid: ownerDid,
-          dids: conversations
-              .where((conversation) => !conversation.isGroup)
-              .map((conversation) => conversation.targetDid ?? ''),
-          peerPersonaIdsByDid: <String, String>{
-            for (final conversation in conversations)
-              if (!conversation.isGroup &&
-                  (conversation.targetDid?.trim().isNotEmpty ?? false) &&
-                  (conversation.peerPersonaId?.trim().isNotEmpty ?? false))
-                conversation.targetDid!.trim(): conversation.peerPersonaId!
-                    .trim(),
-          },
-        );
+  ) async {
+    final items = conversations.toList(growable: false);
+    final controller = ref.read(peerDisplayProfileProvider.notifier);
+    await controller.loadCached(
+      ownerDid: ownerDid,
+      dids: items
+          .where((conversation) => !conversation.isGroup)
+          .map((conversation) => conversation.targetDid ?? ''),
+      peerPersonaIdsByDid: <String, String>{
+        for (final conversation in items)
+          if (!conversation.isGroup &&
+              (conversation.targetDid?.trim().isNotEmpty ?? false) &&
+              (conversation.peerPersonaId?.trim().isNotEmpty ?? false))
+            conversation.targetDid!.trim(): conversation.peerPersonaId!.trim(),
+      },
+    );
+    controller.registerLocalNotes(
+      ownerDid: ownerDid,
+      localNotesByPersonaId: <String, String>{
+        for (final conversation in items)
+          if (!conversation.isGroup &&
+              (conversation.peerPersonaId?.trim().isNotEmpty ?? false))
+            conversation.peerPersonaId!.trim():
+                conversation.peerLocalNote?.trim() ?? '',
+      },
+    );
   }
 
   void _ensurePatchSubscriptionForCurrentSession() {
@@ -501,7 +586,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           );
           return;
         }
-        _applyPatchUpsert(item);
+        _applyPatchUpsert(item, version: patch.version);
         applied = true;
       case ConversationListPatchKind.remove:
         _applyPatchRemove(patch);
@@ -526,7 +611,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         return;
     }
     if (applied) {
-      _lastPatchVersion = patch.version;
+      _lastPatchVersion = state.version;
     }
   }
 
@@ -559,6 +644,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final beforeLoading = state.isLoading;
     if (!beforeLoading &&
         _sameConversationSummaryList(currentConversations, nextConversations)) {
+      _publishConversationListState(
+        state.copyWith(version: patch.version),
+        source: 'patch_reset.version',
+        updateBadge: false,
+      );
       _snapshotBootstrapActive = false;
       _trace(
         'state.patch_reset.noop',
@@ -573,7 +663,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _publishConversationListState(
       state.copyWith(
         conversations: sortConversationsForPresentation(nextConversations),
-        isLoading: false,
+        loadState: ConversationListLoadState.ready,
+        version: patch.version,
+        errorCode: null,
       ),
       source: 'patch_reset',
     );
@@ -590,12 +682,20 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
   }
 
-  void _applyPatchUpsert(ConversationSummary conversation) {
+  void _applyPatchUpsert(
+    ConversationSummary conversation, {
+    required int version,
+  }) {
     if (_isLocallyHidden(conversation)) {
+      _publishConversationListState(
+        state.copyWith(version: version),
+        source: 'patch_upsert.hidden_version',
+        updateBadge: false,
+      );
       return;
     }
     _snapshotBootstrapActive = false;
-    _upsertConversation(conversation, source: 'patch_upsert');
+    _upsertConversation(conversation, source: 'patch_upsert', version: version);
   }
 
   void _applyPatchRemove(ConversationListPatch patch) {
@@ -607,11 +707,21 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         .where((item) => item.conversationId != conversationId)
         .toList(growable: false);
     if (next.length == state.conversations.length) {
+      _publishConversationListState(
+        state.copyWith(version: patch.version),
+        source: 'patch_remove.version',
+        updateBadge: false,
+      );
       return;
     }
     final beforeUnread = state.unreadCount;
     _publishConversationListState(
-      state.copyWith(conversations: next),
+      state.copyWith(
+        conversations: next,
+        loadState: ConversationListLoadState.ready,
+        version: patch.version,
+        errorCode: null,
+      ),
       source: 'patch_remove',
     );
     _snapshotBootstrapActive = false;
@@ -644,7 +754,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final targetIndex = (patch.index ?? 0).clamp(0, current.length);
     current.insert(targetIndex, item);
     _publishConversationListState(
-      state.copyWith(conversations: sortConversationsForPresentation(current)),
+      state.copyWith(
+        conversations: sortConversationsForPresentation(current),
+        loadState: ConversationListLoadState.ready,
+        version: patch.version,
+        errorCode: null,
+      ),
       source: 'patch_reorder',
     );
     _snapshotBootstrapActive = false;
@@ -750,9 +865,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       label: 'conversation_list.patch_repair',
       keepLocalOnly: false,
       badgeSource: 'patch_repair',
+      version: repair.version,
     );
     if (applied && repair.version > _lastPatchVersion) {
-      _lastPatchVersion = repair.version;
+      _lastPatchVersion = state.version;
     }
   }
 
@@ -774,6 +890,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required String label,
     bool keepLocalOnly = true,
     String? badgeSource,
+    int? version,
   }) async {
     if (generation != _refreshGeneration) {
       return false;
@@ -804,6 +921,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final beforeLoading = state.isLoading;
     if (!beforeLoading &&
         _sameConversationSummaryList(currentConversations, nextConversations)) {
+      if (version != null && version != state.version) {
+        _publishConversationListState(
+          state.copyWith(version: version),
+          source: '${badgeSource ?? label}.version',
+          updateBadge: false,
+        );
+      }
       _snapshotBootstrapActive = false;
       _trace(
         'state.refresh_noop',
@@ -819,7 +943,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _publishConversationListState(
       state.copyWith(
         conversations: sortConversationsForPresentation(nextConversations),
-        isLoading: false,
+        loadState: ConversationListLoadState.ready,
+        version: version,
+        errorCode: null,
       ),
       source: badgeSource ?? label,
     );
@@ -961,6 +1087,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   void _upsertConversation(
     ConversationSummary conversation, {
     String source = 'upsert',
+    int? version,
   }) {
     if (_isLocallyHidden(conversation)) {
       return;
@@ -992,6 +1119,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final beforeUnread = state.unreadCount;
     final beforeItems = state.conversations.length;
     if (_sameConversationSummaryList(state.conversations, merged)) {
+      if (version != null && version != state.version) {
+        _publishConversationListState(
+          state.copyWith(version: version),
+          source: '$source.version',
+          updateBadge: false,
+        );
+      }
       _trace(
         'state.upsert_noop',
         fields: <String, Object?>{
@@ -1009,7 +1143,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     _publishConversationListState(
-      state.copyWith(conversations: merged),
+      state.copyWith(
+        conversations: merged,
+        loadState: ConversationListLoadState.ready,
+        version: version,
+        errorCode: null,
+      ),
       source: source,
     );
     _trace(
@@ -1147,7 +1286,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _snapshotBootstrapAllowedGeneration = null;
     _locallyHiddenConversationKeys.clear();
     _readPresentation.clear();
-    state = const ConversationListState();
+    state = ConversationListState();
   }
 
   @override
@@ -1383,6 +1522,7 @@ bool _sameConversationSummaryValue(
       first.targetDid == second.targetDid &&
       first.targetPeer == second.targetPeer &&
       first.peerPersonaId == second.peerPersonaId &&
+      first.peerLocalNote == second.peerLocalNote &&
       first.canonicalGroupDid == second.canonicalGroupDid &&
       first.groupId == second.groupId &&
       first.avatarUri == second.avatarUri &&

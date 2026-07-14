@@ -4,8 +4,9 @@ class _PeerInfoTarget {
   const _PeerInfoTarget({
     required this.targetDid,
     required this.displayName,
+    this.peerPersonaId,
+    this.fullHandle,
     this.avatarUri,
-    this.avatarSeed,
     this.inboxConversation,
   });
 
@@ -13,16 +14,18 @@ class _PeerInfoTarget {
     return _PeerInfoTarget(
       targetDid: conversation.targetDid?.trim() ?? '',
       displayName: conversation.displayName,
+      peerPersonaId: conversation.peerPersonaId,
+      fullHandle: conversation.targetPeer,
       avatarUri: conversation.avatarUri,
-      avatarSeed: conversation.avatarSeed,
       inboxConversation: conversation.isGroup ? null : conversation,
     );
   }
 
   final String targetDid;
   final String displayName;
+  final String? peerPersonaId;
+  final String? fullHandle;
   final String? avatarUri;
-  final String? avatarSeed;
   final ConversationSummary? inboxConversation;
 }
 
@@ -91,13 +94,26 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     required double maxDialogHeight,
   }) {
     final profile = state.profile;
-    final displayName = _displayName(profile, runtimeAgent, targetDid);
     final profileDid = _profileDid(profile, fallbackDid: targetDid);
-    final profileName = profile == null
-        ? ''
-        : DidDisplayFormatter.profileName(profile);
+    final displayName = ref.watch(
+      peerDisplayNameProvider(
+        PeerDisplayNameRequest(
+          peerPersonaId: profileDid == targetDid
+              ? widget.target.peerPersonaId
+              : null,
+          did: profileDid,
+          nickname: runtimeAgent?.displayName ?? profile?.displayName,
+          fullHandle:
+              profile?.fullHandle ??
+              profile?.handle ??
+              widget.target.fullHandle,
+          senderNameSnapshot: widget.target.displayName,
+          unknownLabel: context.l10n.chatPeerInfoUnknownContact,
+        ),
+      ),
+    );
     final handleLabel = profile == null
-        ? ''
+        ? (widget.target.fullHandle?.trim() ?? '')
         : DidDisplayFormatter.profileHandleLabel(profile);
     final avatarUri = profile?.avatarUri ?? widget.target.avatarUri;
     final rawProfileContent = profile == null
@@ -108,11 +124,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
       rawProfileContent,
     );
-    final primaryIdentity = handleLabel.isEmpty ? displayName : handleLabel;
+    final primaryIdentity = displayName;
     final secondaryIdentity = _secondaryIdentityLabel(
       primary: primaryIdentity,
-      displayName: displayName,
-      profileName: profileName,
+      handleLabel: handleLabel,
     );
     final agentAlias = runtimeAgent?.displayName.trim() ?? '';
     final showAgentAlias =
@@ -366,33 +381,6 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     );
   }
 
-  String _displayName(
-    UserProfile? profile,
-    AgentSummary? runtimeAgent,
-    String fallbackDid,
-  ) {
-    final agentName = runtimeAgent?.displayName.trim();
-    if (agentName != null && agentName.isNotEmpty) {
-      return agentName;
-    }
-    if (profile != null) {
-      return DidDisplayFormatter.profileName(profile);
-    }
-    final conversationName = widget.target.displayName.trim();
-    if (conversationName.isNotEmpty && !conversationName.startsWith('did:')) {
-      return conversationName;
-    }
-    final avatarSeed = widget.target.avatarSeed?.trim();
-    if (avatarSeed != null &&
-        avatarSeed.isNotEmpty &&
-        !avatarSeed.startsWith('did:')) {
-      return avatarSeed;
-    }
-    return fallbackDid.isEmpty
-        ? context.l10n.chatPeerInfoUnknownContact
-        : DidDisplayFormatter.compactDid(fallbackDid);
-  }
-
   String _profileDid(UserProfile? profile, {required String fallbackDid}) {
     final did = profile?.did.trim();
     if (did != null && did.isNotEmpty) {
@@ -403,16 +391,13 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
 
   String _secondaryIdentityLabel({
     required String primary,
-    required String displayName,
-    required String profileName,
+    required String handleLabel,
   }) {
     final normalizedPrimary = _normalizedIdentityLabel(primary);
-    for (final candidate in <String>[profileName, displayName]) {
-      final value = candidate.trim();
-      if (value.isNotEmpty &&
-          _normalizedIdentityLabel(value) != normalizedPrimary) {
-        return value;
-      }
+    final value = handleLabel.trim();
+    if (value.isNotEmpty &&
+        _normalizedIdentityLabel(value) != normalizedPrimary) {
+      return value;
     }
     return '';
   }

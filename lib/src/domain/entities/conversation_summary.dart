@@ -16,6 +16,7 @@ class ConversationSummary {
     this.targetDid,
     this.targetPeer,
     this.peerPersonaId,
+    this.peerLocalNote,
     this.canonicalGroupDid,
     this.groupId,
     this.avatarUri,
@@ -39,6 +40,7 @@ class ConversationSummary {
   final String? targetDid;
   final String? targetPeer;
   final String? peerPersonaId;
+  final String? peerLocalNote;
   final String? canonicalGroupDid;
   final String? groupId;
   final String? avatarUri;
@@ -66,6 +68,7 @@ class ConversationSummary {
     Object? targetDid = _conversationSummaryUnset,
     Object? targetPeer = _conversationSummaryUnset,
     Object? peerPersonaId = _conversationSummaryUnset,
+    Object? peerLocalNote = _conversationSummaryUnset,
     Object? canonicalGroupDid = _conversationSummaryUnset,
     Object? groupId = _conversationSummaryUnset,
     Object? avatarUri = _conversationSummaryUnset,
@@ -91,6 +94,7 @@ class ConversationSummary {
       targetDid: _resolveNullableString(targetDid, this.targetDid),
       targetPeer: _resolveNullableString(targetPeer, this.targetPeer),
       peerPersonaId: _resolveNullableString(peerPersonaId, this.peerPersonaId),
+      peerLocalNote: _resolveNullableString(peerLocalNote, this.peerLocalNote),
       canonicalGroupDid: _resolveNullableString(
         canonicalGroupDid,
         this.canonicalGroupDid,

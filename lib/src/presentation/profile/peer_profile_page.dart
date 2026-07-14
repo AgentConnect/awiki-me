@@ -19,6 +19,7 @@ import '../shared/identity_flow.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'peer_display_profile_provider.dart';
 import 'peer_profile_provider.dart';
 
 class PeerProfilePage extends ConsumerWidget {
@@ -41,7 +42,16 @@ class PeerProfilePage extends ConsumerWidget {
     );
     final displayName = profile == null
         ? ''
-        : DidDisplayFormatter.profileName(profile);
+        : ref.watch(
+            peerDisplayNameProvider(
+              PeerDisplayNameRequest(
+                did: profile.did,
+                nickname: profile.displayName,
+                fullHandle: profile.fullHandle ?? profile.handle,
+                unknownLabel: context.l10n.chatUnknownUser,
+              ),
+            ),
+          );
     final handleLabel = profile == null
         ? ''
         : DidDisplayFormatter.profileHandleLabel(profile);

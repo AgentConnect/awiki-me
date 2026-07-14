@@ -111,6 +111,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     if (widget.macStyle && responsive.isMacDesktop) {
       return _MacConversationList(
         conversations: state.conversations,
+        loadState: state.loadState,
         composerDrafts: composerDrafts,
         selectedConversationId: _selectedConversationKey(
           widget.selectedConversationId,
@@ -135,6 +136,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: _ConversationRefreshView(
         conversations: state.conversations,
+        loadState: state.loadState,
         composerDrafts: composerDrafts,
         selectedConversationId: _selectedConversationKey(
           widget.selectedConversationId,
@@ -210,6 +212,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
 class _MacConversationList extends ConsumerStatefulWidget {
   const _MacConversationList({
     required this.conversations,
+    required this.loadState,
     required this.composerDrafts,
     required this.selectedConversationId,
     required this.selectedThreadId,
@@ -222,6 +225,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final ConversationListLoadState loadState;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
   final String? selectedThreadId;
@@ -355,7 +359,15 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
             child: CustomScrollView(
               slivers: <Widget>[
                 CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
-                if (widget.conversations.isEmpty)
+                if (widget.conversations.isEmpty &&
+                    widget.loadState == ConversationListLoadState.error)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _ConversationLoadErrorState(
+                      onRetry: widget.onRefresh,
+                    ),
+                  )
+                else if (widget.conversations.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _MacConversationEmptyState(
@@ -500,6 +512,7 @@ ConversationDraftSortState? _draftSortStateForConversation(
 class _ConversationRefreshView extends ConsumerStatefulWidget {
   const _ConversationRefreshView({
     required this.conversations,
+    required this.loadState,
     required this.composerDrafts,
     required this.selectedConversationId,
     required this.selectedThreadId,
@@ -511,6 +524,7 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final ConversationListLoadState loadState;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
   final String? selectedThreadId;
@@ -573,6 +587,7 @@ class _ConversationRefreshViewState
     );
     return _ConversationSearchableRefreshView(
       conversations: widget.conversations,
+      loadState: widget.loadState,
       visibleConversations: visibleConversations,
       composerDrafts: widget.composerDrafts,
       selectedConversationId: widget.selectedConversationId,
@@ -614,6 +629,7 @@ class _ConversationRefreshViewState
 class _ConversationSearchableRefreshView extends ConsumerWidget {
   const _ConversationSearchableRefreshView({
     required this.conversations,
+    required this.loadState,
     required this.visibleConversations,
     required this.composerDrafts,
     required this.selectedConversationId,
@@ -629,6 +645,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final ConversationListLoadState loadState;
   final List<ConversationSummary> visibleConversations;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
@@ -654,7 +671,13 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
             onChanged: onQueryChanged,
           ),
         ),
-        if (conversations.isEmpty)
+        if (conversations.isEmpty &&
+            loadState == ConversationListLoadState.error)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _ConversationLoadErrorState(onRetry: onRefresh),
+          )
+        else if (conversations.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
             child: _EmptyState(
@@ -1246,21 +1269,20 @@ String _conversationPresentationTitle(
       return groupName;
     }
   }
-  String? cachedPeerName;
-  final targetDid = conversation.targetDid?.trim() ?? '';
-  if (!conversation.isGroup && targetDid.isNotEmpty) {
-    cachedPeerName = peerDisplayName(
-      ref.watch(peerDisplayProfileProvider),
-      peerPersonaId: conversation.peerPersonaId,
-      did: targetDid,
-      fallback: '',
+  if (!conversation.isGroup) {
+    return ref.watch(
+      peerDisplayNameProvider(
+        PeerDisplayNameRequest(
+          peerPersonaId: conversation.peerPersonaId,
+          did: conversation.targetDid,
+          nickname: conversation.displayName,
+          fullHandle: conversation.targetPeer,
+          unknownLabel: l10n.chatUnknownUser,
+        ),
+      ),
     );
   }
-  return DidDisplayFormatter.conversationTitle(
-    conversation,
-    l10n,
-    peerDisplayName: cachedPeerName,
-  );
+  return DidDisplayFormatter.conversationTitle(conversation, l10n);
 }
 
 String? _conversationPresentationAvatarUri(
@@ -1692,6 +1714,42 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
           fontSize: responsive.displayScaled(compact ? 10 : 10.5),
           fontWeight: FontWeight.w600,
           height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationLoadErrorState extends StatelessWidget {
+  const _ConversationLoadErrorState({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(responsive.displayScaled(24)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              context.l10n.operationFailedRetry,
+              key: const Key('conversation-list-load-error'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.displayScaled(13),
+              ),
+            ),
+            SizedBox(height: responsive.displayScaled(10)),
+            CupertinoButton(
+              key: const Key('conversation-list-load-retry'),
+              onPressed: onRetry,
+              child: Text(context.l10n.commonRetry),
+            ),
+          ],
         ),
       ),
     );
