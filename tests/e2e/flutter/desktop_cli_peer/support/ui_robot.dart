@@ -104,14 +104,21 @@ class _DesktopAppRobot {
             .firstOrNull;
         if (selected == null ||
             selected.isGroup ||
-            (selected.targetDid?.trim().isEmpty ?? true)) {
+            (selected.targetDid?.trim().isEmpty ?? true) ||
+            (selected.peerPersonaId?.trim().isEmpty ?? true)) {
           return false;
         }
-        final targetPeer = normalizeDidOrHandleInput(
-          selected.targetPeer ?? '',
+        final profile = container
+            .read(peerDisplayProfileProvider)
+            .forPeer(
+              peerPersonaId: selected.peerPersonaId,
+              did: selected.targetDid,
+            );
+        final resolvedHandle = normalizeDidOrHandleInput(
+          profile?.handle ?? '',
         ).toLowerCase();
-        return targetPeer == expectedPeer ||
-            targetPeer.startsWith('$expectedPeer.');
+        return resolvedHandle == expectedPeer ||
+            resolvedHandle.startsWith('$expectedPeer.');
       },
     );
     await pumpUntilFinder(
