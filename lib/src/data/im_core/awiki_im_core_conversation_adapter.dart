@@ -215,10 +215,8 @@ class AwikiImCoreConversationAdapter
             ownerDid: patch.ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
-            threadId: item?.threadId ?? patch.threadId,
-            conversationId:
-                item?.conversationIdentity?.conversationId ??
-                patch.conversationIdentity?.conversationId,
+            threadId: item?.threadId,
+            conversationId: item?.conversationId ?? patch.conversationId,
           );
         }
         return CoreConversationPatch(
@@ -227,9 +225,7 @@ class AwikiImCoreConversationAdapter
           version: patch.version,
           unreadTotal: patch.unreadTotal,
           item: _mappers.conversationFromSnapshot(item, ownerDid: ownerDid),
-          conversationId:
-              item.conversationIdentity?.conversationId ??
-              patch.conversationIdentity?.conversationId,
+          conversationId: item.conversationId,
         );
       case core.ConversationStorePatchKind.remove:
         return CoreConversationPatch(
@@ -237,8 +233,7 @@ class AwikiImCoreConversationAdapter
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,
-          threadId: patch.threadId,
-          conversationId: patch.conversationIdentity?.conversationId,
+          conversationId: patch.conversationId,
         );
       case core.ConversationStorePatchKind.reorder:
         return CoreConversationPatch(
@@ -246,8 +241,7 @@ class AwikiImCoreConversationAdapter
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,
-          threadId: patch.threadId,
-          conversationId: patch.conversationIdentity?.conversationId,
+          conversationId: patch.conversationId,
           index: patch.index,
         );
       case core.ConversationStorePatchKind.repairRequired:

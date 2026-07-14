@@ -121,7 +121,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
-      conversationId: _conversationIdFromMessage(message),
+      conversationId: message.conversationId,
       threadId: _messageThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -159,6 +159,7 @@ class AwikiImCoreMappers {
   ChatMessage chatMessageFromSnapshot(
     core.ConversationSnapshotMessage message, {
     required String ownerDid,
+    required String conversationId,
   }) {
     final manifest = _snapshotAttachmentManifestJson(message);
     final attachment = _attachmentFromManifest(manifest);
@@ -189,7 +190,7 @@ class AwikiImCoreMappers {
     return ChatMessage(
       localId: message.id,
       remoteId: message.id,
-      conversationId: _conversationIdFromSnapshotMessage(message),
+      conversationId: conversationId,
       threadId: _messageThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -229,6 +230,13 @@ class AwikiImCoreMappers {
     required String ownerDid,
     ProductConversationOverlay? overlay,
   }) {
+    _requireResolvedConversation(
+      conversationId: conversation.conversationId,
+      resolutionState: conversation.resolutionState,
+      peerPersonaId: conversation.peerPersonaId,
+      canonicalGroupDid: conversation.canonicalGroupDid,
+      threadKind: conversation.threadKind,
+    );
     final isGroup =
         conversation.threadKind == 'group' ||
         conversation.threadId.startsWith('group:');
@@ -255,7 +263,7 @@ class AwikiImCoreMappers {
         ? null
         : chatMessageFromCore(lastMessage, ownerDid: ownerDid);
     return ConversationSummary(
-      conversationId: _conversationIdFromConversation(conversation),
+      conversationId: conversation.conversationId,
       threadId: _conversationThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -296,6 +304,15 @@ class AwikiImCoreMappers {
   }
 
   bool shouldIncludeConversation(core.Conversation conversation) {
+    if (!_isResolvedConversation(
+      conversationId: conversation.conversationId,
+      resolutionState: conversation.resolutionState,
+      peerPersonaId: conversation.peerPersonaId,
+      canonicalGroupDid: conversation.canonicalGroupDid,
+      threadKind: conversation.threadKind,
+    )) {
+      return false;
+    }
     final lastMessage = conversation.lastMessage;
     if (lastMessage == null) {
       return true;
@@ -311,6 +328,13 @@ class AwikiImCoreMappers {
     required String ownerDid,
     ProductConversationOverlay? overlay,
   }) {
+    _requireResolvedConversation(
+      conversationId: conversation.conversationId,
+      resolutionState: conversation.resolutionState,
+      peerPersonaId: conversation.peerPersonaId,
+      canonicalGroupDid: conversation.canonicalGroupDid,
+      threadKind: conversation.threadKind,
+    );
     final isGroup =
         conversation.threadKind == 'group' ||
         conversation.threadId.startsWith('group:');
@@ -335,9 +359,13 @@ class AwikiImCoreMappers {
         : null;
     final lastMessageSnapshot = lastMessage == null
         ? null
-        : chatMessageFromSnapshot(lastMessage, ownerDid: ownerDid);
+        : chatMessageFromSnapshot(
+            lastMessage,
+            ownerDid: ownerDid,
+            conversationId: conversation.conversationId,
+          );
     return ConversationSummary(
-      conversationId: _conversationIdFromSnapshot(conversation),
+      conversationId: conversation.conversationId,
       threadId: _conversationThreadId(
         ownerDid: ownerDid,
         isGroup: isGroup,
@@ -379,6 +407,15 @@ class AwikiImCoreMappers {
   bool shouldIncludeSnapshotConversation(
     core.ConversationSnapshotItem conversation,
   ) {
+    if (!_isResolvedConversation(
+      conversationId: conversation.conversationId,
+      resolutionState: conversation.resolutionState,
+      peerPersonaId: conversation.peerPersonaId,
+      canonicalGroupDid: conversation.canonicalGroupDid,
+      threadKind: conversation.threadKind,
+    )) {
+      return false;
+    }
     final lastMessage = conversation.lastMessage;
     if (lastMessage == null) {
       return true;
@@ -654,30 +691,39 @@ String? _firstNonEmpty(Iterable<String> values) {
   return null;
 }
 
-String? _conversationIdFromMessage(core.Message message) {
-  return _nonEmpty(message.metadata.conversationIdentity?.conversationId);
+bool _isResolvedConversation({
+  required String conversationId,
+  required core.ConversationResolutionState resolutionState,
+  required String? peerPersonaId,
+  required String? canonicalGroupDid,
+  required String threadKind,
+}) {
+  if (_nonEmpty(conversationId) == null ||
+      resolutionState != core.ConversationResolutionState.resolved) {
+    return false;
+  }
+  if (threadKind == 'group') {
+    return _nonEmpty(canonicalGroupDid) != null;
+  }
+  return _nonEmpty(peerPersonaId) != null;
 }
 
-String? _conversationIdFromSnapshotMessage(
-  core.ConversationSnapshotMessage message,
-) {
-  return _nonEmpty(message.conversationIdentity?.conversationId);
-}
-
-String? _conversationIdFromConversation(core.Conversation conversation) {
-  return _nonEmpty(conversation.conversationIdentity?.conversationId) ??
-      (conversation.lastMessage == null
-          ? null
-          : _conversationIdFromMessage(conversation.lastMessage!));
-}
-
-String? _conversationIdFromSnapshot(
-  core.ConversationSnapshotItem conversation,
-) {
-  return _nonEmpty(conversation.conversationIdentity?.conversationId) ??
-      (conversation.lastMessage == null
-          ? null
-          : _conversationIdFromSnapshotMessage(conversation.lastMessage!));
+void _requireResolvedConversation({
+  required String conversationId,
+  required core.ConversationResolutionState resolutionState,
+  required String? peerPersonaId,
+  required String? canonicalGroupDid,
+  required String threadKind,
+}) {
+  if (!_isResolvedConversation(
+    conversationId: conversationId,
+    resolutionState: resolutionState,
+    peerPersonaId: peerPersonaId,
+    canonicalGroupDid: canonicalGroupDid,
+    threadKind: threadKind,
+  )) {
+    throw StateError('IM Core conversation is missing canonical identity.');
+  }
 }
 
 String _stripPrefix(String value, String prefix) {

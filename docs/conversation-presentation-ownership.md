@@ -125,7 +125,7 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 `AwikiImCoreMappers` 是当前生产映射边界：
 
 - `chatMessageFromCore(core.Message, ownerDid: ...)`
-- `chatMessageFromSnapshot(core.ConversationSnapshotMessage, ownerDid: ...)`
+- `chatMessageFromSnapshot(core.ConversationSnapshotMessage, ownerDid: ..., conversationId: ...)`
 - `conversationFromCore(...)`
 - `conversationFromSnapshot(...)`
 - `realtimeUpdateFromCore(...)`
@@ -134,6 +134,7 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 
 | 输入事实 | App 字段 / 行为 |
 |---|---|
+| required `conversationId` | 直接写入 App message/conversation projection；不得回退 `conversationIdentity` 或 `threadId` |
 | `message.id` | `ChatMessage.localId` 和 `remoteId` |
 | SDK thread kind / group / direct peer | 规范化为 App `threadId`、`groupId`、`receiverDid` |
 | `message.sender` + `ownerDid` + direction | `ChatMessage.isMine` |
@@ -143,6 +144,12 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 | `metadata.contentType` / `body.kind` | `ChatMessage.originalType` |
 | encrypted content type | `ChatMessage.isEncrypted` |
 | server sequence | `ChatMessage.serverSequence`，用于排序、thread-after 和 first-paint 判断 |
+
+SDK conversation list/snapshot 只有在 `resolutionState == resolved` 且 Direct
+具有 `peerPersonaId`、Group 具有 `canonicalGroupDid` 时才能进入 App mapper。
+缺少任一 canonical identity 的行在 adapter 边界 fail closed，不再由 UI 用 DID、
+Handle 或 thread 进行猜测合并。snapshot message 自身不再独立推断 conversation，
+而是继承所属 snapshot item 的 required `conversationId`。
 
 `ChatMessage` 的关键 derived fields：
 

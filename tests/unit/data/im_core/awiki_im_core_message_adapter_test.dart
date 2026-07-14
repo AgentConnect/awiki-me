@@ -620,6 +620,8 @@ core.Message _messageForOwner(
   String? contentType,
 }) {
   return core.Message(
+    conversationId: conversationId,
+    senderDidSnapshot: 'did:bob',
     id: id,
     threadKind: 'direct',
     threadId: conversationId,

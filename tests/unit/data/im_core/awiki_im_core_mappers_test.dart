@@ -117,6 +117,8 @@ void main() {
 
   test('message maps SDK DTO into app ChatMessage', () {
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:alice',
       id: 'msg-1',
       threadKind: 'direct',
       threadId: 'did:bob',
@@ -140,6 +142,8 @@ void main() {
 
   test('accepted outgoing SDK message stops local sending indicator', () {
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:alice',
       id: 'msg-accepted',
       threadKind: 'direct',
       threadId: 'did:bob',
@@ -175,6 +179,8 @@ void main() {
       migrationState: core.ConversationMigrationState.canonical,
     );
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:bob',
+      senderDidSnapshot: 'did:bob',
       id: 'msg-identity',
       threadKind: 'direct',
       threadId: 'did:bob',
@@ -185,6 +191,9 @@ void main() {
       metadata: core.MessageMetadata(conversationIdentity: identity),
     );
     const conversation = core.Conversation(
+      conversationId: 'dm:peer-scope:v1:bob',
+      peerPersonaId: 'persona:v1:test',
+      resolutionState: core.ConversationResolutionState.resolved,
       threadKind: 'direct',
       threadId: 'did:bob',
       conversationIdentity: identity,
@@ -210,6 +219,8 @@ void main() {
 
   test('scoped direct message keeps stable thread id and peer metadata', () {
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:abc123',
+      senderDidSnapshot: 'did:bob:new',
       id: 'msg-scoped',
       threadKind: 'thread',
       threadId: 'dm:peer-scope:v1:abc123',
@@ -236,6 +247,9 @@ void main() {
     final mapped = mapper.chatMessageFromCore(message, ownerDid: 'did:alice');
     final conversation = mapper.conversationFromCore(
       const core.Conversation(
+        conversationId: 'dm:peer-scope:v1:abc123',
+        peerPersonaId: 'persona:v1:test',
+        resolutionState: core.ConversationResolutionState.resolved,
         threadKind: 'thread',
         threadId: 'dm:peer-scope:v1:abc123',
         participants: <String>['bob.anpclaw.com'],
@@ -262,6 +276,8 @@ void main() {
     const payload =
         '{"schema":"awiki.agent.status.v1","status_scope":"daemon","daemon":{"status":"ready"}}';
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:daemon',
       id: 'msg-control',
       threadKind: 'direct',
       threadId: 'did:daemon',
@@ -295,6 +311,8 @@ void main() {
       migrationState: core.ConversationMigrationState.canonical,
     );
     const message = core.Message(
+      conversationId: 'did:test:group',
+      senderDidSnapshot: 'did:alice',
       id: 'msg-group-event',
       threadKind: 'group',
       threadId: 'group:did:test:group',
@@ -334,6 +352,8 @@ void main() {
       migrationState: core.ConversationMigrationState.canonical,
     );
     const lastMessage = core.Message(
+      conversationId: 'did:test:group',
+      senderDidSnapshot: 'did:alice',
       id: 'msg-group-event',
       threadKind: 'group',
       threadId: 'group:did:test:group',
@@ -348,6 +368,9 @@ void main() {
       ),
     );
     const conversation = core.Conversation(
+      conversationId: 'did:test:group',
+      canonicalGroupDid: 'did:test:group',
+      resolutionState: core.ConversationResolutionState.resolved,
       threadKind: 'group',
       threadId: 'group:did:test:group',
       conversationIdentity: identity,
@@ -373,6 +396,8 @@ void main() {
     const manifest =
         '{"attachments":[{"attachment_id":"att-1","filename":"report.pdf","mime_type":"application/pdf","size":"1024","access_info":{"object_uri":"https://objects.example/att-1"}}],"primary_attachment_id":"att-1","caption":"季度报告"}';
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:bob',
       id: 'msg-attachment',
       threadKind: 'direct',
       threadId: 'did:bob',
@@ -411,6 +436,8 @@ void main() {
     const manifest =
         '{"attachments":[{"attachment_id":"att-1","filename":"report.md","mime_type":"text/markdown","size":"1024"}],"primary_attachment_id":"att-1","caption":"@codex 看看这个文件","mention_payload":{"text":"@codex 看看这个文件","mentions":[{"id":"men_codex","range":{"start":0,"end":6,"unit":"unicode_code_point"},"target":{"kind":"agent","did":"did:agent:codex"},"mention_role":"addressee"}]}}';
     const message = core.Message(
+      conversationId: 'did:test:group',
+      senderDidSnapshot: 'did:alice',
       id: 'msg-attachment-mention',
       threadKind: 'group',
       threadId: 'group:did:test:group',
@@ -451,6 +478,8 @@ void main() {
       const manifest =
           '{"attachments":[{"attachment_id":"att-local","filename":"local.md","mime_type":"text/markdown","size":"24","access_info":{"object_uri":"https://objects.example/att-local"}}],"caption":"本地历史附件","primary_attachment_id":"att-local"}';
       const message = core.Message(
+        conversationId: 'did:test:group',
+        senderDidSnapshot: 'did:bob',
         id: 'msg-local-attachment',
         threadKind: 'group',
         threadId: 'group:did:test:group',
@@ -478,6 +507,8 @@ void main() {
 
   test('message timestamps from SDK are normalized to local time', () {
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:bob',
       id: 'msg-local-time',
       threadKind: 'direct',
       threadId: 'did:bob',
@@ -499,6 +530,9 @@ void main() {
     'conversation overlay customizes display fields without becoming source',
     () {
       const conversation = core.Conversation(
+        conversationId: 'dm:peer-scope:v1:test',
+        peerPersonaId: 'persona:v1:test',
+        resolutionState: core.ConversationResolutionState.resolved,
         threadKind: 'direct',
         threadId: 'did:bob',
         title: 'Bob',
@@ -507,6 +541,8 @@ void main() {
         messageCount: 5,
         lastMessageAt: '2026-05-23T09:01:00Z',
         lastMessage: core.Message(
+          conversationId: 'dm:peer-scope:v1:test',
+          senderDidSnapshot: 'did:bob',
           id: 'msg-2',
           threadKind: 'direct',
           threadId: 'did:bob',
@@ -547,6 +583,9 @@ void main() {
       const mentionPayload =
           '{"text":"@bob 看这里","mentions":[{"id":"m1","range":{"start":0,"end":4,"unit":"unicode_code_point"},"target":{"kind":"human","did":"did:bob","display_name":"Bob"},"mention_role":"addressee"}]}';
       const conversation = core.ConversationSnapshotItem(
+        conversationId: 'dm:peer-scope:v1:bob',
+        peerPersonaId: 'persona:v1:test',
+        resolutionState: core.ConversationResolutionState.resolved,
         threadKind: 'thread',
         threadId: 'dm:peer-scope:v1:bob',
         participants: <String>['bob.awiki.test'],
@@ -620,12 +659,17 @@ void main() {
       const manifest =
           '{"attachments":[{"attachment_id":"att-2","filename":"diagram.png","mime_type":"image/png","size":"2048","access_info":{"object_uri":"https://objects.example/att-2"}}],"primary_attachment_id":"att-2"}';
       const conversation = core.Conversation(
+        conversationId: 'dm:peer-scope:v1:test',
+        peerPersonaId: 'persona:v1:test',
+        resolutionState: core.ConversationResolutionState.resolved,
         threadKind: 'direct',
         threadId: 'did:bob',
         participants: <String>['did:alice', 'did:bob'],
         unreadCount: 1,
         messageCount: 1,
         lastMessage: core.Message(
+          conversationId: 'dm:peer-scope:v1:test',
+          senderDidSnapshot: 'did:bob',
           id: 'msg-attachment-preview',
           threadKind: 'direct',
           threadId: 'did:bob',
@@ -662,12 +706,17 @@ void main() {
 
   test('conversation preview maps visible control text but excludes recents', () {
     const conversation = core.Conversation(
+      conversationId: 'dm:peer-scope:v1:test',
+      peerPersonaId: 'persona:v1:test',
+      resolutionState: core.ConversationResolutionState.resolved,
       threadKind: 'direct',
       threadId: 'did:daemon',
       participants: <String>['did:alice', 'did:daemon'],
       unreadCount: 1,
       messageCount: 1,
       lastMessage: core.Message(
+        conversationId: 'dm:peer-scope:v1:test',
+        senderDidSnapshot: 'did:daemon',
         id: 'msg-control-preview',
         threadKind: 'direct',
         threadId: 'did:daemon',
@@ -693,12 +742,17 @@ void main() {
 
   test('conversation preview suppresses payload-only agent control', () {
     const conversation = core.Conversation(
+      conversationId: 'dm:peer-scope:v1:test',
+      peerPersonaId: 'persona:v1:test',
+      resolutionState: core.ConversationResolutionState.resolved,
       threadKind: 'direct',
       threadId: 'did:daemon',
       participants: <String>['did:alice', 'did:daemon'],
       unreadCount: 1,
       messageCount: 1,
       lastMessage: core.Message(
+        conversationId: 'dm:peer-scope:v1:test',
+        senderDidSnapshot: 'did:daemon',
         id: 'msg-control-preview-hidden',
         threadKind: 'direct',
         threadId: 'did:daemon',
@@ -728,6 +782,8 @@ void main() {
       const event = core.RealtimeEvent(
         kind: 'message_received',
         message: core.Message(
+          conversationId: 'dm:peer-scope:v1:test',
+          senderDidSnapshot: 'did:cgw',
           id: 'msg-cgw',
           threadKind: 'direct',
           threadId: 'did:cgw',
@@ -753,6 +809,8 @@ void main() {
     const event = core.RealtimeEvent(
       kind: 'message_received',
       message: core.Message(
+        conversationId: 'dm:peer-scope:v1:test',
+        senderDidSnapshot: 'did:daemon',
         id: 'msg-control-realtime',
         threadKind: 'direct',
         threadId: 'did:daemon',
@@ -779,6 +837,8 @@ void main() {
     const event = core.RealtimeEvent(
       kind: 'message_received',
       message: core.Message(
+        conversationId: 'dm:peer-scope:v1:test',
+        senderDidSnapshot: 'did:agent:runtime',
         id: 'msg-control-visible-realtime',
         threadKind: 'direct',
         threadId: 'did:agent:runtime',
@@ -806,6 +866,9 @@ void main() {
 
   test('direct conversation keeps an already canonical thread id', () {
     const conversation = core.Conversation(
+      conversationId: 'dm:peer-scope:v1:test',
+      peerPersonaId: 'persona:v1:test',
+      resolutionState: core.ConversationResolutionState.resolved,
       threadKind: 'direct',
       threadId: 'dm:did:alice:did:bob',
       participants: <String>[],
@@ -824,6 +887,8 @@ void main() {
 
   test('group messages and conversations keep group-prefixed thread ids', () {
     const message = core.Message(
+      conversationId: 'did:group',
+      senderDidSnapshot: 'did:bob',
       id: 'group-msg',
       threadKind: 'group',
       threadId: 'did:group',
@@ -834,6 +899,9 @@ void main() {
       metadata: core.MessageMetadata(),
     );
     const conversation = core.Conversation(
+      conversationId: 'did:group',
+      canonicalGroupDid: 'did:group',
+      resolutionState: core.ConversationResolutionState.resolved,
       threadKind: 'group',
       threadId: 'did:group',
       participants: <String>[],

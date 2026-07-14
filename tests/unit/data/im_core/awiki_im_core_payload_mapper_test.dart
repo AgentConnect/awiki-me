@@ -9,6 +9,8 @@ void main() {
     const payload =
         '{"schema":"awiki.daemon.bootstrap.v1","bootstrap_id":"boot_1"}';
     const message = core.Message(
+      conversationId: 'dm:peer-scope:v1:test',
+      senderDidSnapshot: 'did:agent:daemon',
       id: 'msg-control',
       threadKind: 'direct',
       threadId: 'did:agent:daemon',
@@ -36,6 +38,8 @@ void main() {
       const event = core.RealtimeEvent(
         kind: 'message_received',
         message: core.Message(
+          conversationId: 'dm:peer-scope:v1:test',
+          senderDidSnapshot: 'did:agent:daemon',
           id: 'msg-control-realtime',
           threadKind: 'direct',
           threadId: 'did:agent:daemon',
@@ -68,6 +72,8 @@ void main() {
     const event = core.RealtimeEvent(
       kind: 'message_received',
       message: core.Message(
+        conversationId: 'dm:peer-scope:v1:test',
+        senderDidSnapshot: 'did:agent:runtime',
         id: 'msg-control-visible-realtime',
         threadKind: 'direct',
         threadId: 'did:agent:runtime',
@@ -101,6 +107,8 @@ void main() {
     const event = core.RealtimeEvent(
       kind: 'message_received',
       message: core.Message(
+        conversationId: 'dm:peer-scope:v1:test',
+        senderDidSnapshot: 'did:agent:runtime',
         id: 'msg-runtime',
         threadKind: 'direct',
         threadId: 'did:agent:runtime',
@@ -139,6 +147,8 @@ void main() {
     ]
   }''';
     const message = core.Message(
+      conversationId: 'did:wba:awiki.info:group:mention',
+      senderDidSnapshot: 'did:wba:awiki.info:user:peer',
       id: 'msg-mention',
       threadKind: 'group',
       threadId: 'group:did:wba:awiki.info:group:mention',
@@ -177,6 +187,8 @@ void main() {
     ]
   }''';
     const message = core.Message(
+      conversationId: 'did:wba:awiki.info:group:mention',
+      senderDidSnapshot: 'did:wba:awiki.info:user:peer',
       id: 'msg-mention-invalid',
       threadKind: 'group',
       threadId: 'group:did:wba:awiki.info:group:mention',
@@ -212,11 +224,16 @@ void main() {
   }''';
     final conversation = mapper.conversationFromCore(
       const core.Conversation(
+        conversationId: 'did:wba:awiki.info:group:mention',
+        canonicalGroupDid: 'did:wba:awiki.info:group:mention',
+        resolutionState: core.ConversationResolutionState.resolved,
         threadKind: 'group',
         threadId: 'group:did:wba:awiki.info:group:mention',
         unreadCount: 1,
         messageCount: 1,
         lastMessage: core.Message(
+          conversationId: 'did:wba:awiki.info:group:mention',
+          senderDidSnapshot: 'did:wba:awiki.info:user:peer',
           id: 'msg-preview',
           threadKind: 'group',
           threadId: 'group:did:wba:awiki.info:group:mention',
