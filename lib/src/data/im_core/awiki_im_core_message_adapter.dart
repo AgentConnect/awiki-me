@@ -117,9 +117,10 @@ class AwikiImCoreMessageAdapter
           idempotencyKey: idempotencyKey,
         ),
       );
-      return _mappers.chatMessageFromCore(
+      return _conversationMessageFromCore(
         result.message.message,
         ownerDid: ownerDid,
+        expectedConversationId: conversation.conversationId,
       );
     });
   }
@@ -166,7 +167,11 @@ class AwikiImCoreMessageAdapter
           idempotencyKey: idempotencyKey,
         ),
       );
-      return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
+      return _conversationMessageFromCore(
+        result.message,
+        ownerDid: ownerDid,
+        expectedConversationId: conversation.conversationId,
+      );
     });
   }
 
@@ -189,7 +194,11 @@ class AwikiImCoreMessageAdapter
           idempotencyKey: idempotencyKey,
         ),
       );
-      return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
+      return _conversationMessageFromCore(
+        result.message,
+        ownerDid: ownerDid,
+        expectedConversationId: conversation.conversationId,
+      );
     });
   }
 
@@ -378,8 +387,11 @@ class AwikiImCoreMessageAdapter
         'im_core_messages.conversation_timeline_map',
         () => page.items
             .map(
-              (message) =>
-                  _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
+              (message) => _conversationMessageFromCore(
+                message,
+                ownerDid: ownerDid,
+                expectedConversationId: conversation.conversationId,
+              ),
             )
             .where(
               (message) =>
@@ -445,7 +457,13 @@ class AwikiImCoreMessageAdapter
           core.ConversationReadRef(conversationId: conversation.conversationId),
           limit: limit,
         )
-        .map((patch) => _threadPatchFromCore(patch, ownerDid: ownerDid));
+        .map(
+          (patch) => _conversationPatchFromCore(
+            patch,
+            ownerDid: ownerDid,
+            expectedConversationId: conversation.conversationId,
+          ),
+        );
   }
 
   @override
@@ -459,7 +477,11 @@ class AwikiImCoreMessageAdapter
         core.ConversationReadRef(conversationId: conversation.conversationId),
         limit: limit,
       );
-      return _threadPatchFromCore(patch, ownerDid: ownerDid);
+      return _conversationPatchFromCore(
+        patch,
+        ownerDid: ownerDid,
+        expectedConversationId: conversation.conversationId,
+      );
     });
   }
 
@@ -538,6 +560,57 @@ class AwikiImCoreMessageAdapter
       messageId: patch.messageId,
       reason: patch.reason,
     );
+  }
+
+  ChatMessage _conversationMessageFromCore(
+    core.Message message, {
+    required String ownerDid,
+    required String expectedConversationId,
+  }) {
+    final mapped = _mappers.chatMessageFromCore(message, ownerDid: ownerDid);
+    _requireExpectedConversationId(
+      mapped.conversationId,
+      expectedConversationId,
+    );
+    return mapped;
+  }
+
+  ThreadMessagePatch _conversationPatchFromCore(
+    core.ThreadMessageStorePatch patch, {
+    required String ownerDid,
+    required String expectedConversationId,
+  }) {
+    _requireExpectedConversationId(
+      patch.conversationIdentity?.conversationId,
+      expectedConversationId,
+    );
+    for (final message in patch.items) {
+      _requireExpectedConversationId(
+        message.conversationId,
+        expectedConversationId,
+      );
+    }
+    final message = patch.message;
+    if (message != null) {
+      _requireExpectedConversationId(
+        message.conversationId,
+        expectedConversationId,
+      );
+    }
+    return _threadPatchFromCore(patch, ownerDid: ownerDid);
+  }
+}
+
+void _requireExpectedConversationId(
+  String? actualConversationId,
+  String expectedConversationId,
+) {
+  final actual = actualConversationId?.trim();
+  if (actual == null || actual.isEmpty) {
+    throw StateError('canonical_conversation_identity_missing');
+  }
+  if (actual != expectedConversationId) {
+    throw StateError('canonical_conversation_identity_mismatch');
   }
 }
 

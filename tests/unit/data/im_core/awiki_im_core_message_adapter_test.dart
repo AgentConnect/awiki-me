@@ -63,6 +63,28 @@ void main() {
     },
   );
 
+  test(
+    'conversation timeline fails closed without canonical identity',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      client.messages.responseConversationId = '';
+      final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+      await expectLater(
+        adapter.loadConversationTimeline(
+          AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'canonical_conversation_identity_missing',
+          ),
+        ),
+      );
+    },
+  );
+
   test('conversation timeline patch APIs use conversation read ref', () async {
     final client = _FakeClient(ownerDid: 'did:alice');
     final runtime = _FakeRuntime(client);
@@ -103,6 +125,43 @@ void main() {
   });
 
   test(
+    'conversation timeline patch does not infer identity from its message',
+    () async {
+      final client = _FakeClient(ownerDid: 'did:alice');
+      final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+      final patchFuture = adapter
+          .watchConversationTimelinePatches(
+            AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
+          )
+          .first;
+      await Future<void>.delayed(Duration.zero);
+      client.messages.emitConversationTimelinePatch(
+        core.ThreadMessageStorePatch(
+          kind: core.ThreadMessageStorePatchKind.upsert,
+          ownerIdentityId: 'alice-id',
+          ownerDid: 'did:alice',
+          version: 2,
+          threadKind: 'thread',
+          threadId: 'dm:peer-scope:v1:bob',
+          message: _messageForOwner('did:alice'),
+        ),
+      );
+
+      await expectLater(
+        patchFuture,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'canonical_conversation_identity_missing',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'sendConversationText forwards conversation id and durable ids',
     () async {
       final client = _FakeClient(ownerDid: 'did:alice');
@@ -127,6 +186,28 @@ void main() {
       expect(sent.conversationId, 'dm:peer-scope:v1:bob');
     },
   );
+
+  test('sendConversationText rejects a different canonical id', () async {
+    final client = _FakeClient(ownerDid: 'did:alice');
+    client.messages.responseConversationId = 'dm:peer-scope:v1:mallory';
+    final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+    await expectLater(
+      adapter.sendConversationText(
+        conversation: AppConversationReadRef.fromConversationId(
+          'dm:peer-scope:v1:bob',
+        ),
+        content: 'must stay in bob conversation',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'canonical_conversation_identity_mismatch',
+        ),
+      ),
+    );
+  });
 
   test(
     'sendConversationPayload forwards payload json and durable ids',
@@ -420,6 +501,7 @@ class _FakeMessageApi implements core.MessageApi {
   String? lastPayloadJson;
   String? lastClientMessageId;
   String? lastIdempotencyKey;
+  String? responseConversationId;
 
   void emitConversationTimelinePatch(core.ThreadMessageStorePatch patch) {
     _conversationTimelinePatches.add(patch);
@@ -450,7 +532,12 @@ class _FakeMessageApi implements core.MessageApi {
     lastConversationId = conversation.conversationId;
     lastConversationTimelineCursor = cursor;
     return core.MessagePage(
-      items: <core.Message>[_messageForOwner(_ownerDid())],
+      items: <core.Message>[
+        _messageForOwner(
+          _ownerDid(),
+          conversationId: responseConversationId ?? conversation.conversationId,
+        ),
+      ],
       hasMore: false,
     );
   }
@@ -500,7 +587,8 @@ class _FakeMessageApi implements core.MessageApi {
       message: _messageForOwner(
         _ownerDid(),
         id: request.clientMessageId ?? 'sent-conversation-text',
-        conversationId: request.conversation.conversationId,
+        conversationId:
+            responseConversationId ?? request.conversation.conversationId,
         text: request.text,
       ),
     );
@@ -520,7 +608,8 @@ class _FakeMessageApi implements core.MessageApi {
       message: _messageForOwner(
         _ownerDid(),
         id: request.clientMessageId ?? 'sent-conversation-payload',
-        conversationId: request.conversation.conversationId,
+        conversationId:
+            responseConversationId ?? request.conversation.conversationId,
         text: 'payload hello',
         kind: 'application/json',
         payloadJson: request.payloadJson,

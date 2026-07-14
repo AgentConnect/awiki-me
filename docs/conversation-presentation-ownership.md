@@ -145,6 +145,11 @@ Flutter SDK conversation DTO 必须保持 core-only。以下字段不得加入 S
 | encrypted content type | `ChatMessage.isEncrypted` |
 | server sequence | `ChatMessage.serverSequence`，用于排序、thread-after 和 first-paint 判断 |
 
+`sendConversation*`、conversation timeline load/repair 和 timeline patch stream
+在 adapter 边界还会校验返回的每条消息与 patch 的 `conversationId` 必须非空且
+严格等于请求的 canonical ID；缺失或串入其他会话时直接 fail closed，不允许用
+`threadId`、DID 或 patch 中另一条消息补成当前会话。
+
 SDK conversation list/snapshot 只有在 `resolutionState == resolved` 且 Direct
 具有 `peerPersonaId`、Group 具有 `canonicalGroupDid` 时才能进入 App mapper。
 缺少任一 canonical identity 的行在 adapter 边界 fail closed，不再由 UI 用 DID、
