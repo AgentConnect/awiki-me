@@ -30,6 +30,7 @@ void main() {
     await layout.scopeLayout.createScopeRootExclusive();
     var openerCalled = false;
     var inspectionCalled = false;
+    var upgradeCalled = false;
     final vaultProvider = _FakeVaultSecretProvider(
       secrets: core.DeviceVaultRootKey.fromList(List<int>.filled(32, 7)),
     );
@@ -48,6 +49,20 @@ void main() {
           eligibility: core.LocalStateUpgradeEligibility.notRequired,
           sourceSchemaVersion: 28,
           targetSchemaVersion: 28,
+        );
+      },
+      upgradeLocalState: (paths) async {
+        upgradeCalled = true;
+        expect(inspectionCalled, isTrue);
+        return const core.LocalStateUpgradeResult(
+          status: core.LocalStateUpgradeStatus.notRequired,
+          sourceSchemaVersion: 28,
+          targetSchemaVersion: 28,
+          migratedPersonas: 0,
+          migratedConversations: 0,
+          unresolvedMessages: 0,
+          aliasCount: 0,
+          backupAvailable: false,
         );
       },
       openCore:
@@ -85,6 +100,7 @@ void main() {
 
     await expectLater(runtime.open(), throwsA(isA<UnsupportedError>()));
     expect(openerCalled, isTrue);
+    expect(upgradeCalled, isTrue);
     expect(vaultProvider.calls, 1);
     expect(runtime.isOpen, isFalse);
   });

@@ -93,6 +93,209 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     if (database != null) await database.close();
   }
 
+  /// Atomically rewrites App-owned conversation overlays and drafts using the
+  /// Core-owned alias projection. A verified SQLite snapshot is created before
+  /// the first mutation; each mapping is journaled in the same transaction as
+  /// its data changes so startup can safely retry.
+  Future<void> migrateCanonicalConversationAliases(
+    Iterable<ProductConversationAliasMigration> mappings,
+  ) async {
+    final normalized = _normalizeAliasMigrations(mappings);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final db = await _db;
+    final pending = await _pendingAliasMigrations(db, normalized);
+    if (pending.isEmpty) {
+      return;
+    }
+    await _createCanonicalMigrationBackup(db);
+    await db.transaction((transaction) async {
+      await _createCanonicalMigrationJournal(transaction);
+      for (final mapping in pending) {
+        await _migrateConversationOverlay(transaction, mapping);
+        await _migrateMessageDraft(transaction, mapping);
+        await transaction.insert(
+          'canonical_conversation_overlay_migrations',
+          <String, Object?>{
+            'owner_did': mapping.ownerDid,
+            'legacy_conversation_id': mapping.legacyConversationId,
+            'canonical_conversation_id': mapping.canonicalConversationId,
+            'completed_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+      }
+    });
+  }
+
+  Future<List<ProductConversationAliasMigration>> _pendingAliasMigrations(
+    Database db,
+    List<ProductConversationAliasMigration> mappings,
+  ) async {
+    final journalExists =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            <Object?>['canonical_conversation_overlay_migrations'],
+          ),
+        ) ==
+        1;
+    if (!journalExists) {
+      return mappings;
+    }
+    final pending = <ProductConversationAliasMigration>[];
+    for (final mapping in mappings) {
+      final completed = Sqflite.firstIntValue(
+        await db.rawQuery(
+          '''SELECT COUNT(*) FROM canonical_conversation_overlay_migrations
+WHERE owner_did = ? AND legacy_conversation_id = ?
+  AND canonical_conversation_id = ?''',
+          <Object?>[
+            mapping.ownerDid,
+            mapping.legacyConversationId,
+            mapping.canonicalConversationId,
+          ],
+        ),
+      );
+      if (completed != 1) {
+        pending.add(mapping);
+      }
+    }
+    return pending;
+  }
+
+  Future<void> _createCanonicalMigrationBackup(Database db) async {
+    final backupDirectory = Directory(
+      p.join(
+        p.dirname(_databasePath),
+        'canonical-conversation-overlay-upgrade',
+      ),
+    );
+    await backupDirectory.create(recursive: true);
+    final backupPath = p.join(
+      backupDirectory.path,
+      'awiki_me_product_store.pre-canonical-v2.sqlite',
+    );
+    if (await File(backupPath).exists()) {
+      return;
+    }
+    final temporaryPath = '$backupPath.tmp';
+    final temporaryFile = File(temporaryPath);
+    if (await temporaryFile.exists()) {
+      await temporaryFile.delete();
+    }
+    final escaped = temporaryPath.replaceAll("'", "''");
+    await db.execute("VACUUM INTO '$escaped'");
+    await File(temporaryPath).rename(backupPath);
+  }
+
+  static Future<void> _createCanonicalMigrationJournal(DatabaseExecutor db) =>
+      db.execute('''
+CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
+  owner_did TEXT NOT NULL,
+  legacy_conversation_id TEXT NOT NULL,
+  canonical_conversation_id TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  PRIMARY KEY (owner_did, legacy_conversation_id)
+)''');
+
+  static Future<void> _migrateConversationOverlay(
+    DatabaseExecutor db,
+    ProductConversationAliasMigration mapping,
+  ) async {
+    final rows = await db.query(
+      'conversation_overlays',
+      where: 'owner_did = ? AND (thread_id = ? OR conversation_id = ?)',
+      whereArgs: <Object?>[
+        mapping.ownerDid,
+        mapping.legacyConversationId,
+        mapping.legacyConversationId,
+      ],
+    );
+    if (rows.isEmpty) {
+      return;
+    }
+    final canonicalRows = await db.query(
+      'conversation_overlays',
+      where: 'owner_did = ? AND conversation_id = ?',
+      whereArgs: <Object?>[mapping.ownerDid, mapping.canonicalConversationId],
+    );
+    final candidates = <ProductConversationOverlay>[
+      ...rows.map(_overlayFromRow),
+      ...canonicalRows.map(_overlayFromRow),
+    ];
+    candidates.sort((left, right) {
+      final byTime = right.updatedAt.compareTo(left.updatedAt);
+      if (byTime != 0) return byTime;
+      final leftCanonical =
+          left.effectiveConversationId == mapping.canonicalConversationId;
+      final rightCanonical =
+          right.effectiveConversationId == mapping.canonicalConversationId;
+      return leftCanonical == rightCanonical ? 0 : (leftCanonical ? -1 : 1);
+    });
+    final selected = candidates.first.copyWith(
+      threadId: mapping.canonicalConversationId,
+      conversationId: mapping.canonicalConversationId,
+    );
+    await db.delete(
+      'conversation_overlays',
+      where:
+          'owner_did = ? AND (thread_id = ? OR conversation_id = ? OR conversation_id = ?)',
+      whereArgs: <Object?>[
+        mapping.ownerDid,
+        mapping.legacyConversationId,
+        mapping.legacyConversationId,
+        mapping.canonicalConversationId,
+      ],
+    );
+    await db.insert(
+      'conversation_overlays',
+      _overlayToRow(selected),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<void> _migrateMessageDraft(
+    DatabaseExecutor db,
+    ProductConversationAliasMigration mapping,
+  ) async {
+    final rows = await db.query(
+      'message_drafts',
+      where: 'owner_did = ? AND thread_id IN (?, ?)',
+      whereArgs: <Object?>[
+        mapping.ownerDid,
+        mapping.legacyConversationId,
+        mapping.canonicalConversationId,
+      ],
+    );
+    if (rows.isEmpty) {
+      return;
+    }
+    final drafts = rows.map(_draftFromRow).toList()
+      ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    final selected = MessageDraft(
+      ownerDid: mapping.ownerDid,
+      threadId: mapping.canonicalConversationId,
+      draftText: drafts.first.draftText,
+      updatedAt: drafts.first.updatedAt,
+    );
+    await db.delete(
+      'message_drafts',
+      where: 'owner_did = ? AND thread_id IN (?, ?)',
+      whereArgs: <Object?>[
+        mapping.ownerDid,
+        mapping.legacyConversationId,
+        mapping.canonicalConversationId,
+      ],
+    );
+    await db.insert(
+      'message_drafts',
+      _draftToRow(selected),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   static Future<void> _createSchema(DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE conversation_overlays (
@@ -605,4 +808,40 @@ bool _readBool(Object? value) {
 DateTime _readDate(Object? value) {
   return DateTime.tryParse(value?.toString() ?? '') ??
       DateTime.fromMillisecondsSinceEpoch(0);
+}
+
+List<ProductConversationAliasMigration> _normalizeAliasMigrations(
+  Iterable<ProductConversationAliasMigration> mappings,
+) {
+  final byOwnerAndAlias = <String, ProductConversationAliasMigration>{};
+  for (final mapping in mappings) {
+    final ownerDid = mapping.ownerDid.trim();
+    final legacyConversationId = mapping.legacyConversationId.trim();
+    final canonicalConversationId = mapping.canonicalConversationId.trim();
+    if (ownerDid.isEmpty ||
+        legacyConversationId.isEmpty ||
+        canonicalConversationId.isEmpty ||
+        legacyConversationId == canonicalConversationId) {
+      continue;
+    }
+    final normalized = ProductConversationAliasMigration(
+      ownerDid: ownerDid,
+      legacyConversationId: legacyConversationId,
+      canonicalConversationId: canonicalConversationId,
+    );
+    final key = '$ownerDid\n$legacyConversationId';
+    final existing = byOwnerAndAlias[key];
+    if (existing != null &&
+        existing.canonicalConversationId != canonicalConversationId) {
+      throw StateError('conversation_alias_conflict');
+    }
+    byOwnerAndAlias[key] = normalized;
+  }
+  final result = byOwnerAndAlias.values.toList(growable: false);
+  result.sort((left, right) {
+    final byOwner = left.ownerDid.compareTo(right.ownerDid);
+    if (byOwner != 0) return byOwner;
+    return left.legacyConversationId.compareTo(right.legacyConversationId);
+  });
+  return result;
 }

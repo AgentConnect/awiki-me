@@ -62,6 +62,18 @@ class ProductConversationOverlay {
   }
 }
 
+class ProductConversationAliasMigration {
+  const ProductConversationAliasMigration({
+    required this.ownerDid,
+    required this.legacyConversationId,
+    required this.canonicalConversationId,
+  });
+
+  final String ownerDid;
+  final String legacyConversationId;
+  final String canonicalConversationId;
+}
+
 const Object _productConversationOverlayUnset = Object();
 
 String? _resolveNullableString(Object? value, String? current) {

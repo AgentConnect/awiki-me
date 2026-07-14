@@ -12,6 +12,7 @@ import '../application/directory_application_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
+import '../application/models/product_local_models.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
@@ -187,6 +188,16 @@ class AppBootstrap {
     try {
       final productLocalStore = AwikiProductLocalStoreSqlite(
         databasePath: storageScopeLayout.productDatabasePath,
+      );
+      await productLocalStore.migrateCanonicalConversationAliases(
+        runtime.localStateUpgradeResult?.aliasMappings.map(
+              (mapping) => ProductConversationAliasMigration(
+                ownerDid: mapping.ownerDid,
+                legacyConversationId: mapping.legacyConversationId,
+                canonicalConversationId: mapping.canonicalConversationId,
+              ),
+            ) ??
+            const <ProductConversationAliasMigration>[],
       );
       final activeSessionStore = KeyValueActiveSessionStore(
         storage: preferenceStorage,

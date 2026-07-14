@@ -50,6 +50,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
 
   core.AwikiImCore? _core;
+  core.LocalStateUpgradeResult? _localStateUpgradeResult;
   Future<void>? _openInFlight;
   core.AwikiImClient? _currentClient;
   int _activeClientOperations = 0;
@@ -59,6 +60,9 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   AwikiImCoreEnvironmentConfig get config => _config;
 
   AwikiImCorePathLayout get paths => _paths;
+
+  core.LocalStateUpgradeResult? get localStateUpgradeResult =>
+      _localStateUpgradeResult;
 
   @override
   bool get isOpen => _core != null;
@@ -90,10 +94,11 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     await _paths.ensureDirectories();
     await _paths.archiveIncompatibleLocalStateIfNeeded();
     final corePaths = _paths.toCorePaths();
-    final inspection = await _inspectLocalStateUpgrade(corePaths);
-    if (inspection.eligibility == core.LocalStateUpgradeEligibility.required) {
-      await _upgradeLocalState(corePaths);
-    }
+    await _inspectLocalStateUpgrade(corePaths);
+    // Run the idempotent entry point even after cutover. Besides performing a
+    // required upgrade, it returns the stable alias mapping that lets the App
+    // resume its independent overlay migration after a process crash.
+    _localStateUpgradeResult = await _upgradeLocalState(corePaths);
     final opened = await _openCore(
       config: _config.toCoreConfig(),
       paths: corePaths,
@@ -210,6 +215,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       _currentClient = null;
       final core = _core;
       _core = null;
+      _localStateUpgradeResult = null;
       try {
         await client?.dispose();
       } finally {

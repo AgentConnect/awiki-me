@@ -418,6 +418,80 @@ void main() {
       expect(overlays['dm:alice:bob']?.customTitle, 'Bob');
     },
   );
+
+  test('canonical alias migration is backed up and idempotent', () async {
+    final store = _store(databaseDir);
+    const legacyId = 'direct-did:did:bob';
+    const canonicalId = 'dm:peer-scope:v1:bob';
+    await store.upsertConversationOverlay(
+      ProductConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: legacyId,
+        customTitle: 'latest legacy title',
+        hidden: true,
+        updatedAt: DateTime.utc(2026, 7, 14, 2),
+      ),
+    );
+    await store.upsertConversationOverlayByConversationId(
+      ProductConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: canonicalId,
+        conversationId: canonicalId,
+        customTitle: 'older canonical title',
+        updatedAt: DateTime.utc(2026, 7, 14, 1),
+      ),
+    );
+    await store.saveDraft(
+      MessageDraft(
+        ownerDid: 'did:alice',
+        threadId: legacyId,
+        draftText: 'migrated draft',
+        updatedAt: DateTime.utc(2026, 7, 14, 3),
+      ),
+    );
+
+    const mapping = ProductConversationAliasMigration(
+      ownerDid: 'did:alice',
+      legacyConversationId: legacyId,
+      canonicalConversationId: canonicalId,
+    );
+    await store.migrateCanonicalConversationAliases(const [mapping]);
+    await store.migrateCanonicalConversationAliases(const [mapping]);
+
+    expect(
+      await store.loadConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: legacyId,
+      ),
+      isNull,
+    );
+    final overlay = await store.loadConversationOverlayByConversationId(
+      ownerDid: 'did:alice',
+      conversationId: canonicalId,
+    );
+    expect(overlay?.threadId, canonicalId);
+    expect(overlay?.customTitle, 'latest legacy title');
+    expect(overlay?.hidden, isTrue);
+    expect(
+      await store.loadDraft(ownerDid: 'did:alice', threadId: legacyId),
+      isNull,
+    );
+    expect(
+      (await store.loadDraft(
+        ownerDid: 'did:alice',
+        threadId: canonicalId,
+      ))?.draftText,
+      'migrated draft',
+    );
+    expect(
+      await File(
+        '${databaseDir.path}/support/awiki-me/product/'
+        'canonical-conversation-overlay-upgrade/'
+        'awiki_me_product_store.pre-canonical-v2.sqlite',
+      ).exists(),
+      isTrue,
+    );
+  });
 }
 
 Future<void> _createVersion1Schema(DatabaseExecutor db) async {
