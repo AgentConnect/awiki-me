@@ -69,12 +69,18 @@ AWIKI_MACOS_DEVELOPMENT_TEAM="ABCDEFGHIJ" \
 scripts/package_app.sh
 ```
 
-只要本次目标包含 macOS，脚本就会在修改版本号和构建之前检查 identity 是否存在。
+只要本次目标包含 macOS，脚本就会在构建之前检查 identity 是否存在。
 用户试用包使用 Flutter Release 模式和 production Keychain channel；Profile 仍属于开发通道，
 不能用来生成用户安装包。
 构建完成后还会强制验证严格签名、Bundle ID、Team ID、非 ad-hoc 状态及稳定
 designated requirement；任何一项不符合都不会生成最终 DMG。Android-only 打包不依赖
 macOS 签名配置。
+
+发布版本必须先写入并提交 `pubspec.yaml`，打包脚本不会再自动递增版本。脚本要求
+AWiki Me 与 sibling `awiki-cli-rs2` 都是 clean Git worktree，并把二者完整 40 位 commit
+SHA 写入 package manifest、latest manifest 和签名 App 的 `Info.plist`。DMG 生成前会读取
+`AWikiAppSourceRef` 与 `AWikiImCoreSourceRef` 并与本次构建输入逐字校验；因此发布 artifact
+可以证明其 App/Core 源码来源，但该能力不能反向补齐未嵌入这些字段的历史 artifact。
 
 `package_app.local.config`、`.p12` 和 `.pfx` 均已被 Git 忽略，但真实私钥仍应只保存在
 Keychain、加密密码库或 CI Secret 中。`.gitignore` 不是凭证存储机制。

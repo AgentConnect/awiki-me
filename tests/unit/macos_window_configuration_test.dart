@@ -165,6 +165,39 @@ void main() {
       contains('CODE_SIGN_IDENTITY="\$AWIKI_MACOS_SIGNING_FINGERPRINT"'),
     );
     expect(packageScript, contains('awiki_verify_macos_app_signature'));
+    expect(packageScript, contains("rev-parse --verify 'HEAD^{commit}'"));
+    expect(
+      packageScript,
+      contains('status --porcelain --untracked-files=normal'),
+    );
+    expect(packageScript, contains('HEAD changed during packaging'));
+    expect(
+      packageScript,
+      contains(
+        'require_source_tree_matches_ref "AWiki Me" "\$ROOT_DIR" "\$APP_SOURCE_REF"',
+      ),
+    );
+    expect(
+      packageScript,
+      contains(
+        'require_source_tree_matches_ref "im-core" "\$SDK_REPO_DIR" "\$IM_CORE_SOURCE_REF"',
+      ),
+    );
+    expect(packageScript, contains('AWIKI_APP_SOURCE_REF="\$APP_SOURCE_REF"'));
+    expect(
+      packageScript,
+      contains('AWIKI_IM_CORE_SOURCE_REF="\$IM_CORE_SOURCE_REF"'),
+    );
+    expect(packageScript, contains('"sourceRefs": {'));
+    expect(
+      packageScript,
+      contains('"app": \$(json_string "\$APP_SOURCE_REF")'),
+    );
+    expect(
+      packageScript,
+      contains('"imCore": \$(json_string "\$IM_CORE_SOURCE_REF")'),
+    );
+    expect(packageConfig, contains('PACKAGE_VERSION_BUMP="none"'));
     expect(
       packageConfig,
       contains(
@@ -185,5 +218,14 @@ void main() {
     );
     expect(nativeWindow, contains('case .production:'));
     expect(nativeWindow, contains('case .development:'));
+
+    final infoPlist = File('macos/Runner/Info.plist').readAsStringSync();
+    expect(infoPlist, contains('<key>AWikiAppSourceRef</key>'));
+    expect(infoPlist, contains('<string>\$(AWIKI_APP_SOURCE_REF)</string>'));
+    expect(infoPlist, contains('<key>AWikiImCoreSourceRef</key>'));
+    expect(
+      infoPlist,
+      contains('<string>\$(AWIKI_IM_CORE_SOURCE_REF)</string>'),
+    );
   });
 }

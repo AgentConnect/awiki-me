@@ -274,6 +274,13 @@ The script uses `PACKAGE_RELEASE_DOMAIN` only for release artifact metadata: pac
 
 Packaging behavior:
 
+- The release version must already be committed in `pubspec.yaml`; packaging
+  does not bump or rewrite tracked source files. Both the AWiki Me and sibling
+  `awiki-cli-rs2` worktrees must be clean.
+- `package-manifest.json` and `dist/latest.json` record the exact 40-character
+  App and im-core source refs. The same refs are embedded in the signed macOS
+  App as `AWikiAppSourceRef` and `AWikiImCoreSourceRef`, and packaging verifies
+  them before creating the DMG.
 - Android arm64: Flutter release APK, signed through `android/key.properties` for internal distribution.
 - macOS arm64 / x64: release DMG signed by the fixed Team ID; packaging fails
   before release if the Keychain identity is unavailable or the resulting app
