@@ -1,10 +1,12 @@
 # AWiki Me 预发布 Storage Cleanup Runbook
 
-Status: active；仅用于首发前开发数据
+Status: archived；仅用于已确认的首发前开发数据，禁止用于生产 `release/0710`
 
-`release/0707` 与 `release/0710` 均未上线。正式 App 不读取旧
-`awiki-me/environments/<namespace>`、split Keychain items 或 namespace bundle。本工具只帮助
-开发者盘点、归档或显式删除这些预发布残留，不属于 production migration。
+本文创建时 `release/0707` 与 `release/0710` 尚未上线；该历史前提已经失效，
+`release/0710` 现已上线。正式 App 仍不读取旧
+`awiki-me/environments/<namespace>`、split Keychain items 或 namespace bundle，但本工具只帮助
+开发者处理明确确认的预发布残留，不属于 production migration，也不能替代 schema 27
+Canonical Conversation 升级、备份或恢复模块。不要对生产用户 Storage Scope 运行本工具。
 
 ## 安全边界
 
