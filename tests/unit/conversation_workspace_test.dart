@@ -2900,7 +2900,7 @@ void main() {
     expect(find.text('Marcus Chen'), findsWidgets);
   });
 
-  testWidgets('macOS 双栏刷新后按 exact thread 保持 peer-scoped 选中会话', (tester) async {
+  testWidgets('macOS 双栏刷新后按 exact conversation ID 保持选中会话', (tester) async {
     const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(

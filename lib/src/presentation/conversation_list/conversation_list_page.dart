@@ -44,7 +44,6 @@ class ConversationListPage extends ConsumerStatefulWidget {
   const ConversationListPage({
     super.key,
     this.onConversationSelected,
-    this.selectedThreadId,
     this.selectedConversationId,
     this.embedded = false,
     this.bottomInset = 120,
@@ -52,7 +51,6 @@ class ConversationListPage extends ConsumerStatefulWidget {
   });
 
   final ConversationSelectionHandler? onConversationSelected;
-  final String? selectedThreadId;
   final String? selectedConversationId;
   final bool embedded;
   final double bottomInset;
@@ -116,7 +114,6 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         selectedConversationId: _selectedConversationKey(
           widget.selectedConversationId,
         ),
-        selectedThreadId: _selectedConversationKey(widget.selectedThreadId),
         bottomInset: widget.bottomInset,
         onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
@@ -141,7 +138,6 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         selectedConversationId: _selectedConversationKey(
           widget.selectedConversationId,
         ),
-        selectedThreadId: _selectedConversationKey(widget.selectedThreadId),
         embedded: widget.embedded,
         bottomInset: widget.bottomInset,
         onRefresh: refreshConversations,
@@ -215,7 +211,6 @@ class _MacConversationList extends ConsumerStatefulWidget {
     required this.loadState,
     required this.composerDrafts,
     required this.selectedConversationId,
-    required this.selectedThreadId,
     required this.bottomInset,
     required this.onRefresh,
     required this.onOpen,
@@ -228,7 +223,6 @@ class _MacConversationList extends ConsumerStatefulWidget {
   final ConversationListLoadState loadState;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
-  final String? selectedThreadId;
   final double bottomInset;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
@@ -436,7 +430,6 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                             item,
                             selectedConversationId:
                                 widget.selectedConversationId,
-                            selectedThreadId: widget.selectedThreadId,
                           ),
                           onTap: () => widget.onOpen(item),
                           onDelete: () => widget.onDelete(item),
@@ -479,23 +472,11 @@ String? _selectedConversationKey(String? value) {
 bool _isSelectedConversation(
   ConversationSummary item, {
   required String? selectedConversationId,
-  required String? selectedThreadId,
 }) {
   final itemConversationId = item.conversationId.trim();
-  if (selectedConversationId != null &&
+  return selectedConversationId != null &&
       itemConversationId.isNotEmpty &&
-      itemConversationId == selectedConversationId) {
-    return true;
-  }
-  final itemThreadId = item.threadId.trim();
-  if (selectedThreadId != null &&
-      itemThreadId.isNotEmpty &&
-      itemThreadId == selectedThreadId) {
-    return true;
-  }
-  return selectedThreadId != null &&
-      itemConversationId.isNotEmpty &&
-      itemConversationId == selectedThreadId;
+      itemConversationId == selectedConversationId;
 }
 
 ConversationDraftSortState? _draftSortStateForConversation(
@@ -515,7 +496,6 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
     required this.loadState,
     required this.composerDrafts,
     required this.selectedConversationId,
-    required this.selectedThreadId,
     required this.embedded,
     required this.bottomInset,
     required this.onRefresh,
@@ -527,7 +507,6 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
   final ConversationListLoadState loadState;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
-  final String? selectedThreadId;
   final bool embedded;
   final double bottomInset;
   final Future<void> Function() onRefresh;
@@ -591,7 +570,6 @@ class _ConversationRefreshViewState
       visibleConversations: visibleConversations,
       composerDrafts: widget.composerDrafts,
       selectedConversationId: widget.selectedConversationId,
-      selectedThreadId: widget.selectedThreadId,
       embedded: widget.embedded,
       bottomInset: widget.bottomInset,
       hasQuery: hasQuery,
@@ -633,7 +611,6 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
     required this.visibleConversations,
     required this.composerDrafts,
     required this.selectedConversationId,
-    required this.selectedThreadId,
     required this.embedded,
     required this.bottomInset,
     required this.hasQuery,
@@ -649,7 +626,6 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
   final List<ConversationSummary> visibleConversations;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
-  final String? selectedThreadId;
   final bool embedded;
   final double bottomInset;
   final bool hasQuery;
@@ -739,7 +715,6 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   isSelected: _isSelectedConversation(
                     item,
                     selectedConversationId: selectedConversationId,
-                    selectedThreadId: selectedThreadId,
                   ),
                   onTap: () => onOpen(item),
                   onLongPress: () => onDelete(item),
