@@ -23,6 +23,13 @@ typedef AwikiImCoreInspectLocalStateUpgrade =
 typedef AwikiImCoreUpgradeLocalState =
     Future<core.LocalStateUpgradeResult> Function(core.AwikiImCorePaths paths);
 
+enum AwikiImCoreRuntimeProgress { upgradingLocalState }
+
+String? awikiImCoreDiagnosticCode(Object? error) => switch (error) {
+  core.AwikiImCoreException(:final code) => code,
+  _ => null,
+};
+
 class AwikiImCoreRuntime implements ImCoreRuntimePort {
   AwikiImCoreRuntime({
     required AwikiImCoreEnvironmentConfig config,
@@ -32,6 +39,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     AwikiImCoreOpen? openCore,
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
     AwikiImCoreUpgradeLocalState? upgradeLocalState,
+    void Function(AwikiImCoreRuntimeProgress progress)? onProgress,
   }) : _config = config,
        _paths = paths,
        _scopeId = scopeId,
@@ -39,7 +47,8 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
        _openCore = openCore ?? core.AwikiImCore.open,
        _inspectLocalStateUpgrade =
            inspectLocalStateUpgrade ?? _inspectLocalStateUpgradeWithSdk,
-       _upgradeLocalState = upgradeLocalState ?? _upgradeLocalStateWithSdk;
+       _upgradeLocalState = upgradeLocalState ?? _upgradeLocalStateWithSdk,
+       _onProgress = onProgress;
 
   final AwikiImCoreEnvironmentConfig _config;
   final AwikiImCorePathLayout _paths;
@@ -48,6 +57,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCoreOpen _openCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
+  final void Function(AwikiImCoreRuntimeProgress progress)? _onProgress;
 
   core.AwikiImCore? _core;
   core.LocalStateUpgradeResult? _localStateUpgradeResult;
@@ -63,6 +73,12 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
 
   core.LocalStateUpgradeResult? get localStateUpgradeResult =>
       _localStateUpgradeResult;
+
+  bool get hasCanonicalOverlayMigrationWork {
+    final result = _localStateUpgradeResult;
+    return result?.status == core.LocalStateUpgradeStatus.completed ||
+        result?.aliasMappings.isNotEmpty == true;
+  }
 
   @override
   bool get isOpen => _core != null;
@@ -94,7 +110,10 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     await _paths.ensureDirectories();
     await _paths.archiveIncompatibleLocalStateIfNeeded();
     final corePaths = _paths.toCorePaths();
-    await _inspectLocalStateUpgrade(corePaths);
+    final inspection = await _inspectLocalStateUpgrade(corePaths);
+    if (inspection.eligibility == core.LocalStateUpgradeEligibility.required) {
+      _onProgress?.call(AwikiImCoreRuntimeProgress.upgradingLocalState);
+    }
     // Run the idempotent entry point even after cutover. Besides performing a
     // required upgrade, it returns the stable alias mapping that lets the App
     // resume its independent overlay migration after a process crash.

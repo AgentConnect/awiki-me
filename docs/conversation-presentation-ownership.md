@@ -354,6 +354,11 @@ App 在 overlay cutover 前崩溃时，下一次启动必须重新读取 mapping
 启动半新半旧的 Conversation/Profile/Group Store，也不得通过清库、OTP 或 Handle
 恢复绕过。ProductLocalStore 的备份使用 `VACUUM INTO` 生成一致 SQLite snapshot，
 legacy/canonical 行冲突按最新 `updatedAt`、同时间 canonical 优先的确定性规则合并。
+只有 Core inspection 明确返回 `required` 时，启动 shell 才显示“安全升级本地数据”；
+Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Store。NotRequired 启动
+保持普通 loading，不制造升级提示。失败页只展示稳定的脱敏 diagnostic code，并提供
+复制诊断、重试和退出；不得把异常正文、SQLite path、DID、消息内容或 SecretVault
+细节直接渲染到 UI，也不得自动清库或重新走 OTP/Handle recovery。
 
 ## 15. 会话头部信息入口
 

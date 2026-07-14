@@ -378,7 +378,7 @@ void main() {
     });
 
     test(
-      'snapshot load collapses unambiguous legacy runtime direct rows into canonical peer-scoped rows',
+      'snapshot keeps distinct canonical rows without app-side identity merging',
       () async {
         final didMessage = ChatMessage(
           localId: 'legacy-did-msg',
@@ -462,14 +462,18 @@ void main() {
         );
 
         expect(core.snapshotCount, 1);
-        expect(conversations, hasLength(1));
+        expect(conversations, hasLength(2));
         final byThread = {
           for (final conversation in conversations)
             conversation.threadId: conversation,
         };
         expect(
-          byThread['dm:peer-scope:v1:runtime']?.conversationKey,
+          byThread['dm:peer-scope:v1:runtime']?.conversationId,
           'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']?.conversationId,
+          'dm:did:human:did:agent:runtime',
         );
         expect(
           byThread['dm:peer-scope:v1:runtime']?.targetPeer,
@@ -707,7 +711,7 @@ void main() {
       },
     );
 
-    test('applies canonical overlay before legacy alias fallback', () async {
+    test('uses canonical overlay and ignores legacy alias rows', () async {
       final conversation = _conversation(
         'dm:alice:old-did',
         targetDid: 'did:old-bob',
@@ -756,7 +760,7 @@ void main() {
       expect(conversations.single.avatarSeed, 'seed-canonical');
     });
 
-    test('hide migrates legacy overlay fields into canonical row', () async {
+    test('hide writes canonical overlay without reading legacy fields', () async {
       final conversation = _conversation(
         'dm:alice:old-did',
         targetDid: 'did:old-bob',
@@ -795,10 +799,10 @@ void main() {
         conversationId: 'dm:peer-scope:v1:bob',
       );
       expect(overlay?.hidden, isTrue);
-      expect(overlay?.pinned, isTrue);
-      expect(overlay?.muted, isTrue);
-      expect(overlay?.customTitle, 'Legacy title');
-      expect(overlay?.avatarSeed, 'seed-legacy');
+      expect(overlay?.pinned, isFalse);
+      expect(overlay?.muted, isFalse);
+      expect(overlay?.customTitle, isNull);
+      expect(overlay?.avatarSeed, isNull);
       expect(overlay?.threadId, 'dm:peer-scope:v1:bob');
     });
 
@@ -1024,7 +1028,7 @@ void main() {
     );
 
     test(
-      'collapses unambiguous runtime DID direct rows into peer-scoped storage conversations',
+      'preserves distinct canonical runtime conversations from Core',
       () async {
         final legacyMessage = ChatMessage(
           localId: 'legacy-runtime-reply',
@@ -1095,14 +1099,18 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(conversations, hasLength(1));
+        expect(conversations, hasLength(2));
         final byThread = {
           for (final conversation in conversations)
             conversation.threadId: conversation,
         };
         expect(
-          byThread['dm:peer-scope:v1:runtime']?.conversationKey,
+          byThread['dm:peer-scope:v1:runtime']?.conversationId,
           'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']?.conversationId,
+          'dm:did:human:did:agent:runtime',
         );
         expect(
           byThread['dm:peer-scope:v1:runtime']?.targetPeer,
@@ -1222,7 +1230,7 @@ void main() {
     );
 
     test(
-      'hides canonical peer-scoped runtime conversation after legacy direct collapse',
+      'hides only the selected canonical runtime conversation',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1298,7 +1306,9 @@ void main() {
             reason: key,
           );
         }
-        expect(conversations, isEmpty);
+        expect(conversations.map((conversation) => conversation.threadId), [
+          'dm:did:human:did:agent:runtime',
+        ]);
       },
     );
 
@@ -1332,10 +1342,10 @@ void main() {
 
         expect(conversations, hasLength(2));
         expect(
-          conversations.map((conversation) => conversation.conversationKey),
+          conversations.map((conversation) => conversation.conversationId),
           containsAll(<String>[
-            'direct-did:did:old-bob',
-            'direct-did:did:new-bob',
+            'dm:alice:old-bob',
+            'dm:alice:new-bob',
           ]),
         );
       },
@@ -1380,7 +1390,7 @@ void main() {
     );
 
     test(
-      'keeps runtime conversation hidden when agent projection is unavailable',
+      'ignores legacy visibility aliases when canonical overlay is absent',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1407,12 +1417,16 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(conversations, isEmpty);
+        expect(conversations, hasLength(1));
+        expect(
+          conversations.single.conversationId,
+          'dm:did:human:did:agent:runtime',
+        );
       },
     );
 
     test(
-      'restores canonical peer-scoped runtime conversation after legacy direct collapse',
+      'restores one canonical runtime conversation without merging another',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1492,6 +1506,7 @@ void main() {
         );
         expect(conversations.map((conversation) => conversation.threadId), [
           'dm:peer-scope:v1:runtime',
+          'dm:did:human:did:agent:runtime',
         ]);
       },
     );

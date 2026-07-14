@@ -131,6 +131,7 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: _FakeVaultSecretProvider(),
+      onProgress: (progress) => events.add(progress.name),
       inspectLocalStateUpgrade: (paths) async {
         events.add('inspect');
         return const core.LocalStateUpgradeInspection(
@@ -164,7 +165,12 @@ void main() {
     );
 
     await expectLater(runtime.open(), throwsA(isA<UnsupportedError>()));
-    expect(events, <String>['inspect', 'upgrade', 'open']);
+    expect(events, <String>[
+      'inspect',
+      'upgradingLocalState',
+      'upgrade',
+      'open',
+    ]);
   });
 
   test('upgrade failure prevents SDK open', () async {

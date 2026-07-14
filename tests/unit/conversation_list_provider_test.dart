@@ -14,6 +14,7 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +22,47 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  test('ensureLoaded hydrates once and reuses canonical state', () async {
+    final conversation = _conversation(
+      conversationId: 'conv:bob',
+      threadId: 'dm:alice:bob',
+      displayName: 'Bob',
+    );
+    final service = _StaticConversationService(
+      conversations: <ConversationSummary>[conversation],
+    );
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+
+    await notifier.ensureLoaded();
+    await notifier.ensureLoaded();
+
+    expect(container.read(conversationListProvider).conversations, [
+      conversation,
+    ]);
+    expect(service.fastCalls, 1);
+  });
+
+  test('ensureLoaded absorbs snapshot and fast hydrate failures', () async {
+    final container = _conversationContainer(
+      service: _FailingHydrateConversationService(),
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    await container.read(conversationListProvider.notifier).ensureLoaded();
+    await pumpEventQueue();
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(container.read(conversationListProvider).isLoading, isFalse);
+  });
+
   test(
     'refreshFastLocal emits base conversations before enrichment finishes',
     () async {
@@ -766,6 +808,7 @@ void main() {
       final baseTime = DateTime.utc(2026, 6, 27, 2);
       final local =
           _conversation(
+            conversationId: 'conv:hermes',
             threadId: 'dm:did:human:did:agent',
             displayName: 'Hermes',
             targetDid: 'did:agent',
@@ -775,6 +818,7 @@ void main() {
             lastMessageAt: baseTime.add(const Duration(minutes: 1)),
           );
       final refreshed = _conversation(
+        conversationId: 'conv:hermes',
         threadId: 'dm:peer-scope:v1:hermes',
         displayName: 'Hermes Remote',
         targetDid: 'did:agent',
@@ -1685,6 +1729,184 @@ void main() {
     expect(service.watchCalls, 1);
   });
 
+  test(
+    'conversation patch reset replaces canonical rows and is idempotent',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+      final resetConversation = _conversation(
+        conversationId: 'conv:carol',
+        threadId: 'dm:alice:carol',
+        displayName: 'Carol',
+        unreadCount: 4,
+      );
+      final reset = ConversationListPatch(
+        kind: ConversationListPatchKind.reset,
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 4,
+        items: <ConversationSummary>[resetConversation],
+      );
+
+      service.emitPatch(reset);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(conversationListProvider).conversations, [
+        resetConversation,
+      ]);
+      expect(notifications.lastBadgeCount, 4);
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 4,
+          items: <ConversationSummary>[resetConversation],
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(conversationListProvider).conversations, [
+        resetConversation,
+      ]);
+      expect(service.repairCalls, 0);
+    },
+  );
+
+  test('conversation patch rejects stale and incomplete mutations', () async {
+    final service = _PatchConversationService(
+      conversations: const <ConversationSummary>[],
+      repairVersion: 2,
+    );
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    await container.read(conversationListProvider.notifier).refreshFastLocal();
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:other',
+        version: 1,
+        unreadTotal: 0,
+      ),
+    );
+    service.emitPatch(
+      ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 0,
+        item: _conversation(threadId: 'dm:alice:bob', displayName: 'Bob'),
+      ),
+    );
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 0,
+      ),
+    );
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 2,
+        unreadTotal: 0,
+      ),
+    );
+    await pumpEventQueue();
+
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.remove,
+        ownerDid: 'did:alice',
+        version: 3,
+        unreadTotal: 0,
+      ),
+    );
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.remove,
+        ownerDid: 'did:alice',
+        version: 4,
+        unreadTotal: 0,
+        conversationId: 'conv:missing',
+      ),
+    );
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.reorder,
+        ownerDid: 'did:alice',
+        version: 5,
+        unreadTotal: 0,
+      ),
+    );
+    await pumpEventQueue();
+    service.emitPatch(
+      const ConversationListPatch(
+        kind: ConversationListPatchKind.reorder,
+        ownerDid: 'did:alice',
+        version: 5,
+        unreadTotal: 0,
+        conversationId: 'conv:missing',
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(service.repairCalls, greaterThanOrEqualTo(3));
+  });
+
+  test('patch stream error and close each trigger bounded repair', () async {
+    final repair = Completer<ConversationStoreRepairResult>();
+    final service = _PatchConversationService(
+      conversations: const <ConversationSummary>[],
+      repairResult: repair.future,
+    );
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    await container.read(conversationListProvider.notifier).refreshFastLocal();
+    service.emitError(StateError('stream failed'));
+    service.emitError(StateError('stream failed again'));
+    await Future<void>.delayed(Duration.zero);
+    expect(service.repairCalls, 1);
+
+    repair.complete(
+      const ConversationStoreRepairResult(
+        conversations: <ConversationSummary>[],
+        version: 1,
+      ),
+    );
+    await pumpEventQueue();
+    await service.closePatches();
+    await pumpEventQueue();
+
+    expect(service.repairCalls, 2);
+  });
+
   test('conversation patch upsert respects local hidden waterline', () async {
     final seed = _conversation(
       threadId: 'dm:alice:bob',
@@ -1854,6 +2076,10 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     }
 
+    container
+        .read(selectedConversationProvider.notifier)
+        .selectConversationId('conv:a');
+
     service.emitPatch(
       const ConversationListPatch(
         kind: ConversationListPatchKind.remove,
@@ -1867,6 +2093,71 @@ void main() {
 
     final rows = container.read(conversationListProvider).conversations;
     expect(rows.map((item) => item.conversationId), <String>['conv:b']);
+    expect(container.read(selectedConversationProvider), isNull);
+  });
+
+  test('canonical conversation actions reject invalid local context', () async {
+    final authenticated = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    final unauthenticated = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+      authenticated: false,
+    );
+    addTearDown(authenticated.dispose);
+    addTearDown(unauthenticated.dispose);
+
+    await expectLater(
+      authenticated
+          .read(conversationListProvider.notifier)
+          .commitConversationId('  '),
+      throwsArgumentError,
+    );
+    await expectLater(
+      unauthenticated
+          .read(conversationListProvider.notifier)
+          .deleteFromRecents(
+            _conversation(
+              conversationId: 'conv:bob',
+              threadId: 'dm:alice:bob',
+              displayName: 'Bob',
+            ),
+          ),
+      throwsStateError,
+    );
+  });
+
+  test('failed canonical hide rolls back the local removal', () async {
+    final conversation = _conversation(
+      conversationId: 'conv:bob',
+      threadId: 'dm:alice:bob',
+      displayName: 'Bob',
+      unreadCount: 1,
+    );
+    final container = _conversationContainer(
+      service: _FailingHideConversationService(
+        conversations: <ConversationSummary>[conversation],
+      ),
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(conversation);
+    await pumpEventQueue();
+
+    await expectLater(
+      notifier.deleteFromRecents(conversation),
+      throwsStateError,
+    );
+
+    expect(container.read(conversationListProvider).conversations, [
+      conversation,
+    ]);
   });
 
   test(
@@ -2946,6 +3237,40 @@ class _StaticConversationService implements ConversationService {
   }) async {}
 }
 
+class _FailingHydrateConversationService extends _StaticConversationService {
+  _FailingHydrateConversationService()
+    : super(conversations: const <ConversationSummary>[]);
+
+  @override
+  Future<List<ConversationSummary>> loadConversationSnapshot({
+    required String ownerDid,
+  }) async {
+    throw StateError('snapshot failed');
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    throw StateError('hydrate failed');
+  }
+}
+
+class _FailingHideConversationService extends _StaticConversationService {
+  _FailingHideConversationService({required super.conversations});
+
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    throw StateError('hide failed');
+  }
+}
+
 class _MutableConversationService extends _StaticConversationService {
   _MutableConversationService({required super.conversations})
     : currentConversations = conversations;
@@ -3062,6 +3387,12 @@ class _PatchConversationService extends _StaticConversationService {
   void emitPatch(ConversationListPatch patch) {
     _patches.add(patch);
   }
+
+  void emitError(Object error) {
+    _patches.addError(error);
+  }
+
+  Future<void> closePatches() => _patches.close();
 
   @override
   Stream<ConversationListPatch> watchConversationPatches({
