@@ -28,6 +28,8 @@
 	<string>$(AWIKI_APP_SOURCE_REF)</string>
 	<key>AWikiImCoreSourceRef</key>
 	<string>$(AWIKI_IM_CORE_SOURCE_REF)</string>
+	<key>AWikiPrimaryTenantDomain</key>
+	<string>$(AWIKI_PRIMARY_TENANT_DOMAIN)</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>

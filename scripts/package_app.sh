@@ -893,15 +893,19 @@ verify_macos_app() {
   [[ "$bundle_id" == "$PACKAGE_MACOS_BUNDLE_ID" ]] ||
     fail "macOS app bundle id is $bundle_id, expected $PACKAGE_MACOS_BUNDLE_ID"
 
-  local app_source_ref im_core_source_ref
+  local app_source_ref im_core_source_ref primary_tenant_domain
   app_source_ref="$(/usr/libexec/PlistBuddy -c 'Print :AWikiAppSourceRef' \
     "$app/Contents/Info.plist" 2>/dev/null || true)"
   im_core_source_ref="$(/usr/libexec/PlistBuddy -c 'Print :AWikiImCoreSourceRef' \
+    "$app/Contents/Info.plist" 2>/dev/null || true)"
+  primary_tenant_domain="$(/usr/libexec/PlistBuddy -c 'Print :AWikiPrimaryTenantDomain' \
     "$app/Contents/Info.plist" 2>/dev/null || true)"
   [[ "$app_source_ref" == "$APP_SOURCE_REF" ]] ||
     fail "macOS app source ref is $app_source_ref, expected $APP_SOURCE_REF"
   [[ "$im_core_source_ref" == "$IM_CORE_SOURCE_REF" ]] ||
     fail "macOS im-core source ref is $im_core_source_ref, expected $IM_CORE_SOURCE_REF"
+  [[ "$primary_tenant_domain" == "$PACKAGE_PRIMARY_TENANT_DOMAIN" ]] ||
+    fail "macOS primary tenant domain is $primary_tenant_domain, expected $PACKAGE_PRIMARY_TENANT_DOMAIN"
 
   local executable="$app/Contents/MacOS/$PACKAGE_APP_DISPLAY_NAME"
   [[ -f "$executable" ]] || fail "macOS executable not found: $executable"
@@ -1021,6 +1025,7 @@ build_macos_arch() {
     DEVELOPMENT_TEAM="$AWIKI_MACOS_DEVELOPMENT_TEAM" \
     AWIKI_APP_SOURCE_REF="$APP_SOURCE_REF" \
     AWIKI_IM_CORE_SOURCE_REF="$IM_CORE_SOURCE_REF" \
+    AWIKI_PRIMARY_TENANT_DOMAIN="$PACKAGE_PRIMARY_TENANT_DOMAIN" \
     FLUTTER_BUILD_NAME="$VERSION_NAME" \
     FLUTTER_BUILD_NUMBER="$BUILD_NUMBER" \
     build
@@ -1097,6 +1102,9 @@ write_latest_manifest() {
     "app": $(json_string "$APP_SOURCE_REF"),
     "imCore": $(json_string "$IM_CORE_SOURCE_REF")
   },
+  "tenant": {
+    "primaryDomain": $(json_string "$PACKAGE_PRIMARY_TENANT_DOMAIN")
+  },
   "releaseNotesUrl": $(json_string "$PACKAGE_DOWNLOAD_PAGE_URL"),
   "githubReleaseUrl": $(json_string "$PACKAGE_DOWNLOAD_PAGE_URL"),
   "platforms": {
@@ -1145,6 +1153,9 @@ write_manifest() {
   "sourceRefs": {
     "app": $(json_string "$APP_SOURCE_REF"),
     "imCore": $(json_string "$IM_CORE_SOURCE_REF")
+  },
+  "tenant": {
+    "primaryDomain": $(json_string "$PACKAGE_PRIMARY_TENANT_DOMAIN")
   },
   "release": {
     "downloadBaseUrl": $(json_string "$PACKAGE_RELEASE_BASE_URL")

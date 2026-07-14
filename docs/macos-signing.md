@@ -78,9 +78,12 @@ macOS 签名配置。
 
 发布版本必须先写入并提交 `pubspec.yaml`，打包脚本不会再自动递增版本。脚本要求
 AWiki Me 与 sibling `awiki-cli-rs2` 都是 clean Git worktree，并把二者完整 40 位 commit
-SHA 写入 package manifest、latest manifest 和签名 App 的 `Info.plist`。DMG 生成前会读取
-`AWikiAppSourceRef` 与 `AWikiImCoreSourceRef` 并与本次构建输入逐字校验；因此发布 artifact
-可以证明其 App/Core 源码来源，但该能力不能反向补齐未嵌入这些字段的历史 artifact。
+SHA 与编译期主租户域名写入 package manifest、latest manifest 和签名 App 的
+`Info.plist`。DMG 生成前会读取 `AWikiAppSourceRef`、`AWikiImCoreSourceRef` 与
+`AWikiPrimaryTenantDomain` 并与本次构建输入逐字校验；因此发布 artifact 可以证明其
+App/Core 源码来源和 fresh registry 的主租户目标，但该能力不能反向补齐未嵌入这些字段的
+历史 artifact。用于 `awiki.info` 双版本门禁的新 artifact 必须显式使用
+`--primary-tenant-domain awiki.info` 打包。
 
 `package_app.local.config`、`.p12` 和 `.pfx` 均已被 Git 忽略，但真实私钥仍应只保存在
 Keychain、加密密码库或 CI Secret 中。`.gitignore` 不是凭证存储机制。

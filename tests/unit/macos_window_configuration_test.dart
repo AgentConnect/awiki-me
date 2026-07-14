@@ -188,6 +188,12 @@ void main() {
       packageScript,
       contains('AWIKI_IM_CORE_SOURCE_REF="\$IM_CORE_SOURCE_REF"'),
     );
+    expect(
+      packageScript,
+      contains(
+        'AWIKI_PRIMARY_TENANT_DOMAIN="\$PACKAGE_PRIMARY_TENANT_DOMAIN"',
+      ),
+    );
     expect(packageScript, contains('"sourceRefs": {'));
     expect(
       packageScript,
@@ -196,6 +202,12 @@ void main() {
     expect(
       packageScript,
       contains('"imCore": \$(json_string "\$IM_CORE_SOURCE_REF")'),
+    );
+    expect(
+      packageScript,
+      contains(
+        '"primaryDomain": \$(json_string "\$PACKAGE_PRIMARY_TENANT_DOMAIN")',
+      ),
     );
     expect(packageConfig, contains('PACKAGE_VERSION_BUMP="none"'));
     expect(
@@ -226,6 +238,11 @@ void main() {
     expect(
       infoPlist,
       contains('<string>\$(AWIKI_IM_CORE_SOURCE_REF)</string>'),
+    );
+    expect(infoPlist, contains('<key>AWikiPrimaryTenantDomain</key>'));
+    expect(
+      infoPlist,
+      contains('<string>\$(AWIKI_PRIMARY_TENANT_DOMAIN)</string>'),
     );
   });
 }
