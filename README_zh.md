@@ -156,6 +156,15 @@ DID Host：awiki.ai
 Storage Scope：安装时生成的 UUID（不由域名派生）
 ```
 
+日常开发直接启动 Debug App，并在 App 内切换租户：
+
+```bash
+flutter run --debug -d macos
+```
+
+普通开发不需要传入租户域名参数。Debug/Profile 使用独立的应用身份、本地数据和
+Keychain service，不读取或改写已安装 Release App 的生产数据。
+
 内置主租户提供一个统一的编译期域名覆盖参数。参数只接受小写 hostname，
 不传时仍默认使用 `awiki.ai`：
 
@@ -166,7 +175,8 @@ flutter build macos --debug \
 
 App 会从这一个值统一派生内置主租户的后端地址（`https://<domain>`）、DID
 Host、服务 DID、更新地址和 Daemon 下载地址。该参数只在创建全新租户注册表
-时生效，不会改写已有的 `tenant-registry.json`，也不会迁移已有 Storage Scope。
+时生效，不是日常租户选择器；不会改写已有的 `tenant-registry.json`，也不会迁移
+或重新创建已有 Storage Scope。
 
 每个租户配置拥有不同且不可变的 `storage_scope_id`。数据路径、平台 secret account、im-core workspace/device context 只由该 UUID 派生，租户名和后端地址不再是本地 locator。切换租户时会先完整释放旧 runtime，再打开新 scope。显示名称可以原位修改；DID Host 变化必须创建新的租户配置和 scope；已有本地数据时，后端地址也不能在缺少稳定 realm 证明的情况下原位修改。
 

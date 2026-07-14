@@ -157,6 +157,17 @@ DID host: awiki.ai
 storage scope: generated UUID (not derived from the domain)
 ```
 
+For ordinary development, start the Debug App and switch tenants inside the
+App:
+
+```bash
+flutter run --debug -d macos
+```
+
+Normal development does not need a tenant-domain flag. Debug/Profile uses a
+separate application identity, local data root, and Keychain service, and does
+not read or modify the installed Release App's production data.
+
 The built-in tenant domain has one compile-time override. It accepts a lowercase
 hostname only and keeps `awiki.ai` as the default:
 
@@ -167,8 +178,9 @@ flutter build macos --debug \
 
 The App derives the built-in backend URL (`https://<domain>`), DID host, service
 DID, update URL, and Daemon download URL from that single value. The override is
-used only when creating a fresh tenant registry; it does not rewrite an existing
-`tenant-registry.json` or move an existing Storage Scope.
+used only when creating a fresh tenant registry and is not a runtime tenant
+selector. It does not rewrite an existing `tenant-registry.json`, or move or
+recreate an existing Storage Scope.
 
 Every tenant profile owns a different immutable `storage_scope_id`. Paths, the platform-secret account, and the im-core workspace/device context derive only from that UUID; tenant names and backend URLs never act as local locators. Switching tenants fully disposes the old runtime before opening the new scope. Names can be changed in place. A DID-host change requires a new tenant profile and scope; a backend route cannot be changed after local data exists without a future verified realm-binding flow.
 

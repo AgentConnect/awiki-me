@@ -159,6 +159,20 @@ void main() {
     expect(packageScript, contains('PACKAGE_APP_DISPLAY_NAME="AWikiMe"'));
     expect(packageScript, contains('PACKAGE_MACOS_BUILD_MODE="release"'));
     expect(packageScript, contains('XCODE_CONFIGURATION="Release"'));
+    expect(
+      packageScript,
+      contains(
+        'PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE="ai.awiki.awikime.scope-secrets"',
+      ),
+    );
+    expect(
+      packageScript,
+      contains('Dart production scope-secret service must stay'),
+    );
+    expect(
+      packageScript,
+      contains('macOS production scope-secret service must stay'),
+    );
     expect(packageScript, contains('package_app.local.config'));
     expect(
       packageScript,

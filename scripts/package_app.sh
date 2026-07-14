@@ -11,6 +11,7 @@ cd "$ROOT_DIR"
 PACKAGE_APP_DISPLAY_NAME="AWikiMe"
 PACKAGE_ANDROID_APP_ID="ai.awiki.awikime"
 PACKAGE_MACOS_BUNDLE_ID="ai.awiki.awikime"
+PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE="ai.awiki.awikime.scope-secrets"
 PACKAGE_FLUTTER_BIN="flutter"
 PACKAGE_SDK_REPO_DIR="../awiki-cli-rs2"
 PACKAGE_ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
@@ -465,6 +466,9 @@ sync_android_local_version() {
 }
 
 check_source_identity() {
+  grep -Fq "ScopeSecretChannel.production => '$PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE'" \
+    lib/src/data/storage/platform_scope_secret_repository.dart ||
+    fail "Dart production scope-secret service must stay $PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE"
   if needs_android; then
     grep -Fq "namespace = \"$PACKAGE_ANDROID_APP_ID\"" \
       android/app/build.gradle ||
@@ -477,6 +481,9 @@ check_source_identity() {
     grep -Fq "PRODUCT_BUNDLE_IDENTIFIER = $PACKAGE_MACOS_BUNDLE_ID" \
       macos/Runner/Configs/AppInfo.xcconfig ||
       fail "macOS PRODUCT_BUNDLE_IDENTIFIER must stay $PACKAGE_MACOS_BUNDLE_ID"
+    grep -Fq "case \"$PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE\":" \
+      macos/Runner/MainFlutterWindow.swift ||
+      fail "macOS production scope-secret service must stay $PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE"
   fi
 }
 

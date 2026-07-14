@@ -75,6 +75,66 @@ void main() {
     expect(manifest.didHostAtCreation, 'awiki.info');
   });
 
+  test(
+    'existing registry ignores new build defaults and preserves scope data',
+    () async {
+      final secrets = FakeScopeSecretRepository();
+      final originalStore = AppTenantStore(
+        appStateRoot: root.path,
+        secretRepository: secrets,
+        initialTenantFactory: () => defaultTenantProfile().copyWith(
+          backendBaseUrl: 'https://awiki.ai',
+          didHost: 'awiki.ai',
+        ),
+      );
+      final original = await originalStore.loadRegistry();
+      final originalTenant = original.activeTenant;
+      final layout = await originalStore.layoutForScope(
+        originalTenant.storageScopeId,
+      );
+      final imCoreSentinel = File(layout.imCoreSqlitePath);
+      final productSentinel = File(layout.productDatabasePath);
+      await imCoreSentinel.parent.create(recursive: true);
+      await productSentinel.parent.create(recursive: true);
+      await imCoreSentinel.writeAsBytes(<int>[1, 2, 3, 4]);
+      await productSentinel.writeAsBytes(<int>[5, 6, 7, 8]);
+      final registryFile = File(
+        p.join(
+          root.path,
+          'support',
+          'awiki-me',
+          'control',
+          'tenant-registry.json',
+        ),
+      );
+      final registryBeforeUpgrade = await registryFile.readAsString();
+
+      final upgradedStore = AppTenantStore(
+        appStateRoot: root.path,
+        secretRepository: secrets,
+        initialTenantFactory: () => throw StateError(
+          'existing registry must not consult new build defaults',
+        ),
+      );
+      final reopened = await upgradedStore.loadRegistry();
+
+      expect(reopened.revision, original.revision);
+      expect(reopened.activeTenantProfileId, original.activeTenantProfileId);
+      expect(
+        reopened.activeTenant.storageScopeId,
+        originalTenant.storageScopeId,
+      );
+      expect(reopened.activeTenant.backendBaseUrl, 'https://awiki.ai');
+      expect(await registryFile.readAsString(), registryBeforeUpgrade);
+      expect(await imCoreSentinel.readAsBytes(), <int>[1, 2, 3, 4]);
+      expect(await productSentinel.readAsBytes(), <int>[5, 6, 7, 8]);
+      expect(
+        (await secrets.readExisting(originalTenant.storageScopeId)).status,
+        ScopeSecretReadStatus.present,
+      );
+    },
+  );
+
   test('two tenants have distinct profile IDs scopes and paths', () async {
     final first = await store.loadRegistry();
     final second = await store.createTenant(
