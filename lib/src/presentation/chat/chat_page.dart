@@ -1012,7 +1012,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final refreshedConversation = conversation.copyWith(
       groupId: updated.groupId,
-      conversationId: 'group:${updated.groupId}',
     );
     unawaited(
       _chatThreadsController.refreshLocalProjectionForConversation(

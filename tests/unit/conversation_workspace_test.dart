@@ -1256,6 +1256,7 @@ void main() {
           ),
         ],
       };
+    final messagingService = FakeMessagingService(gateway);
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -1272,6 +1273,7 @@ void main() {
             (ref) =>
                 _StaticConversationListController(ref, gateway.conversations),
           ),
+          messagingServiceProvider.overrideWithValue(messagingService),
         ],
       ),
     );
@@ -1358,6 +1360,7 @@ void main() {
     expect(find.text('Bob'), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
+    expect(messagingService.lastConversationTimelineId, 'group:funding');
 
     await tester.tap(find.bySemanticsLabel('移除成员').last);
     await tester.pumpAndSettle();
