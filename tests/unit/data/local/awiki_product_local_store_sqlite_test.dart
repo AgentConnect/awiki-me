@@ -306,6 +306,25 @@ void main() {
       expect(legacy?.conversationId, 'direct-did:did:bob');
       expect(bobOwner?.customTitle, 'Bob private');
 
+      final backup = await databaseFactory.openDatabase(
+        _canonicalBackupPath(databaseDir),
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      final backupVersion = (await backup.rawQuery(
+        'PRAGMA user_version',
+      )).single.values.single;
+      final backupColumns = await backup.rawQuery(
+        'PRAGMA table_info(conversation_overlays)',
+      );
+      final backupIntegrity = await backup.rawQuery('PRAGMA integrity_check');
+      await backup.close();
+      expect(backupVersion, 2);
+      expect(
+        backupColumns.any((column) => column['name'] == 'conversation_id'),
+        isFalse,
+      );
+      expect(backupIntegrity.single.values.single, 'ok');
+
       await store.upsertConversationOverlay(
         ProductConversationOverlay(
           ownerDid: 'did:alice',
@@ -487,14 +506,7 @@ void main() {
       ))?.draftText,
       'migrated draft',
     );
-    expect(
-      await File(
-        '${databaseDir.path}/support/awiki-me/product/'
-        'canonical-conversation-overlay-upgrade/'
-        'awiki_me_product_store.pre-canonical-v2.sqlite',
-      ).exists(),
-      isTrue,
-    );
+    expect(await File(_canonicalBackupPath(databaseDir)).exists(), isTrue);
   });
 }
 
@@ -551,4 +563,10 @@ AwikiProductLocalStoreSqlite _store(Directory databaseDir) {
 
 String _databasePath(Directory databaseDir) {
   return '${databaseDir.path}/support/awiki-me/product/${AwikiProductLocalStoreSqlite.databaseName}';
+}
+
+String _canonicalBackupPath(Directory databaseDir) {
+  return '${databaseDir.path}/support/awiki-me/product/'
+      'canonical-conversation-overlay-upgrade/'
+      'awiki_me_product_store.pre-canonical-v2.sqlite';
 }

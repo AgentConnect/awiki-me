@@ -1369,13 +1369,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   ConversationSummary _applyReadPresentation(
     ConversationSummary conversation, {
     required String? ownerDid,
-    Iterable<ConversationSummary>? presentationRows,
   }) {
-    return _readPresentation.project(
-      conversation,
-      ownerDid: ownerDid,
-      presentationRows: presentationRows,
-    );
+    return _readPresentation.project(conversation, ownerDid: ownerDid);
   }
 
   List<ConversationSummary> _applyReadPresentationAll(
@@ -1388,7 +1383,6 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           final applied = _applyReadPresentation(
             conversation,
             ownerDid: ownerDid,
-            presentationRows: conversations,
           );
           changed = changed || !identical(applied, conversation);
           return applied;
@@ -1533,7 +1527,8 @@ bool _sameConversationSummaryValue(
         second.lastMessageSnapshot,
       ) &&
       first.conversationKey == second.conversationKey &&
-      first.peerLifecycleState == second.peerLifecycleState;
+      first.peerLifecycleState == second.peerLifecycleState &&
+      first.resolutionState == second.resolutionState;
 }
 
 bool _sameLastMessageSnapshot(ChatMessage? first, ChatMessage? second) {
@@ -1642,11 +1637,7 @@ class _ConversationReadPresentationStore {
     ConversationSummary conversation, {
     required String? ownerDid,
   }) {
-    final state = _findStateFor(
-      conversation,
-      ownerDid: ownerDid,
-      matchVisibilityBridge: false,
-    );
+    final state = _findStateFor(conversation, ownerDid: ownerDid);
     if (state == null) {
       return;
     }
@@ -1677,13 +1668,8 @@ class _ConversationReadPresentationStore {
   ConversationSummary project(
     ConversationSummary conversation, {
     required String? ownerDid,
-    Iterable<ConversationSummary>? presentationRows,
   }) {
-    final state = _stateFor(
-      conversation,
-      ownerDid: ownerDid,
-      presentationRows: presentationRows,
-    );
+    final state = _stateFor(conversation, ownerDid: ownerDid);
     final incoming = _UnreadWatermark.fromConversation(conversation);
     final hadLatest = state.latest != null;
     if (incoming.isAfter(state.latest)) {
@@ -1722,15 +1708,8 @@ class _ConversationReadPresentationStore {
   _ConversationReadPresentationState _stateFor(
     ConversationSummary conversation, {
     required String? ownerDid,
-    Iterable<ConversationSummary>? presentationRows,
-    bool matchVisibilityBridge = true,
   }) {
-    final existing = _findStateFor(
-      conversation,
-      ownerDid: ownerDid,
-      presentationRows: presentationRows,
-      matchVisibilityBridge: matchVisibilityBridge,
-    );
+    final existing = _findStateFor(conversation, ownerDid: ownerDid);
     if (existing != null) {
       return existing;
     }
@@ -1745,17 +1724,10 @@ class _ConversationReadPresentationStore {
   _ConversationReadPresentationState? _findStateFor(
     ConversationSummary conversation, {
     required String? ownerDid,
-    Iterable<ConversationSummary>? presentationRows,
-    bool matchVisibilityBridge = true,
   }) {
     for (var index = _states.length - 1; index >= 0; index -= 1) {
       final state = _states[index];
-      if (state.matches(
-        conversation,
-        ownerDid: ownerDid,
-        presentationRows: presentationRows,
-        matchVisibilityBridge: matchVisibilityBridge,
-      )) {
+      if (state.matches(conversation, ownerDid: ownerDid)) {
         return state;
       }
     }
@@ -1785,12 +1757,7 @@ class _ConversationReadPresentationState {
   int displayUnreadMentionCount = 0;
   String? displayFirstUnreadMentionMessageId;
 
-  bool matches(
-    ConversationSummary candidate, {
-    required String? ownerDid,
-    Iterable<ConversationSummary>? presentationRows,
-    bool matchVisibilityBridge = true,
-  }) {
+  bool matches(ConversationSummary candidate, {required String? ownerDid}) {
     return _sameReadOwner(ownerDid ?? this.ownerDid, this.ownerDid) &&
         conversation.conversationId == candidate.conversationId;
   }

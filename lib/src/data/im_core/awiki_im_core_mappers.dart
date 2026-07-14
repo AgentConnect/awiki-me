@@ -238,7 +238,7 @@ class AwikiImCoreMappers {
     required String ownerDid,
     ProductConversationOverlay? overlay,
   }) {
-    _requireResolvedConversation(
+    _requireDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
       peerPersonaId: conversation.peerPersonaId,
@@ -310,11 +310,14 @@ class AwikiImCoreMappers {
       lastMessageSnapshot: lastMessageSnapshot?.hasRenderableContent == true
           ? lastMessageSnapshot
           : null,
+      resolutionState: _conversationResolutionStateFromCore(
+        conversation.resolutionState,
+      ),
     );
   }
 
   bool shouldIncludeConversation(core.Conversation conversation) {
-    if (!_isResolvedConversation(
+    if (!_isDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
       peerPersonaId: conversation.peerPersonaId,
@@ -338,7 +341,7 @@ class AwikiImCoreMappers {
     required String ownerDid,
     ProductConversationOverlay? overlay,
   }) {
-    _requireResolvedConversation(
+    _requireDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
       peerPersonaId: conversation.peerPersonaId,
@@ -409,13 +412,16 @@ class AwikiImCoreMappers {
       lastMessageSnapshot: lastMessageSnapshot?.hasRenderableContent == true
           ? lastMessageSnapshot
           : null,
+      resolutionState: _conversationResolutionStateFromCore(
+        conversation.resolutionState,
+      ),
     );
   }
 
   bool shouldIncludeSnapshotConversation(
     core.ConversationSnapshotItem conversation,
   ) {
-    if (!_isResolvedConversation(
+    if (!_isDisplayableConversation(
       conversationId: conversation.conversationId,
       resolutionState: conversation.resolutionState,
       peerPersonaId: conversation.peerPersonaId,
@@ -695,7 +701,7 @@ String? _firstNonEmpty(Iterable<String> values) {
   return null;
 }
 
-bool _isResolvedConversation({
+bool _isDisplayableConversation({
   required String conversationId,
   required core.ConversationResolutionState resolutionState,
   required String? peerPersonaId,
@@ -703,8 +709,11 @@ bool _isResolvedConversation({
   required String threadKind,
 }) {
   if (_nonEmpty(conversationId) == null ||
-      resolutionState != core.ConversationResolutionState.resolved) {
+      resolutionState == core.ConversationResolutionState.blockedConflict) {
     return false;
+  }
+  if (resolutionState == core.ConversationResolutionState.legacyUnresolved) {
+    return true;
   }
   if (threadKind == 'group') {
     return _nonEmpty(canonicalGroupDid) != null;
@@ -712,22 +721,36 @@ bool _isResolvedConversation({
   return _nonEmpty(peerPersonaId) != null;
 }
 
-void _requireResolvedConversation({
+void _requireDisplayableConversation({
   required String conversationId,
   required core.ConversationResolutionState resolutionState,
   required String? peerPersonaId,
   required String? canonicalGroupDid,
   required String threadKind,
 }) {
-  if (!_isResolvedConversation(
+  if (!_isDisplayableConversation(
     conversationId: conversationId,
     resolutionState: resolutionState,
     peerPersonaId: peerPersonaId,
     canonicalGroupDid: canonicalGroupDid,
     threadKind: threadKind,
   )) {
-    throw StateError('IM Core conversation is missing canonical identity.');
+    throw StateError('IM Core conversation is not displayable.');
   }
+}
+
+ConversationIdentityResolutionState _conversationResolutionStateFromCore(
+  core.ConversationResolutionState state,
+) {
+  return switch (state) {
+    core.ConversationResolutionState.resolved =>
+      ConversationIdentityResolutionState.resolved,
+    core.ConversationResolutionState.legacyUnresolved =>
+      ConversationIdentityResolutionState.legacyUnresolved,
+    core.ConversationResolutionState.blockedConflict => throw StateError(
+      'IM Core conversation is blocked by identity conflict.',
+    ),
+  };
 }
 
 String _stripPrefix(String value, String prefix) {

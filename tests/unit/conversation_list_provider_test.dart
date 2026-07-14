@@ -77,6 +77,35 @@ void main() {
     );
   });
 
+  test(
+    'legacy unresolved rows stay distinct by conversation id without guessing',
+    () {
+      final first = _conversation(
+        conversationId: 'legacy:first',
+        threadId: 'did:bob',
+        displayName: 'Bob',
+        resolutionState: ConversationIdentityResolutionState.legacyUnresolved,
+      );
+      final second = _conversation(
+        conversationId: 'legacy:second',
+        threadId: 'did:bob',
+        displayName: 'Bob',
+        resolutionState: ConversationIdentityResolutionState.legacyUnresolved,
+      );
+
+      final state = ConversationListState(
+        conversations: <ConversationSummary>[first, second],
+      );
+
+      expect(state.orderedIds, <String>['legacy:first', 'legacy:second']);
+      expect(state.entitiesById, hasLength(2));
+      expect(
+        state.conversations.every((item) => item.isLegacyUnresolved),
+        isTrue,
+      );
+    },
+  );
+
   test('ensureLoaded hydrates once and reuses canonical state', () async {
     final conversation = _conversation(
       conversationId: 'conv:bob',
@@ -2918,6 +2947,8 @@ ConversationSummary _conversation({
   bool isGroup = false,
   String? groupId,
   DateTime? lastMessageAt,
+  ConversationIdentityResolutionState resolutionState =
+      ConversationIdentityResolutionState.resolved,
 }) {
   return ConversationSummary(
     conversationId: conversationId ?? threadId,
@@ -2930,6 +2961,7 @@ ConversationSummary _conversation({
     targetDid: isGroup ? null : targetDid,
     targetPeer: isGroup ? null : targetPeer,
     groupId: groupId,
+    resolutionState: resolutionState,
   );
 }
 

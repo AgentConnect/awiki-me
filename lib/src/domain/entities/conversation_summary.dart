@@ -2,6 +2,8 @@ import 'chat_message.dart';
 
 enum ConversationPeerLifecycleState { active, deletedAgent }
 
+enum ConversationIdentityResolutionState { resolved, legacyUnresolved }
+
 class ConversationSummary {
   const ConversationSummary({
     required this.conversationId,
@@ -25,6 +27,7 @@ class ConversationSummary {
     this.lastMessageSnapshot,
     this.conversationKey,
     this.peerLifecycleState = ConversationPeerLifecycleState.active,
+    this.resolutionState = ConversationIdentityResolutionState.resolved,
   });
 
   /// Required canonical message-chain key owned by im-core.
@@ -49,11 +52,15 @@ class ConversationSummary {
   final ChatMessage? lastMessageSnapshot;
   final String? conversationKey;
   final ConversationPeerLifecycleState peerLifecycleState;
+  final ConversationIdentityResolutionState resolutionState;
 
   bool get isDeletedAgentConversation =>
       peerLifecycleState == ConversationPeerLifecycleState.deletedAgent;
 
   bool get hasUnreadMention => unreadMentionCount > 0;
+
+  bool get isLegacyUnresolved =>
+      resolutionState == ConversationIdentityResolutionState.legacyUnresolved;
 
   ConversationSummary copyWith({
     String? conversationId,
@@ -77,6 +84,7 @@ class ConversationSummary {
     Object? lastMessageSnapshot = _conversationSummaryUnset,
     Object? conversationKey = _conversationSummaryUnset,
     ConversationPeerLifecycleState? peerLifecycleState,
+    ConversationIdentityResolutionState? resolutionState,
   }) {
     return ConversationSummary(
       conversationId: conversationId ?? this.conversationId,
@@ -115,6 +123,7 @@ class ConversationSummary {
         this.conversationKey,
       ),
       peerLifecycleState: peerLifecycleState ?? this.peerLifecycleState,
+      resolutionState: resolutionState ?? this.resolutionState,
     );
   }
 }

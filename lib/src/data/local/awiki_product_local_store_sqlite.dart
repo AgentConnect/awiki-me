@@ -57,6 +57,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       'product_store.resolve_path',
       _resolveDatabasePath,
     );
+    await _backupBeforeSchemaUpgradeIfRequired(path);
     _database = await AwikiPerformanceLogger.async(
       'product_store.open_database',
       () => openDatabase(
@@ -74,6 +75,23 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
       ),
     );
     return _database!;
+  }
+
+  Future<void> _backupBeforeSchemaUpgradeIfRequired(String path) async {
+    if (!await File(path).exists()) {
+      return;
+    }
+    final database = await openDatabase(path, singleInstance: false);
+    try {
+      final version = Sqflite.firstIntValue(
+        await database.rawQuery('PRAGMA user_version'),
+      );
+      if (version != null && version > 0 && version < databaseVersion) {
+        await _createCanonicalMigrationBackup(database, databasePath: path);
+      }
+    } finally {
+      await database.close();
+    }
   }
 
   Future<String> _resolveDatabasePath() async {
@@ -165,12 +183,13 @@ WHERE owner_did = ? AND legacy_conversation_id = ?
     return pending;
   }
 
-  Future<void> _createCanonicalMigrationBackup(Database db) async {
+  Future<void> _createCanonicalMigrationBackup(
+    Database db, {
+    String? databasePath,
+  }) async {
+    final sourcePath = databasePath ?? _databasePath;
     final backupDirectory = Directory(
-      p.join(
-        p.dirname(_databasePath),
-        'canonical-conversation-overlay-upgrade',
-      ),
+      p.join(p.dirname(sourcePath), 'canonical-conversation-overlay-upgrade'),
     );
     await backupDirectory.create(recursive: true);
     final backupPath = p.join(
@@ -178,6 +197,7 @@ WHERE owner_did = ? AND legacy_conversation_id = ?
       'awiki_me_product_store.pre-canonical-v2.sqlite',
     );
     if (await File(backupPath).exists()) {
+      await _verifyCanonicalMigrationBackup(backupPath);
       return;
     }
     final temporaryPath = '$backupPath.tmp';
@@ -187,7 +207,35 @@ WHERE owner_did = ? AND legacy_conversation_id = ?
     }
     final escaped = temporaryPath.replaceAll("'", "''");
     await db.execute("VACUUM INTO '$escaped'");
+    await _verifyCanonicalMigrationBackup(temporaryPath);
     await File(temporaryPath).rename(backupPath);
+  }
+
+  Future<void> _verifyCanonicalMigrationBackup(String path) async {
+    if (await File(path).length() == 0) {
+      throw const FileSystemException(
+        'canonical_conversation_overlay_backup_empty',
+      );
+    }
+    final database = await openDatabase(
+      path,
+      readOnly: true,
+      singleInstance: false,
+    );
+    try {
+      final rows = await database.rawQuery('PRAGMA integrity_check');
+      final values = rows.length == 1 ? rows.single.values : const <Object?>[];
+      final result = values.length == 1
+          ? values.single?.toString().trim().toLowerCase()
+          : null;
+      if (result != 'ok') {
+        throw const FileSystemException(
+          'canonical_conversation_overlay_backup_invalid',
+        );
+      }
+    } finally {
+      await database.close();
+    }
   }
 
   static Future<void> _createCanonicalMigrationJournal(DatabaseExecutor db) =>

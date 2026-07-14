@@ -220,6 +220,46 @@ void main() {
     expect(mappedConversation.peerPersonaId, 'persona:v1:test');
   });
 
+  test('legacy unresolved registry conversation remains displayable', () {
+    const conversation = core.Conversation(
+      conversationId: 'legacy:direct:did:bob',
+      resolutionState: core.ConversationResolutionState.legacyUnresolved,
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      participants: <String>['did:alice', 'did:bob'],
+      unreadCount: 0,
+      messageCount: 0,
+    );
+
+    final mapped = mapper.conversationFromCore(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapper.shouldIncludeConversation(conversation), isTrue);
+    expect(mapped.conversationId, 'legacy:direct:did:bob');
+    expect(mapped.peerPersonaId, isNull);
+    expect(mapped.isLegacyUnresolved, isTrue);
+  });
+
+  test('blocked identity conflict is not exposed as a normal conversation', () {
+    const conversation = core.Conversation(
+      conversationId: 'legacy:conflict:bob',
+      resolutionState: core.ConversationResolutionState.blockedConflict,
+      threadKind: 'direct',
+      threadId: 'did:bob',
+      participants: <String>['did:alice', 'did:bob'],
+      unreadCount: 0,
+      messageCount: 0,
+    );
+
+    expect(mapper.shouldIncludeConversation(conversation), isFalse);
+    expect(
+      () => mapper.conversationFromCore(conversation, ownerDid: 'did:alice'),
+      throwsStateError,
+    );
+  });
+
   test('scoped direct message keeps stable thread id and peer metadata', () {
     const message = core.Message(
       conversationId: 'dm:peer-scope:v1:abc123',
