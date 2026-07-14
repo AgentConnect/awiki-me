@@ -485,9 +485,16 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _patchSubscription = ref
         .read(conversationServiceProvider)
         .watchConversationPatches(ownerDid: ownerDid)
+        .asyncMap((patch) async {
+          await _handleConversationPatch(
+            patch,
+            ownerDid: ownerDid,
+            token: token,
+          );
+          return patch;
+        })
         .listen(
-          (patch) =>
-              _handleConversationPatch(patch, ownerDid: ownerDid, token: token),
+          (_) {},
           onError: (_) => _schedulePatchRepair(
             ownerDid: ownerDid,
             generation: generation,
@@ -512,11 +519,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     await subscription?.cancel();
   }
 
-  void _handleConversationPatch(
+  Future<void> _handleConversationPatch(
     ConversationListPatch patch, {
     required String ownerDid,
     required int token,
-  }) {
+  }) async {
     _trace(
       'patch.received',
       fields: <String, Object?>{
@@ -567,6 +574,32 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         generation: _refreshGeneration,
         token: token,
         reason: 'version_gap',
+      );
+      return;
+    }
+    switch (patch.kind) {
+      case ConversationListPatchKind.reset:
+        await _loadCachedPeerProfiles(ownerDid, patch.items);
+        break;
+      case ConversationListPatchKind.upsert:
+        final item = patch.item;
+        if (item != null) {
+          await _loadCachedPeerProfiles(ownerDid, <ConversationSummary>[item]);
+        }
+        break;
+      case ConversationListPatchKind.remove:
+      case ConversationListPatchKind.reorder:
+      case ConversationListPatchKind.repairRequired:
+        break;
+    }
+    if (!_canApplyPatch(patch, ownerDid: ownerDid, token: token)) {
+      _trace(
+        'patch.ignored',
+        fields: <String, Object?>{
+          'reason': 'stale_after_profile_bundle',
+          'kind': patch.kind.name,
+          'version': patch.version,
+        },
       );
       return;
     }

@@ -224,6 +224,8 @@ release/0710 的 legacy DID/thread/Handle alias 只允许由 Core upgrade、alia
 
 打开会话后，text/payload/attachment 首发、重试和 read/sync 都传入同一 canonical `AppConversationReadRef`；Core 用 directory 解析时写入的 owner-scoped Direct route 寻址 current DID。App 不得把 peer-scope 会话降级为 `dm:<targetDid>` write alias。`ChatThreadsController` 只从 canonical `conversationId` timeline、conversation timeline patch 或 committed projection repair 中获得更新消息。列表 preview 的 authoritative base 仍来自 `im-core` conversation summary projection；legacy alias、remote history best-effort page 或 realtime hint 都不能成为第二套 preview 真相。`ConversationListProvider` 是 recents state 的唯一发布边界，snapshot、fast-local、patch reset/upsert/remove/reorder、repair 和 read ack 都必须在发布前应用同一套 read presentation waterline；Profile/Group 展示信息在 Widget/View Provider 中组合，不回写 base summary。这个 waterline 只接受 latest message watermark 前进或 read watermark 前进；summary-only 更新不能提前清 unread，read watermark 覆盖的迟到 unread 不能重新出现，旧的 0 unread 不能清掉更新消息。真正的 read state 必须通过带 message watermark 的 `markConversationRead(AppConversationReadRef, watermark)` 提交。
 
+Conversation patch stream 必须串行应用；`reset` / `upsert` 在发布新会话行前先完成同一 owner/runtime scope 的本地 Persona Profile 读取，使会话列表和聊天页头的首个内容帧直接使用已缓存昵称。缓存读取失败时保留已有 Profile 并按统一 resolver 回退 Handle/DID，但不能为等待远端 Profile 阻塞 patch，也不能先发布 Handle 再用本地昵称覆盖。聊天页头即使暂时缺少 current DID，也必须能以 `peerPersonaId` 读取同一份 Profile 投影。
+
 ## 10. Timeline 和 Local-First 打开路径
 
 Chat presentation 是单向的：

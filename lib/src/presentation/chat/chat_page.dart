@@ -1839,13 +1839,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return null;
     }
     final targetDid = conversation.targetDid?.trim();
-    if (targetDid == null || targetDid.isEmpty) {
+    final peerPersonaId = conversation.peerPersonaId?.trim();
+    if ((targetDid == null || targetDid.isEmpty) &&
+        (peerPersonaId == null || peerPersonaId.isEmpty)) {
       return null;
     }
     final nickname = ref.watch(
       peerDisplayNameProvider(
         PeerDisplayNameRequest(
-          peerPersonaId: conversation.peerPersonaId,
+          peerPersonaId: peerPersonaId,
           did: targetDid,
           nickname: conversation.displayName,
           fullHandle: conversation.targetPeer,

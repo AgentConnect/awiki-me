@@ -616,6 +616,66 @@ void main() {
     expect(profileService.loadPublicProfileCalls, 0);
   });
 
+  testWidgets('单聊页头在 current DID 缺失时仍按 Persona 读取本地昵称', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'wire:persona-only',
+      conversationId: 'conv:persona-only',
+      displayName: 'zsy.awiki.ai',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      peerPersonaId: 'persona:zsy',
+      targetPeer: 'zsy.awiki.ai',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              peerPersonaId: 'persona:zsy',
+              profile: const UserProfile(
+                did: 'did:test:zsy-old',
+                nickName: '张盛毅',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'zsy.awiki.ai',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final headerTitle = tester.widget<Text>(
+      find.byKey(const Key('chat-header-title')),
+    );
+    expect(headerTitle.data, '张盛毅');
+    expect(find.text('zsy.awiki.ai'), findsNothing);
+    expect(profileService.loadPublicProfileCalls, 0);
+  });
+
   testWidgets('最近会话同步使用本地 profile 投影且不发起远端查询', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);

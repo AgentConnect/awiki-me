@@ -3,19 +3,23 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -1818,6 +1822,76 @@ void main() {
   });
 
   test(
+    'conversation patch publishes only after cached persona profile is ready',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final directory = _DelayedCachedDirectoryService();
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        directory: directory,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 1,
+          item: _conversation(
+            conversationId: 'conv:bob',
+            threadId: 'wire:bob',
+            displayName: 'bob.awiki.info',
+            targetDid: 'did:bob',
+            targetPeer: 'bob.awiki.info',
+            peerPersonaId: 'persona:bob',
+            unreadCount: 1,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(directory.requests, <Set<String>>[
+        <String>{'did:bob'},
+      ]);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+
+      directory.complete(<PeerDisplayProfile>[
+        const PeerDisplayProfile(
+          did: 'did:bob',
+          peerPersonaId: 'persona:bob',
+          displayName: 'Bob Nickname',
+          handle: 'bob.awiki.info',
+        ),
+      ]);
+      await pumpEventQueue();
+
+      final state = container.read(conversationListProvider);
+      expect(state.orderedIds, <String>['conv:bob']);
+      expect(
+        container.read(
+          peerDisplayNameProvider(
+            const PeerDisplayNameRequest(
+              peerPersonaId: 'persona:bob',
+              did: 'did:bob',
+              nickname: 'bob.awiki.info',
+              fullHandle: 'bob.awiki.info',
+            ),
+          ),
+        ),
+        'Bob Nickname',
+      );
+    },
+  );
+
+  test(
     'conversation patch reset replaces canonical rows and is idempotent',
     () async {
       final service = _PatchConversationService(
@@ -2944,6 +3018,7 @@ ConversationSummary _conversation({
   int unreadCount = 0,
   String targetDid = 'did:bob',
   String? targetPeer,
+  String? peerPersonaId,
   bool isGroup = false,
   String? groupId,
   DateTime? lastMessageAt,
@@ -2960,6 +3035,7 @@ ConversationSummary _conversation({
     isGroup: isGroup,
     targetDid: isGroup ? null : targetDid,
     targetPeer: isGroup ? null : targetPeer,
+    peerPersonaId: isGroup ? null : peerPersonaId,
     groupId: groupId,
     resolutionState: resolutionState,
   );
@@ -2991,6 +3067,7 @@ ProviderContainer _conversationContainer({
   required String ownerDid,
   List<AgentSummary> agents = const <AgentSummary>[],
   AwikiEnvironmentConfig? environment,
+  DirectoryApplicationService? directory,
   bool authenticated = true,
 }) {
   return ProviderContainer(
@@ -2998,6 +3075,8 @@ ProviderContainer _conversationContainer({
       if (environment != null)
         awikiEnvironmentConfigProvider.overrideWithValue(environment),
       conversationServiceProvider.overrideWithValue(service),
+      if (directory != null)
+        directoryApplicationServiceProvider.overrideWithValue(directory),
       notificationFacadeProvider.overrideWithValue(notifications),
       agentsProvider.overrideWith(
         (ref) => _StaticAgentsController(ref, agents),
@@ -3017,6 +3096,34 @@ ProviderContainer _conversationContainer({
       }),
     ],
   );
+}
+
+class _DelayedCachedDirectoryService implements DirectoryApplicationService {
+  final List<Set<String>> requests = <Set<String>>[];
+  final Completer<List<PeerDisplayProfile>> _completer =
+      Completer<List<PeerDisplayProfile>>();
+
+  void complete(List<PeerDisplayProfile> profiles) {
+    _completer.complete(profiles);
+  }
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) {
+    requests.add(dids.toSet());
+    return _completer.future;
+  }
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    throw UnimplementedError();
+  }
 }
 
 class _StaticAgentsController extends AgentsController {
