@@ -146,6 +146,7 @@ RealtimeUpdate _update() {
 ConversationSummary _conversation() {
   return ConversationSummary(
     threadId: 'dm:alice:bob',
+    conversationId: 'dm:alice:bob',
     displayName: 'Bob',
     lastMessagePreview: 'hi',
     lastMessageAt: DateTime.utc(2026, 5, 23),
@@ -385,16 +386,16 @@ class _FakeConversations implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) async {
-    hiddenThreads.add('$ownerDid/${conversation.visibilityKey}/true');
+    hiddenThreads.add('$ownerDid/${conversation.conversationId}/true');
   }
 
   @override
-  Future<void> restoreConversationToRecents({
+  Future<void> ensureConversationInRecents({
     required String ownerDid,
-    required ConversationSummary conversation,
+    required String conversationId,
     DateTime? updatedAt,
   }) async {
-    hiddenThreads.add('$ownerDid/${conversation.visibilityKey}/false');
+    hiddenThreads.add('$ownerDid/$conversationId/false');
   }
 }
 
@@ -638,6 +639,7 @@ UserProfile _profile(String did) {
 GroupSummary _group() {
   return const GroupSummary(
     groupId: 'did:group',
+    conversationId: 'group:did:group',
     name: 'Group',
     description: '',
     memberCount: 1,

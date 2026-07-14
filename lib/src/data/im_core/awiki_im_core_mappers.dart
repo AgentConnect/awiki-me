@@ -130,6 +130,8 @@ class AwikiImCoreMappers {
         fallbackThreadId: message.threadId,
       ),
       senderDid: message.sender,
+      senderPeerPersonaId: _nonEmpty(message.senderPeerPersonaId),
+      senderDidSnapshot: _nonEmpty(message.senderDidSnapshot),
       senderName:
           _attribute(message.metadata, 'senderName') ??
           _attribute(message.metadata, 'sender_name'),
@@ -199,6 +201,12 @@ class AwikiImCoreMappers {
         fallbackThreadId: message.threadId,
       ),
       senderDid: message.sender,
+      senderPeerPersonaId: _snapshotAttribute(
+        message,
+        'sender_peer_persona_id',
+      ),
+      senderDidSnapshot:
+          _snapshotAttribute(message, 'sender_did_snapshot') ?? message.sender,
       senderName:
           _snapshotAttribute(message, 'senderName') ??
           _snapshotAttribute(message, 'sender_name'),
@@ -293,6 +301,8 @@ class AwikiImCoreMappers {
       isGroup: isGroup,
       targetDid: targetDid,
       targetPeer: targetPeer,
+      peerPersonaId: conversation.peerPersonaId,
+      canonicalGroupDid: conversation.canonicalGroupDid,
       groupId: groupId,
       avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
@@ -394,6 +404,8 @@ class AwikiImCoreMappers {
       isGroup: isGroup,
       targetDid: targetDid,
       targetPeer: targetPeer,
+      peerPersonaId: conversation.peerPersonaId,
+      canonicalGroupDid: conversation.canonicalGroupDid,
       groupId: groupId,
       avatarUri: null,
       avatarSeed: overlay?.avatarSeed,
@@ -428,6 +440,7 @@ class AwikiImCoreMappers {
 
   GroupSummary groupFromCoreSummary(core.GroupSummary group) {
     return GroupSummary(
+      conversationId: group.conversationId,
       groupId: group.did,
       displayName:
           _nonEmpty(group.displayName) ?? _nonEmpty(group.name) ?? group.did,
@@ -442,6 +455,7 @@ class AwikiImCoreMappers {
 
   GroupSummary groupFromCoreSnapshot(core.GroupSnapshot group) {
     return GroupSummary(
+      conversationId: group.conversationId,
       groupId: group.did,
       displayName:
           _nonEmpty(group.displayName) ?? _nonEmpty(group.name) ?? group.did,
@@ -468,6 +482,9 @@ class AwikiImCoreMappers {
       did: did,
       handle: handle,
       role: member.role ?? 'member',
+      membershipId: _nonEmpty(member.membershipId),
+      peerPersonaId: _nonEmpty(member.peerPersonaId),
+      credentialDid: _nonEmpty(member.credentialDid),
       subjectType: subjectType,
       membershipStatus: GroupMemberMembershipStatus.parse(member.status),
     );
@@ -572,19 +589,8 @@ class AwikiImCoreMappers {
     final message = event.message;
     if (message == null) {
       if (event.kind == 'group_updated') {
-        final groupId = _nonEmpty(event.group);
-        final group = groupId == null
-            ? null
-            : GroupSummary(
-                groupId: groupId,
-                displayName: groupId,
-                description: '',
-                memberCount: 0,
-                lastMessageAt: null,
-                membershipStatus: null,
-              );
         return RealtimeUpdate(
-          group: group,
+          group: null,
           syncDirty: event.sync?.syncDirty ?? true,
           gapDetected: event.sync?.gapDetected ?? false,
           syncEventSeq: event.sync?.eventSeq,
@@ -606,6 +612,7 @@ class AwikiImCoreMappers {
         ? null
         : _directPeerDidForMessage(ownerDid, message);
     final conversation = ConversationSummary(
+      conversationId: message.conversationId,
       threadId: chatMessage.threadId,
       displayName:
           chatMessage.groupId ?? targetPeer ?? targetDid ?? message.sender,
@@ -625,6 +632,7 @@ class AwikiImCoreMappers {
     final group = chatMessage.groupId == null
         ? null
         : GroupSummary(
+            conversationId: message.conversationId,
             groupId: chatMessage.groupId!,
             displayName: chatMessage.groupId!,
             description: '',

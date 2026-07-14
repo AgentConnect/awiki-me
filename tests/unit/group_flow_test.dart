@@ -293,6 +293,7 @@ void main() {
         home: const GroupDetailPage(
           initialGroup: GroupSummary(
             groupId: groupDid,
+            conversationId: 'group:$groupDid',
             name: '融资协作群',
             description: '',
             memberCount: 2,
@@ -419,6 +420,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 1,
@@ -515,6 +517,7 @@ void main() {
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: 'dm:recent',
+          conversationId: 'dm:recent',
           displayName: '最近联系人',
           lastMessagePreview: 'hello',
           lastMessageAt: DateTime(2026, 5, 17, 11),
@@ -525,6 +528,7 @@ void main() {
         ),
         ConversationSummary(
           threadId: 'group:not-candidate',
+          conversationId: 'group:not-candidate',
           displayName: '不应该出现的群聊',
           lastMessagePreview: 'group',
           lastMessageAt: DateTime(2026, 5, 17, 12),
@@ -536,6 +540,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 2,
@@ -653,6 +658,7 @@ void main() {
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: 'dm:deleted-agent',
+          conversationId: 'dm:deleted-agent',
           displayName: '已删除智能体候选',
           lastMessagePreview: 'history',
           lastMessageAt: DateTime(2026, 7, 13),
@@ -678,6 +684,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '生命周期测试群',
           description: '',
           memberCount: 1,
@@ -754,6 +761,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 1,
@@ -829,6 +837,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 1,
@@ -883,6 +892,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 2,
@@ -943,6 +953,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 2,
@@ -1003,6 +1014,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupDid,
+          conversationId: 'group:$groupDid',
           name: '融资协作群',
           description: '',
           memberCount: 1,

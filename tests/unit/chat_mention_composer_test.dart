@@ -45,6 +45,7 @@ void main() {
       );
       final conversation = ConversationSummary(
         threadId: 'group:group-mention',
+        conversationId: 'group:group-mention',
         displayName: 'Mention Group',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 14, 20, 40),
@@ -148,6 +149,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:group-mention',
+      conversationId: 'group:group-mention',
       displayName: 'Mention Group',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 14, 20, 42),
@@ -213,6 +215,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:group-mention',
+      conversationId: 'group:group-mention',
       displayName: 'Mention Group',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 14, 20, 40),
@@ -301,6 +304,7 @@ void main() {
       );
       final conversation = ConversationSummary(
         threadId: 'group:group-mention',
+        conversationId: 'group:group-mention',
         displayName: 'Mention Group',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 14, 20, 45),
@@ -404,6 +408,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:group-mention',
+      conversationId: 'group:group-mention',
       displayName: 'Mention Group',
       lastMessagePreview: text,
       lastMessageAt: DateTime(2026, 6, 14, 21),
@@ -466,6 +471,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:did:wba:awiki.info:u:peer',
+      conversationId: 'dm:did:wba:awiki.info:u:peer',
       displayName: 'Peer',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 14, 20, 41),

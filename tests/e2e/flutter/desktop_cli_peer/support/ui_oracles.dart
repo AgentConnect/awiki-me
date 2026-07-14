@@ -283,8 +283,7 @@ ConversationSummary requireExactlyOneConversation({
   final normalizedId = conversationId.trim();
   final matches = conversations
       .where(
-        (conversation) =>
-            conversation.effectiveConversationId.trim() == normalizedId,
+        (conversation) => conversation.conversationId.trim() == normalizedId,
       )
       .toList(growable: false);
   if (matches.length != 1) {

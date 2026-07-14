@@ -36,6 +36,7 @@ void main() {
       ProductConversationOverlay(
         ownerDid: 'did:alice',
         threadId: 'direct:bob',
+        conversationId: 'direct:bob',
         pinned: true,
         muted: true,
         customTitle: 'Bob',
@@ -47,6 +48,7 @@ void main() {
       ProductConversationOverlay(
         ownerDid: 'did:bob',
         threadId: 'direct:bob',
+        conversationId: 'direct:bob',
         hidden: true,
         customTitle: 'Bob private',
         updatedAt: now,
@@ -251,7 +253,7 @@ void main() {
       expect(states.single.valueJson, '{"state":"ready"}');
       expect(overlay?.customTitle, 'Bob legacy');
       expect(overlay?.hidden, isTrue);
-      expect(overlay?.effectiveConversationId, 'direct:bob');
+      expect(overlay?.conversationId, 'direct:bob');
     },
   );
 
@@ -301,7 +303,7 @@ void main() {
       expect(legacy?.pinned, isTrue);
       expect(legacy?.muted, isTrue);
       expect(legacy?.hidden, isTrue);
-      expect(legacy?.effectiveConversationId, 'direct-did:did:bob');
+      expect(legacy?.conversationId, 'direct-did:did:bob');
       expect(bobOwner?.customTitle, 'Bob private');
 
       await store.upsertConversationOverlay(
@@ -405,6 +407,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'dm:alice:bob',
+          conversationId: 'dm:alice:bob',
           customTitle: 'Bob',
           updatedAt: DateTime.utc(2026, 6, 27),
         ),
@@ -427,6 +430,7 @@ void main() {
       ProductConversationOverlay(
         ownerDid: 'did:alice',
         threadId: legacyId,
+        conversationId: legacyId,
         customTitle: 'latest legacy title',
         hidden: true,
         updatedAt: DateTime.utc(2026, 7, 14, 2),

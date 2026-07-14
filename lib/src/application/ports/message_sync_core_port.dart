@@ -14,7 +14,6 @@ abstract interface class MessageSyncCorePort {
     String? afterServerSeq,
     int? limit,
   });
-
 }
 
 abstract interface class ConversationMessageSyncCorePort {

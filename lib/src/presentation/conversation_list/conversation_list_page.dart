@@ -10,8 +10,8 @@ import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../core/performance_logger.dart';
-import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -20,6 +20,7 @@ import '../chat/chat_provider.dart';
 import '../agents/agents_provider.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
+import '../group/group_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
@@ -399,15 +400,16 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           widget.composerDrafts,
                         );
                         return _MacConversationRow(
-                          key: Key(
-                            'conversation-row:${item.effectiveConversationId}',
-                          ),
+                          key: Key('conversation-row:${item.conversationId}'),
                           title: _conversationPresentationTitle(
                             ref,
                             item,
                             context.l10n,
                           ),
-                          avatarUri: item.avatarUri,
+                          avatarUri: _conversationPresentationAvatarUri(
+                            ref,
+                            item,
+                          ),
                           preview: preview,
                           timeLabel: item.lastMessagePreview.trim().isEmpty
                               ? ''
@@ -467,7 +469,7 @@ bool _isSelectedConversation(
   required String? selectedConversationId,
   required String? selectedThreadId,
 }) {
-  final itemConversationId = item.effectiveConversationId.trim();
+  final itemConversationId = item.conversationId.trim();
   if (selectedConversationId != null &&
       itemConversationId.isNotEmpty &&
       itemConversationId == selectedConversationId) {
@@ -697,13 +699,13 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   composerDrafts,
                 );
                 return _ConversationRow(
-                  key: Key('conversation-row:${item.effectiveConversationId}'),
+                  key: Key('conversation-row:${item.conversationId}'),
                   title: _conversationPresentationTitle(
                     ref,
                     item,
                     context.l10n,
                   ),
-                  avatarUri: item.avatarUri,
+                  avatarUri: _conversationPresentationAvatarUri(ref, item),
                   preview: preview,
                   timeLabel: item.lastMessagePreview.trim().isEmpty
                       ? ''
@@ -1237,11 +1239,19 @@ String _conversationPresentationTitle(
   ConversationSummary conversation,
   AppLocalizations l10n,
 ) {
+  if (conversation.isGroup) {
+    final group = _presentationGroup(ref, conversation);
+    final groupName = group?.displayName.trim() ?? '';
+    if (groupName.isNotEmpty) {
+      return groupName;
+    }
+  }
   String? cachedPeerName;
   final targetDid = conversation.targetDid?.trim() ?? '';
   if (!conversation.isGroup && targetDid.isNotEmpty) {
     cachedPeerName = peerDisplayName(
       ref.watch(peerDisplayProfileProvider),
+      peerPersonaId: conversation.peerPersonaId,
       did: targetDid,
       fallback: '',
     );
@@ -1251,6 +1261,30 @@ String _conversationPresentationTitle(
     l10n,
     peerDisplayName: cachedPeerName,
   );
+}
+
+String? _conversationPresentationAvatarUri(
+  WidgetRef ref,
+  ConversationSummary conversation,
+) {
+  if (!conversation.isGroup) {
+    return conversation.avatarUri;
+  }
+  return _presentationGroup(ref, conversation)?.avatarUri ??
+      conversation.avatarUri;
+}
+
+GroupSummary? _presentationGroup(
+  WidgetRef ref,
+  ConversationSummary conversation,
+) {
+  final conversationId = conversation.conversationId.trim();
+  for (final group in ref.watch(groupProvider).groups) {
+    if (group.conversationId.trim() == conversationId) {
+      return group;
+    }
+  }
+  return null;
 }
 
 String _normalizedConversationSearchText(String text) {
@@ -1404,17 +1438,7 @@ ChatComposerDraft _draftForConversation(
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
-  if (isPeerScopedDirectConversation(conversation)) {
-    return drafts[conversation.threadId.trim()] ?? const ChatComposerDraft();
-  }
-  for (final key in conversation.visibilityKeys) {
-    final draft = drafts[key.trim()];
-    if (draft != null) {
-      return draft;
-    }
-  }
-  final threadDraft = drafts[conversation.threadId.trim()];
-  return threadDraft ?? const ChatComposerDraft();
+  return drafts[conversation.conversationId] ?? const ChatComposerDraft();
 }
 
 String _conversationCountLabel(int count) => count > 999 ? '999+' : '$count';

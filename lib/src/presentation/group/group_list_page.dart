@@ -18,6 +18,7 @@ import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
 import 'group_member_invite_dialog.dart';
@@ -815,7 +816,7 @@ class _GroupCard extends StatelessWidget {
   }
 }
 
-class GroupMemberRow extends StatelessWidget {
+class GroupMemberRow extends ConsumerWidget {
   const GroupMemberRow({
     super.key,
     required this.item,
@@ -828,8 +829,11 @@ class GroupMemberRow extends StatelessWidget {
   final bool showRemoveButton;
 
   @override
-  Widget build(BuildContext context) {
-    final title = _memberTitle(item);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final title = _memberDisplayLabel(
+      item,
+      ref.watch(peerDisplayProfileProvider),
+    );
     final identityLabel = _memberIdentityLabel(item);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
@@ -881,8 +885,6 @@ class GroupMemberRow extends StatelessWidget {
       ],
     );
   }
-
-  String _memberTitle(GroupMemberSummary item) => _memberDisplayLabel(item);
 }
 
 Future<void> showRemoveGroupMemberDialog({
@@ -892,7 +894,10 @@ Future<void> showRemoveGroupMemberDialog({
   required GroupMemberSummary member,
   required ValueChanged<GroupSummary> onGroupUpdated,
 }) async {
-  final memberTitle = _memberDisplayLabel(member);
+  final memberTitle = _memberDisplayLabel(
+    member,
+    ref.read(peerDisplayProfileProvider),
+  );
   await AppNavigator.showDialog<void>(
     context,
     (dialogContext) => CupertinoAlertDialog(
@@ -931,7 +936,19 @@ Future<void> showRemoveGroupMemberDialog({
   );
 }
 
-String _memberDisplayLabel(GroupMemberSummary member) {
+String _memberDisplayLabel(
+  GroupMemberSummary member,
+  PeerDisplayProfileState profiles,
+) {
+  final cached = peerDisplayName(
+    profiles,
+    peerPersonaId: member.peerPersonaId,
+    did: member.did,
+    fallback: '',
+  );
+  if (cached.isNotEmpty) {
+    return cached;
+  }
   final displayName = member.displayName?.trim();
   if (displayName != null && displayName.isNotEmpty) {
     return displayName;

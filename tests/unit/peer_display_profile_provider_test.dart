@@ -50,7 +50,7 @@ void main() {
     expect(switched.forDid('did:test:bob')?.displayName, 'Bob');
   });
 
-  test('头像触发的远端 profile 会立即更新展示投影', () {
+  test('远端 profile 不会按未经验证的旧 DID 复制展示别名', () {
     final container = ProviderContainer(
       overrides: <Override>[
         directoryApplicationServiceProvider.overrideWithValue(
@@ -64,7 +64,7 @@ void main() {
         .read(peerDisplayProfileProvider.notifier)
         .updateFromRemote(
           ownerDid: 'did:test:owner',
-          requestedDid: 'did:test:alice-old',
+          peerPersonaId: 'persona:alice',
           profile: const UserProfile(
             did: 'did:test:alice',
             displayName: 'Alice New',
@@ -76,8 +76,14 @@ void main() {
         );
 
     final state = container.read(peerDisplayProfileProvider);
+    expect(
+      state
+          .forPeer(peerPersonaId: 'persona:alice', did: 'did:test:alice')
+          ?.displayName,
+      'Alice New',
+    );
     expect(state.forDid('did:test:alice')?.displayName, 'Alice New');
-    expect(state.forDid('did:test:alice-old')?.displayName, 'Alice New');
+    expect(state.forDid('did:test:alice-old'), isNull);
   });
 
   test('远端 profile 没有昵称时保留 Handle 作为展示回退', () {
@@ -113,6 +119,46 @@ void main() {
       ),
       'bob.awiki.ai',
     );
+  });
+
+  test('同一 Persona 的已验证 DID 轮换共享一份展示资料', () {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      peerPersonaId: 'persona:alice',
+      profile: const UserProfile(
+        did: 'did:test:alice-old',
+        displayName: 'Alice Old',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      ),
+    );
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      peerPersonaId: 'persona:alice',
+      profile: const UserProfile(
+        did: 'did:test:alice-new',
+        displayName: 'Alice New',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      ),
+    );
+
+    final state = container.read(peerDisplayProfileProvider);
+    expect(state.profilesByPersonaId, hasLength(1));
+    expect(state.forDid('did:test:alice-old')?.displayName, 'Alice New');
+    expect(state.forDid('did:test:alice-new')?.displayName, 'Alice New');
   });
 
   test('查看全部并发刷新本地缺失 profile 并缓存成功结果', () async {

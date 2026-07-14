@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
-import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
@@ -18,21 +17,9 @@ Future<void> openGroupChat(
   bool closeCurrentRouteOnDesktop = false,
   bool replaceCurrentRouteOnPhone = false,
 }) async {
-  final conversation = ConversationSummary(
-    threadId: 'group:${group.groupId}',
-    displayName: group.displayName,
-    lastMessagePreview: '',
-    lastMessageAt: group.lastMessageAt ?? DateTime.now(),
-    unreadCount: 0,
-    isGroup: true,
-    groupId: group.groupId,
-    avatarUri: group.avatarUri,
-    avatarSeed: group.groupId,
-  );
-
-  await ref
+  final conversation = await ref
       .read(conversationListProvider.notifier)
-      .commitStartedConversation(conversation);
+      .commitConversationId(group.conversationId);
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {
     return;

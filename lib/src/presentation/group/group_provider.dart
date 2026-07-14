@@ -6,8 +6,8 @@ import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/user_profile.dart';
-import '../app_shell/providers/selected_conversation_provider.dart';
-import '../conversation_list/conversation_provider.dart';
+import '../app_shell/providers/session_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 
 class GroupState {
   const GroupState({
@@ -58,7 +58,6 @@ class GroupController extends StateNotifier<GroupState> {
         keepLocalOnly: false,
       );
       state = state.copyWith(groups: merged, isLoading: false);
-      _applyGroupsToConversations(merged);
     } catch (_) {
       state = state.copyWith(isLoading: false);
       rethrow;
@@ -94,6 +93,14 @@ class GroupController extends StateNotifier<GroupState> {
         }
         try {
           final profile = await profiles.loadPublicProfile(subject);
+          final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+          ref
+              .read(peerDisplayProfileProvider.notifier)
+              .updateFromRemote(
+                ownerDid: ownerDid,
+                profile: profile,
+                peerPersonaId: member.peerPersonaId,
+              );
           return _mergeMemberProfile(member, profile);
         } catch (_) {
           // Profile hydration is best-effort. The group membership snapshot is
@@ -212,12 +219,6 @@ class GroupController extends StateNotifier<GroupState> {
       keepLocalOnly: true,
     );
     state = state.copyWith(groups: merged);
-    _applyGroupsToConversations(merged);
-  }
-
-  void _applyGroupsToConversations(List<GroupSummary> groups) {
-    ref.read(conversationListProvider.notifier).applyGroupNames(groups);
-    ref.read(selectedConversationProvider.notifier).applyGroupNames(groups);
   }
 
   void clear() {
@@ -271,6 +272,7 @@ GroupSummary _mergeGroupSummary({
     return incoming;
   }
   return GroupSummary(
+    conversationId: incoming.conversationId,
     groupId: incoming.groupId,
     name: _mergeGroupName(local: local, incoming: incoming),
     description: _preferNonEmpty(incoming.description, local.description) ?? '',
@@ -372,6 +374,9 @@ GroupMemberSummary _mergeMemberProfile(
     did: member.did,
     handle: mergedHandle,
     role: member.role,
+    membershipId: member.membershipId,
+    peerPersonaId: member.peerPersonaId,
+    credentialDid: member.credentialDid,
     profileUrl: _preferNonEmptyOptional(member.profileUrl, profile.profileUri),
     displayName: _preferNonEmptyOptional(
       member.displayName,

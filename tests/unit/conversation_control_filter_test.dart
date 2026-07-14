@@ -156,7 +156,7 @@ void main() {
   });
 
   test(
-    'service list collapses legacy direct row when peer-scoped thread exists',
+    'service list deduplicates projection rows only by canonical ID',
     () async {
       final service = ImCoreConversationService(
         conversations: _FakeConversations(
@@ -167,7 +167,7 @@ void main() {
               targetPeer: 'did:agent:runtime',
               lastMessagePreview: 'legacy preview',
               lastMessageAt: DateTime.utc(2026, 7, 3, 10),
-            ),
+            ).copyWith(conversationId: 'dm:peer-scope:v1:runtime-thread'),
             _conversation(
               'dm:peer-scope:v1:runtime-thread',
               targetDid: 'did:agent:runtime',
@@ -247,6 +247,7 @@ ConversationSummary _conversation(
 }) {
   return ConversationSummary(
     threadId: threadId,
+    conversationId: threadId,
     displayName: threadId,
     lastMessagePreview: lastMessagePreview,
     lastMessageAt: lastMessageAt ?? DateTime.utc(2026, 6, 4),

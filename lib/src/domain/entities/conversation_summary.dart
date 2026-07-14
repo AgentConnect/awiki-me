@@ -4,6 +4,7 @@ enum ConversationPeerLifecycleState { active, deletedAgent }
 
 class ConversationSummary {
   const ConversationSummary({
+    required this.conversationId,
     required this.threadId,
     required this.displayName,
     required this.lastMessagePreview,
@@ -14,22 +15,19 @@ class ConversationSummary {
     this.firstUnreadMentionMessageId,
     this.targetDid,
     this.targetPeer,
+    this.peerPersonaId,
+    this.canonicalGroupDid,
     this.groupId,
     this.avatarUri,
     this.avatarSeed,
     this.lastMessagePayloadJson,
     this.lastMessageSnapshot,
-    this.conversationId,
     this.conversationKey,
     this.peerLifecycleState = ConversationPeerLifecycleState.active,
   });
 
-  /// Canonical message-chain key owned by im-core.
-  ///
-  /// During migration, legacy UI code may still use [threadId] or
-  /// [conversationKey]. New message display paths must use
-  /// [effectiveConversationId] instead.
-  final String? conversationId;
+  /// Required canonical message-chain key owned by im-core.
+  final String conversationId;
   final String threadId;
   final String displayName;
   final String lastMessagePreview;
@@ -40,6 +38,8 @@ class ConversationSummary {
   final bool isGroup;
   final String? targetDid;
   final String? targetPeer;
+  final String? peerPersonaId;
+  final String? canonicalGroupDid;
   final String? groupId;
   final String? avatarUri;
   final String? avatarSeed;
@@ -53,77 +53,8 @@ class ConversationSummary {
 
   bool get hasUnreadMention => unreadMentionCount > 0;
 
-  String get effectiveConversationId {
-    final explicit = conversationId?.trim();
-    if (explicit != null && explicit.isNotEmpty) {
-      return explicit;
-    }
-    return threadId.trim();
-  }
-
-  String get visibilityKey {
-    if (!isGroup && _isPeerScopedDirectThreadId(threadId)) {
-      final thread = threadId.trim();
-      return thread.isEmpty ? 'thread:' : thread;
-    }
-    final explicitKey = conversationKey?.trim();
-    if (explicitKey != null && explicitKey.isNotEmpty) {
-      return explicitKey;
-    }
-    if (isGroup) {
-      final group = groupId?.trim();
-      if (group != null && group.isNotEmpty) {
-        return 'group:$group';
-      }
-    } else {
-      final peer = targetPeer?.trim();
-      if (peer != null && peer.isNotEmpty) {
-        return 'direct:${_normalizeDirectPeer(peer)}';
-      }
-      final did = targetDid?.trim();
-      if (did != null && did.isNotEmpty) {
-        return 'direct:$did';
-      }
-    }
-    final thread = threadId.trim();
-    return thread.isEmpty ? 'thread:' : 'thread:$thread';
-  }
-
-  List<String> get visibilityKeys {
-    final keys = <String>[];
-    void add(String value) {
-      final key = value.trim();
-      if (key.isNotEmpty && !keys.contains(key)) {
-        keys.add(key);
-      }
-    }
-
-    add(visibilityKey);
-    if (!isGroup && _isPeerScopedDirectThreadId(threadId)) {
-      add(threadId);
-      add('thread:${threadId.trim()}');
-      return keys;
-    }
-    if (isGroup) {
-      final group = groupId?.trim();
-      if (group != null && group.isNotEmpty) {
-        add('group:$group');
-      }
-    } else {
-      final peer = targetPeer?.trim();
-      if (peer != null && peer.isNotEmpty) {
-        add('direct:${_normalizeDirectPeer(peer)}');
-      }
-      final did = targetDid?.trim();
-      if (did != null && did.isNotEmpty) {
-        add('direct:$did');
-      }
-    }
-    add(threadId);
-    return keys;
-  }
-
   ConversationSummary copyWith({
+    String? conversationId,
     String? threadId,
     String? displayName,
     String? lastMessagePreview,
@@ -134,20 +65,18 @@ class ConversationSummary {
     bool? isGroup,
     Object? targetDid = _conversationSummaryUnset,
     Object? targetPeer = _conversationSummaryUnset,
+    Object? peerPersonaId = _conversationSummaryUnset,
+    Object? canonicalGroupDid = _conversationSummaryUnset,
     Object? groupId = _conversationSummaryUnset,
     Object? avatarUri = _conversationSummaryUnset,
     Object? avatarSeed = _conversationSummaryUnset,
     Object? lastMessagePayloadJson = _conversationSummaryUnset,
     Object? lastMessageSnapshot = _conversationSummaryUnset,
-    Object? conversationId = _conversationSummaryUnset,
     Object? conversationKey = _conversationSummaryUnset,
     ConversationPeerLifecycleState? peerLifecycleState,
   }) {
     return ConversationSummary(
-      conversationId: _resolveNullableString(
-        conversationId,
-        this.conversationId,
-      ),
+      conversationId: conversationId ?? this.conversationId,
       threadId: threadId ?? this.threadId,
       displayName: displayName ?? this.displayName,
       lastMessagePreview: lastMessagePreview ?? this.lastMessagePreview,
@@ -161,6 +90,11 @@ class ConversationSummary {
       isGroup: isGroup ?? this.isGroup,
       targetDid: _resolveNullableString(targetDid, this.targetDid),
       targetPeer: _resolveNullableString(targetPeer, this.targetPeer),
+      peerPersonaId: _resolveNullableString(peerPersonaId, this.peerPersonaId),
+      canonicalGroupDid: _resolveNullableString(
+        canonicalGroupDid,
+        this.canonicalGroupDid,
+      ),
       groupId: _resolveNullableString(groupId, this.groupId),
       avatarUri: _resolveNullableString(avatarUri, this.avatarUri),
       avatarSeed: _resolveNullableString(avatarSeed, this.avatarSeed),
@@ -195,13 +129,4 @@ ChatMessage? _resolveNullableChatMessage(Object? value, ChatMessage? current) {
     return current;
   }
   return value as ChatMessage?;
-}
-
-String _normalizeDirectPeer(String value) {
-  final peer = value.trim();
-  return peer.startsWith('did:') ? peer : peer.toLowerCase();
-}
-
-bool _isPeerScopedDirectThreadId(String value) {
-  return value.trim().startsWith('dm:peer-scope:');
 }

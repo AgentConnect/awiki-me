@@ -51,6 +51,7 @@ void main() {
     () {
       final deletedConversation = ConversationSummary(
         threadId: 'dm:deleted-agent',
+        conversationId: 'dm:deleted-agent',
         displayName: 'Deleted agent',
         lastMessagePreview: 'history',
         lastMessageAt: DateTime(2026, 7, 13),

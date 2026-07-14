@@ -222,6 +222,7 @@ FakeAwikiMeAppHarness _createVisualHarness() {
 ConversationSummary _visualConversation() {
   return ConversationSummary(
     threadId: 'dm:$_runtimeDid',
+    conversationId: 'dm:$_runtimeDid',
     displayName: 'Hermes UI',
     lastMessagePreview: 'latest runtime reply',
     lastMessageAt: DateTime(2026, 6, 15, 10, 30),

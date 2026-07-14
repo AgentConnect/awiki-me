@@ -229,9 +229,9 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
       final byTime = right.updatedAt.compareTo(left.updatedAt);
       if (byTime != 0) return byTime;
       final leftCanonical =
-          left.effectiveConversationId == mapping.canonicalConversationId;
+          left.conversationId == mapping.canonicalConversationId;
       final rightCanonical =
-          right.effectiveConversationId == mapping.canonicalConversationId;
+          right.conversationId == mapping.canonicalConversationId;
       return leftCanonical == rightCanonical ? 0 : (leftCanonical ? -1 : 1);
     });
     final selected = candidates.first.copyWith(
@@ -487,7 +487,7 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
   Future<void> upsertConversationOverlayByConversationId(
     ProductConversationOverlay overlay,
   ) async {
-    final conversationId = overlay.effectiveConversationId;
+    final conversationId = overlay.conversationId;
     await upsertConversationOverlay(
       overlay.copyWith(
         threadId: conversationId,
@@ -527,6 +527,7 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
               ProductConversationOverlay(
                 ownerDid: ownerDid,
                 threadId: conversationKey,
+                conversationId: conversationKey,
                 updatedAt: updatedAt,
               ))
           .copyWith(hidden: hidden, updatedAt: updatedAt),
@@ -694,7 +695,9 @@ ProductConversationOverlay _overlayFromRow(Map<String, Object?> row) {
   return ProductConversationOverlay(
     ownerDid: row['owner_did']?.toString() ?? '',
     threadId: row['thread_id']?.toString() ?? '',
-    conversationId: row['conversation_id']?.toString(),
+    conversationId: row['conversation_id']?.toString().trim().isNotEmpty == true
+        ? row['conversation_id']!.toString()
+        : row['thread_id']?.toString() ?? '',
     pinned: _readBool(row['pinned']),
     muted: _readBool(row['muted']),
     hidden: _readBool(row['hidden']),
@@ -708,7 +711,7 @@ Map<String, Object?> _overlayToRow(ProductConversationOverlay overlay) {
   return <String, Object?>{
     'owner_did': overlay.ownerDid,
     'thread_id': overlay.threadId,
-    'conversation_id': overlay.effectiveConversationId,
+    'conversation_id': overlay.conversationId,
     'pinned': overlay.pinned ? 1 : 0,
     'muted': overlay.muted ? 1 : 0,
     'hidden': overlay.hidden ? 1 : 0,
@@ -724,7 +727,7 @@ Map<String, ProductConversationOverlay> _overlaysByConversationId(
   final overlays = <String, ProductConversationOverlay>{};
   for (final row in rows) {
     final overlay = _overlayFromRow(row);
-    final conversationId = overlay.effectiveConversationId;
+    final conversationId = overlay.conversationId;
     final existing = overlays[conversationId];
     if (existing == null || _preferConversationOverlay(overlay, existing)) {
       overlays[conversationId] = overlay;
@@ -738,9 +741,9 @@ bool _preferConversationOverlay(
   ProductConversationOverlay existing,
 ) {
   final candidateIsCanonical =
-      candidate.threadId.trim() == candidate.effectiveConversationId;
+      candidate.threadId.trim() == candidate.conversationId;
   final existingIsCanonical =
-      existing.threadId.trim() == existing.effectiveConversationId;
+      existing.threadId.trim() == existing.conversationId;
   if (candidateIsCanonical != existingIsCanonical) {
     return candidateIsCanonical;
   }

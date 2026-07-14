@@ -15,6 +15,8 @@ class ChatMessage {
     required this.isMine,
     required this.sendState,
     this.conversationId,
+    this.senderPeerPersonaId,
+    this.senderDidSnapshot,
     this.senderName,
     this.remoteId,
     this.receiverDid,
@@ -30,6 +32,8 @@ class ChatMessage {
   final String localId;
   final String? remoteId;
   final String? conversationId;
+  final String? senderPeerPersonaId;
+  final String? senderDidSnapshot;
   final String threadId;
   final String senderDid;
   final String? senderName;
@@ -100,6 +104,8 @@ class ChatMessage {
   ChatMessage copyWith({
     String? remoteId,
     Object? conversationId = _chatMessageUnset,
+    Object? senderPeerPersonaId = _chatMessageUnset,
+    Object? senderDidSnapshot = _chatMessageUnset,
     String? content,
     String? originalType,
     DateTime? createdAt,
@@ -116,6 +122,14 @@ class ChatMessage {
       conversationId: _resolveNullableString(
         conversationId,
         this.conversationId,
+      ),
+      senderPeerPersonaId: _resolveNullableString(
+        senderPeerPersonaId,
+        this.senderPeerPersonaId,
+      ),
+      senderDidSnapshot: _resolveNullableString(
+        senderDidSnapshot,
+        this.senderDidSnapshot,
       ),
       threadId: threadId,
       senderDid: senderDid,

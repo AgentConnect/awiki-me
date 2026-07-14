@@ -10,7 +10,6 @@ import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/ports/directory_core_port.dart';
-import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
@@ -22,6 +21,7 @@ import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import 'app_dialog.dart';
 import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
@@ -227,6 +227,18 @@ Future<void> openDirectConversationForProfile(
   );
 }
 
+Future<String> resolveCanonicalConversationIdForProfile(
+  WidgetRef ref,
+  UserProfile profile,
+) async {
+  final resolved = await _resolveDirectPeer(
+    ref,
+    peerDid: profile.did,
+    peerHandle: profile.fullHandle ?? profile.handle,
+  );
+  return resolved.conversationId;
+}
+
 Future<void> openDirectConversationForDid(
   BuildContext context,
   WidgetRef ref, {
@@ -269,54 +281,26 @@ Future<void> openDirectConversationForDid(
         .showError(AppMessage.fromError(error));
     return;
   }
-  final resolvedDid = resolvedPeer.did;
-  final resolvedHandle = resolvedPeer.handle;
-  final peerTarget = _directPeerTarget(
-    peerDid: resolvedDid,
-    peerHandle: resolvedHandle,
-  );
   final canonicalConversationId = resolvedPeer.conversationId;
-  final existing = ref
-      .read(conversationListProvider)
-      .conversations
-      .where(
-        (item) =>
-            item.conversationId?.trim() == canonicalConversationId ||
-            item.threadId == canonicalConversationId ||
-            item.targetPeer?.trim() == peerTarget ||
-            item.targetDid?.trim() == resolvedDid,
-      )
-      .toList(growable: false);
-  final existingConversation = existing.isEmpty
-      ? null
-      : _preferAuthoritativeDirectConversation(existing);
-  final conversation = existing.isNotEmpty
-      ? _directConversationForPeer(
-          existingConversation!,
-          peerDid: resolvedDid,
-          peerTarget: peerTarget,
-          peerName: peerName,
-          avatarUri: avatarUri,
-          avatarSeed: avatarSeed,
-          fallbackConversationId: canonicalConversationId,
-        )
-      : ConversationSummary(
-          conversationId: canonicalConversationId,
-          threadId: canonicalConversationId,
-          displayName: _directConversationName(peerName, resolvedDid),
-          lastMessagePreview: '',
-          lastMessageAt: DateTime.now(),
-          unreadCount: 0,
-          isGroup: false,
-          targetDid: resolvedDid,
-          avatarUri: avatarUri,
-          targetPeer: peerTarget,
-          avatarSeed: avatarSeed ?? resolvedDid,
-        );
-
-  await ref
+  final conversation = await ref
       .read(conversationListProvider.notifier)
-      .commitStartedConversation(conversation);
+      .commitConversationId(canonicalConversationId);
+  ref
+      .read(peerDisplayProfileProvider.notifier)
+      .updateFromRemote(
+        ownerDid: session.did,
+        peerPersonaId: conversation.peerPersonaId,
+        profile: UserProfile(
+          did: resolvedPeer.did,
+          displayName: peerName,
+          bio: '',
+          tags: const <String>[],
+          profileMarkdown: '',
+          handle: resolvedPeer.handle,
+          fullHandle: resolvedPeer.handle,
+          avatarUri: avatarUri,
+        ),
+      );
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
   if (!context.mounted) {
     return;
@@ -332,54 +316,6 @@ Future<void> openDirectConversationForDid(
   await AppNavigator.push(context, (_) => ChatPage(conversation: conversation));
 }
 
-ConversationSummary _directConversationForPeer(
-  ConversationSummary existing, {
-  required String peerDid,
-  required String peerTarget,
-  required String peerName,
-  String? avatarUri,
-  String? avatarSeed,
-  required String fallbackConversationId,
-}) {
-  final existingConversationId = existing.conversationId?.trim();
-  final fallbackIsPeerScoped = fallbackConversationId.startsWith(
-    'dm:peer-scope:',
-  );
-  final existingIsPeerScoped =
-      existingConversationId?.startsWith('dm:peer-scope:') ?? false;
-  final conversationId = fallbackIsPeerScoped && !existingIsPeerScoped
-      ? fallbackConversationId
-      : existingConversationId != null && existingConversationId.isNotEmpty
-      ? existingConversationId
-      : fallbackConversationId;
-  final existingTarget = existing.targetDid?.trim() ?? '';
-  final existingPeer = existing.targetPeer?.trim() ?? '';
-  final keepExistingName =
-      !existing.isGroup &&
-      (existingTarget == peerDid || existingPeer == peerTarget) &&
-      existing.displayName.trim().isNotEmpty;
-  return ConversationSummary(
-    conversationId: conversationId,
-    threadId: conversationId,
-    displayName: keepExistingName
-        ? existing.displayName
-        : _directConversationName(peerName, peerDid),
-    lastMessagePreview: existing.lastMessagePreview,
-    lastMessageAt: existing.lastMessageAt,
-    unreadCount: existing.unreadCount,
-    isGroup: false,
-    targetDid: peerDid,
-    targetPeer: peerTarget,
-    groupId: null,
-    avatarUri: avatarUri ?? existing.avatarUri,
-    avatarSeed: avatarSeed ?? existing.avatarSeed ?? peerDid,
-    lastMessagePayloadJson: existing.lastMessagePayloadJson,
-    lastMessageSnapshot: existing.lastMessageSnapshot,
-    conversationKey: existing.conversationKey,
-    peerLifecycleState: existing.peerLifecycleState,
-  );
-}
-
 Future<_ResolvedDirectPeer> _resolveDirectPeer(
   WidgetRef ref, {
   required String peerDid,
@@ -389,11 +325,7 @@ Future<_ResolvedDirectPeer> _resolveDirectPeer(
   final providedHandle = _normalizedOptionalHandle(peerHandle);
   final providedConversationId = resolvedConversationId?.trim();
   if (providedConversationId != null && providedConversationId.isNotEmpty) {
-    _validateResolvedDirectConversation(
-      conversationId: providedConversationId,
-      resolvedDid: peerDid,
-      resolvedHandle: providedHandle,
-    );
+    _validateResolvedDirectConversation(conversationId: providedConversationId);
     return _ResolvedDirectPeer(
       did: peerDid,
       handle: providedHandle,
@@ -416,11 +348,7 @@ Future<_ResolvedDirectPeer> _resolveDirectPeer(
   }
   final resolvedHandle = _normalizedOptionalHandle(resolution.handle);
   final canonicalConversationId = resolution.conversationId?.trim() ?? '';
-  _validateResolvedDirectConversation(
-    conversationId: canonicalConversationId,
-    resolvedDid: resolvedDid,
-    resolvedHandle: resolvedHandle,
-  );
+  _validateResolvedDirectConversation(conversationId: canonicalConversationId);
   return _ResolvedDirectPeer(
     did: resolvedDid,
     handle: resolvedHandle ?? providedHandle,
@@ -428,26 +356,9 @@ Future<_ResolvedDirectPeer> _resolveDirectPeer(
   );
 }
 
-void _validateResolvedDirectConversation({
-  required String conversationId,
-  required String resolvedDid,
-  required String? resolvedHandle,
-}) {
-  if (!conversationId.startsWith('dm:') || conversationId.length <= 3) {
+void _validateResolvedDirectConversation({required String conversationId}) {
+  if (!conversationId.startsWith('dm:peer-scope:v1:')) {
     throw StateError('identity_missing_canonical_conversation');
-  }
-  if (_isDomainQualifiedHandle(resolvedHandle)) {
-    if (!conversationId.startsWith('dm:peer-scope:v1:')) {
-      throw StateError('identity_handle_conversation_not_canonical');
-    }
-    return;
-  }
-  if (conversationId.startsWith('dm:peer-scope:v1:')) {
-    return;
-  }
-  final legacyPeerDid = conversationId.substring(3).trim();
-  if (legacyPeerDid != resolvedDid) {
-    throw StateError('identity_conversation_did_mismatch');
   }
 }
 
@@ -466,32 +377,6 @@ bool _isDomainQualifiedHandle(String? value) {
   final handle = value?.trim() ?? '';
   final separator = handle.indexOf('.');
   return separator > 0 && separator < handle.length - 1;
-}
-
-ConversationSummary _preferAuthoritativeDirectConversation(
-  List<ConversationSummary> conversations,
-) {
-  assert(conversations.isNotEmpty);
-  return conversations.firstWhere((conversation) {
-    final conversationId = conversation.conversationId?.trim();
-    return conversationId != null && conversationId.isNotEmpty;
-  }, orElse: () => conversations.first);
-}
-
-String _directPeerTarget({required String peerDid, String? peerHandle}) {
-  final handle = peerHandle?.trim();
-  if (handle != null && handle.isNotEmpty) {
-    return handle.toLowerCase();
-  }
-  return peerDid.trim();
-}
-
-String _directConversationName(String peerName, String peerDid) {
-  final name = peerName.trim();
-  if (name.isNotEmpty) {
-    return name;
-  }
-  return DidDisplayFormatter.compactDid(peerDid);
 }
 
 Future<void> showStartConversationDialog(

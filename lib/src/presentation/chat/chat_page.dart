@@ -22,7 +22,6 @@ import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/entities/chat_mention.dart';
 import '../../domain/entities/chat_message.dart';
-import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
@@ -125,7 +124,7 @@ class ChatPage extends StatelessWidget {
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
       child: ChatView(
-        key: ValueKey('chat-view:${conversation.threadId}'),
+        key: ValueKey('chat-view:${conversation.conversationId}'),
         conversation: conversation,
         embedded: false,
         onBack: () => Navigator.of(context).pop(),
@@ -214,11 +213,14 @@ class _AttachmentDropOverlay extends StatelessWidget {
 }
 
 String _timelineDisplayThreadId(ConversationSummary conversation) {
-  final conversationId = conversation.effectiveConversationId.trim();
-  if (conversationId.isNotEmpty) {
-    return conversationId;
-  }
-  return conversation.threadId.trim();
+  return conversation.conversationId;
+}
+
+bool _sameCanonicalConversation(
+  ConversationSummary first,
+  ConversationSummary second,
+) {
+  return first.conversationId == second.conversationId;
 }
 
 class ChatView extends ConsumerStatefulWidget {
@@ -373,7 +375,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
   @override
   void didUpdateWidget(covariant ChatView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
+    if (!_sameCanonicalConversation(
+      oldWidget.conversation,
+      widget.conversation,
+    )) {
       _composerFocusRequestId += 1;
       _visibleReadAckToken += 1;
       _markConversationHidden(
@@ -428,7 +433,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!mounted ||
           token != _visibleReadAckToken ||
           displayThreadId != _displayThreadId ||
-          !sameConversationThread(
+          !_sameCanonicalConversation(
             conversation,
             _currentConversationSnapshot(),
           )) {
@@ -461,7 +466,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (!mounted ||
           token != _visibleReadAckToken ||
           displayThreadId != _displayThreadId ||
-          !sameConversationThread(
+          !_sameCanonicalConversation(
             conversation,
             _currentConversationSnapshot(),
           )) {
@@ -976,7 +981,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   Future<void> _showPeerInfoDialog(ConversationSummary conversation) async {
     await AppNavigator.showDialog<void>(
       context,
-      (dialogContext) => _PeerInfoDialog(conversation: conversation),
+      (dialogContext) => _PeerInfoDialog(
+        target: _PeerInfoTarget.fromConversation(conversation),
+      ),
     );
   }
 
@@ -1090,19 +1097,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
         !targetDid.startsWith('did:')) {
       return null;
     }
-    final peerConversation = conversation.isGroup
-        ? ConversationSummary(
-            threadId: 'profile:$targetDid',
-            displayName: senderLabel,
-            lastMessagePreview: '',
-            lastMessageAt: message.createdAt,
-            unreadCount: 0,
-            isGroup: false,
+    final target = conversation.isGroup
+        ? _PeerInfoTarget(
             targetDid: targetDid,
+            displayName: senderLabel,
             avatarSeed: senderLabel,
           )
-        : conversation;
-    return () => _showPeerInfoDialog(peerConversation);
+        : _PeerInfoTarget.fromConversation(conversation);
+    return () => AppNavigator.showDialog<void>(
+      context,
+      (dialogContext) => _PeerInfoDialog(target: target),
+    );
   }
 
   Future<void> _pickAndStageAttachment() async {
@@ -1161,7 +1166,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return false;
       }
       if (!mounted ||
-          !sameConversationThread(
+          !_sameCanonicalConversation(
             conversation,
             _currentConversationSnapshot(),
           )) {
@@ -1193,7 +1198,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       final draft = await _draftFromDroppedItem(item);
       if (draft == null ||
           !mounted ||
-          !sameConversationThread(
+          !_sameCanonicalConversation(
             conversation,
             _currentConversationSnapshot(),
           )) {
@@ -1272,7 +1277,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
   ) {
     if (!mounted ||
         !_canAcceptExternalAttachment(conversation) ||
-        !sameConversationThread(conversation, _currentConversationSnapshot())) {
+        !_sameCanonicalConversation(
+          conversation,
+          _currentConversationSnapshot(),
+        )) {
       return;
     }
     setState(() {
@@ -1781,61 +1789,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return null;
   }
 
-  bool _migrateDisplayThreadIfNeeded(List<ConversationSummary> conversations) {
-    final current = _currentDisplayConversationSnapshot(conversations);
-    if (isPeerScopedDirectConversation(current)) {
-      return false;
-    }
-    if (!isPresentationOnlyDirectConversationAlias(current)) {
-      return false;
-    }
-    final candidates = conversations
-        .where(
-          (conversation) =>
-              isPeerScopedDirectConversation(conversation) &&
-              sameDirectPresentationTarget(conversation, current),
-        )
-        .toList(growable: false);
-    if (candidates.length != 1) {
-      return false;
-    }
-    final nextConversation = candidates.single;
-    final nextThreadId = _timelineDisplayThreadId(nextConversation);
-    if (nextThreadId.isEmpty || nextThreadId == _displayThreadId) {
-      return false;
-    }
-    final previousThreadId = _displayThreadId;
-    _composerFocusRequestId += 1;
-    _visibleReadAckToken += 1;
-    _markConversationHidden(current, displayThreadId: previousThreadId);
-    setState(() {
-      _displayThreadId = nextThreadId;
-      _hasDeferredBottomNotice = false;
-      _userAwayFromBottom = false;
-      _cancelPendingScrollRequests();
-      _beginOpeningBottomAnchor();
-    });
-    _markConversationVisible(nextConversation, displayThreadId: nextThreadId);
-    _restoreComposerDraft(nextConversation, updateState: true);
-    unawaited(
-      _chatThreadsController.openConversation(
-        nextConversation,
-        displayThreadId: nextThreadId,
-      ),
-    );
-    return true;
-  }
-
   void _handleConversationListChanged(ConversationListState next) {
     if (!mounted) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
-        return;
-      }
-      final migrated = _migrateDisplayThreadIfNeeded(next.conversations);
-      if (migrated) {
         return;
       }
       final updated = _matchingConversationByThread(next.conversations);
@@ -1854,35 +1813,18 @@ class _ChatViewState extends ConsumerState<ChatView> {
   ConversationSummary? _matchingConversationForDisplay(
     List<ConversationSummary> conversations,
   ) {
-    final exact = _matchingConversationByThread(conversations);
-    if (exact != null) {
-      return exact;
-    }
-    for (final conversation in conversations) {
-      if (_canUseConversationAliasForDisplay(conversation)) {
-        return conversation;
-      }
-    }
-    return null;
-  }
-
-  bool _canUseConversationAliasForDisplay(ConversationSummary candidate) {
-    if (!sameConversationTarget(candidate, widget.conversation)) {
-      return false;
-    }
-    return !(isPeerScopedDirectConversation(candidate) &&
-        isPeerScopedDirectConversation(widget.conversation));
+    return _matchingConversationByThread(conversations);
   }
 
   ConversationSummary _currentConversationForTitle() {
     final conversations = ref.watch(conversationListProvider).conversations;
     final latest = _matchingConversationForDisplay(conversations);
     final base = latest ?? widget.conversation;
-    if (!base.isGroup || base.groupId == null || base.groupId!.isEmpty) {
+    if (!base.isGroup) {
       return base;
     }
-    final groupName = _currentGroupName(base.groupId!);
-    final groupAvatarUri = _currentGroupAvatarUri(base.groupId!);
+    final groupName = _currentGroupName(base);
+    final groupAvatarUri = _currentGroupAvatarUri(base);
     if ((groupName == null || groupName == base.displayName) &&
         groupAvatarUri == base.avatarUri) {
       return base;
@@ -1903,6 +1845,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final nickname = peerDisplayName(
       ref.watch(peerDisplayProfileProvider),
+      peerPersonaId: conversation.peerPersonaId,
       did: targetDid,
       fallback: '',
     );
@@ -1915,55 +1858,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return latest ?? widget.conversation;
   }
 
-  ConversationSummary _currentDisplayConversationSnapshot(
-    List<ConversationSummary> conversations,
-  ) {
-    for (final conversation in conversations) {
-      if (_timelineDisplayThreadId(conversation) == _displayThreadId.trim()) {
-        return conversation;
-      }
-    }
-    if (_timelineDisplayThreadId(widget.conversation) ==
-        _displayThreadId.trim()) {
-      return widget.conversation;
-    }
-    return ConversationSummary(
-      threadId: _displayThreadId,
-      displayName: widget.conversation.displayName,
-      lastMessagePreview: widget.conversation.lastMessagePreview,
-      lastMessageAt: widget.conversation.lastMessageAt,
-      unreadCount: widget.conversation.unreadCount,
-      unreadMentionCount: widget.conversation.unreadMentionCount,
-      firstUnreadMentionMessageId:
-          widget.conversation.firstUnreadMentionMessageId,
-      isGroup: widget.conversation.isGroup,
-      targetDid: widget.conversation.targetDid,
-      targetPeer: widget.conversation.targetPeer,
-      groupId: widget.conversation.groupId,
-      avatarUri: widget.conversation.avatarUri,
-      avatarSeed: widget.conversation.avatarSeed,
-      lastMessagePayloadJson: widget.conversation.lastMessagePayloadJson,
-      lastMessageSnapshot: widget.conversation.lastMessageSnapshot,
-      conversationKey: widget.conversation.conversationKey,
-      peerLifecycleState: widget.conversation.peerLifecycleState,
-    );
-  }
-
-  String? _currentGroupName(String groupId) {
+  String? _currentGroupName(ConversationSummary conversation) {
     final groups = ref.watch(groupProvider).groups;
     for (final group in groups) {
-      if (group.groupId == groupId &&
-          !GroupDisplayName.isIdLike(group.displayName, groupId)) {
+      if (group.conversationId == conversation.conversationId &&
+          !GroupDisplayName.isIdLike(group.displayName, group.groupId)) {
         return group.displayName;
       }
     }
     return null;
   }
 
-  String? _currentGroupAvatarUri(String groupId) {
+  String? _currentGroupAvatarUri(ConversationSummary conversation) {
     final groups = ref.watch(groupProvider).groups;
     for (final group in groups) {
-      if (group.groupId == groupId) {
+      if (group.conversationId == conversation.conversationId) {
         return group.avatarUri;
       }
     }
@@ -2126,8 +2035,17 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   String _displayNameForMessage(BuildContext context, ChatMessage message) {
-    final senderName = message.senderName?.trim() ?? '';
     final senderDid = message.senderDid.trim();
+    final cached = peerDisplayName(
+      ref.watch(peerDisplayProfileProvider),
+      peerPersonaId: message.senderPeerPersonaId,
+      did: senderDid,
+      fallback: '',
+    );
+    if (cached.isNotEmpty) {
+      return cached;
+    }
+    final senderName = message.senderName?.trim() ?? '';
     if (senderName.isNotEmpty) {
       if (!senderName.startsWith('did:')) {
         return senderName;
@@ -2146,10 +2064,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
   GroupSummary _groupSummaryForConversation(ConversationSummary conversation) {
     final groupId = conversation.groupId?.trim().isNotEmpty == true
         ? conversation.groupId!.trim()
+        : conversation.canonicalGroupDid?.trim().isNotEmpty == true
+        ? conversation.canonicalGroupDid!.trim()
         : conversation.threadId;
     final groups = ref.read(groupProvider).groups;
     for (final item in groups) {
-      if (item.groupId == groupId) {
+      if (item.conversationId == conversation.conversationId) {
         return item;
       }
     }
@@ -2157,6 +2077,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         ? conversation.displayName.trim()
         : groupId;
     return GroupSummary(
+      conversationId: conversation.conversationId,
       groupId: groupId,
       displayName: name,
       description: '',

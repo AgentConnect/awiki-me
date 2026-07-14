@@ -1,9 +1,35 @@
 part of '../chat_page.dart';
 
-class _PeerInfoDialog extends ConsumerStatefulWidget {
-  const _PeerInfoDialog({required this.conversation});
+class _PeerInfoTarget {
+  const _PeerInfoTarget({
+    required this.targetDid,
+    required this.displayName,
+    this.avatarUri,
+    this.avatarSeed,
+    this.inboxConversation,
+  });
 
-  final ConversationSummary conversation;
+  factory _PeerInfoTarget.fromConversation(ConversationSummary conversation) {
+    return _PeerInfoTarget(
+      targetDid: conversation.targetDid?.trim() ?? '',
+      displayName: conversation.displayName,
+      avatarUri: conversation.avatarUri,
+      avatarSeed: conversation.avatarSeed,
+      inboxConversation: conversation.isGroup ? null : conversation,
+    );
+  }
+
+  final String targetDid;
+  final String displayName;
+  final String? avatarUri;
+  final String? avatarSeed;
+  final ConversationSummary? inboxConversation;
+}
+
+class _PeerInfoDialog extends ConsumerStatefulWidget {
+  const _PeerInfoDialog({required this.target});
+
+  final _PeerInfoTarget target;
 
   @override
   ConsumerState<_PeerInfoDialog> createState() => _PeerInfoDialogState();
@@ -15,8 +41,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
   @override
   void initState() {
     super.initState();
-    if (!widget.conversation.isGroup &&
-        (widget.conversation.targetDid?.trim().isNotEmpty ?? false)) {
+    if (widget.target.targetDid.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;
@@ -28,7 +53,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final targetDid = widget.conversation.targetDid?.trim() ?? '';
+    final targetDid = widget.target.targetDid;
     final responsive = context.awikiResponsive;
     final maxDialogHeight = MediaQuery.sizeOf(context).height * 0.86;
     final runtimeAgent = _runtimeAgent();
@@ -74,7 +99,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final handleLabel = profile == null
         ? ''
         : DidDisplayFormatter.profileHandleLabel(profile);
-    final avatarUri = profile?.avatarUri ?? widget.conversation.avatarUri;
+    final avatarUri = profile?.avatarUri ?? widget.target.avatarUri;
     final rawProfileContent = profile == null
         ? ''
         : (profile.profileMarkdown.trim().isNotEmpty
@@ -305,7 +330,8 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                     ),
             ),
           ),
-          if (runtimeAgent != null) ...<Widget>[
+          if (runtimeAgent != null &&
+              widget.target.inboxConversation != null) ...<Widget>[
             const SizedBox(height: 16),
             AppSecondaryButton(
               label: _showAgentInbox
@@ -318,13 +344,15 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
               },
             ),
           ],
-          if (runtimeAgent != null && _showAgentInbox) ...<Widget>[
+          if (runtimeAgent != null &&
+              widget.target.inboxConversation != null &&
+              _showAgentInbox) ...<Widget>[
             const SizedBox(height: 16),
             SizedBox(
               key: const Key('peer-info-agent-inbox'),
               height: inboxHeight,
               child: AgentInboxPanel(
-                conversation: widget.conversation,
+                conversation: widget.target.inboxConversation!,
                 onClose: () {
                   setState(() {
                     _showAgentInbox = false;
@@ -350,11 +378,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     if (profile != null) {
       return DidDisplayFormatter.profileName(profile);
     }
-    final conversationName = widget.conversation.displayName.trim();
+    final conversationName = widget.target.displayName.trim();
     if (conversationName.isNotEmpty && !conversationName.startsWith('did:')) {
       return conversationName;
     }
-    final avatarSeed = widget.conversation.avatarSeed?.trim();
+    final avatarSeed = widget.target.avatarSeed?.trim();
     if (avatarSeed != null &&
         avatarSeed.isNotEmpty &&
         !avatarSeed.startsWith('did:')) {
@@ -485,8 +513,8 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
   }
 
   AgentSummary? _runtimeAgent() {
-    final targetDid = widget.conversation.targetDid?.trim();
-    if (targetDid == null || targetDid.isEmpty || widget.conversation.isGroup) {
+    final targetDid = widget.target.targetDid;
+    if (targetDid.isEmpty) {
       return null;
     }
     for (final agent in ref.watch(agentsProvider).agents) {

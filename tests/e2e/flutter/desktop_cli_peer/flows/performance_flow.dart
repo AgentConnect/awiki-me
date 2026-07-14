@@ -785,14 +785,14 @@ class _CountingConversationService implements ConversationService {
   }
 
   @override
-  Future<void> restoreConversationToRecents({
+  Future<void> ensureConversationInRecents({
     required String ownerDid,
-    required ConversationSummary conversation,
+    required String conversationId,
     DateTime? updatedAt,
   }) {
-    return delegate.restoreConversationToRecents(
+    return delegate.ensureConversationInRecents(
       ownerDid: ownerDid,
-      conversation: conversation,
+      conversationId: conversationId,
       updatedAt: updatedAt,
     );
   }

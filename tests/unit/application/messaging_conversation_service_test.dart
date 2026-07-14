@@ -37,6 +37,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-pinned',
+          conversationId: 'thread-pinned',
           pinned: true,
           customTitle: 'Pinned title',
           avatarSeed: 'seed-pinned',
@@ -47,6 +48,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-hidden',
+          conversationId: 'thread-hidden',
           hidden: true,
           updatedAt: now,
         ),
@@ -180,6 +182,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'dm:did:alice:did:bob',
+            conversationId: 'dm:did:alice:did:bob',
             customTitle: 'Bob local title',
             avatarSeed: 'local-seed',
             updatedAt: DateTime.utc(2026, 5, 23, 9),
@@ -189,6 +192,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'dm:did:alice:did:stale',
+            conversationId: 'dm:did:alice:did:stale',
             hidden: true,
             updatedAt: DateTime.utc(2026, 5, 23, 9),
           ),
@@ -231,6 +235,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-pinned',
+          conversationId: 'thread-pinned',
           pinned: true,
           customTitle: 'Pinned local',
           updatedAt: DateTime.utc(2026, 5, 23, 9),
@@ -262,6 +267,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-patched',
+            conversationId: 'thread-patched',
             customTitle: 'Patched local title',
             updatedAt: DateTime.utc(2026, 5, 23, 9),
           ),
@@ -535,6 +541,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-hidden',
+            conversationId: 'thread-hidden',
             hidden: true,
             updatedAt: now,
           ),
@@ -543,6 +550,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-pinned',
+            conversationId: 'thread-pinned',
             pinned: true,
             customTitle: 'Pinned local title',
             avatarSeed: 'pinned-seed',
@@ -603,6 +611,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-pinned',
+            conversationId: 'thread-pinned',
             pinned: true,
             customTitle: '置顶会话',
             updatedAt: DateTime.utc(2026, 6, 27),
@@ -712,6 +721,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'direct-did:did:old-bob',
+          conversationId: 'direct-did:did:old-bob',
           pinned: true,
           hidden: true,
           customTitle: 'Legacy title',
@@ -759,6 +769,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'direct-did:did:old-bob',
+          conversationId: 'direct-did:did:old-bob',
           pinned: true,
           muted: true,
           customTitle: 'Legacy title',
@@ -851,9 +862,9 @@ void main() {
       );
       expect(core.ensuredConversationIds, isEmpty);
 
-      await service.restoreConversationToRecents(
+      await service.ensureConversationInRecents(
         ownerDid: 'did:alice',
-        conversation: conversation,
+        conversationId: conversation.conversationId,
       );
 
       expect(core.ensuredConversationIds, <String>['dm:alice:old-did']);
@@ -1264,7 +1275,7 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(peerScoped.visibilityKey, 'dm:peer-scope:v1:runtime');
+        expect(peerScoped.conversationId, 'dm:peer-scope:v1:runtime');
         expect(
           (await store.loadConversationOverlayByConversationId(
             ownerDid: 'did:human',
@@ -1457,9 +1468,9 @@ void main() {
           ))?.hidden,
           isTrue,
         );
-        await service.restoreConversationToRecents(
+        await service.ensureConversationInRecents(
           ownerDid: 'did:human',
-          conversation: handleRow,
+          conversationId: handleRow.conversationId,
         );
         final conversations = await service.listConversations(
           ownerDid: 'did:human',
@@ -1546,7 +1557,7 @@ ConversationSummary _conversation(
     9,
   ).subtract(Duration(minutes: minutesAgo));
   return ConversationSummary(
-    conversationId: conversationId,
+    conversationId: conversationId ?? threadId,
     threadId: threadId,
     displayName: displayName ?? threadId,
     lastMessagePreview: lastMessagePreview,

@@ -416,6 +416,7 @@ UserProfile _profile(String did) {
 GroupSummary _group() {
   return const GroupSummary(
     groupId: 'did:group',
+    conversationId: 'group:did:group',
     name: 'Group',
     description: '',
     memberCount: 1,

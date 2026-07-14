@@ -81,7 +81,7 @@ Future<void> _verifyContactRegression({
     bootstrap: bootstrap,
     providerOverrides: providerOverrides,
     cliDid: cliDid,
-    expectedConversationId: conversation.effectiveConversationId,
+    expectedConversationId: conversation.conversationId,
     config: config,
     nonce: nonce,
   );
@@ -170,7 +170,7 @@ Future<void> _verifyContactDirectCanonicalRegression({
     expectedFollowing: true,
   );
   final conversation = await robot.openContactConversation(cliDid);
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   expect(conversationId.startsWith('dm:peer-scope:v1:'), isTrue);
   expect(conversationId, expectedConversationId);
   expect(find.byKey(Key('conversation-row:$conversationId')), findsOneWidget);
@@ -335,24 +335,20 @@ Future<void> _expectCanonicalContactRowsExact({
     limit: 50,
   );
   expect(
-    coreRows.where((item) => item.effectiveConversationId == conversationId),
+    coreRows.where((item) => item.conversationId == conversationId),
     hasLength(1),
   );
   expect(
-    coreRows.where(
-      (item) => item.effectiveConversationId == legacyConversationId,
-    ),
+    coreRows.where((item) => item.conversationId == legacyConversationId),
     isEmpty,
   );
   final uiRows = robot.container.read(conversationListProvider).conversations;
   expect(
-    uiRows.where((item) => item.effectiveConversationId == conversationId),
+    uiRows.where((item) => item.conversationId == conversationId),
     hasLength(1),
   );
   expect(
-    uiRows.where(
-      (item) => item.effectiveConversationId == legacyConversationId,
-    ),
+    uiRows.where((item) => item.conversationId == legacyConversationId),
     isEmpty,
   );
   expect(find.byKey(Key('conversation-row:$conversationId')), findsOneWidget);
@@ -376,7 +372,7 @@ Future<void> _expectSingleCanonicalContactOverlay({
         conversationIds: <String>[conversationId],
       );
       if (canonical.length != 1 ||
-          canonical.values.single.effectiveConversationId != conversationId) {
+          canonical.values.single.conversationId != conversationId) {
         return false;
       }
       final legacy = await store.loadConversationOverlays(

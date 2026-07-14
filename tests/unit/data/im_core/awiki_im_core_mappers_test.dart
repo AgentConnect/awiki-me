@@ -118,6 +118,7 @@ void main() {
   test('message maps SDK DTO into app ChatMessage', () {
     const message = core.Message(
       conversationId: 'dm:peer-scope:v1:test',
+      senderPeerPersonaId: 'persona:v1:alice',
       senderDidSnapshot: 'did:alice',
       id: 'msg-1',
       threadKind: 'direct',
@@ -138,6 +139,8 @@ void main() {
     expect(mapped.isMine, isTrue);
     expect(mapped.sendState, MessageSendState.sent);
     expect(mapped.serverSequence, 42);
+    expect(mapped.senderPeerPersonaId, 'persona:v1:alice');
+    expect(mapped.senderDidSnapshot, 'did:alice');
   });
 
   test('accepted outgoing SDK message stops local sending indicator', () {
@@ -214,7 +217,7 @@ void main() {
 
     expect(mappedMessage.conversationId, 'dm:peer-scope:v1:bob');
     expect(mappedConversation.conversationId, 'dm:peer-scope:v1:bob');
-    expect(mappedConversation.effectiveConversationId, 'dm:peer-scope:v1:bob');
+    expect(mappedConversation.peerPersonaId, 'persona:v1:test');
   });
 
   test('scoped direct message keeps stable thread id and peer metadata', () {
@@ -559,6 +562,7 @@ void main() {
         overlay: ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'dm:alice:bob',
+          conversationId: 'dm:alice:bob',
           customTitle: 'Pinned Bob',
           avatarSeed: 'seed-1',
           updatedAt: DateTime.utc(2026, 5, 23),
@@ -626,6 +630,7 @@ void main() {
         overlay: ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'dm:peer-scope:v1:bob',
+          conversationId: 'dm:peer-scope:v1:bob',
           customTitle: 'Bob local',
           avatarSeed: 'seed-local',
           pinned: true,
@@ -922,12 +927,16 @@ void main() {
     expect(mappedMessage.threadId, 'group:did:group');
     expect(mappedConversation.threadId, 'group:did:group');
     expect(mappedConversation.groupId, 'did:group');
+    expect(mappedConversation.canonicalGroupDid, 'did:group');
   });
 
   test('group members derive handle from e1 DID when SDK handle is absent', () {
     final member = mapper.groupMemberFromCore(
       const core.GroupMember(
+        membershipId: 'membership:bob',
+        peerPersonaId: 'persona:bob',
         did: 'did:wba:awiki.ai:user:bob:e1_member',
+        credentialDid: 'did:wba:awiki.ai:user:bob:e1_credential',
         role: 'member',
       ),
     );
@@ -938,6 +947,9 @@ void main() {
     expect(member.handle, 'bob');
     expect(member.did, 'did:wba:awiki.ai:user:bob:e1_member');
     expect(member.role, 'member');
+    expect(member.membershipId, 'membership:bob');
+    expect(member.peerPersonaId, 'persona:bob');
+    expect(member.credentialDid, 'did:wba:awiki.ai:user:bob:e1_credential');
     expect(compactMember.handle, 'alice');
   });
 
@@ -1161,6 +1173,7 @@ void main() {
     final summary = mapper.groupFromCoreSummary(
       const core.GroupSummary(
         did: 'did:group',
+        conversationId: 'group:did:group',
         name: 'Legacy name',
         displayName: 'Project Group',
         avatarUri: 'https://cdn.example/group.png',
@@ -1170,6 +1183,7 @@ void main() {
     final snapshot = mapper.groupFromCoreSnapshot(
       const core.GroupSnapshot(
         did: 'did:group',
+        conversationId: 'group:did:group',
         displayName: 'Project Group Snapshot',
         avatarUri: 'https://cdn.example/group-snapshot.png',
         description: 'Group description',

@@ -33,7 +33,7 @@ class ConversationWorkspacePage extends ConsumerWidget {
       return const ConversationListPage();
     }
 
-    final selectedConversation = _effectiveSelectedConversation(
+    final selectedConversation = _selectedConversation(
       ref.watch(selectedConversationProvider),
       ref.watch(conversationListProvider).conversations,
     );
@@ -54,7 +54,7 @@ class ConversationWorkspacePage extends ConsumerWidget {
       footer: listFooter,
       sidebar: ConversationListPage(
         embedded: true,
-        selectedConversationId: selectedConversation?.effectiveConversationId,
+        selectedConversationId: selectedConversation?.conversationId,
         bottomInset: listFooter == null ? 24 : 16,
         onConversationSelected: (conversation) async {
           ref
@@ -65,9 +65,7 @@ class ConversationWorkspacePage extends ConsumerWidget {
       detailPane: selectedConversation == null
           ? const AwikiWorkspaceEmptyDetail()
           : ChatView(
-              key: ValueKey(
-                'chat-view:${selectedConversation.effectiveConversationId}',
-              ),
+              key: ValueKey('chat-view:${selectedConversation.conversationId}'),
               conversation: selectedConversation,
               embedded: true,
               onBack: () {
@@ -80,34 +78,18 @@ class ConversationWorkspacePage extends ConsumerWidget {
   }
 }
 
-ConversationSummary? _effectiveSelectedConversation(
-  ConversationSummary? selected,
+ConversationSummary? _selectedConversation(
+  String? selectedConversationId,
   List<ConversationSummary> conversations,
 ) {
-  if (selected == null) {
+  final selected = selectedConversationId?.trim();
+  if (selected == null || selected.isEmpty) {
     return null;
   }
-  final selectedConversationId = selected.effectiveConversationId.trim();
-  if (selectedConversationId.isEmpty) {
-    return selected;
-  }
   for (final conversation in conversations) {
-    if (conversation.effectiveConversationId.trim() == selectedConversationId) {
+    if (conversation.conversationId == selected) {
       return conversation;
     }
   }
-  final selectedThreadId = selected.threadId.trim();
-  if (selectedThreadId.isNotEmpty) {
-    for (final conversation in conversations) {
-      if (conversation.threadId.trim() == selectedThreadId) {
-        return conversation;
-      }
-    }
-  }
-  for (final conversation in conversations) {
-    if (conversation.threadId.trim() == selectedConversationId) {
-      return conversation;
-    }
-  }
-  return selected;
+  return null;
 }

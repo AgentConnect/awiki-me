@@ -11,7 +11,7 @@ Future<void> _verifyAttachmentRegression({
   required String nonce,
 }) async {
   final conversation = await robot.startDirectConversation(config.cliHandle);
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   final cliDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
     observedPeerDid: conversation.targetDid ?? '',

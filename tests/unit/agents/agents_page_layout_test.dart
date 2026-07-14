@@ -1,5 +1,4 @@
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -632,22 +631,11 @@ void main() {
     await tester.pumpAndSettle();
     final context = tester.element(find.byType(AgentsWorkspacePage));
     final container = ProviderScope.containerOf(context);
-    expect(
-      container.read(selectedConversationProvider)?.targetDid,
-      'did:agent:runtime',
-    );
-    expect(
-      container.read(selectedConversationProvider)?.targetPeer,
-      'awiki-agent-hermes.awiki.ai',
-    );
-    expect(
-      container.read(selectedConversationProvider)?.effectiveConversationId,
-      'dm:peer-scope:v1:hermes-runtime',
-    );
-    expect(
-      container.read(selectedConversationProvider)?.targetPeer,
-      'awiki-agent-hermes.awiki.ai',
-    );
+    final selected = selectedConversationSummary(container);
+    expect(selected?.targetDid, 'did:agent:runtime');
+    expect(selected?.targetPeer, 'awiki-agent-hermes.awiki.ai');
+    expect(selected?.conversationId, 'dm:peer-scope:v1:hermes-runtime');
+    expect(selected?.targetPeer, 'awiki-agent-hermes.awiki.ai');
 
     expect(find.text('重置 Session'), findsNothing);
     expect(find.text('重试 Run'), findsNothing);

@@ -11,15 +11,34 @@ import '../shared/formatters/display_formatters.dart';
 class PeerDisplayProfileState {
   const PeerDisplayProfileState({
     this.ownerDid,
-    this.profiles = const <String, PeerDisplayProfile>{},
+    this.profilesByPersonaId = const <String, PeerDisplayProfile>{},
+    this.unresolvedProfilesByDid = const <String, PeerDisplayProfile>{},
+    this.personaIdByDid = const <String, String>{},
   });
 
   final String? ownerDid;
-  final Map<String, PeerDisplayProfile> profiles;
+  final Map<String, PeerDisplayProfile> profilesByPersonaId;
+  final Map<String, PeerDisplayProfile> unresolvedProfilesByDid;
+  final Map<String, String> personaIdByDid;
+
+  PeerDisplayProfile? forPeer({String? peerPersonaId, String? did}) {
+    final personaId = peerPersonaId?.trim() ?? '';
+    if (personaId.isNotEmpty) {
+      return profilesByPersonaId[personaId];
+    }
+    return forDid(did);
+  }
 
   PeerDisplayProfile? forDid(String? did) {
     final key = did?.trim() ?? '';
-    return key.isEmpty ? null : profiles[key];
+    if (key.isEmpty) {
+      return null;
+    }
+    final personaId = personaIdByDid[key];
+    if (personaId != null) {
+      return profilesByPersonaId[personaId];
+    }
+    return unresolvedProfilesByDid[key];
   }
 }
 
@@ -34,6 +53,7 @@ class PeerDisplayProfileController
   Future<void> loadCached({
     required String ownerDid,
     required Iterable<String> dids,
+    Map<String, String> peerPersonaIdsByDid = const <String, String>{},
   }) async {
     final normalizedOwner = ownerDid.trim();
     if (normalizedOwner.isEmpty) {
@@ -41,9 +61,10 @@ class PeerDisplayProfileController
       return;
     }
     _selectOwner(normalizedOwner);
+    _registerPersonaRoutes(peerPersonaIdsByDid);
     final missing = dids
         .map((did) => did.trim())
-        .where((did) => did.isNotEmpty && !state.profiles.containsKey(did))
+        .where((did) => did.isNotEmpty && state.forDid(did) == null)
         .toSet();
     if (missing.isEmpty) {
       return;
@@ -61,13 +82,13 @@ class PeerDisplayProfileController
     if (state.ownerDid != normalizedOwner) {
       return;
     }
-    _merge(profiles);
+    _merge(profiles, peerPersonaIdsByDid: peerPersonaIdsByDid);
   }
 
   void updateFromRemote({
     required String ownerDid,
     required UserProfile profile,
-    String? requestedDid,
+    String? peerPersonaId,
   }) {
     final normalizedOwner = ownerDid.trim();
     final did = profile.did.trim();
@@ -85,21 +106,12 @@ class PeerDisplayProfileController
         : null;
     final projection = PeerDisplayProfile(
       did: did,
+      peerPersonaId: peerPersonaId,
       displayName: nickname,
       handle: profile.fullHandle ?? profile.handle,
       avatarUri: profile.avatarUri,
     );
-    final lookupDid = requestedDid?.trim() ?? '';
-    _merge(<PeerDisplayProfile>[
-      projection,
-      if (lookupDid.isNotEmpty && lookupDid != did)
-        PeerDisplayProfile(
-          did: lookupDid,
-          displayName: projection.displayName,
-          handle: projection.handle,
-          avatarUri: projection.avatarUri,
-        ),
-    ]);
+    _merge(<PeerDisplayProfile>[projection]);
   }
 
   Future<void> refreshRemoteMissing({
@@ -120,7 +132,7 @@ class PeerDisplayProfileController
       return;
     }
     final missing = requested
-        .where((did) => !state.profiles.containsKey(did))
+        .where((did) => state.forDid(did) == null)
         .toList(growable: false);
     await Future.wait<void>(
       missing.map((did) {
@@ -152,7 +164,7 @@ class PeerDisplayProfileController
       if (state.ownerDid != ownerDid) {
         return;
       }
-      updateFromRemote(ownerDid: ownerDid, profile: profile, requestedDid: did);
+      updateFromRemote(ownerDid: ownerDid, profile: profile);
     } catch (error) {
       debugPrint(
         '[awiki_me][profile_projection] remote_profile_refresh_failed '
@@ -174,15 +186,66 @@ class PeerDisplayProfileController
     state = PeerDisplayProfileState(ownerDid: ownerDid);
   }
 
-  void _merge(Iterable<PeerDisplayProfile> profiles) {
-    final next = <String, PeerDisplayProfile>{...state.profiles};
-    for (final profile in profiles) {
-      final did = profile.did.trim();
-      if (did.isNotEmpty) {
-        next[did] = profile;
+  void _registerPersonaRoutes(Map<String, String> peerPersonaIdsByDid) {
+    if (peerPersonaIdsByDid.isEmpty) {
+      return;
+    }
+    final routes = <String, String>{...state.personaIdByDid};
+    for (final entry in peerPersonaIdsByDid.entries) {
+      final did = entry.key.trim();
+      final personaId = entry.value.trim();
+      if (did.isNotEmpty && personaId.isNotEmpty) {
+        routes[did] = personaId;
       }
     }
-    state = PeerDisplayProfileState(ownerDid: state.ownerDid, profiles: next);
+    state = PeerDisplayProfileState(
+      ownerDid: state.ownerDid,
+      profilesByPersonaId: state.profilesByPersonaId,
+      unresolvedProfilesByDid: state.unresolvedProfilesByDid,
+      personaIdByDid: routes,
+    );
+  }
+
+  void _merge(
+    Iterable<PeerDisplayProfile> profiles, {
+    Map<String, String> peerPersonaIdsByDid = const <String, String>{},
+  }) {
+    final byPersona = <String, PeerDisplayProfile>{
+      ...state.profilesByPersonaId,
+    };
+    final unresolvedByDid = <String, PeerDisplayProfile>{
+      ...state.unresolvedProfilesByDid,
+    };
+    final routes = <String, String>{...state.personaIdByDid};
+    for (final profile in profiles) {
+      final did = profile.did.trim();
+      if (did.isEmpty) {
+        continue;
+      }
+      final personaId =
+          profile.peerPersonaId?.trim() ??
+          peerPersonaIdsByDid[did]?.trim() ??
+          routes[did];
+      if (personaId != null && personaId.isNotEmpty) {
+        routes[did] = personaId;
+        byPersona[personaId] = PeerDisplayProfile(
+          did: did,
+          peerPersonaId: personaId,
+          displayName: profile.displayName,
+          handle: profile.handle,
+          avatarUri: profile.avatarUri,
+        );
+        unresolvedByDid.remove(did);
+      } else {
+        unresolvedByDid[did] = profile;
+      }
+    }
+    state = PeerDisplayProfileState(
+      ownerDid: state.ownerDid,
+      profilesByPersonaId: byPersona,
+      unresolvedProfilesByDid: unresolvedByDid,
+      personaIdByDid: routes,
+    );
   }
 }
 
@@ -194,10 +257,11 @@ final peerDisplayProfileProvider =
 
 String peerDisplayName(
   PeerDisplayProfileState state, {
+  String? peerPersonaId,
   required String? did,
   required String fallback,
 }) {
-  final profile = state.forDid(did);
+  final profile = state.forPeer(peerPersonaId: peerPersonaId, did: did);
   final nickname = profile?.displayName?.trim() ?? '';
   if (nickname.isNotEmpty && !nickname.startsWith('did:')) {
     return nickname;
@@ -206,8 +270,17 @@ String peerDisplayName(
   return handle.isNotEmpty ? handle : fallback;
 }
 
-String? peerAvatarUri(PeerDisplayProfileState state, String? did) {
-  final value = state.forDid(did)?.avatarUri?.trim() ?? '';
+String? peerAvatarUri(
+  PeerDisplayProfileState state,
+  String? did, {
+  String? peerPersonaId,
+}) {
+  final value =
+      state
+          .forPeer(peerPersonaId: peerPersonaId, did: did)
+          ?.avatarUri
+          ?.trim() ??
+      '';
   return value.isEmpty ? null : value;
 }
 

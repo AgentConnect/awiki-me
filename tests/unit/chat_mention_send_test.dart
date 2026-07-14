@@ -77,7 +77,7 @@ void main() {
           mentions: <ChatMentionDraft>[mention],
         );
 
-    expect(gateway.lastSentThreadId, conversation.effectiveConversationId);
+    expect(gateway.lastSentThreadId, conversation.conversationId);
     expect(gateway.lastSentGroupId, conversation.groupId);
     expect(gateway.lastSentPayload, isNotNull);
     expect(gateway.lastSentPayload?['text'], text);
@@ -267,6 +267,7 @@ void main() {
       const agentDid = 'did:wba:awiki.info:agent:runtime:hermes:e1_agent';
       final agentConversation = ConversationSummary(
         threadId: 'direct:$agentDid',
+        conversationId: 'direct:$agentDid',
         displayName: 'Hermes',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 14, 21),
@@ -458,7 +459,7 @@ void main() {
 }
 
 String _timelineId(ConversationSummary conversation) =>
-    conversation.effectiveConversationId;
+    conversation.conversationId;
 
 List<ChatMessage> _conversationProjection(
   FakeMessagingService messagingService,

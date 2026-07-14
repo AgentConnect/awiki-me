@@ -39,7 +39,6 @@ import 'package:awiki_me/src/domain/entities/bridge_capabilities.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
-import 'package:awiki_me/src/domain/entities/conversation_identity.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -67,8 +66,10 @@ import 'package:awiki_me/src/domain/services/update_service.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
@@ -113,6 +114,20 @@ const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
     },
   },
 };
+
+ConversationSummary? selectedConversationSummary(ProviderContainer container) {
+  final selectedId = container.read(selectedConversationProvider);
+  if (selectedId == null) {
+    return null;
+  }
+  for (final conversation
+      in container.read(conversationListProvider).conversations) {
+    if (conversation.conversationId == selectedId) {
+      return conversation;
+    }
+  }
+  return null;
+}
 
 const AgentLatestStatus readyDaemonStatusWithGenericCliCapability =
     AgentLatestStatus(
@@ -850,6 +865,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     lastCreatedGroupPrompt = messagePrompt;
     final group = GroupSummary(
       groupId: 'group-${groups.length + 1}',
+      conversationId: 'group:${'group-${groups.length + 1}'}',
       name: name,
       description: description,
       memberCount: 1,
@@ -891,6 +907,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
       (item) => item.groupId == groupId,
       orElse: () => GroupSummary(
         groupId: groupId,
+        conversationId: 'group:$groupId',
         name: groupId,
         description: '',
         memberCount: 0,
@@ -926,6 +943,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     lastJoinedGroupDid = groupDid;
     final group = GroupSummary(
       groupId: groupDid,
+      conversationId: 'group:$groupDid',
       name: 'Joined $groupDid',
       description: '',
       memberCount: 1,
@@ -972,6 +990,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     final current = await getGroup(groupId);
     final updated = GroupSummary(
       groupId: current.groupId,
+      conversationId: 'group:${current.groupId}',
       name: current.name,
       description: current.description,
       memberCount: members.length,
@@ -1014,6 +1033,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     final current = await getGroup(groupId);
     final updated = GroupSummary(
       groupId: current.groupId,
+      conversationId: 'group:${current.groupId}',
       name: current.name,
       description: current.description,
       memberCount: members.length,
@@ -1739,18 +1759,68 @@ class FakeConversationService implements ConversationService {
     required ConversationSummary conversation,
     DateTime? updatedAt,
   }) {
-    return gateway.deleteLocalThread(
-      conversationVisibilityIdentity(conversation).primaryKey,
-    );
+    return gateway.deleteLocalThread(conversation.conversationId);
   }
 
   @override
-  Future<void> restoreConversationToRecents({
+  Future<void> ensureConversationInRecents({
     required String ownerDid,
-    required ConversationSummary conversation,
+    required String conversationId,
     DateTime? updatedAt,
   }) async {
-    // Test gateway-backed service has no persistent overlay store.
+    if (gateway.conversations.any(
+      (item) => item.conversationId == conversationId,
+    )) {
+      return;
+    }
+    for (final entry in gateway.directoryConversationIdsByQuery.entries) {
+      if (entry.value != conversationId) {
+        continue;
+      }
+      final profile = gateway.publicProfilesByQuery[entry.key];
+      if (profile == null) {
+        continue;
+      }
+      gateway.conversations = <ConversationSummary>[
+        ...gateway.conversations,
+        ConversationSummary(
+          conversationId: conversationId,
+          threadId: conversationId,
+          displayName:
+              profile.fullHandle ?? profile.handle ?? profile.displayName,
+          lastMessagePreview: '',
+          lastMessageAt: DateTime.now(),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: profile.did,
+          targetPeer: profile.fullHandle ?? profile.handle ?? profile.did,
+          peerPersonaId: 'test-persona:$conversationId',
+          avatarUri: profile.avatarUri,
+        ),
+      ];
+      return;
+    }
+    for (final group in gateway.groups) {
+      if (group.conversationId != conversationId) {
+        continue;
+      }
+      gateway.conversations = <ConversationSummary>[
+        ...gateway.conversations,
+        ConversationSummary(
+          conversationId: conversationId,
+          threadId: conversationId,
+          displayName: group.displayName,
+          lastMessagePreview: '',
+          lastMessageAt: group.lastMessageAt ?? DateTime.now(),
+          unreadCount: 0,
+          isGroup: true,
+          canonicalGroupDid: group.groupId,
+          groupId: group.groupId,
+          avatarUri: group.avatarUri,
+        ),
+      ];
+      return;
+    }
   }
 }
 
@@ -2931,7 +3001,7 @@ class FakeProductLocalStore implements ProductLocalStore {
     overlays.removeWhere(
       (_, overlay) =>
           overlay.ownerDid == ownerDid &&
-          overlay.effectiveConversationId == conversationId,
+          overlay.conversationId == conversationId,
     );
   }
 
@@ -2981,7 +3051,7 @@ class FakeProductLocalStore implements ProductLocalStore {
         _firstOverlayWhere(
           (overlay) =>
               overlay.ownerDid == ownerDid &&
-              overlay.effectiveConversationId == conversationId,
+              overlay.conversationId == conversationId,
         );
   }
 
@@ -3014,7 +3084,7 @@ class FakeProductLocalStore implements ProductLocalStore {
       if (overlay.ownerDid != ownerDid) {
         continue;
       }
-      final conversationId = overlay.effectiveConversationId;
+      final conversationId = overlay.conversationId;
       if (ids != null && !ids.contains(conversationId)) {
         continue;
       }
@@ -3086,6 +3156,7 @@ class FakeProductLocalStore implements ProductLocalStore {
                 ProductConversationOverlay(
                   ownerDid: ownerDid,
                   threadId: conversationKey,
+                  conversationId: conversationKey,
                   updatedAt: updatedAt,
                 ))
             .copyWith(hidden: hidden, updatedAt: updatedAt);
@@ -3127,7 +3198,7 @@ class FakeProductLocalStore implements ProductLocalStore {
   Future<void> upsertConversationOverlayByConversationId(
     ProductConversationOverlay overlay,
   ) async {
-    final conversationId = overlay.effectiveConversationId;
+    final conversationId = overlay.conversationId;
     overlays[_key(overlay.ownerDid, conversationId)] = overlay.copyWith(
       threadId: conversationId,
       conversationId: conversationId,
@@ -3151,9 +3222,9 @@ bool _preferConversationOverlay(
   ProductConversationOverlay existing,
 ) {
   final candidateIsCanonical =
-      candidate.threadId.trim() == candidate.effectiveConversationId;
+      candidate.threadId.trim() == candidate.conversationId;
   final existingIsCanonical =
-      existing.threadId.trim() == existing.effectiveConversationId;
+      existing.threadId.trim() == existing.conversationId;
   if (candidateIsCanonical != existingIsCanonical) {
     return candidateIsCanonical;
   }

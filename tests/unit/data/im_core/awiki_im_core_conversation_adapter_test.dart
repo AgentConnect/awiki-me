@@ -261,7 +261,7 @@ void main() {
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
     expect(patch.conversationId, 'dm:peer-scope:v1:bob');
     expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
-    expect(patch.item?.effectiveConversationId, 'dm:peer-scope:v1:bob');
+    expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
   });
 
   test(

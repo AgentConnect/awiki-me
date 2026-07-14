@@ -2,7 +2,7 @@ class ProductConversationOverlay {
   const ProductConversationOverlay({
     required this.ownerDid,
     required this.threadId,
-    this.conversationId,
+    required this.conversationId,
     this.pinned = false,
     this.muted = false,
     this.hidden = false,
@@ -15,10 +15,7 @@ class ProductConversationOverlay {
 
   /// Canonical message-chain key owned by im-core.
   ///
-  /// [threadId] is kept as a migration/storage detail for legacy overlay rows.
-  /// New overlay writes should set this field and use [effectiveConversationId]
-  /// as the persistent fact key.
-  final String? conversationId;
+  final String conversationId;
   final String threadId;
   final bool pinned;
   final bool muted;
@@ -27,17 +24,9 @@ class ProductConversationOverlay {
   final String? avatarSeed;
   final DateTime updatedAt;
 
-  String get effectiveConversationId {
-    final explicit = conversationId?.trim();
-    if (explicit != null && explicit.isNotEmpty) {
-      return explicit;
-    }
-    return threadId.trim();
-  }
-
   ProductConversationOverlay copyWith({
     String? threadId,
-    Object? conversationId = _productConversationOverlayUnset,
+    String? conversationId,
     bool? pinned,
     bool? muted,
     bool? hidden,
@@ -48,10 +37,7 @@ class ProductConversationOverlay {
     return ProductConversationOverlay(
       ownerDid: ownerDid,
       threadId: threadId ?? this.threadId,
-      conversationId: _resolveNullableString(
-        conversationId,
-        this.conversationId,
-      ),
+      conversationId: conversationId ?? this.conversationId,
       pinned: pinned ?? this.pinned,
       muted: muted ?? this.muted,
       hidden: hidden ?? this.hidden,
@@ -72,15 +58,6 @@ class ProductConversationAliasMigration {
   final String ownerDid;
   final String legacyConversationId;
   final String canonicalConversationId;
-}
-
-const Object _productConversationOverlayUnset = Object();
-
-String? _resolveNullableString(Object? value, String? current) {
-  if (identical(value, _productConversationOverlayUnset)) {
-    return current;
-  }
-  return value as String?;
 }
 
 class MessageDraft {

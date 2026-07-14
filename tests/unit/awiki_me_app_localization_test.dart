@@ -222,6 +222,7 @@ void main() {
         conversations: _StaticConversationCore(<ConversationSummary>[
           ConversationSummary(
             threadId: 'dm:did:me:did:agent:daemon',
+            conversationId: 'dm:did:me:did:agent:daemon',
             displayName: '代理 1',
             lastMessagePreview: '',
             lastMessageAt: DateTime.utc(2026, 6, 3),
@@ -231,6 +232,7 @@ void main() {
           ),
           ConversationSummary(
             threadId: 'dm:did:me:did:agent:runtime',
+            conversationId: 'dm:did:me:did:agent:runtime',
             displayName: 'Hermes',
             lastMessagePreview: 'Hermes 已准备好。',
             lastMessageAt: DateTime.utc(2026, 6, 3),

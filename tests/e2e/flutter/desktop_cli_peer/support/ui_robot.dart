@@ -13,11 +13,17 @@ class _DesktopAppRobot {
       ProviderScope.containerOf(tester.element(find.byType(AppShell)));
 
   ConversationSummary get selectedConversation {
-    final selected = container.read(selectedConversationProvider);
-    if (selected == null) {
+    final selectedId = container.read(selectedConversationProvider);
+    if (selectedId == null) {
       fail('No conversation is selected in the App UI.');
     }
-    return selected;
+    for (final conversation
+        in container.read(conversationListProvider).conversations) {
+      if (conversation.conversationId == selectedId) {
+        return conversation;
+      }
+    }
+    fail('Selected conversation "$selectedId" is missing from the App store.');
   }
 
   Future<void> activate(AppSession session) async {
@@ -87,7 +93,15 @@ class _DesktopAppRobot {
       description: 'selected direct conversation after start-chat action',
       timeout: const Duration(seconds: 90),
       condition: () {
-        final selected = container.read(selectedConversationProvider);
+        final selectedId = container.read(selectedConversationProvider);
+        if (selectedId == null) {
+          return false;
+        }
+        final selected = container
+            .read(conversationListProvider)
+            .conversations
+            .where((item) => item.conversationId == selectedId)
+            .firstOrNull;
         if (selected == null ||
             selected.isGroup ||
             (selected.targetDid?.trim().isEmpty ?? true)) {
@@ -435,7 +449,7 @@ class _DesktopAppRobot {
     if (selected.isGroup || selected.targetDid?.trim() != peerDid.trim()) {
       fail('Contact row opened the wrong Direct peer: $selected');
     }
-    if (!selected.effectiveConversationId.startsWith('dm:peer-scope:v1:')) {
+    if (!selected.conversationId.startsWith('dm:peer-scope:v1:')) {
       fail('Contact row did not open a canonical peer-scope conversation.');
     }
     return selected;
@@ -549,7 +563,7 @@ class _DesktopAppRobot {
         return current.isGroup &&
             current.groupId?.trim() == groupDid &&
             current.threadId.trim() == 'group:$groupDid' &&
-            current.effectiveConversationId == 'group:$groupDid';
+            current.conversationId == 'group:$groupDid';
       },
     );
     return selectedConversation;

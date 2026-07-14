@@ -130,6 +130,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:1',
+      conversationId: 'dm:1',
       displayName: 'Alice',
       lastMessagePreview: 'design.md',
       lastMessageAt: snapshot.createdAt,

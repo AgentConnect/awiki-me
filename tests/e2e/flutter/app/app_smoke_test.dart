@@ -234,13 +234,11 @@ void main() {
         final started = conversations.single;
         expect(started.conversationId, 'dm:peer-scope:v1:smoke-peer');
         expect(
-          container.read(selectedConversationProvider)?.effectiveConversationId,
+          container.read(selectedConversationProvider),
           'dm:peer-scope:v1:smoke-peer',
         );
         expect(
-          find.byKey(
-            Key('conversation-row:${started.effectiveConversationId}'),
-          ),
+          find.byKey(Key('conversation-row:${started.conversationId}')),
           findsOneWidget,
         );
 
@@ -558,6 +556,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'direct:did:human:bob',
+      conversationId: 'direct:did:human:bob',
       displayName: 'Bob',
       lastMessagePreview: 'hello',
       lastMessageAt: DateTime(2026, 6, 19, 10, 0),
@@ -687,6 +686,7 @@ void main() {
       const runtimeDid = 'did:test:agent:hermes-ui';
       final conversation = ConversationSummary(
         threadId: 'dm:$runtimeDid',
+        conversationId: 'dm:$runtimeDid',
         displayName: 'hermes-ui.awiki.ai',
         lastMessagePreview: 'latest runtime reply',
         lastMessageAt: DateTime(2026, 6, 15, 10, 30),
