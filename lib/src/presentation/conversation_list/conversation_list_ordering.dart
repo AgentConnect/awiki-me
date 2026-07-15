@@ -123,9 +123,5 @@ DateTime _conversationSortActivity(
 }
 
 String _conversationStableSortKey(ConversationSummary conversation) {
-  final visibilityKey = conversation.visibilityKey.trim();
-  if (visibilityKey.isNotEmpty) {
-    return visibilityKey;
-  }
-  return conversation.threadId.trim();
+  return conversation.conversationId;
 }

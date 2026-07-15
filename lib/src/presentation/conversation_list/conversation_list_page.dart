@@ -10,8 +10,8 @@ import '../../app/app_router.dart';
 import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../core/performance_logger.dart';
-import '../../domain/entities/conversation_identity.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -20,6 +20,7 @@ import '../chat/chat_provider.dart';
 import '../agents/agents_provider.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
+import '../group/group_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
@@ -43,7 +44,6 @@ class ConversationListPage extends ConsumerStatefulWidget {
   const ConversationListPage({
     super.key,
     this.onConversationSelected,
-    this.selectedThreadId,
     this.selectedConversationId,
     this.embedded = false,
     this.bottomInset = 120,
@@ -51,7 +51,6 @@ class ConversationListPage extends ConsumerStatefulWidget {
   });
 
   final ConversationSelectionHandler? onConversationSelected;
-  final String? selectedThreadId;
   final String? selectedConversationId;
   final bool embedded;
   final double bottomInset;
@@ -110,11 +109,11 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     if (widget.macStyle && responsive.isMacDesktop) {
       return _MacConversationList(
         conversations: state.conversations,
+        loadState: state.loadState,
         composerDrafts: composerDrafts,
         selectedConversationId: _selectedConversationKey(
           widget.selectedConversationId,
         ),
-        selectedThreadId: _selectedConversationKey(widget.selectedThreadId),
         bottomInset: widget.bottomInset,
         onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
@@ -134,11 +133,11 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: _ConversationRefreshView(
         conversations: state.conversations,
+        loadState: state.loadState,
         composerDrafts: composerDrafts,
         selectedConversationId: _selectedConversationKey(
           widget.selectedConversationId,
         ),
-        selectedThreadId: _selectedConversationKey(widget.selectedThreadId),
         embedded: widget.embedded,
         bottomInset: widget.bottomInset,
         onRefresh: refreshConversations,
@@ -209,9 +208,9 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
 class _MacConversationList extends ConsumerStatefulWidget {
   const _MacConversationList({
     required this.conversations,
+    required this.loadState,
     required this.composerDrafts,
     required this.selectedConversationId,
-    required this.selectedThreadId,
     required this.bottomInset,
     required this.onRefresh,
     required this.onOpen,
@@ -221,9 +220,9 @@ class _MacConversationList extends ConsumerStatefulWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final ConversationListLoadState loadState;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
-  final String? selectedThreadId;
   final double bottomInset;
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
@@ -354,7 +353,15 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
             child: CustomScrollView(
               slivers: <Widget>[
                 CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
-                if (widget.conversations.isEmpty)
+                if (widget.conversations.isEmpty &&
+                    widget.loadState == ConversationListLoadState.error)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _ConversationLoadErrorState(
+                      onRetry: widget.onRefresh,
+                    ),
+                  )
+                else if (widget.conversations.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _MacConversationEmptyState(
@@ -399,15 +406,16 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           widget.composerDrafts,
                         );
                         return _MacConversationRow(
-                          key: Key(
-                            'conversation-row:${item.effectiveConversationId}',
-                          ),
+                          key: Key('conversation-row:${item.conversationId}'),
                           title: _conversationPresentationTitle(
                             ref,
                             item,
                             context.l10n,
                           ),
-                          avatarUri: item.avatarUri,
+                          avatarUri: _conversationPresentationAvatarUri(
+                            ref,
+                            item,
+                          ),
                           preview: preview,
                           timeLabel: item.lastMessagePreview.trim().isEmpty
                               ? ''
@@ -422,7 +430,6 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                             item,
                             selectedConversationId:
                                 widget.selectedConversationId,
-                            selectedThreadId: widget.selectedThreadId,
                           ),
                           onTap: () => widget.onOpen(item),
                           onDelete: () => widget.onDelete(item),
@@ -465,23 +472,11 @@ String? _selectedConversationKey(String? value) {
 bool _isSelectedConversation(
   ConversationSummary item, {
   required String? selectedConversationId,
-  required String? selectedThreadId,
 }) {
-  final itemConversationId = item.effectiveConversationId.trim();
-  if (selectedConversationId != null &&
+  final itemConversationId = item.conversationId.trim();
+  return selectedConversationId != null &&
       itemConversationId.isNotEmpty &&
-      itemConversationId == selectedConversationId) {
-    return true;
-  }
-  final itemThreadId = item.threadId.trim();
-  if (selectedThreadId != null &&
-      itemThreadId.isNotEmpty &&
-      itemThreadId == selectedThreadId) {
-    return true;
-  }
-  return selectedThreadId != null &&
-      itemConversationId.isNotEmpty &&
-      itemConversationId == selectedThreadId;
+      itemConversationId == selectedConversationId;
 }
 
 ConversationDraftSortState? _draftSortStateForConversation(
@@ -498,9 +493,9 @@ ConversationDraftSortState? _draftSortStateForConversation(
 class _ConversationRefreshView extends ConsumerStatefulWidget {
   const _ConversationRefreshView({
     required this.conversations,
+    required this.loadState,
     required this.composerDrafts,
     required this.selectedConversationId,
-    required this.selectedThreadId,
     required this.embedded,
     required this.bottomInset,
     required this.onRefresh,
@@ -509,9 +504,9 @@ class _ConversationRefreshView extends ConsumerStatefulWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final ConversationListLoadState loadState;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
-  final String? selectedThreadId;
   final bool embedded;
   final double bottomInset;
   final Future<void> Function() onRefresh;
@@ -571,10 +566,10 @@ class _ConversationRefreshViewState
     );
     return _ConversationSearchableRefreshView(
       conversations: widget.conversations,
+      loadState: widget.loadState,
       visibleConversations: visibleConversations,
       composerDrafts: widget.composerDrafts,
       selectedConversationId: widget.selectedConversationId,
-      selectedThreadId: widget.selectedThreadId,
       embedded: widget.embedded,
       bottomInset: widget.bottomInset,
       hasQuery: hasQuery,
@@ -612,10 +607,10 @@ class _ConversationRefreshViewState
 class _ConversationSearchableRefreshView extends ConsumerWidget {
   const _ConversationSearchableRefreshView({
     required this.conversations,
+    required this.loadState,
     required this.visibleConversations,
     required this.composerDrafts,
     required this.selectedConversationId,
-    required this.selectedThreadId,
     required this.embedded,
     required this.bottomInset,
     required this.hasQuery,
@@ -627,10 +622,10 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
   });
 
   final List<ConversationSummary> conversations;
+  final ConversationListLoadState loadState;
   final List<ConversationSummary> visibleConversations;
   final Map<String, ChatComposerDraft> composerDrafts;
   final String? selectedConversationId;
-  final String? selectedThreadId;
   final bool embedded;
   final double bottomInset;
   final bool hasQuery;
@@ -652,7 +647,13 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
             onChanged: onQueryChanged,
           ),
         ),
-        if (conversations.isEmpty)
+        if (conversations.isEmpty &&
+            loadState == ConversationListLoadState.error)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _ConversationLoadErrorState(onRetry: onRefresh),
+          )
+        else if (conversations.isEmpty)
           SliverFillRemaining(
             hasScrollBody: false,
             child: _EmptyState(
@@ -697,13 +698,13 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   composerDrafts,
                 );
                 return _ConversationRow(
-                  key: Key('conversation-row:${item.effectiveConversationId}'),
+                  key: Key('conversation-row:${item.conversationId}'),
                   title: _conversationPresentationTitle(
                     ref,
                     item,
                     context.l10n,
                   ),
-                  avatarUri: item.avatarUri,
+                  avatarUri: _conversationPresentationAvatarUri(ref, item),
                   preview: preview,
                   timeLabel: item.lastMessagePreview.trim().isEmpty
                       ? ''
@@ -714,7 +715,6 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   isSelected: _isSelectedConversation(
                     item,
                     selectedConversationId: selectedConversationId,
-                    selectedThreadId: selectedThreadId,
                   ),
                   onTap: () => onOpen(item),
                   onLongPress: () => onDelete(item),
@@ -1237,20 +1237,51 @@ String _conversationPresentationTitle(
   ConversationSummary conversation,
   AppLocalizations l10n,
 ) {
-  String? cachedPeerName;
-  final targetDid = conversation.targetDid?.trim() ?? '';
-  if (!conversation.isGroup && targetDid.isNotEmpty) {
-    cachedPeerName = peerDisplayName(
-      ref.watch(peerDisplayProfileProvider),
-      did: targetDid,
-      fallback: '',
+  if (conversation.isGroup) {
+    final group = _presentationGroup(ref, conversation);
+    final groupName = group?.displayName.trim() ?? '';
+    if (groupName.isNotEmpty) {
+      return groupName;
+    }
+  }
+  if (!conversation.isGroup) {
+    return ref.watch(
+      peerDisplayNameProvider(
+        PeerDisplayNameRequest(
+          peerPersonaId: conversation.peerPersonaId,
+          did: conversation.targetDid,
+          nickname: conversation.displayName,
+          fullHandle: conversation.targetPeer,
+          unknownLabel: l10n.chatUnknownUser,
+        ),
+      ),
     );
   }
-  return DidDisplayFormatter.conversationTitle(
-    conversation,
-    l10n,
-    peerDisplayName: cachedPeerName,
-  );
+  return DidDisplayFormatter.conversationTitle(conversation, l10n);
+}
+
+String? _conversationPresentationAvatarUri(
+  WidgetRef ref,
+  ConversationSummary conversation,
+) {
+  if (!conversation.isGroup) {
+    return conversation.avatarUri;
+  }
+  return _presentationGroup(ref, conversation)?.avatarUri ??
+      conversation.avatarUri;
+}
+
+GroupSummary? _presentationGroup(
+  WidgetRef ref,
+  ConversationSummary conversation,
+) {
+  final conversationId = conversation.conversationId.trim();
+  for (final group in ref.watch(groupProvider).groups) {
+    if (group.conversationId.trim() == conversationId) {
+      return group;
+    }
+  }
+  return null;
 }
 
 String _normalizedConversationSearchText(String text) {
@@ -1404,17 +1435,7 @@ ChatComposerDraft _draftForConversation(
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
-  if (isPeerScopedDirectConversation(conversation)) {
-    return drafts[conversation.threadId.trim()] ?? const ChatComposerDraft();
-  }
-  for (final key in conversation.visibilityKeys) {
-    final draft = drafts[key.trim()];
-    if (draft != null) {
-      return draft;
-    }
-  }
-  final threadDraft = drafts[conversation.threadId.trim()];
-  return threadDraft ?? const ChatComposerDraft();
+  return drafts[conversation.conversationId] ?? const ChatComposerDraft();
 }
 
 String _conversationCountLabel(int count) => count > 999 ? '999+' : '$count';
@@ -1668,6 +1689,42 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
           fontSize: responsive.displayScaled(compact ? 10 : 10.5),
           fontWeight: FontWeight.w600,
           height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationLoadErrorState extends StatelessWidget {
+  const _ConversationLoadErrorState({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.all(responsive.displayScaled(24)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              context.l10n.operationFailedRetry,
+              key: const Key('conversation-list-load-error'),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF66728A),
+                fontSize: responsive.displayScaled(13),
+              ),
+            ),
+            SizedBox(height: responsive.displayScaled(10)),
+            CupertinoButton(
+              key: const Key('conversation-list-load-retry'),
+              onPressed: onRetry,
+              child: Text(context.l10n.commonRetry),
+            ),
+          ],
         ),
       ),
     );

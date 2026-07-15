@@ -13,7 +13,6 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
-import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
@@ -245,10 +244,14 @@ class FriendsPage extends ConsumerWidget {
 const int _previewLimit = 3;
 
 String _displayName(WidgetRef ref, RelationshipSummary item) {
-  return peerDisplayName(
-    ref.watch(peerDisplayProfileProvider),
-    did: item.did,
-    fallback: DidDisplayFormatter.relationshipTitle(item),
+  return ref.watch(
+    peerDisplayNameProvider(
+      PeerDisplayNameRequest(
+        did: item.did,
+        nickname: item.displayName,
+        fullHandle: item.handle,
+      ),
+    ),
   );
 }
 

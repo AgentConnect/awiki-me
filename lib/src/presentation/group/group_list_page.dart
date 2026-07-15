@@ -13,11 +13,11 @@ import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
-import '../shared/formatters/display_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
 import 'group_member_invite_dialog.dart';
@@ -815,7 +815,7 @@ class _GroupCard extends StatelessWidget {
   }
 }
 
-class GroupMemberRow extends StatelessWidget {
+class GroupMemberRow extends ConsumerWidget {
   const GroupMemberRow({
     super.key,
     required this.item,
@@ -828,8 +828,10 @@ class GroupMemberRow extends StatelessWidget {
   final bool showRemoveButton;
 
   @override
-  Widget build(BuildContext context) {
-    final title = _memberTitle(item);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final title = ref.watch(
+      peerDisplayNameProvider(_memberDisplayNameRequest(item)),
+    );
     final identityLabel = _memberIdentityLabel(item);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
@@ -881,8 +883,6 @@ class GroupMemberRow extends StatelessWidget {
       ],
     );
   }
-
-  String _memberTitle(GroupMemberSummary item) => _memberDisplayLabel(item);
 }
 
 Future<void> showRemoveGroupMemberDialog({
@@ -892,7 +892,9 @@ Future<void> showRemoveGroupMemberDialog({
   required GroupMemberSummary member,
   required ValueChanged<GroupSummary> onGroupUpdated,
 }) async {
-  final memberTitle = _memberDisplayLabel(member);
+  final memberTitle = ref.read(
+    peerDisplayNameProvider(_memberDisplayNameRequest(member)),
+  );
   await AppNavigator.showDialog<void>(
     context,
     (dialogContext) => CupertinoAlertDialog(
@@ -931,17 +933,13 @@ Future<void> showRemoveGroupMemberDialog({
   );
 }
 
-String _memberDisplayLabel(GroupMemberSummary member) {
-  final displayName = member.displayName?.trim();
-  if (displayName != null && displayName.isNotEmpty) {
-    return displayName;
-  }
-  final handle = member.handle.trim();
-  final did = member.did.trim();
-  if (handle.isNotEmpty && handle != did) {
-    return handle;
-  }
-  return DidDisplayFormatter.compactDid(did);
+PeerDisplayNameRequest _memberDisplayNameRequest(GroupMemberSummary member) {
+  return PeerDisplayNameRequest(
+    peerPersonaId: member.peerPersonaId,
+    did: member.did,
+    nickname: member.displayName,
+    fullHandle: member.handle,
+  );
 }
 
 String? _memberIdentityLabel(GroupMemberSummary member) {

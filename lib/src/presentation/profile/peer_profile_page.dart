@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
-import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_provider.dart';
@@ -20,6 +19,7 @@ import '../shared/identity_flow.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'peer_display_profile_provider.dart';
 import 'peer_profile_provider.dart';
 
 class PeerProfilePage extends ConsumerWidget {
@@ -42,7 +42,16 @@ class PeerProfilePage extends ConsumerWidget {
     );
     final displayName = profile == null
         ? ''
-        : DidDisplayFormatter.profileName(profile);
+        : ref.watch(
+            peerDisplayNameProvider(
+              PeerDisplayNameRequest(
+                did: profile.did,
+                nickname: profile.displayName,
+                fullHandle: profile.fullHandle ?? profile.handle,
+                unknownLabel: context.l10n.chatUnknownUser,
+              ),
+            ),
+          );
     final handleLabel = profile == null
         ? ''
         : DidDisplayFormatter.profileHandleLabel(profile);
@@ -250,11 +259,30 @@ class PeerProfilePage extends ConsumerWidget {
                       AppDangerButton(
                         label: context.l10n.peerProfileDeleteThread,
                         onPressed: () async {
-                          final threadId = _threadIdForProfile(ref, profile);
                           try {
-                            await ref
-                                .read(chatThreadsProvider.notifier)
-                                .deleteThread(threadId);
+                            final conversationId =
+                                await resolveCanonicalConversationIdForProfile(
+                                  ref,
+                                  profile,
+                                );
+                            final conversations = ref
+                                .read(conversationListProvider)
+                                .conversations
+                                .where(
+                                  (item) =>
+                                      item.conversationId == conversationId,
+                                )
+                                .toList(growable: false);
+                            if (conversations.length > 1) {
+                              throw StateError(
+                                'canonical_conversation_not_unique',
+                              );
+                            }
+                            if (conversations.length == 1) {
+                              await ref
+                                  .read(chatThreadsProvider.notifier)
+                                  .deleteConversation(conversations.single);
+                            }
                             ref
                                 .read(uiFeedbackProvider.notifier)
                                 .showInfo(
@@ -291,31 +319,4 @@ MarkdownStyleSheet _peerMarkdownStyleSheet(BuildContext context) {
     h1: bodyStyle.copyWith(fontSize: responsive.isPhone ? 20 : 17),
     h2: bodyStyle.copyWith(fontSize: responsive.isPhone ? 18 : 15),
   );
-}
-
-String _threadIdForProfile(WidgetRef ref, UserProfile profile) {
-  final peerTarget = _directPeerTarget(profile.fullHandle ?? profile.handle);
-  final peerDid = profile.did.trim();
-  final existing = ref
-      .read(conversationListProvider)
-      .conversations
-      .where(
-        (item) =>
-            !item.isGroup &&
-            ((peerTarget != null &&
-                    _directPeerTarget(item.targetPeer) == peerTarget) ||
-                item.targetDid?.trim() == peerDid),
-      );
-  if (existing.isNotEmpty) {
-    return existing.first.threadId;
-  }
-  return 'dm:$peerDid';
-}
-
-String? _directPeerTarget(String? value) {
-  final target = value?.trim();
-  if (target == null || target.isEmpty) {
-    return null;
-  }
-  return target.startsWith('did:') ? target : target.toLowerCase();
 }

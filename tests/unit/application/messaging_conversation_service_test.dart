@@ -37,6 +37,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-pinned',
+          conversationId: 'thread-pinned',
           pinned: true,
           customTitle: 'Pinned title',
           avatarSeed: 'seed-pinned',
@@ -47,6 +48,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-hidden',
+          conversationId: 'thread-hidden',
           hidden: true,
           updatedAt: now,
         ),
@@ -64,7 +66,8 @@ void main() {
         'thread-pinned',
         'thread-normal',
       ]);
-      expect(conversations.first.displayName, 'Pinned title');
+      expect(conversations.first.displayName, 'thread-pinned');
+      expect(conversations.first.peerLocalNote, 'Pinned title');
       expect(conversations.first.avatarSeed, 'seed-pinned');
       expect(core.listCount, 1);
     });
@@ -180,6 +183,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'dm:did:alice:did:bob',
+            conversationId: 'dm:did:alice:did:bob',
             customTitle: 'Bob local title',
             avatarSeed: 'local-seed',
             updatedAt: DateTime.utc(2026, 5, 23, 9),
@@ -189,6 +193,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'dm:did:alice:did:stale',
+            conversationId: 'dm:did:alice:did:stale',
             hidden: true,
             updatedAt: DateTime.utc(2026, 5, 23, 9),
           ),
@@ -205,7 +210,8 @@ void main() {
         expect(core.snapshotCount, 1);
         expect(core.listCount, 0);
         expect(conversations, hasLength(1));
-        expect(conversations.single.displayName, 'Bob local title');
+        expect(conversations.single.displayName, 'Bob from snapshot');
+        expect(conversations.single.peerLocalNote, 'Bob local title');
         expect(conversations.single.avatarSeed, 'local-seed');
         expect(snapshotRow.displayName, 'Bob from snapshot');
         expect(snapshotRow.avatarSeed, isNull);
@@ -231,6 +237,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-pinned',
+          conversationId: 'thread-pinned',
           pinned: true,
           customTitle: 'Pinned local',
           updatedAt: DateTime.utc(2026, 5, 23, 9),
@@ -249,7 +256,8 @@ void main() {
         'thread-pinned',
         'thread-recent',
       ]);
-      expect(conversations.first.displayName, 'Pinned local');
+      expect(conversations.first.displayName, 'Pinned from snapshot');
+      expect(conversations.first.peerLocalNote, 'Pinned local');
       expect(pinnedRow.displayName, 'Pinned from snapshot');
     });
 
@@ -262,6 +270,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-patched',
+            conversationId: 'thread-patched',
             customTitle: 'Patched local title',
             updatedAt: DateTime.utc(2026, 5, 23, 9),
           ),
@@ -291,7 +300,8 @@ void main() {
         );
         final patch = await firstPatch.timeout(const Duration(seconds: 1));
         expect(patch.kind, ConversationListPatchKind.upsert);
-        expect(patch.item?.displayName, 'Patched local title');
+        expect(patch.item?.displayName, 'Patched core title');
+        expect(patch.item?.peerLocalNote, 'Patched local title');
 
         final repairPatchStream = service.watchConversationPatches(
           ownerDid: 'did:alice',
@@ -372,7 +382,7 @@ void main() {
     });
 
     test(
-      'snapshot load collapses unambiguous legacy runtime direct rows into canonical peer-scoped rows',
+      'snapshot keeps distinct canonical rows without app-side identity merging',
       () async {
         final didMessage = ChatMessage(
           localId: 'legacy-did-msg',
@@ -456,14 +466,18 @@ void main() {
         );
 
         expect(core.snapshotCount, 1);
-        expect(conversations, hasLength(1));
+        expect(conversations, hasLength(2));
         final byThread = {
           for (final conversation in conversations)
             conversation.threadId: conversation,
         };
         expect(
-          byThread['dm:peer-scope:v1:runtime']?.conversationKey,
+          byThread['dm:peer-scope:v1:runtime']?.conversationId,
           'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']?.conversationId,
+          'dm:did:human:did:agent:runtime',
         );
         expect(
           byThread['dm:peer-scope:v1:runtime']?.targetPeer,
@@ -535,6 +549,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-hidden',
+            conversationId: 'thread-hidden',
             hidden: true,
             updatedAt: now,
           ),
@@ -543,6 +558,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-pinned',
+            conversationId: 'thread-pinned',
             pinned: true,
             customTitle: 'Pinned local title',
             avatarSeed: 'pinned-seed',
@@ -570,7 +586,8 @@ void main() {
           'thread-pinned',
           'thread-normal',
         ]);
-        expect(conversations.first.displayName, 'Pinned local title');
+        expect(conversations.first.displayName, 'thread-pinned');
+        expect(conversations.first.peerLocalNote, 'Pinned local title');
         expect(conversations.first.avatarSeed, 'pinned-seed');
       },
     );
@@ -603,6 +620,7 @@ void main() {
           ProductConversationOverlay(
             ownerDid: 'did:alice',
             threadId: 'thread-pinned',
+            conversationId: 'thread-pinned',
             pinned: true,
             customTitle: '置顶会话',
             updatedAt: DateTime.utc(2026, 6, 27),
@@ -640,7 +658,8 @@ void main() {
           'thread-pinned',
           'dm:alice:runtime',
         ]);
-        expect(enriched.first.displayName, '置顶会话');
+        expect(enriched.first.displayName, 'thread-pinned');
+        expect(enriched.first.peerLocalNote, '置顶会话');
         expect(enriched.last.displayName, '写作助手');
       },
     );
@@ -698,7 +717,7 @@ void main() {
       },
     );
 
-    test('applies canonical overlay before legacy alias fallback', () async {
+    test('uses canonical overlay and ignores legacy alias rows', () async {
       final conversation = _conversation(
         'dm:alice:old-did',
         targetDid: 'did:old-bob',
@@ -712,6 +731,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'direct-did:did:old-bob',
+          conversationId: 'direct-did:did:old-bob',
           pinned: true,
           hidden: true,
           customTitle: 'Legacy title',
@@ -742,11 +762,12 @@ void main() {
       );
 
       expect(conversations, hasLength(1));
-      expect(conversations.single.displayName, 'Canonical title');
+      expect(conversations.single.displayName, 'dm:alice:old-did');
+      expect(conversations.single.peerLocalNote, 'Canonical title');
       expect(conversations.single.avatarSeed, 'seed-canonical');
     });
 
-    test('hide migrates legacy overlay fields into canonical row', () async {
+    test('hide writes canonical overlay without reading legacy fields', () async {
       final conversation = _conversation(
         'dm:alice:old-did',
         targetDid: 'did:old-bob',
@@ -759,6 +780,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'direct-did:did:old-bob',
+          conversationId: 'direct-did:did:old-bob',
           pinned: true,
           muted: true,
           customTitle: 'Legacy title',
@@ -784,10 +806,10 @@ void main() {
         conversationId: 'dm:peer-scope:v1:bob',
       );
       expect(overlay?.hidden, isTrue);
-      expect(overlay?.pinned, isTrue);
-      expect(overlay?.muted, isTrue);
-      expect(overlay?.customTitle, 'Legacy title');
-      expect(overlay?.avatarSeed, 'seed-legacy');
+      expect(overlay?.pinned, isFalse);
+      expect(overlay?.muted, isFalse);
+      expect(overlay?.customTitle, isNull);
+      expect(overlay?.avatarSeed, isNull);
       expect(overlay?.threadId, 'dm:peer-scope:v1:bob');
     });
 
@@ -851,9 +873,9 @@ void main() {
       );
       expect(core.ensuredConversationIds, isEmpty);
 
-      await service.restoreConversationToRecents(
+      await service.ensureConversationInRecents(
         ownerDid: 'did:alice',
-        conversation: conversation,
+        conversationId: conversation.conversationId,
       );
 
       expect(core.ensuredConversationIds, <String>['dm:alice:old-did']);
@@ -1013,7 +1035,7 @@ void main() {
     );
 
     test(
-      'collapses unambiguous runtime DID direct rows into peer-scoped storage conversations',
+      'preserves distinct canonical runtime conversations from Core',
       () async {
         final legacyMessage = ChatMessage(
           localId: 'legacy-runtime-reply',
@@ -1084,14 +1106,18 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(conversations, hasLength(1));
+        expect(conversations, hasLength(2));
         final byThread = {
           for (final conversation in conversations)
             conversation.threadId: conversation,
         };
         expect(
-          byThread['dm:peer-scope:v1:runtime']?.conversationKey,
+          byThread['dm:peer-scope:v1:runtime']?.conversationId,
           'dm:peer-scope:v1:runtime',
+        );
+        expect(
+          byThread['dm:did:human:did:agent:runtime']?.conversationId,
+          'dm:did:human:did:agent:runtime',
         );
         expect(
           byThread['dm:peer-scope:v1:runtime']?.targetPeer,
@@ -1211,7 +1237,7 @@ void main() {
     );
 
     test(
-      'hides canonical peer-scoped runtime conversation after legacy direct collapse',
+      'hides only the selected canonical runtime conversation',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1264,7 +1290,7 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(peerScoped.visibilityKey, 'dm:peer-scope:v1:runtime');
+        expect(peerScoped.conversationId, 'dm:peer-scope:v1:runtime');
         expect(
           (await store.loadConversationOverlayByConversationId(
             ownerDid: 'did:human',
@@ -1287,7 +1313,9 @@ void main() {
             reason: key,
           );
         }
-        expect(conversations, isEmpty);
+        expect(conversations.map((conversation) => conversation.threadId), [
+          'dm:did:human:did:agent:runtime',
+        ]);
       },
     );
 
@@ -1321,10 +1349,10 @@ void main() {
 
         expect(conversations, hasLength(2));
         expect(
-          conversations.map((conversation) => conversation.conversationKey),
+          conversations.map((conversation) => conversation.conversationId),
           containsAll(<String>[
-            'direct-did:did:old-bob',
-            'direct-did:did:new-bob',
+            'dm:alice:old-bob',
+            'dm:alice:new-bob',
           ]),
         );
       },
@@ -1369,7 +1397,7 @@ void main() {
     );
 
     test(
-      'keeps runtime conversation hidden when agent projection is unavailable',
+      'ignores legacy visibility aliases when canonical overlay is absent',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1396,12 +1424,16 @@ void main() {
           ownerDid: 'did:human',
         );
 
-        expect(conversations, isEmpty);
+        expect(conversations, hasLength(1));
+        expect(
+          conversations.single.conversationId,
+          'dm:did:human:did:agent:runtime',
+        );
       },
     );
 
     test(
-      'restores canonical peer-scoped runtime conversation after legacy direct collapse',
+      'restores one canonical runtime conversation without merging another',
       () async {
         final didRow = _conversation(
           'dm:did:human:did:agent:runtime',
@@ -1457,9 +1489,9 @@ void main() {
           ))?.hidden,
           isTrue,
         );
-        await service.restoreConversationToRecents(
+        await service.ensureConversationInRecents(
           ownerDid: 'did:human',
-          conversation: handleRow,
+          conversationId: handleRow.conversationId,
         );
         final conversations = await service.listConversations(
           ownerDid: 'did:human',
@@ -1481,6 +1513,7 @@ void main() {
         );
         expect(conversations.map((conversation) => conversation.threadId), [
           'dm:peer-scope:v1:runtime',
+          'dm:did:human:did:agent:runtime',
         ]);
       },
     );
@@ -1546,7 +1579,7 @@ ConversationSummary _conversation(
     9,
   ).subtract(Duration(minutes: minutesAgo));
   return ConversationSummary(
-    conversationId: conversationId,
+    conversationId: conversationId ?? threadId,
     threadId: threadId,
     displayName: displayName ?? threadId,
     lastMessagePreview: lastMessagePreview,

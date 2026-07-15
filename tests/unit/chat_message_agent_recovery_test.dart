@@ -334,7 +334,7 @@ void main() {
       _timelineThreadId(conversation),
     );
 
-    await controller.deleteThread(_timelineThreadId(conversation));
+    await controller.deleteConversation(conversation);
 
     expect(controller.debugCacheStats().rawThreadStateCount, 0);
     expect(controller.debugCacheStats().canonicalThreadCount, 0);
@@ -492,6 +492,7 @@ void main() {
 
     final otherConversation = ConversationSummary(
       threadId: 'direct:did:human:carol',
+      conversationId: 'direct:did:human:carol',
       displayName: 'Carol',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 19, 10, 10),
@@ -696,8 +697,8 @@ ChatMessage _chatMessage({
   return ChatMessage(
     localId: localId,
     remoteId: remoteId,
-    conversationId: conversation.effectiveConversationId,
-    threadId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
+    threadId: conversation.conversationId,
     senderDid: conversation.targetDid ?? 'did:human:bob',
     receiverDid: 'did:human:alice',
     content: content,
@@ -708,7 +709,7 @@ ChatMessage _chatMessage({
 }
 
 String _timelineThreadId(ConversationSummary conversation) =>
-    conversation.effectiveConversationId;
+    conversation.conversationId;
 
 ChatMessage _messageOnConversation(
   ConversationSummary conversation,
@@ -717,8 +718,8 @@ ChatMessage _messageOnConversation(
   return ChatMessage(
     localId: message.localId,
     remoteId: message.remoteId,
-    conversationId: conversation.effectiveConversationId,
-    threadId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
+    threadId: conversation.conversationId,
     senderDid: message.senderDid,
     senderName: message.senderName,
     receiverDid: message.receiverDid,

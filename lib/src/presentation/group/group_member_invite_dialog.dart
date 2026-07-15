@@ -14,6 +14,7 @@ import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/services/peer_display_name_resolver.dart';
 import '../agents/agents_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
@@ -579,9 +580,11 @@ class GroupInviteCandidate {
     required GroupInviteCandidateSource source,
   }) {
     final did = relationship.did.trim();
-    final displayName = relationship.displayName.trim().isNotEmpty
-        ? relationship.displayName.trim()
-        : _displayNameFallback(relationship.handle, did);
+    final displayName = const PeerDisplayNameResolver().resolve(
+      nickname: relationship.displayName,
+      fullHandle: relationship.handle,
+      did: did,
+    );
     return GroupInviteCandidate(
       did: did,
       displayName: displayName,
@@ -611,9 +614,12 @@ class GroupInviteCandidate {
     }
     final did = conversation.targetDid?.trim() ?? '';
     final peer = conversation.targetPeer?.trim();
-    final displayName = conversation.displayName.trim().isNotEmpty
-        ? conversation.displayName.trim()
-        : _displayNameFallback(peer, did);
+    final displayName = const PeerDisplayNameResolver().resolve(
+      localNote: conversation.peerLocalNote,
+      nickname: conversation.displayName,
+      fullHandle: peer,
+      did: did,
+    );
     return GroupInviteCandidate(
       did: did,
       displayName: displayName,
@@ -637,7 +643,11 @@ class GroupInviteCandidate {
     UserProfile profile, {
     required GroupInviteCandidateSource source,
   }) {
-    final displayName = DidDisplayFormatter.profileName(profile);
+    final displayName = const PeerDisplayNameResolver().resolve(
+      nickname: profile.displayName,
+      fullHandle: profile.fullHandle ?? profile.handle,
+      did: profile.did,
+    );
     return GroupInviteCandidate(
       did: profile.did.trim(),
       displayName: displayName,
@@ -1335,14 +1345,6 @@ GroupInviteIdentityKind _kindFromIdentityText({
     return GroupInviteIdentityKind.agent;
   }
   return GroupInviteIdentityKind.human;
-}
-
-String _displayNameFallback(String? handle, String did) {
-  final normalizedHandle = handle?.trim();
-  if (normalizedHandle != null && normalizedHandle.isNotEmpty) {
-    return normalizedHandle;
-  }
-  return DidDisplayFormatter.compactDid(did);
 }
 
 String? _handleFromDirectPeer(String? peer) {

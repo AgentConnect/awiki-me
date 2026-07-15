@@ -80,11 +80,7 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     final ownerDid = ref.read(sessionProvider).session?.did ?? '';
     ref
         .read(peerDisplayProfileProvider.notifier)
-        .updateFromRemote(
-          ownerDid: ownerDid,
-          profile: profile,
-          requestedDid: did,
-        );
+        .updateFromRemote(ownerDid: ownerDid, profile: profile);
     state = state.copyWith(profile: profile, clearError: true);
 
     try {

@@ -103,6 +103,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:1',
+          conversationId: 'dm:1',
           displayName: 'Peer',
           lastMessagePreview: 'hello',
           lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -116,6 +117,7 @@ void main() {
     ConversationSummary staleSelectedConversation() {
       return ConversationSummary(
         threadId: 'group:old-group',
+        conversationId: 'group:old-group',
         displayName: '旧身份群聊',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -244,6 +246,7 @@ void main() {
     test('进入后台时裁剪隐藏会话缓存但保留可见会话', () async {
       final visibleConversation = ConversationSummary(
         threadId: 'dm:visible',
+        conversationId: 'dm:visible',
         displayName: 'Visible',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 29, 10),
@@ -253,6 +256,7 @@ void main() {
       );
       final hiddenConversation = ConversationSummary(
         threadId: 'dm:hidden',
+        conversationId: 'dm:hidden',
         displayName: 'Hidden',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 29, 10),
@@ -321,6 +325,7 @@ void main() {
     test('内存压力会回收隐藏会话缓存但保留可见会话', () {
       final visibleConversation = ConversationSummary(
         threadId: 'dm:memory-visible',
+        conversationId: 'dm:memory-visible',
         displayName: 'Visible',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 29, 10),
@@ -330,6 +335,7 @@ void main() {
       );
       final hiddenConversation = ConversationSummary(
         threadId: 'dm:memory-hidden',
+        conversationId: 'dm:memory-hidden',
         displayName: 'Hidden',
         lastMessagePreview: '',
         lastMessageAt: DateTime(2026, 6, 29, 10),
@@ -442,6 +448,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:2',
+          conversationId: 'dm:2',
           displayName: 'did:wba:awiki.ai:user:alice:e1_key',
           lastMessagePreview: 'hello',
           lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -571,6 +578,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:attachment',
+          conversationId: 'dm:attachment',
           displayName: 'Peer',
           lastMessagePreview: '[附件] report.pdf',
           lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -623,6 +631,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'group:group-1',
+          conversationId: 'group:group-1',
           displayName: '融资协作群',
           lastMessagePreview: 'hello group',
           lastMessageAt: DateTime(2026, 4, 5, 12, 5),
@@ -632,6 +641,7 @@ void main() {
         ),
         group: GroupSummary(
           groupId: 'group-1',
+          conversationId: 'group:group-1',
           name: '融资协作群',
           description: '',
           memberCount: 2,
@@ -681,6 +691,7 @@ void main() {
 
       final mentionedConversation = ConversationSummary(
         threadId: 'group:group-mention',
+        conversationId: 'group:group-mention',
         displayName: '群聊',
         lastMessagePreview: '@me 请看',
         lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -724,6 +735,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'group:group-mention',
+          conversationId: 'group:group-mention',
           displayName: '群聊',
           lastMessagePreview: '普通消息',
           lastMessageAt: DateTime(2026, 4, 5, 12, 1),
@@ -782,6 +794,7 @@ void main() {
       messageSyncService.syncReasons.clear();
       final conversation = ConversationSummary(
         threadId: 'direct-handle:alice.awiki.info',
+        conversationId: 'direct-handle:alice.awiki.info',
         displayName: 'Alice',
         lastMessagePreview: 'hello alias',
         lastMessageAt: DateTime(2026, 4, 5, 12, 10),
@@ -876,6 +889,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'group:did:test:group:alpha',
+          conversationId: 'group:did:test:group:alpha',
           displayName: 'Alpha',
           lastMessagePreview: 'hello group alias',
           lastMessageAt: DateTime(2026, 4, 5, 12, 15),
@@ -940,6 +954,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:daemon',
+          conversationId: 'dm:daemon',
           displayName: '代理 1',
           lastMessagePreview: 'control-plane text should be hidden',
           lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -998,6 +1013,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:runtime',
+          conversationId: 'dm:runtime',
           displayName: 'Hermes',
           lastMessagePreview: 'Hermes reply',
           lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1053,6 +1069,7 @@ void main() {
       );
       final pendingAlias = ConversationSummary(
         threadId: 'dm:pending:hermes.awiki.info',
+        conversationId: 'dm:pending:hermes.awiki.info',
         displayName: 'Hermes',
         lastMessagePreview: '在吗？',
         lastMessageAt: DateTime(2026, 7, 3, 12, 0),
@@ -1079,6 +1096,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:peer-scope:v1:hermes-runtime',
+          conversationId: 'dm:peer-scope:v1:hermes-runtime',
           displayName: 'hermes',
           lastMessagePreview: '在的',
           lastMessageAt: DateTime(2026, 7, 3, 12, 1),
@@ -1139,6 +1157,7 @@ void main() {
         ),
         conversationHint: ConversationSummary(
           threadId: 'dm:human',
+          conversationId: 'dm:human',
           displayName: 'zhuocheng',
           lastMessagePreview: 'runtime reply',
           lastMessageAt: DateTime(2026, 4, 5, 12, 2),
@@ -1230,6 +1249,7 @@ void main() {
         },
         conversation: ConversationSummary(
           threadId: 'dm:runtime',
+          conversationId: 'dm:runtime',
           displayName: 'Hermes',
           lastMessagePreview: 'Agent 已准备好。',
           lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1255,6 +1275,7 @@ void main() {
     test('实时 Message Agent 控制 payload 回收到 chat provider', () async {
       final conversation = ConversationSummary(
         threadId: 'direct:did:human:bob',
+        conversationId: 'direct:did:human:bob',
         displayName: 'Bob',
         lastMessagePreview: 'hello',
         lastMessageAt: DateTime(2026, 6, 19, 10, 0),
@@ -1501,9 +1522,9 @@ class _RecordingConversationService implements ConversationService {
   }) async {}
 
   @override
-  Future<void> restoreConversationToRecents({
+  Future<void> ensureConversationInRecents({
     required String ownerDid,
-    required ConversationSummary conversation,
+    required String conversationId,
     DateTime? updatedAt,
   }) async {}
 }

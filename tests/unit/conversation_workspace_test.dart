@@ -54,20 +54,19 @@ class _StaticConversationListController extends ConversationListController {
     if (selected == null) {
       return;
     }
-    final selectedConversationId = selected.effectiveConversationId.trim();
-    final selectedThreadId = selected.threadId.trim();
     for (final conversation in conversations) {
-      if ((selectedConversationId.isNotEmpty &&
-              conversation.effectiveConversationId.trim() ==
-                  selectedConversationId) ||
-          (selectedThreadId.isNotEmpty &&
-              conversation.threadId.trim() == selectedThreadId)) {
-        ref
-            .read(selectedConversationProvider.notifier)
-            .selectConversation(conversation);
+      if (conversation.conversationId == selected) {
         return;
       }
     }
+    ref.read(selectedConversationProvider.notifier).clearSelection();
+  }
+
+  void showLoadError() {
+    state = ConversationListState(
+      loadState: ConversationListLoadState.error,
+      errorCode: 'conversation_load_failed',
+    );
   }
 
   @override
@@ -93,17 +92,22 @@ class _BlockingRestoreConversationListController
   final Completer<void> restoreCompleter;
 
   @override
-  Future<void> restoreConversation(ConversationSummary conversation) {
+  Future<ConversationSummary> commitConversationId(String conversationId) {
     if (!restoreStarted.isCompleted) {
       restoreStarted.complete();
     }
-    return restoreCompleter.future;
+    return restoreCompleter.future.then((_) {
+      return state.conversations.singleWhere(
+        (conversation) => conversation.conversationId == conversationId,
+      );
+    });
   }
 }
 
 void main() {
   final conversation = ConversationSummary(
     threadId: 'dm:did:me:did:peer',
+    conversationId: 'dm:did:me:did:peer',
     displayName: 'Marcus Chen',
     lastMessagePreview: 'Hey! I just saw the updates.',
     lastMessageAt: DateTime(2026, 3, 28, 10, 24),
@@ -125,9 +129,41 @@ void main() {
     ),
   ];
 
+  testWidgets('会话加载失败不会伪装成真实空列表', (tester) async {
+    late _StaticConversationListController controller;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: FakeAwikiGateway(),
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            controller = _StaticConversationListController(
+              ref,
+              const <ConversationSummary>[],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    controller.showLoadError();
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('conversation-list-load-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('conversation-list-load-retry')),
+      findsOneWidget,
+    );
+    expect(find.text('暂无会话'), findsNothing);
+  });
+
   testWidgets('最近会话显示未读 @ 我提示', (tester) async {
     final mentionConversation = ConversationSummary(
       threadId: 'group:did:group:mentions',
+      conversationId: 'group:did:group:mentions',
       displayName: '项目群',
       lastMessagePreview: '@Marcus 请看这里',
       lastMessageAt: DateTime(2026, 3, 28, 10, 30),
@@ -159,6 +195,63 @@ void main() {
     expect(find.text('项目群'), findsOneWidget);
     expect(find.text('未读 2'), findsOneWidget);
     expect(find.text('@我'), findsOneWidget);
+  });
+
+  testWidgets('群资料仅在展示层解析且不改写 Core 会话投影', (tester) async {
+    const groupDid = 'did:wba:awiki.info:groups:canonical';
+    const conversationId = 'group:did:wba:awiki.info:groups:canonical';
+    final groupConversation = ConversationSummary(
+      threadId: 'legacy-group-thread',
+      conversationId: conversationId,
+      displayName: groupDid,
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 14, 10),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupDid,
+      canonicalGroupDid: groupDid,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[groupConversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[groupConversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+    );
+
+    container
+        .read(groupProvider.notifier)
+        .upsertGroup(
+          GroupSummary(
+            conversationId: conversationId,
+            groupId: groupDid,
+            displayName: 'Canonical Group',
+            description: '',
+            memberCount: 2,
+            lastMessageAt: DateTime(2026, 7, 14, 10),
+          ),
+        );
+    await tester.pump();
+
+    expect(find.text('Canonical Group'), findsOneWidget);
+    expect(
+      container.read(conversationListProvider).conversations.single.displayName,
+      groupDid,
+    );
   });
 
   testWidgets('macOS 宽度下聊天头部不显示身份卡或会话信息入口', (tester) async {
@@ -266,6 +359,7 @@ void main() {
     );
     final runtimeConversation = ConversationSummary(
       threadId: 'dm:did:me:did:agent:runtime',
+      conversationId: 'dm:did:me:did:agent:runtime',
       displayName: 'Hermes',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 4, 10),
@@ -777,6 +871,7 @@ void main() {
     );
     final agentConversation = ConversationSummary(
       threadId: 'dm:did:agent:runtime',
+      conversationId: 'dm:did:agent:runtime',
       displayName: 'Hermes',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 4, 10),
@@ -885,6 +980,7 @@ void main() {
     );
     final agentConversation = ConversationSummary(
       threadId: 'dm:did:agent:remote-runtime',
+      conversationId: 'dm:did:agent:remote-runtime',
       displayName: 'Remote Hermes',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 6, 4, 10),
@@ -965,6 +1061,7 @@ void main() {
   testWidgets('macOS 最近会话保留已删除智能体并显示状态', (tester) async {
     final deletedConversation = ConversationSummary(
       threadId: 'dm:deleted-agent',
+      conversationId: 'dm:deleted-agent',
       displayName: '旧智能体',
       lastMessagePreview: '旧回复',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1014,6 +1111,7 @@ void main() {
   testWidgets('手机宽度下已删除智能体状态显示在名称旁边', (tester) async {
     final deletedConversation = ConversationSummary(
       threadId: 'dm:deleted-agent-mobile',
+      conversationId: 'dm:deleted-agent-mobile',
       displayName: '旧智能体',
       lastMessagePreview: '旧回复',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1121,6 +1219,7 @@ void main() {
     const groupId = 'did:test:group:funding';
     final group = GroupSummary(
       groupId: groupId,
+      conversationId: 'group:$groupId',
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 2,
@@ -1130,6 +1229,7 @@ void main() {
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
+      conversationId: 'group:funding',
       displayName: '融资协作群',
       lastMessagePreview: 'hello group',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1156,6 +1256,7 @@ void main() {
           ),
         ],
       };
+    final messagingService = FakeMessagingService(gateway);
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -1172,6 +1273,7 @@ void main() {
             (ref) =>
                 _StaticConversationListController(ref, gateway.conversations),
           ),
+          messagingServiceProvider.overrideWithValue(messagingService),
         ],
       ),
     );
@@ -1258,6 +1360,7 @@ void main() {
     expect(find.text('Bob'), findsOneWidget);
     expect(find.text(memberDid), findsNothing);
     expect(find.text('3 人'), findsOneWidget);
+    expect(messagingService.lastConversationTimelineId, 'group:funding');
 
     await tester.tap(find.bySemanticsLabel('移除成员').last);
     await tester.pumpAndSettle();
@@ -1277,6 +1380,7 @@ void main() {
     const groupId = 'did:test:group:instant-invite';
     final group = GroupSummary(
       groupId: groupId,
+      conversationId: 'group:$groupId',
       name: '即时邀请群',
       description: '',
       memberCount: 1,
@@ -1286,6 +1390,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:instant-invite',
+      conversationId: 'group:instant-invite',
       displayName: '即时邀请群',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 7, 13, 18),
@@ -1368,6 +1473,7 @@ void main() {
     const groupId = 'did:test:group:funding';
     final fullGroup = GroupSummary(
       groupId: groupId,
+      conversationId: 'group:$groupId',
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 2,
@@ -1377,6 +1483,7 @@ void main() {
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
+      conversationId: 'group:funding',
       displayName: '融资协作群',
       lastMessagePreview: 'hello group',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1440,6 +1547,7 @@ void main() {
     gateway.groups = <GroupSummary>[
       GroupSummary(
         groupId: groupId,
+        conversationId: 'group:$groupId',
         name: groupId,
         description: '',
         memberCount: 0,
@@ -1519,6 +1627,7 @@ void main() {
     const groupId = 'did:test:group:funding';
     final group = GroupSummary(
       groupId: groupId,
+      conversationId: 'group:$groupId',
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 2,
@@ -1528,6 +1637,7 @@ void main() {
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
+      conversationId: 'group:funding',
       displayName: '融资协作群',
       lastMessagePreview: 'hello group',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1608,6 +1718,7 @@ void main() {
   testWidgets('macOS 群聊成员刷新不受群详情空响应影响', (tester) async {
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
+      conversationId: 'group:funding',
       displayName: '融资协作群',
       lastMessagePreview: 'hello group',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1620,6 +1731,7 @@ void main() {
       ..groups = <GroupSummary>[
         GroupSummary(
           groupId: groupConversation.groupId!,
+          conversationId: 'group:${groupConversation.groupId!}',
           name: '融资协作群',
           description: '同步融资材料和里程碑',
           memberCount: 1,
@@ -1696,6 +1808,7 @@ void main() {
   testWidgets('macOS 群聊成员刷新期间显示按钮级 loading', (tester) async {
     final groupConversation = ConversationSummary(
       threadId: 'group:funding',
+      conversationId: 'group:funding',
       displayName: '融资协作群',
       lastMessagePreview: 'hello group',
       lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -1705,6 +1818,7 @@ void main() {
     );
     final group = GroupSummary(
       groupId: groupConversation.groupId!,
+      conversationId: 'group:${groupConversation.groupId!}',
       name: '融资协作群',
       description: '同步融资材料和里程碑',
       memberCount: 1,
@@ -1885,7 +1999,7 @@ void main() {
       findsOneWidget,
     );
     final conversationRow = find.byKey(
-      Key('conversation-row:${conversation.effectiveConversationId}'),
+      Key('conversation-row:${conversation.conversationId}'),
     );
     expect(conversationRow, findsOneWidget);
     final unreadTag = find.descendant(
@@ -2160,6 +2274,7 @@ void main() {
     );
     final readConversation = ConversationSummary(
       threadId: 'dm:read',
+      conversationId: 'dm:read',
       displayName: 'Read Chat',
       lastMessagePreview: 'read',
       lastMessageAt: DateTime(2026, 3, 28, 10, 24),
@@ -2211,6 +2326,7 @@ void main() {
     final conversations = <ConversationSummary>[
       ConversationSummary(
         threadId: 'dm:read',
+        conversationId: 'dm:read',
         displayName: 'Read Chat',
         lastMessagePreview: 'read',
         lastMessageAt: DateTime(2026, 3, 28, 10, 24),
@@ -2220,6 +2336,7 @@ void main() {
       ),
       ConversationSummary(
         threadId: 'dm:unread',
+        conversationId: 'dm:unread',
         displayName: 'Unread Chat',
         lastMessagePreview: 'unread',
         lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -2363,6 +2480,7 @@ void main() {
       conversation,
       ConversationSummary(
         threadId: 'group:funding',
+        conversationId: 'group:funding',
         displayName: '融资协作群',
         lastMessagePreview: '明早同步 deck',
         lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -2372,6 +2490,7 @@ void main() {
       ),
       ConversationSummary(
         threadId: 'dm:did:me:did:ops',
+        conversationId: 'dm:did:me:did:ops',
         displayName: 'Ops Bot',
         lastMessagePreview: 'server alert recovered',
         lastMessageAt: DateTime(2026, 3, 28, 10, 26),
@@ -2461,6 +2580,7 @@ void main() {
       conversation,
       ConversationSummary(
         threadId: 'group:funding',
+        conversationId: 'group:funding',
         displayName: '融资协作群',
         lastMessagePreview: '明早同步 deck',
         lastMessageAt: DateTime(2026, 3, 28, 10, 25),
@@ -2470,6 +2590,7 @@ void main() {
       ),
       ConversationSummary(
         threadId: 'dm:did:me:did:ops',
+        conversationId: 'dm:did:me:did:ops',
         displayName: 'Ops Bot',
         lastMessagePreview: 'server alert recovered',
         lastMessageAt: DateTime(2026, 3, 28, 10, 26),
@@ -2678,6 +2799,7 @@ void main() {
     );
     final richConversation = ConversationSummary(
       threadId: 'dm:mobile-right-meta',
+      conversationId: 'dm:mobile-right-meta',
       displayName: 'Mobile Runtime Agent',
       lastMessagePreview: '这是一段很长的最近消息预览，用来验证右侧时间、状态和未读数量不会被遮挡。',
       lastMessageAt: DateTime(2026, 12, 31, 23, 59),
@@ -2778,7 +2900,7 @@ void main() {
     expect(find.text('Marcus Chen'), findsWidgets);
   });
 
-  testWidgets('macOS 双栏刷新后按 exact thread 保持 peer-scoped 选中会话', (tester) async {
+  testWidgets('macOS 双栏刷新后按 exact conversation ID 保持选中会话', (tester) async {
     const agentDid = 'did:wba:awiki.ai:agent:runtime:test';
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(

@@ -29,7 +29,7 @@ Future<void> _verifyGroupTextRegression({
   expect(groupDid, isNotEmpty);
   await _waitForUiConversationUnread(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     expectedUnread: 0,
     expectedLastMessage: '',
   );
@@ -47,7 +47,7 @@ Future<void> _verifyGroupTextRegression({
   await robot.addGroupMember(cliFullHandle);
   await _waitForUiConversationUnread(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     expectedUnread: 0,
     expectedLastMessage: '',
   );
@@ -72,11 +72,11 @@ Future<void> _verifyGroupTextRegression({
   );
   await _waitForUiConversationUnread(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     expectedUnread: 0,
     expectedLastMessage: '',
   );
-  await robot.openConversationRow(conversation.effectiveConversationId);
+  await robot.openConversationRow(conversation.conversationId);
   await E2eScenarioProgressWriter.record(
     'group_empty_member_restart_exact_one',
   );
@@ -84,7 +84,7 @@ Future<void> _verifyGroupTextRegression({
   await robot.sendText(appGroupText);
   final appGroupMessage = await _waitForUiMessage(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     content: appGroupText,
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
@@ -113,7 +113,7 @@ Future<void> _verifyGroupTextRegression({
   );
   final appMention = await _waitForUiMessage(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     content: appMentionText,
     senderDid: ownerDid,
     sendState: MessageSendState.sent,
@@ -161,7 +161,7 @@ Future<void> _verifyGroupTextRegression({
   }
   final cliGroupMessage = await _waitForUiMessage(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     content: cliGroupText,
     messageId: cliGroupMessageId,
     senderDid: cliMemberDid,
@@ -228,7 +228,7 @@ Future<void> _verifyGroupTextRegression({
   }
   final cliMention = await _waitForUiMessage(
     robot: robot,
-    conversationId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
     content: cliMentionText,
     messageId: cliMentionId,
     senderDid: cliMemberDid,

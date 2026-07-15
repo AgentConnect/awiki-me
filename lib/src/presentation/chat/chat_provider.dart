@@ -394,23 +394,7 @@ class ChatComposerDraftsController
   }
 
   List<String> _draftKeysFor(ConversationSummary conversation) {
-    final keys = <String>[];
-    void add(String value) {
-      final key = value.trim();
-      if (key.isNotEmpty && !keys.contains(key)) {
-        keys.add(key);
-      }
-    }
-
-    if (isPeerScopedDirectConversation(conversation)) {
-      add(conversation.threadId);
-      return keys;
-    }
-    for (final key in conversation.visibilityKeys) {
-      add(key);
-    }
-    add(conversation.threadId);
-    return keys;
+    return <String>[conversation.conversationId];
   }
 }
 
@@ -1240,20 +1224,7 @@ class ChatThreadsController
       }
     }
 
-    add(displayThreadId);
-    add(conversation.threadId);
-    if (isPeerScopedDirectConversation(conversation)) {
-      return aliases.toList();
-    }
-    for (final key in conversation.visibilityKeys) {
-      add(key);
-    }
-    for (final key in conversationVisibilityIdentity(
-      conversation,
-      includeHandleAliasesForStrongIdentity: true,
-    ).keys) {
-      add(key);
-    }
+    add(conversation.conversationId);
     final canonicalKey =
         _cacheMetadataByThreadId[displayThreadId]?.canonicalKey ??
         _canonicalKeyForConversation(conversation);
@@ -2885,6 +2856,7 @@ class ChatThreadsController
       localId: clientMessageId,
       threadId: targetThreadId,
       senderDid: session.did,
+      senderDidSnapshot: session.did,
       senderName: session.handle ?? session.displayName,
       receiverDid: conversation.targetDid,
       groupId: conversation.groupId,
@@ -3225,23 +3197,16 @@ class ChatThreadsController
     }
   }
 
-  Future<void> deleteThread(String threadId) async {
-    final session = ref.read(sessionProvider).session;
-    if (session == null) {
-      throw StateError('No active awiki session. Please sign in first.');
-    }
+  Future<void> deleteConversation(ConversationSummary conversation) async {
     await ref
-        .read(conversationServiceProvider)
-        .setThreadHidden(
-          ownerDid: session.did,
-          threadId: threadId,
-          hidden: true,
-        );
-    final next = Map<String, ChatThreadState>.from(state)..remove(threadId);
-    _cancelThreadPatchSubscriptionTtl(threadId);
-    _removeThreadCacheMetadata(threadId);
+        .read(conversationListProvider.notifier)
+        .deleteFromRecents(conversation);
+    final conversationId = _conversationTimelineKeyFor(conversation);
+    final next = Map<String, ChatThreadState>.from(state)
+      ..remove(conversationId);
+    _cancelThreadPatchSubscriptionTtl(conversationId);
+    _removeThreadCacheMetadata(conversationId);
     state = next;
-    await ref.read(conversationListProvider.notifier).refresh();
   }
 
   void _updateConversationPreviewFromMessages(
@@ -3504,18 +3469,7 @@ class ChatThreadsController
     String threadId, {
     bool? visible,
   }) {
-    final aliases = isPeerScopedDirectConversation(conversation)
-        ? <String>{threadId, conversation.threadId}
-        : <String>{
-            threadId,
-            conversation.threadId,
-            for (final key in conversation.visibilityKeys) key,
-            for (final key in conversationVisibilityIdentity(
-              conversation,
-              includeHandleAliasesForStrongIdentity: true,
-            ).keys)
-              key,
-          };
+    final aliases = <String>{conversation.conversationId};
     _touchThreadCache(
       threadId,
       const <ChatMessage>[],
@@ -3583,20 +3537,7 @@ class ChatThreadsController
   }
 
   String? _canonicalKeyForConversation(ConversationSummary conversation) {
-    final conversationId = conversation.effectiveConversationId.trim();
-    if (conversationId.isNotEmpty) {
-      return conversationId;
-    }
-    if (conversation.isGroup) {
-      final group = conversation.groupId?.trim();
-      if (group != null && group.isNotEmpty) {
-        return canonicalGroupThreadId(group);
-      }
-    }
-    return conversationVisibilityIdentity(
-      conversation,
-      includeHandleAliasesForStrongIdentity: true,
-    ).primaryKey;
+    return conversation.conversationId;
   }
 
   String? _canonicalKeyForMessages(
@@ -5267,22 +5208,8 @@ class ChatThreadsController
     }
     for (final conversation
         in ref.read(conversationListProvider).conversations) {
-      if (conversation.threadId == explicit) {
-        return conversation.threadId;
-      }
-      if (!isPeerScopedDirectConversation(conversation) &&
-          conversation.visibilityKeys.contains(explicit)) {
-        return conversation.threadId;
-      }
-    }
-    for (final entry in state.entries) {
-      final identity = _conversationIdentityForThread(entry.key, entry.value);
-      if (identity.threadId == explicit) {
-        return entry.key;
-      }
-      if (!isPeerScopedDirectConversation(identity) &&
-          identity.visibilityKeys.contains(explicit)) {
-        return entry.key;
+      if (conversation.conversationId == explicit) {
+        return explicit;
       }
     }
     return explicit;
@@ -6174,59 +6101,11 @@ class ChatThreadsController
   ConversationSummary _refreshedConversationFor(ConversationSummary fallback) {
     final conversations = ref.read(conversationListProvider).conversations;
     for (final item in conversations) {
-      if (sameConversationThread(item, fallback)) {
-        return item;
-      }
-    }
-    for (final item in conversations) {
-      if (_canUseConversationAliasForState(item, fallback)) {
+      if (item.conversationId == fallback.conversationId) {
         return item;
       }
     }
     return fallback;
-  }
-
-  bool _canUseConversationAliasForState(
-    ConversationSummary candidate,
-    ConversationSummary fallback,
-  ) {
-    if (!sameConversationTarget(candidate, fallback)) {
-      return false;
-    }
-    // Once the caller holds a canonical peer-scoped identity, state lookup
-    // must never downgrade it to a legacy dm:<DID> row. The canonical preview
-    // upsert will replace that stale alias in the conversation list.
-    return !isPeerScopedDirectConversation(fallback);
-  }
-
-  ConversationSummary _conversationIdentityForThread(
-    String threadId,
-    ChatThreadState thread,
-  ) {
-    final latestMessage = thread.messages.isEmpty ? null : thread.messages.last;
-    final groupId = latestMessage?.groupId?.trim();
-    if (groupId != null && groupId.isNotEmpty) {
-      return ConversationSummary(
-        threadId: threadId,
-        displayName: groupId,
-        lastMessagePreview: latestMessage?.previewText ?? '',
-        lastMessageAt: latestMessage?.createdAt ?? DateTime(1970),
-        unreadCount: 0,
-        isGroup: true,
-        groupId: groupId,
-      );
-    }
-    final targetDid = directPeerDidFromMessages(thread.messages);
-    return ConversationSummary(
-      threadId: threadId,
-      displayName: targetDid ?? threadId,
-      lastMessagePreview: latestMessage?.previewText ?? '',
-      lastMessageAt: latestMessage?.createdAt ?? DateTime(1970),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: targetDid,
-      targetPeer: targetDid,
-    );
   }
 
   List<ChatMessage> _sortMessages(List<ChatMessage> messages) {
@@ -6471,7 +6350,7 @@ String? _conversationReadRefDebug(AppConversationReadRef? ref) {
 }
 
 String _conversationTimelineKeyFor(ConversationSummary conversation) {
-  return conversation.effectiveConversationId.trim();
+  return conversation.conversationId.trim();
 }
 
 String _newClientMessageId() {
@@ -6481,7 +6360,7 @@ String _newClientMessageId() {
 AppConversationReadRef? _conversationReadRefFor(
   ConversationSummary conversation,
 ) {
-  final conversationId = conversation.effectiveConversationId.trim();
+  final conversationId = conversation.conversationId.trim();
   if (conversationId.isEmpty) {
     return null;
   }
@@ -6649,6 +6528,8 @@ ChatMessage _withThreadId(ChatMessage message, String threadId) {
     conversationId: message.conversationId,
     threadId: threadId,
     senderDid: message.senderDid,
+    senderPeerPersonaId: message.senderPeerPersonaId,
+    senderDidSnapshot: message.senderDidSnapshot,
     senderName: message.senderName,
     receiverDid: message.receiverDid,
     groupId: message.groupId,

@@ -1,5 +1,6 @@
 class GroupSummary {
   const GroupSummary({
+    required this.conversationId,
     required this.groupId,
     String? displayName,
     String? name,
@@ -11,6 +12,7 @@ class GroupSummary {
     this.membershipStatus,
   }) : displayName = displayName ?? name ?? groupId;
 
+  final String conversationId;
   final String groupId;
   final String displayName;
   final String description;

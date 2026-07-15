@@ -232,9 +232,7 @@ void main() {
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
-          realtime.copyWith(
-            conversationId: conversation.effectiveConversationId,
-          ),
+          realtime.copyWith(conversationId: conversation.conversationId),
           threadId: _timelineThreadId(conversation),
         );
     expect(
@@ -273,6 +271,7 @@ void main() {
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:controller',
+      conversationId: 'dm:peer-scope:v1:controller',
       displayName: 'Controller',
       lastMessagePreview: '今天几号了',
       lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -283,6 +282,7 @@ void main() {
     );
     final runtimeConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:runtime',
+      conversationId: 'dm:peer-scope:v1:runtime',
       displayName: 'Runtime Agent',
       lastMessagePreview: '今天是 2026年7月3日。',
       lastMessageAt: DateTime(2026, 7, 3, 7, 10),
@@ -343,6 +343,7 @@ void main() {
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:controller',
+      conversationId: 'dm:peer-scope:v1:controller',
       displayName: 'Controller',
       lastMessagePreview: '今天几号了',
       lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -353,6 +354,7 @@ void main() {
     );
     final runtimeConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:runtime',
+      conversationId: 'dm:peer-scope:v1:runtime',
       displayName: 'Runtime Agent',
       lastMessagePreview: '今天是 2026年7月3日。',
       lastMessageAt: DateTime(2026, 7, 3, 7, 10),
@@ -410,6 +412,7 @@ void main() {
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:controller',
+      conversationId: 'dm:peer-scope:v1:controller',
       displayName: 'Controller',
       lastMessagePreview: 'controller preview',
       lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -420,6 +423,7 @@ void main() {
     );
     final runtimeConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:runtime',
+      conversationId: 'dm:peer-scope:v1:runtime',
       displayName: 'Runtime Agent',
       lastMessagePreview: 'runtime preview',
       lastMessageAt: DateTime(2026, 7, 3, 7, 10),
@@ -448,6 +452,7 @@ void main() {
       const agentHandle = 'test-agent.awiki.ai';
       final controllerConversation = ConversationSummary(
         threadId: 'dm:peer-scope:v1:controller',
+        conversationId: 'dm:peer-scope:v1:controller',
         displayName: 'Controller',
         lastMessagePreview: 'controller preview',
         lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -458,6 +463,7 @@ void main() {
       );
       final runtimeConversation = ConversationSummary(
         threadId: 'dm:peer-scope:v1:runtime',
+        conversationId: 'dm:peer-scope:v1:runtime',
         displayName: 'Runtime Agent',
         lastMessagePreview: 'runtime preview',
         lastMessageAt: DateTime(2026, 7, 3, 7, 10),
@@ -724,6 +730,7 @@ void main() {
     final patchMessaging = _PatchMessagingService(
       localHistory: <ChatMessage>[],
     );
+    gateway.conversations = const <ConversationSummary>[];
     final patchContainer = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
@@ -760,7 +767,7 @@ void main() {
     expect(patchMessaging.sendConversationTextCalls, 1);
     expect(
       patchMessaging.lastSendConversation?.conversationId,
-      canonicalConversation.effectiveConversationId,
+      canonicalConversation.conversationId,
     );
     expect(patchMessaging.lastClientMessageId, isNotEmpty);
     var messages = patchContainer
@@ -773,16 +780,14 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .singleWhere(
-          (item) =>
-              item.effectiveConversationId ==
-              canonicalConversation.effectiveConversationId,
+          (item) => item.conversationId == canonicalConversation.conversationId,
         );
     expect(canonicalPreview.lastMessagePreview, 'hello patch');
     expect(
       patchContainer
           .read(conversationListProvider)
           .conversations
-          .where((item) => item.effectiveConversationId == 'dm:did:peer'),
+          .where((item) => item.conversationId == 'dm:did:peer'),
       isEmpty,
     );
 
@@ -793,12 +798,12 @@ void main() {
         ownerDid: 'did:me',
         version: 2,
         threadKind: 'conversation',
-        threadId: canonicalConversation.effectiveConversationId,
-        conversationId: canonicalConversation.effectiveConversationId,
+        threadId: canonicalConversation.conversationId,
+        conversationId: canonicalConversation.conversationId,
         message: ChatMessage(
           localId: clientMessageId,
           remoteId: clientMessageId,
-          conversationId: canonicalConversation.effectiveConversationId,
+          conversationId: canonicalConversation.conversationId,
           threadId: canonicalConversation.threadId,
           senderDid: 'did:me',
           receiverDid: 'did:peer',
@@ -824,12 +829,12 @@ void main() {
         ownerDid: 'did:me',
         version: 3,
         threadKind: 'conversation',
-        threadId: canonicalConversation.effectiveConversationId,
-        conversationId: canonicalConversation.effectiveConversationId,
+        threadId: canonicalConversation.conversationId,
+        conversationId: canonicalConversation.conversationId,
         message: ChatMessage(
           localId: clientMessageId,
           remoteId: 'sent-patched',
-          conversationId: canonicalConversation.effectiveConversationId,
+          conversationId: canonicalConversation.conversationId,
           threadId: canonicalConversation.threadId,
           senderDid: 'did:me',
           receiverDid: 'did:peer',
@@ -994,12 +999,12 @@ void main() {
         ownerDid: 'did:me',
         version: 2,
         threadKind: 'conversation',
-        threadId: groupConversation.effectiveConversationId,
-        conversationId: groupConversation.effectiveConversationId,
+        threadId: groupConversation.conversationId,
+        conversationId: groupConversation.conversationId,
         message: ChatMessage(
           localId: '$groupDid:42',
           remoteId: '$groupDid:42',
-          conversationId: groupConversation.effectiveConversationId,
+          conversationId: groupConversation.conversationId,
           threadId: groupConversation.threadId,
           senderDid: 'did:me',
           groupId: groupDid,
@@ -1019,12 +1024,12 @@ void main() {
         ownerDid: 'did:me',
         version: 3,
         threadKind: 'conversation',
-        threadId: groupConversation.effectiveConversationId,
-        conversationId: groupConversation.effectiveConversationId,
+        threadId: groupConversation.conversationId,
+        conversationId: groupConversation.conversationId,
         message: ChatMessage(
           localId: 'msg-local-timeout',
           remoteId: 'msg-local-timeout',
-          conversationId: groupConversation.effectiveConversationId,
+          conversationId: groupConversation.conversationId,
           threadId: groupConversation.threadId,
           senderDid: 'did:me',
           groupId: groupDid,
@@ -1038,7 +1043,7 @@ void main() {
     await pumpEventQueue();
 
     final messages = patchContainer
-        .read(chatThreadProvider(groupConversation.effectiveConversationId))
+        .read(chatThreadProvider(groupConversation.conversationId))
         .messages;
     expect(
       messages.where((item) => item.content == '后面我们在这里多发发消息'),
@@ -1084,12 +1089,12 @@ void main() {
         ownerDid: 'did:me',
         version: 2,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
+        conversationId: conversation.conversationId,
         messages: _withConversationId(<ChatMessage>[
           oldMessage,
           agentReply,
-        ], conversation.effectiveConversationId),
+        ], conversation.conversationId),
       ),
     );
     final patchContainer = ProviderContainer(
@@ -1150,7 +1155,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      updatedConversation.effectiveConversationId,
+      updatedConversation.conversationId,
     );
   });
 
@@ -1159,7 +1164,7 @@ void main() {
       content: 'old visible',
       createdAt: DateTime(2026, 5, 8, 10, 0),
       serverSequence: 10,
-      conversationId: conversation.effectiveConversationId,
+      conversationId: conversation.conversationId,
     );
     final repairCompleter = Completer<void>();
     final messagingService = FakeMessagingService(gateway)
@@ -1382,6 +1387,7 @@ void main() {
     const agentHandle = 'zhuochengtestcodex0703.awiki.ai';
     final controllerConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:controller',
+      conversationId: 'dm:peer-scope:v1:controller',
       displayName: 'zhuocheng',
       lastMessagePreview: '今天几号了',
       lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -1556,11 +1562,11 @@ void main() {
         ownerDid: 'did:me',
         version: 2,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
+        conversationId: conversation.conversationId,
         messages: _withConversationId(<ChatMessage>[
           oldMessage,
-        ], conversation.effectiveConversationId),
+        ], conversation.conversationId),
       ),
     );
     _seedPatchConversationProjection(
@@ -1720,12 +1726,12 @@ void main() {
           ownerDid: 'did:me',
           version: 2,
           threadKind: 'conversation',
-          threadId: conversation.effectiveConversationId,
-          conversationId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
           message: ChatMessage(
             localId: 'sent-patched-attachment',
             remoteId: 'sent-patched-attachment',
-            conversationId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
             threadId: _timelineThreadId(conversation),
             senderDid: 'did:me',
             receiverDid: 'did:peer',
@@ -1833,11 +1839,11 @@ void main() {
         ownerDid: 'did:me',
         version: 3,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
+        conversationId: conversation.conversationId,
         messages: _withConversationId(<ChatMessage>[
           repaired,
-        ], conversation.effectiveConversationId),
+        ], conversation.conversationId),
       ),
     );
     final patchContainer = ProviderContainer(
@@ -1871,11 +1877,9 @@ void main() {
         ownerDid: 'did:me',
         version: 5,
         threadKind: 'conversation',
-        threadId: conversation.effectiveConversationId,
-        conversationId: conversation.effectiveConversationId,
-        message: repaired.copyWith(
-          conversationId: conversation.effectiveConversationId,
-        ),
+        threadId: conversation.conversationId,
+        conversationId: conversation.conversationId,
+        message: repaired.copyWith(conversationId: conversation.conversationId),
       ),
     );
     await pumpEventQueue();
@@ -1911,11 +1915,11 @@ void main() {
           ownerDid: 'did:me',
           version: 2,
           threadKind: 'conversation',
-          threadId: conversation.effectiveConversationId,
-          conversationId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
           messages: _withConversationId(<ChatMessage>[
             repaired,
-          ], conversation.effectiveConversationId),
+          ], conversation.conversationId),
         ),
       );
       gateway.dmHistoryByPeerDid = <String, List<ChatMessage>>{
@@ -1992,7 +1996,7 @@ void main() {
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
-          local.copyWith(conversationId: conversation.effectiveConversationId),
+          local.copyWith(conversationId: conversation.conversationId),
           threadId: _timelineThreadId(conversation),
         );
 
@@ -2101,6 +2105,7 @@ void main() {
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final agentConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
+      conversationId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
       displayName: 'Hermes',
       lastMessagePreview: '我在',
       lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -2160,6 +2165,7 @@ void main() {
   test('peer-scope 本地历史和增量同步使用同一个精确 storage thread', () async {
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:codex1',
+      conversationId: 'dm:peer-scope:v1:codex1',
       displayName: 'Codex1',
       lastMessagePreview: 'hello',
       lastMessageAt: DateTime(2026, 6, 30, 8, 58),
@@ -2201,7 +2207,7 @@ void main() {
     expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
     expect(
       messaging.lastConversationTimelineId,
-      canonicalConversation.effectiveConversationId,
+      canonicalConversation.conversationId,
     );
     expect(gateway.fetchLocalDmHistoryCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -2212,7 +2218,7 @@ void main() {
           .single
           .conversation
           .conversationId,
-      canonicalConversation.effectiveConversationId,
+      canonicalConversation.conversationId,
     );
     expect(
       messageSyncService.conversationAfterRequests.single.afterServerSeq,
@@ -2233,6 +2239,7 @@ void main() {
     () async {
       final canonicalConversation = ConversationSummary(
         threadId: 'dm:peer-scope:v1:codex-empty',
+        conversationId: 'dm:peer-scope:v1:codex-empty',
         displayName: 'Codex Empty',
         lastMessagePreview: 'waiting',
         lastMessageAt: DateTime(2026, 7, 4, 22, 55),
@@ -2272,7 +2279,7 @@ void main() {
       expect(messaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
       expect(
         messaging.lastConversationTimelineId,
-        canonicalConversation.effectiveConversationId,
+        canonicalConversation.conversationId,
       );
       expect(gateway.fetchLocalDmHistoryCalls, 0);
       expect(gateway.fetchDmHistoryCalls, 0);
@@ -2283,7 +2290,7 @@ void main() {
             .single
             .conversation
             .conversationId,
-        canonicalConversation.effectiveConversationId,
+        canonicalConversation.conversationId,
       );
       expect(messageSyncService.threadAfterRequests, isEmpty);
       expect(
@@ -2299,6 +2306,7 @@ void main() {
   test('peer-scope 强制同步时跳过未支持的远端 thread history', () async {
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:codex-force',
+      conversationId: 'dm:peer-scope:v1:codex-force',
       displayName: 'Codex Force',
       lastMessagePreview: 'newer summary',
       lastMessageAt: DateTime(2026, 7, 4, 23, 1),
@@ -2324,6 +2332,7 @@ void main() {
   test('peer-scope 会话打开时保留同一 storage thread 的完整本地历史', () async {
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:codex1',
+      conversationId: 'dm:peer-scope:v1:codex1',
       displayName: 'Codex1',
       lastMessagePreview: 'latest reply',
       lastMessageAt: DateTime(2026, 7, 3, 19, 26),
@@ -2397,7 +2406,7 @@ void main() {
     expect(
       (container.read(messagingServiceProvider) as FakeMessagingService)
           .lastConversationTimelineId,
-      canonicalConversation.effectiveConversationId,
+      canonicalConversation.conversationId,
     );
     expect(gateway.fetchLocalDmHistoryCalls, 0);
     expect(gateway.fetchDmHistoryCalls, 0);
@@ -2515,8 +2524,7 @@ void main() {
         conversations
             .singleWhere(
               (item) =>
-                  item.effectiveConversationId ==
-                  unreadConversation.effectiveConversationId,
+                  item.conversationId == unreadConversation.conversationId,
             )
             .unreadCount,
         2,
@@ -2578,7 +2586,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadConversation.effectiveConversationId,
+      unreadConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -2612,7 +2620,7 @@ void main() {
         .upsertConversation(unreadConversation);
     controller.debugSeedMessageForTesting(
       visibleMessage.copyWith(
-        conversationId: unreadConversation.effectiveConversationId,
+        conversationId: unreadConversation.conversationId,
       ),
       threadId: _timelineThreadId(unreadConversation),
     );
@@ -2631,16 +2639,14 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .singleWhere(
-          (item) =>
-              item.effectiveConversationId ==
-              unreadConversation.effectiveConversationId,
+          (item) => item.conversationId == unreadConversation.conversationId,
         );
     expect(updated.unreadCount, 0);
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadConversation.effectiveConversationId,
+      unreadConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -2684,7 +2690,7 @@ void main() {
       displayThreadId: _timelineThreadId(initial),
     );
     controller.debugSeedMessageForTesting(
-      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      visibleMessage.copyWith(conversationId: initial.conversationId),
       threadId: _timelineThreadId(initial),
     );
     final unreadEmissions = <int>[];
@@ -2720,7 +2726,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      initial.effectiveConversationId,
+      initial.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -2769,7 +2775,7 @@ void main() {
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadUpdate);
     controller.debugSeedMessageForTesting(
-      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      visibleMessage.copyWith(conversationId: initial.conversationId),
       threadId: _timelineThreadId(initial),
     );
     final published = container
@@ -2830,7 +2836,7 @@ void main() {
         .read(conversationListProvider.notifier)
         .upsertConversation(unreadUpdate);
     controller.debugSeedMessageForTesting(
-      visibleMessage.copyWith(conversationId: initial.effectiveConversationId),
+      visibleMessage.copyWith(conversationId: initial.conversationId),
       threadId: _timelineThreadId(initial),
     );
     final published = container
@@ -2863,7 +2869,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      initial.effectiveConversationId,
+      initial.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -2897,7 +2903,7 @@ void main() {
         .upsertConversation(unreadConversation);
     controller.debugSeedMessageForTesting(
       visibleMessage.copyWith(
-        conversationId: unreadConversation.effectiveConversationId,
+        conversationId: unreadConversation.conversationId,
       ),
       threadId: _timelineThreadId(unreadConversation),
     );
@@ -2916,16 +2922,14 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .singleWhere(
-          (item) =>
-              item.effectiveConversationId ==
-              unreadConversation.effectiveConversationId,
+          (item) => item.conversationId == unreadConversation.conversationId,
         );
     expect(updated.unreadCount, 0);
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadConversation.effectiveConversationId,
+      unreadConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -3002,7 +3006,7 @@ void main() {
         .upsertConversation(advancedConversation);
     controller.debugSeedMessageForTesting(
       laterAgentReply.copyWith(
-        conversationId: unreadConversation.effectiveConversationId,
+        conversationId: unreadConversation.conversationId,
       ),
       threadId: _timelineThreadId(unreadConversation),
     );
@@ -3016,7 +3020,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadConversation.effectiveConversationId,
+      unreadConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -3075,7 +3079,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadConversation.effectiveConversationId,
+      unreadConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -3148,7 +3152,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadConversation.effectiveConversationId,
+      unreadConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -3209,14 +3213,14 @@ void main() {
     expect(
       (container.read(messagingServiceProvider) as FakeMessagingService)
           .lastConversationTimelineId,
-      unreadPeerScopedConversation.effectiveConversationId,
+      unreadPeerScopedConversation.conversationId,
     );
     expect(gateway.fetchLocalDmHistoryCalls, 0);
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      unreadPeerScopedConversation.effectiveConversationId,
+      unreadPeerScopedConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -3334,7 +3338,7 @@ void main() {
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      visibleConversation.effectiveConversationId,
+      visibleConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -3358,6 +3362,7 @@ void main() {
     );
     final refreshedConversation = ConversationSummary(
       threadId: conversation.threadId,
+      conversationId: conversation.threadId,
       displayName: conversation.displayName,
       lastMessagePreview: reply.content,
       lastMessageAt: reply.createdAt,
@@ -3453,7 +3458,7 @@ void main() {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final openedConversation = ConversationSummary(
-      conversationId: 'dm:did:me:$agentDid',
+      conversationId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
       threadId: 'dm:did:me:$agentDid',
       displayName: 'Hermes',
       lastMessagePreview: '',
@@ -3506,28 +3511,23 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .sendMessage(
           conversation: refreshedConversation,
-          displayThreadId: openedConversation.threadId,
+          displayThreadId: openedConversation.conversationId,
           content: '你好',
           expectedAgentReplyDid: agentDid,
         );
     await Future<void>.delayed(Duration.zero);
 
     final openedThread = sendContainer.read(
-      chatThreadProvider(openedConversation.threadId),
-    );
-    final refreshedThread = sendContainer.read(
-      chatThreadProvider(refreshedConversation.threadId),
+      chatThreadProvider(openedConversation.conversationId),
     );
     expect(openedThread.messages, hasLength(1));
     expect(openedThread.messages.single.content, '你好');
     expect(openedThread.messages.single.sendState, MessageSendState.sent);
-    expect(refreshedThread.messages, isEmpty);
     expect(openedThread.isAgentProcessing, isTrue);
-    expect(refreshedThread.isAgentProcessing, isFalse);
     expect(gateway.lastSentThreadId, refreshedConversation.threadId);
     expect(
-      sendContainer.read(selectedConversationProvider)?.threadId,
-      refreshedConversation.threadId,
+      sendContainer.read(selectedConversationProvider),
+      refreshedConversation.conversationId,
     );
     expect(
       sendContainer
@@ -3542,6 +3542,7 @@ void main() {
   test('发送成功后用权威发送结果更新会话摘要且不触发远端刷新', () async {
     final staleConversation = ConversationSummary(
       threadId: conversation.threadId,
+      conversationId: conversation.threadId,
       displayName: conversation.displayName,
       lastMessagePreview: '旧消息',
       lastMessageAt: DateTime.now().subtract(const Duration(minutes: 1)),
@@ -4140,6 +4141,7 @@ void main() {
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: conversation.threadId,
+          conversationId: conversation.threadId,
           displayName: conversation.displayName,
           lastMessagePreview: '1',
           lastMessageAt: sentAt,
@@ -4205,6 +4207,7 @@ void main() {
     const groupId = 'did:test:group:empty';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
+      conversationId: 'group:$groupId',
       displayName: '空事件群',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 10, 0),
@@ -4255,7 +4258,7 @@ void main() {
     final oldMessage = ChatMessage(
       localId: 'group-feedback-message-1',
       remoteId: 'group-feedback-message-1',
-      conversationId: groupConversation.effectiveConversationId,
+      conversationId: groupConversation.conversationId,
       threadId: groupConversation.threadId,
       senderDid: 'did:member:old',
       groupId: groupId,
@@ -4292,12 +4295,12 @@ void main() {
         container.read(messagingServiceProvider) as FakeMessagingService;
     final callsBeforeRefresh = messagingService.conversationTimelineCalls;
     await messagingService.persistConversationMessages(
-      groupConversation.effectiveConversationId,
+      groupConversation.conversationId,
       <ChatMessage>[
         ChatMessage(
           localId: 'group-feedback-event-2',
           remoteId: 'group-feedback-event-2',
-          conversationId: groupConversation.effectiveConversationId,
+          conversationId: groupConversation.conversationId,
           threadId: groupConversation.threadId,
           senderDid: 'did:me',
           groupId: groupId,
@@ -4342,7 +4345,7 @@ void main() {
     );
     expect(
       messagingService.lastConversationTimelineId,
-      groupConversation.effectiveConversationId,
+      groupConversation.conversationId,
     );
   });
 
@@ -4350,6 +4353,7 @@ void main() {
     const groupId = 'did:test:group:attachments';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
+      conversationId: 'group:$groupId',
       displayName: '附件群',
       lastMessagePreview: '[附件] report.pdf',
       lastMessageAt: DateTime(2026, 5, 8, 10, 0),
@@ -4445,7 +4449,7 @@ void main() {
     expect(messaging.sendConversationAttachmentCalls, 1);
     expect(
       messaging.lastAttachmentConversation?.conversationId,
-      conversation.effectiveConversationId,
+      conversation.conversationId,
     );
     expect(
       messaging.lastSentAttachmentClientMessageId,
@@ -4664,6 +4668,7 @@ void main() {
     gateway.nextSentMessageId = 'sent-group-agent-attachment';
     final groupConversation = ConversationSummary(
       threadId: 'group:did:test:group',
+      conversationId: 'group:did:test:group',
       displayName: 'Group',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -4749,7 +4754,7 @@ void main() {
     expect(messaging.sendConversationAttachmentCalls, 1);
     expect(
       messaging.lastAttachmentConversation?.conversationId,
-      groupConversation.effectiveConversationId,
+      groupConversation.conversationId,
     );
     expect(gateway.lastSentGroupId, 'did:test:group');
     expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
@@ -4761,6 +4766,7 @@ void main() {
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:did:test:group-human',
+      conversationId: 'group:did:test:group-human',
       displayName: 'Group',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -4848,6 +4854,7 @@ void main() {
     );
     final groupConversation = ConversationSummary(
       threadId: 'group:did:test:group-agent-low',
+      conversationId: 'group:did:test:group-agent-low',
       displayName: 'Group',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -5086,6 +5093,7 @@ void main() {
     const groupId = 'did:test:group:send-attachment';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
+      conversationId: 'group:$groupId',
       displayName: '附件群',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 10, 0),
@@ -5135,7 +5143,7 @@ void main() {
     expect(messaging.sendConversationAttachmentCalls, 1);
     expect(
       messaging.lastAttachmentConversation?.conversationId,
-      groupConversation.effectiveConversationId,
+      groupConversation.conversationId,
     );
     expect(gateway.lastSentGroupId, groupId);
     final conversations = sendContainer
@@ -5207,7 +5215,7 @@ void main() {
     final failedMessage = ChatMessage(
       localId: 'failed-text',
       remoteId: 'failed-text',
-      conversationId: conversation.effectiveConversationId,
+      conversationId: conversation.conversationId,
       threadId: _timelineThreadId(conversation),
       senderDid: 'did:me',
       receiverDid: conversation.targetDid,
@@ -5248,7 +5256,7 @@ void main() {
     expect(patchMessaging.sendConversationTextCalls, 1);
     expect(
       patchMessaging.lastSendConversation?.conversationId,
-      conversation.effectiveConversationId,
+      conversation.conversationId,
     );
     expect(patchMessaging.lastClientMessageId, 'failed-text');
     expect(patchMessaging.lastIdempotencyKey, 'retry-failed-text');
@@ -5339,7 +5347,7 @@ void main() {
     expect(patchMessaging.sendConversationAttachmentCalls, 1);
     expect(
       patchMessaging.lastSendAttachmentConversation?.conversationId,
-      conversation.effectiveConversationId,
+      conversation.conversationId,
     );
     expect(patchMessaging.lastClientMessageId, 'failed-attachment-retry');
     expect(patchMessaging.lastIdempotencyKey, 'retry-failed-attachment-retry');
@@ -5563,10 +5571,11 @@ void main() {
     expect(gateway.fetchDmHistoryCalls, 0);
   });
 
-  test('群列表刷新后会把已知群名称同步到会话列表', () async {
+  test('群资料刷新不会改写 Core 会话投影', () async {
     const groupId = 'did:test:group:funding';
     final groupConversation = ConversationSummary(
       threadId: 'group:$groupId',
+      conversationId: 'group:$groupId',
       displayName: 'Group $groupId',
       lastMessagePreview: 'hello group',
       lastMessageAt: DateTime(2026, 5, 8, 10, 0),
@@ -5582,6 +5591,7 @@ void main() {
         .upsertGroup(
           const GroupSummary(
             groupId: groupId,
+            conversationId: 'group:$groupId',
             name: '融资协作群',
             description: '',
             memberCount: 3,
@@ -5591,14 +5601,15 @@ void main() {
 
     expect(
       container.read(conversationListProvider).conversations.single.displayName,
-      '融资协作群',
+      'Group $groupId',
     );
   });
 
-  test('刷新最近会话时不会把已知群名称降级成群 DID', () async {
+  test('刷新最近会话时不会把展示层群名称写回 Core 摘要', () async {
     const groupId = 'did:test:group:funding';
     final knownGroupConversation = ConversationSummary(
       threadId: 'group:$groupId',
+      conversationId: 'group:$groupId',
       displayName: '融资协作群',
       lastMessagePreview: '旧消息',
       lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -5609,6 +5620,7 @@ void main() {
     gateway.conversations = <ConversationSummary>[
       ConversationSummary(
         threadId: 'group:$groupId',
+        conversationId: 'group:$groupId',
         displayName: groupId,
         lastMessagePreview: '新消息',
         lastMessageAt: DateTime(2026, 5, 8, 10, 5),
@@ -5637,18 +5649,19 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .single;
-    expect(refreshed.displayName, '融资协作群');
+    expect(refreshed.displayName, groupId);
     expect(refreshed.lastMessagePreview, '新消息');
     expect(refreshed.unreadCount, 3);
   });
 
-  test('实时群消息不会把已知群名称降级成群 DID', () {
+  test('实时群消息不会把展示层群名称写回 Core 摘要', () {
     const groupId = 'did:test:group:funding';
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(
           ConversationSummary(
             threadId: 'group:$groupId',
+            conversationId: 'group:$groupId',
             displayName: '融资协作群',
             lastMessagePreview: '旧消息',
             lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -5663,6 +5676,7 @@ void main() {
         .upsertConversation(
           ConversationSummary(
             threadId: 'group:$groupId',
+            conversationId: 'group:$groupId',
             displayName: groupId,
             lastMessagePreview: '实时新消息',
             lastMessageAt: DateTime(2026, 5, 8, 10, 6),
@@ -5676,17 +5690,18 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .single;
-    expect(refreshed.displayName, '融资协作群');
+    expect(refreshed.displayName, groupId);
     expect(refreshed.lastMessagePreview, '实时新消息');
     expect(refreshed.unreadCount, 1);
   });
 
-  test('实时私聊消息不会把已知智能体名称降级成 handle', () {
+  test('实时私聊消息不会把展示层智能体名称写回 Core 摘要', () {
     container
         .read(conversationListProvider.notifier)
         .upsertConversation(
           ConversationSummary(
             threadId: 'dm:did:me:did:agent:runtime',
+            conversationId: 'dm:did:me:did:agent:runtime',
             displayName: '写作助手',
             lastMessagePreview: '旧消息',
             lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -5701,6 +5716,7 @@ void main() {
         .upsertConversation(
           ConversationSummary(
             threadId: 'dm:did:me:did:agent:runtime',
+            conversationId: 'dm:did:me:did:agent:runtime',
             displayName: 'awiki-agent-random',
             lastMessagePreview: '实时新消息',
             lastMessageAt: DateTime(2026, 5, 8, 10, 6),
@@ -5714,7 +5730,7 @@ void main() {
         .read(conversationListProvider)
         .conversations
         .single;
-    expect(refreshed.displayName, '写作助手');
+    expect(refreshed.displayName, 'awiki-agent-random');
     expect(refreshed.lastMessagePreview, '实时新消息');
     expect(refreshed.unreadCount, 1);
   });
@@ -5745,7 +5761,7 @@ void main() {
     expect(container.read(selectedConversationProvider), isNull);
     expect(notificationFacade.lastBadgeCount, 0);
     expect(gateway.deleteLocalThreadCalls, 1);
-    expect(gateway.lastDeletedLocalThreadId, 'direct-did:did:peer');
+    expect(gateway.lastDeletedLocalThreadId, conversation.conversationId);
   });
 
   test('删除最近会话后旧实时不复活，新实时会重新显示', () async {
@@ -5798,7 +5814,7 @@ void main() {
     expect(conversations.single.lastMessagePreview, '新消息');
   });
 
-  test('刷新的 peer-scoped 会话替换本地 legacy DID 会话', () async {
+  test('不同 canonical ID 的 direct 会话不会由 App 猜测合并', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     container
@@ -5806,6 +5822,7 @@ void main() {
         .upsertConversation(
           ConversationSummary(
             threadId: 'dm:did:human:$agentDid',
+            conversationId: 'dm:did:human:$agentDid',
             displayName: 'zhuocheng-test-hermes',
             lastMessagePreview: '本地消息',
             lastMessageAt: DateTime(2026, 5, 8, 10),
@@ -5818,6 +5835,7 @@ void main() {
     gateway.conversations = <ConversationSummary>[
       ConversationSummary(
         threadId: 'dm:peer-scope:v1:runtime',
+        conversationId: 'dm:peer-scope:v1:runtime',
         displayName: '改名后的智能体',
         lastMessagePreview: '刷新消息',
         lastMessageAt: DateTime(2026, 5, 8, 10, 1),
@@ -5843,7 +5861,7 @@ void main() {
     final conversations = container
         .read(conversationListProvider)
         .conversations;
-    expect(conversations, hasLength(1));
+    expect(conversations, hasLength(2));
     final byThread = {
       for (final conversation in conversations)
         conversation.threadId: conversation,
@@ -5854,7 +5872,7 @@ void main() {
     expect(byThread['dm:peer-scope:v1:runtime']?.displayName, '改名后的智能体');
   });
 
-  test('legacy DID 会话已读不会错误清空新的 peer-scoped 未读', () async {
+  test('已读状态只作用于精确 canonical ID', () async {
     const agentDid = 'did:agent:runtime';
     const agentHandle = 'zhuocheng-test-hermes.anpclaw.com';
     final readConversation = ConversationSummary(
@@ -5933,18 +5951,16 @@ void main() {
           .read(conversationListProvider)
           .conversations
           .singleWhere(
-            (item) =>
-                item.effectiveConversationId ==
-                readConversation.effectiveConversationId,
+            (item) => item.conversationId == readConversation.conversationId,
           )
           .unreadCount,
-      1,
+      0,
     );
     expect(gateway.markReadCalls, 0);
     expect(gateway.markConversationReadCalls, 1);
     expect(
       gateway.lastMarkConversationReadConversationId,
-      readConversation.effectiveConversationId,
+      readConversation.conversationId,
     );
     _expectLastConversationReadWatermark(
       gateway,
@@ -5955,6 +5971,7 @@ void main() {
     gateway.conversations = <ConversationSummary>[
       ConversationSummary(
         threadId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
+        conversationId: 'dm:peer-scope:v1:zhuocheng-test-hermes',
         displayName: 'Hermes',
         lastMessagePreview: '我在。',
         lastMessageAt: readConversation.lastMessageAt,
@@ -5981,7 +5998,7 @@ void main() {
           .read(conversationListProvider)
           .conversations
           .where((conversation) => conversation.targetDid == agentDid),
-      hasLength(1),
+      hasLength(2),
     );
   });
 
@@ -6001,6 +6018,7 @@ void main() {
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: conversation.threadId,
+          conversationId: conversation.threadId,
           displayName: conversation.displayName,
           lastMessagePreview: reply.content,
           lastMessageAt: reply.createdAt,
@@ -6456,7 +6474,7 @@ void _seedConversationProjection(
   ConversationSummary conversation,
   List<ChatMessage> messages,
 ) {
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   messaging.conversationTimelineById[conversationId] = _withConversationId(
     messages,
     conversationId,
@@ -6468,7 +6486,7 @@ void _seedPatchConversationProjection(
   ConversationSummary conversation,
   List<ChatMessage> messages,
 ) {
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   messaging.projectionByConversationId[conversationId] = _withConversationId(
     messages,
     conversationId,
@@ -6480,13 +6498,13 @@ void _seedConversationAfter(
   ConversationSummary conversation,
   List<ChatMessage> messages,
 ) {
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   syncService.conversationAfterMessagesById[conversationId] =
       _withConversationId(messages, conversationId);
 }
 
 String _timelineThreadId(ConversationSummary conversation) =>
-    conversation.effectiveConversationId;
+    conversation.conversationId;
 
 ChatMessage _sentMessage({
   required AppThreadRef thread,

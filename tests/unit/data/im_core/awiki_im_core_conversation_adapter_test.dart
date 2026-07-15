@@ -171,6 +171,9 @@ void main() {
           version: 1,
           unreadTotal: 2,
           item: core.ConversationSnapshotItem(
+            conversationId: 'dm:peer-scope:v1:bob',
+            peerPersonaId: 'persona:v1:bob',
+            resolutionState: core.ConversationResolutionState.resolved,
             threadKind: 'direct',
             threadId: 'did:bob',
             participants: <String>['did:bob'],
@@ -218,6 +221,9 @@ void main() {
         version: 5,
         unreadTotal: 1,
         item: core.ConversationSnapshotItem(
+          conversationId: 'dm:peer-scope:v1:bob',
+          peerPersonaId: 'persona:v1:bob',
+          resolutionState: core.ConversationResolutionState.resolved,
           threadKind: 'thread',
           threadId: 'dm:peer-scope:v1:bob',
           conversationIdentity: core.ConversationIdentity(
@@ -255,7 +261,7 @@ void main() {
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
     expect(patch.conversationId, 'dm:peer-scope:v1:bob');
     expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
-    expect(patch.item?.effectiveConversationId, 'dm:peer-scope:v1:bob');
+    expect(patch.item?.conversationId, 'dm:peer-scope:v1:bob');
   });
 
   test(
@@ -276,6 +282,9 @@ void main() {
           version: 1,
           unreadTotal: 0,
           item: core.ConversationSnapshotItem(
+            conversationId: 'did:group',
+            canonicalGroupDid: 'did:group',
+            resolutionState: core.ConversationResolutionState.resolved,
             threadKind: 'group',
             threadId: 'did:group',
             participants: <String>['did:alice'],
@@ -311,6 +320,9 @@ void main() {
         version: 3,
         unreadTotal: 1,
         item: core.ConversationSnapshotItem(
+          conversationId: 'dm:peer-scope:v1:agent-runtime',
+          peerPersonaId: 'persona:v1:agent-runtime',
+          resolutionState: core.ConversationResolutionState.resolved,
           threadKind: 'direct',
           threadId: 'did:agent:runtime',
           participants: <String>['did:agent:runtime'],
@@ -336,7 +348,7 @@ void main() {
 
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
     expect(patch.kind, CoreConversationPatchKind.remove);
-    expect(patch.threadId, 'did:agent:runtime');
+    expect(patch.conversationId, 'dm:peer-scope:v1:agent-runtime');
     expect(patch.item, isNull);
   });
 
@@ -356,6 +368,9 @@ void main() {
         version: 4,
         unreadTotal: 0,
         item: core.ConversationSnapshotItem(
+          conversationId: 'dm:peer-scope:v1:agent-daemon',
+          peerPersonaId: 'persona:v1:agent-daemon',
+          resolutionState: core.ConversationResolutionState.resolved,
           threadKind: 'direct',
           threadId: 'did:agent:daemon',
           participants: <String>['did:agent:daemon'],
@@ -380,7 +395,7 @@ void main() {
 
     final patch = await patchFuture.timeout(const Duration(seconds: 1));
     expect(patch.kind, CoreConversationPatchKind.remove);
-    expect(patch.threadId, 'did:agent:daemon');
+    expect(patch.conversationId, 'dm:peer-scope:v1:agent-daemon');
   });
 
   test(
@@ -400,15 +415,14 @@ void main() {
           ownerDid: 'did:alice',
           version: 2,
           unreadTotal: 0,
-          threadKind: 'direct',
-          threadId: 'did:bob',
+          conversationId: 'dm:peer-scope:v1:bob',
           index: 0,
         ),
       );
 
       final patch = await patchFuture.timeout(const Duration(seconds: 1));
       expect(patch.kind, CoreConversationPatchKind.reorder);
-      expect(patch.threadId, 'did:bob');
+      expect(patch.conversationId, 'dm:peer-scope:v1:bob');
       expect(patch.index, 0);
     },
   );

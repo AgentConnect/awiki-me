@@ -13,11 +13,17 @@ class _DesktopAppRobot {
       ProviderScope.containerOf(tester.element(find.byType(AppShell)));
 
   ConversationSummary get selectedConversation {
-    final selected = container.read(selectedConversationProvider);
-    if (selected == null) {
+    final selectedId = container.read(selectedConversationProvider);
+    if (selectedId == null) {
       fail('No conversation is selected in the App UI.');
     }
-    return selected;
+    for (final conversation
+        in container.read(conversationListProvider).conversations) {
+      if (conversation.conversationId == selectedId) {
+        return conversation;
+      }
+    }
+    fail('Selected conversation "$selectedId" is missing from the App store.');
   }
 
   Future<void> activate(AppSession session) async {
@@ -87,17 +93,32 @@ class _DesktopAppRobot {
       description: 'selected direct conversation after start-chat action',
       timeout: const Duration(seconds: 90),
       condition: () {
-        final selected = container.read(selectedConversationProvider);
-        if (selected == null ||
-            selected.isGroup ||
-            (selected.targetDid?.trim().isEmpty ?? true)) {
+        final selectedId = container.read(selectedConversationProvider);
+        if (selectedId == null) {
           return false;
         }
-        final targetPeer = normalizeDidOrHandleInput(
-          selected.targetPeer ?? '',
+        final selected = container
+            .read(conversationListProvider)
+            .conversations
+            .where((item) => item.conversationId == selectedId)
+            .firstOrNull;
+        if (selected == null ||
+            selected.isGroup ||
+            (selected.targetDid?.trim().isEmpty ?? true) ||
+            (selected.peerPersonaId?.trim().isEmpty ?? true)) {
+          return false;
+        }
+        final profile = container
+            .read(peerDisplayProfileProvider)
+            .forPeer(
+              peerPersonaId: selected.peerPersonaId,
+              did: selected.targetDid,
+            );
+        final resolvedHandle = normalizeDidOrHandleInput(
+          profile?.handle ?? '',
         ).toLowerCase();
-        return targetPeer == expectedPeer ||
-            targetPeer.startsWith('$expectedPeer.');
+        return resolvedHandle == expectedPeer ||
+            resolvedHandle.startsWith('$expectedPeer.');
       },
     );
     await pumpUntilFinder(
@@ -435,7 +456,7 @@ class _DesktopAppRobot {
     if (selected.isGroup || selected.targetDid?.trim() != peerDid.trim()) {
       fail('Contact row opened the wrong Direct peer: $selected');
     }
-    if (!selected.effectiveConversationId.startsWith('dm:peer-scope:v1:')) {
+    if (!selected.conversationId.startsWith('dm:peer-scope:v1:')) {
       fail('Contact row did not open a canonical peer-scope conversation.');
     }
     return selected;
@@ -549,7 +570,7 @@ class _DesktopAppRobot {
         return current.isGroup &&
             current.groupId?.trim() == groupDid &&
             current.threadId.trim() == 'group:$groupDid' &&
-            current.effectiveConversationId == 'group:$groupDid';
+            current.conversationId == 'group:$groupDid';
       },
     );
     return selectedConversation;
@@ -946,6 +967,7 @@ class _FailOnceMessagingService
   int delegatedConversationTextAttempts = 0;
   bool conversationTextAttemptPending = false;
   String? lastConversationTextFailureCode;
+  String? lastConversationTextFailureDetail;
   final Map<String, List<_PatchSink>> _patchSinks =
       <String, List<_PatchSink>>{};
   final Map<String, int> _patchVersions = <String, int>{};
@@ -1009,6 +1031,7 @@ class _FailOnceMessagingService
     delegatedConversationTextAttempts += 1;
     conversationTextAttemptPending = true;
     lastConversationTextFailureCode = null;
+    lastConversationTextFailureDetail = null;
     try {
       final sent = await _delegate.sendConversationText(
         conversation: conversation,
@@ -1025,6 +1048,7 @@ class _FailOnceMessagingService
       lastConversationTextFailureCode = error is core.AwikiImCoreException
           ? error.code
           : error.runtimeType.toString();
+      lastConversationTextFailureDetail = error.toString();
       rethrow;
     } finally {
       conversationTextAttemptPending = false;

@@ -20,7 +20,7 @@ Future<void> _verifyDirectTextRegression({
 
   await E2eScenarioProgressWriter.record('direct_start_conversation');
   final conversation = await robot.startDirectConversation(config.cliHandle);
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   expect(
     conversationId.startsWith('dm:peer-scope:v1:'),
     isTrue,
@@ -240,7 +240,10 @@ Future<void> _verifyDirectTextRegression({
   );
   final retryFailureCode = messaging.lastConversationTextFailureCode;
   if (retryFailureCode != null) {
-    fail('Real retry transport failed with typed code "$retryFailureCode".');
+    fail(
+      'Real retry transport failed with typed code "$retryFailureCode": '
+      '${messaging.lastConversationTextFailureDetail}',
+    );
   }
   final retried = await _waitForUiMessage(
     robot: robot,
@@ -280,7 +283,7 @@ Future<void> _verifyDirectTextRegression({
   final restartedConversation = await robot.startDirectConversation(
     config.cliHandle,
   );
-  expect(restartedConversation.effectiveConversationId, conversationId);
+  expect(restartedConversation.conversationId, conversationId);
   await _assertUiMessagesExactlyOnce(
     robot: robot,
     conversationId: conversationId,
@@ -307,6 +310,13 @@ Future<void> _verifyDirectTextRegression({
     ownerDid: ownerDid,
     expectedText: retryText,
     expectedConversationId: conversationId,
+  );
+  await _expectCanonicalContactRowsExact(
+    robot: robot,
+    conversations: conversations,
+    ownerDid: ownerDid,
+    conversationId: conversationId,
+    peerDid: cliDid,
   );
   await _waitForAppConversationLatestInTimeline(
     messaging: messaging,
@@ -386,23 +396,16 @@ List<ChatMessage> _uiMessages(_DesktopAppRobot robot, String conversationId) {
       'conversation.',
     );
   }
-  final selectedConversationId = selected.effectiveConversationId.trim();
-  final selectedThreadId = selected.threadId.trim();
-  if (requestedId.isEmpty ||
-      (selectedConversationId != requestedId &&
-          selectedThreadId != requestedId)) {
+  final selectedConversationId = selected.trim();
+  if (requestedId.isEmpty || selectedConversationId != requestedId) {
     throw StateError(
       'Requested UI conversation "$requestedId" does not match selected '
-      'conversation "$selectedConversationId" / thread '
-      '"$selectedThreadId".',
+      'conversation "$selectedConversationId".',
     );
   }
   final canonical = notifier.thread(requestedId).messages;
   if (canonical.isNotEmpty) {
     return canonical;
-  }
-  if (selectedThreadId.isNotEmpty && selectedThreadId != requestedId) {
-    return notifier.thread(selectedThreadId).messages;
   }
   return canonical;
 }

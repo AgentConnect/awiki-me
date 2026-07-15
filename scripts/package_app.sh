@@ -307,10 +307,10 @@ validate_primary_tenant_domain "$PACKAGE_PRIMARY_TENANT_DOMAIN"
 parse_package_targets "$PACKAGE_TARGETS"
 
 case "$PACKAGE_VERSION_BUMP" in
-  build|patch|minor|major|none)
+  none)
     ;;
   *)
-    fail "PACKAGE_VERSION_BUMP must be one of: build, patch, minor, major, none"
+    fail "source-attested packaging requires PACKAGE_VERSION_BUMP=none; commit the release version before packaging"
     ;;
 esac
 
@@ -341,6 +341,38 @@ PACKAGE_DOWNLOAD_PAGE_URL="$(trim_trailing_slash "$PACKAGE_DOWNLOAD_PAGE_URL")"
 LATEST_MANIFEST="$DIST_ROOT/latest.json"
 SDK_REPO_DIR="$(resolve_repo_path "$PACKAGE_SDK_REPO_DIR")"
 SDK_NATIVE_BUILD_SCRIPT="$SDK_REPO_DIR/scripts/flutter/build-sdk-native.sh"
+
+resolve_source_ref() {
+  local label="$1"
+  local repo_dir="$2"
+  local source_ref
+  source_ref="$(git -C "$repo_dir" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" ||
+    fail "$label source directory is not a readable Git checkout: $repo_dir"
+  [[ "$source_ref" =~ ^[0-9a-f]{40}$ ]] ||
+    fail "$label source ref must be a full 40-character commit SHA"
+  printf '%s\n' "$source_ref"
+}
+
+require_clean_source_tree() {
+  local label="$1"
+  local repo_dir="$2"
+  local status
+  status="$(git -C "$repo_dir" status --porcelain --untracked-files=normal 2>/dev/null)" ||
+    fail "$label source directory is not a readable Git checkout: $repo_dir"
+  [[ -z "$status" ]] ||
+    fail "$label source tree must be clean before packaging; commit or remove local changes"
+}
+
+require_source_tree_matches_ref() {
+  local label="$1"
+  local repo_dir="$2"
+  local expected_ref="$3"
+  local actual_ref
+  actual_ref="$(resolve_source_ref "$label" "$repo_dir")"
+  [[ "$actual_ref" == "$expected_ref" ]] ||
+    fail "$label HEAD changed during packaging: expected $expected_ref, got $actual_ref"
+  require_clean_source_tree "$label" "$repo_dir"
+}
 
 read_pubspec_version() {
   local raw
@@ -868,6 +900,20 @@ verify_macos_app() {
   [[ "$bundle_id" == "$PACKAGE_MACOS_BUNDLE_ID" ]] ||
     fail "macOS app bundle id is $bundle_id, expected $PACKAGE_MACOS_BUNDLE_ID"
 
+  local app_source_ref im_core_source_ref primary_tenant_domain
+  app_source_ref="$(/usr/libexec/PlistBuddy -c 'Print :AWikiAppSourceRef' \
+    "$app/Contents/Info.plist" 2>/dev/null || true)"
+  im_core_source_ref="$(/usr/libexec/PlistBuddy -c 'Print :AWikiImCoreSourceRef' \
+    "$app/Contents/Info.plist" 2>/dev/null || true)"
+  primary_tenant_domain="$(/usr/libexec/PlistBuddy -c 'Print :AWikiPrimaryTenantDomain' \
+    "$app/Contents/Info.plist" 2>/dev/null || true)"
+  [[ "$app_source_ref" == "$APP_SOURCE_REF" ]] ||
+    fail "macOS app source ref is $app_source_ref, expected $APP_SOURCE_REF"
+  [[ "$im_core_source_ref" == "$IM_CORE_SOURCE_REF" ]] ||
+    fail "macOS im-core source ref is $im_core_source_ref, expected $IM_CORE_SOURCE_REF"
+  [[ "$primary_tenant_domain" == "$PACKAGE_PRIMARY_TENANT_DOMAIN" ]] ||
+    fail "macOS primary tenant domain is $primary_tenant_domain, expected $PACKAGE_PRIMARY_TENANT_DOMAIN"
+
   local executable="$app/Contents/MacOS/$PACKAGE_APP_DISPLAY_NAME"
   [[ -f "$executable" ]] || fail "macOS executable not found: $executable"
   local actual_archs
@@ -885,6 +931,7 @@ prepare_macos_project() {
 ensure_flutter_pub_get() {
   if [[ "$FLUTTER_PUB_GET_DONE" -eq 0 ]]; then
     "$PACKAGE_FLUTTER_BIN" pub get
+    require_source_tree_matches_ref "AWiki Me" "$ROOT_DIR" "$APP_SOURCE_REF"
     FLUTTER_PUB_GET_DONE=1
   fi
 }
@@ -896,11 +943,13 @@ build_sdk_native() {
   if needs_macos; then
     log "building awiki_im_core macOS native SDK artifact"
     "$SDK_NATIVE_BUILD_SCRIPT" --macos-only
+    require_source_tree_matches_ref "im-core" "$SDK_REPO_DIR" "$IM_CORE_SOURCE_REF"
   fi
 
   if needs_android; then
     log "building awiki_im_core Android native SDK artifact"
     "$SDK_NATIVE_BUILD_SCRIPT" --android-only --skip-codegen-check
+    require_source_tree_matches_ref "im-core" "$SDK_REPO_DIR" "$IM_CORE_SOURCE_REF"
   fi
 }
 
@@ -938,6 +987,8 @@ build_android_arm64() {
     --target-platform android-arm64 \
     --split-per-abi \
     --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PACKAGE_PRIMARY_TENANT_DOMAIN" \
+    --dart-define="AWIKI_APP_SOURCE_REF=$APP_SOURCE_REF" \
+    --dart-define="AWIKI_IM_CORE_SOURCE_REF=$IM_CORE_SOURCE_REF" \
     --build-name "$VERSION_NAME" \
     --build-number "$BUILD_NUMBER"
 
@@ -964,6 +1015,8 @@ build_macos_arch() {
     --no-pub \
     --config-only \
     --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PACKAGE_PRIMARY_TENANT_DOMAIN" \
+    --dart-define="AWIKI_APP_SOURCE_REF=$APP_SOURCE_REF" \
+    --dart-define="AWIKI_IM_CORE_SOURCE_REF=$IM_CORE_SOURCE_REF" \
     --build-name "$VERSION_NAME" \
     --build-number "$BUILD_NUMBER"
   xcodebuild \
@@ -977,6 +1030,9 @@ build_macos_arch() {
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$AWIKI_MACOS_SIGNING_FINGERPRINT" \
     DEVELOPMENT_TEAM="$AWIKI_MACOS_DEVELOPMENT_TEAM" \
+    AWIKI_APP_SOURCE_REF="$APP_SOURCE_REF" \
+    AWIKI_IM_CORE_SOURCE_REF="$IM_CORE_SOURCE_REF" \
+    AWIKI_PRIMARY_TENANT_DOMAIN="$PACKAGE_PRIMARY_TENANT_DOMAIN" \
     FLUTTER_BUILD_NAME="$VERSION_NAME" \
     FLUTTER_BUILD_NUMBER="$BUILD_NUMBER" \
     build
@@ -1049,6 +1105,13 @@ write_latest_manifest() {
   "version": $(json_string "$VERSION_NAME"),
   "buildNumber": $BUILD_NUMBER,
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
+  "sourceRefs": {
+    "app": $(json_string "$APP_SOURCE_REF"),
+    "imCore": $(json_string "$IM_CORE_SOURCE_REF")
+  },
+  "tenant": {
+    "primaryDomain": $(json_string "$PACKAGE_PRIMARY_TENANT_DOMAIN")
+  },
   "releaseNotesUrl": $(json_string "$PACKAGE_DOWNLOAD_PAGE_URL"),
   "githubReleaseUrl": $(json_string "$PACKAGE_DOWNLOAD_PAGE_URL"),
   "platforms": {
@@ -1094,6 +1157,13 @@ write_manifest() {
     "macos": $(json_string "$PACKAGE_MACOS_BUILD_MODE")
   },
   "publishedAt": $(json_string "$(date -u +%Y-%m-%dT%H:%M:%SZ)"),
+  "sourceRefs": {
+    "app": $(json_string "$APP_SOURCE_REF"),
+    "imCore": $(json_string "$IM_CORE_SOURCE_REF")
+  },
+  "tenant": {
+    "primaryDomain": $(json_string "$PACKAGE_PRIMARY_TENANT_DOMAIN")
+  },
   "release": {
     "downloadBaseUrl": $(json_string "$PACKAGE_RELEASE_BASE_URL")
   },
@@ -1126,10 +1196,15 @@ JSON
 }
 
 require_cmd awk
+require_cmd git
 require_cmd grep
 require_cmd sed
 require_cmd "$PACKAGE_FLUTTER_BIN"
 require_cmd shasum
+APP_SOURCE_REF="$(resolve_source_ref "AWiki Me" "$ROOT_DIR")"
+IM_CORE_SOURCE_REF="$(resolve_source_ref "im-core" "$SDK_REPO_DIR")"
+require_clean_source_tree "AWiki Me" "$ROOT_DIR"
+require_clean_source_tree "im-core" "$SDK_REPO_DIR"
 if needs_macos; then
   require_cmd codesign
   require_cmd hdiutil
@@ -1173,6 +1248,8 @@ log "current version: $CURRENT_VERSION"
 log "next version:    $NEXT_VERSION"
 log "dist root:       $DIST_ROOT"
 log "SDK repo:        $SDK_REPO_DIR"
+log "App source ref:  $APP_SOURCE_REF"
+log "Core source ref: $IM_CORE_SOURCE_REF"
 if needs_macos; then
   log "macOS signer:    $AWIKI_MACOS_SIGNING_IDENTITY"
   log "macOS Team ID:   $AWIKI_MACOS_DEVELOPMENT_TEAM"

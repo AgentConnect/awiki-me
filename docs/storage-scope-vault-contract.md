@@ -13,6 +13,8 @@ record 密码格式。
 租户显示名称、后端地址或构建版本变化而重新创建 scope。旧 `awiki.ai` /
 `tenant-default` namespace、旧 split keys 和 namespace bundle 只属于预发布开发数据，
 不进入 production 启动或恢复链路，也不得在普通启动时自动删除。
+同一 scope 内的 release/0710 schema 27 数据必须通过 Core 显式 local-state upgrade gate
+升级，不能被当作不兼容数据归档，也不能要求用户重新登录。
 
 ## 1. Ownership 与边界
 
@@ -243,12 +245,16 @@ registry lookup
   -> readExisting platform secret
   -> envelope scope/schema/key validation
   -> derive v1 context
+  -> inspect Core local-state schema（只读）
+  -> 若为0710 schema 27：online backup + shadow migration + conservation validation + cutover
   -> VaultRequired open
   -> verify existing identities
 ```
 
 任何步骤失败都不得创建key、切换directory、猜测domain scope或回退plaintext。
 “scope存在但key缺失”是blocked/unrecoverable local vault，不是fresh scope。
+Core升级失败时保持backup/journal并停留在启动错误页；允许重试，但不得清库、触发OTP/
+Handle恢复或在升级完成前创建conversation/profile/product业务Store。
 
 ## 8. Route、switch 与删除规则
 

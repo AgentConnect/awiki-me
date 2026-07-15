@@ -12,6 +12,7 @@ import '../application/directory_application_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
+import '../application/models/product_local_models.dart';
 import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
@@ -64,6 +65,13 @@ import '../application/tenant/app_tenant.dart';
 import '../data/storage/awiki_storage_scope_layout.dart';
 import '../data/storage/scope_secret_repository_factory.dart';
 import '../data/tenant/app_tenant_store.dart';
+
+enum AppBootstrapProgress {
+  preparing,
+  upgradingLocalState,
+  migratingLocalOverlays,
+  startingApplication,
+}
 
 class AppBootstrap {
   AppBootstrap({
@@ -130,6 +138,7 @@ class AppBootstrap {
     AwikiEnvironmentConfig? environment,
     String? appStateRoot,
     AppTenantProfile? tenant,
+    void Function(AppBootstrapProgress progress)? onProgress,
   }) async {
     final totalWatch = Stopwatch()..start();
     final scopeSecretRepository = buildScopeSecretRepository(
@@ -182,11 +191,29 @@ class AppBootstrap {
       vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
         repository: scopeSecretRepository,
       ),
+      onProgress: (progress) {
+        if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
+          onProgress?.call(AppBootstrapProgress.upgradingLocalState);
+        }
+      },
     );
     await runtime.openAndValidate();
     try {
       final productLocalStore = AwikiProductLocalStoreSqlite(
         databasePath: storageScopeLayout.productDatabasePath,
+      );
+      if (runtime.hasCanonicalOverlayMigrationWork) {
+        onProgress?.call(AppBootstrapProgress.migratingLocalOverlays);
+      }
+      await productLocalStore.migrateCanonicalConversationAliases(
+        runtime.localStateUpgradeResult?.aliasMappings.map(
+              (mapping) => ProductConversationAliasMigration(
+                ownerDid: mapping.ownerDid,
+                legacyConversationId: mapping.legacyConversationId,
+                canonicalConversationId: mapping.canonicalConversationId,
+              ),
+            ) ??
+            const <ProductConversationAliasMigration>[],
       );
       final activeSessionStore = KeyValueActiveSessionStore(
         storage: preferenceStorage,
@@ -328,6 +355,7 @@ class AppBootstrap {
         attachmentCacheService: attachmentCacheService,
         storageScopeLayout: storageScopeLayout,
       );
+      onProgress?.call(AppBootstrapProgress.startingApplication);
       totalWatch.stop();
       AwikiPerformanceLogger.log(
         'bootstrap.create',

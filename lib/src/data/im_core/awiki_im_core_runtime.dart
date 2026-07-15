@@ -15,6 +15,21 @@ typedef AwikiImCoreOpen =
       core.AwikiImCoreOpenOptions? openOptions,
     });
 
+typedef AwikiImCoreInspectLocalStateUpgrade =
+    Future<core.LocalStateUpgradeInspection> Function(
+      core.AwikiImCorePaths paths,
+    );
+
+typedef AwikiImCoreUpgradeLocalState =
+    Future<core.LocalStateUpgradeResult> Function(core.AwikiImCorePaths paths);
+
+enum AwikiImCoreRuntimeProgress { upgradingLocalState }
+
+String? awikiImCoreDiagnosticCode(Object? error) => switch (error) {
+  core.AwikiImCoreException(:final code) => code,
+  _ => null,
+};
+
 class AwikiImCoreRuntime implements ImCoreRuntimePort {
   AwikiImCoreRuntime({
     required AwikiImCoreEnvironmentConfig config,
@@ -22,19 +37,30 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     required StorageScopeId scopeId,
     required AwikiImCoreVaultSecretProvider vaultSecretProvider,
     AwikiImCoreOpen? openCore,
+    AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
+    AwikiImCoreUpgradeLocalState? upgradeLocalState,
+    void Function(AwikiImCoreRuntimeProgress progress)? onProgress,
   }) : _config = config,
        _paths = paths,
        _scopeId = scopeId,
        _vaultSecretProvider = vaultSecretProvider,
-       _openCore = openCore ?? core.AwikiImCore.open;
+       _openCore = openCore ?? core.AwikiImCore.open,
+       _inspectLocalStateUpgrade =
+           inspectLocalStateUpgrade ?? _inspectLocalStateUpgradeWithSdk,
+       _upgradeLocalState = upgradeLocalState ?? _upgradeLocalStateWithSdk,
+       _onProgress = onProgress;
 
   final AwikiImCoreEnvironmentConfig _config;
   final AwikiImCorePathLayout _paths;
   final StorageScopeId _scopeId;
   final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
   final AwikiImCoreOpen _openCore;
+  final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
+  final AwikiImCoreUpgradeLocalState _upgradeLocalState;
+  final void Function(AwikiImCoreRuntimeProgress progress)? _onProgress;
 
   core.AwikiImCore? _core;
+  core.LocalStateUpgradeResult? _localStateUpgradeResult;
   Future<void>? _openInFlight;
   core.AwikiImClient? _currentClient;
   int _activeClientOperations = 0;
@@ -44,6 +70,15 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   AwikiImCoreEnvironmentConfig get config => _config;
 
   AwikiImCorePathLayout get paths => _paths;
+
+  core.LocalStateUpgradeResult? get localStateUpgradeResult =>
+      _localStateUpgradeResult;
+
+  bool get hasCanonicalOverlayMigrationWork {
+    final result = _localStateUpgradeResult;
+    return result?.status == core.LocalStateUpgradeStatus.completed ||
+        result?.aliasMappings.isNotEmpty == true;
+  }
 
   @override
   bool get isOpen => _core != null;
@@ -74,9 +109,18 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     final vaultSecrets = await _vaultSecretProvider.openExisting(_scopeId);
     await _paths.ensureDirectories();
     await _paths.archiveIncompatibleLocalStateIfNeeded();
+    final corePaths = _paths.toCorePaths();
+    final inspection = await _inspectLocalStateUpgrade(corePaths);
+    if (inspection.eligibility == core.LocalStateUpgradeEligibility.required) {
+      _onProgress?.call(AwikiImCoreRuntimeProgress.upgradingLocalState);
+    }
+    // Run the idempotent entry point even after cutover. Besides performing a
+    // required upgrade, it returns the stable alias mapping that lets the App
+    // resume its independent overlay migration after a process crash.
+    _localStateUpgradeResult = await _upgradeLocalState(corePaths);
     final opened = await _openCore(
       config: _config.toCoreConfig(),
-      paths: _paths.toCorePaths(),
+      paths: corePaths,
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
         identitySecretVault: core.ImCoreSecretVaultOptions(
           rootKey: vaultSecrets.rootKey,
@@ -190,6 +234,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       _currentClient = null;
       final core = _core;
       _core = null;
+      _localStateUpgradeResult = null;
       try {
         await client?.dispose();
       } finally {
@@ -230,6 +275,14 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     await idle.future;
   }
 }
+
+Future<core.LocalStateUpgradeInspection> _inspectLocalStateUpgradeWithSdk(
+  core.AwikiImCorePaths paths,
+) => core.AwikiImCore.inspectLocalStateUpgrade(paths: paths);
+
+Future<core.LocalStateUpgradeResult> _upgradeLocalStateWithSdk(
+  core.AwikiImCorePaths paths,
+) => core.AwikiImCore.upgradeLocalState(paths: paths);
 
 core.IdentitySelector _selectorFromString(String value) {
   final trimmed = value.trim();

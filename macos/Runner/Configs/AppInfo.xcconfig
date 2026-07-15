@@ -16,6 +16,10 @@ PRODUCT_NAME = AWikiMe
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime
 
+// The compile-time built-in tenant. Packaging overrides this together with the
+// matching Dart define and records the value in the signed App Info.plist.
+AWIKI_PRIMARY_TENANT_DOMAIN = awiki.ai
+
 // Fallback CocoaPods paths for direct Xcode builds.
 //
 // Xcode resolves the [CP] file-list paths before it can print the manifest

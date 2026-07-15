@@ -50,7 +50,7 @@ void main() {
     expect(switched.forDid('did:test:bob')?.displayName, 'Bob');
   });
 
-  test('头像触发的远端 profile 会立即更新展示投影', () {
+  test('远端 profile 不会按未经验证的旧 DID 复制展示别名', () {
     final container = ProviderContainer(
       overrides: <Override>[
         directoryApplicationServiceProvider.overrideWithValue(
@@ -64,7 +64,7 @@ void main() {
         .read(peerDisplayProfileProvider.notifier)
         .updateFromRemote(
           ownerDid: 'did:test:owner',
-          requestedDid: 'did:test:alice-old',
+          peerPersonaId: 'persona:alice',
           profile: const UserProfile(
             did: 'did:test:alice',
             displayName: 'Alice New',
@@ -76,8 +76,14 @@ void main() {
         );
 
     final state = container.read(peerDisplayProfileProvider);
+    expect(
+      state
+          .forPeer(peerPersonaId: 'persona:alice', did: 'did:test:alice')
+          ?.displayName,
+      'Alice New',
+    );
     expect(state.forDid('did:test:alice')?.displayName, 'Alice New');
-    expect(state.forDid('did:test:alice-old')?.displayName, 'Alice New');
+    expect(state.forDid('did:test:alice-old'), isNull);
   });
 
   test('远端 profile 没有昵称时保留 Handle 作为展示回退', () {
@@ -104,14 +110,150 @@ void main() {
           ),
         );
 
-    final state = container.read(peerDisplayProfileProvider);
     expect(
-      peerDisplayName(
-        state,
-        did: 'did:wba:awiki.ai:user:bob:e1_key',
-        fallback: 'unknown',
+      container.read(
+        peerDisplayNameProvider(
+          const PeerDisplayNameRequest(
+            did: 'did:wba:awiki.ai:user:bob:e1_key',
+            senderNameSnapshot: 'unknown',
+          ),
+        ),
       ),
       'bob.awiki.ai',
+    );
+  });
+
+  test('同一 Persona 的已验证 DID 轮换共享一份展示资料', () {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      peerPersonaId: 'persona:alice',
+      profile: const UserProfile(
+        did: 'did:test:alice-old',
+        displayName: 'Alice Old',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      ),
+    );
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      peerPersonaId: 'persona:alice',
+      profile: const UserProfile(
+        did: 'did:test:alice-new',
+        displayName: 'Alice New',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      ),
+    );
+
+    final state = container.read(peerDisplayProfileProvider);
+    expect(state.profilesByPersonaId, hasLength(1));
+    expect(state.forDid('did:test:alice-old')?.displayName, 'Alice New');
+    expect(state.forDid('did:test:alice-new')?.displayName, 'Alice New');
+  });
+
+  test('后到的 Persona 路由会接管同 DID 的未解析 profile', () async {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      profile: const UserProfile(
+        did: 'did:test:alice',
+        displayName: 'Alice cached first',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        fullHandle: 'alice.awiki.info',
+      ),
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).unresolvedProfilesByDid,
+      contains('did:test:alice'),
+    );
+
+    await controller.loadCached(
+      ownerDid: 'did:test:owner',
+      dids: const <String>['did:test:alice'],
+      peerPersonaIdsByDid: const <String, String>{
+        'did:test:alice': 'persona:alice',
+      },
+    );
+
+    final state = container.read(peerDisplayProfileProvider);
+    expect(state.unresolvedProfilesByDid, isEmpty);
+    expect(state.profilesByPersonaId, hasLength(1));
+    expect(
+      state
+          .forPeer(peerPersonaId: 'persona:alice', did: 'did:test:alice')
+          ?.displayName,
+      'Alice cached first',
+    );
+  });
+
+  test('统一 View Provider 在所有 DID 路由上优先使用 Persona 本地备注', () async {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _CachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    await controller.loadCached(
+      ownerDid: 'did:test:owner-a',
+      dids: const <String>['did:test:alice'],
+      peerPersonaIdsByDid: const <String, String>{
+        'did:test:alice': 'persona:alice',
+      },
+    );
+    controller.registerLocalNotes(
+      ownerDid: 'did:test:owner-a',
+      localNotesByPersonaId: const <String, String>{
+        'persona:alice': 'Alice local note',
+      },
+    );
+
+    expect(
+      container.read(
+        peerDisplayNameProvider(
+          const PeerDisplayNameRequest(
+            did: 'did:test:alice',
+            nickname: 'Different page nickname',
+            fullHandle: 'alice.awiki.info',
+          ),
+        ),
+      ),
+      'Alice local note',
+    );
+
+    await controller.loadCached(
+      ownerDid: 'did:test:owner-b',
+      dids: const <String>['did:test:bob'],
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).localNotesByPersonaId,
+      isEmpty,
     );
   });
 

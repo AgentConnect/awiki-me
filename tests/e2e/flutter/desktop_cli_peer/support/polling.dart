@@ -87,7 +87,7 @@ Future<ConversationSummary> _waitForAppConversationRefresh({
       final exact = items
           .where(
             (conversation) =>
-                conversation.effectiveConversationId == expectedConversationId,
+                conversation.conversationId == expectedConversationId,
           )
           .toList(growable: false);
       if (exact.length != 1 ||
@@ -115,7 +115,7 @@ Future<void> _waitForAppConversationLatestInTimeline({
         'the canonical conversation timeline.',
   );
   final timelineMessaging = messaging as ConversationTimelineMessagingService;
-  final conversationId = conversation.effectiveConversationId;
+  final conversationId = conversation.conversationId;
   final latestSnapshot = conversation.lastMessageSnapshot;
   final latestSnapshotId = latestSnapshot == null
       ? null

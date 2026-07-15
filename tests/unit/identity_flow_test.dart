@@ -1,5 +1,4 @@
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
-import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_services.dart';
@@ -43,20 +42,7 @@ void main() {
       }
       ..directoryConversationIdsByQuery = <String, String>{
         'cgw.awiki.ai': 'dm:peer-scope:v1:canonical-peer',
-      }
-      ..conversations = <ConversationSummary>[
-        ConversationSummary(
-          conversationId: 'dm:did:test:peer',
-          threadId: 'dm:did:test:peer',
-          displayName: 'Legacy Peer',
-          lastMessagePreview: '',
-          lastMessageAt: DateTime(2026, 7, 1),
-          unreadCount: 0,
-          isGroup: false,
-          targetDid: 'did:test:peer',
-          targetPeer: 'cgw.awiki.ai',
-        ),
-      ];
+      };
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
       tester.binding.setSurfaceSize(null);
@@ -166,7 +152,7 @@ void main() {
     await tester.tap(contactRow);
     await tester.pumpAndSettle();
 
-    final opened = container.read(selectedConversationProvider);
+    final opened = selectedConversationSummary(container);
     expect(opened, isNotNull);
     expect(opened!.conversationId, 'dm:peer-scope:v1:canonical-peer');
     expect(opened.threadId, 'dm:peer-scope:v1:canonical-peer');
@@ -174,7 +160,7 @@ void main() {
     expect(opened.targetPeer, 'cgw.awiki.ai');
     final rows = container.read(conversationListProvider).conversations;
     expect(rows, hasLength(1));
-    expect(rows.single.effectiveConversationId, opened.effectiveConversationId);
+    expect(rows.single.conversationId, opened.conversationId);
   });
 
   testWidgets('handle-backed 解析缺少 canonical ID 时 fail closed', (tester) async {
@@ -216,7 +202,7 @@ void main() {
     expect(container.read(selectedConversationProvider), isNull);
   });
 
-  testWidgets('纯 DID identity 只使用 Core 明确返回的 legacy conversation ID', (
+  testWidgets('纯 DID identity 返回 legacy conversation ID 时 fail closed', (
     tester,
   ) async {
     const pureDidProfile = UserProfile(
@@ -258,14 +244,8 @@ void main() {
     await tester.tap(find.byKey(const Key('contact-row:did:test:pure-peer')));
     await tester.pumpAndSettle();
 
-    expect(
-      container.read(selectedConversationProvider)?.effectiveConversationId,
-      'dm:did:test:pure-peer',
-    );
-    expect(
-      container.read(conversationListProvider).conversations,
-      hasLength(1),
-    );
+    expect(container.read(selectedConversationProvider), isNull);
+    expect(container.read(conversationListProvider).conversations, isEmpty);
   });
 
   testWidgets('最近会话更多操作菜单使用更多操作标题', (tester) async {

@@ -36,6 +36,7 @@ void main() {
       ProductConversationOverlay(
         ownerDid: 'did:alice',
         threadId: 'direct:bob',
+        conversationId: 'direct:bob',
         pinned: true,
         muted: true,
         customTitle: 'Bob',
@@ -47,6 +48,7 @@ void main() {
       ProductConversationOverlay(
         ownerDid: 'did:bob',
         threadId: 'direct:bob',
+        conversationId: 'direct:bob',
         hidden: true,
         customTitle: 'Bob private',
         updatedAt: now,
@@ -251,7 +253,7 @@ void main() {
       expect(states.single.valueJson, '{"state":"ready"}');
       expect(overlay?.customTitle, 'Bob legacy');
       expect(overlay?.hidden, isTrue);
-      expect(overlay?.effectiveConversationId, 'direct:bob');
+      expect(overlay?.conversationId, 'direct:bob');
     },
   );
 
@@ -301,8 +303,27 @@ void main() {
       expect(legacy?.pinned, isTrue);
       expect(legacy?.muted, isTrue);
       expect(legacy?.hidden, isTrue);
-      expect(legacy?.effectiveConversationId, 'direct-did:did:bob');
+      expect(legacy?.conversationId, 'direct-did:did:bob');
       expect(bobOwner?.customTitle, 'Bob private');
+
+      final backup = await databaseFactory.openDatabase(
+        _canonicalBackupPath(databaseDir),
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      final backupVersion = (await backup.rawQuery(
+        'PRAGMA user_version',
+      )).single.values.single;
+      final backupColumns = await backup.rawQuery(
+        'PRAGMA table_info(conversation_overlays)',
+      );
+      final backupIntegrity = await backup.rawQuery('PRAGMA integrity_check');
+      await backup.close();
+      expect(backupVersion, 2);
+      expect(
+        backupColumns.any((column) => column['name'] == 'conversation_id'),
+        isFalse,
+      );
+      expect(backupIntegrity.single.values.single, 'ok');
 
       await store.upsertConversationOverlay(
         ProductConversationOverlay(
@@ -405,6 +426,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'dm:alice:bob',
+          conversationId: 'dm:alice:bob',
           customTitle: 'Bob',
           updatedAt: DateTime.utc(2026, 6, 27),
         ),
@@ -418,6 +440,74 @@ void main() {
       expect(overlays['dm:alice:bob']?.customTitle, 'Bob');
     },
   );
+
+  test('canonical alias migration is backed up and idempotent', () async {
+    final store = _store(databaseDir);
+    const legacyId = 'direct-did:did:bob';
+    const canonicalId = 'dm:peer-scope:v1:bob';
+    await store.upsertConversationOverlay(
+      ProductConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: legacyId,
+        conversationId: legacyId,
+        customTitle: 'latest legacy title',
+        hidden: true,
+        updatedAt: DateTime.utc(2026, 7, 14, 2),
+      ),
+    );
+    await store.upsertConversationOverlayByConversationId(
+      ProductConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: canonicalId,
+        conversationId: canonicalId,
+        customTitle: 'older canonical title',
+        updatedAt: DateTime.utc(2026, 7, 14, 1),
+      ),
+    );
+    await store.saveDraft(
+      MessageDraft(
+        ownerDid: 'did:alice',
+        threadId: legacyId,
+        draftText: 'migrated draft',
+        updatedAt: DateTime.utc(2026, 7, 14, 3),
+      ),
+    );
+
+    const mapping = ProductConversationAliasMigration(
+      ownerDid: 'did:alice',
+      legacyConversationId: legacyId,
+      canonicalConversationId: canonicalId,
+    );
+    await store.migrateCanonicalConversationAliases(const [mapping]);
+    await store.migrateCanonicalConversationAliases(const [mapping]);
+
+    expect(
+      await store.loadConversationOverlay(
+        ownerDid: 'did:alice',
+        threadId: legacyId,
+      ),
+      isNull,
+    );
+    final overlay = await store.loadConversationOverlayByConversationId(
+      ownerDid: 'did:alice',
+      conversationId: canonicalId,
+    );
+    expect(overlay?.threadId, canonicalId);
+    expect(overlay?.customTitle, 'latest legacy title');
+    expect(overlay?.hidden, isTrue);
+    expect(
+      await store.loadDraft(ownerDid: 'did:alice', threadId: legacyId),
+      isNull,
+    );
+    expect(
+      (await store.loadDraft(
+        ownerDid: 'did:alice',
+        threadId: canonicalId,
+      ))?.draftText,
+      'migrated draft',
+    );
+    expect(await File(_canonicalBackupPath(databaseDir)).exists(), isTrue);
+  });
 }
 
 Future<void> _createVersion1Schema(DatabaseExecutor db) async {
@@ -473,4 +563,10 @@ AwikiProductLocalStoreSqlite _store(Directory databaseDir) {
 
 String _databasePath(Directory databaseDir) {
   return '${databaseDir.path}/support/awiki-me/product/${AwikiProductLocalStoreSqlite.databaseName}';
+}
+
+String _canonicalBackupPath(Directory databaseDir) {
+  return '${databaseDir.path}/support/awiki-me/product/'
+      'canonical-conversation-overlay-upgrade/'
+      'awiki_me_product_store.pre-canonical-v2.sqlite';
 }

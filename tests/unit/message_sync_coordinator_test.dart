@@ -224,6 +224,7 @@ ProviderContainer _container(
 ConversationSummary _conversation() {
   return ConversationSummary(
     threadId: 'dm:did:test:me:did:test:peer',
+    conversationId: 'dm:did:test:me:did:test:peer',
     displayName: 'Peer',
     lastMessagePreview: 'hello',
     lastMessageAt: DateTime.utc(2026, 6, 27, 9),

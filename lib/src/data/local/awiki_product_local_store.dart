@@ -33,7 +33,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
         _firstOverlayWhere(
           (overlay) =>
               overlay.ownerDid == ownerDid &&
-              overlay.effectiveConversationId == conversationId,
+              overlay.conversationId == conversationId,
         );
   }
 
@@ -68,7 +68,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
       if (overlay.ownerDid != ownerDid) {
         continue;
       }
-      final conversationId = overlay.effectiveConversationId;
+      final conversationId = overlay.conversationId;
       if (allowed != null && !allowed.contains(conversationId)) {
         continue;
       }
@@ -91,7 +91,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   Future<void> upsertConversationOverlayByConversationId(
     ProductConversationOverlay overlay,
   ) async {
-    final conversationId = overlay.effectiveConversationId;
+    final conversationId = overlay.conversationId;
     _overlays[_compoundKey(overlay.ownerDid, conversationId)] = overlay
         .copyWith(threadId: conversationId, conversationId: conversationId);
   }
@@ -125,6 +125,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
                 ProductConversationOverlay(
                   ownerDid: ownerDid,
                   threadId: conversationKey,
+                  conversationId: conversationKey,
                   updatedAt: updatedAt,
                 ))
             .copyWith(hidden: hidden, updatedAt: updatedAt);
@@ -176,7 +177,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
     _overlays.removeWhere(
       (_, overlay) =>
           overlay.ownerDid == ownerDid &&
-          overlay.effectiveConversationId == conversationId,
+          overlay.conversationId == conversationId,
     );
   }
 
@@ -264,9 +265,9 @@ bool _preferConversationOverlay(
   ProductConversationOverlay existing,
 ) {
   final candidateIsCanonical =
-      candidate.threadId.trim() == candidate.effectiveConversationId;
+      candidate.threadId.trim() == candidate.conversationId;
   final existingIsCanonical =
-      existing.threadId.trim() == existing.effectiveConversationId;
+      existing.threadId.trim() == existing.conversationId;
   if (candidateIsCanonical != existingIsCanonical) {
     return candidateIsCanonical;
   }

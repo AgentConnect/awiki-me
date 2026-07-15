@@ -268,6 +268,30 @@ void main() {
     });
   });
 
+  group('desktopE2eUtf8Locale', () {
+    test('replaces an ASCII macOS shell locale for CocoaPods', () {
+      expect(
+        desktopE2eUtf8Locale(
+          platform: DesktopE2ePlatform.macos,
+          lang: 'C',
+          lcAll: 'POSIX',
+        ),
+        'en_US.UTF-8',
+      );
+    });
+
+    test('keeps an explicitly configured UTF-8 locale', () {
+      expect(
+        desktopE2eUtf8Locale(
+          platform: DesktopE2ePlatform.macos,
+          lang: 'en_US.UTF-8',
+          lcAll: 'zh_CN.UTF-8',
+        ),
+        'zh_CN.UTF-8',
+      );
+    });
+  });
+
   group('CLI build provenance', () {
     const commit = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
 

@@ -182,6 +182,7 @@ void main() {
       );
       final conversation = ConversationSummary(
         threadId: 'direct:did:human:bob',
+        conversationId: 'direct:did:human:bob',
         displayName: 'Bob',
         lastMessagePreview: 'hello',
         lastMessageAt: DateTime(2026, 6, 19, 10, 0),
@@ -991,9 +992,7 @@ ConversationSummary? _conversationForCliMessage(
     if (conversation.displayName.trim().toLowerCase() == normalizedHandle) {
       return conversation;
     }
-    if (conversation.visibilityKeys.any(
-      (key) => key.toLowerCase().contains(normalizedHandle),
-    )) {
+    if (conversation.conversationId.toLowerCase().contains(normalizedHandle)) {
       return conversation;
     }
   }
@@ -1010,7 +1009,7 @@ String _conversationDebugSummary(List<ConversationSummary> conversations) {
             'targetDid': conversation.targetDid,
             'targetPeer': conversation.targetPeer,
             'preview': conversation.lastMessagePreview,
-            'visibilityKeys': conversation.visibilityKeys,
+            'conversationId': conversation.conversationId,
           },
         )
         .toList(),

@@ -36,6 +36,9 @@ class GroupMemberSummary {
     required this.did,
     required this.handle,
     required this.role,
+    this.membershipId,
+    this.peerPersonaId,
+    this.credentialDid,
     this.profileUrl,
     this.displayName,
     this.avatarUri,
@@ -47,6 +50,9 @@ class GroupMemberSummary {
   final String did;
   final String handle;
   final String role;
+  final String? membershipId;
+  final String? peerPersonaId;
+  final String? credentialDid;
   final String? profileUrl;
   final String? displayName;
   final String? avatarUri;

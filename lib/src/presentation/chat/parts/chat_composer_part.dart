@@ -65,7 +65,10 @@ class _ComposerState extends ConsumerState<_Composer> {
     if (oldWidget.focusRequestId != widget.focusRequestId) {
       _scheduleInputFocusForRequest(widget.focusRequestId);
     }
-    if (!sameConversationThread(oldWidget.conversation, widget.conversation)) {
+    if (!_sameCanonicalConversation(
+      oldWidget.conversation,
+      widget.conversation,
+    )) {
       _clearMentionTrigger();
     } else {
       _syncMentionTrigger();

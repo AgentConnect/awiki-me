@@ -230,105 +230,6 @@ List<ChatMessage> _scrollMessages({
 }
 
 void main() {
-  testWidgets('ChatView migrates pending direct alias to peer-scoped thread', (
-    tester,
-  ) async {
-    const session = SessionIdentity(
-      did: 'did:test:me',
-      handle: 'me',
-      displayName: 'Me',
-      credentialName: 'default',
-    );
-    const agentDid = 'did:agent:runtime:hermes';
-    const agentHandle = 'hermes.awiki.example';
-    final pendingAlias = ConversationSummary(
-      threadId: 'dm:pending:$agentHandle',
-      displayName: 'Hermes',
-      lastMessagePreview: '在吗？',
-      lastMessageAt: DateTime(2026, 7, 3, 12),
-      unreadCount: 0,
-      isGroup: false,
-      targetDid: agentDid,
-      targetPeer: agentHandle,
-    );
-    final runtimeConversation = pendingAlias.copyWith(
-      threadId: 'dm:peer-scope:v1:hermes-runtime',
-      lastMessagePreview: '在的',
-      lastMessageAt: DateTime(2026, 7, 3, 12, 1),
-      unreadCount: 1,
-    );
-    final pendingMessage = ChatMessage(
-      localId: 'pending-only',
-      remoteId: 'pending-only',
-      threadId: pendingAlias.threadId,
-      senderDid: session.did,
-      receiverDid: agentDid,
-      content: 'partial pending',
-      createdAt: pendingAlias.lastMessageAt,
-      isMine: true,
-      sendState: MessageSendState.sent,
-    );
-    final runtimeMessage = ChatMessage(
-      localId: 'runtime-reply',
-      remoteId: 'runtime-reply',
-      threadId: runtimeConversation.threadId,
-      senderDid: agentDid,
-      receiverDid: session.did,
-      content: '完整回复',
-      createdAt: runtimeConversation.lastMessageAt,
-      isMine: false,
-      sendState: MessageSendState.sent,
-    );
-    late _StaticConversationListController listController;
-    late _StaticChatThreadsController chatController;
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: CupertinoPageScaffold(
-          child: ChatView(conversation: pendingAlias, embedded: false),
-        ),
-        gateway: FakeAwikiGateway(),
-        session: session,
-        providerOverrides: <Override>[
-          conversationListProvider.overrideWith((ref) {
-            listController = _StaticConversationListController(
-              ref,
-              <ConversationSummary>[pendingAlias],
-            );
-            return listController;
-          }),
-          chatThreadsProvider.overrideWith((ref) {
-            chatController = _StaticChatThreadsController(
-              ref,
-              <String, List<ChatMessage>>{
-                pendingAlias.threadId: <ChatMessage>[pendingMessage],
-                runtimeConversation.threadId: <ChatMessage>[runtimeMessage],
-              },
-            );
-            return chatController;
-          }),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('partial pending'), findsOneWidget);
-    expect(find.text('完整回复'), findsNothing);
-
-    listController.replaceConversations(<ConversationSummary>[
-      runtimeConversation,
-    ]);
-    await tester.pumpAndSettle();
-
-    expect(find.text('partial pending'), findsNothing);
-    expect(find.text('完整回复'), findsOneWidget);
-    expect(chatController.hiddenThreadIds, contains(pendingAlias.threadId));
-    expect(
-      chatController.visibleThreadIds,
-      contains(runtimeConversation.threadId),
-    );
-  });
-
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -402,6 +303,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:narrow',
+      conversationId: 'dm:narrow',
       displayName: 'Very Long Mac Agent Conversation Name',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -453,6 +355,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:header-actions',
+      conversationId: 'dm:header-actions',
       displayName: 'Mac Agent',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -506,6 +409,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:mac',
+      conversationId: 'group:mac',
       displayName: '融资协作群',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -560,6 +464,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:human-peer',
+      conversationId: 'dm:human-peer',
       displayName: '真人用户',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -607,6 +512,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:remote-agent',
+      conversationId: 'dm:remote-agent',
       displayName: '远端智能体',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -664,6 +570,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:nickname-header',
+      conversationId: 'dm:nickname-header',
       displayName: 'zsy.awiki.ai',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -709,11 +616,72 @@ void main() {
     expect(profileService.loadPublicProfileCalls, 0);
   });
 
+  testWidgets('单聊页头在 current DID 缺失时仍按 Persona 读取本地昵称', (tester) async {
+    final profileCompleter = Completer<UserProfile>();
+    final profileService = _DelayedProfileApplicationService(profileCompleter);
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'wire:persona-only',
+      conversationId: 'conv:persona-only',
+      displayName: 'zsy.awiki.ai',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      peerPersonaId: 'persona:zsy',
+      targetPeer: 'zsy.awiki.ai',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profileService),
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              peerPersonaId: 'persona:zsy',
+              profile: const UserProfile(
+                did: 'did:test:zsy-old',
+                nickName: '张盛毅',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'zsy.awiki.ai',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final headerTitle = tester.widget<Text>(
+      find.byKey(const Key('chat-header-title')),
+    );
+    expect(headerTitle.data, '张盛毅');
+    expect(find.text('zsy.awiki.ai'), findsNothing);
+    expect(profileService.loadPublicProfileCalls, 0);
+  });
+
   testWidgets('最近会话同步使用本地 profile 投影且不发起远端查询', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
     final conversation = ConversationSummary(
       threadId: 'dm:nickname-list',
+      conversationId: 'dm:nickname-list',
       displayName: 'lzc.awiki.ai',
       lastMessagePreview: 'hello',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -764,6 +732,7 @@ void main() {
     final profileService = _DelayedProfileApplicationService(profileCompleter);
     final conversation = ConversationSummary(
       threadId: 'group:header',
+      conversationId: 'group:header',
       displayName: '产品讨论群',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -799,7 +768,7 @@ void main() {
     expect(profileService.loadPublicProfileCalls, 0);
   });
 
-  testWidgets('聊天头像信息弹窗先展示基础信息，profile 返回后补齐资料', (tester) async {
+  testWidgets('Profile 返回不同 DID 时补齐弹窗但不重绑聊天页头', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
     final gateway = FakeAwikiGateway();
@@ -811,6 +780,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:delayed-profile',
+      conversationId: 'dm:delayed-profile',
       displayName: '本地智能体',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -879,7 +849,7 @@ void main() {
     expect(find.text('Profile Agent'), findsWidgets);
     expect(
       tester.widget<Text>(find.byKey(const Key('chat-header-title'))).data,
-      'Profile Agent',
+      '本地智能体',
     );
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
     expect(find.text('@profile-agent.awiki.ai'), findsOneWidget);
@@ -914,6 +884,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:follow-button',
+      conversationId: 'dm:follow-button',
       displayName: 'Peer',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -963,6 +934,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:follow-failed',
+      conversationId: 'dm:follow-failed',
       displayName: 'Peer',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1036,6 +1008,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:rename-runtime-agent',
+      conversationId: 'dm:rename-runtime-agent',
       displayName: '我的智能体',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1111,6 +1084,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:unfollow-button',
+      conversationId: 'dm:unfollow-button',
       displayName: 'Peer',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1170,6 +1144,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:did:test:group:funding',
+      conversationId: 'group:did:test:group:funding',
       displayName: 'Group did:test:group:funding',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1191,6 +1166,7 @@ void main() {
             controller.upsertGroup(
               GroupSummary(
                 groupId: conversation.groupId!,
+                conversationId: 'group:${conversation.groupId!}',
                 name: '融资协作群',
                 description: '',
                 memberCount: 3,
@@ -1219,6 +1195,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'group:did:test:group:removed',
+      conversationId: 'group:did:test:group:removed',
       displayName: '历史群聊',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -1240,6 +1217,7 @@ void main() {
             controller.upsertGroup(
               GroupSummary(
                 groupId: conversation.groupId!,
+                conversationId: 'group:${conversation.groupId!}',
                 name: '历史群聊',
                 description: '',
                 memberCount: 3,
@@ -1345,7 +1323,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pumpAndSettle();
 
@@ -1364,6 +1342,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:scroll-bottom-gap',
+      conversationId: 'dm:scroll-bottom-gap',
       displayName: 'Alice',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -1429,7 +1408,7 @@ void main() {
       targetDid: 'did:test:alice',
     );
     final messages = _scrollMessages(
-      threadId: conversation.effectiveConversationId,
+      threadId: conversation.conversationId,
       peerDid: 'did:test:alice',
       startedAt: DateTime(2026, 4, 5, 10),
       count: 28,
@@ -1453,7 +1432,7 @@ void main() {
           chatThreadsProvider.overrideWith(
             (ref) =>
                 _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
-                  conversation.effectiveConversationId: messages,
+                  conversation.conversationId: messages,
                 }),
           ),
           messagingServiceProvider.overrideWithValue(messagingService),
@@ -1474,7 +1453,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pumpAndSettle();
 
@@ -1492,6 +1471,7 @@ void main() {
     );
     final conversationA = ConversationSummary(
       threadId: 'dm:visible-a',
+      conversationId: 'dm:visible-a',
       displayName: 'Alice',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -1501,6 +1481,7 @@ void main() {
     );
     final conversationB = ConversationSummary(
       threadId: 'dm:visible-b',
+      conversationId: 'dm:visible-b',
       displayName: 'Bob',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -1576,6 +1557,7 @@ void main() {
     );
     final conversationA = ConversationSummary(
       threadId: 'dm:peer-scope:v1:controller',
+      conversationId: 'dm:peer-scope:v1:controller',
       displayName: 'Agent Controller',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -1586,6 +1568,7 @@ void main() {
     );
     final conversationB = ConversationSummary(
       threadId: 'dm:peer-scope:v1:runtime',
+      conversationId: 'dm:peer-scope:v1:runtime',
       displayName: 'Agent Runtime',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 7, 3, 7, 10),
@@ -1649,6 +1632,7 @@ void main() {
     );
     final openedConversation = ConversationSummary(
       threadId: 'dm:did:test:me:did:agent:runtime',
+      conversationId: 'dm:did:test:me:did:agent:runtime',
       displayName: 'Runtime raw',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -1862,6 +1846,7 @@ void main() {
     );
     final conversationA = ConversationSummary(
       threadId: 'dm:scroll-a',
+      conversationId: 'dm:scroll-a',
       displayName: 'Alice',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -1871,6 +1856,7 @@ void main() {
     );
     final conversationB = ConversationSummary(
       threadId: 'dm:scroll-b',
+      conversationId: 'dm:scroll-b',
       displayName: 'Bob',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 13),
@@ -2053,6 +2039,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:scroll-new-message',
+      conversationId: 'dm:scroll-new-message',
       displayName: 'Alice',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -2144,7 +2131,7 @@ void main() {
       targetDid: 'did:test:alice',
     );
     final messages = _scrollMessages(
-      threadId: conversation.effectiveConversationId,
+      threadId: conversation.conversationId,
       peerDid: 'did:test:alice',
       startedAt: DateTime(2026, 4, 5, 10),
       count: 6,
@@ -2167,7 +2154,7 @@ void main() {
           chatThreadsProvider.overrideWith(
             (ref) =>
                 _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
-                  conversation.effectiveConversationId: messages,
+                  conversation.conversationId: messages,
                 }),
           ),
         ],
@@ -2185,8 +2172,8 @@ void main() {
           ChatMessage(
             localId: 'incoming-while-visible',
             remoteId: 'incoming-while-visible',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: 'did:test:alice',
             receiverDid: session.did,
             content: 'new message while visible',
@@ -2205,7 +2192,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .acknowledgeVisibleConversationRead(
           conversation,
-          displayThreadId: conversation.effectiveConversationId,
+          displayThreadId: conversation.conversationId,
           forcePersistentAck: true,
         );
     await tester.pump();
@@ -2215,7 +2202,7 @@ void main() {
     expect(gateway.markConversationReadCalls, greaterThanOrEqualTo(1));
     expect(
       gateway.lastMarkConversationReadConversationId,
-      conversation.effectiveConversationId,
+      conversation.conversationId,
     );
   });
 
@@ -2229,6 +2216,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:draft-preview',
+      conversationId: 'dm:draft-preview',
       displayName: 'Alice',
       lastMessagePreview: 'alice old preview',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -2292,6 +2280,7 @@ void main() {
     final base = DateTime(2026, 4, 5, 12);
     final unread = ConversationSummary(
       threadId: 'dm:sort-unread',
+      conversationId: 'dm:sort-unread',
       displayName: 'Unread',
       lastMessagePreview: 'unread old preview',
       lastMessageAt: base.subtract(const Duration(minutes: 20)),
@@ -2301,6 +2290,7 @@ void main() {
     );
     final draft = ConversationSummary(
       threadId: 'dm:sort-draft',
+      conversationId: 'dm:sort-draft',
       displayName: 'Draft',
       lastMessagePreview: 'draft old preview',
       lastMessageAt: base.subtract(const Duration(minutes: 10)),
@@ -2310,6 +2300,7 @@ void main() {
     );
     final read = ConversationSummary(
       threadId: 'dm:sort-read',
+      conversationId: 'dm:sort-read',
       displayName: 'Read',
       lastMessagePreview: 'read latest preview',
       lastMessageAt: base,
@@ -2376,6 +2367,7 @@ void main() {
     const agentHandle = 'test-agent.awiki.ai';
     final controllerConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:controller',
+      conversationId: 'dm:peer-scope:v1:controller',
       displayName: 'Controller',
       lastMessagePreview: 'controller old preview',
       lastMessageAt: DateTime(2026, 7, 3, 7, 9),
@@ -2386,6 +2378,7 @@ void main() {
     );
     final runtimeConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:runtime',
+      conversationId: 'dm:peer-scope:v1:runtime',
       displayName: 'Runtime Agent',
       lastMessagePreview: 'runtime old preview',
       lastMessageAt: DateTime(2026, 7, 3, 7, 10),
@@ -2437,6 +2430,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:preview-tags',
+      conversationId: 'dm:preview-tags',
       displayName: 'Alice',
       lastMessagePreview: 'alice mentioned me',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -2571,8 +2565,8 @@ void main() {
     final sending = ChatMessage(
       localId: 'delayed-sending-message',
       remoteId: 'delayed-sending-message',
-      conversationId: conversation.effectiveConversationId,
-      threadId: conversation.effectiveConversationId,
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
       senderDid: session.did,
       receiverDid: conversation.targetDid,
       content: 'pending hello',
@@ -2592,7 +2586,7 @@ void main() {
           chatThreadsProvider.overrideWith(
             (ref) =>
                 _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
-                  conversation.effectiveConversationId: <ChatMessage>[sending],
+                  conversation.conversationId: <ChatMessage>[sending],
                 }),
           ),
         ],
@@ -2619,7 +2613,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           sending.copyWith(sendState: MessageSendState.sent),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump();
 
@@ -2699,7 +2693,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           delivered,
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -2713,7 +2707,7 @@ void main() {
           <String, Object?>{
             'run_id': 'run_external_service_delayed',
             'runtime_agent_did': 'did:agent:runtime',
-            'conversation_id': conversation.effectiveConversationId,
+            'conversation_id': conversation.conversationId,
             'source_message_id': delivered.remoteId,
             'status': 'running',
             'progress': <String, Object?>{
@@ -2739,7 +2733,7 @@ void main() {
           <String, Object?>{
             'run_id': 'run_external_service_delayed',
             'runtime_agent_did': 'did:agent:runtime',
-            'conversation_id': conversation.effectiveConversationId,
+            'conversation_id': conversation.conversationId,
             'source_message_id': delivered.remoteId,
             'status': 'running',
             'progress': <String, Object?>{
@@ -2799,7 +2793,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -2812,8 +2806,8 @@ void main() {
           ChatMessage(
             localId: 'remote-agent-reply',
             remoteId: 'remote-agent-reply',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: conversation.targetDid!,
             receiverDid: session.did,
             content: '处理完成',
@@ -2870,7 +2864,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -2903,7 +2897,7 @@ void main() {
         ChatMessage(
           localId: 'selectable-text-message',
           remoteId: 'selectable-text-message',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: conversation.targetDid!,
           receiverDid: session.did,
           content: '这是一条可以复制的消息',
@@ -2968,7 +2962,7 @@ void main() {
         ChatMessage(
           localId: 'incoming-markdown',
           remoteId: 'incoming-markdown',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: conversation.targetDid!,
           receiverDid: session.did,
           content: markdown,
@@ -3030,7 +3024,7 @@ void main() {
         ChatMessage(
           localId: 'outgoing-plain-markdown',
           remoteId: 'outgoing-plain-markdown',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: session.did,
           receiverDid: conversation.targetDid!,
           content: text,
@@ -3096,13 +3090,13 @@ void main() {
     const groupMarkdown = '## 群聊标题\n\n- 群聊事项';
     const agentMarkdown = '```text\nagent result\n```';
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[groupConversation.effectiveConversationId] =
+      ..conversationTimelineById[groupConversation.conversationId] =
           <ChatMessage>[
             _messageWithConversation(
               ChatMessage(
                 localId: 'group-incoming-markdown',
                 remoteId: 'group-incoming-markdown',
-                threadId: groupConversation.effectiveConversationId,
+                threadId: groupConversation.conversationId,
                 senderDid: 'did:test:peer',
                 groupId: groupConversation.groupId,
                 content: groupMarkdown,
@@ -3113,13 +3107,13 @@ void main() {
               groupConversation,
             ),
           ]
-      ..conversationTimelineById[agentConversation.effectiveConversationId] =
+      ..conversationTimelineById[agentConversation.conversationId] =
           <ChatMessage>[
             _messageWithConversation(
               ChatMessage(
                 localId: 'agent-markdown',
                 remoteId: 'agent-markdown',
-                threadId: agentConversation.effectiveConversationId,
+                threadId: agentConversation.conversationId,
                 senderDid: agentConversation.targetDid!,
                 receiverDid: session.did,
                 content: agentMarkdown,
@@ -3206,7 +3200,7 @@ void main() {
         ChatMessage(
           localId: 'group-mention-markdown',
           remoteId: 'group-mention-markdown',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: 'did:test:peer',
           senderName: 'Bob',
           groupId: conversation.groupId,
@@ -3323,7 +3317,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -3336,8 +3330,8 @@ void main() {
           ChatMessage(
             localId: 'agent-processing-reply',
             remoteId: 'agent-processing-reply',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '总结完成',
@@ -3413,7 +3407,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -3426,8 +3420,8 @@ void main() {
           ChatMessage(
             localId: 'group-agent-processing-reply',
             remoteId: 'group-agent-processing-reply',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: 'did:wba:awiki.info:agent:runtime:hermes:e1_agent',
             groupId: conversation.groupId,
             content: '@me **总结完成**',
@@ -3510,7 +3504,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
     await tester.enterText(find.byType(CupertinoTextField), '第二个问题');
@@ -3519,7 +3513,7 @@ void main() {
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
           _latestProjectedConversationMessage(messagingService, conversation),
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -3533,8 +3527,8 @@ void main() {
           ChatMessage(
             localId: 'agent-processing-reply-a',
             remoteId: 'agent-processing-reply-a',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第一个回答',
@@ -3554,8 +3548,8 @@ void main() {
           ChatMessage(
             localId: 'agent-processing-reply-a',
             remoteId: 'agent-processing-reply-a',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第一个回答',
@@ -3574,8 +3568,8 @@ void main() {
           ChatMessage(
             localId: 'agent-processing-reply-b',
             remoteId: 'agent-processing-reply-b',
-            conversationId: conversation.effectiveConversationId,
-            threadId: conversation.effectiveConversationId,
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第二个回答',
@@ -3600,6 +3594,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:refresh',
+      conversationId: 'dm:refresh',
       displayName: 'cgw',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 12, 0),
@@ -3633,6 +3628,7 @@ void main() {
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: conversation.threadId,
+          conversationId: conversation.threadId,
           displayName: conversation.displayName,
           lastMessagePreview: reply.content,
           lastMessageAt: reply.createdAt,
@@ -3674,6 +3670,7 @@ void main() {
     const agentHandle = 'hermes-test.anpclaw.com';
     final openedConversation = ConversationSummary(
       threadId: 'dm:${session.did}:$agentDid',
+      conversationId: 'dm:${session.did}:$agentDid',
       displayName: 'Hermes',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 5, 8, 12, 0),
@@ -3684,6 +3681,7 @@ void main() {
     );
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:hermes-test',
+      conversationId: 'dm:peer-scope:v1:hermes-test',
       displayName: 'Hermes',
       lastMessagePreview: '我在。',
       lastMessageAt: DateTime(2026, 5, 8, 12, 1),
@@ -3766,7 +3764,7 @@ void main() {
       ChatMessage(
         localId: 'msg-local-time-1',
         remoteId: 'msg-local-time-1',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: 'did:test:peer',
         receiverDid: session.did,
         content: 'time check',
@@ -3780,7 +3778,7 @@ void main() {
       ChatMessage(
         localId: 'msg-local-time-2',
         remoteId: 'msg-local-time-2',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: 'did:test:peer',
         receiverDid: session.did,
         content: 'time check again',
@@ -3791,8 +3789,10 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[firstMessage, secondMessage];
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        firstMessage,
+        secondMessage,
+      ];
     gateway.conversations = <ConversationSummary>[conversation];
 
     await tester.pumpWidget(
@@ -3929,7 +3929,7 @@ void main() {
     expect(messaging.sendConversationAttachmentCalls, 1);
     expect(
       messaging.lastAttachmentConversation?.conversationId,
-      conversation.effectiveConversationId,
+      conversation.conversationId,
     );
     expect(gateway.lastSentThreadId, 'dm:did:test:peer');
     expect(gateway.lastSentAttachment?.filename, 'report.pdf');
@@ -4017,7 +4017,7 @@ void main() {
       ChatMessage(
         localId: 'inline-image',
         remoteId: 'inline-image',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: conversation.targetDid!,
         receiverDid: session.did,
         content: '',
@@ -4036,8 +4036,9 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[message]
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ]
       ..nextAttachmentDownloadResult = AttachmentDownloadResult(
         attachmentId: 'att-inline-image',
         filename: 'photo.png',
@@ -4103,6 +4104,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:attachment-focus',
+      conversationId: 'dm:attachment-focus',
       displayName: 'Tester',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -4179,9 +4181,7 @@ void main() {
     );
 
     final dropTarget = find.byKey(
-      Key(
-        'chat-attachment-drop-target:${conversation.effectiveConversationId}',
-      ),
+      Key('chat-attachment-drop-target:${conversation.conversationId}'),
     );
     final center = tester.getCenter(dropTarget);
     await _sendDesktopDropMethod('entered', <double>[center.dx, center.dy]);
@@ -4363,6 +4363,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:mac-attachment-focus',
+      conversationId: 'dm:mac-attachment-focus',
       displayName: 'Tester',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -4429,6 +4430,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:mac-screenshot',
+      conversationId: 'dm:mac-screenshot',
       displayName: 'Tester',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -4498,6 +4500,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:mac-composer-layout',
+      conversationId: 'dm:mac-composer-layout',
       displayName: 'Tester',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12),
@@ -4659,7 +4662,7 @@ void main() {
     expect(messaging.sendConversationAttachmentCalls, 1);
     expect(
       messaging.lastAttachmentConversation?.conversationId,
-      conversation.effectiveConversationId,
+      conversation.conversationId,
     );
     expect(gateway.lastSentGroupId, conversation.groupId);
     expect(gateway.lastSentAttachment?.filename, 'diagram.png');
@@ -4683,6 +4686,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:agent-attachment-compose',
+      conversationId: 'dm:agent-attachment-compose',
       displayName: '我的智能体',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -4807,7 +4811,7 @@ void main() {
     expect(gateway.lastSentAttachmentCaption, '@codex 看看这个文件');
     expect(find.text('@codex 看看这个文件'), findsOneWidget);
     final thread = container.read(
-      chatThreadProvider(conversation.effectiveConversationId),
+      chatThreadProvider(conversation.conversationId),
     );
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.agentPendingTurns.single.agentDid, 'did:agent:codex');
@@ -4887,14 +4891,13 @@ void main() {
       targetDid: 'did:test:peer',
     );
     final messages = _scrollMessages(
-      threadId: conversation.effectiveConversationId,
+      threadId: conversation.conversationId,
       peerDid: 'did:test:peer',
       startedAt: DateTime(2026, 4, 5, 12, 0),
       count: 8,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          messages;
+      ..conversationTimelineById[conversation.conversationId] = messages;
     late ChatThreadsController controller;
     final showChat = ValueNotifier<bool>(true);
     addTearDown(showChat.dispose);
@@ -4935,7 +4938,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      controller.thread(conversation.effectiveConversationId).messages.length,
+      controller.thread(conversation.conversationId).messages.length,
       greaterThanOrEqualTo(8),
     );
 
@@ -4945,7 +4948,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(
-      controller.thread(conversation.effectiveConversationId).messages.length,
+      controller.thread(conversation.conversationId).messages.length,
       lessThanOrEqualTo(2),
     );
     expect(controller.debugCacheStats().trimmedMessageCount, greaterThan(0));
@@ -4961,6 +4964,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:ime-composing',
+      conversationId: 'dm:ime-composing',
       displayName: 'Tester',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -5006,6 +5010,7 @@ void main() {
     );
     final conversation = ConversationSummary(
       threadId: 'dm:ime-composing-send-button',
+      conversationId: 'dm:ime-composing-send-button',
       displayName: 'Tester',
       lastMessagePreview: '',
       lastMessageAt: DateTime(2026, 4, 5, 12, 0),
@@ -5089,7 +5094,7 @@ void main() {
         ChatMessage(
           localId: 'alice-1',
           remoteId: 'alice-1',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
           groupId: conversation.groupId,
           content: '第一条',
@@ -5103,7 +5108,7 @@ void main() {
         ChatMessage(
           localId: 'alice-2',
           remoteId: 'alice-2',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
           groupId: conversation.groupId,
           content: '第二条',
@@ -5117,7 +5122,7 @@ void main() {
         ChatMessage(
           localId: 'bob-1',
           remoteId: 'bob-1',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: 'did:wba:awiki.ai:user:bob:e1_key',
           senderName: 'did:wba:awiki.ai:user:bob:e1_key',
           groupId: conversation.groupId,
@@ -5132,7 +5137,7 @@ void main() {
         ChatMessage(
           localId: 'mine-1',
           remoteId: 'mine-1',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: session.did,
           senderName: session.handle,
           groupId: conversation.groupId,
@@ -5147,7 +5152,7 @@ void main() {
         ChatMessage(
           localId: 'alice-3',
           remoteId: 'alice-3',
-          threadId: conversation.effectiveConversationId,
+          threadId: conversation.conversationId,
           senderDid: 'did:wba:awiki.ai:user:alice:e1_key',
           groupId: conversation.groupId,
           content: '第四条',
@@ -5159,8 +5164,7 @@ void main() {
       ),
     ];
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          messages;
+      ..conversationTimelineById[conversation.conversationId] = messages;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5223,7 +5227,7 @@ void main() {
       ChatMessage(
         localId: 'dm-caption-attachment',
         remoteId: 'dm-caption-attachment',
-        threadId: dmConversation.effectiveConversationId,
+        threadId: dmConversation.conversationId,
         senderDid: 'did:test:peer',
         content: '请看这个文件',
         originalType: 'application/anp-attachment-manifest+json',
@@ -5244,7 +5248,7 @@ void main() {
       ChatMessage(
         localId: 'group-caption-attachment',
         remoteId: 'group-caption-attachment',
-        threadId: groupConversation.effectiveConversationId,
+        threadId: groupConversation.conversationId,
         senderDid: 'did:test:peer',
         groupId: groupConversation.groupId,
         content: '群里也发一个',
@@ -5263,8 +5267,9 @@ void main() {
       groupConversation,
     );
     final dmMessagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[dmConversation.effectiveConversationId] =
-          <ChatMessage>[dmMessage];
+      ..conversationTimelineById[dmConversation.conversationId] = <ChatMessage>[
+        dmMessage,
+      ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5294,7 +5299,7 @@ void main() {
     );
 
     final groupMessagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[groupConversation.effectiveConversationId] =
+      ..conversationTimelineById[groupConversation.conversationId] =
           <ChatMessage>[groupMessage];
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5343,31 +5348,30 @@ void main() {
       targetDid: 'did:test:peer',
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[
-            _messageWithConversation(
-              ChatMessage(
-                localId: 'selectable-attachment',
-                remoteId: 'selectable-attachment',
-                threadId: conversation.effectiveConversationId,
-                senderDid: conversation.targetDid!,
-                receiverDid: session.did,
-                content: '附件说明',
-                createdAt: DateTime(2026, 4, 5, 12, 1),
-                isMine: false,
-                sendState: MessageSendState.sent,
-                originalType: 'application/anp-attachment-manifest+json',
-                attachment: const ChatAttachment(
-                  attachmentId: 'att-selectable',
-                  filename: 'copyable-report.pdf',
-                  mimeType: 'application/pdf',
-                  sizeBytes: 2048,
-                  caption: '附件说明',
-                ),
-              ),
-              conversation,
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        _messageWithConversation(
+          ChatMessage(
+            localId: 'selectable-attachment',
+            remoteId: 'selectable-attachment',
+            threadId: conversation.conversationId,
+            senderDid: conversation.targetDid!,
+            receiverDid: session.did,
+            content: '附件说明',
+            createdAt: DateTime(2026, 4, 5, 12, 1),
+            isMine: false,
+            sendState: MessageSendState.sent,
+            originalType: 'application/anp-attachment-manifest+json',
+            attachment: const ChatAttachment(
+              attachmentId: 'att-selectable',
+              filename: 'copyable-report.pdf',
+              mimeType: 'application/pdf',
+              sizeBytes: 2048,
+              caption: '附件说明',
             ),
-          ];
+          ),
+          conversation,
+        ),
+      ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5418,7 +5422,7 @@ void main() {
       ChatMessage(
         localId: 'native-open-attachment',
         remoteId: 'native-open-attachment',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: conversation.targetDid!,
         receiverDid: session.did,
         content: '',
@@ -5436,8 +5440,9 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[message];
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5499,7 +5504,7 @@ void main() {
       ChatMessage(
         localId: 'attachment-markdown-caption',
         remoteId: 'attachment-markdown-caption',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: conversation.targetDid!,
         receiverDid: session.did,
         content: caption,
@@ -5518,8 +5523,9 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[message];
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5569,7 +5575,7 @@ void main() {
       ChatMessage(
         localId: 'local_msg_1',
         remoteId: 'msg_1',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: 'did:human:bob',
         receiverDid: session.did,
         content: 'hello',
@@ -5583,7 +5589,7 @@ void main() {
       ChatMessage(
         localId: 'control-json',
         remoteId: 'control-json',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: 'did:agent:daemon',
         receiverDid: session.did,
         content: '{"schema":"awiki.message.sync.v1"}',
@@ -5596,8 +5602,10 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[message, controlMessage];
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+        controlMessage,
+      ];
     gateway.conversations = <ConversationSummary>[conversation];
 
     await tester.pumpWidget(
@@ -5655,7 +5663,7 @@ void main() {
           'runtime_agent_did': 'did:agent:runtime',
           'run_id': 'run_1',
           'source_message_id': 'msg_1',
-          'source_conversation_id': conversation.effectiveConversationId,
+          'source_conversation_id': conversation.conversationId,
           'state': 'finished',
           'has_text': true,
           'retention_class': 'hash_only',
@@ -5670,7 +5678,7 @@ void main() {
           'runtime_agent_did': 'did:agent:runtime',
           'run_id': 'run_1',
           'source_message_id': 'msg_1',
-          'conversation_id': conversation.effectiveConversationId,
+          'conversation_id': conversation.conversationId,
           'requires_confirmation': true,
           'args': <String, Object?>{'draft_text': '收到，我会处理。'},
         });
@@ -5718,7 +5726,7 @@ void main() {
       ChatMessage(
         localId: 'deleted-agent-history',
         remoteId: 'deleted-agent-history',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: conversation.targetDid!,
         receiverDid: session.did,
         content: '历史消息仍可查看',
@@ -5729,8 +5737,9 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[message];
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5783,7 +5792,7 @@ void main() {
       ChatMessage(
         localId: 'attachment-only',
         remoteId: 'attachment-only',
-        threadId: conversation.effectiveConversationId,
+        threadId: conversation.conversationId,
         senderDid: 'did:test:peer',
         content: '',
         originalType: 'application/anp-attachment-manifest+json',
@@ -5800,8 +5809,9 @@ void main() {
       conversation,
     );
     final messagingService = FakeMessagingService(gateway)
-      ..conversationTimelineById[conversation.effectiveConversationId] =
-          <ChatMessage>[message];
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5844,8 +5854,8 @@ ChatMessage _messageWithConversation(
   return ChatMessage(
     localId: message.localId,
     remoteId: message.remoteId,
-    conversationId: conversation.effectiveConversationId,
-    threadId: conversation.effectiveConversationId,
+    conversationId: conversation.conversationId,
+    threadId: conversation.conversationId,
     senderDid: message.senderDid,
     senderName: message.senderName,
     receiverDid: message.receiverDid,
@@ -5869,7 +5879,7 @@ FakeMessagingService _messagingServiceWithConversationMessages(
   List<ChatMessage> messages,
 ) {
   return FakeMessagingService(gateway)
-    ..conversationTimelineById[conversation.effectiveConversationId] = messages
+    ..conversationTimelineById[conversation.conversationId] = messages
         .map((message) => _messageWithConversation(message, conversation))
         .toList(growable: false);
 }
@@ -5879,12 +5889,11 @@ ChatMessage _latestProjectedConversationMessage(
   ConversationSummary conversation,
 ) {
   final messages =
-      messagingService.conversationTimelineById[conversation
-          .effectiveConversationId] ??
+      messagingService.conversationTimelineById[conversation.conversationId] ??
       const <ChatMessage>[];
   if (messages.isEmpty) {
     throw StateError(
-      'No projected messages for ${conversation.effectiveConversationId}',
+      'No projected messages for ${conversation.conversationId}',
     );
   }
   return messages.last;

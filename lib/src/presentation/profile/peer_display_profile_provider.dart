@@ -6,20 +6,50 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../domain/entities/peer_display_profile.dart';
 import '../../domain/entities/user_profile.dart';
-import '../shared/formatters/display_formatters.dart';
+import '../../domain/services/peer_display_name_resolver.dart';
 
 class PeerDisplayProfileState {
   const PeerDisplayProfileState({
     this.ownerDid,
-    this.profiles = const <String, PeerDisplayProfile>{},
+    this.profilesByPersonaId = const <String, PeerDisplayProfile>{},
+    this.unresolvedProfilesByDid = const <String, PeerDisplayProfile>{},
+    this.personaIdByDid = const <String, String>{},
+    this.localNotesByPersonaId = const <String, String>{},
   });
 
   final String? ownerDid;
-  final Map<String, PeerDisplayProfile> profiles;
+  final Map<String, PeerDisplayProfile> profilesByPersonaId;
+  final Map<String, PeerDisplayProfile> unresolvedProfilesByDid;
+  final Map<String, String> personaIdByDid;
+  final Map<String, String> localNotesByPersonaId;
+
+  PeerDisplayProfile? forPeer({String? peerPersonaId, String? did}) {
+    final personaId = peerPersonaId?.trim() ?? '';
+    if (personaId.isNotEmpty) {
+      return profilesByPersonaId[personaId];
+    }
+    return forDid(did);
+  }
 
   PeerDisplayProfile? forDid(String? did) {
     final key = did?.trim() ?? '';
-    return key.isEmpty ? null : profiles[key];
+    if (key.isEmpty) {
+      return null;
+    }
+    final personaId = personaIdByDid[key];
+    if (personaId != null) {
+      return profilesByPersonaId[personaId];
+    }
+    return unresolvedProfilesByDid[key];
+  }
+
+  String? localNoteForPeer({String? peerPersonaId, String? did}) {
+    final requestedPersonaId = peerPersonaId?.trim() ?? '';
+    final didKey = did?.trim() ?? '';
+    final personaId = requestedPersonaId.isNotEmpty
+        ? requestedPersonaId
+        : personaIdByDid[didKey] ?? '';
+    return personaId.isEmpty ? null : localNotesByPersonaId[personaId];
   }
 }
 
@@ -34,6 +64,7 @@ class PeerDisplayProfileController
   Future<void> loadCached({
     required String ownerDid,
     required Iterable<String> dids,
+    Map<String, String> peerPersonaIdsByDid = const <String, String>{},
   }) async {
     final normalizedOwner = ownerDid.trim();
     if (normalizedOwner.isEmpty) {
@@ -41,9 +72,10 @@ class PeerDisplayProfileController
       return;
     }
     _selectOwner(normalizedOwner);
+    _registerPersonaRoutes(peerPersonaIdsByDid);
     final missing = dids
         .map((did) => did.trim())
-        .where((did) => did.isNotEmpty && !state.profiles.containsKey(did))
+        .where((did) => did.isNotEmpty && state.forDid(did) == null)
         .toSet();
     if (missing.isEmpty) {
       return;
@@ -61,13 +93,13 @@ class PeerDisplayProfileController
     if (state.ownerDid != normalizedOwner) {
       return;
     }
-    _merge(profiles);
+    _merge(profiles, peerPersonaIdsByDid: peerPersonaIdsByDid);
   }
 
   void updateFromRemote({
     required String ownerDid,
     required UserProfile profile,
-    String? requestedDid,
+    String? peerPersonaId,
   }) {
     final normalizedOwner = ownerDid.trim();
     final did = profile.did.trim();
@@ -76,7 +108,7 @@ class PeerDisplayProfileController
     }
     _selectOwner(normalizedOwner);
     final rawDisplayName = profile.displayName.trim();
-    final compactDid = DidDisplayFormatter.compactDid(did);
+    final compactDid = PeerDisplayNameResolver.compactDid(did);
     final nickname =
         rawDisplayName.isNotEmpty &&
             rawDisplayName != did &&
@@ -85,21 +117,12 @@ class PeerDisplayProfileController
         : null;
     final projection = PeerDisplayProfile(
       did: did,
+      peerPersonaId: peerPersonaId,
       displayName: nickname,
       handle: profile.fullHandle ?? profile.handle,
       avatarUri: profile.avatarUri,
     );
-    final lookupDid = requestedDid?.trim() ?? '';
-    _merge(<PeerDisplayProfile>[
-      projection,
-      if (lookupDid.isNotEmpty && lookupDid != did)
-        PeerDisplayProfile(
-          did: lookupDid,
-          displayName: projection.displayName,
-          handle: projection.handle,
-          avatarUri: projection.avatarUri,
-        ),
-    ]);
+    _merge(<PeerDisplayProfile>[projection]);
   }
 
   Future<void> refreshRemoteMissing({
@@ -120,7 +143,7 @@ class PeerDisplayProfileController
       return;
     }
     final missing = requested
-        .where((did) => !state.profiles.containsKey(did))
+        .where((did) => state.forDid(did) == null)
         .toList(growable: false);
     await Future.wait<void>(
       missing.map((did) {
@@ -152,7 +175,7 @@ class PeerDisplayProfileController
       if (state.ownerDid != ownerDid) {
         return;
       }
-      updateFromRemote(ownerDid: ownerDid, profile: profile, requestedDid: did);
+      updateFromRemote(ownerDid: ownerDid, profile: profile);
     } catch (error) {
       debugPrint(
         '[awiki_me][profile_projection] remote_profile_refresh_failed '
@@ -167,6 +190,38 @@ class PeerDisplayProfileController
     state = const PeerDisplayProfileState();
   }
 
+  void registerLocalNotes({
+    required String ownerDid,
+    required Map<String, String> localNotesByPersonaId,
+  }) {
+    if (state.ownerDid != ownerDid.trim()) {
+      return;
+    }
+    if (localNotesByPersonaId.isEmpty) {
+      return;
+    }
+    final next = <String, String>{...state.localNotesByPersonaId};
+    for (final entry in localNotesByPersonaId.entries) {
+      final personaId = entry.key.trim();
+      final note = entry.value.trim();
+      if (personaId.isEmpty) {
+        continue;
+      }
+      if (note.isEmpty) {
+        next.remove(personaId);
+      } else {
+        next[personaId] = note;
+      }
+    }
+    state = PeerDisplayProfileState(
+      ownerDid: state.ownerDid,
+      profilesByPersonaId: state.profilesByPersonaId,
+      unresolvedProfilesByDid: state.unresolvedProfilesByDid,
+      personaIdByDid: state.personaIdByDid,
+      localNotesByPersonaId: next,
+    );
+  }
+
   void _selectOwner(String ownerDid) {
     if (state.ownerDid == ownerDid) {
       return;
@@ -174,15 +229,88 @@ class PeerDisplayProfileController
     state = PeerDisplayProfileState(ownerDid: ownerDid);
   }
 
-  void _merge(Iterable<PeerDisplayProfile> profiles) {
-    final next = <String, PeerDisplayProfile>{...state.profiles};
-    for (final profile in profiles) {
-      final did = profile.did.trim();
-      if (did.isNotEmpty) {
-        next[did] = profile;
+  void _registerPersonaRoutes(Map<String, String> peerPersonaIdsByDid) {
+    if (peerPersonaIdsByDid.isEmpty) {
+      return;
+    }
+    final byPersona = <String, PeerDisplayProfile>{
+      ...state.profilesByPersonaId,
+    };
+    final unresolvedByDid = <String, PeerDisplayProfile>{
+      ...state.unresolvedProfilesByDid,
+    };
+    final routes = <String, String>{...state.personaIdByDid};
+    for (final entry in peerPersonaIdsByDid.entries) {
+      final did = entry.key.trim();
+      final personaId = entry.value.trim();
+      if (did.isNotEmpty && personaId.isNotEmpty) {
+        final existingPersonaId = routes[did];
+        if (existingPersonaId != null && existingPersonaId != personaId) {
+          continue;
+        }
+        routes[did] = personaId;
+        final unresolved = unresolvedByDid.remove(did);
+        if (unresolved != null && !byPersona.containsKey(personaId)) {
+          byPersona[personaId] = PeerDisplayProfile(
+            did: did,
+            peerPersonaId: personaId,
+            displayName: unresolved.displayName,
+            handle: unresolved.handle,
+            avatarUri: unresolved.avatarUri,
+          );
+        }
       }
     }
-    state = PeerDisplayProfileState(ownerDid: state.ownerDid, profiles: next);
+    state = PeerDisplayProfileState(
+      ownerDid: state.ownerDid,
+      profilesByPersonaId: byPersona,
+      unresolvedProfilesByDid: unresolvedByDid,
+      personaIdByDid: routes,
+      localNotesByPersonaId: state.localNotesByPersonaId,
+    );
+  }
+
+  void _merge(
+    Iterable<PeerDisplayProfile> profiles, {
+    Map<String, String> peerPersonaIdsByDid = const <String, String>{},
+  }) {
+    final byPersona = <String, PeerDisplayProfile>{
+      ...state.profilesByPersonaId,
+    };
+    final unresolvedByDid = <String, PeerDisplayProfile>{
+      ...state.unresolvedProfilesByDid,
+    };
+    final routes = <String, String>{...state.personaIdByDid};
+    for (final profile in profiles) {
+      final did = profile.did.trim();
+      if (did.isEmpty) {
+        continue;
+      }
+      final personaId =
+          profile.peerPersonaId?.trim() ??
+          peerPersonaIdsByDid[did]?.trim() ??
+          routes[did];
+      if (personaId != null && personaId.isNotEmpty) {
+        routes[did] = personaId;
+        byPersona[personaId] = PeerDisplayProfile(
+          did: did,
+          peerPersonaId: personaId,
+          displayName: profile.displayName,
+          handle: profile.handle,
+          avatarUri: profile.avatarUri,
+        );
+        unresolvedByDid.remove(did);
+      } else {
+        unresolvedByDid[did] = profile;
+      }
+    }
+    state = PeerDisplayProfileState(
+      ownerDid: state.ownerDid,
+      profilesByPersonaId: byPersona,
+      unresolvedProfilesByDid: unresolvedByDid,
+      personaIdByDid: routes,
+      localNotesByPersonaId: state.localNotesByPersonaId,
+    );
   }
 }
 
@@ -192,29 +320,85 @@ final peerDisplayProfileProvider =
       PeerDisplayProfileState
     >((ref) => PeerDisplayProfileController(ref));
 
-String peerDisplayName(
-  PeerDisplayProfileState state, {
-  required String? did,
-  required String fallback,
+String? peerAvatarUri(
+  PeerDisplayProfileState state,
+  String? did, {
+  String? peerPersonaId,
 }) {
-  final profile = state.forDid(did);
-  final nickname = profile?.displayName?.trim() ?? '';
-  if (nickname.isNotEmpty && !nickname.startsWith('did:')) {
-    return nickname;
-  }
-  final handle = _cleanHandle(profile?.handle);
-  return handle.isNotEmpty ? handle : fallback;
-}
-
-String? peerAvatarUri(PeerDisplayProfileState state, String? did) {
-  final value = state.forDid(did)?.avatarUri?.trim() ?? '';
+  final value =
+      state
+          .forPeer(peerPersonaId: peerPersonaId, did: did)
+          ?.avatarUri
+          ?.trim() ??
+      '';
   return value.isEmpty ? null : value;
 }
 
-String _cleanHandle(String? source) {
-  var value = source?.trim() ?? '';
-  while (value.startsWith('@')) {
-    value = value.substring(1).trimLeft();
-  }
-  return value;
+class PeerDisplayNameRequest {
+  const PeerDisplayNameRequest({
+    this.peerPersonaId,
+    this.did,
+    this.nickname,
+    this.fullHandle,
+    this.senderNameSnapshot,
+    this.unknownLabel = '',
+  });
+
+  final String? peerPersonaId;
+  final String? did;
+  final String? nickname;
+  final String? fullHandle;
+  final String? senderNameSnapshot;
+  final String unknownLabel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PeerDisplayNameRequest &&
+      other.peerPersonaId == peerPersonaId &&
+      other.did == did &&
+      other.nickname == nickname &&
+      other.fullHandle == fullHandle &&
+      other.senderNameSnapshot == senderNameSnapshot &&
+      other.unknownLabel == unknownLabel;
+
+  @override
+  int get hashCode => Object.hash(
+    peerPersonaId,
+    did,
+    nickname,
+    fullHandle,
+    senderNameSnapshot,
+    unknownLabel,
+  );
 }
+
+final peerDisplayNameProvider = Provider.family<String, PeerDisplayNameRequest>(
+  (ref, request) {
+    final projection = ref.watch(
+      peerDisplayProfileProvider.select((state) {
+        return (
+          profile: state.forPeer(
+            peerPersonaId: request.peerPersonaId,
+            did: request.did,
+          ),
+          localNote: state.localNoteForPeer(
+            peerPersonaId: request.peerPersonaId,
+            did: request.did,
+          ),
+        );
+      }),
+    );
+    return const PeerDisplayNameResolver().resolve(
+      localNote: projection.localNote,
+      nickname: projection.profile?.displayName?.trim().isNotEmpty == true
+          ? projection.profile!.displayName
+          : request.nickname,
+      fullHandle: projection.profile?.handle?.trim().isNotEmpty == true
+          ? projection.profile!.handle
+          : request.fullHandle,
+      senderNameSnapshot: request.senderNameSnapshot,
+      did: request.did,
+      unknownLabel: request.unknownLabel,
+    );
+  },
+);

@@ -910,16 +910,14 @@ class DesktopE2eRunner {
           'device and application bundle.',
         );
       }
-      final locale = Platform.environment['LANG']?.trim().isNotEmpty == true
-          ? Platform.environment['LANG']!
-          : platform == DesktopE2ePlatform.macos
-          ? 'en_US.UTF-8'
-          : 'C.UTF-8';
+      final locale = desktopE2eUtf8Locale(
+        platform: platform,
+        lang: Platform.environment['LANG'],
+        lcAll: Platform.environment['LC_ALL'],
+      );
       final environment = <String, String>{
         'LANG': locale,
-        'LC_ALL': Platform.environment['LC_ALL']?.trim().isNotEmpty == true
-            ? Platform.environment['LC_ALL']!
-            : locale,
+        'LC_ALL': locale,
         ...flutterBuildIsolation.environment,
       };
       if (platform == DesktopE2ePlatform.linux) {
@@ -1445,6 +1443,20 @@ class DesktopE2eRunner {
     redactor.addSecret(value);
     commands.redactor.addSecret(value);
   }
+}
+
+String desktopE2eUtf8Locale({
+  required DesktopE2ePlatform platform,
+  String? lang,
+  String? lcAll,
+}) {
+  for (final candidate in <String?>[lcAll, lang]) {
+    final value = candidate?.trim() ?? '';
+    if (RegExp(r'utf-?8', caseSensitive: false).hasMatch(value)) {
+      return value;
+    }
+  }
+  return platform == DesktopE2ePlatform.macos ? 'en_US.UTF-8' : 'C.UTF-8';
 }
 
 class DesktopE2eSuiteManifest {

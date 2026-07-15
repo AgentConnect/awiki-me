@@ -3,7 +3,6 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
@@ -289,6 +288,7 @@ void main() {
       ..conversations = <ConversationSummary>[
         ConversationSummary(
           threadId: 'dm:did:test:alice:did:test:me',
+          conversationId: 'dm:did:test:alice:did:test:me',
           displayName: 'Stale Bob',
           lastMessagePreview: 'old',
           lastMessageAt: DateTime(2026, 5, 27, 12),
@@ -341,10 +341,10 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(FriendsPage)),
     );
-    final selected = container.read(selectedConversationProvider);
+    final selected = selectedConversationSummary(container);
     expect(selected?.targetDid, 'did:test:alice');
     expect(selected?.displayName, 'Alice');
-    expect(selected?.effectiveConversationId, 'dm:peer-scope:v1:alice');
+    expect(selected?.conversationId, 'dm:peer-scope:v1:alice');
   });
 
   testWidgets('macOS 点击我关注的在右侧展示完整联系人列表并可取消关注', (tester) async {
@@ -502,6 +502,7 @@ void main() {
     final groups = <GroupSummary>[
       GroupSummary(
         groupId: 'did:test:group:funding',
+        conversationId: 'group:did:test:group:funding',
         name: '融资协作群',
         description: '融资材料同步',
         memberCount: 3,

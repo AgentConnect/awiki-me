@@ -10,6 +10,14 @@ implementations, and App + CLI peer/backend/device validation assets. Root
 `integration_test/*.dart` files are Flutter-tooling shims only. Platform runners live under
 `android/`, `ios/`, `macos/`, and `web/`. Static assets live in `assets/`.
 
+## Architecture Guardrail
+Before changing conversation identity, list/detail/profile projection,
+read/send/realtime behavior, or release/0710 upgrade behavior, read
+[`docs/conversation-presentation-ownership.md`](docs/conversation-presentation-ownership.md),
+[`docs/storage-scope-vault-contract.md`](docs/storage-scope-vault-contract.md), and
+[`../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md`](../awiki-cli-rs2/docs/architecture/im-core-sdk-architecture.md).
+Do not implement conflicting ownership, canonical-identity, fallback, or migration logic; update the authoritative documents first if the architecture itself must change.
+
 ## Build, Test, and Development Commands
 Use Flutter/Dart tooling only. When installing dependencies, prefer the
 Tsinghua pub mirror:
@@ -56,6 +64,13 @@ assertions when the feature spans the real backend, CLI peer, account/OTP,
 multi-client messaging, or mobile-device flows. If coverage cannot be added in
 the current change, document the reason, skipped case ID, owner, and follow-up
 in the relevant test docs or plan before merging.
+
+Any code addition or modification must, in the same task, add or update the
+corresponding unit tests, system tests, and end-to-end (E2E) tests. Keep unit
+tests in this repository, put cross-service system coverage in
+`../awiki-system-test`, and keep AWiki Me product E2E coverage under
+`tests/e2e/`; when another repository owns a required test layer, update it in
+the same task.
 
 For development/test OTP flows, use the shared non-production credentials below:
 

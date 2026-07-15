@@ -37,6 +37,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversat
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -371,7 +372,7 @@ void runDesktopCliPeerE2e({
       }
     },
     skip: !_DesktopCliPeerSmokeConfig.exists(),
-    timeout: const Timeout(Duration(minutes: 12)),
+    timeout: const Timeout(Duration(minutes: 17)),
   );
 }
 

@@ -3,10 +3,9 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 import '../../../domain/entities/conversation_summary.dart';
 import '../../../domain/entities/relationship_summary.dart';
 import '../../../domain/entities/user_profile.dart';
+import '../../../domain/services/peer_display_name_resolver.dart';
 
 class DidDisplayFormatter {
-  static final RegExp _didUserPattern = RegExp(r':(?:user:)?([^:]+):e1_');
-  static final RegExp _didTailPattern = RegExp(r':([^:]+)$');
   static final RegExp _fingerprintPattern = RegExp(r'^(.*:e1_)(.+)$');
   static final RegExp _handleMetadataLine = RegExp(
     r'^\s*(?:[-*]\s*)?(?:我的短号\s*[（(]\s*handle\s*[）)]|handle)\s*[:：]\s*@?\S+\s*$',
@@ -17,17 +16,8 @@ class DidDisplayFormatter {
     caseSensitive: false,
   );
 
-  static String compactDid(String source) {
-    final didMatch = _didUserPattern.firstMatch(source);
-    if (didMatch != null) {
-      return didMatch.group(1)!;
-    }
-    final tailMatch = _didTailPattern.firstMatch(source);
-    if (tailMatch != null) {
-      return tailMatch.group(1)!;
-    }
-    return source;
-  }
+  static String compactDid(String source) =>
+      PeerDisplayNameResolver.compactDid(source);
 
   /// Keeps the complete DID path and the fingerprint tail visible while
   /// removing the visually noisy middle of a long fingerprint.
@@ -103,15 +93,11 @@ class DidDisplayFormatter {
   /// Relationship rows prefer the hydrated nickname and only fall back to
   /// the protocol Handle when the profile has no nickname.
   static String relationshipTitle(RelationshipSummary relationship) {
-    final nickname = relationship.displayName.trim();
-    if (nickname.isNotEmpty && !nickname.startsWith('did:')) {
-      return nickname;
-    }
-    final handle = _cleanHandle(relationship.handle);
-    if (handle.isNotEmpty) {
-      return handle;
-    }
-    return compactDid(relationship.did);
+    return const PeerDisplayNameResolver().resolve(
+      nickname: relationship.displayName,
+      fullHandle: relationship.handle,
+      did: relationship.did,
+    );
   }
 
   static String conversationTitle(
@@ -119,18 +105,16 @@ class DidDisplayFormatter {
     AppLocalizations l10n, {
     String? peerDisplayName,
   }) {
-    final profileName = peerDisplayName?.trim() ?? '';
-    if (!conversation.isGroup && profileName.isNotEmpty) {
-      return profileName;
+    if (!conversation.isGroup) {
+      return const PeerDisplayNameResolver().resolve(
+        nickname: peerDisplayName,
+        fullHandle: conversation.targetPeer,
+        senderNameSnapshot: conversation.displayName,
+        did: conversation.targetDid,
+        unknownLabel: l10n.chatUnknownUser,
+      );
     }
-    if (!conversation.isGroup && _usesHandleAsDisplayName(conversation)) {
-      return l10n.chatUnknownUser;
-    }
-    final source = conversation.isGroup
-        ? conversation.displayName
-        : (conversation.targetDid?.trim().isNotEmpty == true
-              ? conversation.targetDid!.trim()
-              : conversation.displayName);
+    final source = conversation.displayName;
     final compact = compactDisplayName(
       displayName: conversation.displayName,
       fallbackDid: source,
@@ -138,22 +122,12 @@ class DidDisplayFormatter {
     return compact.isEmpty ? l10n.chatConversationUntitled : compact;
   }
 
-  static bool _usesHandleAsDisplayName(ConversationSummary conversation) {
-    final displayName = _cleanHandle(conversation.displayName).toLowerCase();
-    final targetPeer = _cleanHandle(conversation.targetPeer).toLowerCase();
-    return displayName.isNotEmpty &&
-        targetPeer.isNotEmpty &&
-        displayName == targetPeer;
-  }
-
   static String profileName(UserProfile profile) {
-    if (profile.displayName.trim().isNotEmpty) {
-      return profile.displayName.trim();
-    }
-    if (profile.handle?.trim().isNotEmpty == true) {
-      return profile.handle!.trim();
-    }
-    return compactDid(profile.did);
+    return const PeerDisplayNameResolver().resolve(
+      nickname: profile.displayName,
+      fullHandle: profile.fullHandle ?? profile.handle,
+      did: profile.did,
+    );
   }
 
   static String homepageUrl(UserProfile profile) {

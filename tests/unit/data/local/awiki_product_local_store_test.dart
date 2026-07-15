@@ -13,6 +13,7 @@ void main() {
         ProductConversationOverlay(
           ownerDid: 'did:alice',
           threadId: 'thread-1',
+          conversationId: 'thread-1',
           pinned: true,
           customTitle: 'Custom',
           updatedAt: now,
@@ -124,7 +125,7 @@ void main() {
       );
 
       expect(alice?.threadId, 'dm:peer-scope:v1:bob');
-      expect(alice?.effectiveConversationId, 'dm:peer-scope:v1:bob');
+      expect(alice?.conversationId, 'dm:peer-scope:v1:bob');
       expect(alice?.pinned, isTrue);
       expect(alice?.hidden, isFalse);
       expect(alice?.customTitle, 'Bob canonical');
