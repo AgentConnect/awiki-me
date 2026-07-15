@@ -129,18 +129,20 @@ void main() {
         jwtToken: 'test-jwt',
       );
       final harness = createFakeAwikiMeAppHarness(session: session);
+      const smokePeerProfile = UserProfile(
+        did: 'did:test:smoke-peer.awiki.ai',
+        nickName: 'Smoke Peer Nickname',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'smoke-peer',
+        fullHandle: 'smoke-peer.awiki.ai',
+      );
       harness.gateway.directoryConversationIdsByQuery['smoke-peer.awiki.ai'] =
           'dm:peer-scope:v1:smoke-peer';
-      harness.gateway.publicProfilesByQuery['did:test:smoke-peer.awiki.ai'] =
-          const UserProfile(
-            did: 'did:test:smoke-peer.awiki.ai',
-            nickName: 'Smoke Peer Nickname',
-            bio: '',
-            tags: <String>[],
-            profileMarkdown: '',
-            handle: 'smoke-peer',
-            fullHandle: 'smoke-peer.awiki.ai',
-          );
+      harness.gateway.publicProfilesByQuery
+        ..['did:test:smoke-peer.awiki.ai'] = smokePeerProfile
+        ..['smoke-peer.awiki.ai'] = smokePeerProfile;
       final picker = test_support.FakeAttachmentPickerService();
 
       try {
@@ -180,6 +182,8 @@ void main() {
           find.byKey(const Key('chat-header-title')),
         );
         expect(headerTitle.data, 'Smoke Peer Nickname');
+        expect(find.text('Smoke Peer Nickname'), findsNWidgets(2));
+        expect(find.text('smoke-peer.awiki.ai'), findsNothing);
         expect(find.byKey(const Key('chat-emoji-button')), findsOneWidget);
         expect(find.byKey(const Key('chat-screenshot-button')), findsOneWidget);
         await tester.tap(find.byKey(const Key('chat-emoji-button')));
@@ -224,6 +228,8 @@ void main() {
             isGroup: false,
             targetDid: 'did:test:smoke-peer:previous',
             targetPeer: 'smoke-peer.awiki.ai',
+            peerPersonaId:
+                'test-persona:dm:peer-scope:v1:smoke-peer',
           ),
         ];
         await container.read(conversationListProvider.notifier).refresh();
@@ -241,17 +247,8 @@ void main() {
           find.byKey(Key('conversation-row:${started.conversationId}')),
           findsOneWidget,
         );
-
-        harness.gateway.conversations = const <ConversationSummary>[];
-        await container.read(conversationListProvider.notifier).refresh();
-        await _pumpSmokeFrame(tester);
-
-        conversations = container.read(conversationListProvider).conversations;
-        expect(conversations, hasLength(1));
-        expect(
-          conversations.single.conversationId,
-          'dm:peer-scope:v1:smoke-peer',
-        );
+        expect(find.text('Smoke Peer Nickname'), findsNWidgets(2));
+        expect(find.text('smoke-peer.awiki.ai'), findsNothing);
       } finally {
         debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);
