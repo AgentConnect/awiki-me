@@ -311,6 +311,13 @@ Future<void> _verifyDirectTextRegression({
     expectedText: retryText,
     expectedConversationId: conversationId,
   );
+  await _expectCanonicalContactRowsExact(
+    robot: robot,
+    conversations: conversations,
+    ownerDid: ownerDid,
+    conversationId: conversationId,
+    peerDid: cliDid,
+  );
   await _waitForAppConversationLatestInTimeline(
     messaging: messaging,
     conversation: refreshedConversation,
