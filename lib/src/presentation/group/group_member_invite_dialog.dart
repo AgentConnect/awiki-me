@@ -16,8 +16,10 @@ import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/services/peer_display_name_resolver.dart';
 import '../agents/agents_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
+import '../profile/peer_display_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/app_dialog.dart';
@@ -138,6 +140,10 @@ class _GroupMemberInviteDialogState
     });
     try {
       final profile = await resolveIdentityProfile(ref, query);
+      final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+      ref
+          .read(peerDisplayProfileProvider.notifier)
+          .updateFromRemote(ownerDid: ownerDid, profile: profile);
       final candidate = GroupInviteCandidate.fromProfile(
         profile,
         source: GroupInviteCandidateSource.resolved,

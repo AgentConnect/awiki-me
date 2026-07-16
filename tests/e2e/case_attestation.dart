@@ -1,15 +1,152 @@
 import 'dart:convert';
 import 'dart:io';
 
-const int e2eCaseAttestationSchemaVersion = 1;
+const int e2eCaseAttestationSchemaVersion = 2;
 const String e2eCaseAttestationPathDefine = 'AWIKI_E2E_ATTESTATION_PATH';
 const String e2eCaseScenarioDefine = 'AWIKI_E2E_SCENARIO';
 const String e2eCaseRunIdDefine = 'AWIKI_E2E_RUN_ID';
 const String e2eCaseIdsDefine = 'AWIKI_E2E_CASE_IDS';
 const String e2eScenarioProgressFileName = 'scenario_progress.json';
+const String e2eFailureObservationFileName = 'failure_observation.json';
 
 File e2eScenarioProgressFileForAttestation(File attestationFile) =>
     File('${attestationFile.parent.path}/$e2eScenarioProgressFileName');
+
+File e2eFailureObservationFileForAttestation(File attestationFile) =>
+    File('${attestationFile.parent.path}/$e2eFailureObservationFileName');
+
+/// First fail-closed E2E observation retained independently from case pass
+/// attestation. Codes are stable diagnostics and must not contain payloads,
+/// handles, DIDs, credentials, or local paths.
+class E2eFailureObservation {
+  const E2eFailureObservation({
+    required this.scenario,
+    required this.runId,
+    required this.layer,
+    required this.status,
+    required this.code,
+    required this.observedAt,
+    this.caseId,
+  });
+
+  final String scenario;
+  final String runId;
+  final String layer;
+  final String status;
+  final String code;
+  final String observedAt;
+  final String? caseId;
+
+  factory E2eFailureObservation.fromJson(Map<String, Object?> json) {
+    if (json['schemaVersion'] != 1) {
+      throw const FormatException(
+        'failure observation schemaVersion must be 1',
+      );
+    }
+    final layer = _requiredString(json, 'layer');
+    if (!const <String>{
+      'visible_ui',
+      'app_projection',
+      'core_canonical',
+      'remote_service',
+    }.contains(layer)) {
+      throw FormatException('unsupported failure observation layer "$layer"');
+    }
+    final status = _requiredString(json, 'status');
+    if (!const <String>{'fatal', 'timeout', 'unstable'}.contains(status)) {
+      throw FormatException('unsupported failure observation status "$status"');
+    }
+    final code = _requiredString(json, 'code');
+    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(code)) {
+      throw const FormatException(
+        'failure observation code must be a stable snake_case identifier',
+      );
+    }
+    final caseId = _optionalString(json, 'caseId');
+    if (caseId != null && !RegExp(r'^[A-Z0-9-]+$').hasMatch(caseId)) {
+      throw const FormatException(
+        'failure observation caseId must be a stable case identifier',
+      );
+    }
+    return E2eFailureObservation(
+      scenario: _requiredString(json, 'scenario'),
+      runId: _requiredString(json, 'runId'),
+      layer: layer,
+      status: status,
+      code: code,
+      observedAt: _requiredString(json, 'observedAt'),
+      caseId: caseId,
+    );
+  }
+
+  static E2eFailureObservation read(File file) {
+    final decoded = jsonDecode(file.readAsStringSync());
+    if (decoded is! Map) {
+      throw const FormatException('failure observation must be an object');
+    }
+    return E2eFailureObservation.fromJson(<String, Object?>{
+      for (final entry in decoded.entries) entry.key.toString(): entry.value,
+    });
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schemaVersion': 1,
+    'scenario': scenario,
+    'runId': runId,
+    'layer': layer,
+    'status': status,
+    'code': code,
+    'observedAt': observedAt,
+    if (caseId != null) 'caseId': caseId,
+  };
+}
+
+class E2eFailureObservationWriter {
+  E2eFailureObservationWriter._();
+
+  static Future<void> recordFirst({
+    required String layer,
+    required String status,
+    required String code,
+    String? caseId,
+  }) async {
+    const attestationPath = String.fromEnvironment(
+      e2eCaseAttestationPathDefine,
+    );
+    const scenario = String.fromEnvironment(e2eCaseScenarioDefine);
+    const runId = String.fromEnvironment(e2eCaseRunIdDefine);
+    if (attestationPath.trim().isEmpty ||
+        scenario.trim().isEmpty ||
+        runId.trim().isEmpty) {
+      return;
+    }
+    final observation = E2eFailureObservation.fromJson(<String, Object?>{
+      'schemaVersion': 1,
+      'scenario': scenario,
+      'runId': runId,
+      'layer': layer,
+      'status': status,
+      'code': code,
+      'observedAt': DateTime.now().toUtc().toIso8601String(),
+      if (caseId?.trim().isNotEmpty == true) 'caseId': caseId!.trim(),
+    });
+    final file = e2eFailureObservationFileForAttestation(File(attestationPath));
+    if (file.existsSync()) {
+      return;
+    }
+    await file.parent.create(recursive: true);
+    final temporary = File('${file.path}.tmp');
+    await temporary.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(observation.toJson()),
+      flush: true,
+    );
+    if (!file.existsSync()) {
+      await temporary.rename(file.path);
+    } else if (temporary.existsSync()) {
+      await temporary.delete();
+    }
+  }
+}
 
 /// One scenario-owned case result written from inside the Flutter test body.
 class E2eCaseAttestationResult {
@@ -19,6 +156,7 @@ class E2eCaseAttestationResult {
     required this.startedAt,
     required this.finishedAt,
     required this.phases,
+    required this.assertions,
   });
 
   final String caseId;
@@ -26,6 +164,7 @@ class E2eCaseAttestationResult {
   final String startedAt;
   final String finishedAt;
   final List<String> phases;
+  final List<E2eAssertionEvidence> assertions;
 
   factory E2eCaseAttestationResult.fromJson(Map<String, Object?> json) {
     final caseId = _requiredString(json, 'caseId');
@@ -45,12 +184,50 @@ class E2eCaseAttestationResult {
         'case result $caseId must contain non-empty phases',
       );
     }
+    final rawAssertions = json['assertions'];
+    if (rawAssertions is! List || rawAssertions.isEmpty) {
+      throw FormatException(
+        'case result $caseId must contain structured assertions',
+      );
+    }
+    final assertions = <E2eAssertionEvidence>[];
+    final seenAssertionIds = <String>{};
+    for (final rawAssertion in rawAssertions) {
+      if (rawAssertion is! Map) {
+        throw FormatException(
+          'case result $caseId assertion must be an object',
+        );
+      }
+      final assertion = E2eAssertionEvidence.fromJson(<String, Object?>{
+        for (final entry in rawAssertion.entries)
+          entry.key.toString(): entry.value,
+      });
+      if (!seenAssertionIds.add(assertion.assertionId)) {
+        throw FormatException(
+          'case result $caseId contains duplicate assertionId '
+          '${assertion.assertionId}',
+        );
+      }
+      assertions.add(assertion);
+    }
+    final expectedAssertionIds = phases
+        .map((phase) => '$caseId:${phase.trim()}')
+        .toList(growable: false);
+    final actualAssertionIds = assertions
+        .map((assertion) => assertion.assertionId)
+        .toList(growable: false);
+    if (!_sameStringSequence(actualAssertionIds, expectedAssertionIds)) {
+      throw FormatException(
+        'case result $caseId assertion IDs must exactly follow phase order',
+      );
+    }
     return E2eCaseAttestationResult(
       caseId: caseId,
       status: status,
       startedAt: _requiredString(json, 'startedAt'),
       finishedAt: _requiredString(json, 'finishedAt'),
       phases: List<String>.unmodifiable(phases),
+      assertions: List<E2eAssertionEvidence>.unmodifiable(assertions),
     );
   }
 
@@ -60,6 +237,47 @@ class E2eCaseAttestationResult {
     'startedAt': startedAt,
     'finishedAt': finishedAt,
     'phases': phases,
+    'assertions': <Map<String, Object?>>[
+      for (final assertion in assertions) assertion.toJson(),
+    ],
+  };
+}
+
+/// One scenario-owned assertion checkpoint. IDs are stable and payload-free;
+/// the outer runner rejects missing, duplicate, or reordered evidence.
+class E2eAssertionEvidence {
+  const E2eAssertionEvidence({
+    required this.assertionId,
+    required this.status,
+    required this.observedAt,
+  });
+
+  final String assertionId;
+  final String status;
+  final String observedAt;
+
+  factory E2eAssertionEvidence.fromJson(Map<String, Object?> json) {
+    final assertionId = _requiredString(json, 'assertionId');
+    if (!RegExp(r'^[A-Z0-9-]+:[a-z0-9_]+$').hasMatch(assertionId)) {
+      throw const FormatException(
+        'assertionId must be a stable CASE-ID:snake_case identifier',
+      );
+    }
+    final status = _requiredString(json, 'status');
+    if (status != 'passed') {
+      throw FormatException('assertion $assertionId status must be passed');
+    }
+    return E2eAssertionEvidence(
+      assertionId: assertionId,
+      status: status,
+      observedAt: _requiredString(json, 'observedAt'),
+    );
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'assertionId': assertionId,
+    'status': status,
+    'observedAt': observedAt,
   };
 }
 
@@ -276,6 +494,14 @@ class E2eCaseAttestationWriter {
       startedAt: (startedAt ?? now).toUtc().toIso8601String(),
       finishedAt: now.toIso8601String(),
       phases: normalizedPhases,
+      assertions: <E2eAssertionEvidence>[
+        for (final phase in normalizedPhases)
+          E2eAssertionEvidence(
+            assertionId: '$caseId:$phase',
+            status: 'passed',
+            observedAt: now.toIso8601String(),
+          ),
+      ],
     );
     final byCaseId = <String, E2eCaseAttestationResult>{
       for (final value in existing.cases) value.caseId: value,
@@ -359,4 +585,27 @@ String _requiredString(Map<String, Object?> json, String key) {
     throw FormatException('$key must be a non-empty string');
   }
   return value;
+}
+
+String? _optionalString(Map<String, Object?> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('$key must be a non-empty string when present');
+  }
+  return value.trim();
+}
+
+bool _sameStringSequence(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index += 1) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
 }

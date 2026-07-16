@@ -22,7 +22,7 @@
 | `lib/src/data/storage/` | UUID Storage Scope registry/manifest/layout、provision/recovery、strict envelope、platform/E2E secret provider及统一root解析；runtime只可openExisting |
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |
-| `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows、脱敏资源台账 |
+| `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、schema-v2 case/assertion attestation、首失败脱敏诊断、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows与资源台账 |
 | `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
 | `scripts/` | packaging/build helper与显式developer/release gate；cleanup默认dry-run，不进入production startup |
 | `docs/` | 产品、架构、测试、Message Agent、SecretVault、性能和计划文档 |

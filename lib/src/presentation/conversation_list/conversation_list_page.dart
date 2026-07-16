@@ -11,6 +11,7 @@ import '../../app/ui_feedback.dart';
 import '../../core/date_time_formatter.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/conversation_summary.dart';
+import '../../domain/entities/group_system_event.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
@@ -311,6 +312,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
               horizontal: responsive.displayScaled(20),
             ),
             child: CupertinoSearchTextField(
+              key: const Key('conversation-search-field'),
               placeholder: context.l10n.conversationsSearchPlaceholder,
               onChanged: (value) {
                 setState(() {
@@ -401,12 +403,14 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           classification,
                         );
                         final preview = _conversationPreviewPresentation(
+                          ref,
                           context.l10n,
                           item,
                           widget.composerDrafts,
                         );
                         return _MacConversationRow(
                           key: Key('conversation-row:${item.conversationId}'),
+                          conversationId: item.conversationId,
                           title: _conversationPresentationTitle(
                             ref,
                             item,
@@ -693,12 +697,14 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   classification,
                 );
                 final preview = _conversationPreviewPresentation(
+                  ref,
                   context.l10n,
                   item,
                   composerDrafts,
                 );
                 return _ConversationRow(
                   key: Key('conversation-row:${item.conversationId}'),
+                  conversationId: item.conversationId,
                   title: _conversationPresentationTitle(
                     ref,
                     item,
@@ -823,6 +829,7 @@ class _MacListIconButton extends StatelessWidget {
 class _MacConversationRow extends StatelessWidget {
   const _MacConversationRow({
     super.key,
+    required this.conversationId,
     required this.title,
     required this.avatarUri,
     required this.preview,
@@ -835,6 +842,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.onDelete,
   });
 
+  final String conversationId;
   final String title;
   final String? avatarUri;
   final _ConversationPreviewPresentation preview;
@@ -904,15 +912,20 @@ class _MacConversationRow extends StatelessWidget {
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: _ConversationTitleStatusLine(
-                              title: title,
-                              isDeletedAgentConversation:
-                                  isDeletedAgentConversation,
-                              compact: true,
-                              titleStyle: TextStyle(
-                                color: const Color(0xFF17213A),
-                                fontSize: responsive.displayScaled(13.5),
-                                fontWeight: FontWeight.w400,
+                            child: KeyedSubtree(
+                              key: Key(
+                                'conversation-row-title:$conversationId',
+                              ),
+                              child: _ConversationTitleStatusLine(
+                                title: title,
+                                isDeletedAgentConversation:
+                                    isDeletedAgentConversation,
+                                compact: true,
+                                titleStyle: TextStyle(
+                                  color: const Color(0xFF17213A),
+                                  fontSize: responsive.displayScaled(13.5),
+                                  fontWeight: FontWeight.w400,
+                                ),
                               ),
                             ),
                           ),
@@ -922,11 +935,16 @@ class _MacConversationRow extends StatelessWidget {
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: _ConversationPreviewLine(
-                              presentation: preview,
-                              compact: true,
-                              emptyText:
-                                  context.l10n.conversationsNoMessagePreview,
+                            child: KeyedSubtree(
+                              key: Key(
+                                'conversation-row-preview:$conversationId',
+                              ),
+                              child: _ConversationPreviewLine(
+                                presentation: preview,
+                                compact: true,
+                                emptyText:
+                                    context.l10n.conversationsNoMessagePreview,
+                              ),
                             ),
                           ),
                         ],
@@ -1002,6 +1020,7 @@ class _MacConversationEmptyState extends StatelessWidget {
 class _ConversationRow extends StatelessWidget {
   const _ConversationRow({
     super.key,
+    required this.conversationId,
     required this.title,
     required this.avatarUri,
     required this.preview,
@@ -1014,6 +1033,7 @@ class _ConversationRow extends StatelessWidget {
     required this.isSelected,
   });
 
+  final String conversationId;
   final String title;
   final String? avatarUri;
   final _ConversationPreviewPresentation preview;
@@ -1080,15 +1100,18 @@ class _ConversationRow extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       Expanded(
-                        child: _ConversationTitleStatusLine(
-                          title: title,
-                          isDeletedAgentConversation:
-                              isDeletedAgentConversation,
-                          compact: false,
-                          titleStyle: TextStyle(
-                            fontSize: responsive.bodyMd,
-                            fontWeight: FontWeight.w400,
-                            color: theme.title,
+                        child: KeyedSubtree(
+                          key: Key('conversation-row-title:$conversationId'),
+                          child: _ConversationTitleStatusLine(
+                            title: title,
+                            isDeletedAgentConversation:
+                                isDeletedAgentConversation,
+                            compact: false,
+                            titleStyle: TextStyle(
+                              fontSize: responsive.bodyMd,
+                              fontWeight: FontWeight.w400,
+                              color: theme.title,
+                            ),
                           ),
                         ),
                       ),
@@ -1098,10 +1121,14 @@ class _ConversationRow extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       Expanded(
-                        child: _ConversationPreviewLine(
-                          presentation: preview,
-                          compact: false,
-                          emptyText: context.l10n.conversationsNoMessagePreview,
+                        child: KeyedSubtree(
+                          key: Key('conversation-row-preview:$conversationId'),
+                          child: _ConversationPreviewLine(
+                            presentation: preview,
+                            compact: false,
+                            emptyText:
+                                context.l10n.conversationsNoMessagePreview,
+                          ),
                         ),
                       ),
                     ],
@@ -1367,10 +1394,34 @@ ConversationPeerClassification _fallbackConversationPeerClassification(
 }
 
 _ConversationPreviewPresentation _conversationPreviewPresentation(
+  WidgetRef ref,
   AppLocalizations l10n,
   ConversationSummary conversation,
   Map<String, ChatComposerDraft> drafts,
 ) {
+  final systemEvent =
+      conversation.lastMessageSnapshot?.groupSystemEvent ??
+      GroupSystemEvent.tryParse(conversation.lastMessagePayloadJson);
+  final actorName = systemEvent == null
+      ? null
+      : ref.watch(
+          publicIdentityDisplayNameProvider(
+            PublicIdentityDisplayNameRequest(
+              did: systemEvent.actorDid,
+              unknownLabel: l10n.commonUnknown,
+            ),
+          ),
+        );
+  final subjectName = systemEvent == null
+      ? null
+      : ref.watch(
+          publicIdentityDisplayNameProvider(
+            PublicIdentityDisplayNameRequest(
+              did: systemEvent.subjectDid,
+              unknownLabel: l10n.commonUnknown,
+            ),
+          ),
+        );
   final draft = _draftForConversation(conversation, drafts);
   final tags = <_ConversationPreviewTag>[];
   if (conversation.unreadCount > 0) {
@@ -1393,7 +1444,12 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
   }
   if (draft.isEmpty) {
     return _ConversationPreviewPresentation(
-      text: localizeConversationPreview(l10n, conversation),
+      text: localizeConversationPreview(
+        l10n,
+        conversation,
+        groupEventActorName: actorName,
+        groupEventSubjectName: subjectName,
+      ),
       tags: tags,
     );
   }
@@ -1426,7 +1482,12 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
     );
   }
   return _ConversationPreviewPresentation(
-    text: localizeConversationPreview(l10n, conversation),
+    text: localizeConversationPreview(
+      l10n,
+      conversation,
+      groupEventActorName: actorName,
+      groupEventSubjectName: subjectName,
+    ),
     tags: tags,
   );
 }

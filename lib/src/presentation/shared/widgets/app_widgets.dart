@@ -1354,6 +1354,7 @@ class AppListTile extends StatelessWidget {
   const AppListTile({
     super.key,
     required this.title,
+    this.titleKey,
     this.subtitle,
     this.leading,
     this.trailing,
@@ -1363,6 +1364,7 @@ class AppListTile extends StatelessWidget {
   });
 
   final String title;
+  final Key? titleKey;
   final String? subtitle;
   final Widget? leading;
   final Widget? trailing;
@@ -1390,6 +1392,7 @@ class AppListTile extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
+                  key: titleKey,
                   style: AwikiMeTextStyles.listTitle.copyWith(
                     fontSize: responsive.bodyMd,
                     color: destructive ? theme.danger : theme.title,

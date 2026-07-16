@@ -69,6 +69,24 @@ class DidDisplayFormatter {
     return name;
   }
 
+  /// Identity lookup is a person-finding surface: nickname is primary, then
+  /// full Handle, then DID. The Handle remains useful as secondary identity
+  /// metadata only when it differs from the primary title.
+  static String identityLookupTitle(UserProfile profile) =>
+      profileName(profile);
+
+  static String identityLookupSecondaryHandle(UserProfile profile) {
+    final handle = profileHandle(profile);
+    if (handle.isEmpty) {
+      return '';
+    }
+    final title = identityLookupTitle(profile);
+    if (_cleanHandle(title).toLowerCase() == handle.toLowerCase()) {
+      return '';
+    }
+    return '@$handle';
+  }
+
   /// Removes only exact machine-generated identity metadata lines. Free-form
   /// profile prose remains untouched.
   static String withoutRedundantIdentityMetadata(String source) {

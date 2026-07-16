@@ -103,6 +103,40 @@ void main() {
 
     expect(DidDisplayFormatter.profileHandleLabel(profile), '@alice.awiki.ai');
     expect(DidDisplayFormatter.secondaryProfileName(profile), 'Alice Zhang');
+    expect(DidDisplayFormatter.identityLookupTitle(profile), 'Alice Zhang');
+    expect(
+      DidDisplayFormatter.identityLookupSecondaryHandle(profile),
+      '@alice.awiki.ai',
+    );
+  });
+
+  test('identity lookup falls back from nickname to Handle then DID', () {
+    const withHandle = UserProfile(
+      did: 'did:wba:awiki.ai:user:alice:e1_key',
+      displayName: '',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      fullHandle: 'alice.awiki.ai',
+    );
+    const didOnly = UserProfile(
+      did: 'did:wba:awiki.ai:user:bob:e1_key',
+      displayName: '',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+    );
+
+    expect(
+      DidDisplayFormatter.identityLookupTitle(withHandle),
+      'alice.awiki.ai',
+    );
+    expect(
+      DidDisplayFormatter.identityLookupSecondaryHandle(withHandle),
+      isEmpty,
+    );
+    expect(DidDisplayFormatter.identityLookupTitle(didOnly), 'bob');
+    expect(DidDisplayFormatter.identityLookupSecondaryHandle(didOnly), isEmpty);
   });
 
   test('profile metadata cleaner only removes exact handle and DID lines', () {

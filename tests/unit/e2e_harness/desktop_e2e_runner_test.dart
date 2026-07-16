@@ -118,7 +118,7 @@ void main() {
       expect(options.e2eCase, DesktopE2eCase.group);
     });
 
-    test('parses direct attachment and contacts cases', () {
+    test('parses direct attachment contacts and inbound cases', () {
       final direct = DesktopE2eOptions.parse(const <String>[
         '--case',
         'direct',
@@ -134,10 +134,60 @@ void main() {
         'contacts',
         '--dry-run',
       ]);
+      final inbound = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'inbound-first',
+        '--dry-run',
+      ]);
 
       expect(direct.e2eCase, DesktopE2eCase.direct);
       expect(attachment.e2eCase, DesktopE2eCase.attachment);
       expect(contacts.e2eCase, DesktopE2eCase.contacts);
+      expect(inbound.e2eCase, DesktopE2eCase.inbound);
+    });
+
+    test('parses real process-restart case aliases', () {
+      final restart = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'process-restart',
+        '--dry-run',
+      ]);
+      final coldRestart = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'cold_restart',
+        '--dry-run',
+      ]);
+
+      expect(restart.e2eCase, DesktopE2eCase.restart);
+      expect(coldRestart.e2eCase, DesktopE2eCase.restart);
+      expect(restart.e2eCase.caseIds, <String>['PROCESS-RESTART-E2E-001']);
+    });
+
+    test('parses App display-name fallback case aliases', () {
+      final fallback = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'display-name-fallback',
+        '--dry-run',
+      ]);
+      final handleFallback = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'handle_fallback',
+        '--dry-run',
+      ]);
+
+      expect(fallback.e2eCase, DesktopE2eCase.displayNameFallback);
+      expect(handleFallback.e2eCase, DesktopE2eCase.displayNameFallback);
+      expect(fallback.e2eCase.caseName, 'display-name-fallback');
+      expect(fallback.e2eCase.caseIds, <String>[
+        'AUTH-E2E-001',
+        'DISPLAY-NAME-E2E-002',
+      ]);
+      expect(
+        fallback.e2eCase.testFile,
+        'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
+      );
+      expect(fallback.e2eCase.publishesNicknameFixture, isFalse);
+      expect(DesktopE2eCase.full.publishesNicknameFixture, isTrue);
     });
 
     test('parses performance case aliases', () {
@@ -224,7 +274,8 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, full, performance, direct, group, attachment, contacts, '
+                'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'display-name-fallback, '
                 'message-agent, codex-agent, or claude-code-agent.',
           ),
         ),
@@ -823,12 +874,37 @@ cliHandle: legacy-cli
     });
 
     test('scenario progress is colocated with strict attestation', () {
-      final progress = e2eScenarioProgressFileForAttestation(
-        File('/tmp/e2e/reports/case_attestation.json'),
-      );
+      final attestation = File('/tmp/e2e/reports/case_attestation.json');
+      final progress = e2eScenarioProgressFileForAttestation(attestation);
+      final failure = e2eFailureObservationFileForAttestation(attestation);
 
       expect(progress.path, '/tmp/e2e/reports/scenario_progress.json');
+      expect(failure.path, '/tmp/e2e/reports/failure_observation.json');
     });
+
+    test(
+      'remote transport failures are not mislabeled as Flutter UI failures',
+      () {
+        final gateway = classifyDesktopE2eFailureMessage(
+          'flutter test failed\nservice http error 502: 502 Bad Gateway',
+        );
+        final transport = classifyDesktopE2eFailureMessage(
+          'flutter test failed\ntransport_unavailable',
+        );
+        final serviceRpcNetwork = classifyDesktopE2eFailureMessage(
+          'flutter test failed\nservice rpc error 1503: '
+          'failed to resolve DID document via anp: Network failure',
+        );
+        final widget = classifyDesktopE2eFailureMessage(
+          'flutter test failed with code 1 without remote transport evidence',
+        );
+
+        expect(gateway.code, 'remote_service_unavailable');
+        expect(transport.code, 'remote_service_unavailable');
+        expect(serviceRpcNetwork.code, 'remote_service_unavailable');
+        expect(widget.code, 'flutter_product_failed');
+      },
+    );
 
     test('failed command writes redacted durable diagnostics', () async {
       if (Platform.isWindows) {
@@ -1086,6 +1162,65 @@ cliPeer:
       expect(decoded['caseIds'], <dynamic>['SMOKE-E2E-001', 'NATIVE-E2E-001']);
     });
 
+    test('process-restart launches two Flutter test processes', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_process_restart_runner_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      _writeLocalConfig(
+        root,
+        platform: 'macos',
+        appHandle: 'e2e-app',
+        cliHandle: 'e2e-cli',
+      );
+      final lines = <String>[];
+      final runner = DesktopE2eRunner(
+        root: root,
+        options: DesktopE2eOptions.parse(const <String>[
+          '--dry-run',
+          '--case',
+          'restart',
+          '--run-id',
+          'run-restart',
+        ]),
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(
+        log,
+        contains('integration_test/desktop_cli_peer_restart_phase_a_test.dart'),
+      );
+      expect(
+        log,
+        contains('integration_test/desktop_cli_peer_restart_phase_b_test.dart'),
+      );
+      expect(
+        RegExp(
+          'desktop_cli_peer_restart_phase_[ab]_test\\.dart',
+        ).allMatches(log),
+        hasLength(2),
+      );
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-restart/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'restart');
+      expect(decoded['caseIds'], <dynamic>['PROCESS-RESTART-E2E-001']);
+    });
+
     test('generates Linux commands and redacts secrets', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_desktop_cli_peer_runner_test_',
@@ -1174,9 +1309,12 @@ cliPeer:
       expect(decoded['case'], 'full');
       expect(decoded['caseIds'], <dynamic>[
         'AUTH-E2E-001',
+        'CONV-CANON-E2E-001',
         'MSG-E2E-001',
         'MSG-E2E-002',
         'MSG-REG-001',
+        'DISPLAY-NAME-REG-001',
+        'GROUP-CANON-E2E-001',
         'GROUP-E2E-001',
         'GROUP-E2E-002',
         'GROUP-P9-001',
@@ -1186,16 +1324,21 @@ cliPeer:
         'CONTACT-E2E-002',
         'CONTACT-REG-001',
         'CONTACT-MSG-E2E-001',
+        'CONV-LIST-E2E-001',
+        'UNREAD-MULTI-E2E-001',
+        'MSG-SEQUENCE-E2E-001',
+        'DISPLAY-NAME-E2E-001',
         'ATTACH-E2E-001',
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
+        'DISPLAY-NAME-E2E-004',
       ]);
       expect(decoded['runId'], 'run123');
       expect(decoded['platform'], 'linux');
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
       final caseResults = decoded['caseResults'] as List<dynamic>;
-      expect(caseResults, hasLength(16));
+      expect(caseResults, hasLength(24));
       expect(
         caseResults.every(
           (value) =>
@@ -1208,6 +1351,10 @@ cliPeer:
       expect(
         (decoded['attestation'] as Map<String, dynamic>)['status'],
         'not_expected_dry_run',
+      );
+      expect(
+        (decoded['failureObservation'] as Map<String, dynamic>)['status'],
+        'not_observed',
       );
       expect(decoded['appHandle'], 'e2e-app');
       expect(decoded['cliHandle'], 'e2e-cli');
@@ -1393,6 +1540,8 @@ cliPeer:
       await runner.run();
 
       final log = lines.join('\n');
+      expect(log, contains('id profile set'));
+      expect(log, contains('AWiki E2E CLI Peer'));
       expect(
         log,
         contains(
@@ -1407,6 +1556,7 @@ cliPeer:
       expect(decoded['case'], 'group');
       expect(decoded['caseIds'], <dynamic>[
         'AUTH-E2E-001',
+        'GROUP-CANON-E2E-001',
         'GROUP-E2E-001',
         'GROUP-E2E-002',
         'GROUP-P9-001',
@@ -1449,6 +1599,8 @@ cliPeer:
       await runner.run();
 
       final log = lines.join('\n');
+      expect(log, contains('id profile set'));
+      expect(log, contains('AWiki E2E CLI Peer'));
       expect(
         log,
         contains(
@@ -1463,9 +1615,11 @@ cliPeer:
       expect(decoded['case'], 'direct');
       expect(decoded['caseIds'], <dynamic>[
         'AUTH-E2E-001',
+        'CONV-CANON-E2E-001',
         'MSG-E2E-001',
         'MSG-E2E-002',
         'MSG-REG-001',
+        'DISPLAY-NAME-REG-001',
       ]);
     });
 
@@ -1700,6 +1854,59 @@ performance:
         'CONTACT-E2E-002',
         'CONTACT-REG-001',
         'CONTACT-MSG-E2E-001',
+        'CONTACT-FIRST-CONV-E2E-001',
+      ]);
+    });
+
+    test('generates inbound-only Flutter command and report case IDs', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_desktop_cli_peer_runner_inbound_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      _writeLocalConfig(root, platform: 'linux');
+      final lines = <String>[];
+      final runner = DesktopE2eRunner(
+        root: root,
+        options: DesktopE2eOptions.parse(const <String>[
+          '--dry-run',
+          '--case',
+          'inbound',
+          '--run-id',
+          'run-inbound',
+        ]),
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[
+            'test-phone-secret',
+            'test-otp-secret',
+          ]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(
+        log,
+        contains(
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_inbound_test.dart -d linux',
+        ),
+      );
+      final timings = File(
+        '${root.path}/.e2e/desktop-cli-peer/run-inbound/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'inbound');
+      expect(decoded['caseIds'], <dynamic>[
+        'AUTH-E2E-001',
+        'INBOUND-FIRST-CONV-E2E-001',
       ]);
     });
 

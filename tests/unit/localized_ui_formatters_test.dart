@@ -3,6 +3,7 @@ import 'package:awiki_me/l10n/app_localizations_zh.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/group_system_event.dart';
 import 'package:awiki_me/src/presentation/shared/formatters/localized_ui_formatters.dart';
 import 'package:awiki_me/src/presentation/shared/formatters/markdown_preview_formatter.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,36 @@ void main() {
       localizeLegacyConversationPreview(zh, '## 更新\n\n- **完成**\n- `a*b`'),
       '更新 完成 a*b',
     );
+  });
+
+  test('group system event uses resolved nickname before DID fallback', () {
+    const event = GroupSystemEvent(
+      type: 'member_added',
+      groupDid: 'did:test:group',
+      groupEventSeq: 1,
+      actorDid: 'did:wba:awiki.info:user:alice:e1_key',
+      subjectDid: 'did:wba:awiki.info:user:bob:e1_key',
+    );
+
+    expect(
+      localizeGroupSystemEvent(
+        zh,
+        event,
+        actorName: 'Alice nickname',
+        subjectName: 'Bob nickname',
+      ),
+      'Alice nickname邀请Bob nickname加入了群聊',
+    );
+    expect(
+      localizeGroupSystemEvent(
+        zh,
+        event,
+        actorName: 'alice.awiki.info',
+        subjectName: 'bob.awiki.info',
+      ),
+      'alice.awiki.info邀请bob.awiki.info加入了群聊',
+    );
+    expect(localizeGroupSystemEvent(zh, event), 'alice邀请bob加入了群聊');
   });
 
   test('conversation snapshot drives localized attachment preview', () {

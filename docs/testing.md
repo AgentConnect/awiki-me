@@ -133,6 +133,11 @@ an equivalent package that exposes `libsqlite3.so`.
 
 ## E2E Gate
 
+Conversation/list/message/display-name correctness improvements are specified in
+[e2e-conversation-correctness-design.md](e2e-conversation-correctness-design.md).
+The document distinguishes canonical Core truth, App projection, and visible UI
+evidence; none of those layers may substitute for another.
+
 Run the local desktop smoke E2E:
 
 ```bash
@@ -150,6 +155,82 @@ test OTP, and CLI peer are configured:
 ```bash
 dart run tests/e2e/runner.dart --case full
 ```
+
+`full` additionally runs the cross-conversation correctness slice: one Direct
+and one Group receive messages in alternating order, then the test verifies
+exact visible row title/preview/order, per-row and global unread isolation,
+exact canonical message sequences with no leakage, and one nickname projection
+across identity lookup, Direct, Contacts, group system events, and sender
+labels. These checks are cataloged as `CONV-LIST-E2E-001`,
+`UNREAD-MULTI-E2E-001`, `MSG-SEQUENCE-E2E-001`, and
+`DISPLAY-NAME-E2E-001`. The sequence case also hides the App, sends a three-message
+burst without waiting for per-message UI convergence, resumes the App, and
+requires exact `+3` unread, latest preview, ordered canonical IDs/bodies, no
+cross-thread leakage, and no read-state rebound. Direct and Group semantic identity have separate
+`CONV-CANON-E2E-001` / `GROUP-CANON-E2E-001` evidence instead of being hidden
+inside a generic message phase.
+
+Display-name acceptance is App-visible and scoped. Once a target contact row
+or group-member row is visible, a Handle/DID/Unknown primary title is fatal; the
+test does not wait for a later Profile refresh to replace it with the expected
+nickname. The group slice opens the real group-info dialog and checks its member
+row separately from the member provider, member-added system event, and message
+sender label. CLI commands only prepare the peer or trigger remote traffic;
+they are diagnostic stimuli rather than a substitute CLI product gate.
+
+AWiki Me case verdicts are App-first. Conversation count/canonical identity,
+row order/title/preview/unread, bubble set/order, read transitions, and display
+name consistency must be asserted from App projection plus scoped visible UI.
+For App outbound flows, a CLI receipt closes the real transport loop only after
+the App send state, bubble ownership, and row preview have passed. For inbound
+flows, the CLI result identifies the run-owned stimulus; the required product
+assertions remain the App row, badge, timeline, sender label, and read state.
+Detailed CLI product behavior belongs to the CLI-owned test project and must not
+replace a missing App assertion here.
+
+The `direct` and `full` slices also inspect the scoped chat-header title from
+the first frame after a restarted App shell selects the cached Direct
+conversation. `DISPLAY-NAME-REG-001` fails immediately if that first non-empty
+title is a Handle, DID, `Unknown`, a duplicate title widget, or later changes
+during the stable observation window.
+
+`DISPLAY-NAME-E2E-004` changes the real peer nickname after the initial
+conversation, triggers the user-visible refresh by opening the peer avatar,
+and then requires the new nickname to converge on the Direct detail, recents
+row/header, identity lookup, Contacts, group member, existing group system
+event, and existing group sender label without creating a second Persona or
+conversation. The CLI only changes the remote fixture Profile; every required
+verdict is taken from App projection or visible App UI.
+
+The focused `contacts` slice deliberately establishes the CLI peer as an
+inbound follower while the isolated App projection has no Direct for that DID
+or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row before
+identity lookup or a first message, then requires one empty canonical
+peer-scope conversation and reuses the same ID for the later contact message
+closed loop. The combined `full` slice does not attest this first-create case
+because it intentionally creates the Direct in the earlier Direct flow.
+
+On macOS, pass an explicit macOS config such as:
+
+```bash
+dart run tests/e2e/runner.dart --case full \
+  --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
+
+dart run tests/e2e/runner.dart --case restart \
+  --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
+
+dart run tests/e2e/runner.dart --case display-name-fallback \
+  --config tests/e2e/configs/e2e.handle-fallback.local.yaml
+```
+
+`display-name-fallback` 使用独立的无 nickname 远端 peer。runner 故意不执行
+Profile nickname 更新，并以该 actor 的完整 Handle 作为身份查找、Direct、
+Contacts、群成员、群系统事件和 sender label 的唯一 App 主显示名预期。这个
+suite 不能与普通 nickname fixture 共用同一个 peer，也不能用 CLI 输出代替
+App 可见标题断言。
+
+The remote product suites must point every HTTP/WebSocket/DID domain at
+`awiki.info`; they do not start a local backend.
 
 The full real-backend E2E runner reads local configuration from
 `tests/e2e/configs/e2e.local.yaml` by default. Copy the tracked template first:
@@ -213,6 +294,7 @@ Supported E2E cases:
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
+- `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `full`: all App + CLI peer flows.
 
 群组 E2E 使用协议级身份规则：有 Handle 时必须发送完整 `local-part.provider-domain`，bare Handle 只能从当前已认证 `did:wba` 的 provider domain 补全；无法可信补全时只允许用户显式选择 DID-only。App 和测试不得把内部 User ID 放入 ANP group body，也不得先把 Handle 解析成 DID 后丢失 Handle-backed membership 语义。
@@ -252,6 +334,8 @@ The product oracle is fail-closed:
   may enter the scenario only after both remote perspectives report `none` and
   the App `friendsProvider` projection has been refreshed to that baseline;
 - contact-message checks must click the exact DID-keyed visible contact row,
+  scope that row to the requested relationship section/detail pane because a
+  mutual contact legitimately appears in both following and followers,
   keep one `dm:peer-scope:v1:*` identity across Core summary, UI row, timeline,
   and Product overlay, reject a legacy `dm:<DID>` overlay, and preserve the
   exact-one + unread/read result across an App-shell restart;
@@ -312,14 +396,58 @@ directory. The Flutter scenario also writes `scenario_progress.json` after
 major Direct phases. Progress is diagnostic only and can never replace the
 strict case attestation required for a passing result.
 
+When redacted child output contains an explicit remote 5xx or transport
+unavailable error, the outer report classifies it as
+`remote_service_unavailable` instead of the generic `flutter_product_failed`.
+This improves triage only; it never converts the failed product run to passed.
+
+The first fail-closed three-state UI observation is retained separately as
+`failure_observation.json`. It contains only a stable snake-case code, one of
+`visible_ui` / `app_projection` / `core_canonical` / `remote_service`, and a
+`fatal` / `timeout` / `unstable` status. Payload text, Handle, DID, credentials,
+and local paths are forbidden. When the observation belongs to one cataloged
+case it also records the stable `caseId`, so a failure before attestation is
+reported as that case's `failed` result rather than misleading `not_run`.
+Runner schema-v2 reports expose this summary as `failureObservation`;
+successful runs report `not_observed`.
+CLI history/inbox/group collection checks use the same three-state contract and
+distinguish pending, duplicate, canonical-ID, sender/receiver/group, and content
+type failures instead of returning one ambiguous boolean.
+
 `tests/e2e/case_catalog.json` adds the case-level requirements trace: feature,
 preconditions, UI/action, exact oracle, negative guard, environment, cleanup,
 owner, implementation path and evidence type. Its generated view is
 [test-case-catalog.md](test-case-catalog.md). Run
 `dart run tool/validate_test_catalog.dart`; optionally pass
 `--report <suite-report.json>` to reject unknown, duplicate, missing or
-out-of-order report IDs. The catalog also records planned gaps without adding
-them to an executable suite.
+out-of-order report IDs and, for passed cases, missing, duplicate, unstable or
+out-of-order assertion evidence. The catalog also records planned gaps without
+adding them to an executable suite. `DISPLAY-NAME-E2E-002` is active in
+`display-name-fallback` and requires a real no-nickname peer with a stable full
+Handle. A recorded `awiki.info` run currently fails closed because the App
+shows the remote generated user name instead of that full Handle. The separate
+DID-only case `DISPLAY-NAME-E2E-003` remains planned until an actor without both
+nickname and Handle is available. The release
+`restart` suite now runs `PROCESS-RESTART-E2E-001` through two distinct Flutter
+processes against one isolated state root. Deterministic
+Widget coverage already locks identity lookup and group system events to the
+public display order nickname, full Handle, then DID; it is not a substitute
+for the remaining DID-only remote case.
+
+The latest v7 `full` evidence is intentionally red rather than weakened:
+`20260716031319-hkfp48kim6` fails `MSG-SEQUENCE-E2E-001` at the App-visible
+timeline with `wrong_message_id_or_order` after the hidden three-message burst.
+The remote/Core projection contains all three consecutive canonical
+`server_seq` values, while one App-local `sent_at` value is truncated to whole
+seconds and the visible run-owned order is wrong. This is a discovered App
+presentation/projection defect, not a CLI product failure and not a reason to
+replace the exact-order oracle with eventual containment.
+
+Conversation-correctness cases additionally declare `assertionContract` in
+the catalog. It maps every exact-oracle and negative-guard claim to stable
+`CASE-ID:snake_case` evidence and fixes the expected assertion order. A report
+whose phases are internally well formed but drift from that catalog contract
+is rejected rather than accepted as a generic pass.
 
 Before App launch, the runner creates and activates an isolated CLI tenant whose
 `backend_base_url` and `did_host` match `awiki.info`, then proves that the CLI
@@ -456,17 +584,22 @@ The PR dry-run is orchestration lint and is never substituted for that real job.
 ### Case-level attestation and fail-closed reports
 
 Runner reports use schema v2. `status=passed` is valid only when the Flutter
-scenario itself writes a schema-v1 `case_attestation.json` and every expected
-case ID has one unique `status=passed` result with non-empty phases and
-timestamps. The outer Flutter process exit code is necessary but is not enough.
+scenario itself writes a schema-v2 `case_attestation.json` and every expected
+case ID has one unique `status=passed` result with non-empty phases, timestamps,
+and structured assertion evidence. Assertion IDs use stable
+`CASE-ID:snake_case` names and must match the phase sequence exactly; missing,
+duplicate, failed, unstable, or reordered evidence fails closed. The outer
+Flutter process exit code is necessary but is not enough.
 
 The runner reports `dry_run` and `prepared` as distinct non-passing suite and
 case states. Missing, duplicate, unknown, skipped, failed, corrupt, wrong-run,
 or wrong-scenario attestation results make a real run `failed`. The report keeps
 the expected IDs in `caseIds`, actual successful IDs in `passedCaseIds`, and one
 entry per expected case in `caseResults`. Attestation and workspace paths remain
-redacted; the scenario file stores only case IDs, phase names, status, and
-timestamps.
+redacted; the scenario file stores only case IDs, phase/assertion IDs, status,
+and timestamps. This is the first assertion-evidence layer; one-to-one trace
+from every catalog exact oracle/negative guard to a dedicated assertion ID is
+still required before the conversation-correctness plan is complete.
 
 Message Agent fake Widget coverage is not product acceptance. The optional real
 `message-agent` suite currently attests only implemented vertical slices:

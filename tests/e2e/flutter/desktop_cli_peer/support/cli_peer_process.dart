@@ -10,7 +10,7 @@ Future<void> _waitForCliHistory({
   String? expectedGroupDid,
   String? expectedContentType,
 }) async {
-  Future<bool> probe() async {
+  Future<E2eObservation> observe() async {
     final result = await _runCli(config, <String>[
       '--format',
       'json',
@@ -21,25 +21,28 @@ Future<void> _waitForCliHistory({
       '--limit',
       '20',
     ]);
-    return result.exitCode == 0 &&
-        _cliExactMessageMatches(
-          result.stdout,
-          expectedText: expectedText,
-          expectedMessageId: expectedMessageId,
-          expectedSenderDid: expectedSenderDid,
-          expectedReceiverDid: expectedReceiverDid,
-          expectedGroupDid: expectedGroupDid,
-          expectedContentType: expectedContentType,
-        );
+    if (result.exitCode != 0) {
+      return const E2eObservation.pending('cli_history_request_failed');
+    }
+    return observeCliExactMessage(
+      output: result.stdout,
+      expectedText: expectedText,
+      expectedMessageId: expectedMessageId,
+      expectedSenderDid: expectedSenderDid,
+      expectedReceiverDid: expectedReceiverDid,
+      expectedGroupDid: expectedGroupDid,
+      expectedContentType: expectedContentType,
+    );
   }
 
-  await _poll(
+  await _pollObservation(
     description: 'CLI history contains exact message "$expectedText"',
-    action: probe,
+    observe: observe,
+    failureLayer: 'core_canonical',
   );
-  await _assertStableCliProbe(
+  await _assertStableCliObservation(
     description: 'CLI history exact message "$expectedText"',
-    probe: probe,
+    observe: observe,
   );
 }
 
@@ -51,7 +54,7 @@ Future<void> _waitForCliGroupMessages({
   String? expectedSenderDid,
   String? expectedContentType,
 }) async {
-  Future<bool> probe() async {
+  Future<E2eObservation> observe() async {
     final result = await _runCli(config, <String>[
       '--format',
       'json',
@@ -62,24 +65,27 @@ Future<void> _waitForCliGroupMessages({
       '--limit',
       '20',
     ]);
-    return result.exitCode == 0 &&
-        _cliExactMessageMatches(
-          result.stdout,
-          expectedText: expectedText,
-          expectedMessageId: expectedMessageId,
-          expectedSenderDid: expectedSenderDid,
-          expectedGroupDid: groupDid,
-          expectedContentType: expectedContentType,
-        );
+    if (result.exitCode != 0) {
+      return const E2eObservation.pending('cli_group_messages_request_failed');
+    }
+    return observeCliExactMessage(
+      output: result.stdout,
+      expectedText: expectedText,
+      expectedMessageId: expectedMessageId,
+      expectedSenderDid: expectedSenderDid,
+      expectedGroupDid: groupDid,
+      expectedContentType: expectedContentType,
+    );
   }
 
-  await _poll(
+  await _pollObservation(
     description: 'CLI group messages contain exact message "$expectedText"',
-    action: probe,
+    observe: observe,
+    failureLayer: 'core_canonical',
   );
-  await _assertStableCliProbe(
+  await _assertStableCliObservation(
     description: 'CLI group exact message "$expectedText"',
-    probe: probe,
+    observe: observe,
   );
 }
 
@@ -91,7 +97,7 @@ Future<void> _waitForCliInbox({
   String? expectedReceiverDid,
   String? expectedContentType,
 }) async {
-  Future<bool> probe() async {
+  Future<E2eObservation> observe() async {
     final result = await _runCli(config, const <String>[
       '--format',
       'json',
@@ -100,62 +106,48 @@ Future<void> _waitForCliInbox({
       '--limit',
       '20',
     ]);
-    return result.exitCode == 0 &&
-        _cliExactMessageMatches(
-          result.stdout,
-          expectedText: expectedText,
-          expectedMessageId: expectedMessageId,
-          expectedSenderDid: expectedSenderDid,
-          expectedReceiverDid: expectedReceiverDid,
-          expectedContentType: expectedContentType,
-        );
+    if (result.exitCode != 0) {
+      return const E2eObservation.pending('cli_inbox_request_failed');
+    }
+    return observeCliExactMessage(
+      output: result.stdout,
+      expectedText: expectedText,
+      expectedMessageId: expectedMessageId,
+      expectedSenderDid: expectedSenderDid,
+      expectedReceiverDid: expectedReceiverDid,
+      expectedContentType: expectedContentType,
+    );
   }
 
-  await _poll(
+  await _pollObservation(
     description: 'CLI inbox contains exact message "$expectedText"',
-    action: probe,
+    observe: observe,
+    failureLayer: 'core_canonical',
   );
-  await _assertStableCliProbe(
+  await _assertStableCliObservation(
     description: 'CLI inbox exact message "$expectedText"',
-    probe: probe,
+    observe: observe,
   );
 }
 
-Future<void> _assertStableCliProbe({
+Future<void> _assertStableCliObservation({
   required String description,
-  required Future<bool> Function() probe,
+  required Future<E2eObservation> Function() observe,
 }) async {
   await Future<void>.delayed(const Duration(seconds: 2));
-  if (!await probe()) {
-    fail('$description was not stable after the duplicate observation window.');
+  final observation = await observe();
+  if (observation.status != E2eObservationStatus.pass) {
+    final code = observation.code ?? 'cli_exact_message_unstable';
+    await E2eFailureObservationWriter.recordFirst(
+      layer: 'core_canonical',
+      status: 'unstable',
+      code: code,
+    );
+    fail(
+      '$description was not stable after the duplicate observation window: '
+      '$code.',
+    );
   }
-}
-
-bool _cliExactMessageMatches(
-  String output, {
-  required String expectedText,
-  String? expectedMessageId,
-  String? expectedSenderDid,
-  String? expectedReceiverDid,
-  String? expectedGroupDid,
-  String? expectedContentType,
-}) {
-  final matches = cliMessagesWithExactText(
-    output,
-    expectedText: expectedText,
-    expectedMessageId: expectedMessageId,
-  );
-  if (matches.length != 1) {
-    return false;
-  }
-  final message = matches.single;
-  bool exact(String key, String? expected) =>
-      expected == null ||
-      _nonEmptyCliString(message[key])?.trim() == expected.trim();
-  return exact('sender_did', expectedSenderDid) &&
-      exact('receiver_did', expectedReceiverDid) &&
-      exact('group_did', expectedGroupDid) &&
-      exact('content_type', expectedContentType);
 }
 
 Future<_CliAttachmentMessage> _waitForCliAttachmentMessage({

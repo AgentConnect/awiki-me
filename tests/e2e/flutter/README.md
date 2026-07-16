@@ -23,6 +23,7 @@ Run E2E through the repository-level runner:
 ```bash
 dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case full
+dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
 dart run tests/e2e/runner.dart --case message-agent
 dart run tests/e2e/runner.dart --case codex-agent
@@ -99,6 +100,26 @@ acceptance. Use the two gates for their distinct purposes:
 dart run tests/e2e/runner.dart --case performance
 dart run tests/e2e/runner.dart --case full
 ```
+
+The Full gate includes App-visible conversation correctness rather than only
+transport acceptance: semantic exact-one Direct/Group rows, exact row
+title/preview/order/unread, canonical message ID/body/sender order, no
+cross-conversation leakage, and display-name consistency across Direct,
+Contacts, group members, group system events, and sender labels. It also sends
+a three-message Direct burst while the App is hidden and requires exact `+3`
+unread plus ordered convergence after resume. A separate Profile-refresh phase
+changes the remote nickname, triggers refresh through the visible peer-avatar
+entry, and requires every existing App surface to converge without changing
+the Persona or canonical conversation.
+
+`--case display-name-fallback` is the focused App-visible fallback gate. Its
+ignored local config must select a dedicated `awiki.info` CLI peer with no
+nickname and one stable full Handle. The runner deliberately does not update
+that peer's Profile. It requires the exact full Handle in identity lookup,
+Direct row/header, Contacts, group member/event, and sender-label surfaces;
+generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
+later self-healing title fail. CLI is only the remote identity/traffic stimulus,
+not the product assertion surface.
 
 `--case message-agent` is the durable acceptance entry for Message Agent
 product behavior. It must exercise the App UI path for selecting a daemon,

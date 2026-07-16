@@ -22,6 +22,10 @@ accounts:
   cliPeer:
     handle: awiki-e2e-cli
 
+# For --case display-name-fallback, use a separate ignored *.local.yaml whose
+# cliPeer is a dedicated awiki.info actor with no nickname and one stable full
+# Handle. The runner deliberately does not update that peer's Profile.
+
 cliPeer:
   binary: ../awiki-cli-rs2/target/debug/awiki-cli
   # Replace with the exact non-zero 40-character commit used to build both

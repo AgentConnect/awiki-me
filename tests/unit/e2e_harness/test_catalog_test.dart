@@ -11,14 +11,54 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(43));
+      expect(catalog.cases, hasLength(56));
       expect(
         catalog.suiteCaseIds.keys,
         containsAll(<String>['smoke', 'full', 'direct']),
       );
-      expect(catalog.renderMarkdown(), contains('global unread increased by'));
+      expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );
+
+  test('every active conversation-correctness case has claim mapping', () {
+    final catalog = AppTestCatalog.load(Directory.current);
+    const caseIds = <String>{
+      'CONTACT-E2E-001',
+      'CONTACT-E2E-002',
+      'CONTACT-FIRST-CONV-E2E-001',
+      'CONTACT-MSG-E2E-001',
+      'CONTACT-REG-001',
+      'CONV-CANON-E2E-001',
+      'CONV-LIST-E2E-001',
+      'DISPLAY-NAME-E2E-001',
+      'DISPLAY-NAME-E2E-002',
+      'DISPLAY-NAME-E2E-004',
+      'DISPLAY-NAME-REG-001',
+      'GROUP-CANON-E2E-001',
+      'GROUP-E2E-001',
+      'GROUP-E2E-002',
+      'GROUP-P9-001',
+      'GROUP-P9-002',
+      'GROUP-REG-001',
+      'INBOUND-FIRST-CONV-E2E-001',
+      'MSG-E2E-001',
+      'MSG-E2E-002',
+      'MSG-REG-001',
+      'MSG-SEQUENCE-E2E-001',
+      'PROCESS-RESTART-E2E-001',
+      'UNREAD-MULTI-E2E-001',
+    };
+
+    for (final caseId in caseIds) {
+      final catalogCase = catalog.caseById[caseId];
+      expect(catalogCase, isNotNull, reason: '$caseId must remain cataloged');
+      expect(
+        catalogCase!.assertionContract,
+        isNotNull,
+        reason: '$caseId must map every claim to executable evidence',
+      );
+    }
+  });
 
   test('catalog rejects missing metadata and manifest cases', () async {
     final root = await _temporaryCatalogRoot();
@@ -57,6 +97,13 @@ void main() {
 
       catalog.validateReport(valid);
 
+      final passed = <String, Object?>{
+        'case': 'focused',
+        'caseIds': <String>['CASE-001'],
+        'caseResults': <Map<String, Object?>>[_passedCaseResult()],
+      };
+      catalog.validateReport(passed);
+
       final unknown = Map<String, Object?>.from(valid)
         ..['caseResults'] = <Map<String, Object?>>[
           <String, Object?>{'caseId': 'CASE-UNKNOWN'},
@@ -94,9 +141,149 @@ void main() {
           ),
         ),
       );
+
+      final missingAssertions = <String, Object?>{
+        ...passed,
+        'caseResults': <Map<String, Object?>>[
+          _passedCaseResult()..remove('assertions'),
+        ],
+      };
+      expect(
+        () => catalog.validateReport(missingAssertions),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('structured assertions'),
+          ),
+        ),
+      );
+
+      final duplicateAssertions = _passedCaseResult();
+      duplicateAssertions['phases'] = <String>['first_check', 'second_check'];
+      duplicateAssertions['assertions'] = <Map<String, Object?>>[
+        _assertionResult('CASE-001:first_check'),
+        _assertionResult('CASE-001:first_check'),
+      ];
+      expect(
+        () => catalog.validateReport(<String, Object?>{
+          ...passed,
+          'caseResults': <Map<String, Object?>>[duplicateAssertions],
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('duplicate assertionId'),
+          ),
+        ),
+      );
+
+      final reorderedAssertions = _passedCaseResult();
+      reorderedAssertions['phases'] = <String>['first_check', 'second_check'];
+      reorderedAssertions['assertions'] = <Map<String, Object?>>[
+        _assertionResult('CASE-001:second_check'),
+        _assertionResult('CASE-001:first_check'),
+      ];
+      expect(
+        () => catalog.validateReport(<String, Object?>{
+          ...passed,
+          'caseResults': <Map<String, Object?>>[reorderedAssertions],
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('exactly follow phase order'),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'catalog assertion contract traces claims and rejects report drift',
+    () async {
+      final root = await _temporaryCatalogRoot();
+      addTearDown(() => root.delete(recursive: true));
+      final catalogFile = File('${root.path}/$appCaseCatalogPath');
+      final decoded =
+          jsonDecode(catalogFile.readAsStringSync()) as Map<String, dynamic>;
+      final catalogCase =
+          (decoded['cases'] as List<dynamic>).single as Map<String, dynamic>;
+      catalogCase['assertionContract'] = <String, Object?>{
+        'assertionIds': <String>['CASE-001:assertion_completed'],
+        'exactOracleAssertions': <List<String>>[
+          <String>['CASE-001:assertion_completed'],
+        ],
+        'negativeCheckAssertions': <List<String>>[
+          <String>['CASE-001:assertion_completed'],
+        ],
+      };
+      catalogFile.writeAsStringSync(jsonEncode(decoded));
+      final catalog = AppTestCatalog.load(root);
+      catalog.validateReport(<String, Object?>{
+        'case': 'focused',
+        'caseIds': <String>['CASE-001'],
+        'caseResults': <Map<String, Object?>>[_passedCaseResult()],
+      });
+
+      final drifted = _passedCaseResult()
+        ..['phases'] = <String>['different_assertion']
+        ..['assertions'] = <Map<String, Object?>>[
+          _assertionResult('CASE-001:different_assertion'),
+        ];
+      expect(
+        () => catalog.validateReport(<String, Object?>{
+          'case': 'focused',
+          'caseIds': <String>['CASE-001'],
+          'caseResults': <Map<String, Object?>>[drifted],
+        }),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('catalog assertion contract'),
+          ),
+        ),
+      );
+
+      final invalidDecoded =
+          jsonDecode(catalogFile.readAsStringSync()) as Map<String, dynamic>;
+      final invalidCase =
+          (invalidDecoded['cases'] as List<dynamic>).single
+              as Map<String, dynamic>;
+      final contract = invalidCase['assertionContract'] as Map<String, dynamic>;
+      contract['negativeCheckAssertions'] = <List<String>>[];
+      catalogFile.writeAsStringSync(jsonEncode(invalidDecoded));
+      expect(
+        () => AppTestCatalog.load(root),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('one entry per catalog claim'),
+          ),
+        ),
+      );
     },
   );
 }
+
+Map<String, Object?> _passedCaseResult() => <String, Object?>{
+  'caseId': 'CASE-001',
+  'status': 'passed',
+  'phases': <String>['assertion_completed'],
+  'assertions': <Map<String, Object?>>[
+    _assertionResult('CASE-001:assertion_completed'),
+  ],
+};
+
+Map<String, Object?> _assertionResult(String assertionId) => <String, Object?>{
+  'assertionId': assertionId,
+  'status': 'passed',
+  'observedAt': '2026-07-16T00:00:00.000Z',
+};
 
 Future<Directory> _temporaryCatalogRoot() async {
   final root = await Directory.systemTemp.createTemp('awiki_test_catalog_');

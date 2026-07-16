@@ -536,7 +536,34 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     );
     if (!message.isMine) {
       final title = _notificationTitle(update, normalizedConversationHint);
-      final preview = localizeMessagePreview(_currentLocalizations(), message);
+      final l10n = _currentLocalizations();
+      final systemEvent = message.groupSystemEvent;
+      final actorName = systemEvent == null
+          ? null
+          : ref.read(
+              publicIdentityDisplayNameProvider(
+                PublicIdentityDisplayNameRequest(
+                  did: systemEvent.actorDid,
+                  unknownLabel: l10n.commonUnknown,
+                ),
+              ),
+            );
+      final subjectName = systemEvent == null
+          ? null
+          : ref.read(
+              publicIdentityDisplayNameProvider(
+                PublicIdentityDisplayNameRequest(
+                  did: systemEvent.subjectDid,
+                  unknownLabel: l10n.commonUnknown,
+                ),
+              ),
+            );
+      final preview = localizeMessagePreview(
+        l10n,
+        message,
+        groupEventActorName: actorName,
+        groupEventSubjectName: subjectName,
+      );
       final body = preview.isNotEmpty
           ? preview
           : AppMessage.newMessageArrived().resolveForFallback();

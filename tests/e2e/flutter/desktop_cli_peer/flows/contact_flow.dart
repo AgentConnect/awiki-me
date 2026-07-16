@@ -12,6 +12,7 @@ Future<void> _verifyContactRegression({
   required String canonicalCliDid,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
+  required bool expectContactFirst,
 }) async {
   final cliDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
@@ -45,16 +46,89 @@ Future<void> _verifyContactRegression({
     expectedFollowing: false,
   );
 
-  final conversation = await robot.startDirectConversation(config.cliHandle);
+  if (expectContactFirst) {
+    requireNoDirectConversationForPeer(
+      conversations: await conversations.listConversations(ownerDid: ownerDid),
+      peerDid: cliDid,
+      peerHandles: <String>[
+        config.cliHandle,
+        '${config.cliHandle}.${config.environment.didDomain}',
+      ],
+    );
+    requireNoDirectConversationForPeer(
+      conversations: robot.container
+          .read(conversationListProvider)
+          .conversations,
+      peerDid: cliDid,
+      peerHandles: <String>[
+        config.cliHandle,
+        '${config.cliHandle}.${config.environment.didDomain}',
+      ],
+    );
+  }
+
+  final cliFollow = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'people',
+    'follow',
+    config.appHandle,
+  ]);
+  if (cliFollow.exitCode != 0) {
+    fail('CLI people follow failed: ${_summarizeCliResult(cliFollow)}');
+  }
+  await _waitForAppRelationshipStatus(
+    relationships: relationships,
+    peer: cliDid,
+    expected: 'follower',
+  );
+  await _waitForAppRelationshipList(
+    description: 'App followers contain exact CLI DID',
+    load: () => relationships.listFollowers(limit: 50),
+    expectedDid: cliDid,
+  );
+  await _waitForCliRelationshipList(
+    config: config,
+    command: 'following',
+    expectedDidOrHandle: config.appHandle,
+  );
+  await robot.refreshRelationshipProjection(
+    peerDid: cliDid,
+    expectedFollowing: false,
+  );
+
+  final conversation = await robot.openContactConversation(
+    cliDid,
+    expectedTitle: config.expectedCliPeerDisplayName,
+    fromFollowers: true,
+    forceViewAll: true,
+  );
   requireMatchingCliPeerDid(
     canonicalCliDid: cliDid,
     observedPeerDid: conversation.targetDid ?? '',
   );
+  final expectedPeerPersonaId = conversation.peerPersonaId!;
+  final expectedPeerName = robot.expectedDirectDisplayName(conversation);
+  expect(expectedPeerName, config.expectedCliPeerDisplayName);
+  if (expectContactFirst) {
+    requireExactlyOneDirectConversationForPersona(
+      conversations: robot.container
+          .read(conversationListProvider)
+          .conversations,
+      conversationId: conversation.conversationId,
+      peerPersonaId: expectedPeerPersonaId,
+      unreadCount: 0,
+      lastMessage: '',
+    );
+    await E2eScenarioProgressWriter.record(
+      'contact_first_created_canonical_direct',
+    );
+  }
   await robot.followSelectedPeer();
   await _waitForAppRelationshipStatus(
     relationships: relationships,
     peer: cliDid,
-    expected: 'following',
+    expected: 'friend',
   );
   await _waitForAppRelationshipList(
     description: 'App following contains exact CLI DID',
@@ -69,7 +143,7 @@ Future<void> _verifyContactRegression({
   await _waitForCliRelationshipStatus(
     config: config,
     peer: config.appHandle,
-    expectedRelationship: 'follower',
+    expectedRelationship: 'friend',
   );
 
   await _verifyContactDirectCanonicalRegression(
@@ -82,19 +156,45 @@ Future<void> _verifyContactRegression({
     providerOverrides: providerOverrides,
     cliDid: cliDid,
     expectedConversationId: conversation.conversationId,
+    expectedPeerPersonaId: expectedPeerPersonaId,
+    expectedPeerName: expectedPeerName,
     config: config,
     nonce: nonce,
   );
 
-  final cliFollow = await _runCli(config, <String>[
+  final cliUnfollowToFollowing = await _runCli(config, <String>[
+    '--format',
+    'json',
+    'people',
+    'unfollow',
+    config.appHandle,
+  ]);
+  if (cliUnfollowToFollowing.exitCode != 0) {
+    fail(
+      'CLI people unfollow failed: '
+      '${_summarizeCliResult(cliUnfollowToFollowing)}',
+    );
+  }
+  await _waitForAppRelationshipStatus(
+    relationships: relationships,
+    peer: cliDid,
+    expected: 'following',
+  );
+  await _waitForCliRelationshipStatus(
+    config: config,
+    peer: config.appHandle,
+    expectedRelationship: 'follower',
+  );
+
+  final cliRefollow = await _runCli(config, <String>[
     '--format',
     'json',
     'people',
     'follow',
     config.appHandle,
   ]);
-  if (cliFollow.exitCode != 0) {
-    fail('CLI people follow failed: ${_summarizeCliResult(cliFollow)}');
+  if (cliRefollow.exitCode != 0) {
+    fail('CLI people follow failed: ${_summarizeCliResult(cliRefollow)}');
   }
   await _waitForAppRelationshipStatus(
     relationships: relationships,
@@ -158,6 +258,8 @@ Future<void> _verifyContactDirectCanonicalRegression({
   required List<Override> providerOverrides,
   required String cliDid,
   required String expectedConversationId,
+  required String expectedPeerPersonaId,
+  required String expectedPeerName,
   required _DesktopCliPeerSmokeConfig config,
   required String nonce,
 }) async {
@@ -169,11 +271,22 @@ Future<void> _verifyContactDirectCanonicalRegression({
     peerDid: cliDid,
     expectedFollowing: true,
   );
-  final conversation = await robot.openContactConversation(cliDid);
+  final conversation = await robot.openContactConversation(
+    cliDid,
+    expectedTitle: expectedPeerName,
+  );
   final conversationId = conversation.conversationId;
   expect(conversationId.startsWith('dm:peer-scope:v1:'), isTrue);
   expect(conversationId, expectedConversationId);
+  expect(conversation.peerPersonaId, expectedPeerPersonaId);
   expect(find.byKey(Key('conversation-row:$conversationId')), findsOneWidget);
+  await robot.expectConversationRowPresentation(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+    expectedPreview: conversation.lastMessagePreview,
+    unreadCount: conversation.unreadCount,
+  );
+  await robot.expectSelectedConversationHeader(expectedPeerName);
   await E2eScenarioProgressWriter.record('contact_canonical_row_opened');
 
   await robot.sendText(outboundText);
@@ -237,7 +350,13 @@ Future<void> _verifyContactDirectCanonicalRegression({
   await _assertUiMessagesExactlyOnce(
     robot: robot,
     conversationId: conversationId,
-    expected: <String, String>{outboundText: outboundId},
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: outboundId,
+        content: outboundText,
+        conversationId: conversationId,
+      ),
+    ],
   );
 
   await robot.restart(
@@ -249,11 +368,18 @@ Future<void> _verifyContactDirectCanonicalRegression({
   await _assertUiMessagesExactlyOnce(
     robot: robot,
     conversationId: conversationId,
-    expected: <String, String>{outboundText: outboundId},
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: outboundId,
+        content: outboundText,
+        conversationId: conversationId,
+      ),
+    ],
   );
-  requireExactlyOneConversation(
+  requireExactlyOneDirectConversationForPersona(
     conversations: robot.container.read(conversationListProvider).conversations,
     conversationId: conversationId,
+    peerPersonaId: conversation.peerPersonaId!,
     unreadCount: 0,
     lastMessage: outboundText,
   );
@@ -306,10 +432,18 @@ Future<void> _verifyContactDirectCanonicalRegression({
   await _assertUiMessagesExactlyOnce(
     robot: robot,
     conversationId: conversationId,
-    expected: <String, String>{
-      outboundText: outboundId,
-      inboundText: inboundId,
-    },
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: outboundId,
+        content: outboundText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: inboundId,
+        content: inboundText,
+        conversationId: conversationId,
+      ),
+    ],
   );
   await _expectSingleCanonicalContactOverlay(
     bootstrap: bootstrap,
@@ -334,18 +468,35 @@ Future<void> _expectCanonicalContactRowsExact({
     ownerDid: ownerDid,
     limit: 50,
   );
-  expect(
-    coreRows.where((item) => item.conversationId == conversationId),
-    hasLength(1),
+  final coreCanonical = coreRows
+      .where((item) => item.conversationId == conversationId)
+      .toList(growable: false);
+  expect(coreCanonical, hasLength(1));
+  final peerPersonaId = coreCanonical.single.peerPersonaId?.trim() ?? '';
+  expect(peerPersonaId, isNotEmpty);
+  requireExactlyOneDirectConversationForPersona(
+    conversations: coreRows,
+    conversationId: conversationId,
+    peerPersonaId: peerPersonaId,
+    unreadCount: coreCanonical.single.unreadCount,
+    lastMessage: coreCanonical.single.lastMessagePreview,
   );
   expect(
     coreRows.where((item) => item.conversationId == legacyConversationId),
     isEmpty,
   );
   final uiRows = robot.container.read(conversationListProvider).conversations;
-  expect(
-    uiRows.where((item) => item.conversationId == conversationId),
-    hasLength(1),
+  final uiCanonical = uiRows
+      .where((item) => item.conversationId == conversationId)
+      .toList(growable: false);
+  expect(uiCanonical, hasLength(1));
+  expect(uiCanonical.single.peerPersonaId, peerPersonaId);
+  requireExactlyOneDirectConversationForPersona(
+    conversations: uiRows,
+    conversationId: conversationId,
+    peerPersonaId: peerPersonaId,
+    unreadCount: uiCanonical.single.unreadCount,
+    lastMessage: uiCanonical.single.lastMessagePreview,
   );
   expect(
     uiRows.where((item) => item.conversationId == legacyConversationId),

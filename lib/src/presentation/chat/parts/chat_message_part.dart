@@ -254,7 +254,7 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
   }
 }
 
-class _GroupSystemEventNotice extends StatelessWidget {
+class _GroupSystemEventNotice extends ConsumerWidget {
   const _GroupSystemEventNotice({
     required this.message,
     required this.macStyle,
@@ -264,10 +264,36 @@ class _GroupSystemEventNotice extends StatelessWidget {
   final bool macStyle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final text = localizeMessagePreview(context.l10n, message);
+    final event = message.groupSystemEvent;
+    final actorName = event == null
+        ? null
+        : ref.watch(
+            publicIdentityDisplayNameProvider(
+              PublicIdentityDisplayNameRequest(
+                did: event.actorDid,
+                unknownLabel: context.l10n.commonUnknown,
+              ),
+            ),
+          );
+    final subjectName = event == null
+        ? null
+        : ref.watch(
+            publicIdentityDisplayNameProvider(
+              PublicIdentityDisplayNameRequest(
+                did: event.subjectDid,
+                unknownLabel: context.l10n.commonUnknown,
+              ),
+            ),
+          );
+    final text = localizeMessagePreview(
+      context.l10n,
+      message,
+      groupEventActorName: actorName,
+      groupEventSubjectName: subjectName,
+    );
     final foreground = macStyle ? const Color(0xFF5F6E84) : theme.secondaryText;
     final background = macStyle
         ? const Color(0xFFF6F8FC)
@@ -321,6 +347,7 @@ class _GroupSystemEventNotice extends StatelessWidget {
                 Flexible(
                   child: Text(
                     text,
+                    key: Key('chat-group-system-event:${message.localId}'),
                     textAlign: TextAlign.center,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
@@ -928,6 +955,7 @@ class _MessageBubble extends StatelessWidget {
       ),
       child: Text(
         senderLabel,
+        key: Key('chat-message-sender:${message.localId}'),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(

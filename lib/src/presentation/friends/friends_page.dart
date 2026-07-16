@@ -97,6 +97,7 @@ class FriendsPage extends ConsumerWidget {
                   .map(
                     (item) => _FriendRow.contact(
                       rowKey: Key('contact-row:${item.did.trim()}'),
+                      titleKey: Key('contact-row-title:${item.did.trim()}'),
                       seed: _displayName(ref, item),
                       title: _displayName(ref, item),
                       avatarUri: _avatarUri(ref, item),
@@ -134,6 +135,7 @@ class FriendsPage extends ConsumerWidget {
                   .map(
                     (item) => _FriendRow.contact(
                       rowKey: Key('contact-row:${item.did.trim()}'),
+                      titleKey: Key('contact-row-title:${item.did.trim()}'),
                       seed: _displayName(ref, item),
                       title: _displayName(ref, item),
                       avatarUri: _avatarUri(ref, item),
@@ -376,6 +378,7 @@ class _FriendsPreviewStatus extends StatelessWidget {
 class _FriendRow extends StatelessWidget {
   const _FriendRow.contact({
     required this.rowKey,
+    required this.titleKey,
     required this.seed,
     required this.title,
     required this.onTap,
@@ -386,12 +389,14 @@ class _FriendRow extends StatelessWidget {
   const _FriendRow.group({required this.title, required this.onTap})
     : isGroup = true,
       rowKey = const Key('friends-groups-row'),
+      titleKey = null,
       seed = 'group',
       trailing = null,
       avatarUri = null;
 
   final bool isGroup;
   final Key rowKey;
+  final Key? titleKey;
   final String seed;
   final String title;
   final VoidCallback onTap;
@@ -415,6 +420,7 @@ class _FriendRow extends StatelessWidget {
         child: AppListTile(
           horizontalPadding: 0,
           title: title,
+          titleKey: titleKey,
           trailing: trailing,
           leading: isGroup
               ? AppSurface(
@@ -738,6 +744,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
               padding: const EdgeInsets.symmetric(horizontal: 18),
               child: _FriendRow.contact(
                 rowKey: Key('contact-row:${item.did.trim()}'),
+                titleKey: Key('contact-row-title:${item.did.trim()}'),
                 seed: displayName,
                 title: displayName,
                 avatarUri: _avatarUri(ref, item),

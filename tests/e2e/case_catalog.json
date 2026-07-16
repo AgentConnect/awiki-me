@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-10.test-quality-catalog-v1",
+  "sourceRevision": "2026-07-16.conversation-correctness-v7",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -279,11 +279,11 @@
       "caseId": "CONTACT-E2E-001",
       "feature": "App follow interaction",
       "layer": "product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Find the canonical peer card and tap the visible follow control.",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the CLI peer first follows the isolated App identity and becomes a visible follower contact.",
+      "action": "Open the exact follower contact and tap the visible follow control in the resulting Direct peer information surface.",
       "exactOracles": [
         "Button is visible and enabled.",
-        "Backend relationship becomes exactly following."
+        "Backend relationship becomes exactly friend and both directional lists contain the exact peer once."
       ],
       "negativeChecks": [
         "Missing/disabled/inert click, backend error, or broad friend/follower acceptance fails."
@@ -297,7 +297,27 @@
       "owner": "awiki-me-contacts+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONTACT-E2E-001:inbound_follower_contact_opened",
+          "CONTACT-E2E-001:app_ui_follow_converged_to_friend"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONTACT-E2E-001:inbound_follower_contact_opened"
+          ],
+          [
+            "CONTACT-E2E-001:app_ui_follow_converged_to_friend"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONTACT-E2E-001:inbound_follower_contact_opened",
+            "CONTACT-E2E-001:app_ui_follow_converged_to_friend"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CONTACT-E2E-002",
@@ -321,20 +341,40 @@
       "owner": "awiki-me-contacts+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONTACT-E2E-002:cli_unfollow_refollow_transitions_completed",
+          "CONTACT-E2E-002:app_ui_unfollow_confirmed"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONTACT-E2E-002:cli_unfollow_refollow_transitions_completed"
+          ],
+          [
+            "CONTACT-E2E-002:app_ui_unfollow_confirmed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONTACT-E2E-002:cli_unfollow_refollow_transitions_completed",
+            "CONTACT-E2E-002:app_ui_unfollow_confirmed"
+          ]
+        ]
+      }
     },
     {
-      "caseId": "CONTACT-REG-001",
-      "feature": "Relationship transition/idempotency regression",
+      "caseId": "CONTACT-FIRST-CONV-E2E-001",
+      "feature": "Contact-first canonical Direct creation",
       "layer": "product_ui",
-      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Exercise the canonical relationship lifecycle through refreshes and repeated reads.",
+      "preconditions": "The contacts-focused awiki.info run has an isolated App state root, the exact CLI peer is an inbound follower, and no Direct row exists for its current DID or Handle.",
+      "action": "Open the exact follower row before using identity lookup, recents, local search, or sending a first message.",
       "exactOracles": [
-        "The exact sequence none→following→friend→follower→none is observed.",
-        "CLI status derives the combined state from all directional booleans while independently checking the outbound relationship field; refresh does not invent duplicate or stale relations."
+        "The visible contact row uses the deterministic nickname and opens one dm:peer-scope:v1 conversation with non-empty peerPersonaId.",
+        "The empty Direct remains exact-one by Persona before its first message and subsequent contact re-entry reuses the same canonical conversation ID."
       ],
       "negativeChecks": [
-        "Any broadened state set, duplicate relation, or stale post-refresh state fails."
+        "A pre-existing Direct fixture, Handle/DID title drift, legacy dm:<DID> row, second Persona row, wrong peer, or a disappearing empty conversation fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -345,7 +385,28 @@
       "owner": "awiki-me-contacts+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONTACT-FIRST-CONV-E2E-001:no_direct_before_follower_contact_open",
+          "CONTACT-FIRST-CONV-E2E-001:contact_first_canonical_direct_exact_one"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONTACT-FIRST-CONV-E2E-001:contact_first_canonical_direct_exact_one"
+          ],
+          [
+            "CONTACT-FIRST-CONV-E2E-001:no_direct_before_follower_contact_open",
+            "CONTACT-FIRST-CONV-E2E-001:contact_first_canonical_direct_exact_one"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONTACT-FIRST-CONV-E2E-001:no_direct_before_follower_contact_open",
+            "CONTACT-FIRST-CONV-E2E-001:contact_first_canonical_direct_exact_one"
+          ]
+        ]
+      }
     },
     {
       "caseId": "CONTACT-MSG-E2E-001",
@@ -354,9 +415,9 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the exact CLI peer is visible in the App Contacts UI after canonical relationship convergence.",
       "action": "Click the exact visible contact row, send one run-unique message through the App, restart, then receive and read one run-unique CLI message.",
       "exactOracles": [
-        "The contact row opens one dm:peer-scope:v1 conversation and App send reaches terminal sent.",
+        "The exact contact row displays the same nickname-first title as identity lookup and opens the existing dm:peer-scope:v1 conversation for the same Persona.",
         "CLI inbox/history contain exactly one matching sender, receiver, body, type, message id, and thread.",
-        "Core conversation summary, App UI row, timeline message, and Product overlay each have exactly one canonical identity with no dm:<DID> overlay.",
+        "Core conversation summary, visible row/header, timeline message, and Product overlay each have exactly one canonical identity with no dm:<DID> overlay.",
         "Restart preserves one canonical row/message; closed-view incoming unread is exactly +1, restart preserves 1, and opening clears it to 0 without rebound."
       ],
       "negativeChecks": [
@@ -371,7 +432,320 @@
       "owner": "awiki-me-contacts+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONTACT-MSG-E2E-001:exact_contact_row_clicked",
+          "CONTACT-MSG-E2E-001:canonical_send_message_summary_ui_overlay_exact_one",
+          "CONTACT-MSG-E2E-001:restart_unread_read_closed_loop_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONTACT-MSG-E2E-001:exact_contact_row_clicked"
+          ],
+          [
+            "CONTACT-MSG-E2E-001:canonical_send_message_summary_ui_overlay_exact_one"
+          ],
+          [
+            "CONTACT-MSG-E2E-001:canonical_send_message_summary_ui_overlay_exact_one"
+          ],
+          [
+            "CONTACT-MSG-E2E-001:restart_unread_read_closed_loop_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONTACT-MSG-E2E-001:exact_contact_row_clicked",
+            "CONTACT-MSG-E2E-001:canonical_send_message_summary_ui_overlay_exact_one",
+            "CONTACT-MSG-E2E-001:restart_unread_read_closed_loop_verified"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "CONTACT-REG-001",
+      "feature": "Relationship transition/idempotency regression",
+      "layer": "product_ui",
+      "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
+      "action": "Exercise the canonical relationship lifecycle through refreshes and repeated reads.",
+      "exactOracles": [
+        "The exact sequence none→follower→friend→following→friend→follower→none is observed.",
+        "CLI status derives the combined state from all directional booleans while independently checking the outbound relationship field; refresh does not invent duplicate or stale relations."
+      ],
+      "negativeChecks": [
+        "Any broadened state set, duplicate relation, or stale post-refresh state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-contacts+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONTACT-REG-001:exact_none_follower_friend_following_transitions_checked"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONTACT-REG-001:exact_none_follower_friend_following_transitions_checked"
+          ],
+          [
+            "CONTACT-REG-001:exact_none_follower_friend_following_transitions_checked"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONTACT-REG-001:exact_none_follower_friend_following_transitions_checked"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "CONV-LIST-E2E-001",
+      "feature": "Multi-conversation list projection correctness",
+      "layer": "product_ui",
+      "preconditions": "The full remote awiki.info flow has one canonical Direct and one canonical Group for the isolated App state root.",
+      "action": "While both conversations are closed, deliver Direct, Group, then Direct messages and restart before inspecting the list.",
+      "exactOracles": [
+        "After each delivery, App projection relative order follows the latest canonical message without duplicating either semantic conversation.",
+        "After restart, visible Direct and Group rows have exact nickname/group title, exact latest preview, exact unread badge, and Direct appears before Group."
+      ],
+      "negativeChecks": [
+        "Duplicate semantic row, stale row order, wrong title/preview, missing row, or zero-unread badge fails immediately."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONV-LIST-E2E-001:latest_activity_relative_order_exact",
+          "CONV-LIST-E2E-001:restart_rows_title_preview_unread_order_exact",
+          "CONV-LIST-E2E-001:duplicate_stale_or_missing_row_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONV-LIST-E2E-001:latest_activity_relative_order_exact"
+          ],
+          [
+            "CONV-LIST-E2E-001:restart_rows_title_preview_unread_order_exact"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONV-LIST-E2E-001:duplicate_stale_or_missing_row_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DISPLAY-NAME-E2E-001",
+      "feature": "Nickname consistency across identity and conversation surfaces",
+      "layer": "product_ui",
+      "preconditions": "The CLI peer publishes a deterministic nickname that differs from its Handle and DID.",
+      "action": "Resolve the peer, open Direct and Contacts, add the same peer to a Group, observe the system event and receive a Group message.",
+      "exactOracles": [
+        "Identity lookup first visible primary title, Direct row/header, and Contact row all use the exact nickname.",
+        "Group member projection, member-added system event, and incoming sender label use the same exact nickname."
+      ],
+      "negativeChecks": [
+        "Handle, compact/full DID, Unknown, or any different title shown as the primary name while the nickname is available fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DISPLAY-NAME-E2E-001:lookup_direct_and_contact_exact_nickname",
+          "DISPLAY-NAME-E2E-001:group_member_event_and_sender_exact_nickname",
+          "DISPLAY-NAME-E2E-001:handle_did_unknown_primary_name_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DISPLAY-NAME-E2E-001:lookup_direct_and_contact_exact_nickname"
+          ],
+          [
+            "DISPLAY-NAME-E2E-001:group_member_event_and_sender_exact_nickname"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DISPLAY-NAME-E2E-001:handle_did_unknown_primary_name_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DISPLAY-NAME-E2E-002",
+      "feature": "Full-Handle fallback consistency across App surfaces",
+      "layer": "product_ui",
+      "preconditions": "A dedicated awiki.info CLI peer has no nickname and has one stable full Handle distinct from its DID and generated user name.",
+      "action": "Resolve the peer and exercise identity lookup, Direct, Contacts, group member, group system-event, and sender-label surfaces through the App.",
+      "exactOracles": [
+        "Identity lookup, Direct row/header, and Contact row use the exact full Handle when nickname is unavailable.",
+        "Group member, member-added system event, and incoming sender label use the same exact full Handle."
+      ],
+      "negativeChecks": [
+        "A bare local name, generated user name, compact/full DID, Unknown, mixed fallback, transient wrong first title, or later self-healing fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DISPLAY-NAME-E2E-002:lookup_direct_and_contact_exact_full_handle",
+          "DISPLAY-NAME-E2E-002:group_member_event_and_sender_exact_full_handle",
+          "DISPLAY-NAME-E2E-002:bare_name_did_unknown_or_mixed_fallback_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DISPLAY-NAME-E2E-002:lookup_direct_and_contact_exact_full_handle"
+          ],
+          [
+            "DISPLAY-NAME-E2E-002:group_member_event_and_sender_exact_full_handle"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DISPLAY-NAME-E2E-002:bare_name_did_unknown_or_mixed_fallback_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DISPLAY-NAME-E2E-003",
+      "feature": "DID-only fallback consistency across App surfaces",
+      "layer": "product_ui",
+      "preconditions": "A dedicated awiki.info actor is resolvable and can participate in product flows without either a nickname or a Handle projection.",
+      "action": "Open identity lookup, Direct, Contacts, group member, group system-event, and sender-label surfaces for the DID-only actor.",
+      "exactOracles": [
+        "Every scoped App surface uses the DID fallback only when both nickname and Handle are unavailable."
+      ],
+      "negativeChecks": [
+        "The actor must not appear as Unknown, a stale generated user name, a stale sender snapshot, or a mixed fallback across App surfaces."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "DISPLAY-NAME-E2E-004",
+      "feature": "Explicit Profile refresh converges every App display surface",
+      "layer": "product_ui",
+      "preconditions": "The awiki.info peer starts with one nickname distinct from its Handle and DID, then publishes a second run-unique nickname while its Direct, Contact, Group, system-event, and sender-label surfaces already exist.",
+      "action": "Open the existing Direct, click the visible peer avatar to refresh Profile, then reopen identity lookup, recents, Contacts, group info, the member-added system event, and the existing group sender label.",
+      "exactOracles": [
+        "The peer-info title, Direct App projection, conversation row, chat header, identity lookup, and Contact row converge to the exact new nickname while reusing the same Persona and canonical conversation ID.",
+        "The existing group member, member-added system event, and message sender label converge to the same exact new nickname without changing the canonical Group conversation."
+      ],
+      "negativeChecks": [
+        "A stale old nickname, Handle/DID/Unknown fallback, mixed old/new surfaces, a second Direct row, changed Persona/conversation ID, or a later name reversion fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/profile_refresh_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DISPLAY-NAME-E2E-004:explicit_avatar_refresh_converged_direct_detail_contact_and_lookup",
+          "DISPLAY-NAME-E2E-004:profile_refresh_converged_group_member_event_and_sender",
+          "DISPLAY-NAME-E2E-004:stale_mixed_or_identity_split_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DISPLAY-NAME-E2E-004:explicit_avatar_refresh_converged_direct_detail_contact_and_lookup"
+          ],
+          [
+            "DISPLAY-NAME-E2E-004:profile_refresh_converged_group_member_event_and_sender"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DISPLAY-NAME-E2E-004:stale_mixed_or_identity_split_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DISPLAY-NAME-REG-001",
+      "feature": "Cached nickname is correct on the first visible frame",
+      "layer": "product_ui",
+      "preconditions": "The CLI peer nickname has already been resolved into the isolated App profile projection and the Direct conversation survives an App-shell restart.",
+      "action": "Restart the App shell and open the canonical Direct row through the visible conversation list before any remote profile refresh is requested.",
+      "exactOracles": [
+        "After the target conversation becomes selected, the first non-empty scoped chat-header title is the exact cached nickname.",
+        "The same nickname remains stable throughout the post-open observation window."
+      ],
+      "negativeChecks": [
+        "A first visible Handle, compact/full DID, Unknown label, duplicate title widget, or later title drift fails immediately instead of waiting for self-healing."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DISPLAY-NAME-REG-001:cached_nickname_first_nonempty_header_title",
+          "DISPLAY-NAME-REG-001:cached_nickname_stable_after_open",
+          "DISPLAY-NAME-REG-001:handle_did_unknown_or_duplicate_title_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DISPLAY-NAME-REG-001:cached_nickname_first_nonempty_header_title"
+          ],
+          [
+            "DISPLAY-NAME-REG-001:cached_nickname_stable_after_open"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DISPLAY-NAME-REG-001:handle_did_unknown_or_duplicate_title_rejected"
+          ]
+        ]
+      }
     },
     {
       "caseId": "GROUP-E2E-001",
@@ -381,13 +755,13 @@
       "action": "Create a group, add the canonical CLI member, and send through visible App UI.",
       "exactOracles": [
         "A read-only resolver preflight yields a non-empty DID; the member action itself still performs at most three visible search submissions, selects the one exact enabled candidate, and then requires the selected add-member action to be enabled before tapping it.",
-        "The selected group converges to its canonical conversation id before messaging.",
-        "The empty group row exists exactly once before member addition, remains exact-one after member refresh, and survives App restart before the first message.",
-        "One canonical group and correct member exist.",
+        "The selected group converges to one canonical conversation id before messaging, with the exact visible group title, empty preview and unread 0.",
+        "The empty group row remains exact-one after member refresh and App restart before the first message.",
+        "One canonical group and correct member exist, and the visible member-added system event uses the member nickname before Handle/DID fallback.",
         "App send reaches terminal state and CLI observes exactly one message with exact sender/content/group."
       ],
       "negativeChecks": [
-        "Wrong group/member, missing or duplicate empty row, disappearance after member refresh/restart, direct service shortcut, send nonterminal, or duplicate message fails."
+        "Wrong group/member, duplicate semantic Group row, missing/disappearing empty row, title drift, Handle/DID shown despite an available nickname, direct service shortcut, nonterminal send, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -398,7 +772,41 @@
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "GROUP-E2E-001:group_created_and_member_added_through_ui",
+          "GROUP-E2E-001:empty_group_survives_member_refresh_and_restart_exact_one",
+          "GROUP-E2E-001:member_added_system_event_uses_nickname_projection",
+          "GROUP-E2E-001:app_group_ui_send_exact_one_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "GROUP-E2E-001:group_created_and_member_added_through_ui"
+          ],
+          [
+            "GROUP-E2E-001:group_created_and_member_added_through_ui",
+            "GROUP-E2E-001:empty_group_survives_member_refresh_and_restart_exact_one"
+          ],
+          [
+            "GROUP-E2E-001:empty_group_survives_member_refresh_and_restart_exact_one"
+          ],
+          [
+            "GROUP-E2E-001:member_added_system_event_uses_nickname_projection"
+          ],
+          [
+            "GROUP-E2E-001:app_group_ui_send_exact_one_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "GROUP-E2E-001:group_created_and_member_added_through_ui",
+            "GROUP-E2E-001:empty_group_survives_member_refresh_and_restart_exact_one",
+            "GROUP-E2E-001:member_added_system_event_uses_nickname_projection",
+            "GROUP-E2E-001:app_group_ui_send_exact_one_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "GROUP-E2E-002",
@@ -407,11 +815,12 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send a run-unique group message from CLI and navigate to it in App UI.",
       "exactOracles": [
-        "App renders exactly one canonical group message with exact content/sender/group.",
-        "Stable history requery does not duplicate it."
+        "Closed-view CLI delivery increments only the canonical group unread by exactly one and the visible row shows exact title, preview and unread.",
+        "App renders exactly one canonical group message with exact content/sender/group and the visible sender label uses the same nickname as the group identity projection.",
+        "Opening the exact row clears only that group unread and stable history requery does not duplicate the message."
       ],
       "negativeChecks": [
-        "Wrong row/thread, missing/duplicate bubble, or mismatched content/identity fails."
+        "Wrong row/thread, missing/duplicate bubble, incorrect preview/unread, sender Handle/DID drift despite an available nickname, or mismatched content/identity fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -422,7 +831,32 @@
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
+          "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+        ],
+        "exactOracleAssertions": [
+          [
+            "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+          ],
+          [
+            "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
+            "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+          ],
+          [
+            "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
+            "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "GROUP-E2E-002:cli_group_send_verified_in_app_ui",
+            "GROUP-E2E-002:group_row_preview_unread_and_sender_nickname_exact"
+          ]
+        ]
+      }
     },
     {
       "caseId": "GROUP-P9-001",
@@ -447,7 +881,28 @@
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "GROUP-P9-001:app_ui_structured_group_mention_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "GROUP-P9-001:app_ui_structured_group_mention_verified"
+          ],
+          [
+            "GROUP-P9-001:app_ui_structured_group_mention_verified"
+          ],
+          [
+            "GROUP-P9-001:app_ui_structured_group_mention_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "GROUP-P9-001:app_ui_structured_group_mention_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "GROUP-P9-002",
@@ -472,7 +927,28 @@
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+        ],
+        "exactOracleAssertions": [
+          [
+            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+          ],
+          [
+            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+          ],
+          [
+            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "GROUP-P9-002:cli_structured_group_mention_verified_in_app_ui"
+          ]
+        ]
+      }
     },
     {
       "caseId": "GROUP-REG-001",
@@ -481,10 +957,11 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Refresh and requery the group history after bidirectional sends and mentions.",
       "exactOracles": [
-        "Every run-owned canonical message remains exactly once and ordered in the intended group."
+        "The complete run-owned canonical message set remains exactly once and in exact App/UI order in the intended group after refresh.",
+        "No run-owned group message appears in another loaded App conversation projection."
       ],
       "negativeChecks": [
-        "Cross-group leakage, missing message, replay duplicate, or identity/content drift fails."
+        "Loaded cross-conversation leakage, missing/extra/out-of-order message, replay duplicate, or identity/content drift fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -495,7 +972,73 @@
       "owner": "awiki-me-groups+awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "GROUP-REG-001:group_history_exact_order_and_stability_checked",
+          "GROUP-REG-001:loaded_conversation_message_leakage_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "GROUP-REG-001:group_history_exact_order_and_stability_checked"
+          ],
+          [
+            "GROUP-REG-001:loaded_conversation_message_leakage_rejected"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "GROUP-REG-001:group_history_exact_order_and_stability_checked",
+            "GROUP-REG-001:loaded_conversation_message_leakage_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "INBOUND-FIRST-CONV-E2E-001",
+      "feature": "Inbound-first canonical Direct creation",
+      "layer": "product_ui",
+      "preconditions": "The inbound-focused awiki.info run has an isolated App state root and no Direct row for the exact CLI peer current DID or Handle.",
+      "action": "Keep the peer conversation closed, send the first Direct message from CLI, open the resulting visible row, then re-enter through identity lookup, recents, and local search.",
+      "exactOracles": [
+        "The first inbound message creates exactly one resolved dm:peer-scope:v1 conversation with one peerPersonaId, exact nickname, preview, unread increment, and canonical message ID.",
+        "Opening clears only that unread state, and identity lookup, recents, App-shell rebuild, and local search all reuse the same canonical conversation and exact-one timeline."
+      ],
+      "negativeChecks": [
+        "A pre-existing Direct fixture, legacy dm:<DID> row, duplicate Persona row, wrong nickname/preview/unread, missing or duplicate message, alternate entry ID, or restart/search drift fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/inbound_first_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "INBOUND-FIRST-CONV-E2E-001:no_direct_before_first_inbound_message",
+          "INBOUND-FIRST-CONV-E2E-001:inbound_message_created_one_canonical_persona_conversation",
+          "INBOUND-FIRST-CONV-E2E-001:lookup_recents_and_local_search_reused_same_conversation"
+        ],
+        "exactOracleAssertions": [
+          [
+            "INBOUND-FIRST-CONV-E2E-001:inbound_message_created_one_canonical_persona_conversation"
+          ],
+          [
+            "INBOUND-FIRST-CONV-E2E-001:lookup_recents_and_local_search_reused_same_conversation"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "INBOUND-FIRST-CONV-E2E-001:no_direct_before_first_inbound_message",
+            "INBOUND-FIRST-CONV-E2E-001:inbound_message_created_one_canonical_persona_conversation",
+            "INBOUND-FIRST-CONV-E2E-001:lookup_recents_and_local_search_reused_same_conversation"
+          ]
+        ]
+      }
     },
     {
       "caseId": "MSG-E2E-001",
@@ -504,12 +1047,12 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Open a canonical Direct conversation, verify it before the first message and after App restart, then type and send a run-unique message through visible App controls.",
       "exactOracles": [
-        "Before the first send, the empty canonical Direct row exists exactly once with unread 0 and empty preview; App restart preserves the same exact row.",
-        "App send reaches terminal sent state.",
+        "Before the first send, the resolved Persona has exactly one canonical Direct row; its visible nickname-first title, empty preview, unread 0, selected chat header, and restart state match exactly.",
+        "App send reaches terminal sent state and the visible row preview is the exact sent body.",
         "CLI inbox contains exactly one canonical message with exact body, sender, receiver, thread and type."
       ],
       "negativeChecks": [
-        "Missing/duplicate empty row, loss on restart, rejected/final-nonaccepted send, wrong identity/content, zero message matches, or duplicates fail."
+        "A second row for the same Persona, missing/duplicate empty row, title/preview drift, loss on restart, rejected or nonterminal send, wrong identity/content, zero matches, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -520,7 +1063,35 @@
       "owner": "awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MSG-E2E-001:empty_direct_restart_exact_one_before_first_message",
+          "MSG-E2E-001:identity_lookup_row_and_header_nickname_exact",
+          "MSG-E2E-001:app_ui_send_terminal_sent",
+          "MSG-E2E-001:cli_inbox_canonical_exact_one_verified"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MSG-E2E-001:empty_direct_restart_exact_one_before_first_message",
+            "MSG-E2E-001:identity_lookup_row_and_header_nickname_exact"
+          ],
+          [
+            "MSG-E2E-001:app_ui_send_terminal_sent"
+          ],
+          [
+            "MSG-E2E-001:cli_inbox_canonical_exact_one_verified"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MSG-E2E-001:empty_direct_restart_exact_one_before_first_message",
+            "MSG-E2E-001:identity_lookup_row_and_header_nickname_exact",
+            "MSG-E2E-001:app_ui_send_terminal_sent",
+            "MSG-E2E-001:cli_inbox_canonical_exact_one_verified"
+          ]
+        ]
+      }
     },
     {
       "caseId": "MSG-E2E-002",
@@ -530,8 +1101,8 @@
       "action": "Send a run-unique direct message from CLI while the App target conversation is not open, then open it through UI.",
       "exactOracles": [
         "CLI send is accepted and has a canonical message ID.",
-        "Global and target-conversation unread move from baseline to exactly baseline+1.",
-        "After an App-shell rebuild, the canonical row shows the exact localized unread-count label and one exact bubble; opening clears list and navigation unread without rebound."
+        "Global and target-conversation unread move from baseline to exactly baseline+1, while the scoped visible row shows the exact preview and localized unread count.",
+        "After an App-shell rebuild, the canonical row preserves the exact title/preview/unread and one exact bubble; opening clears list and navigation unread and removes the row badge without rebound."
       ],
       "negativeChecks": [
         "Wrong conversation alias, duplicate bubble, incorrect badge delta, premature read, or rebound fails."
@@ -545,7 +1116,30 @@
       "owner": "awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MSG-E2E-002:cli_send_accepted",
+          "MSG-E2E-002:app_ui_unread_exact_increment_and_read_clear"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MSG-E2E-002:cli_send_accepted"
+          ],
+          [
+            "MSG-E2E-002:app_ui_unread_exact_increment_and_read_clear"
+          ],
+          [
+            "MSG-E2E-002:app_ui_unread_exact_increment_and_read_clear"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MSG-E2E-002:cli_send_accepted",
+            "MSG-E2E-002:app_ui_unread_exact_increment_and_read_clear"
+          ]
+        ]
+      }
     },
     {
       "caseId": "MSG-REG-001",
@@ -556,10 +1150,11 @@
       "exactOracles": [
         "The controlled failed row stays visible in the canonical conversation even when the write path uses a DID alias or a core reset arrives.",
         "The visible retry performs exactly one real remote transport attempt, reports a typed failure code if it fails, and reaches terminal sent state.",
-        "Canonical ID/body remain exactly one after a legal desktop hidden/resumed lifecycle reconnect and widget/App-shell rebuild."
+        "The complete run-owned Direct sequence has the exact canonical IDs, contents, conversation ownership and visible order after reconnect and App-shell rebuild.",
+        "Two distinct canonical messages with the same body remain exactly two ordered messages through the stability window and rebuild."
       ],
       "negativeChecks": [
-        "Silent success, new duplicate on retry/replay, lost message, or stale failed state fails."
+        "Silent success, duplicate/extra/missing/out-of-order message, cross-conversation leakage, same-body collapse, new duplicate on retry/replay, lost message, or stale failed state fails immediately."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -570,7 +1165,83 @@
       "owner": "awiki-me-messaging",
       "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "active"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MSG-REG-001:failure_retry_ui_verified",
+          "MSG-REG-001:lifecycle_and_widget_restart_exact_one_verified",
+          "MSG-REG-001:complete_direct_message_sequence_ordered_and_stable",
+          "MSG-REG-001:same_body_distinct_canonical_messages_preserved"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MSG-REG-001:failure_retry_ui_verified"
+          ],
+          [
+            "MSG-REG-001:lifecycle_and_widget_restart_exact_one_verified"
+          ],
+          [
+            "MSG-REG-001:complete_direct_message_sequence_ordered_and_stable"
+          ],
+          [
+            "MSG-REG-001:same_body_distinct_canonical_messages_preserved"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MSG-REG-001:failure_retry_ui_verified",
+            "MSG-REG-001:lifecycle_and_widget_restart_exact_one_verified",
+            "MSG-REG-001:complete_direct_message_sequence_ordered_and_stable",
+            "MSG-REG-001:same_body_distinct_canonical_messages_preserved"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "MSG-SEQUENCE-E2E-001",
+      "feature": "Cross-conversation exact message sequence and isolation",
+      "layer": "product_ui",
+      "preconditions": "The full remote awiki.info flow has one canonical Direct and one canonical Group.",
+      "action": "Deliver ordered Direct/Group traffic, then hide the App, send a three-message Direct burst without waiting for App convergence, resume, open each row, and requery local history.",
+      "exactOracles": [
+        "The Direct and Group run-owned canonical ids are exact-once and ordered in App projection, visible bubbles, and SDK local history with no cross-conversation leakage.",
+        "After hidden/resume, the three-message burst produces exact +3 Direct/global unread and the last-message preview; opening Direct shows the exact burst ID/body/sender order and clears only that unread without rebound."
+      ],
+      "negativeChecks": [
+        "Duplicate/missing/extra id, wrong body/sender/conversation, swapped burst order, stale preview, unread drift/rebound, or cross-conversation leakage fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MSG-SEQUENCE-E2E-001:direct_and_group_canonical_ids_exact_once_in_order",
+          "MSG-SEQUENCE-E2E-001:visible_and_local_history_order_no_cross_conversation_leakage",
+          "MSG-SEQUENCE-E2E-001:hidden_burst_resume_exact_sequence_and_unread",
+          "MSG-SEQUENCE-E2E-001:duplicate_missing_extra_or_swapped_message_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MSG-SEQUENCE-E2E-001:direct_and_group_canonical_ids_exact_once_in_order",
+            "MSG-SEQUENCE-E2E-001:visible_and_local_history_order_no_cross_conversation_leakage"
+          ],
+          [
+            "MSG-SEQUENCE-E2E-001:hidden_burst_resume_exact_sequence_and_unread"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MSG-SEQUENCE-E2E-001:duplicate_missing_extra_or_swapped_message_rejected"
+          ]
+        ]
+      }
     },
     {
       "caseId": "MSGAGENT-E2E-001",
@@ -974,6 +1645,56 @@
       "catalogStatus": "active"
     },
     {
+      "caseId": "PROCESS-RESTART-E2E-001",
+      "feature": "Canonical conversation cold-process restart",
+      "layer": "product_ui",
+      "preconditions": "The runner can launch two independent Flutter integration-test processes against one isolated App state root and one attested x86_64 build.",
+      "action": "Phase A creates Direct/Group conversations, messages, unread state, and cached Profiles; Phase B starts a new Flutter process and restores only persisted state.",
+      "exactOracles": [
+        "The second process restores Persona/Group semantic exact-one, exact message order, unread state, and cached first-visible names without reusing in-memory providers."
+      ],
+      "negativeChecks": [
+        "Same-process Widget rebuild, duplicate/lost rows, unread drift, message replay, Handle/DID flash, changed native content hash, or a different state root fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging+awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/process_restart_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "PROCESS-RESTART-E2E-001:distinct_flutter_process_same_state_root",
+          "PROCESS-RESTART-E2E-001:active_identity_restored_without_login",
+          "PROCESS-RESTART-E2E-001:direct_persona_exact_one_after_cold_start",
+          "PROCESS-RESTART-E2E-001:group_exact_one_after_cold_start",
+          "PROCESS-RESTART-E2E-001:exact_messages_and_unread_restored",
+          "PROCESS-RESTART-E2E-001:cached_names_visible_without_fallback"
+        ],
+        "exactOracleAssertions": [
+          [
+            "PROCESS-RESTART-E2E-001:active_identity_restored_without_login",
+            "PROCESS-RESTART-E2E-001:direct_persona_exact_one_after_cold_start",
+            "PROCESS-RESTART-E2E-001:group_exact_one_after_cold_start",
+            "PROCESS-RESTART-E2E-001:exact_messages_and_unread_restored",
+            "PROCESS-RESTART-E2E-001:cached_names_visible_without_fallback"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "PROCESS-RESTART-E2E-001:distinct_flutter_process_same_state_root",
+            "PROCESS-RESTART-E2E-001:direct_persona_exact_one_after_cold_start",
+            "PROCESS-RESTART-E2E-001:group_exact_one_after_cold_start",
+            "PROCESS-RESTART-E2E-001:exact_messages_and_unread_restored",
+            "PROCESS-RESTART-E2E-001:cached_names_visible_without_fallback"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "SMOKE-E2E-001",
       "feature": "App shell smoke",
       "layer": "product_ui",
@@ -997,6 +1718,143 @@
       "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
+    },
+    {
+      "caseId": "UNREAD-MULTI-E2E-001",
+      "feature": "Multi-conversation unread isolation and read clearing",
+      "layer": "product_ui",
+      "preconditions": "The full remote awiki.info flow has one closed canonical Direct and one closed canonical Group.",
+      "action": "Receive two Direct messages and one Group message, restart, open Group, then open Direct.",
+      "exactOracles": [
+        "Before opening, Direct unread is exactly 2, Group unread is exactly 1, and global unread increases by exactly 3.",
+        "Opening Group clears only Group and leaves Direct at 2; opening Direct then restores the exact baseline total with no rebound during the stability window."
+      ],
+      "negativeChecks": [
+        "Wrong per-row/global count, clearing the wrong row, lost restart state, duplicate badge, or delayed unread rebound fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "UNREAD-MULTI-E2E-001:direct_two_group_one_global_three_exact",
+          "UNREAD-MULTI-E2E-001:opening_one_clears_only_that_conversation",
+          "UNREAD-MULTI-E2E-001:restart_and_stability_no_unread_rebound"
+        ],
+        "exactOracleAssertions": [
+          [
+            "UNREAD-MULTI-E2E-001:direct_two_group_one_global_three_exact"
+          ],
+          [
+            "UNREAD-MULTI-E2E-001:opening_one_clears_only_that_conversation",
+            "UNREAD-MULTI-E2E-001:restart_and_stability_no_unread_rebound"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "UNREAD-MULTI-E2E-001:direct_two_group_one_global_three_exact",
+            "UNREAD-MULTI-E2E-001:opening_one_clears_only_that_conversation",
+            "UNREAD-MULTI-E2E-001:restart_and_stability_no_unread_rebound"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "CONV-CANON-E2E-001",
+      "feature": "Canonical Direct conversation across App entries",
+      "layer": "product_ui",
+      "preconditions": "The awiki.info peer has a nickname distinct from its Handle and DID, and the isolated App state contains no Direct row for that Persona.",
+      "action": "Create the Direct through identity lookup before the first message, then reopen it through recents, local conversation search, restart, and the visible Contact row.",
+      "exactOracles": [
+        "Every App entry reuses the same peer-scope canonical conversation ID and peer Persona ID.",
+        "The empty pre-message conversation remains visible, then messages, preview, unread, and cached nickname stay attached to that single row across restart."
+      ],
+      "negativeChecks": [
+        "A legacy dm:<DID> row, a second semantic row, a changed Persona/conversation ID, a lost empty row, or entry-specific title/state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "CONV-CANON-E2E-001:identity_lookup_empty_conversation_canonical_before_message",
+          "CONV-CANON-E2E-001:local_search_and_restart_reused_same_persona_conversation",
+          "CONV-CANON-E2E-001:legacy_or_duplicate_direct_row_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "CONV-CANON-E2E-001:identity_lookup_empty_conversation_canonical_before_message",
+            "CONV-CANON-E2E-001:local_search_and_restart_reused_same_persona_conversation"
+          ],
+          [
+            "CONV-CANON-E2E-001:identity_lookup_empty_conversation_canonical_before_message",
+            "CONV-CANON-E2E-001:local_search_and_restart_reused_same_persona_conversation"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "CONV-CANON-E2E-001:legacy_or_duplicate_direct_row_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "GROUP-CANON-E2E-001",
+      "feature": "Canonical Group conversation across App lifecycle",
+      "layer": "product_ui",
+      "preconditions": "The App creates a unique group on awiki.info through visible UI.",
+      "action": "Create the group, add the canonical peer, refresh members, restart the App shell, and send/receive the first messages.",
+      "exactOracles": [
+        "Group creation produces exactly one conversation whose conversation ID, canonical Group DID, and wire thread remain aligned before the first message.",
+        "Adding a member, refreshing, restarting, and sending messages preserve that same single Group row."
+      ],
+      "negativeChecks": [
+        "A disappearing empty group, duplicate Group row, changed Group identity, member-add replacement row, or first-message-only resurrection fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "GROUP-CANON-E2E-001:created_group_canonical_before_first_message",
+          "GROUP-CANON-E2E-001:member_add_and_restart_preserved_exact_one_group",
+          "GROUP-CANON-E2E-001:duplicate_disappearing_or_changed_group_rejected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "GROUP-CANON-E2E-001:created_group_canonical_before_first_message"
+          ],
+          [
+            "GROUP-CANON-E2E-001:member_add_and_restart_preserved_exact_one_group"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "GROUP-CANON-E2E-001:duplicate_disappearing_or_changed_group_rejected"
+          ]
+        ]
+      }
     }
   ]
 }

@@ -845,6 +845,9 @@ class GroupMemberRow extends ConsumerWidget {
             children: <Widget>[
               Text(
                 title,
+                key: Key(
+                  'group-member-title:${groupMemberPresentationKey(item)}',
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AwikiMeTextStyles.cardTitle,
@@ -954,6 +957,18 @@ String? _memberIdentityLabel(GroupMemberSummary member) {
 String _memberProtocolRef(GroupMemberSummary member) {
   final handle = member.handle.trim();
   return handle.isEmpty ? member.did.trim() : handle;
+}
+
+String groupMemberPresentationKey(GroupMemberSummary member) {
+  final membershipId = member.membershipId?.trim() ?? '';
+  if (membershipId.isNotEmpty) {
+    return membershipId;
+  }
+  final peerPersonaId = member.peerPersonaId?.trim() ?? '';
+  if (peerPersonaId.isNotEmpty) {
+    return peerPersonaId;
+  }
+  return member.did.trim();
 }
 
 bool canManageGroupMembers(GroupSummary group) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
@@ -5,6 +7,7 @@ import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/domain/services/peer_display_name_resolver.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -257,6 +260,69 @@ void main() {
     );
   });
 
+  test('公开身份显示按昵称、Handle、DID回退且不使用联系人备注', () {
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    controller.updateFromRemote(
+      ownerDid: 'did:test:owner',
+      peerPersonaId: 'persona:alice',
+      profile: const UserProfile(
+        did: 'did:wba:awiki.info:user:alice:e1_key',
+        displayName: 'Alice nickname',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        fullHandle: 'alice.awiki.info',
+      ),
+    );
+    controller.registerLocalNotes(
+      ownerDid: 'did:test:owner',
+      localNotesByPersonaId: const <String, String>{
+        'persona:alice': 'Alice local note',
+      },
+    );
+
+    expect(
+      container.read(
+        publicIdentityDisplayNameProvider(
+          const PublicIdentityDisplayNameRequest(
+            did: 'did:wba:awiki.info:user:alice:e1_key',
+          ),
+        ),
+      ),
+      'Alice nickname',
+    );
+    expect(
+      container.read(
+        publicIdentityDisplayNameProvider(
+          const PublicIdentityDisplayNameRequest(
+            did: 'did:wba:awiki.info:user:bob:e1_key',
+            fullHandle: 'bob.awiki.info',
+          ),
+        ),
+      ),
+      'bob.awiki.info',
+    );
+    expect(
+      container.read(
+        publicIdentityDisplayNameProvider(
+          const PublicIdentityDisplayNameRequest(
+            did: 'did:wba:awiki.info:user:carol:e1_key',
+          ),
+        ),
+      ),
+      'carol',
+    );
+  });
+
   test('查看全部并发刷新本地缺失 profile 并缓存成功结果', () async {
     final profiles = _RemoteProfileService();
     final container = ProviderContainer(
@@ -288,6 +354,77 @@ void main() {
     expect(state.forDid('did:test:alice')?.displayName, 'alice nickname');
     expect(state.forDid('did:test:bob')?.displayName, 'bob nickname');
   });
+
+  test(
+    'Handle/DID fallback cache does not suppress one remote profile load',
+    () async {
+      final profiles = _RemoteProfileService();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          directoryApplicationServiceProvider.overrideWithValue(
+            _FallbackCachedDirectoryService(),
+          ),
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(peerDisplayProfileProvider.notifier);
+
+      await controller.refreshRemoteMissing(
+        ownerDid: 'did:test:owner',
+        dids: const <String>['did:test:alice'],
+      );
+      await controller.refreshRemoteMissing(
+        ownerDid: 'did:test:owner',
+        dids: const <String>['did:test:alice'],
+      );
+
+      expect(profiles.requests, const <String>['did:test:alice']);
+      final projected = container
+          .read(peerDisplayProfileProvider)
+          .forDid('did:test:alice');
+      expect(projected?.displayName, 'alice nickname');
+      expect(projected?.handle, 'alice.awiki.ai');
+    },
+  );
+
+  test(
+    'late cached fallback cannot overwrite a newer remote nickname',
+    () async {
+      final directory = _DelayedCachedDirectoryService();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          directoryApplicationServiceProvider.overrideWithValue(directory),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(peerDisplayProfileProvider.notifier);
+
+      final cachedLoad = controller.loadCached(
+        ownerDid: 'did:test:owner',
+        dids: const <String>['did:test:alice'],
+      );
+      controller.updateFromRemote(
+        ownerDid: 'did:test:owner',
+        profile: const UserProfile(
+          did: 'did:test:alice',
+          displayName: 'Alice nickname',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: 'alice.awiki.ai',
+        ),
+      );
+      directory.completeWithFallback();
+      await cachedLoad;
+
+      final projected = container
+          .read(peerDisplayProfileProvider)
+          .forDid('did:test:alice');
+      expect(projected?.displayName, 'Alice nickname');
+      expect(projected?.handle, 'alice.awiki.ai');
+    },
+  );
 }
 
 class _CachedDirectoryService implements DirectoryApplicationService {
@@ -361,6 +498,60 @@ class _EmptyCachedDirectoryService implements DirectoryApplicationService {
   Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
     Iterable<String> dids,
   ) async => const <PeerDisplayProfile>[];
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    throw UnimplementedError();
+  }
+}
+
+class _FallbackCachedDirectoryService implements DirectoryApplicationService {
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => dids
+      .map(
+        (did) => PeerDisplayProfile(
+          did: did,
+          displayName: PeerDisplayNameResolver.compactDid(did),
+        ),
+      )
+      .toList(growable: false);
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    throw UnimplementedError();
+  }
+}
+
+class _DelayedCachedDirectoryService implements DirectoryApplicationService {
+  final Completer<List<PeerDisplayProfile>> _profiles =
+      Completer<List<PeerDisplayProfile>>();
+
+  void completeWithFallback() {
+    _profiles.complete(const <PeerDisplayProfile>[
+      PeerDisplayProfile(
+        did: 'did:test:alice',
+        displayName: 'alice',
+        handle: 'alice.awiki.ai',
+      ),
+    ]);
+  }
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) => _profiles.future;
 
   @override
   Future<DirectoryPeerResolution> lookupHandle(String handle) {

@@ -727,6 +727,98 @@ void main() {
     expect(profileService.loadPublicProfileCalls, 0);
   });
 
+  testWidgets('最近会话中的群系统消息使用本地昵称投影', (tester) async {
+    const conversationId = 'group:did:test:group:preview-system-event';
+    const groupDid = 'did:test:group:preview-system-event';
+    const actorDid = 'did:wba:awiki.info:user:alice:e1_key';
+    const subjectDid = 'did:wba:awiki.info:user:bob:e1_key';
+    final eventPayload = jsonEncode(<String, Object?>{
+      'schema': 'awiki.group.system_event.v1',
+      'type': 'member_added',
+      'group_did': groupDid,
+      'group_event_seq': 1,
+      'actor_did': actorDid,
+      'subject_did': subjectDid,
+    });
+    final eventMessage = ChatMessage(
+      localId: 'preview-system-event-1',
+      conversationId: conversationId,
+      threadId: conversationId,
+      senderDid: actorDid,
+      groupId: groupDid,
+      content: '',
+      createdAt: DateTime(2026, 4, 5, 12),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      originalType: 'application/json',
+      payloadJson: eventPayload,
+    );
+    final conversation = ConversationSummary(
+      conversationId: conversationId,
+      threadId: conversationId,
+      displayName: '项目群',
+      lastMessagePreview: 'member_added',
+      lastMessageAt: eventMessage.createdAt,
+      unreadCount: 0,
+      isGroup: true,
+      groupId: groupDid,
+      lastMessagePayloadJson: eventPayload,
+      lastMessageSnapshot: eventMessage,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        providerOverrides: <Override>[
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: 'did:test:me',
+              profile: const UserProfile(
+                did: actorDid,
+                displayName: 'Alice nickname',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'alice.awiki.info',
+              ),
+            );
+            controller.updateFromRemote(
+              ownerDid: 'did:test:me',
+              profile: const UserProfile(
+                did: subjectDid,
+                displayName: 'Bob nickname',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'bob.awiki.info',
+              ),
+            );
+            return controller;
+          }),
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[conversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final preview = find.byKey(
+      const Key('conversation-row-preview:$conversationId'),
+    );
+    expect(
+      find.descendant(
+        of: preview,
+        matching: find.text('Alice nickname邀请Bob nickname加入了群聊'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('群聊页头不查询个人 profile 并保留群名', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
@@ -2473,6 +2565,20 @@ void main() {
     expect(find.text('@我'), findsOneWidget);
     expect(find.text('草稿'), findsOneWidget);
     expect(find.text('draft reply'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('conversation-row-title:dm:preview-tags')),
+        matching: find.text('Alice'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('conversation-row-preview:dm:preview-tags')),
+        matching: find.text('draft reply'),
+      ),
+      findsOneWidget,
+    );
 
     final unreadLeft = tester.getTopLeft(find.text('未读 3')).dx;
     final mentionLeft = tester.getTopLeft(find.text('@我')).dx;
@@ -5193,6 +5299,169 @@ void main() {
     expect(find.text('第四条'), findsOneWidget);
     expect(find.text('alice'), findsNWidgets(2));
     expect(find.text('bob'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('chat-message-sender:alice-1')))
+          .data,
+      'alice',
+    );
+    expect(find.byKey(const Key('chat-message-sender:alice-2')), findsNothing);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('chat-message-sender:bob-1')))
+          .data,
+      'bob',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('chat-message-sender:alice-3')))
+          .data,
+      'alice',
+    );
+  });
+
+  testWidgets('群系统消息按昵称、Handle、DID顺序显示成员身份', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:system-event-name',
+      threadId: 'group:system-event-name',
+      displayName: '项目群',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:system-event-name',
+    );
+    const actorDid = 'did:wba:awiki.info:user:alice:e1_key';
+    const subjectDid = 'did:wba:awiki.info:user:bob:e1_key';
+    const handleActorDid = 'did:wba:awiki.info:user:carol:e1_key';
+    const handleSubjectDid = 'did:wba:awiki.info:user:dave:e1_key';
+    const didOnlyActor = 'did:wba:awiki.info:user:erin:e1_key';
+    const didOnlySubject = 'did:wba:awiki.info:user:frank:e1_key';
+    ChatMessage systemMessage({
+      required int sequence,
+      required String actor,
+      required String subject,
+    }) => _messageWithConversation(
+      ChatMessage(
+        localId: 'system-event-$sequence',
+        remoteId: 'system-event-$sequence',
+        threadId: conversation.conversationId,
+        senderDid: actor,
+        groupId: conversation.groupId,
+        content: '',
+        createdAt: DateTime(2026, 4, 5, 12, sequence),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        originalType: 'application/json',
+        payloadJson: jsonEncode(<String, Object?>{
+          'schema': 'awiki.group.system_event.v1',
+          'type': 'member_added',
+          'group_did': conversation.groupId,
+          'group_event_seq': sequence,
+          'actor_did': actor,
+          'subject_did': subject,
+        }),
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        systemMessage(sequence: 1, actor: actorDid, subject: subjectDid),
+        systemMessage(
+          sequence: 2,
+          actor: handleActorDid,
+          subject: handleSubjectDid,
+        ),
+        systemMessage(
+          sequence: 3,
+          actor: didOnlyActor,
+          subject: didOnlySubject,
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              profile: const UserProfile(
+                did: actorDid,
+                displayName: 'Alice nickname',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'alice.awiki.info',
+              ),
+            );
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              profile: const UserProfile(
+                did: subjectDid,
+                displayName: 'Bob nickname',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'bob.awiki.info',
+              ),
+            );
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              profile: const UserProfile(
+                did: handleActorDid,
+                displayName: '',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'carol.awiki.info',
+              ),
+            );
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              profile: const UserProfile(
+                did: handleSubjectDid,
+                displayName: '',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'dave.awiki.info',
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    String eventText(int sequence) => tester
+        .widget<Text>(
+          find.byKey(Key('chat-group-system-event:system-event-$sequence')),
+        )
+        .data!;
+    expect(eventText(1), 'Alice nickname邀请Bob nickname加入了群聊');
+    expect(eventText(2), 'carol.awiki.info邀请dave.awiki.info加入了群聊');
+    expect(eventText(3), 'erin邀请frank加入了群聊');
   });
 
   testWidgets('私聊和群聊附件消息有文本时显示柔和分隔线', (tester) async {

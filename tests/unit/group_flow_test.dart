@@ -13,6 +13,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -392,6 +393,12 @@ void main() {
     );
 
     expect(find.text('李智诚'), findsOneWidget);
+    expect(
+      find.byKey(
+        const Key('group-member-title:did:wba:awiki.ai:user:lzc:e1_member'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('lzc'), findsNothing);
     expect(find.text('@lzc'), findsOneWidget);
     expect(
@@ -479,6 +486,13 @@ void main() {
     expect(find.text('用户'), findsWidgets);
     expect(find.text('匹配结果'), findsOneWidget);
     expect(gateway.lastAddedGroupId, isNull);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GroupDetailPage)),
+    );
+    expect(
+      container.read(peerDisplayProfileProvider).forDid(memberDid)?.displayName,
+      'Bob',
+    );
 
     await tester.tap(find.text('Bob'));
     await tester.pumpAndSettle();

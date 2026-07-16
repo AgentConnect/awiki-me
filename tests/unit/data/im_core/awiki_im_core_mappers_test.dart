@@ -700,6 +700,29 @@ void main() {
     },
   );
 
+  test('snapshot group keeps the committed local group title', () {
+    const groupDid = 'did:wba:awiki.info:groups:group-1:e1_group';
+    const conversation = core.ConversationSnapshotItem(
+      conversationId: 'group:$groupDid',
+      canonicalGroupDid: groupDid,
+      resolutionState: core.ConversationResolutionState.resolved,
+      threadKind: 'group',
+      threadId: groupDid,
+      title: 'Project Group',
+      unreadCount: 0,
+      messageCount: 0,
+    );
+
+    final mapped = mapper.conversationFromSnapshot(
+      conversation,
+      ownerDid: 'did:alice',
+    );
+
+    expect(mapped.conversationId, 'group:$groupDid');
+    expect(mapped.displayName, 'Project Group');
+    expect(mapped.groupId, groupDid);
+  });
+
   test(
     'conversation preview uses attachment filename when there is no caption',
     () {

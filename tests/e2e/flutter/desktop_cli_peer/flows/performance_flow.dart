@@ -295,7 +295,18 @@ Future<void> _verifyPerformanceRegression({
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,
     thread: thread,
-    expectedTexts: <String>[appToCliText, cliToAppText],
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appMessageId,
+        content: appToCliText,
+        conversationId: conversationForCliMessage.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliSentMessageId!,
+        content: cliToAppText,
+        conversationId: conversationForCliMessage.conversationId,
+      ),
+    ],
   );
 
   final threadOpenWatch = Stopwatch()..start();

@@ -5,9 +5,10 @@ part of '../desktop_cli_peer_e2e.dart';
 /// It only performs visible input, tap, navigation, lifecycle, and drop
 /// operations. Business services remain read-only oracles outside this class.
 class _DesktopAppRobot {
-  _DesktopAppRobot(this.tester);
+  _DesktopAppRobot(this.tester, {this.failureCaseId});
 
   final WidgetTester tester;
+  String? failureCaseId;
 
   ProviderContainer get container =>
       ProviderScope.containerOf(tester.element(find.byType(AppShell)));
@@ -38,7 +39,10 @@ class _DesktopAppRobot {
     );
   }
 
-  Future<ConversationSummary> startDirectConversation(String peerHandle) async {
+  Future<ConversationSummary> startDirectConversation(
+    String peerHandle, {
+    String expectedPrimaryDisplayName = _nicknameFixtureDisplayName,
+  }) async {
     final directButton = find.byKey(const Key('start-conversation-button'));
     final quickActionsButton = find.bySemanticsIdentifier(
       'e2e-quick-actions-button',
@@ -79,11 +83,41 @@ class _DesktopAppRobot {
       find.byKey(const Key('identity-lookup-search-button')),
       description: 'identity lookup search button',
     );
+    E2eObservation observeIdentityPreviewTitle() {
+      final previewTitle = find.byKey(
+        const Key('identity-preview-display-name'),
+      );
+      final elements = previewTitle.evaluate().toList(growable: false);
+      if (elements.isEmpty) {
+        return const E2eObservation.pending('identity_preview_pending');
+      }
+      if (elements.length != 1 || elements.single.widget is! Text) {
+        return const E2eObservation.fatal(
+          'identity_preview_title_not_exact_one',
+        );
+      }
+      final text = (elements.single.widget as Text).data?.trim() ?? '';
+      if (text != expectedPrimaryDisplayName.trim()) {
+        return const E2eObservation.fatal(
+          'identity_preview_primary_name_mismatch',
+        );
+      }
+      return const E2eObservation.pass();
+    }
+
+    await pumpUntilObservation(
+      description: 'first visible identity primary title',
+      timeout: const Duration(seconds: 90),
+      observe: observeIdentityPreviewTitle,
+    );
     await pumpUntilFinder(
       find.byKey(const Key('identity-start-chat-button')),
       description: 'resolved start-chat action',
       enabled: true,
     );
+    final previewTitle = find.byKey(const Key('identity-preview-display-name'));
+    final previewTitleText =
+        tester.widget<Text>(previewTitle).data?.trim() ?? '';
     await tapOne(
       find.byKey(const Key('identity-start-chat-button')),
       description: 'start-chat action',
@@ -128,6 +162,13 @@ class _DesktopAppRobot {
     final selected = selectedConversation;
     if (selected.isGroup || (selected.targetDid?.trim().isEmpty ?? true)) {
       fail('UI resolved an invalid direct conversation: $selected');
+    }
+    final conversationTitle = expectedDirectDisplayName(selected);
+    if (previewTitleText != conversationTitle ||
+        conversationTitle != expectedPrimaryDisplayName.trim()) {
+      fail(
+        'Identity lookup title and canonical conversation title do not match.',
+      );
     }
     return selected;
   }
@@ -186,6 +227,117 @@ class _DesktopAppRobot {
     expectExactlyOneVisibleMessageContent(
       localId: message.localId,
       expectedText: text,
+    );
+  }
+
+  Future<void> expectMemberAddedSystemEvent({
+    required String conversationId,
+    required String subjectDid,
+    required String expectedMemberName,
+  }) async {
+    E2eObservation observe() {
+      final matches = _uiMessages(this, conversationId)
+          .where((message) {
+            final event = message.groupSystemEvent;
+            return event?.isMemberAdded == true &&
+                event?.subjectDid?.trim() == subjectDid.trim();
+          })
+          .toList(growable: false);
+      if (matches.isEmpty) {
+        return const E2eObservation.pending('member_added_event_pending');
+      }
+      if (matches.length != 1) {
+        return const E2eObservation.fatal('duplicate_member_added_event');
+      }
+      final message = matches.single;
+      final event = message.groupSystemEvent!;
+      final textFinder = find.byKey(
+        Key('chat-group-system-event:${message.localId}'),
+      );
+      final elements = textFinder.evaluate().toList(growable: false);
+      if (elements.isEmpty) {
+        return const E2eObservation.pending('member_added_event_not_visible');
+      }
+      if (elements.length != 1 || elements.single.widget is! Text) {
+        return const E2eObservation.fatal(
+          'member_added_event_rendered_multiple_times',
+        );
+      }
+      final text = (elements.single.widget as Text).data ?? '';
+      final l10n = AppLocalizations.of(elements.single);
+      final sessionDid = container.read(sessionProvider).session?.did.trim();
+      final actorDid = event.actorDid?.trim() ?? '';
+      final expectedText = actorDid.isNotEmpty && actorDid == sessionDid
+          ? l10n.chatGroupMemberAddedByYou(expectedMemberName)
+          : actorDid.isEmpty
+          ? l10n.chatGroupMemberJoined(expectedMemberName)
+          : l10n.chatGroupMemberAddedBy(
+              container.read(
+                publicIdentityDisplayNameProvider(
+                  PublicIdentityDisplayNameRequest(
+                    did: actorDid,
+                    unknownLabel: l10n.commonUnknown,
+                  ),
+                ),
+              ),
+              expectedMemberName,
+            );
+      if (text != expectedText) {
+        return const E2eObservation.fatal(
+          'member_added_event_display_name_mismatch',
+        );
+      }
+      return const E2eObservation.pass();
+    }
+
+    await pumpUntilObservation(
+      description: 'nickname-first group member-added system event',
+      timeout: const Duration(seconds: 90),
+      observe: observe,
+    );
+    await assertStableFor(
+      description: 'group member-added display name',
+      observe: observe,
+    );
+  }
+
+  Future<void> expectMessageSenderDisplayName({
+    required String conversationId,
+    required ChatMessage message,
+    required String expectedName,
+  }) async {
+    final anchor = requireGroupSenderLabelAnchor(
+      messages: _uiMessages(this, conversationId),
+      target: message,
+    );
+    final anchorContent = find.byKey(
+      Key('chat-message-content:${anchor.localId}'),
+    );
+    await pumpUntilFinder(
+      anchorContent,
+      description: 'group sender-label anchor ${anchor.localId}',
+    );
+    await tester.ensureVisible(anchorContent);
+    await tester.pumpAndSettle();
+
+    E2eObservation observe() {
+      final sender = find.byKey(Key('chat-message-sender:${anchor.localId}'));
+      return observeExactScopedText(
+        widgets: sender.evaluate().map((element) => element.widget),
+        expectedText: expectedName,
+        pendingCode: 'message_sender_label_pending',
+        exactOneCode: 'message_sender_label_rendered_multiple_times',
+        mismatchCode: 'message_sender_display_name_mismatch',
+      );
+    }
+
+    await pumpUntilObservation(
+      description: 'exact group message sender display name',
+      observe: observe,
+    );
+    await assertStableFor(
+      description: 'group message sender display name',
+      observe: observe,
     );
   }
 
@@ -398,8 +550,8 @@ class _DesktopAppRobot {
     required String conversationId,
     required int unreadCount,
   }) async {
-    if (unreadCount <= 0) {
-      fail('Unread badge oracle requires a positive count, got $unreadCount.');
+    if (unreadCount < 0) {
+      fail('Unread badge oracle requires a non-negative count, got $unreadCount.');
     }
     final row = find.byKey(Key('conversation-row:$conversationId'));
     await pumpUntilFinder(
@@ -411,6 +563,32 @@ class _DesktopAppRobot {
       of: row,
       matching: find.byKey(const Key('conversation-preview-tag-unread')),
     );
+    if (unreadCount == 0) {
+      E2eObservation observeNoBadge() {
+        final count = unreadBadge.evaluate().length;
+        if (count == 0) {
+          return const E2eObservation.pass();
+        }
+        if (count > 1) {
+          return const E2eObservation.fatal(
+            'duplicate_conversation_unread_badge',
+          );
+        }
+        return const E2eObservation.pending(
+          'conversation_unread_badge_not_cleared',
+        );
+      }
+
+      await pumpUntilObservation(
+        description: 'conversation row unread badge cleared',
+        observe: observeNoBadge,
+      );
+      await assertStableFor(
+        description: 'conversation row unread badge remains cleared',
+        observe: observeNoBadge,
+      );
+      return;
+    }
     await pumpUntilFinder(
       unreadBadge,
       description: 'conversation row unread badge',
@@ -430,20 +608,235 @@ class _DesktopAppRobot {
     expect(exactLabel, findsOneWidget);
   }
 
+  String expectedDirectDisplayName(ConversationSummary conversation) {
+    if (conversation.isGroup) {
+      fail('Direct display-name oracle received a Group conversation.');
+    }
+    return container.read(
+      peerDisplayNameProvider(
+        PeerDisplayNameRequest(
+          peerPersonaId: conversation.peerPersonaId,
+          did: conversation.targetDid,
+          nickname: conversation.displayName,
+          fullHandle: conversation.targetPeer,
+        ),
+      ),
+    );
+  }
+
+  Future<void> expectConversationRowPresentation({
+    required String conversationId,
+    required String expectedTitle,
+    required String expectedPreview,
+    required int unreadCount,
+  }) async {
+    final row = find.byKey(Key('conversation-row:$conversationId'));
+    await pumpUntilFinder(
+      row,
+      description: 'conversation row presentation $conversationId',
+      timeout: const Duration(seconds: 90),
+    );
+    final l10n = AppLocalizations.of(tester.element(row));
+    final visiblePreview = expectedPreview.trim().isEmpty
+        ? l10n.conversationsNoMessagePreview
+        : expectedPreview;
+    final unreadLabel = unreadCount <= 0
+        ? null
+        : l10n.conversationsUnreadTag(
+            unreadCount > 999 ? '999+' : '$unreadCount',
+          );
+    expectExactConversationRowUi(
+      conversationId: conversationId,
+      expectedTitle: expectedTitle,
+      expectedPreview: visiblePreview,
+      expectedUnreadLabel: unreadLabel,
+    );
+  }
+
+  Future<void> expectSelectedConversationHeader(String expectedTitle) async {
+    final header = find.byKey(const Key('chat-header-title'));
+    E2eObservation observe() => observeExactScopedText(
+      widgets: header.evaluate().map((element) => element.widget),
+      expectedText: expectedTitle,
+      pendingCode: 'chat_header_title_pending',
+      exactOneCode: 'chat_header_title_not_exact_one',
+      mismatchCode: 'chat_header_title_mismatch',
+    );
+    await pumpUntilObservation(
+      description: 'selected conversation header title',
+      observe: observe,
+    );
+    await assertStableFor(
+      description: 'selected conversation header title',
+      observe: observe,
+    );
+  }
+
+  Future<void> expectConversationRowsInOrder(
+    List<String> conversationIds,
+  ) async {
+    for (final conversationId in conversationIds) {
+      await pumpUntilFinder(
+        find.byKey(Key('conversation-row:$conversationId')),
+        description: 'ordered conversation row $conversationId',
+        timeout: const Duration(seconds: 90),
+      );
+    }
+    expectVisibleConversationOrder(
+      tester: tester,
+      conversationIds: conversationIds,
+    );
+  }
+
   Future<void> openConversationRow(String conversationId) => tapOne(
     find.byKey(Key('conversation-row:$conversationId')),
     description: 'conversation row $conversationId',
   );
 
-  Future<ConversationSummary> openContactConversation(String peerDid) async {
+  Future<void> openConversationRowWithFirstVisibleTitle({
+    required String conversationId,
+    required String expectedTitle,
+  }) async {
+    await tapOne(
+      find.byKey(Key('conversation-row:$conversationId')),
+      description: 'conversation row $conversationId',
+    );
+    final header = find.byKey(const Key('chat-header-title'));
+    E2eObservation observe() {
+      final selectedId = container.read(selectedConversationProvider);
+      final titles = header
+          .evaluate()
+          .map((element) => element.widget)
+          .whereType<Text>()
+          .map((widget) => widget.data ?? '');
+      return observeFirstVisibleConversationTitle(
+        targetSelected: selectedId == conversationId,
+        visibleTitles: titles,
+        expectedTitle: expectedTitle,
+      );
+    }
+
+    await pumpUntilObservation(
+      description: 'first visible cached conversation title',
+      observe: observe,
+    );
+    await assertStableFor(
+      description: 'cached conversation title after open',
+      observe: observe,
+    );
+  }
+
+  Future<ConversationSummary> reopenConversationFromLocalSearch({
+    required String query,
+    required String conversationId,
+    required String expectedTitle,
+  }) async {
+    await navigateToMessages();
+    final search = find.byKey(const Key('conversation-search-field'));
+    await pumpUntilFinder(search, description: 'conversation search field');
+    final input = find.descendant(
+      of: search,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntilFinder(
+      input,
+      description: 'conversation search editable field',
+      enabled: true,
+    );
+    await tester.enterText(input, query);
+    await tester.pump();
+    final row = find.byKey(Key('conversation-row:$conversationId'));
+    await pumpUntilFinder(row, description: 'exact searched conversation row');
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.text(expectedTitle, findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    await tapOne(row, description: 'searched conversation row');
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-chat-input'),
+      description: 'chat composer after local conversation search',
+    );
+    final selected = selectedConversation;
+    if (selected.conversationId != conversationId) {
+      fail('Local conversation search opened a different canonical row.');
+    }
+    await tester.enterText(input, '');
+    await tester.pump();
+    return selected;
+  }
+
+  Future<ConversationSummary> openContactConversation(
+    String peerDid, {
+    String? expectedTitle,
+    bool fromFollowers = false,
+    bool forceViewAll = false,
+  }) async {
     await navigateToContacts();
     await container.read(friendsProvider.notifier).refresh();
     await tester.pump();
-    final row = find.byKey(Key('contact-row:${peerDid.trim()}'));
-    if (row.evaluate().isEmpty) {
+    final rowKey = Key('contact-row:${peerDid.trim()}');
+    final friendsPage = find.byType(FriendsPage);
+    await pumpUntilFinder(friendsPage, description: 'contacts sidebar page');
+    var row = find.descendant(of: friendsPage, matching: find.byKey(rowKey));
+    final openedViewAll = forceViewAll || row.evaluate().length != 1;
+    if (openedViewAll) {
       await tapOne(
-        find.byKey(const Key('friends-following-view-all')),
-        description: 'following contacts view-all action',
+        find.byKey(
+          fromFollowers
+              ? const Key('friends-followers-view-all')
+              : const Key('friends-following-view-all'),
+        ),
+        description: fromFollowers
+            ? 'follower contacts view-all action'
+            : 'following contacts view-all action',
+      );
+      final relationshipList = find.byWidgetPredicate(
+        (widget) =>
+            widget is RelationshipListPage &&
+            widget.type ==
+                (fromFollowers
+                    ? FriendsRelationshipListType.followers
+                    : FriendsRelationshipListType.following),
+      );
+      await pumpUntilFinder(
+        relationshipList,
+        description: 'relationship list detail pane',
+      );
+      row = find.descendant(of: relationshipList, matching: find.byKey(rowKey));
+    }
+    if (expectedTitle != null) {
+      final title = find.descendant(
+        of: row,
+        matching: find.byKey(Key('contact-row-title:${peerDid.trim()}')),
+      );
+      E2eObservation observeTitle() {
+        final rows = row.evaluate().toList(growable: false);
+        if (rows.isEmpty) {
+          return const E2eObservation.pending('contact_row_pending');
+        }
+        if (rows.length != 1) {
+          return const E2eObservation.fatal('contact_row_not_exact_one');
+        }
+        return observeExactScopedText(
+          widgets: title.evaluate().map((element) => element.widget),
+          expectedText: expectedTitle,
+          pendingCode: 'contact_title_pending',
+          exactOneCode: 'contact_title_not_exact_one',
+          mismatchCode: 'contact_first_visible_title_mismatch',
+        );
+      }
+
+      await pumpUntilObservation(
+        description: 'contact row first visible display title',
+        timeout: const Duration(seconds: 90),
+        observe: observeTitle,
+      );
+      await assertStableFor(
+        description: 'contact row display title',
+        observe: observeTitle,
       );
     }
     await tapOne(row, description: 'exact contact row');
@@ -462,6 +855,53 @@ class _DesktopAppRobot {
     return selected;
   }
 
+  Future<void> expectGroupMemberDisplayName({
+    required GroupMemberSummary member,
+    required String expectedName,
+  }) async {
+    await tapOne(
+      find.byKey(const Key('chat-peer-info-avatar-button')),
+      description: 'group info button',
+    );
+    await pumpUntilFinder(
+      find.byKey(const Key('group-info-dialog-did-value')),
+      description: 'group info dialog',
+    );
+    final dialog = find.ancestor(
+      of: find.byKey(const Key('group-info-dialog-did-value')),
+      matching: find.byType(AppDialogScaffold),
+    );
+    final title = find.descendant(
+      of: dialog,
+      matching: find.byKey(
+        Key('group-member-title:${groupMemberPresentationKey(member)}'),
+      ),
+    );
+    E2eObservation observeTitle() {
+      return observeExactScopedText(
+        widgets: title.evaluate().map((element) => element.widget),
+        expectedText: expectedName,
+        pendingCode: 'group_member_title_pending',
+        exactOneCode: 'group_member_title_not_exact_one',
+        mismatchCode: 'group_member_first_visible_title_mismatch',
+      );
+    }
+
+    await pumpUntilObservation(
+      description: 'group member first visible display title',
+      timeout: const Duration(seconds: 90),
+      observe: observeTitle,
+    );
+    await assertStableFor(
+      description: 'group member display title',
+      observe: observeTitle,
+    );
+    await tapOne(
+      find.byKey(const Key('peer-info-close-button')),
+      description: 'group info close button',
+    );
+  }
+
   Future<void> openSelectedPeerInfo() async {
     await tapOne(
       find.byKey(const Key('chat-peer-info-avatar-button')),
@@ -470,6 +910,45 @@ class _DesktopAppRobot {
     await pumpUntilFinder(
       find.byKey(const Key('peer-info-dialog-handle-value')),
       description: 'handle-first peer identity header',
+    );
+  }
+
+  Future<void> expectSelectedPeerInfoDisplayNameAfterRefresh(
+    String expectedName,
+  ) async {
+    await openSelectedPeerInfo();
+    final title = find.byKey(const Key('peer-info-dialog-handle-value'));
+    E2eObservation observeRefresh() {
+      final elements = title.evaluate().toList(growable: false);
+      if (elements.isEmpty) {
+        return const E2eObservation.pending('peer_info_title_pending');
+      }
+      if (elements.length != 1 || elements.single.widget is! Text) {
+        return const E2eObservation.fatal('peer_info_title_not_exact_one');
+      }
+      final actual = (elements.single.widget as Text).data?.trim() ?? '';
+      if (actual != expectedName.trim()) {
+        return const E2eObservation.pending(
+          'peer_info_profile_refresh_pending',
+        );
+      }
+      return const E2eObservation.pass();
+    }
+
+    await pumpUntilObservation(
+      description: 'peer info explicit profile refresh',
+      timeout: const Duration(seconds: 90),
+      observe: observeRefresh,
+    );
+    await assertStableFor(
+      description: 'peer info refreshed display name',
+      observe: () => observeExactScopedText(
+        widgets: title.evaluate().map((element) => element.widget),
+        expectedText: expectedName,
+        pendingCode: 'peer_info_title_pending',
+        exactOneCode: 'peer_info_title_not_exact_one',
+        mismatchCode: 'peer_info_refreshed_name_reverted',
+      ),
     );
   }
 
@@ -811,6 +1290,30 @@ class _DesktopAppRobot {
     );
   }
 
+  Future<void> enterHiddenLifecycle() async {
+    for (final state in const <AppLifecycleState>[
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+  }
+
+  Future<void> resumeFromHiddenLifecycle() async {
+    for (final state in const <AppLifecycleState>[
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+    await pumpUntilFinder(
+      find.bySemanticsIdentifier('e2e-authenticated'),
+      description: 'App shell after hidden burst resume',
+    );
+  }
+
   /// Rebuilds the Widget tree and App shell in this integration-test process.
   /// This is intentionally not evidence of a native OS process restart.
   Future<void> restart({
@@ -944,6 +1447,73 @@ class _DesktopAppRobot {
       'Timed out waiting for $description.'
       '${lastError == null ? '' : ' Last error: $lastError'}',
     );
+  }
+
+  Future<void> pumpUntilObservation({
+    required String description,
+    required E2eObservation Function() observe,
+    Duration timeout = const Duration(seconds: 45),
+    String failureLayer = 'visible_ui',
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    String? lastPendingCode;
+    while (DateTime.now().isBefore(deadline)) {
+      await tester.pump(const Duration(milliseconds: 200));
+      final observation = observe();
+      switch (observation.status) {
+        case E2eObservationStatus.pass:
+          return;
+        case E2eObservationStatus.pending:
+          lastPendingCode = observation.code;
+          continue;
+        case E2eObservationStatus.fatal:
+          await E2eFailureObservationWriter.recordFirst(
+            layer: failureLayer,
+            status: 'fatal',
+            code: observation.code ?? 'unspecified_invariant',
+            caseId: failureCaseId,
+          );
+          fail(
+            'Fatal invariant while waiting for $description: '
+            '${observation.code ?? 'unspecified_invariant'}.',
+          );
+      }
+    }
+    await E2eFailureObservationWriter.recordFirst(
+      layer: failureLayer,
+      status: 'timeout',
+      code: lastPendingCode ?? 'observation_timeout',
+      caseId: failureCaseId,
+    );
+    fail(
+      'Timed out waiting for $description.'
+      '${lastPendingCode == null ? '' : ' Last pending: $lastPendingCode.'}',
+    );
+  }
+
+  Future<void> assertStableFor({
+    required String description,
+    required E2eObservation Function() observe,
+    Duration duration = const Duration(seconds: 2),
+    String failureLayer = 'visible_ui',
+  }) async {
+    final deadline = DateTime.now().add(duration);
+    while (DateTime.now().isBefore(deadline)) {
+      await tester.pump(const Duration(milliseconds: 200));
+      final observation = observe();
+      if (observation.status != E2eObservationStatus.pass) {
+        await E2eFailureObservationWriter.recordFirst(
+          layer: failureLayer,
+          status: 'unstable',
+          code: observation.code ?? 'unspecified_instability',
+          caseId: failureCaseId,
+        );
+        fail(
+          '$description became unstable: '
+          '${observation.code ?? observation.status.name}.',
+        );
+      }
+    }
   }
 }
 

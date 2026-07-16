@@ -70,16 +70,17 @@ void main() {
 
     expect(
       tester
-          .widget<Text>(find.byKey(const Key('identity-preview-handle-value')))
-          .data,
-      '@cgw.awiki.ai',
-    );
-    expect(
-      tester
           .widget<Text>(find.byKey(const Key('identity-preview-display-name')))
           .data,
       'CGW Agent',
     );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('identity-preview-handle-value')))
+          .data,
+      '@cgw.awiki.ai',
+    );
+    expect(find.text('did:test:peer'), findsOneWidget);
     await tester.tap(find.byKey(const Key('identity-start-chat-button')));
     await tester.pumpAndSettle();
 
@@ -113,6 +114,76 @@ void main() {
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('身份查找主标题在无昵称时依次回退到 Handle 和 DID', (tester) async {
+    const handleOnly = UserProfile(
+      did: 'did:wba:awiki.info:user:handle-only:e1_key',
+      displayName: '',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      fullHandle: 'handle-only.awiki.info',
+    );
+    const didOnly = UserProfile(
+      did: 'did:wba:awiki.info:user:did-only:e1_key',
+      displayName: '',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+    );
+
+    Future<void> expectLookupTitle({
+      required UserProfile profile,
+      required String query,
+      required String expectedTitle,
+    }) async {
+      final gateway = FakeAwikiGateway()
+        ..publicProfilesByQuery = <String, UserProfile>{query: profile};
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const _IdentityFlowHarness(),
+          gateway: gateway,
+          session: session,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('关注联系人'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('identity-lookup-input')),
+        query,
+      );
+      await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<Text>(
+              find.byKey(const Key('identity-preview-display-name')),
+            )
+            .data,
+        expectedTitle,
+      );
+      expect(
+        find.byKey(const Key('identity-preview-handle-value')),
+        findsNothing,
+      );
+      expect(find.text(profile.did), findsWidgets);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+    }
+
+    await expectLookupTitle(
+      profile: handleOnly,
+      query: 'handle-only.awiki.info',
+      expectedTitle: 'handle-only.awiki.info',
+    );
+    await expectLookupTitle(
+      profile: didOnly,
+      query: didOnly.did,
+      expectedTitle: 'did-only',
+    );
   });
 
   testWidgets('联系人裸 handle 入口通过 DID 解析后只打开 canonical 单聊', (tester) async {
@@ -149,6 +220,10 @@ void main() {
 
     final contactRow = find.byKey(const Key('contact-row:did:test:peer'));
     expect(contactRow, findsOneWidget);
+    expect(
+      find.byKey(const Key('contact-row-title:did:test:peer')),
+      findsOneWidget,
+    );
     await tester.tap(contactRow);
     await tester.pumpAndSettle();
 

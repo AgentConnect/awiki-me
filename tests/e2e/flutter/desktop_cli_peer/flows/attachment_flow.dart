@@ -220,7 +220,18 @@ Future<void> _verifyAttachmentRegression({
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,
     thread: thread,
-    expectedTexts: <String>[appAttachmentCaption, cliAttachmentCaption],
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appAttachmentMessageId,
+        content: appAttachmentCaption,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliSentMessageId,
+        content: cliAttachmentCaption,
+        conversationId: conversationId,
+      ),
+    ],
   );
 }
 

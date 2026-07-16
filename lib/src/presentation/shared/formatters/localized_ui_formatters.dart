@@ -249,7 +249,12 @@ String localizeAttachmentFilename(AppLocalizations l10n, String filename) {
   return normalized;
 }
 
-String localizeMessagePreview(AppLocalizations l10n, ChatMessage message) {
+String localizeMessagePreview(
+  AppLocalizations l10n,
+  ChatMessage message, {
+  String? groupEventActorName,
+  String? groupEventSubjectName,
+}) {
   final systemEvent = message.groupSystemEvent;
   if (systemEvent != null) {
     return localizeGroupSystemEvent(
@@ -258,6 +263,8 @@ String localizeMessagePreview(AppLocalizations l10n, ChatMessage message) {
       actorIsMe:
           systemEvent.actorDid?.trim() == message.senderDid.trim() &&
           message.isMine,
+      actorName: groupEventActorName,
+      subjectName: groupEventSubjectName,
     );
   }
   final attachment = message.attachment;
@@ -277,9 +284,11 @@ String localizeGroupSystemEvent(
   AppLocalizations l10n,
   GroupSystemEvent event, {
   bool actorIsMe = false,
+  String? actorName,
+  String? subjectName,
 }) {
-  final actor = _groupSystemEventName(event.actorDid, l10n);
-  final member = _groupSystemEventName(event.subjectDid, l10n);
+  final actor = _groupSystemEventName(actorName, event.actorDid, l10n);
+  final member = _groupSystemEventName(subjectName, event.subjectDid, l10n);
   return switch (event.type) {
     'member_added' =>
       actorIsMe
@@ -297,7 +306,15 @@ String localizeGroupSystemEvent(
   };
 }
 
-String _groupSystemEventName(String? did, AppLocalizations l10n) {
+String _groupSystemEventName(
+  String? resolvedName,
+  String? did,
+  AppLocalizations l10n,
+) {
+  final resolved = resolvedName?.trim() ?? '';
+  if (resolved.isNotEmpty) {
+    return resolved;
+  }
   final raw = did?.trim() ?? '';
   if (raw.isEmpty) {
     return l10n.commonUnknown;
@@ -307,17 +324,29 @@ String _groupSystemEventName(String? did, AppLocalizations l10n) {
 
 String localizeConversationPreview(
   AppLocalizations l10n,
-  ConversationSummary conversation,
-) {
+  ConversationSummary conversation, {
+  String? groupEventActorName,
+  String? groupEventSubjectName,
+}) {
   final snapshot = conversation.lastMessageSnapshot;
   if (snapshot != null) {
-    return localizeMessagePreview(l10n, snapshot);
+    return localizeMessagePreview(
+      l10n,
+      snapshot,
+      groupEventActorName: groupEventActorName,
+      groupEventSubjectName: groupEventSubjectName,
+    );
   }
   final systemEvent = GroupSystemEvent.tryParse(
     conversation.lastMessagePayloadJson,
   );
   if (systemEvent != null) {
-    return localizeGroupSystemEvent(l10n, systemEvent);
+    return localizeGroupSystemEvent(
+      l10n,
+      systemEvent,
+      actorName: groupEventActorName,
+      subjectName: groupEventSubjectName,
+    );
   }
   return localizeLegacyConversationPreview(
     l10n,

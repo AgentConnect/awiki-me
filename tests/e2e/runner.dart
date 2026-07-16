@@ -21,14 +21,18 @@ const String _claudeCodeAgentRunConfigPath =
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
 const String _desktopCliPeerPerformanceScenario =
     'desktop-app-cli-peer-performance';
+const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _messageAgentScenario = 'message-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
 const String _claudeCodeAgentScenario = 'claude-code-agent-full-ui';
 const List<String> _desktopCliPeerCaseIds = <String>[
   'AUTH-E2E-001',
+  'CONV-CANON-E2E-001',
   'MSG-E2E-001',
   'MSG-E2E-002',
   'MSG-REG-001',
+  'DISPLAY-NAME-REG-001',
+  'GROUP-CANON-E2E-001',
   'GROUP-E2E-001',
   'GROUP-E2E-002',
   'GROUP-P9-001',
@@ -38,9 +42,14 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'CONTACT-E2E-002',
   'CONTACT-REG-001',
   'CONTACT-MSG-E2E-001',
+  'CONV-LIST-E2E-001',
+  'UNREAD-MULTI-E2E-001',
+  'MSG-SEQUENCE-E2E-001',
+  'DISPLAY-NAME-E2E-001',
   'ATTACH-E2E-001',
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
+  'DISPLAY-NAME-E2E-004',
 ];
 const List<String> _desktopSmokeCaseIds = <String>[
   'SMOKE-E2E-001',
@@ -48,6 +57,7 @@ const List<String> _desktopSmokeCaseIds = <String>[
 ];
 const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
+  'GROUP-CANON-E2E-001',
   'GROUP-E2E-001',
   'GROUP-E2E-002',
   'GROUP-P9-001',
@@ -56,9 +66,11 @@ const List<String> _desktopCliPeerGroupCaseIds = <String>[
 ];
 const List<String> _desktopCliPeerDirectCaseIds = <String>[
   'AUTH-E2E-001',
+  'CONV-CANON-E2E-001',
   'MSG-E2E-001',
   'MSG-E2E-002',
   'MSG-REG-001',
+  'DISPLAY-NAME-REG-001',
 ];
 const List<String> _desktopCliPeerAttachmentCaseIds = <String>[
   'AUTH-E2E-001',
@@ -72,6 +84,18 @@ const List<String> _desktopCliPeerContactsCaseIds = <String>[
   'CONTACT-E2E-002',
   'CONTACT-REG-001',
   'CONTACT-MSG-E2E-001',
+  'CONTACT-FIRST-CONV-E2E-001',
+];
+const List<String> _desktopCliPeerInboundCaseIds = <String>[
+  'AUTH-E2E-001',
+  'INBOUND-FIRST-CONV-E2E-001',
+];
+const List<String> _desktopCliPeerRestartCaseIds = <String>[
+  'PROCESS-RESTART-E2E-001',
+];
+const List<String> _desktopCliPeerDisplayNameFallbackCaseIds = <String>[
+  'AUTH-E2E-001',
+  'DISPLAY-NAME-E2E-002',
 ];
 const List<String> _desktopCliPeerPerformanceCaseIds = <String>[
   'PERF-E2E-001', // real backend App + CLI peer performance gate.
@@ -223,7 +247,9 @@ class DesktopE2eRunner {
   late final File productTimingsFile;
   late final File caseAttestationFile;
   late final File scenarioProgressFile;
+  late final File failureObservationFile;
   late final File resourceLedgerFile;
+  late final File processRestartHandoffFile;
   late final DesktopFlutterBuildIsolation flutterBuildIsolation;
   late final DesktopE2eSuiteManifest suiteManifest;
   late final DesktopE2eSuiteDefinition suiteDefinition;
@@ -278,7 +304,13 @@ class DesktopE2eRunner {
     scenarioProgressFile = e2eScenarioProgressFileForAttestation(
       caseAttestationFile,
     );
+    failureObservationFile = e2eFailureObservationFileForAttestation(
+      caseAttestationFile,
+    );
     resourceLedgerFile = File('${reportDir.path}/resource_ledger.json');
+    processRestartHandoffFile = File(
+      '${reportDir.parent.path}/process_restart_handoff.json',
+    );
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
@@ -289,7 +321,9 @@ class DesktopE2eRunner {
     _addRuntimeSecret(productTimingsFile.path);
     _addRuntimeSecret(caseAttestationFile.path);
     _addRuntimeSecret(scenarioProgressFile.path);
+    _addRuntimeSecret(failureObservationFile.path);
     _addRuntimeSecret(resourceLedgerFile.path);
+    _addRuntimeSecret(processRestartHandoffFile.path);
     if (!options.dryRun && !options.prepareOnly) {
       if (caseAttestationFile.existsSync()) {
         caseAttestationFile.deleteSync();
@@ -304,6 +338,18 @@ class DesktopE2eRunner {
       final progressTemporary = File('${scenarioProgressFile.path}.tmp');
       if (progressTemporary.existsSync()) {
         progressTemporary.deleteSync();
+      }
+      if (failureObservationFile.existsSync()) {
+        failureObservationFile.deleteSync();
+      }
+      final failureObservationTemporary = File(
+        '${failureObservationFile.path}.tmp',
+      );
+      if (failureObservationTemporary.existsSync()) {
+        failureObservationTemporary.deleteSync();
+      }
+      if (processRestartHandoffFile.existsSync()) {
+        processRestartHandoffFile.deleteSync();
       }
     }
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
@@ -588,33 +634,45 @@ class DesktopE2eRunner {
       '--otp',
       peerConfig.otpCode,
     ], allowFailure: true);
-    if (recover.exitCode == 0 || options.dryRun) {
-      return;
+    if (recover.exitCode != 0 && !options.dryRun) {
+      if (!_looksRecoverableForRegister(recover.output)) {
+        throw E2eFailure(
+          'CLI peer recover failed and did not look like a missing-handle error: '
+          '${redactor.redact(recover.output)}',
+        );
+      }
+      final register = await _cli(<String>[
+        '--format',
+        'json',
+        'id',
+        'register',
+        '--handle',
+        peerConfig.cliHandle,
+        '--phone',
+        peerConfig.otpPhone,
+        '--otp',
+        peerConfig.otpCode,
+      ], allowFailure: true);
+      if (register.exitCode != 0) {
+        throw E2eFailure(
+          'CLI peer register failed: ${redactor.redact(register.output)}',
+        );
+      }
+      _resourceSideEffectsPossible = true;
     }
-    if (!_looksRecoverableForRegister(recover.output)) {
-      throw E2eFailure(
-        'CLI peer recover failed and did not look like a missing-handle error: '
-        '${redactor.redact(recover.output)}',
-      );
+
+    if (peerConfig.e2eCase.publishesNicknameFixture) {
+      await _cli(<String>[
+        '--format',
+        'json',
+        'id',
+        'profile',
+        'set',
+        '--display-name',
+        _desktopCliPeerDisplayName,
+      ]);
+      _resourceSideEffectsPossible = true;
     }
-    final register = await _cli(<String>[
-      '--format',
-      'json',
-      'id',
-      'register',
-      '--handle',
-      peerConfig.cliHandle,
-      '--phone',
-      peerConfig.otpPhone,
-      '--otp',
-      peerConfig.otpCode,
-    ], allowFailure: true);
-    if (register.exitCode != 0) {
-      throw E2eFailure(
-        'CLI peer register failed: ${redactor.redact(register.output)}',
-      );
-    }
-    _resourceSideEffectsPossible = true;
   }
 
   Future<void> _checkCliReady() async {
@@ -761,6 +819,40 @@ class DesktopE2eRunner {
 
   Future<void> _planFlutterDesktopSmoke() async {
     final peerConfig = _requireConfig();
+    if (peerConfig.e2eCase == DesktopE2eCase.restart) {
+      await _runFlutterArgs(
+        <String>[
+          'test',
+          '--dart-define=AWIKI_E2E=true',
+          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+          'integration_test/desktop_cli_peer_restart_phase_a_test.dart',
+          '-d',
+          peerConfig.platform.name,
+          ..._caseAttestationDartDefines(suiteDefinition.caseIds),
+        ],
+        platform: peerConfig.platform,
+        timeout: _effectiveFlutterTimeout(peerConfig),
+      );
+      if (!options.dryRun && !processRestartHandoffFile.existsSync()) {
+        throw E2eFailure(
+          'Process-restart phase A did not write its handoff evidence.',
+        );
+      }
+      await _runFlutterArgs(
+        <String>[
+          'test',
+          '--dart-define=AWIKI_E2E=true',
+          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+          'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
+          '-d',
+          peerConfig.platform.name,
+          ..._caseAttestationDartDefines(suiteDefinition.caseIds),
+        ],
+        platform: peerConfig.platform,
+        timeout: _effectiveFlutterTimeout(peerConfig),
+      );
+      return;
+    }
     final flutterArgs = <String>[
       'test',
       '--dart-define=AWIKI_E2E=true',
@@ -814,6 +906,9 @@ class DesktopE2eRunner {
         'cleanupPolicy': suiteDefinition.cleanupPolicy,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'processRestart': <String, Object?>{
+        'handoffPath': processRestartHandoffFile.path,
+      },
       'performance': <String, Object?>{
         'enabled': peerConfig.e2eCase == DesktopE2eCase.performance,
         'productTimingsPath': productTimingsFile.path,
@@ -1022,6 +1117,30 @@ class DesktopE2eRunner {
     }
   }
 
+  Map<String, Object?> _readFailureObservationSummary() {
+    if (!failureObservationFile.existsSync()) {
+      return const <String, Object?>{'status': 'not_observed'};
+    }
+    try {
+      final observation = E2eFailureObservation.read(failureObservationFile);
+      if (observation.scenario != options.e2eCase.scenario ||
+          observation.runId != runId) {
+        return const <String, Object?>{'status': 'invalid'};
+      }
+      return <String, Object?>{
+        'status': 'observed',
+        'layer': observation.layer,
+        'failureStatus': observation.status,
+        'code': observation.code,
+        'observedAt': observation.observedAt,
+        if (observation.caseId != null) 'caseId': observation.caseId,
+        'path': '<redacted-failure-observation-path>',
+      };
+    } on Object {
+      return const <String, Object?>{'status': 'invalid'};
+    }
+  }
+
   DesktopProductTimingReport _readProductTimingReport() {
     if (!productTimingsFile.existsSync()) {
       throw E2eFailure(
@@ -1088,7 +1207,21 @@ class DesktopE2eRunner {
     if (options.prepareOnly) {
       return 'prepared';
     }
-    return _attestedCases[caseId]?.status ?? 'not_run';
+    final attested = _attestedCases[caseId]?.status;
+    if (attested != null) {
+      return attested;
+    }
+    if (failureObservationFile.existsSync()) {
+      try {
+        if (E2eFailureObservation.read(failureObservationFile).caseId ==
+            caseId) {
+          return 'failed';
+        }
+      } on Object {
+        // The report exposes invalid failure evidence separately.
+      }
+    }
+    return 'not_run';
   }
 
   String _suiteStatus({required bool orchestrationSucceeded}) {
@@ -1148,6 +1281,12 @@ class DesktopE2eRunner {
               if (_attestedCases[caseId] != null)
                 'finishedAt': _attestedCases[caseId]!.finishedAt,
               'phases': _attestedCases[caseId]?.phases ?? const <String>[],
+              'assertions': <Map<String, Object?>>[
+                for (final assertion
+                    in _attestedCases[caseId]?.assertions ??
+                        const <E2eAssertionEvidence>[])
+                  assertion.toJson(),
+              ],
             },
         ],
         'attestation': <String, Object?>{
@@ -1165,6 +1304,7 @@ class DesktopE2eRunner {
               : 'invalid',
           if (_caseAttestationError != null) 'error': _caseAttestationError,
         },
+        'failureObservation': _readFailureObservationSummary(),
         'runId': runId,
         'platform': platform.name,
         'case': (config?.e2eCase ?? options.e2eCase).caseName,
@@ -1373,43 +1513,7 @@ class DesktopE2eRunner {
   }
 
   ({String code, String summary}) _classifyFailure(E2eFailure error) {
-    final message = redactor.redact(error.message);
-    if (message.contains('CLI peer identity mismatch') ||
-        message.contains('id resolve') ||
-        message.contains('identity preflight')) {
-      return (
-        code: 'identity_preflight_failed',
-        summary:
-            'Remote account-pool identity preflight failed; inspect the redacted runner log.',
-      );
-    }
-    if (message.contains('cliPeer.sourceRef')) {
-      return (
-        code: 'source_ref_unverified',
-        summary: 'CLI/SDK source ref is missing or not an exact commit SHA.',
-      );
-    }
-    if (message.contains('audited remote')) {
-      return (
-        code: 'target_policy_failed',
-        summary:
-            'The product E2E target does not match the audited remote policy.',
-      );
-    }
-    if (message.startsWith('flutter ') || message.startsWith('xvfb-run ')) {
-      return (
-        code: 'flutter_product_failed',
-        summary:
-            'Flutter product E2E failed; inspect case attestation and the redacted runner log.',
-      );
-    }
-    final firstLine = message.split('\n').first.trim();
-    return (
-      code: 'e2e_failure',
-      summary: firstLine.length <= 240
-          ? firstLine
-          : '${firstLine.substring(0, 237)}...',
-    );
+    return classifyDesktopE2eFailureMessage(redactor.redact(error.message));
   }
 
   void _printTimingSummary({
@@ -1443,6 +1547,62 @@ class DesktopE2eRunner {
     redactor.addSecret(value);
     commands.redactor.addSecret(value);
   }
+}
+
+({String code, String summary}) classifyDesktopE2eFailureMessage(
+  String message,
+) {
+  final lower = message.toLowerCase();
+  if (RegExp(r'service http error 5\d\d').hasMatch(lower) ||
+      lower.contains('502 bad gateway') ||
+      lower.contains('503 service unavailable') ||
+      lower.contains('504 gateway time-out') ||
+      lower.contains('transport_unavailable') ||
+      lower.contains('transport unavailable') ||
+      (lower.contains('service rpc error') &&
+          lower.contains('network failure'))) {
+    return (
+      code: 'remote_service_unavailable',
+      summary:
+          'The remote product service was unavailable; inspect the redacted command log and retry after service recovery.',
+    );
+  }
+  if (message.contains('CLI peer identity mismatch') ||
+      message.contains('id resolve') ||
+      message.contains('identity preflight')) {
+    return (
+      code: 'identity_preflight_failed',
+      summary:
+          'Remote account-pool identity preflight failed; inspect the redacted runner log.',
+    );
+  }
+  if (message.contains('cliPeer.sourceRef')) {
+    return (
+      code: 'source_ref_unverified',
+      summary: 'CLI/SDK source ref is missing or not an exact commit SHA.',
+    );
+  }
+  if (message.contains('audited remote')) {
+    return (
+      code: 'target_policy_failed',
+      summary:
+          'The product E2E target does not match the audited remote policy.',
+    );
+  }
+  if (message.startsWith('flutter ') || message.startsWith('xvfb-run ')) {
+    return (
+      code: 'flutter_product_failed',
+      summary:
+          'Flutter product E2E failed; inspect case attestation and the redacted runner log.',
+    );
+  }
+  final firstLine = message.split('\n').first.trim();
+  return (
+    code: 'e2e_failure',
+    summary: firstLine.length <= 240
+        ? firstLine
+        : '${firstLine.substring(0, 237)}...',
+  );
 }
 
 String desktopE2eUtf8Locale({
@@ -2177,6 +2337,9 @@ Run the AWiki Me Desktop App + CLI peer E2E smoke.
 Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case full
+  dart run tests/e2e/runner.dart --case inbound
+  dart run tests/e2e/runner.dart --case restart
+  dart run tests/e2e/runner.dart --case display-name-fallback
   dart run tests/e2e/runner.dart --case performance
   dart run tests/e2e/runner.dart --case message-agent
   dart run tests/e2e/runner.dart --case codex-agent
@@ -2185,12 +2348,14 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|performance|direct|group|attachment|contacts|message-agent|codex-agent|claude-code-agent
+  --case smoke|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|message-agent|codex-agent|claude-code-agent
                                smoke runs local App/native checks. The other
                                cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
                                applies the configured performance budgets. The
+                               restart case launches two Flutter processes
+                               against one isolated App state root. The
                                message-agent case is the full UI acceptance
                                gate for Message Agent; codex-agent and
                                claude-code-agent are user-visible runtime
@@ -2997,6 +3162,9 @@ enum DesktopE2eCase {
   group(_desktopCliPeerGroupCaseIds),
   attachment(_desktopCliPeerAttachmentCaseIds),
   contacts(_desktopCliPeerContactsCaseIds),
+  inbound(_desktopCliPeerInboundCaseIds),
+  restart(_desktopCliPeerRestartCaseIds),
+  displayNameFallback(_desktopCliPeerDisplayNameFallbackCaseIds),
   messageAgent(_messageAgentCaseIds),
   codexAgent(_codexAgentCaseIds),
   claudeCodeAgent(_claudeCodeAgentCaseIds);
@@ -3020,6 +3188,12 @@ enum DesktopE2eCase {
         'integration_test/desktop_cli_peer_attachment_test.dart',
       DesktopE2eCase.contacts =>
         'integration_test/desktop_cli_peer_contacts_test.dart',
+      DesktopE2eCase.inbound =>
+        'integration_test/desktop_cli_peer_inbound_test.dart',
+      DesktopE2eCase.restart =>
+        'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
+      DesktopE2eCase.displayNameFallback =>
+        'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
       DesktopE2eCase.messageAgent =>
         'integration_test/message_agent_full_ui_test.dart',
       DesktopE2eCase.codexAgent =>
@@ -3034,11 +3208,16 @@ enum DesktopE2eCase {
       DesktopE2eCase.messageAgent => 'message-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
+      DesktopE2eCase.displayNameFallback => 'display-name-fallback',
       _ => name,
     };
   }
 
   bool get requiresCliPeer => this != DesktopE2eCase.smoke;
+
+  bool get publishesNicknameFixture =>
+      this != DesktopE2eCase.performance &&
+      this != DesktopE2eCase.displayNameFallback;
 
   String get reportScope {
     return switch (this) {
@@ -3056,6 +3235,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.codexAgent => const Duration(minutes: 8),
       DesktopE2eCase.messageAgent => const Duration(minutes: 10),
       DesktopE2eCase.performance => const Duration(minutes: 12),
+      DesktopE2eCase.restart => const Duration(minutes: 10),
+      DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       _ => const Duration(minutes: 5),
     };
   }
@@ -3105,6 +3286,19 @@ enum DesktopE2eCase {
       'people' ||
       'follow' ||
       'contact-only' => DesktopE2eCase.contacts,
+      'inbound' ||
+      'inbound-first' ||
+      'inbound_first' ||
+      'inbound-only' => DesktopE2eCase.inbound,
+      'restart' ||
+      'process-restart' ||
+      'process_restart' ||
+      'cold-restart' ||
+      'cold_restart' => DesktopE2eCase.restart,
+      'display-name-fallback' ||
+      'display_name_fallback' ||
+      'handle-fallback' ||
+      'handle_fallback' => DesktopE2eCase.displayNameFallback,
       'message-agent' ||
       'message_agent' ||
       'msgagent' ||
@@ -3124,7 +3318,8 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, full, performance, direct, group, attachment, contacts, '
+        'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'display-name-fallback, '
         'message-agent, codex-agent, or claude-code-agent.',
       ),
     };

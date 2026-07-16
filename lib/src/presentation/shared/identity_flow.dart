@@ -752,9 +752,10 @@ class _IdentityPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = DidDisplayFormatter.profileName(profile);
-    final handleLabel = DidDisplayFormatter.profileHandleLabel(profile);
-    final secondaryName = DidDisplayFormatter.secondaryProfileName(profile);
+    final displayName = DidDisplayFormatter.identityLookupTitle(profile);
+    final secondaryHandle = DidDisplayFormatter.identityLookupSecondaryHandle(
+      profile,
+    );
     final relationshipLabel = relationship?.relationship.trim();
     return Container(
       width: double.infinity,
@@ -780,8 +781,8 @@ class _IdentityPreviewCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      handleLabel,
-                      key: const Key('identity-preview-handle-value'),
+                      displayName,
+                      key: const Key('identity-preview-display-name'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -790,11 +791,11 @@ class _IdentityPreviewCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (secondaryName.isNotEmpty) ...<Widget>[
+                    if (secondaryHandle.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 5),
                       Text(
-                        secondaryName,
-                        key: const Key('identity-preview-display-name'),
+                        secondaryHandle,
+                        key: const Key('identity-preview-handle-value'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

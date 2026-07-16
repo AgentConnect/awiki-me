@@ -7,6 +7,41 @@ import '../../e2e/case_attestation.dart';
 
 void main() {
   group('E2eCaseAttestation', () {
+    test(
+      'failure observation is structured and rejects payload-like codes',
+      () {
+        final observation = E2eFailureObservation.fromJson(<String, Object?>{
+          'schemaVersion': 1,
+          'scenario': 'desktop-app-cli-peer',
+          'runId': 'run-a',
+          'layer': 'visible_ui',
+          'status': 'fatal',
+          'code': 'duplicate_persona_conversation',
+          'caseId': 'CONV-CANON-E2E-001',
+          'observedAt': '2026-07-16T00:00:00.000Z',
+        });
+
+        expect(observation.layer, 'visible_ui');
+        expect(observation.code, 'duplicate_persona_conversation');
+        expect(observation.caseId, 'CONV-CANON-E2E-001');
+        expect(observation.toJson()['caseId'], 'CONV-CANON-E2E-001');
+        expect(
+          () => E2eFailureObservation.fromJson(<String, Object?>{
+            ...observation.toJson(),
+            'code': 'did:test:secret',
+          }),
+          throwsFormatException,
+        );
+        expect(
+          () => E2eFailureObservation.fromJson(<String, Object?>{
+            ...observation.toJson(),
+            'caseId': 'bad case id',
+          }),
+          throwsFormatException,
+        );
+      },
+    );
+
     test('accepts an exact all-passed real scenario', () {
       final attestation = E2eCaseAttestation.fromJson(
         _attestationJson(<Map<String, Object?>>[
@@ -25,6 +60,10 @@ void main() {
       expect(validation.passed, isTrue);
       expect(validation.errors, isEmpty);
       expect(validation.caseById.keys, <String>['CASE-001', 'CASE-002']);
+      expect(
+        validation.caseById['CASE-001']!.assertions.single.assertionId,
+        'CASE-001:assertion_completed',
+      );
     });
 
     test('fails closed for missing skipped and unexpected cases', () {
@@ -131,6 +170,91 @@ void main() {
       expect(encoded, isNot(contains('token')));
       expect(encoded, isNot(contains('messageBody')));
     });
+
+    test('rejects missing duplicate and reordered assertion evidence', () {
+      final missing = _caseJson('CASE-001')..remove('assertions');
+      expect(
+        () => E2eCaseAttestation.fromJson(
+          _attestationJson(<Map<String, Object?>>[missing]),
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('structured assertions'),
+          ),
+        ),
+      );
+
+      final duplicate = _caseJson(
+        'CASE-001',
+        phases: const <String>['first_check', 'second_check'],
+      );
+      duplicate['assertions'] = <Map<String, Object?>>[
+        _assertionJson('CASE-001:first_check'),
+        _assertionJson('CASE-001:first_check'),
+      ];
+      expect(
+        () => E2eCaseAttestation.fromJson(
+          _attestationJson(<Map<String, Object?>>[duplicate]),
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('duplicate assertionId'),
+          ),
+        ),
+      );
+
+      final reordered = _caseJson(
+        'CASE-001',
+        phases: const <String>['first_check', 'second_check'],
+      );
+      reordered['assertions'] = <Map<String, Object?>>[
+        _assertionJson('CASE-001:second_check'),
+        _assertionJson('CASE-001:first_check'),
+      ];
+      expect(
+        () => E2eCaseAttestation.fromJson(
+          _attestationJson(<Map<String, Object?>>[reordered]),
+        ),
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains('exactly follow phase order'),
+          ),
+        ),
+      );
+    });
+
+    test('rejects unstable or non-passed assertion evidence', () {
+      final unstableId = _caseJson('CASE-001');
+      unstableId['assertions'] = <Map<String, Object?>>[
+        _assertionJson('CASE-001:contains-hyphen'),
+      ];
+      expect(
+        () => E2eCaseAttestation.fromJson(
+          _attestationJson(<Map<String, Object?>>[unstableId]),
+        ),
+        throwsFormatException,
+      );
+
+      final failed = _caseJson('CASE-001');
+      failed['assertions'] = <Map<String, Object?>>[
+        <String, Object?>{
+          ..._assertionJson('CASE-001:assertion_completed'),
+          'status': 'failed',
+        },
+      ];
+      expect(
+        () => E2eCaseAttestation.fromJson(
+          _attestationJson(<Map<String, Object?>>[failed]),
+        ),
+        throwsFormatException,
+      );
+    });
   });
 }
 
@@ -143,11 +267,23 @@ Map<String, Object?> _attestationJson(List<Map<String, Object?>> cases) =>
       'cases': cases,
     };
 
-Map<String, Object?> _caseJson(String caseId, {String status = 'passed'}) =>
-    <String, Object?>{
-      'caseId': caseId,
-      'status': status,
-      'startedAt': '2026-07-10T10:00:00.000Z',
-      'finishedAt': '2026-07-10T10:00:01.000Z',
-      'phases': <String>['assertion_completed'],
-    };
+Map<String, Object?> _caseJson(
+  String caseId, {
+  String status = 'passed',
+  List<String> phases = const <String>['assertion_completed'],
+}) => <String, Object?>{
+  'caseId': caseId,
+  'status': status,
+  'startedAt': '2026-07-10T10:00:00.000Z',
+  'finishedAt': '2026-07-10T10:00:01.000Z',
+  'phases': phases,
+  'assertions': <Map<String, Object?>>[
+    for (final phase in phases) _assertionJson('$caseId:$phase'),
+  ],
+};
+
+Map<String, Object?> _assertionJson(String assertionId) => <String, Object?>{
+  'assertionId': assertionId,
+  'status': 'passed',
+  'observedAt': '2026-07-10T10:00:01.000Z',
+};

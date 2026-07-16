@@ -11,12 +11,14 @@ class AppTestCatalog {
     required this.cases,
     required this.suitesByCaseId,
     required this.suiteCaseIds,
+    required this.caseById,
   });
 
   final String sourceRevision;
   final List<AppTestCatalogCase> cases;
   final Map<String, List<String>> suitesByCaseId;
   final Map<String, List<String>> suiteCaseIds;
+  final Map<String, AppTestCatalogCase> caseById;
 
   static AppTestCatalog load(Directory root) {
     final manifest = _readJsonObject(
@@ -142,6 +144,11 @@ class AppTestCatalog {
         for (final entry in suiteCaseIds.entries)
           entry.key: List<String>.unmodifiable(entry.value),
       },
+      caseById: Map<String, AppTestCatalogCase>.unmodifiable(
+        <String, AppTestCatalogCase>{
+          for (final value in parsed) value.caseId: value,
+        },
+      ),
     );
   }
 
@@ -181,11 +188,84 @@ class AppTestCatalog {
       if (!suitesByCaseId.containsKey(caseId)) {
         throw FormatException('report contains unknown caseId $caseId');
       }
+      _validateCaseAssertionEvidence(row, caseId: caseId, index: index);
       actual.add(caseId);
     }
     if (!_sameStrings(actual, expected)) {
       throw FormatException(
         'report caseResults mismatch for $suite: expected $expected, got $actual',
+      );
+    }
+  }
+
+  void _validateCaseAssertionEvidence(
+    Map<String, Object?> row, {
+    required String caseId,
+    required int index,
+  }) {
+    if (row['status'] != 'passed') {
+      return;
+    }
+    final label = 'report caseResults[$index]';
+    final phases = _stringList(row, 'phases', label: label);
+    if (phases.isEmpty) {
+      throw FormatException('$label passed case must contain phases');
+    }
+    final rawAssertions = row['assertions'];
+    if (rawAssertions is! List || rawAssertions.isEmpty) {
+      throw FormatException(
+        '$label passed case must contain structured assertions',
+      );
+    }
+    final assertionIds = <String>[];
+    final seenAssertionIds = <String>{};
+    for (
+      var assertionIndex = 0;
+      assertionIndex < rawAssertions.length;
+      assertionIndex += 1
+    ) {
+      final assertion = _object(
+        rawAssertions[assertionIndex],
+        label: '$label assertions[$assertionIndex]',
+      );
+      final assertionId = _requiredString(
+        assertion,
+        'assertionId',
+        label: '$label assertions[$assertionIndex]',
+      );
+      if (!RegExp(
+        '^${RegExp.escape(caseId)}:[a-z0-9_]+\$',
+      ).hasMatch(assertionId)) {
+        throw FormatException('$label assertionId must use $caseId:snake_case');
+      }
+      if (!seenAssertionIds.add(assertionId)) {
+        throw FormatException(
+          '$label contains duplicate assertionId $assertionId',
+        );
+      }
+      if (assertion['status'] != 'passed') {
+        throw FormatException('$label assertion $assertionId must be passed');
+      }
+      _requiredString(
+        assertion,
+        'observedAt',
+        label: '$label assertions[$assertionIndex]',
+      );
+      assertionIds.add(assertionId);
+    }
+    final expectedAssertionIds = phases
+        .map((phase) => '$caseId:$phase')
+        .toList(growable: false);
+    if (!_sameStrings(assertionIds, expectedAssertionIds)) {
+      throw FormatException(
+        '$label assertion IDs must exactly follow phase order',
+      );
+    }
+    final contract = caseById[caseId]?.assertionContract;
+    if (contract != null &&
+        !_sameStrings(assertionIds, contract.assertionIds)) {
+      throw FormatException(
+        '$label assertion IDs do not match the catalog assertion contract',
       );
     }
   }
@@ -244,11 +324,15 @@ class AppTestCatalog {
         'Agent suite attests enable, receive/process and exact revoke convergence.',
       )
       ..writeln(
-        '- The latest recorded `awiki.info` direct run passed identity/auth '
-        'preflight but failed before message cases: global unread increased by '
-        'one and one semantic candidate row existed, but zero rows matched the '
-        'expected canonical conversation ID. Therefore `AUTH-E2E-001` passed '
-        'and the three Direct message cases remained not-run.',
+        '- The latest recorded `awiki.info` conversation-correctness evidence '
+        'includes a focused inbound-first run and a full Direct/Contacts/Group/'
+        'Unread/Ordering/Display-name run, a focused full-Handle fallback run, '
+        'plus a release-only two-process cold restart run. The full-Handle run '
+        'currently exposes a real App-visible generated-name fallback failure. '
+        'The v7 Full hidden/resume burst also exposes a real App-visible '
+        'canonical message-order failure in `MSG-SEQUENCE-E2E-001`. '
+        'The separate DID-only actor and Runtime Agent entry remain explicit '
+        'planned boundaries.',
       )
       ..writeln()
       ..writeln('## Validation')
@@ -279,6 +363,7 @@ class AppTestCatalogCase {
     required this.owner,
     required this.implementationPath,
     required this.evidenceType,
+    required this.assertionContract,
   });
 
   final String caseId;
@@ -295,6 +380,7 @@ class AppTestCatalogCase {
   final String owner;
   final String implementationPath;
   final String evidenceType;
+  final AppTestAssertionContract? assertionContract;
 
   factory AppTestCatalogCase.fromJson(
     Map<String, Object?> json, {
@@ -320,6 +406,13 @@ class AppTestCatalogCase {
         '$label requiredFor/exactOracles/negativeChecks must be non-empty',
       );
     }
+    final assertionContract = AppTestAssertionContract.tryParse(
+      json['assertionContract'],
+      caseId: _requiredString(json, 'caseId', label: label),
+      exactOracleCount: exactOracles.length,
+      negativeCheckCount: negativeChecks.length,
+      label: label,
+    );
     return AppTestCatalogCase(
       caseId: _requiredString(json, 'caseId', label: label),
       catalogStatus: catalogStatus,
@@ -335,6 +428,7 @@ class AppTestCatalogCase {
       owner: _requiredString(json, 'owner', label: label),
       implementationPath: path,
       evidenceType: _requiredString(json, 'evidenceType', label: label),
+      assertionContract: assertionContract,
     );
   }
 
@@ -359,6 +453,81 @@ class AppTestCatalogCase {
         'requiredFor=$requiredFor/${expected.requiredFor}',
       );
     }
+  }
+}
+
+class AppTestAssertionContract {
+  const AppTestAssertionContract({
+    required this.assertionIds,
+    required this.exactOracleAssertions,
+    required this.negativeCheckAssertions,
+  });
+
+  final List<String> assertionIds;
+  final List<List<String>> exactOracleAssertions;
+  final List<List<String>> negativeCheckAssertions;
+
+  static AppTestAssertionContract? tryParse(
+    Object? raw, {
+    required String caseId,
+    required int exactOracleCount,
+    required int negativeCheckCount,
+    required String label,
+  }) {
+    if (raw == null) {
+      return null;
+    }
+    final map = _object(raw, label: '$label assertionContract');
+    final assertionIds = _stringList(
+      map,
+      'assertionIds',
+      label: '$label assertionContract',
+    );
+    if (assertionIds.isEmpty ||
+        assertionIds.toSet().length != assertionIds.length) {
+      throw FormatException(
+        '$label assertionContract must contain unique assertionIds',
+      );
+    }
+    for (final assertionId in assertionIds) {
+      if (!RegExp(
+        '^${RegExp.escape(caseId)}:[a-z0-9_]+\$',
+      ).hasMatch(assertionId)) {
+        throw FormatException(
+          '$label assertionContract ID must use $caseId:snake_case',
+        );
+      }
+    }
+    final exact = _assertionCoverageLists(
+      map,
+      'exactOracleAssertions',
+      expectedLength: exactOracleCount,
+      assertionIds: assertionIds,
+      label: '$label assertionContract',
+    );
+    final negative = _assertionCoverageLists(
+      map,
+      'negativeCheckAssertions',
+      expectedLength: negativeCheckCount,
+      assertionIds: assertionIds,
+      label: '$label assertionContract',
+    );
+    final covered = <String>{
+      for (final values in exact) ...values,
+      for (final values in negative) ...values,
+    };
+    final unclaimed = assertionIds.toSet().difference(covered);
+    if (unclaimed.isNotEmpty) {
+      throw FormatException(
+        '$label assertionContract contains unclaimed IDs: '
+        '${unclaimed.join(', ')}',
+      );
+    }
+    return AppTestAssertionContract(
+      assertionIds: List<String>.unmodifiable(assertionIds),
+      exactOracleAssertions: List<List<String>>.unmodifiable(exact),
+      negativeCheckAssertions: List<List<String>>.unmodifiable(negative),
+    );
   }
 }
 
@@ -451,6 +620,40 @@ List<String> _stringList(
     throw FormatException('$label $key contains duplicates');
   }
   return values;
+}
+
+List<List<String>> _assertionCoverageLists(
+  Map<String, Object?> value,
+  String key, {
+  required int expectedLength,
+  required List<String> assertionIds,
+  required String label,
+}) {
+  final raw = value[key];
+  if (raw is! List || raw.length != expectedLength) {
+    throw FormatException(
+      '$label $key must contain one entry per catalog claim',
+    );
+  }
+  final allowed = assertionIds.toSet();
+  final result = <List<String>>[];
+  for (var index = 0; index < raw.length; index += 1) {
+    final entry = raw[index];
+    if (entry is! List ||
+        entry.isEmpty ||
+        entry.any((value) => value is! String)) {
+      throw FormatException('$label $key[$index] must be a string list');
+    }
+    final values = entry.cast<String>().map((value) => value.trim()).toList();
+    if (values.any((value) => value.isEmpty || !allowed.contains(value)) ||
+        values.toSet().length != values.length) {
+      throw FormatException(
+        '$label $key[$index] contains unknown, empty, or duplicate IDs',
+      );
+    }
+    result.add(List<String>.unmodifiable(values));
+  }
+  return result;
 }
 
 bool _sameStrings(List<String> first, List<String> second) {

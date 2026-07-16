@@ -30,13 +30,16 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
+import 'package:awiki_me/src/domain/services/peer_display_name_resolver.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
@@ -56,9 +59,13 @@ import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';
 part 'flows/contact_flow.dart';
+part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
+part 'flows/inbound_first_flow.dart';
 part 'flows/performance_flow.dart';
+part 'flows/profile_refresh_flow.dart';
+part 'flows/process_restart_flow.dart';
 part 'support/cli_peer_process.dart';
 part 'support/config.dart';
 part 'support/polling.dart';
@@ -66,6 +73,7 @@ part 'support/ui_robot.dart';
 
 const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
+const String _nicknameFixtureDisplayName = 'AWiki E2E CLI Peer';
 
 enum DesktopCliPeerIntegrationCase {
   full,
@@ -73,6 +81,9 @@ enum DesktopCliPeerIntegrationCase {
   group,
   attachment,
   contacts,
+  inboundFirst,
+  processRestart,
+  displayNameFallback,
   performance;
 
   static DesktopCliPeerIntegrationCase parse(String value) {
@@ -96,6 +107,19 @@ enum DesktopCliPeerIntegrationCase {
       'people' ||
       'follow' ||
       'contact-only' => DesktopCliPeerIntegrationCase.contacts,
+      'inbound' ||
+      'inbound-first' ||
+      'inbound_first' ||
+      'inbound-only' => DesktopCliPeerIntegrationCase.inboundFirst,
+      'restart' ||
+      'process-restart' ||
+      'process_restart' ||
+      'cold-restart' ||
+      'cold_restart' => DesktopCliPeerIntegrationCase.processRestart,
+      'display-name-fallback' ||
+      'display_name_fallback' ||
+      'handle-fallback' ||
+      'handle_fallback' => DesktopCliPeerIntegrationCase.displayNameFallback,
       'performance' ||
       'perf' ||
       'startup-performance' ||
@@ -104,18 +128,21 @@ enum DesktopCliPeerIntegrationCase {
       'conversation_performance' => DesktopCliPeerIntegrationCase.performance,
       _ => throw StateError(
         'Unsupported Desktop CLI peer E2E case "$value". '
-        'Use full, performance, direct, group, attachment, or contacts.',
+        'Use full, performance, direct, group, attachment, contacts, inbound, '
+        'restart, or display-name-fallback.',
       ),
     };
   }
 
   bool get runsDirectText =>
       this == DesktopCliPeerIntegrationCase.full ||
-      this == DesktopCliPeerIntegrationCase.direct;
+      this == DesktopCliPeerIntegrationCase.direct ||
+      this == DesktopCliPeerIntegrationCase.displayNameFallback;
 
   bool get runsGroup =>
       this == DesktopCliPeerIntegrationCase.full ||
-      this == DesktopCliPeerIntegrationCase.group;
+      this == DesktopCliPeerIntegrationCase.group ||
+      this == DesktopCliPeerIntegrationCase.displayNameFallback;
 
   bool get runsAttachment =>
       this == DesktopCliPeerIntegrationCase.full ||
@@ -123,9 +150,16 @@ enum DesktopCliPeerIntegrationCase {
 
   bool get runsContacts =>
       this == DesktopCliPeerIntegrationCase.full ||
-      this == DesktopCliPeerIntegrationCase.contacts;
+      this == DesktopCliPeerIntegrationCase.contacts ||
+      this == DesktopCliPeerIntegrationCase.displayNameFallback;
+
+  bool get runsInboundFirst =>
+      this == DesktopCliPeerIntegrationCase.inboundFirst;
 
   bool get runsPerformance => this == DesktopCliPeerIntegrationCase.performance;
+
+  bool get runsDisplayNameFallback =>
+      this == DesktopCliPeerIntegrationCase.displayNameFallback;
 }
 
 DesktopCliPeerIntegrationCase desktopCliPeerCaseFromRunConfig() =>
@@ -195,7 +229,12 @@ void runDesktopCliPeerE2e({
             )
           : preparedSession!;
       expect(session.authenticated, isTrue);
-      final robot = _DesktopAppRobot(tester);
+      final robot = _DesktopAppRobot(
+        tester,
+        failureCaseId: selectedCase.runsDisplayNameFallback
+            ? 'DISPLAY-NAME-E2E-002'
+            : null,
+      );
       await robot.activate(session);
       if (!selectedCase.runsPerformance) {
         await E2eCaseAttestationWriter.markPassed(
@@ -213,6 +252,8 @@ void runDesktopCliPeerE2e({
       final canonicalCliDid = selectedCase.runsPerformance
           ? null
           : await _currentCliDid(config);
+      _DirectRegressionResult? directResult;
+      _GroupRegressionResult? groupResult;
 
       if (selectedCase.runsPerformance) {
         await _verifyPerformanceRegression(
@@ -249,7 +290,7 @@ void runDesktopCliPeerE2e({
 
       if (selectedCase.runsDirectText) {
         final conversations = bootstrap.conversationService!;
-        await _verifyDirectTextRegression(
+        directResult = await _verifyDirectTextRegression(
           robot: robot,
           messaging: faultMessaging!,
           conversations: conversations,
@@ -262,19 +303,56 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        if (!selectedCase.runsDisplayNameFallback) {
+          await _attestPassedCases(<String, List<String>>{
+            'CONV-CANON-E2E-001': const <String>[
+              'identity_lookup_empty_conversation_canonical_before_message',
+              'local_search_and_restart_reused_same_persona_conversation',
+              'legacy_or_duplicate_direct_row_rejected',
+            ],
+            'MSG-E2E-001': const <String>[
+              'empty_direct_restart_exact_one_before_first_message',
+              'identity_lookup_row_and_header_nickname_exact',
+              'app_ui_send_terminal_sent',
+              'cli_inbox_canonical_exact_one_verified',
+            ],
+            'MSG-E2E-002': const <String>[
+              'cli_send_accepted',
+              'app_ui_unread_exact_increment_and_read_clear',
+            ],
+            'MSG-REG-001': const <String>[
+              'failure_retry_ui_verified',
+              'lifecycle_and_widget_restart_exact_one_verified',
+              'complete_direct_message_sequence_ordered_and_stable',
+              'same_body_distinct_canonical_messages_preserved',
+            ],
+            'DISPLAY-NAME-REG-001': const <String>[
+              'cached_nickname_first_nonempty_header_title',
+              'cached_nickname_stable_after_open',
+              'handle_did_unknown_or_duplicate_title_rejected',
+            ],
+          });
+        }
+      }
+
+      if (selectedCase.runsInboundFirst) {
+        await _verifyInboundFirstDirectRegression(
+          robot: robot,
+          messaging: messaging,
+          conversations: bootstrap.conversationService!,
+          ownerDid: session.did,
+          session: session,
+          bootstrap: bootstrap,
+          providerOverrides: appProviderOverrides,
+          canonicalCliDid: canonicalCliDid!,
+          config: config,
+          nonce: messageNonce,
+        );
         await _attestPassedCases(<String, List<String>>{
-          'MSG-E2E-001': const <String>[
-            'empty_direct_restart_exact_one_before_first_message',
-            'app_ui_send_terminal_sent',
-            'cli_inbox_canonical_exact_one_verified',
-          ],
-          'MSG-E2E-002': const <String>[
-            'cli_send_accepted',
-            'app_ui_unread_exact_increment_and_read_clear',
-          ],
-          'MSG-REG-001': const <String>[
-            'failure_retry_ui_verified',
-            'lifecycle_and_widget_restart_exact_one_verified',
+          'INBOUND-FIRST-CONV-E2E-001': const <String>[
+            'no_direct_before_first_inbound_message',
+            'inbound_message_created_one_canonical_persona_conversation',
+            'lookup_recents_and_local_search_reused_same_conversation',
           ],
         });
       }
@@ -293,30 +371,40 @@ void runDesktopCliPeerE2e({
           canonicalCliDid: canonicalCliDid!,
           config: config,
           nonce: messageNonce,
+          expectContactFirst:
+              selectedCase == DesktopCliPeerIntegrationCase.contacts,
         );
-        await _attestPassedCases(<String, List<String>>{
+        final contactCases = <String, List<String>>{
           'CONTACT-E2E-001': const <String>[
-            'app_ui_follow_clicked',
-            'exact_following_state_observed',
+            'inbound_follower_contact_opened',
+            'app_ui_follow_converged_to_friend',
           ],
           'CONTACT-E2E-002': const <String>[
-            'cli_follow_completed',
+            'cli_unfollow_refollow_transitions_completed',
             'app_ui_unfollow_confirmed',
           ],
           'CONTACT-REG-001': const <String>[
-            'exact_friend_follower_none_transitions_checked',
+            'exact_none_follower_friend_following_transitions_checked',
           ],
           'CONTACT-MSG-E2E-001': const <String>[
             'exact_contact_row_clicked',
             'canonical_send_message_summary_ui_overlay_exact_one',
             'restart_unread_read_closed_loop_verified',
           ],
-        });
+          if (selectedCase == DesktopCliPeerIntegrationCase.contacts)
+            'CONTACT-FIRST-CONV-E2E-001': const <String>[
+              'no_direct_before_follower_contact_open',
+              'contact_first_canonical_direct_exact_one',
+            ],
+        };
+        if (!selectedCase.runsDisplayNameFallback) {
+          await _attestPassedCases(contactCases);
+        }
       }
 
       if (selectedCase.runsGroup) {
         final groups = bootstrap.groupApplicationService!;
-        await _verifyGroupTextRegression(
+        groupResult = await _verifyGroupTextRegression(
           robot: robot,
           groups: groups,
           messaging: faultMessaging!,
@@ -328,20 +416,81 @@ void runDesktopCliPeerE2e({
           config: config,
           nonce: messageNonce,
         );
+        if (!selectedCase.runsDisplayNameFallback) {
+          await _attestPassedCases(<String, List<String>>{
+            'GROUP-CANON-E2E-001': const <String>[
+              'created_group_canonical_before_first_message',
+              'member_add_and_restart_preserved_exact_one_group',
+              'duplicate_disappearing_or_changed_group_rejected',
+            ],
+            'GROUP-E2E-001': const <String>[
+              'group_created_and_member_added_through_ui',
+              'empty_group_survives_member_refresh_and_restart_exact_one',
+              'member_added_system_event_uses_nickname_projection',
+              'app_group_ui_send_exact_one_verified',
+            ],
+            'GROUP-E2E-002': const <String>[
+              'cli_group_send_verified_in_app_ui',
+              'group_row_preview_unread_and_sender_nickname_exact',
+            ],
+            'GROUP-P9-001': const <String>[
+              'app_ui_structured_group_mention_verified',
+            ],
+            'GROUP-P9-002': const <String>[
+              'cli_structured_group_mention_verified_in_app_ui',
+            ],
+            'GROUP-REG-001': const <String>[
+              'group_history_exact_order_and_stability_checked',
+              'loaded_conversation_message_leakage_rejected',
+            ],
+          });
+        }
+      }
+
+      if (selectedCase == DesktopCliPeerIntegrationCase.full) {
+        await _verifyCrossConversationCorrectness(
+          robot: robot,
+          messaging: messaging,
+          session: session,
+          bootstrap: bootstrap,
+          providerOverrides: appProviderOverrides,
+          direct: directResult!,
+          group: groupResult!,
+          config: config,
+          nonce: messageNonce,
+        );
         await _attestPassedCases(<String, List<String>>{
-          'GROUP-E2E-001': const <String>[
-            'group_created_and_member_added_through_ui',
-            'empty_group_survives_member_refresh_and_restart_exact_one',
-            'app_group_ui_send_exact_one_verified',
+          'CONV-LIST-E2E-001': const <String>[
+            'latest_activity_relative_order_exact',
+            'restart_rows_title_preview_unread_order_exact',
+            'duplicate_stale_or_missing_row_rejected',
           ],
-          'GROUP-E2E-002': const <String>['cli_group_send_verified_in_app_ui'],
-          'GROUP-P9-001': const <String>[
-            'app_ui_structured_group_mention_verified',
+          'UNREAD-MULTI-E2E-001': const <String>[
+            'direct_two_group_one_global_three_exact',
+            'opening_one_clears_only_that_conversation',
+            'restart_and_stability_no_unread_rebound',
           ],
-          'GROUP-P9-002': const <String>[
-            'cli_structured_group_mention_verified_in_app_ui',
+          'MSG-SEQUENCE-E2E-001': const <String>[
+            'direct_and_group_canonical_ids_exact_once_in_order',
+            'visible_and_local_history_order_no_cross_conversation_leakage',
+            'hidden_burst_resume_exact_sequence_and_unread',
+            'duplicate_missing_extra_or_swapped_message_rejected',
           ],
-          'GROUP-REG-001': const <String>['group_history_regression_checked'],
+          'DISPLAY-NAME-E2E-001': const <String>[
+            'lookup_direct_and_contact_exact_nickname',
+            'group_member_event_and_sender_exact_nickname',
+            'handle_did_unknown_primary_name_rejected',
+          ],
+        });
+      }
+
+      if (selectedCase.runsDisplayNameFallback) {
+        await _attestPassedCases(<String, List<String>>{
+          'DISPLAY-NAME-E2E-002': const <String>[
+            'lookup_direct_and_contact_exact_full_handle',
+            'group_member_event_and_sender_exact_full_handle',
+            'bare_name_did_unknown_or_mixed_fallback_rejected',
+          ],
         });
       }
 
@@ -367,6 +516,29 @@ void runDesktopCliPeerE2e({
           ],
           'ATTACH-REG-001': const <String>[
             'attachment_digest_regression_checked',
+          ],
+        });
+      }
+
+      if (selectedCase == DesktopCliPeerIntegrationCase.full) {
+        robot.failureCaseId = _profileRefreshCaseId;
+        await _verifyProfileRefreshConvergence(
+          robot: robot,
+          conversations: bootstrap.conversationService!,
+          groups: bootstrap.groupApplicationService!,
+          relationships: bootstrap.relationshipApplicationService!,
+          ownerDid: session.did,
+          direct: directResult!,
+          group: groupResult!,
+          config: config,
+          nonce: messageNonce,
+        );
+        robot.failureCaseId = null;
+        await _attestPassedCases(<String, List<String>>{
+          _profileRefreshCaseId: const <String>[
+            'explicit_avatar_refresh_converged_direct_detail_contact_and_lookup',
+            'profile_refresh_converged_group_member_event_and_sender',
+            'stale_mixed_or_identity_split_rejected',
           ],
         });
       }

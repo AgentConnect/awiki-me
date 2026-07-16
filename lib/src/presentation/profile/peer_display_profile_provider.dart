@@ -60,6 +60,7 @@ class PeerDisplayProfileController
 
   final Ref ref;
   final Map<String, Future<void>> _remoteLoads = <String, Future<void>>{};
+  final Set<String> _completedRemoteLoads = <String>{};
 
   Future<void> loadCached({
     required String ownerDid,
@@ -93,7 +94,10 @@ class PeerDisplayProfileController
     if (state.ownerDid != normalizedOwner) {
       return;
     }
-    _merge(profiles, peerPersonaIdsByDid: peerPersonaIdsByDid);
+    _merge(
+      profiles.where((profile) => state.forDid(profile.did) == null),
+      peerPersonaIdsByDid: peerPersonaIdsByDid,
+    );
   }
 
   void updateFromRemote({
@@ -143,7 +147,11 @@ class PeerDisplayProfileController
       return;
     }
     final missing = requested
-        .where((did) => state.forDid(did) == null)
+        .where((did) {
+          final key = '$normalizedOwner\u0000$did';
+          return !_completedRemoteLoads.contains(key) &&
+              _needsRemoteProfileRefresh(state.forDid(did), did);
+        })
         .toList(growable: false);
     await Future.wait<void>(
       missing.map((did) {
@@ -176,6 +184,7 @@ class PeerDisplayProfileController
         return;
       }
       updateFromRemote(ownerDid: ownerDid, profile: profile);
+      _completedRemoteLoads.add(loadKey);
     } catch (error) {
       debugPrint(
         '[awiki_me][profile_projection] remote_profile_refresh_failed '
@@ -187,6 +196,7 @@ class PeerDisplayProfileController
   }
 
   void clear() {
+    _completedRemoteLoads.clear();
     state = const PeerDisplayProfileState();
   }
 
@@ -226,6 +236,7 @@ class PeerDisplayProfileController
     if (state.ownerDid == ownerDid) {
       return;
     }
+    _completedRemoteLoads.clear();
     state = PeerDisplayProfileState(ownerDid: ownerDid);
   }
 
@@ -312,6 +323,18 @@ class PeerDisplayProfileController
       localNotesByPersonaId: state.localNotesByPersonaId,
     );
   }
+}
+
+bool _needsRemoteProfileRefresh(PeerDisplayProfile? profile, String did) {
+  if (profile == null) {
+    return true;
+  }
+  final displayName = profile.displayName?.trim() ?? '';
+  final handle = profile.handle?.trim() ?? '';
+  final compactDid = PeerDisplayNameResolver.compactDid(did);
+  final hasNickname =
+      displayName.isNotEmpty && displayName != did && displayName != compactDid;
+  return !hasNickname || handle.isEmpty;
 }
 
 final peerDisplayProfileProvider =
@@ -402,3 +425,48 @@ final peerDisplayNameProvider = Provider.family<String, PeerDisplayNameRequest>(
     );
   },
 );
+
+/// Resolves public identity surfaces that intentionally do not use a local
+/// contact note or a historical sender snapshot. Identity lookup results and
+/// group system events share this product order: nickname, full Handle, DID.
+class PublicIdentityDisplayNameRequest {
+  const PublicIdentityDisplayNameRequest({
+    required this.did,
+    this.nickname,
+    this.fullHandle,
+    this.unknownLabel = '',
+  });
+
+  final String? did;
+  final String? nickname;
+  final String? fullHandle;
+  final String unknownLabel;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PublicIdentityDisplayNameRequest &&
+      other.did == did &&
+      other.nickname == nickname &&
+      other.fullHandle == fullHandle &&
+      other.unknownLabel == unknownLabel;
+
+  @override
+  int get hashCode => Object.hash(did, nickname, fullHandle, unknownLabel);
+}
+
+final publicIdentityDisplayNameProvider =
+    Provider.family<String, PublicIdentityDisplayNameRequest>((ref, request) {
+      final profile = ref.watch(
+        peerDisplayProfileProvider.select((state) => state.forDid(request.did)),
+      );
+      return const PeerDisplayNameResolver().resolve(
+        nickname: profile?.displayName?.trim().isNotEmpty == true
+            ? profile!.displayName
+            : request.nickname,
+        fullHandle: profile?.handle?.trim().isNotEmpty == true
+            ? profile!.handle
+            : request.fullHandle,
+        did: request.did,
+        unknownLabel: request.unknownLabel,
+      );
+    });

@@ -14,6 +14,7 @@ class _DesktopCliPeerSmokeConfig {
     required this.cliWorkspace,
     required this.cliHome,
     required this.appStateRoot,
+    required this.processRestartHandoffPath,
     required this.performance,
   });
 
@@ -48,6 +49,7 @@ class _DesktopCliPeerSmokeConfig {
     final cliPeerAccount = _mapAt(accounts, 'cliPeer');
     final cliPeer = _mapAt(map, 'cliPeer');
     final app = _mapAt(map, 'app');
+    final processRestart = _mapAt(map, 'processRestart', optional: true);
     final performance = _mapAt(map, 'performance', optional: true);
     final baseUrl = _requiredConfig(service, 'baseUrl', 'service.baseUrl');
     final didDomain = _requiredConfig(
@@ -86,6 +88,7 @@ class _DesktopCliPeerSmokeConfig {
       cliWorkspace: _requiredConfig(cliPeer, 'workspace', 'cliPeer.workspace'),
       cliHome: _requiredConfig(cliPeer, 'home', 'cliPeer.home'),
       appStateRoot: _requiredConfig(app, 'stateRoot', 'app.stateRoot'),
+      processRestartHandoffPath: _optionalConfig(processRestart, 'handoffPath'),
       performance: _DesktopPerformanceRunConfig.fromJson(performance),
     );
   }
@@ -102,7 +105,18 @@ class _DesktopCliPeerSmokeConfig {
   final String cliWorkspace;
   final String cliHome;
   final String appStateRoot;
+  final String? processRestartHandoffPath;
   final _DesktopPerformanceRunConfig performance;
+
+  String get expectedCliPeerDisplayName {
+    if (!e2eCase.runsDisplayNameFallback) {
+      return _nicknameFixtureDisplayName;
+    }
+    final normalized = normalizeDidOrHandleInput(cliHandle).toLowerCase();
+    return normalized.contains('.')
+        ? normalized
+        : '$normalized.${environment.didDomain.toLowerCase()}';
+  }
 
   List<String> get secrets => <String>[
     otpPhone,
@@ -110,6 +124,7 @@ class _DesktopCliPeerSmokeConfig {
     cliWorkspace,
     cliHome,
     appStateRoot,
+    processRestartHandoffPath ?? '',
   ].where((value) => value.trim().isNotEmpty).toList(growable: false);
 }
 

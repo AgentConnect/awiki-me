@@ -1,6 +1,20 @@
 part of '../desktop_cli_peer_e2e.dart';
 
-Future<void> _verifyDirectTextRegression({
+class _DirectRegressionResult {
+  const _DirectRegressionResult({
+    required this.conversationId,
+    required this.peerPersonaId,
+    required this.peerDid,
+    required this.displayName,
+  });
+
+  final String conversationId;
+  final String peerPersonaId;
+  final String peerDid;
+  final String displayName;
+}
+
+Future<_DirectRegressionResult> _verifyDirectTextRegression({
   required _DesktopAppRobot robot,
   required _FailOnceMessagingService messaging,
   required ConversationService conversations,
@@ -17,9 +31,13 @@ Future<void> _verifyDirectTextRegression({
   final cliToAppText = 'e2e cli to app ${config.runId} $nonce';
   final cliToAppNextText = 'e2e cli to app next ${config.runId} $nonce';
   final retryText = 'e2e app retry ${config.runId} $nonce';
+  final sameBodyText = 'e2e same body distinct ids ${config.runId} $nonce';
 
   await E2eScenarioProgressWriter.record('direct_start_conversation');
-  final conversation = await robot.startDirectConversation(config.cliHandle);
+  final conversation = await robot.startDirectConversation(
+    config.cliHandle,
+    expectedPrimaryDisplayName: config.expectedCliPeerDisplayName,
+  );
   final conversationId = conversation.conversationId;
   expect(
     conversationId.startsWith('dm:peer-scope:v1:'),
@@ -31,14 +49,24 @@ Future<void> _verifyDirectTextRegression({
     canonicalCliDid: canonicalCliDid,
     observedPeerDid: conversation.targetDid ?? '',
   );
+  final expectedPeerName = robot.expectedDirectDisplayName(conversation);
+  expect(expectedPeerName.trim(), isNotEmpty);
+  await robot.expectConversationRowPresentation(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+    expectedPreview: '',
+    unreadCount: 0,
+  );
+  await robot.expectSelectedConversationHeader(expectedPeerName);
   await E2eScenarioProgressWriter.record('direct_canonical_conversation_open');
 
   final committedEmpty = await conversations.listConversations(
     ownerDid: ownerDid,
   );
-  requireExactlyOneConversation(
+  requireExactlyOneDirectConversationForPersona(
     conversations: committedEmpty,
     conversationId: conversationId,
+    peerPersonaId: conversation.peerPersonaId!,
     unreadCount: 0,
     lastMessage: '',
   );
@@ -60,7 +88,16 @@ Future<void> _verifyDirectTextRegression({
     expectedUnread: 0,
     expectedLastMessage: '',
   );
-  await robot.openConversationRow(conversationId);
+  await robot.openConversationRowWithFirstVisibleTitle(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+  );
+  final searchedConversation = await robot.reopenConversationFromLocalSearch(
+    query: expectedPeerName,
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+  );
+  expect(searchedConversation.peerPersonaId, conversation.peerPersonaId);
   await E2eScenarioProgressWriter.record('direct_empty_restart_exact_one');
 
   await robot.sendText(appToCliText);
@@ -80,6 +117,12 @@ Future<void> _verifyDirectTextRegression({
     conversationId: conversationId,
     expectedUnread: 0,
     expectedLastMessage: appToCliText,
+  );
+  await robot.expectConversationRowPresentation(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+    expectedPreview: appToCliText,
+    unreadCount: 0,
   );
   await _waitForCliInbox(
     config: config,
@@ -157,7 +200,17 @@ Future<void> _verifyDirectTextRegression({
     conversationId: conversationId,
     unreadCount: 1,
   );
-  await robot.openConversationRow(conversationId);
+  await robot.expectConversationRowPresentation(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+    expectedPreview: cliToAppText,
+    unreadCount: 1,
+  );
+  await robot.openConversationRowWithFirstVisibleTitle(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+  );
+  await robot.expectSelectedConversationHeader(expectedPeerName);
   final received = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,
@@ -198,7 +251,14 @@ Future<void> _verifyDirectTextRegression({
     conversationId: conversationId,
     unreadCount: 1,
   );
+  await robot.expectConversationRowPresentation(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+    expectedPreview: cliToAppNextText,
+    unreadCount: 1,
+  );
   await robot.openConversationRow(conversationId);
+  await robot.expectSelectedConversationHeader(expectedPeerName);
   final nextReceived = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,
@@ -263,16 +323,106 @@ Future<void> _verifyDirectTextRegression({
     expectedContentType: 'text/plain',
   );
 
+  final sameBodyFirstId = await _cliSendDirectText(
+    config: config,
+    text: sameBodyText,
+  );
+  await _waitForUiMessage(
+    robot: robot,
+    conversationId: conversationId,
+    content: sameBodyText,
+    messageId: sameBodyFirstId,
+    senderDid: cliDid,
+    sendState: MessageSendState.sent,
+  );
+  final sameBodySecondId = await _cliSendDirectText(
+    config: config,
+    text: sameBodyText,
+  );
+  List<ChatMessage> sameBodyMessages = const <ChatMessage>[];
+  E2eObservation observeSameBodyMessages() {
+    final matches = _uiMessages(robot, conversationId)
+        .where((message) => message.content == sameBodyText)
+        .toList(growable: false);
+    if (matches.length < 2) {
+      return const E2eObservation.pending('second_same_body_message_pending');
+    }
+    if (matches.length > 2) {
+      return const E2eObservation.fatal('extra_same_body_message');
+    }
+    final observation = observeExactMessageSequence(
+      messages: matches,
+      expected: <ExactMessageExpectation>[
+        ExactMessageExpectation(
+          canonicalId: sameBodyFirstId,
+          content: sameBodyText,
+          conversationId: conversationId,
+          senderDid: cliDid,
+        ),
+        ExactMessageExpectation(
+          canonicalId: sameBodySecondId,
+          content: sameBodyText,
+          conversationId: conversationId,
+          senderDid: cliDid,
+        ),
+      ],
+      isRunOwned: (_) => true,
+    );
+    if (observation.status != E2eObservationStatus.pass) {
+      return observation;
+    }
+    sameBodyMessages = matches;
+    return const E2eObservation.pass();
+  }
+
+  await robot.pumpUntilObservation(
+    description: 'two distinct canonical messages with the same body',
+    timeout: const Duration(seconds: 90),
+    observe: observeSameBodyMessages,
+    failureLayer: 'app_projection',
+  );
+  for (final message in sameBodyMessages) {
+    await robot.expectMessageContentVisible(message);
+  }
+  expectVisibleMessageOrder(
+    tester: robot.tester,
+    localIds: sameBodyMessages.map((message) => message.localId).toList(),
+  );
+  await robot.assertStableFor(
+    description: 'two same-body Direct messages',
+    observe: observeSameBodyMessages,
+    failureLayer: 'app_projection',
+  );
+  await E2eScenarioProgressWriter.record(
+    'direct_same_body_distinct_ids_verified',
+  );
+
   await robot.simulateReconnect();
   await _assertUiMessagesExactlyOnce(
     robot: robot,
     conversationId: conversationId,
-    expected: <String, String>{
-      appToCliText: appMessageId,
-      cliToAppText: cliSentMessageId,
-      cliToAppNextText: nextMessageId,
-      retryText: retryMessageId,
-    },
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appMessageId,
+        content: appToCliText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliSentMessageId,
+        content: cliToAppText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: nextMessageId,
+        content: cliToAppNextText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: retryMessageId,
+        content: retryText,
+        conversationId: conversationId,
+      ),
+    ],
   );
 
   await robot.restart(
@@ -282,33 +432,108 @@ Future<void> _verifyDirectTextRegression({
   );
   final restartedConversation = await robot.startDirectConversation(
     config.cliHandle,
+    expectedPrimaryDisplayName: config.expectedCliPeerDisplayName,
   );
   expect(restartedConversation.conversationId, conversationId);
+  expect(
+    robot.expectedDirectDisplayName(restartedConversation),
+    expectedPeerName,
+  );
+  await robot.expectConversationRowPresentation(
+    conversationId: conversationId,
+    expectedTitle: expectedPeerName,
+    expectedPreview: sameBodyText,
+    unreadCount: 0,
+  );
+  await robot.expectSelectedConversationHeader(expectedPeerName);
+  await robot.pumpUntilObservation(
+    description: 'same-body messages after App-shell rebuild',
+    timeout: const Duration(seconds: 90),
+    observe: observeSameBodyMessages,
+    failureLayer: 'app_projection',
+  );
+  await robot.assertStableFor(
+    description: 'same-body messages after App-shell rebuild',
+    observe: observeSameBodyMessages,
+    failureLayer: 'app_projection',
+  );
   await _assertUiMessagesExactlyOnce(
     robot: robot,
     conversationId: conversationId,
-    expected: <String, String>{
-      appToCliText: appMessageId,
-      cliToAppText: cliSentMessageId,
-      cliToAppNextText: nextMessageId,
-      retryText: retryMessageId,
-    },
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appMessageId,
+        content: appToCliText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliSentMessageId,
+        content: cliToAppText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: nextMessageId,
+        content: cliToAppNextText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: retryMessageId,
+        content: retryText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: sameBodyFirstId,
+        content: sameBodyText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: sameBodySecondId,
+        content: sameBodyText,
+        conversationId: conversationId,
+      ),
+    ],
   );
 
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,
     thread: thread,
-    expectedTexts: <String>[
-      appToCliText,
-      cliToAppText,
-      cliToAppNextText,
-      retryText,
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appMessageId,
+        content: appToCliText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliSentMessageId,
+        content: cliToAppText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: nextMessageId,
+        content: cliToAppNextText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: retryMessageId,
+        content: retryText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: sameBodyFirstId,
+        content: sameBodyText,
+        conversationId: conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: sameBodySecondId,
+        content: sameBodyText,
+        conversationId: conversationId,
+      ),
     ],
   );
   final refreshedConversation = await _waitForAppConversationRefresh(
     conversations: conversations,
     ownerDid: ownerDid,
-    expectedText: retryText,
+    expectedText: sameBodyText,
     expectedConversationId: conversationId,
   );
   await _expectCanonicalContactRowsExact(
@@ -321,8 +546,14 @@ Future<void> _verifyDirectTextRegression({
   await _waitForAppConversationLatestInTimeline(
     messaging: messaging,
     conversation: refreshedConversation,
-    expectedText: retryText,
-    expectedMessageId: retryMessageId,
+    expectedText: sameBodyText,
+    expectedMessageId: sameBodySecondId,
+  );
+  return _DirectRegressionResult(
+    conversationId: conversationId,
+    peerPersonaId: conversation.peerPersonaId!,
+    peerDid: cliDid,
+    displayName: expectedPeerName,
   );
 }
 
@@ -367,11 +598,42 @@ Future<ChatMessage> _waitForUiMessage({
   // Fail immediately if the oracle was accidentally pointed at a different
   // selected conversation; polling must never turn that into a fallback.
   _uiMessages(robot, conversationId);
-  await robot.pumpUntil(
+  await robot.pumpUntilObservation(
     description: 'UI timeline exact message "$content"',
     timeout: const Duration(seconds: 90),
-    condition: () {
+    observe: () {
       final messages = _uiMessages(robot, conversationId);
+      final bodyMatches = messages
+          .where((message) => message.content == content)
+          .toList(growable: false);
+      if (bodyMatches.isEmpty) {
+        return const E2eObservation.pending('message_not_visible');
+      }
+      if (bodyMatches.length != 1) {
+        return const E2eObservation.fatal('duplicate_message_body');
+      }
+      final candidate = bodyMatches.single;
+      final canonicalId = candidate.remoteId ?? candidate.localId;
+      if (messageId != null && canonicalId != messageId) {
+        final remoteId = candidate.remoteId?.trim() ?? '';
+        return remoteId.isEmpty
+            ? const E2eObservation.pending('canonical_message_id_pending')
+            : const E2eObservation.fatal('wrong_canonical_message_id');
+      }
+      if (senderDid != null && candidate.senderDid.trim() != senderDid.trim()) {
+        return const E2eObservation.fatal('wrong_message_sender');
+      }
+      if (requireCanonicalRemoteId &&
+          (candidate.remoteId?.trim().isEmpty ?? true)) {
+        return const E2eObservation.pending('canonical_message_id_pending');
+      }
+      if (sendState != null && candidate.sendState != sendState) {
+        if (sendState == MessageSendState.sent &&
+            candidate.sendState == MessageSendState.sending) {
+          return const E2eObservation.pending('terminal_send_state_pending');
+        }
+        return const E2eObservation.fatal('wrong_message_send_state');
+      }
       matched = requireExactlyOneMessage(
         messages: messages,
         content: content,
@@ -380,7 +642,7 @@ Future<ChatMessage> _waitForUiMessage({
         sendState: sendState,
         requireCanonicalRemoteId: requireCanonicalRemoteId,
       );
-      return true;
+      return const E2eObservation.pass();
     },
   );
   return matched!;
@@ -417,24 +679,26 @@ Future<void> _waitForUiUnreadClosedLoop({
   required int expectedConversationUnread,
   required int expectedTotalUnread,
 }) {
-  return robot.pumpUntil(
+  return robot.pumpUntilObservation(
     description:
         'conversation $conversationId unread=$expectedConversationUnread '
         'and total unread=$expectedTotalUnread',
     timeout: const Duration(seconds: 90),
-    condition: () {
+    observe: () {
       final state = robot.container.read(conversationListProvider);
-      requireUnreadTotal(
-        actual: state.unreadCount,
-        expected: expectedTotalUnread,
-      );
-      requireExactlyOneConversation(
+      final observation = _observeConversationProjection(
         conversations: state.conversations,
         conversationId: conversationId,
-        unreadCount: expectedConversationUnread,
-        lastMessage: expectedText,
+        expectedUnread: expectedConversationUnread,
+        expectedLastMessage: expectedText,
       );
-      return true;
+      if (observation.status != E2eObservationStatus.pass) {
+        return observation;
+      }
+      if (state.unreadCount != expectedTotalUnread) {
+        return const E2eObservation.pending('total_unread_not_converged');
+      }
+      return const E2eObservation.pass();
     },
   );
 }
@@ -446,24 +710,22 @@ Future<void> _waitForUiConversationUnread({
   int? expectedTotalUnread,
   String? expectedLastMessage,
 }) {
-  return robot.pumpUntil(
+  return robot.pumpUntilObservation(
     description: 'conversation $conversationId unread=$expectedUnread',
     timeout: const Duration(seconds: 90),
-    condition: () {
+    observe: () {
       final state = robot.container.read(conversationListProvider);
       if (expectedTotalUnread != null) {
-        requireUnreadTotal(
-          actual: state.unreadCount,
-          expected: expectedTotalUnread,
-        );
+        if (state.unreadCount != expectedTotalUnread) {
+          return const E2eObservation.pending('total_unread_not_converged');
+        }
       }
-      requireExactlyOneConversation(
+      return _observeConversationProjection(
         conversations: state.conversations,
         conversationId: conversationId,
-        unreadCount: expectedUnread,
-        lastMessage: expectedLastMessage,
+        expectedUnread: expectedUnread,
+        expectedLastMessage: expectedLastMessage,
       );
-      return true;
     },
   );
 }
@@ -471,28 +733,113 @@ Future<void> _waitForUiConversationUnread({
 Future<void> _assertUiMessagesExactlyOnce({
   required _DesktopAppRobot robot,
   required String conversationId,
-  required Map<String, String> expected,
+  required List<ExactMessageExpectation> expected,
 }) async {
-  for (final entry in expected.entries) {
-    final message = await _waitForUiMessage(
-      robot: robot,
-      conversationId: conversationId,
-      content: entry.key,
-      messageId: entry.value,
-      sendState: MessageSendState.sent,
+  final runOwnedContents = expected.map((item) => item.content).toSet();
+  E2eObservation observeExactSequence() {
+    final stable = _uiMessages(robot, conversationId);
+    final sequence = observeExactMessageSequence(
+      messages: stable,
+      expected: expected,
+      isRunOwned: (message) => runOwnedContents.contains(message.content),
     );
+    if (sequence.status != E2eObservationStatus.pass) {
+      return sequence;
+    }
+    try {
+      requireNoRunOwnedMessageLeakage(
+        messages: robot.container
+            .read(chatThreadsProvider)
+            .values
+            .expand((thread) => thread.messages),
+        targetConversationId: conversationId,
+        isRunOwned: (message) => runOwnedContents.contains(message.content),
+      );
+    } on StateError {
+      return const E2eObservation.fatal('message_leakage');
+    }
+    return const E2eObservation.pass();
+  }
+
+  await robot.pumpUntilObservation(
+    description: 'run-owned direct message sequence',
+    timeout: const Duration(seconds: 90),
+    observe: observeExactSequence,
+  );
+  final actualMessages = requireExactMessageSequence(
+    messages: _uiMessages(robot, conversationId),
+    expected: expected,
+    isRunOwned: (message) => runOwnedContents.contains(message.content),
+  );
+  for (final message in actualMessages) {
     await robot.expectMessageContentVisible(message);
   }
-  await robot.tester.pump(const Duration(seconds: 2));
-  final stable = _uiMessages(robot, conversationId);
-  for (final entry in expected.entries) {
-    requireExactlyOneMessage(
-      messages: stable,
-      content: entry.key,
-      messageId: entry.value,
-      sendState: MessageSendState.sent,
-    );
+  expectVisibleMessageOrder(
+    tester: robot.tester,
+    localIds: actualMessages.map((message) => message.localId).toList(),
+  );
+  await robot.assertStableFor(
+    description: 'run-owned direct message sequence',
+    observe: observeExactSequence,
+  );
+}
+
+E2eObservation _observeConversationProjection({
+  required Iterable<ConversationSummary> conversations,
+  required String conversationId,
+  required int expectedUnread,
+  String? expectedLastMessage,
+}) {
+  final rows = conversations.toList(growable: false);
+  final canonicalMatches = rows
+      .where((item) => item.conversationId.trim() == conversationId.trim())
+      .toList(growable: false);
+  if (canonicalMatches.isEmpty) {
+    return const E2eObservation.pending('canonical_conversation_missing');
   }
+  if (canonicalMatches.length != 1) {
+    return const E2eObservation.fatal('duplicate_canonical_conversation');
+  }
+  final conversation = canonicalMatches.single;
+  if (conversation.isGroup) {
+    final groupDid = conversation.canonicalGroupDid?.trim() ?? '';
+    if (groupDid.isEmpty) {
+      return const E2eObservation.fatal('resolved_group_identity_missing');
+    }
+    final semanticCount = rows
+        .where(
+          (item) => item.isGroup && item.canonicalGroupDid?.trim() == groupDid,
+        )
+        .length;
+    if (semanticCount != 1) {
+      return const E2eObservation.fatal('duplicate_group_conversation');
+    }
+  } else {
+    final personaId = conversation.peerPersonaId?.trim() ?? '';
+    if (personaId.isEmpty) {
+      return const E2eObservation.fatal('resolved_peer_persona_missing');
+    }
+    final semanticCount = rows
+        .where(
+          (item) =>
+              !item.isGroup &&
+              item.resolutionState ==
+                  ConversationIdentityResolutionState.resolved &&
+              item.peerPersonaId?.trim() == personaId,
+        )
+        .length;
+    if (semanticCount != 1) {
+      return const E2eObservation.fatal('duplicate_persona_conversation');
+    }
+  }
+  if (conversation.unreadCount != expectedUnread) {
+    return const E2eObservation.pending('conversation_unread_not_converged');
+  }
+  if (expectedLastMessage != null &&
+      conversation.lastMessagePreview.trim() != expectedLastMessage.trim()) {
+    return const E2eObservation.pending('conversation_preview_not_converged');
+  }
+  return const E2eObservation.pass();
 }
 
 String _unreadBadgeLabel(int count) => count > 99 ? '99+' : '$count';

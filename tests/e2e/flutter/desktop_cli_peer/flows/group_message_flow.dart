@@ -1,6 +1,26 @@
 part of '../desktop_cli_peer_e2e.dart';
 
-Future<void> _verifyGroupTextRegression({
+class _GroupRegressionResult {
+  const _GroupRegressionResult({
+    required this.conversationId,
+    required this.groupDid,
+    required this.groupName,
+    required this.cliMemberDid,
+    required this.cliMemberDisplayName,
+    required this.cliMessageId,
+    required this.cliMessageText,
+  });
+
+  final String conversationId;
+  final String groupDid;
+  final String groupName;
+  final String cliMemberDid;
+  final String cliMemberDisplayName;
+  final String cliMessageId;
+  final String cliMessageText;
+}
+
+Future<_GroupRegressionResult> _verifyGroupTextRegression({
   required _DesktopAppRobot robot,
   required GroupApplicationService groups,
   required MessagingService messaging,
@@ -33,6 +53,13 @@ Future<void> _verifyGroupTextRegression({
     expectedUnread: 0,
     expectedLastMessage: '',
   );
+  await robot.expectConversationRowPresentation(
+    conversationId: conversation.conversationId,
+    expectedTitle: groupName,
+    expectedPreview: '',
+    unreadCount: 0,
+  );
+  await robot.expectSelectedConversationHeader(groupName);
 
   final ownerMember = await _findGroupMember(
     groups: groups,
@@ -51,6 +78,12 @@ Future<void> _verifyGroupTextRegression({
     expectedUnread: 0,
     expectedLastMessage: '',
   );
+  await robot.expectConversationRowPresentation(
+    conversationId: conversation.conversationId,
+    expectedTitle: groupName,
+    expectedPreview: '',
+    unreadCount: 0,
+  );
   final cliMember = await _findGroupMember(
     groups: groups,
     groupDid: groupDid,
@@ -59,6 +92,34 @@ Future<void> _verifyGroupTextRegression({
   final cliMemberDid = requireMatchingCliPeerDid(
     canonicalCliDid: canonicalCliDid,
     observedPeerDid: cliMember.did,
+  );
+  final cliProfile = robot.container
+      .read(peerDisplayProfileProvider)
+      .forDid(cliMemberDid);
+  final expectedCliMemberName = config.expectedCliPeerDisplayName;
+  if (!config.e2eCase.runsDisplayNameFallback) {
+    final cliMemberNickname = cliProfile?.displayName?.trim() ?? '';
+    final compactCliDid = PeerDisplayNameResolver.compactDid(cliMemberDid);
+    if (cliMemberNickname.isEmpty ||
+        cliMemberNickname.startsWith('did:') ||
+        cliMemberNickname == compactCliDid ||
+        cliMemberNickname != expectedCliMemberName) {
+      fail(
+        'The remote group display-name fixture must expose the exact nickname '
+        'configured for the product-name oracle.',
+      );
+    }
+  } else if (expectedCliMemberName != cliFullHandle) {
+    fail('The Handle fallback oracle must use the exact full Handle.');
+  }
+  await robot.expectGroupMemberDisplayName(
+    member: cliMember,
+    expectedName: expectedCliMemberName,
+  );
+  await robot.expectMemberAddedSystemEvent(
+    conversationId: conversation.conversationId,
+    subjectDid: cliMemberDid,
+    expectedMemberName: expectedCliMemberName,
   );
 
   final appGroupText = 'e2e app group ${config.runId} $nonce';
@@ -77,6 +138,7 @@ Future<void> _verifyGroupTextRegression({
     expectedLastMessage: '',
   );
   await robot.openConversationRow(conversation.conversationId);
+  await robot.expectSelectedConversationHeader(groupName);
   await E2eScenarioProgressWriter.record(
     'group_empty_member_restart_exact_one',
   );
@@ -138,6 +200,11 @@ Future<void> _verifyGroupTextRegression({
     expectedTargetDid: cliMemberDid,
   );
 
+  await robot.navigateToContacts();
+  final groupUnreadBaseline = robot.container.read(
+    conversationListProvider.select((state) => state.unreadCount),
+  );
+
   final cliGroupSend = await _runCli(config, <String>[
     '--format',
     'json',
@@ -159,6 +226,26 @@ Future<void> _verifyGroupTextRegression({
   if (cliGroupMessageId == null) {
     fail('CLI group send did not return canonical message id.');
   }
+  await _waitForUiUnreadClosedLoop(
+    robot: robot,
+    conversationId: conversation.conversationId,
+    expectedText: cliGroupText,
+    expectedConversationUnread: 1,
+    expectedTotalUnread: groupUnreadBaseline + 1,
+  );
+  await robot.restart(
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+  );
+  await robot.expectConversationRowPresentation(
+    conversationId: conversation.conversationId,
+    expectedTitle: groupName,
+    expectedPreview: cliGroupText,
+    unreadCount: 1,
+  );
+  await robot.openConversationRow(conversation.conversationId);
+  await robot.expectSelectedConversationHeader(groupName);
   final cliGroupMessage = await _waitForUiMessage(
     robot: robot,
     conversationId: conversation.conversationId,
@@ -168,6 +255,18 @@ Future<void> _verifyGroupTextRegression({
     sendState: MessageSendState.sent,
   );
   await robot.expectMessageContentVisible(cliGroupMessage);
+  await robot.expectMessageSenderDisplayName(
+    conversationId: conversation.conversationId,
+    message: cliGroupMessage,
+    expectedName: expectedCliMemberName,
+  );
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversation.conversationId,
+    expectedUnread: 0,
+    expectedTotalUnread: groupUnreadBaseline,
+    expectedLastMessage: cliGroupText,
+  );
 
   final cliMentionSurface = '@${config.appHandle}';
   final cliMentionText =
@@ -237,19 +336,71 @@ Future<void> _verifyGroupTextRegression({
   requireSingleMentionTarget(message: cliMention, targetDid: ownerDid);
   await robot.expectMessageContentVisible(cliMention);
 
+  await _assertUiMessagesExactlyOnce(
+    robot: robot,
+    conversationId: conversation.conversationId,
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appGroupMessageId,
+        content: appGroupText,
+        conversationId: conversation.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: appMentionId,
+        content: appMentionText,
+        conversationId: conversation.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliGroupMessageId,
+        content: cliGroupText,
+        conversationId: conversation.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliMentionId,
+        content: cliMentionText,
+        conversationId: conversation.conversationId,
+      ),
+    ],
+  );
+
   await _expectAppHistoryContainsExactlyOnce(
     messaging: messaging,
     thread: groupThread,
-    expectedTexts: <String>[
-      appGroupText,
-      appMentionText,
-      cliGroupText,
-      cliMentionText,
+    expected: <ExactMessageExpectation>[
+      ExactMessageExpectation(
+        canonicalId: appGroupMessageId,
+        content: appGroupText,
+        conversationId: conversation.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: appMentionId,
+        content: appMentionText,
+        conversationId: conversation.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliGroupMessageId,
+        content: cliGroupText,
+        conversationId: conversation.conversationId,
+      ),
+      ExactMessageExpectation(
+        canonicalId: cliMentionId,
+        content: cliMentionText,
+        conversationId: conversation.conversationId,
+      ),
     ],
   );
 
   final recovery = await groups.resumeRebindRecovery();
   expect(recovery.blocked, 0);
+  return _GroupRegressionResult(
+    conversationId: conversation.conversationId,
+    groupDid: groupDid,
+    groupName: groupName,
+    cliMemberDid: cliMemberDid,
+    cliMemberDisplayName: expectedCliMemberName,
+    cliMessageId: cliGroupMessageId,
+    cliMessageText: cliGroupText,
+  );
 }
 
 Future<GroupMemberSummary> _findGroupMember({

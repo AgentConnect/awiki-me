@@ -386,7 +386,12 @@ class AwikiImCoreMappers {
         groupId: groupId,
         fallbackThreadId: conversation.threadId,
       ),
-      displayName: groupId ?? targetPeer ?? targetDid ?? conversation.threadId,
+      displayName:
+          _nonEmpty(conversation.title) ??
+          groupId ??
+          targetPeer ??
+          targetDid ??
+          conversation.threadId,
       lastMessagePreview: lastMessage == null
           ? ''
           : _snapshotMessagePreview(lastMessage),
