@@ -6062,9 +6062,9 @@ void main() {
         });
     await tester.pumpAndSettle();
 
-    expect(find.text('个人助理 已完成处理'), findsOneWidget);
+    expect(find.text('个人助理已完成处理'), findsOneWidget);
     expect(find.text('已生成处理结果'), findsOneWidget);
-    expect(find.text('个人助理 生成了草稿'), findsOneWidget);
+    expect(find.text('个人助理生成了草稿'), findsOneWidget);
     expect(find.text('收到，我会处理。'), findsOneWidget);
     expect(find.text('使用草稿'), findsOneWidget);
     expect(find.text('拒绝'), findsOneWidget);
