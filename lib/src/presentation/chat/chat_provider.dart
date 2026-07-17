@@ -5940,6 +5940,9 @@ class ChatThreadsController
     if (renderableMessages.isEmpty) {
       return true;
     }
+    if (_messagesCoverConversationSnapshot(renderableMessages, conversation)) {
+      return false;
+    }
     final latestLocalAt = renderableMessages
         .map((message) => message.createdAt)
         .reduce((a, b) => a.isAfter(b) ? a : b);
@@ -6053,27 +6056,59 @@ class ChatThreadsController
     if (!message.hasRenderableContent) {
       return false;
     }
+    final snapshot = conversation.lastMessageSnapshot;
+    final messageSequence = message.serverSequence;
+    final conversationSequence = snapshot?.serverSequence;
+    if (messageSequence != null && conversationSequence != null) {
+      return messageSequence <= conversationSequence;
+    }
+    final messageId = _lastMessageIdentity(message);
+    final conversationId = _lastMessageIdentity(snapshot);
+    if (messageId != null &&
+        conversationId != null &&
+        messageId == conversationId) {
+      return true;
+    }
     if (message.createdAt.isAfter(conversation.lastMessageAt)) {
       return false;
     }
     if (message.createdAt.isBefore(conversation.lastMessageAt)) {
       return true;
     }
-    final snapshot = conversation.lastMessageSnapshot;
     if (snapshot == null) {
       return true;
     }
-    final messageSequence = message.serverSequence;
-    final conversationSequence = snapshot.serverSequence;
-    if (messageSequence != null && conversationSequence != null) {
-      return messageSequence <= conversationSequence;
-    }
-    final messageId = _lastMessageIdentity(message);
-    final conversationId = _lastMessageIdentity(snapshot);
     if (messageId != null && conversationId != null) {
-      return messageId == conversationId;
+      return false;
     }
     return message.previewText == conversation.lastMessagePreview;
+  }
+
+  bool _messagesCoverConversationSnapshot(
+    List<ChatMessage> messages,
+    ConversationSummary conversation,
+  ) {
+    final snapshot = conversation.lastMessageSnapshot;
+    if (snapshot == null) {
+      return false;
+    }
+    final snapshotSequence = snapshot.serverSequence;
+    if (snapshotSequence != null &&
+        messages.any(
+          (message) =>
+              message.hasRenderableContent &&
+              message.serverSequence != null &&
+              message.serverSequence! >= snapshotSequence,
+        )) {
+      return true;
+    }
+    final snapshotId = _lastMessageIdentity(snapshot);
+    return snapshotId != null &&
+        messages.any(
+          (message) =>
+              message.hasRenderableContent &&
+              _lastMessageIdentity(message) == snapshotId,
+        );
   }
 
   AppThreadReadWatermark _readWatermarkForMessage(ChatMessage message) {
@@ -6103,6 +6138,9 @@ class ChatThreadsController
     final latest = _latestRenderableMessage(current.messages);
     if (latest == null) {
       return true;
+    }
+    if (_messagesCoverConversationSnapshot(current.messages, conversation)) {
+      return false;
     }
     if (latest.createdAt.isBefore(conversation.lastMessageAt)) {
       return true;

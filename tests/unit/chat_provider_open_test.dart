@@ -3206,8 +3206,9 @@ void main() {
     );
     final unreadConversation = conversation.copyWith(
       lastMessagePreview: latest.content,
-      lastMessageAt: latest.createdAt,
+      lastMessageAt: latest.createdAt.add(const Duration(milliseconds: 500)),
       unreadCount: 2,
+      lastMessageSnapshot: latest,
     );
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[older, latest],
