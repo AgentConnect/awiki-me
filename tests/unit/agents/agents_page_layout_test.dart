@@ -1285,7 +1285,12 @@ void main() {
         find.byKey(const Key('message-agent-settings-panel')),
         findsNothing,
       );
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('消息处理 Agent'), findsOneWidget);
+      expect(
+        find.byKey(const Key('message-agent-settings-entry-card')),
+        findsOneWidget,
+      );
+      expect(find.text('已创建 Message Agent'), findsOneWidget);
       expect(find.text('运行 Daemon 1'), findsWidgets);
       expect(find.text('Hermes Message Agent'), findsWidgets);
       expect(find.text('启用消息处理 Agent'), findsNothing);

@@ -113,12 +113,20 @@ Settings / Message Agent
 - 最近处理状态或错误。
 - 停用、删除、重新连接等操作。
 
+当前实现状态（2026-07-01）：
+
+- App Settings 已提供 `Message Agent` 稳定入口，进入独立的「消息处理 Agent」设置页。
+- Agents tab 的 daemon detail 只提供「配置消息处理 Agent」摘要跳转卡，不再暴露旧的内嵌生命周期管理面板。
+- 独立设置页展示运行 daemon、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
+- 启用按钮仅在 `AWIKI_AGENT_IM_ENABLED=true`、daemon ready 且 daemon 已上报 bootstrap public key 时可用；缺 key 或 daemon 未就绪时提示刷新 daemon 状态。
+- 页面文案必须持续强调「只生成草稿，发送前需用户确认」「不会自动发送消息」「不处理 E2EE 明文」。
+
 创建 Agent 流程可以保留「作为消息处理 Agent」的选项，但它不是唯一入口。两个入口最终进入同一套启用流程。
 
 如果 `AWIKI_AGENT_IM_ENABLED=false`：
 
 - UI 应隐藏 Message Agent 设置入口，或只显示「实验功能未开启」。
-- 当前产品 UI 已先隐藏 Agent/daemon 详情页内的 Message Agent 设置面板；底层 bootstrap、binding、revoke 能力保留，等待独立设置页或后续灰度入口重新开放。
+- 当前产品 UI 在 Settings 显示「实验功能未开启」，且 Agents/daemon detail 不展示可触发生命周期请求的管理按钮。
 - 不展示半成品创建、绑定、配置入口。
 - 不能让用户进入会失败或不可完成的流程。
 
@@ -545,38 +553,84 @@ MVP 完成时，应能验证：
 
 ## 当前落地状态
 
-截至 2026-06-19，MVP 已按以下仓库切片落地：
+截至 2026-07-01，MVP 已按以下仓库切片落地：
 
-- `awiki-me-message-agent`
-  - Message Agent 设置能力已在 Agent/daemon 页面完成过接入验证，但当前产品 UI 隐藏 daemon 详情页的 Message Agent 面板；底层 bootstrap、binding、revoke 与 App 回收能力保留。
-  - `AWIKI_AGENT_IM_ENABLED` 关闭时阻断 bootstrap action；当前 UI 不再展示半成品入口。
+- `awiki-me`
+  - App Settings 已提供稳定 `Message Agent` 入口，进入独立「消息处理 Agent」设置页；Agents tab 的 daemon detail 只保留摘要和跳转，不再把旧内嵌面板作为唯一入口。
+  - `AWIKI_AGENT_IM_ENABLED=false` 时不触发生命周期请求；当前 UI 显示实验功能关闭或隐藏触发入口，不暴露半成品启用流程。
+  - 设置页可以选择 daemon，展示 daemon ready、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
   - App 能从 daemon diagnostics 读取 `bootstrap_key_id`、`bootstrap_public_key_b64u`、`bootstrap_key_algorithm`，并使用 daemon `#key-3` X25519 公钥生成 `awiki.daemon.bootstrap.secure.v1`。
-  - App 回收 `awiki.message.sync.v1`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
-  - MVP 只允许 `message.create_draft` 写入草稿；用户确认后的发送仍由 Human App 发送链路负责。
-- `awiki-cli-rs2-message-agent`
-  - daemon 发布 bootstrap public key diagnostics。
+  - App 回收 `awiki.message.sync.v1`、`runtime_final`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
+  - MVP 只允许 `message.create_draft` 写入输入框草稿；用户点击「使用草稿」只填充 composer，不自动发送普通 IM 消息，发送仍由 Human App 现有链路负责。
+  - `message-agent` E2E runner 已具备 real-backend fail-fast gate：选择该 case 后必须提供 backend、daemon、CLI、OTP、fake Hermes gateway 和 `messageAgent.realBackend=true`，不能退化成静默 skip。
+- `awiki-cli-rs2`
+  - daemon 在 status query、latest-status 和 heartbeat 中都发布 bootstrap public key diagnostics，避免 App 本地 cache 被不含 key 的轻量心跳覆盖。
   - daemon 接收 secure bootstrap envelope，校验 recipient、key id、TTL、nonce/replay、payload hash 和 canonical AAD，再解密内部 bootstrap payload。
   - 旧明文 `awiki.daemon.bootstrap.v1` 在 Message Agent bootstrap 路径 fail closed。
-  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox。
-  - active Message Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发。
-- `user-service-message-agent`
-  - `/user-service/message-agent/rpc` 成为 owner + daemon + runtime Message Agent binding 的服务端事实源。
+  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox；`awiki.app.action.v1` 会携带 `daemon_agent_did` 与 `runtime_agent_did`，App 可稳定把 action result 定向回 daemon controller DID；App 回传 action result 是 daemon-readable 的 redacted control ack，不携带 `result.draft_text`，daemon audit 只记录 action id、state 和错误摘要，不记录草稿正文或 result body。
+  - active Message Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发；唯一 host 内部 final outbox 仍只能把 runtime final 转为发给 owner 的 message sync。
+  - revoked / disabled binding 会 fail closed，不再继续拉取 delegated inbox 或启动 runtime。
+- `user-service`
+  - `/user-service/message-agent/rpc` 是 owner + daemon + runtime Message Agent binding 的服务端事实源。
   - `ensure_binding` 校验 Human ownership、active daemon、daemon 托管 runtime、`runtime_provider`、active delegated key 和敏感字段拒收。
   - `disable_binding` 只停 binding；`revoke_binding` 要求 delegated key registry 已经 revoked，否则 fail closed。
   - delegated key public registration 默认是 read-only scope：`message.inbox.read.plain`、`message.history.read.plain`；不默认包含 `message.send.plain`。
-- `awiki-system-test-message-agent`
-  - 新增 Message Agent MVP focused acceptance：App recovery payload classification、user-service binding lifecycle、daemon 明文 bootstrap fail-closed。
-  - 当前环境未部署 Message Agent RPC 或未启动本地 message-service 时，系统测试会显式 skip 并输出配置和原因。
+- `awiki-system-test`
+  - 保留 focused acceptance：App recovery payload classification、user-service binding lifecycle、daemon 明文 bootstrap fail-closed。
+  - 新增 full UI real backend 产品级 gate：由 `awiki-me/tests/e2e/runner.dart --case message-agent` 驱动完整 App UI，覆盖 daemon 选择、启用、CLI peer 发消息、daemon `runtime_final`、App 草稿确认、redacted action result 回传和撤销 Daemon 消息授权。
+  - 该 gate 的报告必须输出 `MSGAGENT-E2E-001` 至 `MSGAGENT-E2E-005`，以及 `uiEnabled`、`runtimeFinalReceived`、`draftConfirmed`、`actionResultReturned`、`authorizationRevoked` 等 evidence flags；被选中时缺少前置条件必须 fail fast，不能用 skipped evidence 代表产品验收完成。
+
+## 产品级验收 gate
+
+App 侧直接运行：
+
+```bash
+cd awiki-me
+flutter pub run tests/e2e/runner.dart \
+  --case message-agent \
+  --config tests/e2e/configs/e2e.local.yaml
+```
+
+`message-agent` case 的 YAML 必须包含：
+
+- `service.messageServiceUrl`
+- `service.messageServiceWsUrl`
+- `daemon.rustRepo`
+- `daemon.binary`
+- `daemon.stateRoot`
+- `daemon.readyFile`
+- `daemon.fakeHermesGatewayCommand`
+- `messageAgent.runtimeProvider: hermes`
+- `messageAgent.realBackend: true`
+
+系统测试侧运行：
+
+```bash
+cd awiki-system-test
+AWIKI_DAEMON_RUST_REPO=../awiki-cli-rs2 \
+AWIKI_ME_REPO=../awiki-me \
+AWIKI_SYSTEM_TEST_MODE=local \
+uv run --no-sync pytest \
+  tests_v2/daemon/test_message_agent_full_ui_real_backend_e2e.py \
+  -q -rs --tb=short
+```
+
+remote / staging 运行需要显式提供 `E2E_DID_DOMAIN`、`E2E_USER_SERVICE_URL`、
+`E2E_MESSAGE_SERVICE_URL`、`E2E_MESSAGE_SERVICE_WS_URL`。如果固定测试手机号的
+handle 配额已满，可以用 `AWIKI_MESSAGE_AGENT_E2E_APP_HANDLE`、
+`AWIKI_MESSAGE_AGENT_E2E_CLI_HANDLE`、`AWIKI_MESSAGE_AGENT_E2E_DAEMON_HANDLE`
+指定隔离 handle；remote cleanup 当前只记录资源，不能保证删除远端历史配额。
 
 ## 发布与回滚
 
 发布建议：
 
-- 当前默认构建保留 Message Agent 底层能力，但不展示 daemon 详情页入口；后续独立设置页或灰度入口开放前，无需依赖用户手工点击启用。
-- 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement 和 App outbox 回收。
+- 当前默认构建可以展示独立 Message Agent 设置入口，但仍应受 `AWIKI_AGENT_IM_ENABLED` 灰度开关约束；关闭时不能触发生命周期请求。
+- 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement、inactive binding fail-closed 和 App outbox 回收。
 - 发布默认开启构建前确认 user-service 已部署 `/user-service/message-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
 - 发布默认开启构建前确认 message-service 能接受 Human DID `#daemon-key-1` 作为当前 DID Document authentication 中的 delegated client。
-- 监控 binding 创建失败、bootstrap 解密失败、daemon `mark_seen`、runtime_final outbox retry、action result 回传失败和 delegated WSS 连接失败。
+- 发布候选必须运行 full UI real backend gate。当前 gate 已不再 skip；如果失败，应按真实 blocker 处理，而不是降低断言或改回 focused probe。
+- 监控 binding 创建失败、bootstrap 解密失败、daemon `mark_seen`、Hermes session 创建失败、runtime_final outbox retry、action result 回传失败和 delegated WSS 连接失败。
 
 回滚方式：
 
@@ -587,7 +641,8 @@ MVP 完成时，应能验证：
 
 ## 当前剩余风险
 
-- 完整 App -> daemon -> user-service -> message-service -> App 的 happy path 尚需在部署了 Step 06 user-service RPC 且启动 message-service v2 的环境补跑；当前 Linux 容器只能提供 focused component / acceptance 证据。
+- 完整 App -> daemon -> user-service -> message-service -> App 的 full UI gate 当前已经启用且 fail-fast；直接 product gate 绿色证据为 `awiki-me/.e2e/message-agent/direct-current-f984467678/reports/timings.json`（status=success），system-test remote wrapper 绿色证据为 `awiki-me/.e2e/message-agent/full-ui-real-fc4dadc70a/reports/timings.json`（status=success）。两份报告都覆盖 UI 启用、runtime final、草稿确认、redacted action result 和撤销授权，`caseIds` 包含 `MSGAGENT-E2E-001..005`，且 selected gate 不是 skipped evidence。
+- local full UI gate 依赖本地 user-service / message-service / MySQL 等环境；缺少 MySQL 等基础服务时必须 fail-fast，不能用 skip 代替通过。
 - 当前 message-service 仍将 delegated WSS 视为 Human DID delegated client，协议层尚不能表达 `from: Agent DID` / `on_behalf_of: Human DID` 双 proof。
 - `runtime_final` 当前按 `hash_only` retention 展示完成/有结果状态；完整草稿内容依赖 `message.create_draft` action payload。
 - 撤销 delegated key 的强语义依赖 signed DID Document update 和 message-service DID Document cache 刷新，单纯 disable binding 不是永久撤销授权。

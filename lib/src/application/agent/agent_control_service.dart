@@ -560,16 +560,16 @@ class DefaultAgentControlService implements AgentControlService {
         'DID Document update removed a different delegated key.',
       );
     }
-    final binding = await bindings.revokeBinding(bindingId: activeBinding.id);
     await _sendDaemonPayload(
       daemonAgentDid,
       messageAgentBindingDisablePayload(
         messageAgentDid: messageAgentDid,
-        bindingId: binding.id,
+        bindingId: activeBinding.id,
         lifecycleAction: 'revoke',
       ),
       idempotencyKey: 'message-agent-revoke:$messageAgentDid',
     );
+    final binding = await bindings.revokeBinding(bindingId: activeBinding.id);
     return binding;
   }
 

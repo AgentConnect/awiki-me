@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_router.dart';
+import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
@@ -25,6 +26,7 @@ import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
+import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -39,6 +41,7 @@ part 'parts/agents_list_part.dart';
 part 'parts/agents_detail_part.dart';
 part 'parts/agents_access_policy_part.dart';
 part 'parts/agents_dialogs_part.dart';
+part 'message_agent_settings_page.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
   const AgentsWorkspacePage({super.key, this.listFooter});
@@ -180,6 +183,10 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
           ref.read(agentsProvider.notifier).cancelDaemonUpgrade(agent.agentDid),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
       messageAgentEnabled: messageAgentEnabled,
+      onOpenMessageAgentSettings: (agent) => AppNavigator.push<void>(
+        context,
+        (_) => MessageAgentSettingsPage(initialDaemonDid: agent.agentDid),
+      ),
       onBootstrapMessageAgent: (agent) => ref
           .read(agentsProvider.notifier)
           .bootstrapMessageAgent(daemonDid: agent.agentDid),

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -549,6 +551,8 @@ void main() {
           .read(chatComposerDraftsProvider.notifier)
           .draftFor(conversation);
       expect(draft.text, '收到，我稍后处理。');
+      expect(gateway.lastSentContent, isEmpty);
+      expect(gateway.sendTextMessageCalls, 1);
       expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
       expect(gateway.lastSentPayloadIdempotencyKey, contains('act_draft'));
       expect(
@@ -556,6 +560,11 @@ void main() {
         AgentControlPayloads.appActionResultSchema,
       );
       expect(gateway.lastSentPayload?['state'], appActionStateSucceeded);
+      expect(gateway.lastSentPayload?.containsKey('result'), isFalse);
+      expect(
+        jsonEncode(gateway.lastSentPayload),
+        isNot(contains('draft_text')),
+      );
       expect(
         gateway.lastSentPayload?['runtime_agent_did'],
         'did:agent:runtime',
@@ -564,6 +573,57 @@ void main() {
           .read(chatThreadProvider(_timelineThreadId(conversation)))
           .appActionRecords['act_draft'];
       expect(action?.state, appActionStateSucceeded);
+    },
+  );
+
+  test(
+    'confirm unsupported action fails closed without side effects',
+    () async {
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .applyMessageAgentControlPayload(const <String, Object?>{
+            'schema': 'awiki.app.action.v1',
+            'action_id': 'act_unsupported',
+            'action': 'message.summarize_plain',
+            'state': 'requires_confirmation',
+            'runtime_agent_did': 'did:agent:runtime',
+            'run_id': 'run_unsupported',
+            'source_message_id': 'msg_1',
+            'conversation_id': 'direct:did:human:bob',
+            'requires_confirmation': true,
+            'args': <String, Object?>{'text': 'summarize this'},
+          });
+
+      await container
+          .read(chatThreadsProvider.notifier)
+          .confirmAppAction(
+            conversation: conversation,
+            actionId: 'act_unsupported',
+          );
+
+      final action = container
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .appActionRecords['act_unsupported'];
+      expect(action?.state, appActionStateFailed);
+      expect(action?.result?.errorCode, 'app_action_handler_unavailable');
+      expect(
+        container
+            .read(chatComposerDraftsProvider.notifier)
+            .draftFor(conversation)
+            .text,
+        isEmpty,
+      );
+      expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+      expect(gateway.lastSentPayload?['state'], appActionStateFailed);
+      expect(
+        gateway.lastSentPayload?['error_code'],
+        'app_action_handler_unavailable',
+      );
+      expect(gateway.lastSentContent, isEmpty);
+      expect(gateway.sendTextMessageCalls, 1);
     },
   );
 

@@ -35,6 +35,7 @@ const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
 const agentStatusRequestSendTimeout = Duration(seconds: 8);
 const agentActionTimeout = Duration(seconds: 15);
 const agentMessageAgentBootstrapActionTimeout = Duration(seconds: 105);
+const agentMessageAgentRevokeActionTimeout = Duration(seconds: 75);
 const agentStatusQueryPollInterval = Duration(milliseconds: 700);
 const agentStatusQueryPollAttempts = 18;
 const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
@@ -1466,14 +1467,18 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
       return;
     }
-    await _runAction(AgentActionKeys.revokeMessageAgent(daemonDid), () async {
-      await ref
-          .read(agentControlServiceProvider)
-          .revokeMessageAgentAuthorization(
-            daemonAgentDid: daemonDid,
-            messageAgentDid: target.agentDid,
-          );
-    });
+    await _runAction(
+      AgentActionKeys.revokeMessageAgent(daemonDid),
+      () async {
+        await ref
+            .read(agentControlServiceProvider)
+            .revokeMessageAgentAuthorization(
+              daemonAgentDid: daemonDid,
+              messageAgentDid: target.agentDid,
+            );
+      },
+      timeout: agentMessageAgentRevokeActionTimeout,
+    );
   }
 
   Future<void> renameSelected(String displayName) async {
@@ -2646,7 +2651,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
       }
     }
-    if (statusScope == 'snapshot' && payloadDaemonDid != null) {
+    if (statusScope == 'snapshot' &&
+        payloadDaemonDid != null &&
+        snapshotRuntimeDids.isNotEmpty) {
       final pruned = <String, AgentSummary>{};
       for (final entry in byDid.entries) {
         final agent = entry.value;

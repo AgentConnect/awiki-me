@@ -78,6 +78,14 @@ performance:
 
 daemon:
   rustRepo: ../awiki-cli-rs2
+  # Required when running:
+  #   dart run tests/e2e/runner.dart --case message-agent
+  # Build the binary first with:
+  #   cd ../awiki-cli-rs2 && cargo build -p awiki-deamon --locked --bin awiki-deamon
+  # binary: ../awiki-cli-rs2/target/debug/awiki-deamon
+  # stateRoot: .e2e/message-agent-daemon-state
+  # readyFile: .e2e/message-agent-daemon-ready.json
+  # fakeHermesGatewayCommand: python3 path/to/fake_full_ui_hermes_gateway.py
   # Optional local-only env file loaded into the temporary E2E daemon process.
   # Do not commit real tokens. Example content:
   #   ANTHROPIC_BASE_URL=http://127.0.0.1:4000
@@ -90,6 +98,9 @@ messageAgent:
   enabled: true
   runtimeProvider: hermes
   processingScope: all_conversations
+  # --case message-agent is now a product-level gate and must use the real
+  # daemon/backend path instead of silently returning from a skipped UI test.
+  realBackend: true
 
 codexAgent:
   enabled: false

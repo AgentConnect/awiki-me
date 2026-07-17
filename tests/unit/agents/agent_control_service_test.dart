@@ -259,7 +259,7 @@ void main() {
   });
 
   test(
-    'revokeMessageAgentAuthorization updates DID Document before service binding and daemon command',
+    'revokeMessageAgentAuthorization updates DID Document and notifies daemon before service binding revoke',
     () async {
       final messages = _MessagesStub();
       final bindings = _MessageAgentBindingsStub();
@@ -325,7 +325,7 @@ void main() {
   );
 
   test(
-    'revokeMessageAgentAuthorization fails before daemon command when service still sees active delegated key',
+    'revokeMessageAgentAuthorization notifies daemon before service binding revoke',
     () async {
       final messages = _MessagesStub();
       final bindings = _MessageAgentBindingsStub()
@@ -348,7 +348,10 @@ void main() {
 
       expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
       expect(identities.calls, <String>['revoke:did:human:me']);
-      expect(messages.payloads, isEmpty);
+      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
+      final args = messages.lastPayload?['args'] as Map<String, Object?>;
+      expect(args['binding_id'], 'binding_1');
+      expect(args['lifecycle_action'], 'revoke');
     },
   );
 

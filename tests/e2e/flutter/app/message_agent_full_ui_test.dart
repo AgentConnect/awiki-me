@@ -20,6 +20,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -59,12 +60,21 @@ class _StaticConversationListController extends ConversationListController {
   Future<void> refresh() async {}
 }
 
+enum _MessageAgentRealBackendMode { notSelected, disabled, realBackend }
+
+class _ObservedDraftAction {
+  const _ObservedDraftAction({required this.actionId, required this.draftText});
+
+  final String actionId;
+  final String draftText;
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   runMessageAgentRealBackendE2e();
 
-  testWidgets('Message Agent management UI is hidden on daemon detail', (
+  testWidgets('Message Agent settings entry opens without lifecycle payloads', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -141,13 +151,32 @@ void main() {
       await _pumpFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(
+        find.byKey(const Key('message-agent-settings-panel')),
+        findsNothing,
+      );
+      expect(
+        find.bySemanticsIdentifier('message-agent-settings-entry'),
+        findsOneWidget,
+      );
+      expect(find.text('消息处理 Agent'), findsOneWidget);
+      await tester.tap(
+        find.bySemanticsIdentifier('message-agent-settings-entry'),
+      );
+      await _pumpFrame(tester);
+
+      expect(
+        find.byKey(const Key('message-agent-settings-page')),
+        findsOneWidget,
+      );
+      expect(find.text('消息处理 Agent'), findsWidgets);
+      expect(find.text('已上报公钥'), findsOneWidget);
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
-      expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
-      expect(find.text('撤销 Daemon 消息授权'), findsNothing);
+      expect(find.text('启用消息处理 Agent'), findsOneWidget);
+      expect(find.text('暂停处理消息'), findsOneWidget);
+      expect(find.text('删除消息处理 Agent'), findsOneWidget);
+      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
       final nonStatusPayloads = messages.recordedPayloads.where(
@@ -287,12 +316,30 @@ void main() {
 
         expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
         expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
-        await tester.tap(find.text('使用草稿'));
+        await tester.tap(
+          find.byKey(const Key('message-agent-action-confirm:act_draft')),
+        );
         await _pumpFrame(tester);
 
         expect(find.text('草稿已放入输入框'), findsOneWidget);
+        final input = tester.widget<CupertinoTextField>(
+          find.byKey(const Key('chat-composer-input')),
+        );
+        expect(input.controller?.text, '收到，我会处理。');
         expect(harness.gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+        expect(
+          harness.gateway.lastSentPayload?['schema'],
+          AgentControlPayloads.appActionResultSchema,
+        );
+        expect(harness.gateway.lastSentPayload?['action_id'], 'act_draft');
         expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
+        expect(harness.gateway.lastSentPayload?.containsKey('result'), isFalse);
+        expect(
+          jsonEncode(harness.gateway.lastSentPayload),
+          isNot(contains('draft_text')),
+        );
+        expect(harness.gateway.lastSentContent, isEmpty);
+        expect(harness.gateway.sendTextMessageCalls, 1);
       } finally {
         debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);
@@ -305,13 +352,11 @@ void runMessageAgentRealBackendE2e() {
   testWidgets(
     'Message Agent full UI drives real backend daemon and recovery',
     (tester) async {
-      final config = _MessageAgentRealBackendConfig.tryLoad();
-      if (config == null || !config.realBackend) {
-        fail(
-          'Message Agent full UI acceptance requires a real-backend runner '
-          'config and cannot pass as a skipped/no-op test.',
-        );
+      final mode = _MessageAgentRealBackendConfig.selectedMode();
+      if (mode == _MessageAgentRealBackendMode.notSelected) {
+        return;
       }
+      final config = _MessageAgentRealBackendConfig.loadForSelectedGate();
       if (!File(config.daemonBinary).existsSync()) {
         fail('daemon binary was not found: ${config.daemonBinary}');
       }
@@ -364,54 +409,49 @@ void runMessageAgentRealBackendE2e() {
           handle: install.handle,
         );
 
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('e2e-agents-tab'),
-          find.bySemanticsLabel('智能体'),
-          find.bySemanticsLabel('Agents'),
-          find.text('智能体'),
-          find.text('Agents'),
-        ]);
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-
         await _waitForDaemonBootstrapKey(
           tester: tester,
           agents: agents,
           daemonDid: install.daemonDid,
         );
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-        expect(find.text('消息处理 Agent'), findsOneWidget);
+        await _openMessageAgentSettingsForDaemon(
+          tester: tester,
+          container: appContainer,
+          agents: agents,
+          daemonDid: install.daemonDid,
+        );
+        expect(
+          find.byKey(const Key('message-agent-settings-page')),
+          findsOneWidget,
+        );
+        expect(find.text('消息处理 Agent'), findsWidgets);
         expect(find.text('已上报公钥'), findsOneWidget);
         expect(find.text('可启用'), findsWidgets);
         expect(find.text('启用消息处理 Agent'), findsOneWidget);
-        await tester.tap(find.text('启用消息处理 Agent'));
-        await _pumpUntil(
-          tester,
-          () => !ProviderScope.containerOf(
-            tester.element(find.byType(AppShell)),
-          ).read(agentsProvider).isActing,
-          timeout: const Duration(seconds: 25),
-          description: 'message agent enable action to finish',
+        await _runAgentUiActionWithRetry(
+          tester: tester,
+          container: appContainer,
+          actionLabel: '启用消息处理 Agent',
+          actionDescription: 'Message Agent enable',
+          timeout: const Duration(seconds: 120),
+          actionFinders: <Finder>[
+            find.bySemanticsIdentifier('message-agent-enable-action'),
+          ],
         );
-        final stateAfterEnable = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(agentsProvider);
-        if (stateAfterEnable.error != null) {
-          fail(
-            'Message Agent enable failed: ${stateAfterEnable.error}. '
-            'Raw error: ${stateAfterEnable.debugLastError}. '
-            'Agents: ${_agentsDebugSummary(stateAfterEnable)}',
-          );
-        }
 
         await _waitForUserServiceBindingActive(
           binding: bindingPort,
           daemonDid: install.daemonDid,
         );
         await agents.load();
+        await _waitForMessageAgentRuntimeInApp(
+          tester: tester,
+          container: appContainer,
+          daemonDid: install.daemonDid,
+        );
         await _pumpFrame(tester);
         expect(find.text('Hermes Message Agent'), findsWidgets);
+        expect(find.textContaining('已绑定'), findsWidgets);
         await E2eCaseAttestationWriter.markPassed(
           'MSGAGENT-E2E-001',
           phases: const <String>[
@@ -467,39 +507,43 @@ void runMessageAgentRealBackendE2e() {
           ],
         );
 
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('e2e-agents-tab'),
-          find.bySemanticsLabel('智能体'),
-          find.bySemanticsLabel('Agents'),
-          find.text('智能体'),
-          find.text('Agents'),
-        ]);
-        await _pumpFrame(tester);
-        await agents.load();
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-        await tester.tap(find.text('撤销 Daemon 消息授权'));
-        await _pumpFrame(tester);
-        expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
-        await tester.tap(find.text('撤销授权'));
-        await _pumpFrame(tester);
-        await _pumpUntil(
-          tester,
-          () => !ProviderScope.containerOf(
-            tester.element(find.byType(AppShell)),
-          ).read(agentsProvider).isActing,
-          timeout: const Duration(seconds: 25),
+        final draftAction = await _waitForMessageAgentDraftActionInApp(
+          tester: tester,
+          sourceText: sourceText,
         );
-        final stateAfterRevoke = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(agentsProvider);
-        if (stateAfterRevoke.error != null) {
-          fail(
-            'Message Agent revoke failed: ${stateAfterRevoke.error}. '
-            'Raw error: ${stateAfterRevoke.debugLastError}. '
-            'Agents: ${_agentsDebugSummary(stateAfterRevoke)}',
-          );
-        }
+        await _confirmMessageAgentDraftAction(
+          tester: tester,
+          actionId: draftAction.actionId,
+          expectedDraftText: draftAction.draftText,
+        );
+        await _waitForDaemonActionResultReceived(
+          daemonStateRoot: config.daemonStateRoot,
+          expectedActionId: draftAction.actionId,
+          expectedDraftText: draftAction.draftText,
+        );
+
+        await _openMessageAgentSettingsForDaemon(
+          tester: tester,
+          container: appContainer,
+          agents: agents,
+          daemonDid: install.daemonDid,
+        );
+        expect(
+          find.byKey(const Key('message-agent-settings-page')),
+          findsOneWidget,
+        );
+        await _runAgentUiActionWithRetry(
+          tester: tester,
+          container: appContainer,
+          actionLabel: '撤销 Daemon 消息授权',
+          actionDescription: 'Message Agent revoke',
+          timeout: const Duration(seconds: 90),
+          dialogText: '签名 DID Document 更新',
+          confirmLabel: '撤销授权',
+          actionFinders: <Finder>[
+            find.bySemanticsIdentifier('message-agent-revoke-action'),
+          ],
+        );
         await _waitForUserServiceBindingRevoked(binding: bindingPort);
         await _waitForDaemonBindingRevoked(
           daemonStateRoot: config.daemonStateRoot,
@@ -616,7 +660,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
 }) async {
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
-    clientPlatform: 'linux',
+    clientPlatform: config.platform,
     controllerHandle: config.appHandle,
   );
   final result = await _runProcess(
@@ -667,7 +711,7 @@ Future<Process> _startRealDaemon({
       '--ready-file',
       config.daemonReadyFile,
       '--max-runtime-ms',
-      '180000',
+      '1200000',
       '--poll-interval-ms',
       '100',
     ],
@@ -931,6 +975,7 @@ Future<void> _openRealCliConversation({
     ),
   );
   final selected = conversation!;
+  await _returnFromMessageAgentSettingsIfNeeded(tester);
   await _tapFirstFound(tester, <Finder>[
     find.bySemanticsIdentifier('e2e-messages-tab'),
     find.bySemanticsLabel('消息'),
@@ -943,7 +988,173 @@ Future<void> _openRealCliConversation({
   container
       .read(selectedConversationProvider.notifier)
       .selectConversation(selected);
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('chat-composer-input')).evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 30),
+    description: 'CLI conversation opens in chat workspace',
+    lastError: () =>
+        _messageAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
+}
+
+Future<void> _returnFromMessageAgentSettingsIfNeeded(
+  WidgetTester tester,
+) async {
+  if (find.byKey(const Key('message-agent-settings-page')).evaluate().isEmpty) {
+    return;
+  }
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsLabel('返回'),
+    find.byTooltip('返回'),
+  ]);
+  await _pumpUntil(
+    tester,
+    () =>
+        find.byKey(const Key('message-agent-settings-page')).evaluate().isEmpty,
+    timeout: const Duration(seconds: 10),
+    description: 'Message Agent settings page returns to App shell',
+  );
+}
+
+Future<void> _openMessageAgentSettingsForDaemon({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required AgentsController agents,
+  required String daemonDid,
+}) async {
+  await _returnFromMessageAgentSettingsIfNeeded(tester);
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsIdentifier('e2e-agents-tab'),
+    find.bySemanticsLabel('智能体'),
+    find.bySemanticsLabel('Agents'),
+    find.text('智能体'),
+    find.text('Agents'),
+  ]);
   await _pumpFrame(tester);
+  await agents.load();
+  agents.select(daemonDid);
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(agentsProvider);
+      return state.selectedAgentDid == daemonDid &&
+          _agentByDid(state, daemonDid) != null &&
+          find
+              .bySemanticsIdentifier('message-agent-settings-entry')
+              .evaluate()
+              .isNotEmpty;
+    },
+    timeout: const Duration(seconds: 30),
+    description: 'Message Agent settings entry is bound to installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsIdentifier('message-agent-settings-entry'),
+    find.byKey(const Key('message-agent-settings-entry-card')),
+  ]);
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const Key('message-agent-settings-page'))
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 15),
+    description: 'Message Agent settings page opens for installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .bySemanticsIdentifier('message-agent-selected-daemon:$daemonDid')
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 15),
+    description: 'Message Agent settings page selects installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+}
+
+Future<void> _runAgentUiActionWithRetry({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String actionLabel,
+  required String actionDescription,
+  required Duration timeout,
+  List<Finder> actionFinders = const <Finder>[],
+  String? dialogText,
+  String? confirmLabel,
+  int attempts = 3,
+}) async {
+  for (var attempt = 1; attempt <= attempts; attempt += 1) {
+    await _tapFirstFound(
+      tester,
+      actionFinders.isEmpty ? <Finder>[find.text(actionLabel)] : actionFinders,
+    );
+    await _pumpFrame(tester);
+    if (dialogText != null) {
+      expect(find.textContaining(dialogText), findsOneWidget);
+      await _tapFirstFound(tester, <Finder>[find.text(confirmLabel!)]);
+      await _pumpFrame(tester);
+    }
+    await _pumpUntil(
+      tester,
+      () => !container.read(agentsProvider).isActing,
+      timeout: timeout,
+      description: '$actionDescription action to finish',
+      lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+    );
+    final stateAfterAction = container.read(agentsProvider);
+    if (stateAfterAction.error == null) {
+      return;
+    }
+    final failureSummary =
+        '$actionDescription failed on attempt $attempt/$attempts: '
+        '${stateAfterAction.error}. Raw error: '
+        '${stateAfterAction.debugLastError}. Agents: '
+        '${_agentsDebugSummary(stateAfterAction)}';
+    if (attempt >= attempts ||
+        !_isRetryableAgentActionError(stateAfterAction)) {
+      fail(failureSummary);
+    }
+    await tester.pump(const Duration(seconds: 2));
+  }
+}
+
+bool _isRetryableAgentActionError(AgentsState state) {
+  final raw = '${state.error ?? ''}\n${state.debugLastError ?? ''}'
+      .trim()
+      .toLowerCase();
+  return raw.contains('transport_unavailable') ||
+      raw.contains('transport unavailable') ||
+      raw.contains('error sending request for url') ||
+      raw.contains('connection reset') ||
+      raw.contains('connection refused') ||
+      raw.contains('timed out') ||
+      raw.contains('timeout') ||
+      raw.contains('网络连接暂时不可用');
+}
+
+Future<AgentSummary> _waitForMessageAgentRuntimeInApp({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String daemonDid,
+}) async {
+  AgentSummary? runtime;
+  Object? lastState;
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(agentsProvider);
+      lastState = _agentsDebugSummary(state);
+      runtime = state.messageAgentRuntimeFor(daemonDid);
+      return runtime != null;
+    },
+    timeout: const Duration(seconds: 60),
+    description: 'App applies Message Agent runtime inventory after enable',
+    lastError: () => lastState,
+  );
+  return runtime!;
 }
 
 Future<void> _waitForMessageAgentRuntimeFinalInApp({
@@ -971,6 +1182,158 @@ Future<void> _waitForMessageAgentRuntimeFinalInApp({
   );
   await _pumpFrame(tester);
   expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
+}
+
+Future<_ObservedDraftAction> _waitForMessageAgentDraftActionInApp({
+  required WidgetTester tester,
+  required String sourceText,
+}) async {
+  Object? lastState;
+  _ObservedDraftAction? observed;
+  await _pumpUntil(
+    tester,
+    () {
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+      final threads = container.read(chatThreadsProvider);
+      lastState = _messageAgentSyncDebugSummary(threads);
+      return threads.values.any(
+        (thread) =>
+            thread.messages.any((message) => message.content == sourceText) &&
+            thread.appActionRecords.values.any((record) {
+              final args = record.request?.args ?? const <String, Object?>{};
+              final draftText = args['draft_text']?.toString().trim();
+              final isAwaitingUser =
+                  record.state == appActionStateRequiresConfirmation ||
+                  record.state == appActionStateRequested;
+              if (record.action == 'message.create_draft' &&
+                  draftText != null &&
+                  draftText.isNotEmpty &&
+                  isAwaitingUser) {
+                observed = _ObservedDraftAction(
+                  actionId: record.actionId,
+                  draftText: draftText,
+                );
+                return true;
+              }
+              return false;
+            }),
+      );
+    },
+    timeout: const Duration(seconds: 120),
+    description: 'App applies Message Agent draft action recovery state',
+    lastError: () => lastState,
+  );
+  await _pumpFrame(tester);
+  expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
+  expect(find.text(observed!.draftText), findsOneWidget);
+  return observed!;
+}
+
+Future<void> _confirmMessageAgentDraftAction({
+  required WidgetTester tester,
+  required String actionId,
+  required String expectedDraftText,
+}) async {
+  final confirmFinder = find.byKey(
+    Key('message-agent-action-confirm:$actionId'),
+  );
+  await _tapFirstFound(tester, <Finder>[confirmFinder, find.text('使用草稿')]);
+  await _pumpUntil(
+    tester,
+    () {
+      final input = tester.widget<CupertinoTextField>(
+        find.byKey(const Key('chat-composer-input')),
+      );
+      return input.controller?.text == expectedDraftText;
+    },
+    timeout: const Duration(seconds: 15),
+    description: 'draft text enters composer after confirmation',
+  );
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(AppShell)),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final threads = container.read(chatThreadsProvider);
+      return threads.values.any(
+        (thread) =>
+            thread.appActionRecords[actionId]?.state == appActionStateSucceeded,
+      );
+    },
+    timeout: const Duration(seconds: 30),
+    description: 'confirmed draft action reaches local succeeded state',
+    lastError: () =>
+        _messageAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
+  await _pumpUntil(
+    tester,
+    () => find.text('草稿已放入输入框').evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 10),
+    description: 'confirmed draft action renders success card',
+    lastError: () =>
+        _messageAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
+}
+
+Future<void> _waitForDaemonActionResultReceived({
+  required String daemonStateRoot,
+  required String expectedActionId,
+  required String expectedDraftText,
+}) async {
+  final dbPath = '${daemonStateRoot.replaceAll(RegExp(r'/+$'), '')}/daemon.db';
+  String lastState = 'daemon.db not found';
+  await _poll(
+    description: 'daemon audit contains app.action.result for confirmed draft',
+    action: () async {
+      final dbFile = File(dbPath);
+      if (!dbFile.existsSync()) {
+        lastState = 'daemon.db not found at $dbPath';
+        return false;
+      }
+      final db = await databaseFactoryFfi.openDatabase(
+        dbPath,
+        options: OpenDatabaseOptions(readOnly: true),
+      );
+      try {
+        final rows = await db.rawQuery(
+          '''
+          SELECT event_type, detail_json
+          FROM audit_log
+          WHERE event_type = 'app.action.result.received'
+            AND detail_json LIKE ?
+          ORDER BY created_at_ms DESC, audit_id DESC
+          LIMIT 1
+          ''',
+          <Object?>['%$expectedActionId%'],
+        );
+        if (rows.isEmpty) {
+          lastState =
+              'no app.action.result.received audit for $expectedActionId';
+          return false;
+        }
+        final row = rows.first;
+        lastState = jsonEncode(row);
+        final detail = row['detail_json']?.toString() ?? '';
+        final decoded = jsonDecode(detail);
+        if (decoded is! Map<String, Object?>) {
+          lastState = 'unexpected action result audit detail: $detail';
+          return false;
+        }
+        return decoded['action_id'] == expectedActionId &&
+            decoded['state'] == 'succeeded' &&
+            !detail.contains('draft_text') &&
+            !detail.contains(expectedDraftText);
+      } finally {
+        await db.close();
+      }
+    },
+    timeout: const Duration(seconds: 60),
+    interval: const Duration(seconds: 1),
+    lastError: () => lastState,
+  );
 }
 
 ConversationSummary? _conversationForCliMessage(
@@ -1251,10 +1614,45 @@ class _MessageAgentRealBackendConfig {
     this.fakeHermesGatewayCommand,
   });
 
-  static _MessageAgentRealBackendConfig? tryLoad() {
+  static _MessageAgentRealBackendMode selectedMode() {
     final file = File(_messageAgentRunConfigPath);
     if (!file.existsSync()) {
-      return null;
+      return _MessageAgentRealBackendMode.notSelected;
+    }
+    final raw = jsonDecode(file.readAsStringSync());
+    if (raw is! Map) {
+      throw StateError('$_messageAgentRunConfigPath must be a JSON object.');
+    }
+    final map = _stringKeyMap(raw, path: _messageAgentRunConfigPath);
+    if (_optionalConfig(map, 'case') != 'message-agent') {
+      return _MessageAgentRealBackendMode.notSelected;
+    }
+    final messageAgent = _optionalMapAt(map, 'messageAgent');
+    final realBackend =
+        messageAgent['realBackend'] == true ||
+        messageAgent['realBackend']?.toString().toLowerCase() == 'true';
+    if (!realBackend) {
+      return _MessageAgentRealBackendMode.disabled;
+    }
+    return _MessageAgentRealBackendMode.realBackend;
+  }
+
+  static _MessageAgentRealBackendConfig loadForSelectedGate() {
+    final mode = selectedMode();
+    if (mode == _MessageAgentRealBackendMode.notSelected) {
+      throw StateError('Message Agent run config is not selected.');
+    }
+    if (mode == _MessageAgentRealBackendMode.disabled) {
+      throw StateError(
+        'messageAgent.realBackend must be true in $_messageAgentRunConfigPath '
+        'when --case message-agent is selected.',
+      );
+    }
+    final file = File(_messageAgentRunConfigPath);
+    if (!file.existsSync()) {
+      throw StateError(
+        '$_messageAgentRunConfigPath is required when --case message-agent is selected.',
+      );
     }
     final raw = jsonDecode(file.readAsStringSync());
     if (raw is! Map) {
@@ -1265,9 +1663,6 @@ class _MessageAgentRealBackendConfig {
     final realBackend =
         messageAgent['realBackend'] == true ||
         messageAgent['realBackend']?.toString().toLowerCase() == 'true';
-    if (!realBackend) {
-      return null;
-    }
     final service = _mapAt(map, 'service');
     final otp = _mapAt(map, 'otp');
     final accounts = _mapAt(map, 'accounts');
