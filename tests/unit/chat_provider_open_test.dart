@@ -2697,6 +2697,54 @@ void main() {
     );
   });
 
+  test('可见会话在 timeline 水合后保留持久已读意图', () async {
+    final latest = ChatMessage(
+      localId: 'remote-visible-hydrated',
+      remoteId: 'remote-visible-hydrated',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible hydrated unread',
+      createdAt: DateTime(2026, 5, 8, 10, 7),
+      isMine: false,
+      serverSequence: 32,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 2,
+      lastMessageSnapshot: latest,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    final controller = container.read(chatThreadsProvider.notifier);
+
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    controller.debugSeedMessageForTesting(
+      latest,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.acknowledgeVisibleConversationRead(unreadConversation);
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.conversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: latest.remoteId,
+      sequence: latest.serverSequence.toString(),
+    );
+  });
+
   test('可见会话收到未读 summary 更新时列表不闪现未读', () async {
     final initial = conversation.copyWith(
       lastMessagePreview: 'old visible',

@@ -6017,6 +6017,8 @@ class ChatThreadsController
       return;
     }
     final current = _refreshedConversationFor(conversation);
+    final needsPersistentAck =
+        _hasUnreadConversation(conversation) || _hasUnreadConversation(current);
     ref
         .read(conversationListProvider.notifier)
         .markConversationVisibleLocal(
@@ -6027,7 +6029,7 @@ class ChatThreadsController
           ),
         );
     _cacheMetadataByThreadId[displayThreadId] = metadata!.copyWith(
-      visibleConversation: current,
+      visibleConversation: needsPersistentAck ? conversation : current,
     );
   }
 
