@@ -574,6 +574,48 @@ void main() {
     ]);
   });
 
+  test('两条权威消息即使发送时间倒置也按 serverSequence 排序', () {
+    final first = ChatMessage(
+      localId: 'same-body-first',
+      remoteId: 'same-body-first',
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'same body',
+      createdAt: DateTime.utc(2026, 7, 17, 5, 20, 32),
+      isMine: false,
+      serverSequence: 21263,
+      sendState: MessageSendState.sent,
+    );
+    final second = ChatMessage(
+      localId: 'same-body-second',
+      remoteId: 'same-body-second',
+      conversationId: conversation.conversationId,
+      threadId: conversation.conversationId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'same body',
+      createdAt: DateTime.utc(2026, 7, 17, 5, 20, 31),
+      isMine: false,
+      serverSequence: 21264,
+      sendState: MessageSendState.sent,
+    );
+
+    container.read(chatThreadsProvider.notifier).debugSeedMessagesForTesting(
+      conversation.conversationId,
+      <ChatMessage>[second, first],
+    );
+
+    expect(
+      container
+          .read(chatThreadProvider(conversation.conversationId))
+          .messages
+          .map((item) => item.remoteId),
+      <String?>['same-body-first', 'same-body-second'],
+    );
+  });
+
   test('thread-after 补全已有消息 serverSequence 后不改变可见时间线顺序', () async {
     final askedTime = ChatMessage(
       localId: 'local-question-time',
@@ -3158,6 +3200,67 @@ void main() {
       gateway,
       messageId: 'remote-11',
       sequence: '11',
+    );
+  });
+
+  test('旧导航快照不会阻止最新 canonical 会话持久上报已读', () async {
+    final first = ChatMessage(
+      localId: 'remote-stale-navigation-12',
+      remoteId: 'remote-stale-navigation-12',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'first after stale navigation snapshot',
+      createdAt: DateTime.utc(2026, 7, 17, 7, 21, 55),
+      isMine: false,
+      serverSequence: 12,
+      sendState: MessageSendState.sent,
+    );
+    final latest = ChatMessage(
+      localId: 'remote-stale-navigation-13',
+      remoteId: 'remote-stale-navigation-13',
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'latest after stale navigation snapshot',
+      createdAt: DateTime.utc(2026, 7, 17, 7, 21, 58),
+      isMine: false,
+      serverSequence: 13,
+      sendState: MessageSendState.sent,
+    );
+    final latestConversation = conversation.copyWith(
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 2,
+      lastMessageSnapshot: latest,
+    );
+    gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      'did:peer': <ChatMessage>[first, latest],
+    };
+    _seedContainerConversationProjection(
+      container,
+      latestConversation,
+      <ChatMessage>[first, latest],
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(latestConversation);
+    final controller = container.read(chatThreadsProvider.notifier);
+
+    await controller.openConversation(conversation);
+    controller.markConversationVisible(conversation);
+    controller.acknowledgeVisibleConversationRead(conversation);
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      latestConversation.conversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: latest.remoteId,
+      sequence: latest.serverSequence.toString(),
     );
   });
 

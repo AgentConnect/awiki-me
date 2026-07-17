@@ -388,13 +388,37 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     tester: robot.tester,
     localIds: sameBodyMessages.map((message) => message.localId).toList(),
   );
+  E2eObservation observeSameBodyServerSequences() {
+    final exactOrder = observeSameBodyMessages();
+    if (exactOrder.status != E2eObservationStatus.pass) {
+      return exactOrder;
+    }
+    final firstSequence = sameBodyMessages[0].serverSequence;
+    final secondSequence = sameBodyMessages[1].serverSequence;
+    if (firstSequence == null || secondSequence == null) {
+      return const E2eObservation.pending('same_body_server_sequence_pending');
+    }
+    if (firstSequence >= secondSequence) {
+      return const E2eObservation.fatal(
+        'same_body_server_sequence_not_increasing',
+      );
+    }
+    return const E2eObservation.pass();
+  }
+
+  await robot.pumpUntilObservation(
+    description: 'same-body Direct messages converge to server sequence order',
+    timeout: const Duration(seconds: 90),
+    observe: observeSameBodyServerSequences,
+    failureLayer: 'core_projection',
+  );
   await robot.assertStableFor(
     description: 'two same-body Direct messages',
-    observe: observeSameBodyMessages,
+    observe: observeSameBodyServerSequences,
     failureLayer: 'app_projection',
   );
   await E2eScenarioProgressWriter.record(
-    'direct_same_body_distinct_ids_verified',
+    'direct_same_body_distinct_ids_and_sequence_verified',
   );
 
   await robot.simulateReconnect();

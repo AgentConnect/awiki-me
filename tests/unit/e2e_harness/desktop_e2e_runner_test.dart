@@ -800,6 +800,30 @@ cliHandle: legacy-cli
   });
 
   group('Desktop E2E gate governance', () {
+    test('suite timeout cannot be shorter than its estimate', () {
+      expect(
+        () => DesktopE2eSuiteDefinition.fromJson('full', <String, Object?>{
+          'tier': 'product_ui',
+          'requiredFor': <String>['release'],
+          'owner': 'awiki-me-messaging',
+          'estimatedMinutes': 25,
+          'timeoutMinutes': 18,
+          'cleanupPolicy': 'fixed_account_pool_residual_ledger',
+          'allowedHosts': <String>['awiki.info'],
+          'allowedDidDomains': <String>['awiki.info'],
+          'resourceCategories': <String>['direct_messages'],
+          'caseIds': <String>['MSG-REG-001'],
+        }),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('must not be less than estimatedMinutes'),
+          ),
+        ),
+      );
+    });
+
     test('checked-in manifest matches every runner case contract', () {
       final manifest = DesktopE2eSuiteManifest.load(Directory.current);
 
@@ -813,6 +837,10 @@ cliHandle: legacy-cli
         );
         expect(definition.owner, isNotEmpty);
         expect(definition.timeout, isNot(Duration.zero));
+        expect(
+          definition.timeout,
+          greaterThanOrEqualTo(Duration(minutes: definition.estimatedMinutes)),
+        );
       }
     });
 

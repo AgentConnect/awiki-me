@@ -434,14 +434,20 @@ Widget coverage already locks identity lookup and group system events to the
 public display order nickname, full Handle, then DID; it is not a substitute
 for the remaining DID-only remote case.
 
-The latest v7 `full` evidence is intentionally red rather than weakened:
-`20260716031319-hkfp48kim6` fails `MSG-SEQUENCE-E2E-001` at the App-visible
-timeline with `wrong_message_id_or_order` after the hidden three-message burst.
-The remote/Core projection contains all three consecutive canonical
-`server_seq` values, while one App-local `sent_at` value is truncated to whole
-seconds and the visible run-owned order is wrong. This is a discovered App
-presentation/projection defect, not a CLI product failure and not a reason to
-replace the exact-order oracle with eventual containment.
+Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.
+The full product suite uses a 30-minute runner budget and a 29-minute Flutter
+scenario budget so framework teardown remains bounded without terminating the
+declared 25-minute product flow early.
+
+The v8 `awiki.info` `full` evidence
+`fixed-full-committed-20260717160000` passes all 24 declared cases with verified
+schema-v2 attestation. It closes the earlier v7 red evidence by preserving two
+same-body canonical messages during realtime delivery, converging them to
+strictly increasing `serverSequence`, keeping hidden-burst order exact, and
+persisting the newest visible Direct read watermark even when navigation held
+an older conversation summary. The exact-order and unread-no-rebound oracles
+remain strict; they were not replaced with eventual containment or UI-only
+success.
 
 Conversation-correctness cases additionally declare `assertionContract` in
 the catalog. It maps every exact-oracle and negative-guard claim to stable

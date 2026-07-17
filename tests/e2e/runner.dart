@@ -1734,6 +1734,11 @@ class DesktopE2eSuiteDefinition {
     if (timeoutMinutes is! int || timeoutMinutes <= 0) {
       throw E2eFailure('E2E suite "$name" has invalid timeoutMinutes.');
     }
+    if (timeoutMinutes < estimatedMinutes) {
+      throw E2eFailure(
+        'E2E suite "$name" timeoutMinutes must not be less than estimatedMinutes.',
+      );
+    }
     if (cleanupPolicy is! String || cleanupPolicy.trim().isEmpty) {
       throw E2eFailure('E2E suite "$name" has no cleanupPolicy.');
     }

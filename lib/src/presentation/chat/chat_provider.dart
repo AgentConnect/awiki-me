@@ -1571,18 +1571,38 @@ class ChatThreadsController
     bool requireVisible = true,
     bool forcePersistentAck = false,
   }) {
-    final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
+    final requestedThreadId = _displayThreadIdFor(
+      conversation,
+      displayThreadId,
+    );
+    final refreshedConversation = _refreshedConversationFor(conversation);
+    final visibleConversation =
+        _cacheMetadataByThreadId[requestedThreadId]?.visibleConversation;
+    final currentConversation =
+        visibleConversation != null &&
+            visibleConversation.conversationId ==
+                refreshedConversation.conversationId &&
+            !_conversationAdvancedSinceVisible(
+              refreshedConversation,
+              visibleConversation,
+            )
+        ? visibleConversation
+        : refreshedConversation;
+    final targetThreadId = _displayThreadIdFor(
+      currentConversation,
+      displayThreadId,
+    );
     final currentThread = thread(targetThreadId);
     if (!forcePersistentAck &&
-        conversation.unreadCount <= 0 &&
-        conversation.unreadMentionCount <= 0) {
+        currentConversation.unreadCount <= 0 &&
+        currentConversation.unreadMentionCount <= 0) {
       _chatProviderTrace(
         'mark_read.skip',
         fields: <String, Object?>{
           ...AwikiPerformanceLogger.threadField(targetThreadId),
           'reason': 'no_unread',
-          'unread': conversation.unreadCount,
-          'mention_unread': conversation.unreadMentionCount,
+          'unread': currentConversation.unreadCount,
+          'mention_unread': currentConversation.unreadMentionCount,
           'force_persistent_ack': forcePersistentAck,
         },
       );
@@ -1612,7 +1632,7 @@ class ChatThreadsController
       );
       if (requireVisible && metadata?.isVisible == true) {
         _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
-          conversation: conversation,
+          conversation: currentConversation,
           reason: reason,
           forcePersistentAck: forcePersistentAck,
         );
@@ -1622,7 +1642,7 @@ class ChatThreadsController
     if (_activeLocalHistoryLoads.contains(targetThreadId) ||
         currentThread.isHydratingLocalHistory ||
         _activeRemoteHistorySyncs.contains(targetThreadId) ||
-        _shouldLoadHistory(currentThread, conversation)) {
+        _shouldLoadHistory(currentThread, currentConversation)) {
       _chatProviderTrace(
         'mark_read.defer',
         fields: <String, Object?>{
@@ -1633,21 +1653,21 @@ class ChatThreadsController
           'hydrating': currentThread.isHydratingLocalHistory,
           'should_load_history': _shouldLoadHistory(
             currentThread,
-            conversation,
+            currentConversation,
           ),
           'messages': currentThread.messages.length,
           'renderable': _renderableMessageCount(currentThread),
         },
       );
       _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
-        conversation: conversation,
+        conversation: currentConversation,
         reason: reason,
         forcePersistentAck: forcePersistentAck,
       );
       return;
     }
     final watermark = _readWatermarkForVisibleThread(
-      conversation,
+      currentConversation,
       displayThreadId: targetThreadId,
       useLatestVisibleMessage: forcePersistentAck,
     );
@@ -1663,7 +1683,10 @@ class ChatThreadsController
       );
       return;
     }
-    final readToken = _readReceiptToken(conversation, watermark: watermark);
+    final readToken = _readReceiptToken(
+      currentConversation,
+      watermark: watermark,
+    );
     if (_completedReadReceipts.contains(readToken) ||
         _activeReadReceipts.contains(readToken)) {
       _chatProviderTrace(
@@ -1679,7 +1702,7 @@ class ChatThreadsController
       return;
     }
     _markConversationReadBestEffort(
-      conversation,
+      currentConversation,
       readToken: readToken,
       displayThreadId: targetThreadId,
       watermark: watermark,
@@ -3343,20 +3366,24 @@ class ChatThreadsController
     ConversationSummary conversation, {
     String? displayThreadId,
   }) {
-    final threadId = _displayThreadIdFor(conversation, displayThreadId);
+    final currentConversation = _refreshedConversationFor(conversation);
+    final threadId = _displayThreadIdFor(currentConversation, displayThreadId);
     if (_canAcknowledgeVisibleRead) {
-      _markConversationVisibleForReadEligibility(conversation, threadId);
+      _markConversationVisibleForReadEligibility(currentConversation, threadId);
     }
     _cancelHiddenThreadCacheTrim(threadId);
-    _touchConversationCache(conversation, threadId, visible: true);
+    _touchConversationCache(currentConversation, threadId, visible: true);
     final metadata = _cacheMetadataByThreadId[threadId];
     if (metadata != null) {
       _cacheMetadataByThreadId[threadId] = metadata.copyWith(
-        visibleConversation: conversation,
+        visibleConversation: currentConversation,
       );
     }
     _cancelThreadPatchSubscriptionTtl(threadId);
-    _ensureThreadPatchSubscription(conversation, displayThreadId: threadId);
+    _ensureThreadPatchSubscription(
+      currentConversation,
+      displayThreadId: threadId,
+    );
   }
 
   void markConversationHidden(
@@ -6088,10 +6115,7 @@ class ChatThreadsController
       if (!message.hasRenderableContent) {
         continue;
       }
-      if (latest == null ||
-          message.createdAt.isAfter(latest.createdAt) ||
-          (message.createdAt.isAtSameMomentAs(latest.createdAt) &&
-              (message.serverSequence ?? -1) > (latest.serverSequence ?? -1))) {
+      if (latest == null || _compareMessagesForTimeline(latest, message) < 0) {
         latest = message;
       }
     }
@@ -6115,14 +6139,14 @@ class ChatThreadsController
   }
 
   int _compareMessagesForTimeline(ChatMessage a, ChatMessage b) {
-    final timeCompare = a.createdAt.compareTo(b.createdAt);
-    if (timeCompare != 0) {
-      return timeCompare;
-    }
     final aSeq = a.serverSequence;
     final bSeq = b.serverSequence;
     if (aSeq != null && bSeq != null && aSeq != bSeq) {
       return aSeq.compareTo(bSeq);
+    }
+    final timeCompare = a.createdAt.compareTo(b.createdAt);
+    if (timeCompare != 0) {
+      return timeCompare;
     }
     final idCompare = _stableMessageId(a).compareTo(_stableMessageId(b));
     if (idCompare != 0) {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-16.conversation-correctness-v7",
+  "sourceRevision": "2026-07-17.conversation-correctness-v8",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -46,7 +46,7 @@
       ],
       "owner": "awiki-me-messaging",
       "estimatedMinutes": 25,
-      "timeoutMinutes": 18,
+      "timeoutMinutes": 30,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
         "awiki.info"

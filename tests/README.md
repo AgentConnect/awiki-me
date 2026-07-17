@@ -12,7 +12,8 @@ Root `../integration_test/*.dart` files are Flutter-tooling shims. Keep durable
 Flutter test implementation under `e2e/flutter/`; keep real E2E orchestration,
 configuration, reporting, and scenario contracts under `e2e/`.
 
-`e2e/suite_manifest.json` defines executable suite membership. The separate
+`e2e/suite_manifest.json` defines executable suite membership and bounded time
+budgets; `timeoutMinutes` must not be shorter than `estimatedMinutes`. The separate
 `e2e/case_catalog.json` adds exact oracles, negative guards, ownership and
 implementation paths, and may contain explicit `planned` gaps. Validate both
 plus the generated human catalog with:

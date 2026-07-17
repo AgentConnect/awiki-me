@@ -1151,10 +1151,10 @@
         "The controlled failed row stays visible in the canonical conversation even when the write path uses a DID alias or a core reset arrives.",
         "The visible retry performs exactly one real remote transport attempt, reports a typed failure code if it fails, and reaches terminal sent state.",
         "The complete run-owned Direct sequence has the exact canonical IDs, contents, conversation ownership and visible order after reconnect and App-shell rebuild.",
-        "Two distinct canonical messages with the same body remain exactly two ordered messages through the stability window and rebuild."
+        "Two distinct canonical messages with the same body remain exactly two ordered messages during realtime delivery, converge to strictly increasing serverSequence values, and keep that order through the stability window and rebuild."
       ],
       "negativeChecks": [
-        "Silent success, duplicate/extra/missing/out-of-order message, cross-conversation leakage, same-body collapse, new duplicate on retry/replay, lost message, or stale failed state fails immediately."
+        "Silent success, duplicate/extra/missing/out-of-order message, non-increasing converged serverSequence, cross-conversation leakage, same-body collapse, new duplicate on retry/replay, lost message, or stale failed state fails immediately."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",

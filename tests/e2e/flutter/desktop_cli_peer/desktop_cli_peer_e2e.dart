@@ -544,7 +544,7 @@ void runDesktopCliPeerE2e({
       }
     },
     skip: !_DesktopCliPeerSmokeConfig.exists(),
-    timeout: const Timeout(Duration(minutes: 17)),
+    timeout: const Timeout(Duration(minutes: 29)),
   );
 }
 
