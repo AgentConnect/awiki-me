@@ -301,7 +301,7 @@ class _DesktopAppRobot {
     );
   }
 
-  Future<void> expectMessageSenderDisplayName({
+  Future<void> expectMessageSenderIdentityProjection({
     required String conversationId,
     required ChatMessage message,
     required String expectedName,
@@ -322,27 +322,60 @@ class _DesktopAppRobot {
 
     E2eObservation observe() {
       final sender = find.byKey(Key('chat-message-sender:${anchor.localId}'));
-      return observeExactScopedText(
+      final nameObservation = observeExactScopedText(
         widgets: sender.evaluate().map((element) => element.widget),
         expectedText: expectedName,
         pendingCode: 'message_sender_label_pending',
         exactOneCode: 'message_sender_label_rendered_multiple_times',
         mismatchCode: 'message_sender_display_name_mismatch',
       );
+      if (nameObservation.status != E2eObservationStatus.pass) {
+        return nameObservation;
+      }
+      final avatars = find
+          .descendant(of: anchorContent, matching: find.byType(AvatarBadge))
+          .evaluate()
+          .toList(growable: false);
+      if (avatars.isEmpty) {
+        return const E2eObservation.pending('message_sender_avatar_pending');
+      }
+      if (avatars.length != 1) {
+        return const E2eObservation.fatal(
+          'message_sender_avatar_rendered_multiple_times',
+        );
+      }
+      final avatar = avatars.single.widget as AvatarBadge;
+      final expectedAvatar = container
+          .read(peerDisplayProfileProvider)
+          .forPeer(
+            peerPersonaId: anchor.senderPeerPersonaId,
+            did: anchor.senderDid,
+          )
+          ?.avatarUri
+          ?.trim();
+      if (avatar.seed != expectedName ||
+          (avatar.avatarUri?.trim() ?? '') != (expectedAvatar ?? '')) {
+        return const E2eObservation.fatal(
+          'message_sender_avatar_projection_mismatch',
+        );
+      }
+      return const E2eObservation.pass();
     }
 
     await pumpUntilObservation(
-      description: 'exact group message sender display name',
+      description: 'exact group message sender identity projection',
       observe: observe,
     );
     await assertStableFor(
-      description: 'group message sender display name',
+      description: 'group message sender identity projection',
       observe: observe,
     );
   }
 
   Future<String> sendMention({
     required String handle,
+    required String expectedDid,
+    required String expectedDisplayName,
     required String suffix,
   }) async {
     final input = find.bySemanticsIdentifier('e2e-chat-input');
@@ -427,6 +460,15 @@ class _DesktopAppRobot {
       description: 'enabled mention candidate',
     );
     await pumpUntilFinder(candidate, description: 'mention candidate');
+    _expectIdentityCandidatePresentation(
+      candidate: candidate,
+      expectedDisplayName: expectedDisplayName,
+      expectedAvatarUri: container
+          .read(peerDisplayProfileProvider)
+          .forDid(expectedDid)
+          ?.avatarUri,
+      expectedSurface: '@$expectedDisplayName',
+    );
     await tester.tap(candidate.first);
     await tester.pump();
     final field = tester.widget<CupertinoTextField>(
@@ -551,7 +593,9 @@ class _DesktopAppRobot {
     required int unreadCount,
   }) async {
     if (unreadCount < 0) {
-      fail('Unread badge oracle requires a non-negative count, got $unreadCount.');
+      fail(
+        'Unread badge oracle requires a non-negative count, got $unreadCount.',
+      );
     }
     final row = find.byKey(Key('conversation-row:$conversationId'));
     await pumpUntilFinder(
@@ -1055,7 +1099,10 @@ class _DesktopAppRobot {
     return selectedConversation;
   }
 
-  Future<void> addGroupMember(String handle) async {
+  Future<void> addGroupMember(
+    String handle, {
+    required String expectedDisplayName,
+  }) async {
     final preflight = await container
         .read(directoryApplicationServiceProvider)
         .resolvePeer(handle);
@@ -1164,6 +1211,14 @@ class _DesktopAppRobot {
         '${input.controller?.text == handle} candidate_count=$candidateCount.',
       );
     }
+    _expectIdentityCandidatePresentation(
+      candidate: candidateTile,
+      expectedDisplayName: expectedDisplayName,
+      expectedAvatarUri: container
+          .read(peerDisplayProfileProvider)
+          .forDid(preflight.did)
+          ?.avatarUri,
+    );
     await tapOne(candidateTile, description: 'exact resolved group member');
     await pumpUntilFinder(
       addMember,
@@ -1173,11 +1228,64 @@ class _DesktopAppRobot {
     await tapOne(addMember, description: 'add resolved group member');
     await pumpUntil(
       description: 'group member dialog closes',
-      condition: () => find
-          .byKey(const Key('identity-add-group-member-button'))
-          .evaluate()
-          .isEmpty,
+      condition: () {
+        if (find
+            .byKey(const Key('identity-add-group-member-button'))
+            .evaluate()
+            .isEmpty) {
+          return true;
+        }
+        final notices = find
+            .byType(AwikiMeErrorNotice)
+            .evaluate()
+            .toList(growable: false);
+        if (notices.isNotEmpty) {
+          final notice = notices.last.widget as AwikiMeErrorNotice;
+          final code = RegExp(
+            r'AwikiImCoreException\(([^)]+)\)',
+          ).firstMatch(notice.message)?.group(1);
+          fail(
+            'Group member submission failed before the dialog closed; '
+            'error_code=${code ?? 'unclassified'}.',
+          );
+        }
+        return false;
+      },
     );
+  }
+
+  void _expectIdentityCandidatePresentation({
+    required Finder candidate,
+    required String expectedDisplayName,
+    required String? expectedAvatarUri,
+    String? expectedSurface,
+  }) {
+    final expectedTitle = expectedSurface ?? expectedDisplayName;
+    final titleCount = find
+        .descendant(of: candidate, matching: find.text(expectedTitle))
+        .evaluate()
+        .length;
+    final avatars = find
+        .descendant(of: candidate, matching: find.byType(AvatarBadge))
+        .evaluate()
+        .toList(growable: false);
+    if (titleCount != 1 || avatars.length != 1) {
+      fail(
+        'Identity candidate did not expose one exact projected title/avatar; '
+        'title_count=$titleCount avatar_count=${avatars.length}.',
+      );
+    }
+    final avatar = avatars.single.widget as AvatarBadge;
+    final expectedAvatar = expectedAvatarUri?.trim() ?? '';
+    final actualAvatar = avatar.avatarUri?.trim() ?? '';
+    if (avatar.seed != expectedDisplayName || actualAvatar != expectedAvatar) {
+      fail(
+        'Identity candidate name/avatar projection diverged from the canonical '
+        'peer display projection; exact_seed='
+        '${avatar.seed == expectedDisplayName} exact_avatar='
+        '${actualAvatar == expectedAvatar}.',
+      );
+    }
   }
 
   Future<void> stageAttachmentByDesktopDrop({

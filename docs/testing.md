@@ -202,6 +202,15 @@ event, and existing group sender label without creating a second Persona or
 conversation. The CLI only changes the remote fixture Profile; every required
 verdict is taken from App projection or visible App UI.
 
+`DISPLAY-NAME-E2E-001`, `GROUP-E2E-001`, and `GROUP-P9-001` also inspect the
+visible add-member and `@` candidate rows before selection. Their primary title,
+fallback avatar seed, and optional avatar URI must match the same Persona
+Profile projection used by the Direct conversation; merely finding an enabled
+candidate or validating the final member DID/P9 payload is insufficient.
+The same flow also checks the visible group-message sender avatar and fallback
+seed against the Persona Profile projection; a correct sender label alone is
+not a complete identity-presentation oracle.
+
 The focused `contacts` slice deliberately establishes the CLI peer as an
 inbound follower while the isolated App projection has no Direct for that DID
 or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row before

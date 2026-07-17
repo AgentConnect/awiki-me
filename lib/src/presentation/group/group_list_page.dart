@@ -833,11 +833,18 @@ class GroupMemberRow extends ConsumerWidget {
       peerDisplayNameProvider(_memberDisplayNameRequest(item)),
     );
     final identityLabel = _memberIdentityLabel(item);
+    final avatarUri =
+        peerAvatarUri(
+          ref.watch(peerDisplayProfileProvider),
+          item.did,
+          peerPersonaId: item.peerPersonaId,
+        ) ??
+        item.avatarUri;
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     return Row(
       children: <Widget>[
-        AvatarBadge(seed: title, size: 36, avatarUri: item.avatarUri),
+        AvatarBadge(seed: title, size: 36, avatarUri: avatarUri),
         const SizedBox(width: 12),
         Expanded(
           child: Column(

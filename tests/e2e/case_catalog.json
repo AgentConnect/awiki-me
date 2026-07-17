@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-16.conversation-correctness-v7",
+  "sourceRevision": "2026-07-17.profile-candidate-consistency-v8",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -553,13 +553,13 @@
       "feature": "Nickname consistency across identity and conversation surfaces",
       "layer": "product_ui",
       "preconditions": "The CLI peer publishes a deterministic nickname that differs from its Handle and DID.",
-      "action": "Resolve the peer, open Direct and Contacts, add the same peer to a Group, observe the system event and receive a Group message.",
+      "action": "Resolve the peer, open Direct and Contacts, inspect the add-member and @ mention candidates, add the same peer to a Group, observe the system event and receive a Group message.",
       "exactOracles": [
         "Identity lookup first visible primary title, Direct row/header, and Contact row all use the exact nickname.",
-        "Group member projection, member-added system event, and incoming sender label use the same exact nickname."
+        "Add-member candidate, @ mention candidate, Group member projection, member-added system event, and incoming sender title/fallback avatar seed/avatar URI all use the same exact Persona Profile projection."
       ],
       "negativeChecks": [
-        "Handle, compact/full DID, Unknown, or any different title shown as the primary name while the nickname is available fails."
+        "Handle, compact/full DID, Unknown, stale roster/conversation names, generic @ avatars, or any different primary identity projection while the nickname is available fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -754,14 +754,14 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Create a group, add the canonical CLI member, and send through visible App UI.",
       "exactOracles": [
-        "A read-only resolver preflight yields a non-empty DID; the member action itself still performs at most three visible search submissions, selects the one exact enabled candidate, and then requires the selected add-member action to be enabled before tapping it.",
+        "A read-only resolver preflight yields a non-empty DID; the member action itself performs at most three visible search submissions, requires one exact enabled candidate whose title and avatar match the Persona Profile projection, and only then enables the selected add-member action.",
         "The selected group converges to one canonical conversation id before messaging, with the exact visible group title, empty preview and unread 0.",
         "The empty group row remains exact-one after member refresh and App restart before the first message.",
         "One canonical group and correct member exist, and the visible member-added system event uses the member nickname before Handle/DID fallback.",
         "App send reaches terminal state and CLI observes exactly one message with exact sender/content/group."
       ],
       "negativeChecks": [
-        "Wrong group/member, duplicate semantic Group row, missing/disappearing empty row, title drift, Handle/DID shown despite an available nickname, direct service shortcut, nonterminal send, or duplicate message fails."
+        "Wrong group/member, duplicate semantic Group row, missing/disappearing empty row, title or candidate-avatar drift, Handle/DID shown despite an available nickname, direct service shortcut, nonterminal send, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -865,12 +865,12 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Compose a group mention through App UI and send it.",
       "exactOracles": [
-        "The real composer retains exact typed input, exposes the candidate panel from an explicit @ trigger, filters to one exact enabled member, and clears only after send submission.",
+        "The real composer retains exact typed input, exposes the candidate panel from an explicit @ trigger, filters to one exact enabled member whose title and avatar match the Persona Profile projection, and clears only after send submission.",
         "P9 payload contains exactly the intended member DID and valid range.",
         "CLI projection preserves canonical ID, exact text and structured mention metadata."
       ],
       "negativeChecks": [
-        "Text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
+        "A stale roster title, generic @ avatar, text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",

@@ -29,6 +29,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_list_pa
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -105,6 +106,71 @@ class _BlockingRestoreConversationListController
 }
 
 void main() {
+  testWidgets('会话行头像和昵称复用 Persona Profile 投影', (tester) async {
+    const ownerDid = 'did:wba:awiki.info:user:me:e1_current';
+    const peerDid = 'did:wba:awiki.info:user:zhuocheng:e1_peer';
+    const peerPersonaId = 'persona:zhuocheng';
+    const avatarUri = 'https://awiki.info/avatar/zhuocheng.png';
+    final conversation = ConversationSummary(
+      threadId: 'dm:peer-scope:zhuocheng',
+      conversationId: 'dm:peer-scope:zhuocheng',
+      displayName: 'zhuocheng',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 7, 17, 17, 13),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: peerDid,
+      targetPeer: 'zhuocheng.awiki.info',
+      peerPersonaId: peerPersonaId,
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(macStyle: true),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationListPage)),
+      listen: false,
+    );
+    container
+        .read(peerDisplayProfileProvider.notifier)
+        .updateFromRemote(
+          ownerDid: ownerDid,
+          peerPersonaId: peerPersonaId,
+          profile: const UserProfile(
+            did: peerDid,
+            displayName: '卓诚',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+            fullHandle: 'zhuocheng.awiki.info',
+            avatarUri: avatarUri,
+          ),
+        );
+    await tester.pump();
+
+    final row = find.byKey(
+      const Key('conversation-row:dm:peer-scope:zhuocheng'),
+    );
+    expect(find.descendant(of: row, matching: find.text('卓诚')), findsOneWidget);
+    final avatar = tester.widget<AvatarBadge>(
+      find.descendant(of: row, matching: find.byType(AvatarBadge)),
+    );
+    expect(avatar.seed, '卓诚');
+    expect(avatar.avatarUri, avatarUri);
+  });
+
   final conversation = ConversationSummary(
     threadId: 'dm:did:me:did:peer',
     conversationId: 'dm:did:me:did:peer',

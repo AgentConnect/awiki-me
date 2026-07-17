@@ -1292,7 +1292,12 @@ String? _conversationPresentationAvatarUri(
   ConversationSummary conversation,
 ) {
   if (!conversation.isGroup) {
-    return conversation.avatarUri;
+    return peerAvatarUri(
+          ref.watch(peerDisplayProfileProvider),
+          conversation.targetDid,
+          peerPersonaId: conversation.peerPersonaId,
+        ) ??
+        conversation.avatarUri;
   }
   return _presentationGroup(ref, conversation)?.avatarUri ??
       conversation.avatarUri;

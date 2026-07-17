@@ -185,8 +185,11 @@ class _ComposerState extends ConsumerState<_Composer> {
           trigger != _activeMentionTrigger) {
         return;
       }
+      final profileState = ref.read(peerDisplayProfileProvider);
       final candidates = ChatMentionCandidate.forGroupMembers(
-        members,
+        members.map(
+          (member) => _mentionMemberPresentation(member, profileState),
+        ),
         query: trigger.query,
         currentUserDid: ref.read(sessionProvider).session?.did,
         currentUserHandle: ref.read(sessionProvider).session?.handle,
@@ -215,6 +218,46 @@ class _ComposerState extends ConsumerState<_Composer> {
         _selectedMentionIndex = 0;
       });
     }
+  }
+
+  GroupMemberSummary _mentionMemberPresentation(
+    GroupMemberSummary member,
+    PeerDisplayProfileState profileState,
+  ) {
+    final profile = profileState.forPeer(
+      peerPersonaId: member.peerPersonaId,
+      did: member.did,
+    );
+    final displayName = resolvePeerDisplayName(
+      profileState,
+      PeerDisplayNameRequest(
+        peerPersonaId: member.peerPersonaId,
+        did: member.did,
+        nickname: member.displayName,
+        fullHandle: member.handle,
+      ),
+    );
+    final projectedHandle = profile?.handle?.trim() ?? '';
+    return GroupMemberSummary(
+      userId: member.userId,
+      did: member.did,
+      handle: projectedHandle.isEmpty ? member.handle : projectedHandle,
+      role: member.role,
+      membershipId: member.membershipId,
+      peerPersonaId: member.peerPersonaId,
+      credentialDid: member.credentialDid,
+      profileUrl: member.profileUrl,
+      displayName: displayName,
+      avatarUri:
+          peerAvatarUri(
+            profileState,
+            member.did,
+            peerPersonaId: member.peerPersonaId,
+          ) ??
+          member.avatarUri,
+      subjectType: member.subjectType,
+      membershipStatus: member.membershipStatus,
+    );
   }
 
   bool get _hasMentionPanel =>
@@ -1247,32 +1290,12 @@ class _MentionCandidateTile extends StatelessWidget {
             opacity: enabled ? 1 : 0.62,
             child: Row(
               children: <Widget>[
-                Container(
-                  width: macStyle
+                AvatarBadge(
+                  seed: candidate.title,
+                  size: macStyle
                       ? responsive.displayScaled(28)
                       : responsive.displayScaled(32),
-                  height: macStyle
-                      ? responsive.displayScaled(28)
-                      : responsive.displayScaled(32),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE4ECF7),
-                    borderRadius: BorderRadius.circular(
-                      macStyle
-                          ? responsive.displayScaled(8)
-                          : responsive.radius(10),
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '@',
-                    style: TextStyle(
-                      color: const Color(0xFF0B65F8),
-                      fontSize: macStyle
-                          ? responsive.displayScaled(15)
-                          : responsive.bodyMd,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  avatarUri: candidate.avatarUri,
                 ),
                 SizedBox(
                   width: macStyle

@@ -123,6 +123,7 @@ class ChatMentionCandidate {
     this.selector,
     this.disabledReasonCode,
     this.enabled = true,
+    this.avatarUri,
     this.searchTerms = const <String>[],
   });
 
@@ -135,6 +136,7 @@ class ChatMentionCandidate {
   final ChatMentionSelector? selector;
   final ChatMentionDisabledReasonCode? disabledReasonCode;
   final bool enabled;
+  final String? avatarUri;
   final List<String> searchTerms;
 
   factory ChatMentionCandidate.fromGroupMember(GroupMemberSummary member) {
@@ -176,6 +178,7 @@ class ChatMentionCandidate {
             ),
       subjectType: subjectType,
       enabled: sendable,
+      avatarUri: member.avatarUri,
       disabledReasonCode: sendable
           ? null
           : active
