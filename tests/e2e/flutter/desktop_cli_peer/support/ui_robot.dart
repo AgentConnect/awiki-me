@@ -841,8 +841,9 @@ class _DesktopAppRobot {
     bool fromFollowers = false,
     bool forceViewAll = false,
   }) async {
+    final appContainer = container;
     await navigateToContacts();
-    await container.read(friendsProvider.notifier).refresh();
+    await appContainer.read(friendsProvider.notifier).refresh();
     await tester.pump();
     final rowKey = Key('contact-row:${peerDid.trim()}');
     final friendsPage = find.byType(FriendsPage);
@@ -906,11 +907,36 @@ class _DesktopAppRobot {
         observe: observeTitle,
       );
     }
+    final feedbackBefore = appContainer.read(uiFeedbackProvider)?.id;
     await tapOne(row, description: 'exact contact row');
-    await pumpUntilFinder(
-      find.bySemanticsIdentifier('e2e-chat-input'),
+    await pumpUntilObservation(
       description: 'chat composer after contact-row open',
       timeout: const Duration(seconds: 90),
+      observe: () {
+        if (find.bySemanticsIdentifier('e2e-chat-input').evaluate().length ==
+            1) {
+          return const E2eObservation.pass();
+        }
+        final feedback = appContainer.read(uiFeedbackProvider);
+        if (feedback != null && feedback.id != feedbackBefore) {
+          return E2eObservation.fatal(
+            'contact_open_feedback_${feedback.message.id}',
+          );
+        }
+        final selectedId = appContainer.read(selectedConversationProvider);
+        if (selectedId == null) {
+          return const E2eObservation.pending('contact_open_selected_pending');
+        }
+        final selectedProjection = appContainer
+            .read(conversationListProvider)
+            .entitiesById[selectedId];
+        if (selectedProjection == null) {
+          return const E2eObservation.fatal(
+            'contact_open_selected_projection_missing',
+          );
+        }
+        return const E2eObservation.pending('contact_open_composer_pending');
+      },
     );
     final selected = selectedConversation;
     if (selected.isGroup || selected.targetDid?.trim() != peerDid.trim()) {
@@ -970,10 +996,14 @@ class _DesktopAppRobot {
   }
 
   Future<void> openSelectedPeerInfo() async {
-    await tapOne(
-      find.byKey(const Key('chat-peer-info-avatar-button')),
-      description: 'peer info button',
+    final peerInfoButton = find
+        .byKey(const Key('chat-peer-info-avatar-button'))
+        .hitTestable();
+    await pumpUntilFinder(
+      peerInfoButton,
+      description: 'hit-testable peer info button',
     );
+    await tapOne(peerInfoButton, description: 'peer info button');
     await pumpUntilFinder(
       find.byKey(const Key('peer-info-dialog-handle-value')),
       description: 'handle-first peer identity header',
