@@ -388,6 +388,20 @@ class _DesktopAppRobot {
       description: 'enabled mention composer field',
       enabled: true,
     );
+    final selectedGroupDid = selectedConversation.groupId?.trim();
+    if (selectedGroupDid == null || selectedGroupDid.isEmpty) {
+      fail('Mention composition requires a canonical selected group.');
+    }
+    await pumpUntil(
+      description: 'preloaded mention member projection',
+      condition: () {
+        final members = container
+            .read(groupProvider)
+            .membersByGroup[selectedGroupDid];
+        return members != null &&
+            members.any((member) => member.did.trim() == expectedDid.trim());
+      },
+    );
     await _enterExactComposerText(
       inputField,
       '@',
@@ -443,22 +457,31 @@ class _DesktopAppRobot {
         'trigger_detected=${trigger != null}.',
       );
     }
-    await _enterExactComposerText(
-      inputField,
-      '@$handle',
-      description: 'mention filter input',
+    tester.testTextInput.enterText('@$handle');
+    await tester.pump();
+    final filteredPanel = find.byKey(const Key('chat-mention-candidate-panel'));
+    final filteredField = tester.widget<CupertinoTextField>(inputField);
+    final candidate = find.byKey(
+      Key('chat-mention-candidate-member:$expectedDid'),
     );
-    await pumpUntilFinder(
-      find.byKey(const Key('chat-mention-candidate-panel')),
-      description: 'filtered mention candidate panel',
-    );
-    final candidate = find.byWidgetPredicate(
-      (widget) =>
-          widget.key is Key &&
-          widget.key.toString().contains('chat-mention-candidate-') &&
-          !widget.key.toString().contains('candidate-panel'),
-      description: 'enabled mention candidate',
-    );
+    if (filteredField.controller?.text != '@$handle' ||
+        filteredPanel.evaluate().length != 1 ||
+        find
+            .descendant(
+              of: filteredPanel,
+              matching: find.byType(CupertinoActivityIndicator),
+            )
+            .evaluate()
+            .isNotEmpty ||
+        candidate.evaluate().length != 1) {
+      fail(
+        'A preloaded mention query did not filter in the first local frame; '
+        'exact_input=${filteredField.controller?.text == '@$handle'} '
+        'panel_count=${filteredPanel.evaluate().length} '
+        'loading_count=${find.descendant(of: filteredPanel, matching: find.byType(CupertinoActivityIndicator)).evaluate().length} '
+        'target_count=${candidate.evaluate().length}.',
+      );
+    }
     await pumpUntilFinder(candidate, description: 'mention candidate');
     _expectIdentityCandidatePresentation(
       candidate: candidate,

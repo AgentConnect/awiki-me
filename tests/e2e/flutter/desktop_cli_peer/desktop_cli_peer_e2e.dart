@@ -40,6 +40,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
@@ -48,7 +49,8 @@ import 'package:awiki_me/src/presentation/shared/identity_flow.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:crypto/crypto.dart';
-import 'package:flutter/cupertino.dart' show CupertinoTextField;
+import 'package:flutter/cupertino.dart'
+    show CupertinoActivityIndicator, CupertinoTextField;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
     show AppLifecycleState, Key, SizedBox, Text;

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-17.profile-candidate-consistency-v8",
+  "sourceRevision": "2026-07-17.mention-local-roster-v9",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -865,12 +865,12 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Compose a group mention through App UI and send it.",
       "exactOracles": [
-        "The real composer retains exact typed input, exposes the candidate panel from an explicit @ trigger, filters to one exact enabled member whose title and avatar match the Persona Profile projection, and clears only after send submission.",
+        "The real composer retains exact typed input, opens the candidate panel from an explicit @ trigger, and after the GroupState member projection is preloaded filters to the exact enabled member in the first local frame without a loading indicator; the title and avatar match the Persona Profile projection and the composer clears only after send submission.",
         "P9 payload contains exactly the intended member DID and valid range.",
         "CLI projection preserves canonical ID, exact text and structured mention metadata."
       ],
       "negativeChecks": [
-        "A stale roster title, generic @ avatar, text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
+        "A per-query roster reload/loading frame, stale roster title, generic @ avatar, text-only arrival, wrong DID/range/role, malformed JSON, or duplicate message fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",

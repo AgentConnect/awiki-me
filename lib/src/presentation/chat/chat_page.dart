@@ -1967,7 +1967,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return;
       }
       try {
-        await ref.read(groupProvider.notifier).refreshGroup(groupId);
+        await ref
+            .read(groupProvider.notifier)
+            .refreshGroup(groupId, refreshMembers: false);
       } catch (_) {
         _requestedGroupRoleIds.remove(groupId);
       }

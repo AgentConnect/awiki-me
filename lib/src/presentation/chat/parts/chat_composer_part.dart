@@ -53,6 +53,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     super.initState();
     widget.controller.addListener(_handleTextChanged);
     _scheduleInputFocusForRequest(widget.focusRequestId);
+    unawaited(_preloadMentionMembers());
   }
 
   @override
@@ -70,6 +71,7 @@ class _ComposerState extends ConsumerState<_Composer> {
       widget.conversation,
     )) {
       _clearMentionTrigger();
+      unawaited(_preloadMentionMembers());
     } else {
       _syncMentionTrigger();
     }
@@ -120,6 +122,20 @@ class _ComposerState extends ConsumerState<_Composer> {
       }
     }
     return null;
+  }
+
+  Future<void> _preloadMentionMembers() async {
+    final groupDid = _mentionGroupDid;
+    if (groupDid == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(groupProvider.notifier)
+          .ensureGroupMembersLoaded(groupDid);
+    } catch (_) {
+      // The visible mention trigger owns error/empty-state presentation.
+    }
   }
 
   void _syncMentionTrigger() {
@@ -177,9 +193,11 @@ class _ComposerState extends ConsumerState<_Composer> {
     }
     final requestSerial = ++_mentionCandidateRequestSerial;
     try {
-      final members = await ref
-          .read(groupApplicationServiceProvider)
-          .listMembers(groupDid, limit: 100);
+      final groupState = ref.read(groupProvider);
+      final members = groupState.membersByGroup[groupDid] ??
+          await ref
+              .read(groupProvider.notifier)
+              .ensureGroupMembersLoaded(groupDid);
       if (!mounted ||
           requestSerial != _mentionCandidateRequestSerial ||
           trigger != _activeMentionTrigger) {

@@ -354,9 +354,13 @@ The product oracle is fail-closed:
   add-member action to be enabled; the group conversation must also converge to
   its canonical id before messaging;
 - group mention composition uses explicit focused text input, proves the exact
-  text survives a settled frame, opens from a visible `@` trigger, selects one
-  exact candidate, and proves the composer clears after submission; CLI payload
-  sends must return both a canonical id and `application/json` result type;
+  text survives a settled frame, waits for the `GroupState.membersByGroup`
+  preload, then requires the filtered candidate to appear in the first local
+  frame without a loading indicator; unit coverage additionally proves a cold
+  preload and consecutive query edits share exactly one group-member request.
+  The flow selects one exact candidate and proves the composer clears after
+  submission; CLI payload sends must return both a canonical id and
+  `application/json` result type;
   group mentions require one valid structured target DID; attachment checks
   use a real temporary filesystem drop source, require the draft model and
   visible preview to preserve the exact filename, and then require exact ids,

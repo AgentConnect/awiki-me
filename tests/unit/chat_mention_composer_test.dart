@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -16,6 +18,95 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets(
+    'chat mention preloads one roster and filters consecutive queries locally',
+    (tester) async {
+      final rosterLoad = Completer<void>();
+      final gateway = FakeAwikiGateway()
+        ..listGroupMembersCompleter = rosterLoad
+        ..groupMembersByGroupId = const <String, List<GroupMemberSummary>>{
+          'group-mention': <GroupMemberSummary>[
+            GroupMemberSummary(
+              userId: 'did:wba:awiki.info:u:alice',
+              did: 'did:wba:awiki.info:u:alice',
+              handle: 'alice',
+              role: 'member',
+              displayName: 'Alice',
+              subjectType: GroupMemberSubjectType.human,
+            ),
+          ],
+        };
+      addTearDown(() {
+        if (!rosterLoad.isCompleted) {
+          rosterLoad.complete();
+        }
+      });
+      const session = SessionIdentity(
+        did: 'did:wba:awiki.info:u:me',
+        handle: 'me',
+        displayName: 'Me',
+        credentialName: 'me.json',
+      );
+      final conversation = ConversationSummary(
+        threadId: 'group:group-mention',
+        conversationId: 'group:group-mention',
+        displayName: 'Mention Group',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 7, 17, 18),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'group-mention',
+      );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: CupertinoPageScaffold(
+            child: ChatView(
+              conversation: conversation,
+              embedded: true,
+              macStyle: true,
+            ),
+          ),
+          gateway: gateway,
+          session: session,
+        ),
+      );
+      await tester.pump();
+
+      expect(gateway.listGroupMembersCalls, 1);
+      await tester.enterText(find.byType(CupertinoTextField), '@A');
+      await tester.pump();
+      expect(gateway.listGroupMembersCalls, 1);
+
+      rosterLoad.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('@Alice'), findsOneWidget);
+      expect(gateway.loadPublicProfileQueries, isEmpty);
+
+      await tester.enterText(find.byType(CupertinoTextField), '@Al');
+      await tester.pump();
+      expect(find.text('@Alice'), findsOneWidget);
+      expect(gateway.listGroupMembersCalls, 1);
+
+      await tester.enterText(find.byType(CupertinoTextField), '@Ali');
+      await tester.pump();
+      final panel = find.byKey(const Key('chat-mention-candidate-panel'));
+      expect(panel, findsOneWidget);
+      expect(
+        find.descendant(of: panel, matching: find.text('@Alice')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: panel,
+          matching: find.byType(CupertinoActivityIndicator),
+        ),
+        findsNothing,
+      );
+      expect(gateway.listGroupMembersCalls, 1);
+    },
+  );
+
   testWidgets(
     'chat mention composer shows group candidates and inserts draft range',
     (tester) async {
