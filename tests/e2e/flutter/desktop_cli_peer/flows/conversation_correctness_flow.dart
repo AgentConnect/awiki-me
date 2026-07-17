@@ -165,7 +165,7 @@ Future<void> _verifyCrossConversationCorrectness({
     sendState: MessageSendState.sent,
   );
   await robot.expectMessageContentVisible(visibleGroupMessage);
-  await robot.expectMessageSenderDisplayName(
+  await robot.expectMessageSenderIdentityProjection(
     conversationId: group.conversationId,
     message: visibleGroupMessage,
     expectedName: group.cliMemberDisplayName,

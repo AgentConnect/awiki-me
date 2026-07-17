@@ -411,20 +411,49 @@ final peerDisplayNameProvider = Provider.family<String, PeerDisplayNameRequest>(
         );
       }),
     );
-    return const PeerDisplayNameResolver().resolve(
+    return _resolvePeerDisplayName(
+      profile: projection.profile,
       localNote: projection.localNote,
-      nickname: projection.profile?.displayName?.trim().isNotEmpty == true
-          ? projection.profile!.displayName
-          : request.nickname,
-      fullHandle: projection.profile?.handle?.trim().isNotEmpty == true
-          ? projection.profile!.handle
-          : request.fullHandle,
-      senderNameSnapshot: request.senderNameSnapshot,
-      did: request.did,
-      unknownLabel: request.unknownLabel,
+      request: request,
     );
   },
 );
+
+String resolvePeerDisplayName(
+  PeerDisplayProfileState state,
+  PeerDisplayNameRequest request,
+) {
+  return _resolvePeerDisplayName(
+    profile: state.forPeer(
+      peerPersonaId: request.peerPersonaId,
+      did: request.did,
+    ),
+    localNote: state.localNoteForPeer(
+      peerPersonaId: request.peerPersonaId,
+      did: request.did,
+    ),
+    request: request,
+  );
+}
+
+String _resolvePeerDisplayName({
+  required PeerDisplayProfile? profile,
+  required String? localNote,
+  required PeerDisplayNameRequest request,
+}) {
+  return const PeerDisplayNameResolver().resolve(
+    localNote: localNote,
+    nickname: profile?.displayName?.trim().isNotEmpty == true
+        ? profile!.displayName
+        : request.nickname,
+    fullHandle: profile?.handle?.trim().isNotEmpty == true
+        ? profile!.handle
+        : request.fullHandle,
+    senderNameSnapshot: request.senderNameSnapshot,
+    did: request.did,
+    unknownLabel: request.unknownLabel,
+  );
+}
 
 /// Resolves public identity surfaces that intentionally do not use a local
 /// contact note or a historical sender snapshot. Identity lookup results and

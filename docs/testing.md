@@ -202,6 +202,15 @@ event, and existing group sender label without creating a second Persona or
 conversation. The CLI only changes the remote fixture Profile; every required
 verdict is taken from App projection or visible App UI.
 
+`DISPLAY-NAME-E2E-001`, `GROUP-E2E-001`, and `GROUP-P9-001` also inspect the
+visible add-member and `@` candidate rows before selection. Their primary title,
+fallback avatar seed, and optional avatar URI must match the same Persona
+Profile projection used by the Direct conversation; merely finding an enabled
+candidate or validating the final member DID/P9 payload is insufficient.
+The same flow also checks the visible group-message sender avatar and fallback
+seed against the Persona Profile projection; a correct sender label alone is
+not a complete identity-presentation oracle.
+
 The focused `contacts` slice deliberately establishes the CLI peer as an
 inbound follower while the isolated App projection has no Direct for that DID
 or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row before
@@ -346,9 +355,13 @@ The product oracle is fail-closed:
   add-member action to be enabled; the group conversation must also converge to
   its canonical id before messaging;
 - group mention composition uses explicit focused text input, proves the exact
-  text survives a settled frame, opens from a visible `@` trigger, selects one
-  exact candidate, and proves the composer clears after submission; CLI payload
-  sends must return both a canonical id and `application/json` result type;
+  text survives a settled frame, waits for the `GroupState.membersByGroup`
+  preload, then requires the filtered candidate to appear in the first local
+  frame without a loading indicator; unit coverage additionally proves a cold
+  preload and consecutive query edits share exactly one group-member request.
+  The flow selects one exact candidate and proves the composer clears after
+  submission; CLI payload sends must return both a canonical id and
+  `application/json` result type;
   group mentions require one valid structured target DID; attachment checks
   use a real temporary filesystem drop source, require the draft model and
   visible preview to preserve the exact filename, and then require exact ids,

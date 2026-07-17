@@ -115,7 +115,15 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final handleLabel = profile == null
         ? (widget.target.fullHandle?.trim() ?? '')
         : DidDisplayFormatter.profileHandleLabel(profile);
-    final avatarUri = profile?.avatarUri ?? widget.target.avatarUri;
+    final projectedAvatarUri = peerAvatarUri(
+      ref.watch(peerDisplayProfileProvider),
+      profileDid,
+      peerPersonaId: profileDid == targetDid
+          ? widget.target.peerPersonaId
+          : null,
+    );
+    final avatarUri =
+        projectedAvatarUri ?? profile?.avatarUri ?? widget.target.avatarUri;
     final rawProfileContent = profile == null
         ? ''
         : (profile.profileMarkdown.trim().isNotEmpty
@@ -164,6 +172,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                 Row(
                   children: <Widget>[
                     AvatarBadge(
+                      key: const Key('peer-info-avatar'),
                       seed: displayName,
                       size: 64,
                       avatarUri: avatarUri,

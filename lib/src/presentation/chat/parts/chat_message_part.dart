@@ -914,6 +914,7 @@ class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
     required this.senderLabel,
+    required this.senderAvatarUri,
     required this.showSenderLabel,
     this.macStyle = false,
     this.onRetry,
@@ -925,6 +926,7 @@ class _MessageBubble extends StatelessWidget {
 
   final ChatMessage message;
   final String senderLabel;
+  final String? senderAvatarUri;
   final bool showSenderLabel;
   final bool macStyle;
   final Future<void> Function()? onRetry;
@@ -1131,6 +1133,7 @@ class _MessageBubble extends StatelessWidget {
                 child: AvatarBadge(
                   seed: senderLabel,
                   size: responsive.displayScaled(34),
+                  avatarUri: senderAvatarUri,
                 ),
               ),
             ),
@@ -1184,6 +1187,7 @@ class _MessageBubble extends StatelessWidget {
                 child: AvatarBadge(
                   seed: senderLabel,
                   size: responsive.scaled(28),
+                  avatarUri: senderAvatarUri,
                 ),
               ),
             ),

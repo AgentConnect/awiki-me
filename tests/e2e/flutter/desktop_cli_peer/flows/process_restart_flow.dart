@@ -65,7 +65,10 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     final cliFullHandle = cliHandle.contains('.')
         ? cliHandle
         : '$cliHandle.${config.environment.didDomain}';
-    await robot.addGroupMember(cliFullHandle);
+    await robot.addGroupMember(
+      cliFullHandle,
+      expectedDisplayName: _nicknameFixtureDisplayName,
+    );
     final cliMember = await _findGroupMember(
       groups: bootstrap.groupApplicationService!,
       groupDid: groupDid,
@@ -338,7 +341,7 @@ void runDesktopCliPeerProcessRestartPhaseB() {
       senderDid: handoff.groupMemberDid,
       sendState: MessageSendState.sent,
     );
-    await robot.expectMessageSenderDisplayName(
+    await robot.expectMessageSenderIdentityProjection(
       conversationId: handoff.groupConversationId,
       message: groupMessage,
       expectedName: handoff.groupMemberDisplayName,

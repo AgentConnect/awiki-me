@@ -71,7 +71,10 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     _normalizeIdentityRef(ownerDid),
   );
 
-  await robot.addGroupMember(cliFullHandle);
+  await robot.addGroupMember(
+    cliFullHandle,
+    expectedDisplayName: config.expectedCliPeerDisplayName,
+  );
   await _waitForUiConversationUnread(
     robot: robot,
     conversationId: conversation.conversationId,
@@ -171,6 +174,8 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
 
   final appMentionText = await robot.sendMention(
     handle: config.cliHandle,
+    expectedDid: cliMemberDid,
+    expectedDisplayName: expectedCliMemberName,
     suffix: 'e2e app group mention ${config.runId} $nonce',
   );
   final appMention = await _waitForUiMessage(
@@ -195,7 +200,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     config: config,
     groupDid: groupDid,
     expectedText: appMentionText,
-    expectedMentionSurface: appMentionText.split(' ').first,
+    expectedMentionSurface: '@$expectedCliMemberName',
     expectedMessageId: appMentionId,
     expectedTargetDid: cliMemberDid,
   );
@@ -255,7 +260,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     sendState: MessageSendState.sent,
   );
   await robot.expectMessageContentVisible(cliGroupMessage);
-  await robot.expectMessageSenderDisplayName(
+  await robot.expectMessageSenderIdentityProjection(
     conversationId: conversation.conversationId,
     message: cliGroupMessage,
     expectedName: expectedCliMemberName,

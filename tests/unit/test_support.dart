@@ -696,6 +696,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastMarkConversationReadConversationId;
   AppThreadReadWatermark? lastMarkConversationReadWatermark;
   int listConversationsCalls = 0;
+  int listGroupMembersCalls = 0;
   int loadServerInfoCalls = 0;
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
@@ -1082,6 +1083,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   @override
   Future<List<GroupMemberSummary>> listGroupMembers(String groupId) async {
+    listGroupMembersCalls += 1;
     if (listGroupMembersError != null) {
       throw listGroupMembersError!;
     }

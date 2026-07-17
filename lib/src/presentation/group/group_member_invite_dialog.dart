@@ -492,7 +492,12 @@ class _GroupMemberInviteDialogState
       add(candidate);
     }
 
-    final candidates = byDid.values.toList(growable: false);
+    final profileState = watch
+        ? ref.watch(peerDisplayProfileProvider)
+        : ref.read(peerDisplayProfileProvider);
+    final candidates = byDid.values
+        .map((candidate) => candidate.withPeerDisplayProfile(profileState))
+        .toList(growable: false);
     candidates.sort((a, b) {
       final source = a.source.index.compareTo(b.source.index);
       if (source != 0) {
@@ -535,6 +540,7 @@ class GroupInviteCandidate {
     required this.kind,
     required this.source,
     this.handle,
+    this.peerPersonaId,
     this.avatarUri,
     this.avatarSeed,
     this.lastInteractedAt,
@@ -545,6 +551,7 @@ class GroupInviteCandidate {
   final GroupInviteIdentityKind kind;
   final GroupInviteCandidateSource source;
   final String? handle;
+  final String? peerPersonaId;
   final String? avatarUri;
   final String? avatarSeed;
   final DateTime? lastInteractedAt;
@@ -639,6 +646,7 @@ class GroupInviteCandidate {
             ),
       source: GroupInviteCandidateSource.recent,
       handle: _handleFromDirectPeer(peer),
+      peerPersonaId: conversation.peerPersonaId,
       avatarUri: conversation.avatarUri,
       avatarSeed: conversation.avatarSeed ?? displayName,
       lastInteractedAt: conversation.lastMessageAt,
@@ -690,9 +698,47 @@ class GroupInviteCandidate {
           : kind,
       source: source,
       handle: _firstNonEmpty(handle, other.handle),
+      peerPersonaId: _firstNonEmpty(peerPersonaId, other.peerPersonaId),
       avatarUri: _firstNonEmpty(avatarUri, other.avatarUri),
       avatarSeed: _firstNonEmpty(avatarSeed, other.avatarSeed),
       lastInteractedAt: lastInteractedAt ?? other.lastInteractedAt,
+    );
+  }
+
+  GroupInviteCandidate withPeerDisplayProfile(
+    PeerDisplayProfileState profileState,
+  ) {
+    final profile = profileState.forPeer(
+      peerPersonaId: peerPersonaId,
+      did: did,
+    );
+    final projectedHandle = profile?.handle?.trim() ?? '';
+    final projectedAvatarUri =
+        peerAvatarUri(
+          profileState,
+          did,
+          peerPersonaId: peerPersonaId,
+        )?.trim() ??
+        '';
+    final projectedDisplayName = resolvePeerDisplayName(
+      profileState,
+      PeerDisplayNameRequest(
+        peerPersonaId: peerPersonaId,
+        did: did,
+        nickname: displayName,
+        fullHandle: handle,
+      ),
+    );
+    return GroupInviteCandidate(
+      did: did,
+      displayName: projectedDisplayName,
+      kind: kind,
+      source: source,
+      handle: projectedHandle.isEmpty ? handle : projectedHandle,
+      peerPersonaId: peerPersonaId,
+      avatarUri: projectedAvatarUri.isEmpty ? avatarUri : projectedAvatarUri,
+      avatarSeed: projectedDisplayName,
+      lastInteractedAt: lastInteractedAt,
     );
   }
 
@@ -1156,6 +1202,7 @@ class _InviteCandidateTile extends StatelessWidget {
         ? DidDisplayFormatter.compactDid(candidate.did)
         : '@$handle';
     return AppPressableTile(
+      key: Key('group-invite-candidate:${candidate.did}'),
       onTap: onTap,
       semanticLabel: displayName,
       borderRadius: BorderRadius.circular(12),

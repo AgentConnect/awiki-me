@@ -1052,6 +1052,23 @@ void main() {
     expect(matches(cliMention(targetDid: 'did:test:other')), isFalse);
     expect(matches(cliMention(targetKind: 'agent')), isFalse);
     expect(matches(cliMention(role: 'cc')), isFalse);
+
+    const nicknameSurface = '@AWiki E2E CLI Peer';
+    const nicknameText = '$nicknameSurface hello';
+    expect(
+      cliMessageHasExactSingleMention(
+        message: cliMention(
+          text: nicknameText,
+          end: nicknameSurface.runes.length,
+        ),
+        expectedText: nicknameText,
+        expectedMentionSurface: nicknameSurface,
+        expectedTargetDid: 'did:test:peer',
+        expectedTargetKind: 'human',
+        expectedMentionRole: 'addressee',
+      ),
+      isTrue,
+    );
   });
 
   testWidgets(

@@ -45,6 +45,9 @@ class GroupController extends StateNotifier<GroupState> {
   GroupController(this.ref) : super(const GroupState());
 
   final Ref ref;
+  final Map<String, Future<List<GroupMemberSummary>>> _initialMemberLoads =
+      <String, Future<List<GroupMemberSummary>>>{};
+  int _memberLoadGeneration = 0;
 
   Future<void> refresh() async {
     state = state.copyWith(isLoading: true);
@@ -65,17 +68,69 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
+    final normalizedGroupId = groupId.trim();
+    final initialLoad = _initialMemberLoads[normalizedGroupId];
+    if (initialLoad != null) {
+      try {
+        await initialLoad;
+      } catch (_) {
+        // An explicit refresh must still retry after an initial preload fails.
+      }
+    }
+    return _loadGroupMembers(normalizedGroupId, hydrateProfiles: true);
+  }
+
+  Future<List<GroupMemberSummary>> ensureGroupMembersLoaded(String groupId) {
+    final normalizedGroupId = groupId.trim();
+    final cached = state.membersByGroup[normalizedGroupId];
+    if (cached != null) {
+      return Future<List<GroupMemberSummary>>.value(cached);
+    }
+    final active = _initialMemberLoads[normalizedGroupId];
+    if (active != null) {
+      return active;
+    }
+    late final Future<List<GroupMemberSummary>> load;
+    load = _loadGroupMembers(normalizedGroupId, hydrateProfiles: false)
+        .whenComplete(() {
+          if (identical(_initialMemberLoads[normalizedGroupId], load)) {
+            _initialMemberLoads.remove(normalizedGroupId);
+          }
+        });
+    _initialMemberLoads[normalizedGroupId] = load;
+    return load;
+  }
+
+  Future<List<GroupMemberSummary>> _loadGroupMembers(
+    String groupId, {
+    required bool hydrateProfiles,
+  }) async {
+    final generation = _memberLoadGeneration;
     final members = await ref
         .read(groupApplicationServiceProvider)
         .listMembers(groupId);
+    if (generation != _memberLoadGeneration) {
+      return members;
+    }
+    _publishGroupMembers(groupId, members);
+    if (!hydrateProfiles) {
+      return members;
+    }
     final hydratedMembers = await _hydrateMemberProfiles(members);
+    if (generation != _memberLoadGeneration) {
+      return hydratedMembers;
+    }
+    _publishGroupMembers(groupId, hydratedMembers);
+    return hydratedMembers;
+  }
+
+  void _publishGroupMembers(String groupId, List<GroupMemberSummary> members) {
     state = state.copyWith(
       membersByGroup: <String, List<GroupMemberSummary>>{
         ...state.membersByGroup,
-        groupId: hydratedMembers,
+        groupId: members,
       },
     );
-    return hydratedMembers;
   }
 
   Future<List<GroupMemberSummary>> _hydrateMemberProfiles(
@@ -112,7 +167,10 @@ class GroupController extends StateNotifier<GroupState> {
     );
   }
 
-  Future<GroupSummary> refreshGroup(String groupId) async {
+  Future<GroupSummary> refreshGroup(
+    String groupId, {
+    bool refreshMembers = true,
+  }) async {
     late GroupSummary group;
     Object? groupError;
     StackTrace? groupStackTrace;
@@ -122,7 +180,11 @@ class GroupController extends StateNotifier<GroupState> {
       groupError = error;
       groupStackTrace = stackTrace;
     }
-    await loadGroupMembers(groupId);
+    if (refreshMembers) {
+      await loadGroupMembers(groupId);
+    } else {
+      await ensureGroupMembersLoaded(groupId);
+    }
     if (groupError != null) {
       Error.throwWithStackTrace(groupError, groupStackTrace!);
     }
@@ -222,6 +284,8 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   void clear() {
+    _memberLoadGeneration += 1;
+    _initialMemberLoads.clear();
     state = const GroupState();
   }
 }

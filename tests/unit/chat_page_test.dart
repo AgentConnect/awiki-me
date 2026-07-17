@@ -31,6 +31,7 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -5318,6 +5319,114 @@ void main() {
           .data,
       'alice',
     );
+  });
+
+  testWidgets('群消息和发送人详情复用 Persona 昵称与头像投影', (tester) async {
+    const senderDid = 'did:wba:awiki.info:user:zhuocheng:e1_key';
+    const senderPersonaId = 'persona:zhuocheng';
+    const avatarUri = 'https://awiki.info/avatar/zhuocheng.png';
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final gateway = FakeAwikiGateway();
+    final conversation = ConversationSummary(
+      conversationId: 'group:did:test:group:sender-profile',
+      threadId: 'group:sender-profile',
+      displayName: '项目群',
+      lastMessagePreview: '你好',
+      lastMessageAt: DateTime(2026, 7, 17, 17, 0),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:sender-profile',
+    );
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'zhuocheng-1',
+        remoteId: 'zhuocheng-1',
+        threadId: conversation.conversationId,
+        senderDid: senderDid,
+        senderPeerPersonaId: senderPersonaId,
+        senderName: 'zhuocheng',
+        groupId: conversation.groupId,
+        content: '你好',
+        createdAt: conversation.lastMessageAt,
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+          peerDisplayProfileProvider.overrideWith((ref) {
+            final controller = PeerDisplayProfileController(ref);
+            controller.updateFromRemote(
+              ownerDid: session.did,
+              peerPersonaId: senderPersonaId,
+              profile: const UserProfile(
+                did: senderDid,
+                displayName: '卓诚',
+                bio: '',
+                tags: <String>[],
+                profileMarkdown: '',
+                fullHandle: 'zhuocheng.awiki.info',
+                avatarUri: avatarUri,
+              ),
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    final messageContent = find.byKey(
+      const Key('chat-message-content:zhuocheng-1'),
+    );
+    final senderAvatar = find.descendant(
+      of: messageContent,
+      matching: find.byType(AvatarBadge),
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const Key('chat-message-sender:zhuocheng-1')),
+          )
+          .data,
+      '卓诚',
+    );
+    expect(senderAvatar, findsOneWidget);
+    expect(tester.widget<AvatarBadge>(senderAvatar).seed, '卓诚');
+    expect(tester.widget<AvatarBadge>(senderAvatar).avatarUri, avatarUri);
+
+    await tester.tap(senderAvatar);
+    await tester.pumpAndSettle();
+
+    final peerInfoAvatar = tester.widget<AvatarBadge>(
+      find.byKey(const Key('peer-info-avatar')),
+    );
+    expect(peerInfoAvatar.seed, '卓诚');
+    expect(peerInfoAvatar.avatarUri, avatarUri);
   });
 
   testWidgets('群系统消息按昵称、Handle、DID顺序显示成员身份', (tester) async {

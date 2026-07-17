@@ -14,6 +14,7 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -647,6 +648,93 @@ void main() {
       'agent-test.awiki.ai',
     ]);
     expect(find.text('4 人'), findsOneWidget);
+  });
+
+  testWidgets('添加群成员候选复用会话的 Persona 昵称和头像投影', (tester) async {
+    const groupDid = 'did:wba:awiki.info:group:profile-consistency:e1_group';
+    const peerDid = 'did:wba:awiki.info:user:zhuocheng:e1_peer';
+    const peerPersonaId = 'persona:zhuocheng';
+    const avatarUri = 'https://awiki.info/avatar/zhuocheng.png';
+    final group = GroupSummary(
+      groupId: groupDid,
+      conversationId: 'group:$groupDid',
+      name: '资料一致性群',
+      description: '',
+      memberCount: 1,
+      lastMessageAt: DateTime(2026, 7, 17, 17, 14),
+      myRole: 'owner',
+    );
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..groups = <GroupSummary>[group]
+      ..conversations = <ConversationSummary>[
+        ConversationSummary(
+          threadId: 'dm:peer-scope:zhuocheng',
+          conversationId: 'dm:peer-scope:zhuocheng',
+          displayName: 'zhuocheng',
+          lastMessagePreview: 'hello',
+          lastMessageAt: DateTime(2026, 7, 17, 17, 13),
+          unreadCount: 0,
+          isGroup: false,
+          targetDid: peerDid,
+          targetPeer: 'zhuocheng.awiki.info',
+          peerPersonaId: peerPersonaId,
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: group),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(GroupDetailPage)),
+      listen: false,
+    );
+    container
+        .read(peerDisplayProfileProvider.notifier)
+        .updateFromRemote(
+          ownerDid: session.did,
+          peerPersonaId: peerPersonaId,
+          profile: const UserProfile(
+            did: peerDid,
+            displayName: '卓诚',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+            fullHandle: 'zhuocheng.awiki.info',
+            avatarUri: avatarUri,
+          ),
+        );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+    await tester.pumpAndSettle();
+
+    final candidate = find.byKey(const Key('group-invite-candidate:$peerDid'));
+    expect(candidate, findsOneWidget);
+    expect(
+      find.descendant(of: candidate, matching: find.text('卓诚')),
+      findsOneWidget,
+    );
+    final avatar = tester.widget<AvatarBadge>(
+      find.descendant(of: candidate, matching: find.byType(AvatarBadge)),
+    );
+    expect(avatar.seed, '卓诚');
+    expect(avatar.avatarUri, avatarUri);
   });
 
   testWidgets('群详情邀请候选排除已删除智能体的所有本地来源', (tester) async {

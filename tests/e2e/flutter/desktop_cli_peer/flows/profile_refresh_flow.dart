@@ -161,7 +161,7 @@ Future<void> _verifyProfileRefreshConvergence({
     senderDid: group.cliMemberDid,
     sendState: MessageSendState.sent,
   );
-  await robot.expectMessageSenderDisplayName(
+  await robot.expectMessageSenderIdentityProjection(
     conversationId: group.conversationId,
     message: groupMessage,
     expectedName: updatedName,

@@ -747,6 +747,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
                           context,
                           message,
                         );
+                        final senderAvatarUri = message.isMine
+                            ? null
+                            : peerAvatarUri(
+                                ref.watch(peerDisplayProfileProvider),
+                                message.senderDid,
+                                peerPersonaId: message.senderPeerPersonaId,
+                              );
                         final showSenderLabel = _shouldShowSenderLabel(
                           previous,
                           message,
@@ -787,6 +794,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   _MessageBubble(
                                     message: message,
                                     senderLabel: senderLabel,
+                                    senderAvatarUri: senderAvatarUri,
                                     showSenderLabel: showSenderLabel,
                                     macStyle: macStyle,
                                     onRetry:
@@ -1820,7 +1828,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final latest = _matchingConversationForDisplay(conversations);
     final base = latest ?? widget.conversation;
     if (!base.isGroup) {
-      return base;
+      final avatarUri = peerAvatarUri(
+        ref.watch(peerDisplayProfileProvider),
+        base.targetDid,
+        peerPersonaId: base.peerPersonaId,
+      );
+      if (avatarUri == null || avatarUri == base.avatarUri) {
+        return base;
+      }
+      return base.copyWith(avatarUri: avatarUri);
     }
     final groupName = _currentGroupName(base);
     final groupAvatarUri = _currentGroupAvatarUri(base);
@@ -1951,7 +1967,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
         return;
       }
       try {
-        await ref.read(groupProvider.notifier).refreshGroup(groupId);
+        await ref
+            .read(groupProvider.notifier)
+            .refreshGroup(groupId, refreshMembers: false);
       } catch (_) {
         _requestedGroupRoleIds.remove(groupId);
       }
