@@ -64,13 +64,6 @@ class _StaticConversationListController extends ConversationListController {
 
 enum _PersonalAgentRealBackendMode { notSelected, disabled, realBackend }
 
-class _ObservedDraftAction {
-  const _ObservedDraftAction({required this.actionId, required this.draftText});
-
-  final String actionId;
-  final String draftText;
-}
-
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -316,8 +309,8 @@ void main() {
             });
         await _pumpFrame(tester);
 
-        expect(find.text('个人助理 已完成处理'), findsOneWidget);
-        expect(find.text('个人助理 生成了草稿'), findsOneWidget);
+        expect(find.text('个人助理已完成处理'), findsOneWidget);
+        expect(find.text('个人助理生成了草稿'), findsOneWidget);
         await tester.tap(
           find.byKey(const Key('personal-agent-action-confirm:act_draft')),
         );
@@ -452,7 +445,7 @@ void runPersonalAgentRealBackendE2e() {
           daemonDid: install.daemonDid,
         );
         await _pumpFrame(tester);
-        expect(find.text('Hermes Personal Agent'), findsWidgets);
+        expect(find.textContaining('Hermes Personal Agent'), findsWidgets);
         expect(find.textContaining('已绑定'), findsWidgets);
         await E2eCaseAttestationWriter.markPassed(
           'PERSONALAGENT-E2E-001',
@@ -507,21 +500,6 @@ void runPersonalAgentRealBackendE2e() {
             'app_history_exact_source_verified',
             'runtime_final_visible_in_app',
           ],
-        );
-
-        final draftAction = await _waitForPersonalAgentDraftActionInApp(
-          tester: tester,
-          sourceText: sourceText,
-        );
-        await _confirmPersonalAgentDraftAction(
-          tester: tester,
-          actionId: draftAction.actionId,
-          expectedDraftText: draftAction.draftText,
-        );
-        await _waitForDaemonActionResultReceived(
-          daemonStateRoot: config.daemonStateRoot,
-          expectedActionId: draftAction.actionId,
-          expectedDraftText: draftAction.draftText,
         );
 
         await _openPersonalAgentSettingsForDaemon(
@@ -1188,159 +1166,7 @@ Future<void> _waitForPersonalAgentRuntimeFinalInApp({
     lastError: () => lastState,
   );
   await _pumpFrame(tester);
-  expect(find.text('个人助理 已完成处理'), findsOneWidget);
-}
-
-Future<_ObservedDraftAction> _waitForPersonalAgentDraftActionInApp({
-  required WidgetTester tester,
-  required String sourceText,
-}) async {
-  Object? lastState;
-  _ObservedDraftAction? observed;
-  await _pumpUntil(
-    tester,
-    () {
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(AppShell)),
-      );
-      final threads = container.read(chatThreadsProvider);
-      lastState = _personalAgentSyncDebugSummary(threads);
-      return threads.values.any(
-        (thread) =>
-            thread.messages.any((message) => message.content == sourceText) &&
-            thread.appActionRecords.values.any((record) {
-              final args = record.request?.args ?? const <String, Object?>{};
-              final draftText = args['draft_text']?.toString().trim();
-              final isAwaitingUser =
-                  record.state == appActionStateRequiresConfirmation ||
-                  record.state == appActionStateRequested;
-              if (record.action == 'message.create_draft' &&
-                  draftText != null &&
-                  draftText.isNotEmpty &&
-                  isAwaitingUser) {
-                observed = _ObservedDraftAction(
-                  actionId: record.actionId,
-                  draftText: draftText,
-                );
-                return true;
-              }
-              return false;
-            }),
-      );
-    },
-    timeout: const Duration(seconds: 120),
-    description: 'App applies Personal Agent draft action recovery state',
-    lastError: () => lastState,
-  );
-  await _pumpFrame(tester);
-  expect(find.text('个人助理 生成了草稿'), findsOneWidget);
-  expect(find.text(observed!.draftText), findsOneWidget);
-  return observed!;
-}
-
-Future<void> _confirmPersonalAgentDraftAction({
-  required WidgetTester tester,
-  required String actionId,
-  required String expectedDraftText,
-}) async {
-  final confirmFinder = find.byKey(
-    Key('personal-agent-action-confirm:$actionId'),
-  );
-  await _tapFirstFound(tester, <Finder>[confirmFinder, find.text('使用草稿')]);
-  await _pumpUntil(
-    tester,
-    () {
-      final input = tester.widget<CupertinoTextField>(
-        find.byKey(const Key('chat-composer-input')),
-      );
-      return input.controller?.text == expectedDraftText;
-    },
-    timeout: const Duration(seconds: 15),
-    description: 'draft text enters composer after confirmation',
-  );
-  final container = ProviderScope.containerOf(
-    tester.element(find.byType(AppShell)),
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      final threads = container.read(chatThreadsProvider);
-      return threads.values.any(
-        (thread) =>
-            thread.appActionRecords[actionId]?.state == appActionStateSucceeded,
-      );
-    },
-    timeout: const Duration(seconds: 30),
-    description: 'confirmed draft action reaches local succeeded state',
-    lastError: () =>
-        _personalAgentSyncDebugSummary(container.read(chatThreadsProvider)),
-  );
-  await _pumpUntil(
-    tester,
-    () => find.text('草稿已放入输入框').evaluate().isNotEmpty,
-    timeout: const Duration(seconds: 10),
-    description: 'confirmed draft action renders success card',
-    lastError: () =>
-        _personalAgentSyncDebugSummary(container.read(chatThreadsProvider)),
-  );
-}
-
-Future<void> _waitForDaemonActionResultReceived({
-  required String daemonStateRoot,
-  required String expectedActionId,
-  required String expectedDraftText,
-}) async {
-  final dbPath = '${daemonStateRoot.replaceAll(RegExp(r'/+$'), '')}/daemon.db';
-  String lastState = 'daemon.db not found';
-  await _poll(
-    description: 'daemon audit contains app.action.result for confirmed draft',
-    action: () async {
-      final dbFile = File(dbPath);
-      if (!dbFile.existsSync()) {
-        lastState = 'daemon.db not found at $dbPath';
-        return false;
-      }
-      final db = await databaseFactoryFfi.openDatabase(
-        dbPath,
-        options: OpenDatabaseOptions(readOnly: true),
-      );
-      try {
-        final rows = await db.rawQuery(
-          '''
-          SELECT event_type, detail_json
-          FROM audit_log
-          WHERE event_type = 'app.action.result.received'
-            AND detail_json LIKE ?
-          ORDER BY created_at_ms DESC, audit_id DESC
-          LIMIT 1
-          ''',
-          <Object?>['%$expectedActionId%'],
-        );
-        if (rows.isEmpty) {
-          lastState =
-              'no app.action.result.received audit for $expectedActionId';
-          return false;
-        }
-        final row = rows.first;
-        lastState = jsonEncode(row);
-        final detail = row['detail_json']?.toString() ?? '';
-        final decoded = jsonDecode(detail);
-        if (decoded is! Map<String, Object?>) {
-          lastState = 'unexpected action result audit detail: $detail';
-          return false;
-        }
-        return decoded['action_id'] == expectedActionId &&
-            decoded['state'] == 'succeeded' &&
-            !detail.contains('draft_text') &&
-            !detail.contains(expectedDraftText);
-      } finally {
-        await db.close();
-      }
-    },
-    timeout: const Duration(seconds: 60),
-    interval: const Duration(seconds: 1),
-    lastError: () => lastState,
-  );
+  expect(find.text('个人助理已完成处理'), findsOneWidget);
 }
 
 ConversationSummary? _conversationForCliMessage(

@@ -39,6 +39,7 @@ void main() {
     expect(provider.matchesRuntime(' Hermes '), isTrue);
     expect(provider.matchesRuntimeProfile('personal_agent'), isTrue);
     expect(provider.matchesRuntimeProfile('message_agent'), isTrue);
+    expect(provider.matchesHandle('hermes-personal-app-default'), isTrue);
     expect(provider.matchesHandle('hermes-msg-app-default'), isTrue);
   });
 }

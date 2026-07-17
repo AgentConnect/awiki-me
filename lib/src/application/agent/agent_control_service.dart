@@ -708,8 +708,7 @@ class DefaultAgentControlService implements AgentControlService {
           (agent.displayName ==
                   defaultPersonalAgentRuntimeProvider.runtimeDisplayName ||
               agent.displayName == legacyPersonalAgentRuntimeDisplayName ||
-              handle?.startsWith(personalAgentProviderHermesHandlePrefix) ==
-                  true)) {
+              defaultPersonalAgentRuntimeProvider.matchesHandle(handle))) {
         return agent;
       }
     }

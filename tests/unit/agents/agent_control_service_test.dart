@@ -412,7 +412,10 @@ void main() {
       );
 
       expect(inventory.runtimeTokenDaemonDid, 'did:agent:daemon');
-      expect(inventory.runtimeTokenHandle, 'hermes-msg-app-1-334c10a06052');
+      expect(
+        inventory.runtimeTokenHandle,
+        'hermes-personal-app-1-334c10a06052',
+      );
       expect(inventory.runtimeTokenPreferredLanguage, 'en');
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(messages.lastSecure, isFalse);
@@ -718,7 +721,7 @@ void main() {
       );
       expect(
         inventory.runtimeTokenHandle,
-        'hermes-msg-macos-e2e-app-7fe1fc2b5661',
+        'hermes-personal-macos-e2e-app-7fe1fc2b5661',
       );
     },
   );

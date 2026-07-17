@@ -7,7 +7,8 @@ const personalAgentProviderHermesRuntimeDisplayName = 'Hermes Personal Agent';
 const legacyPersonalAgentRuntimeDisplayName = 'Hermes Message Agent';
 const legacyPersonalAgentChineseDisplayMarker = '消息处理';
 const personalAgentProviderHermesCapabilityLabel = 'Hermes message runtime';
-const personalAgentProviderHermesHandlePrefix = 'hermes-msg';
+const personalAgentProviderHermesHandlePrefix = 'hermes-personal';
+const legacyPersonalAgentProviderHermesHandlePrefix = 'hermes-msg';
 
 const personalAgentProviderCodexId = 'codex';
 const personalAgentProviderClaudeCodeId = 'claude_code';
@@ -25,6 +26,7 @@ class PersonalAgentRuntimeProvider {
     this.driverId,
     this.disabledReason,
     this.runtimeAliases = const <String>[],
+    this.handleAliases = const <String>[],
   });
 
   final String id;
@@ -38,6 +40,7 @@ class PersonalAgentRuntimeProvider {
   final String? driverId;
   final String? disabledReason;
   final List<String> runtimeAliases;
+  final List<String> handleAliases;
 
   bool matchesRuntime(String? candidate) {
     final normalized = normalizePersonalAgentProviderKey(candidate);
@@ -54,7 +57,10 @@ class PersonalAgentRuntimeProvider {
 
   bool matchesHandle(String? candidate) {
     final normalized = candidate?.trim().toLowerCase();
-    return normalized != null && normalized.startsWith('$handlePrefix-');
+    return normalized != null &&
+        <String>[handlePrefix, ...handleAliases].any(
+          (prefix) => normalized.startsWith('$prefix-'),
+        );
   }
 
   bool matchesRuntimeProfile(String? candidate) {
@@ -79,6 +85,7 @@ abstract final class PersonalAgentRuntimeProviders {
     runtimeDisplayName: personalAgentProviderHermesRuntimeDisplayName,
     capabilityLabel: personalAgentProviderHermesCapabilityLabel,
     handlePrefix: personalAgentProviderHermesHandlePrefix,
+    handleAliases: <String>[legacyPersonalAgentProviderHermesHandlePrefix],
     enabled: true,
   );
 

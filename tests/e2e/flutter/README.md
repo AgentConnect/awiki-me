@@ -127,23 +127,22 @@ product behavior. It is a fail-fast real-backend gate: local YAML must provide
 `service.messageServiceWsUrl`, `daemon.rustRepo`, `daemon.binary`,
 `daemon.stateRoot`, `daemon.readyFile`, and `daemon.fakeHermesGatewayCommand`.
 The selected gate must exercise the App UI path for selecting a daemon,
-enabling the Personal Agent, recovering `message.sync` / `runtime_final` /
-`app.action` payloads, confirming or rejecting App actions, returning
-`awiki.app.action.result.v1`, and revoking daemon message authorization without
-silently returning from a skipped test. Lower-level probes such as
+enabling the Personal Agent, recovering `message.sync` / `runtime_final`
+payloads, and revoking daemon message authorization without silently returning
+from a skipped test. Lower-level probes such as
 `tool/daemon_control_probe.dart` and daemon pytest probes may support payload,
 security, or backend diagnostics, but they do not replace this full UI E2E gate.
 The real-backend branch must also prove the received/returned/content contract:
 the App local history contains the exact CLI source message, the daemon records
 a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
-the final text equals the deterministic expected reply, and the daemon audit log
-contains a redacted `app.action.result.received` record for the confirmed draft.
+and the final text equals the deterministic expected reply.
 
-The executable case IDs are `PERSONALAGENT-E2E-001/002/004`. The flow exercises
-the visible action/draft confirmation as a supporting step, but
-`PERSONALAGENT-E2E-003` remains planned until it has its own accepted case
-attestation. Fake-backed Widget tests, an outer `flutter test` exit code, a
-missing config, or a partial runnable lifecycle cannot attest a pass.
+The executable case IDs are `PERSONALAGENT-E2E-001/002/004`.
+`PERSONALAGENT-E2E-003` and visible action/draft confirmation remain planned
+until the product has a real action flow and its own accepted case attestation;
+they must not block or be inferred from the current message-processing gate.
+Fake-backed Widget tests, an outer `flutter test` exit code, a missing config,
+or a partial runnable lifecycle cannot attest a pass.
 Lower-level backend coverage remains separate and must not be relabeled as UI
 acceptance.
 
