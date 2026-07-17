@@ -315,13 +315,14 @@ class AppTestCatalog {
         'through application services; it is not required UI acceptance.',
       )
       ..writeln(
-        '- Message Agent, Codex and Claude Code remain `optional_nightly`. A '
+        '- Personal Agent, Codex and Claude Code remain `optional_nightly`. A '
         'missing provider/configuration is reported as skipped/not-run, never passed.',
       )
       ..writeln(
-        '- `MSGAGENT-E2E-003` is cataloged as planned, not executable: the current '
-        'real flow has no visible confirmation/draft action. The runnable Message '
-        'Agent suite attests enable, receive/process and exact revoke convergence.',
+        '- `PERSONALAGENT-E2E-003` is cataloged as planned, not executable: the '
+        'supporting confirmation/draft step does not yet have its own accepted '
+        'case attestation. The runnable Personal Agent suite attests enable, '
+        'receive/process and exact revoke convergence.',
       )
       ..writeln(
         '- The latest recorded `awiki.info` conversation-correctness evidence '

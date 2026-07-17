@@ -1120,7 +1120,7 @@ void main() {
     expect(control.lastInvocationPolicyAgentDid, isNull);
   });
 
-  testWidgets('message Agent controls are hidden when tenant is unsupported', (
+  testWidgets('personal agent controls are hidden when tenant is unsupported', (
     tester,
   ) async {
     final control = FakeAgentControlService()
@@ -1165,65 +1165,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('当前租户暂不支持智能体'), findsOneWidget);
-    expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
-    expect(find.text('消息处理 Agent'), findsNothing);
-    expect(find.text('启用消息处理 Agent'), findsNothing);
+    expect(
+      find.byKey(const Key('personal-agent-settings-panel')),
+      findsNothing,
+    );
+    expect(find.text('个人助理'), findsNothing);
+    expect(find.text('启用个人助理'), findsNothing);
     expect(find.text('暂停处理消息'), findsNothing);
-    expect(find.text('删除消息处理 Agent'), findsNothing);
+    expect(find.text('删除个人助理'), findsNothing);
     expect(find.text('撤销 Daemon 消息授权'), findsNothing);
     expect(control.lastBootstrapDaemonDid, isNull);
     expect(find.textContaining('自动回复'), findsNothing);
     expect(find.textContaining('代发'), findsNothing);
   });
 
-  testWidgets('message Agent panel is hidden when daemon lacks bootstrap key', (
-    tester,
-  ) async {
-    final control = FakeAgentControlService()
-      ..agents = const <AgentSummary>[
-        AgentSummary(
-          agentDid: 'did:agent:daemon',
-          kind: AgentKind.daemon,
-          handle: 'awiki-daemon-test',
-          displayName: '运行 Daemon 1',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
-        ),
-      ];
-    final identities = FakeIdentityCorePort();
+  testWidgets(
+    'personal agent panel is hidden when daemon lacks bootstrap key',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '运行 Daemon 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+          ),
+        ];
+      final identities = FakeIdentityCorePort();
 
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const AgentsWorkspacePage(),
-        session: const SessionIdentity(
-          did: 'did:human:me',
-          credentialName: 'default',
-          displayName: 'Me',
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+            identityCorePortProvider.overrideWithValue(identities),
+            agentImEnabledProvider.overrideWithValue(true),
+          ],
         ),
-        providerOverrides: <Override>[
-          agentControlServiceProvider.overrideWithValue(control),
-          identityCorePortProvider.overrideWithValue(identities),
-          agentImEnabledProvider.overrideWithValue(true),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
-    expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsNothing);
-    expect(find.text('等待刷新状态'), findsNothing);
-    expect(find.text('启用消息处理 Agent'), findsNothing);
-    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
-    expect(control.lastBootstrapDaemonDid, isNull);
-    expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
-  });
+      expect(
+        find.byKey(const Key('personal-agent-settings-panel')),
+        findsNothing,
+      );
+      expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsNothing);
+      expect(find.text('等待刷新状态'), findsOneWidget);
+      expect(find.text('启用个人助理'), findsNothing);
+      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
+    },
+  );
 
   testWidgets(
-    'message Agent management panel is hidden with existing runtime',
+    'personal agent management panel is hidden with existing runtime',
     (tester) async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1254,7 +1261,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-app-default',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -1282,20 +1289,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('message-agent-settings-panel')),
+        find.byKey(const Key('personal-agent-settings-panel')),
         findsNothing,
       );
-      expect(find.text('消息处理 Agent'), findsOneWidget);
+      expect(find.text('个人助理'), findsOneWidget);
       expect(
-        find.byKey(const Key('message-agent-settings-entry-card')),
+        find.byKey(const Key('personal-agent-settings-entry-card')),
         findsOneWidget,
       );
-      expect(find.text('已创建 Message Agent'), findsOneWidget);
+      expect(find.text('已创建个人助理'), findsOneWidget);
       expect(find.text('运行 Daemon 1'), findsWidgets);
-      expect(find.text('Hermes Message Agent'), findsWidgets);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('Hermes Personal Agent'), findsWidgets);
+      expect(find.text('启用个人助理'), findsNothing);
       expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('删除个人助理'), findsNothing);
       expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);

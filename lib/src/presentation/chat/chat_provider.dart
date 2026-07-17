@@ -47,7 +47,7 @@ class ChatThreadState {
     this.isLoading = false,
     this.isHydratingLocalHistory = false,
     this.agentPendingTurns = const <AgentPendingTurn>[],
-    this.messageAgentSyncs = const <MessageAgentSyncRecord>[],
+    this.personalAgentSyncs = const <PersonalAgentSyncRecord>[],
     this.appActionRecords = const <String, AppActionRecord>{},
   });
 
@@ -56,7 +56,7 @@ class ChatThreadState {
   final bool isLoading;
   final bool isHydratingLocalHistory;
   final List<AgentPendingTurn> agentPendingTurns;
-  final List<MessageAgentSyncRecord> messageAgentSyncs;
+  final List<PersonalAgentSyncRecord> personalAgentSyncs;
   final Map<String, AppActionRecord> appActionRecords;
 
   bool get isAgentProcessing => agentPendingTurns.any((turn) => turn.isActive);
@@ -79,15 +79,15 @@ class ChatThreadState {
     return turns.isEmpty ? null : turns.first;
   }
 
-  int get messageAgentTimelineCount =>
-      messageAgentSyncs.length + appActionRecords.length;
+  int get personalAgentTimelineCount =>
+      personalAgentSyncs.length + appActionRecords.length;
 
   ChatThreadState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
     bool? isHydratingLocalHistory,
     List<AgentPendingTurn>? agentPendingTurns,
-    List<MessageAgentSyncRecord>? messageAgentSyncs,
+    List<PersonalAgentSyncRecord>? personalAgentSyncs,
     Map<String, AppActionRecord>? appActionRecords,
   }) {
     return ChatThreadState(
@@ -97,14 +97,14 @@ class ChatThreadState {
       isHydratingLocalHistory:
           isHydratingLocalHistory ?? this.isHydratingLocalHistory,
       agentPendingTurns: agentPendingTurns ?? this.agentPendingTurns,
-      messageAgentSyncs: messageAgentSyncs ?? this.messageAgentSyncs,
+      personalAgentSyncs: personalAgentSyncs ?? this.personalAgentSyncs,
       appActionRecords: appActionRecords ?? this.appActionRecords,
     );
   }
 }
 
-class MessageAgentSyncRecord {
-  const MessageAgentSyncRecord({
+class PersonalAgentSyncRecord {
+  const PersonalAgentSyncRecord({
     required this.identityKey,
     required this.type,
     this.messageId,
@@ -153,13 +153,13 @@ class MessageAgentSyncRecord {
   bool get isTerminal =>
       isRuntimeFinal || isUnsupported || isFailed || state == 'finished';
 
-  static MessageAgentSyncRecord fromPayload(MessageSyncPayload payload) {
+  static PersonalAgentSyncRecord fromPayload(MessageSyncPayload payload) {
     final type = payload.effectiveType;
     final messageId = payload.primaryMessageId;
     final conversationId = payload.primaryConversationId;
     final runId = payload.runId;
-    return MessageAgentSyncRecord(
-      identityKey: _messageAgentSyncIdentityKey(
+    return PersonalAgentSyncRecord(
+      identityKey: _personalAgentSyncIdentityKey(
         type: type,
         runId: runId,
         messageId: messageId,
@@ -184,7 +184,7 @@ class MessageAgentSyncRecord {
   }
 }
 
-String _messageAgentSyncIdentityKey({
+String _personalAgentSyncIdentityKey({
   required String type,
   required String? runId,
   required String? messageId,
@@ -202,7 +202,7 @@ String _messageAgentSyncIdentityKey({
   if (conversation != null && conversation.isNotEmpty) {
     return 'conversation:$conversation:$type';
   }
-  return 'message-agent:$type';
+  return 'personal-agent:$type';
 }
 
 class AgentPendingTurn {
@@ -4071,7 +4071,7 @@ class ChatThreadsController
       add(turn.localMessageId);
       add(turn.remoteMessageId);
     }
-    for (final record in thread.messageAgentSyncs) {
+    for (final record in thread.personalAgentSyncs) {
       if (record.isTerminal) {
         continue;
       }
@@ -4424,7 +4424,7 @@ class ChatThreadsController
         isLoading: isLoading ?? previous.isLoading,
         isHydratingLocalHistory: previous.isHydratingLocalHistory,
         agentPendingTurns: nextAgentPendingTurns,
-        messageAgentSyncs: previous.messageAgentSyncs,
+        personalAgentSyncs: previous.personalAgentSyncs,
         appActionRecords: previous.appActionRecords,
       ),
     };
@@ -4881,11 +4881,11 @@ class ChatThreadsController
     }
   }
 
-  void applyMessageAgentControlPayload(Map<String, Object?> payload) {
+  void applyPersonalAgentControlPayload(Map<String, Object?> payload) {
     final payloadJson = jsonEncode(payload);
     final sync = AgentControlPayloads.decodeMessageSync(payloadJson);
     if (sync != null) {
-      _applyMessageAgentSync(sync);
+      _applyPersonalAgentSync(sync);
       return;
     }
     final request = AgentControlPayloads.decodeAppAction(payloadJson);
@@ -4935,7 +4935,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_result_target_missing',
-        errorSummary: 'message agent daemon target is missing',
+        errorSummary: 'personal agent daemon target is missing',
       );
       return;
     }
@@ -4979,13 +4979,13 @@ class ChatThreadsController
     );
   }
 
-  void _applyMessageAgentSync(MessageSyncPayload payload) {
-    final record = MessageAgentSyncRecord.fromPayload(payload);
-    final threadId = _threadIdForMessageAgentSync(record);
+  void _applyPersonalAgentSync(MessageSyncPayload payload) {
+    final record = PersonalAgentSyncRecord.fromPayload(payload);
+    final threadId = _threadIdForPersonalAgentSync(record);
     if (threadId == null || threadId.isEmpty) {
       return;
     }
-    _upsertMessageAgentSyncRecord(threadId, record);
+    _upsertPersonalAgentSyncRecord(threadId, record);
     final runtimeAgentDid = record.runtimeAgentDid?.trim();
     if (runtimeAgentDid == null || runtimeAgentDid.isEmpty) {
       return;
@@ -5004,7 +5004,7 @@ class ChatThreadsController
       return;
     }
     if (record.isTerminal) {
-      _clearAgentPendingTurnsForMessageAgent(
+      _clearAgentPendingTurnsForPersonalAgent(
         threadId: threadId,
         runtimeAgentDid: runtimeAgentDid,
         sourceMessageId: record.messageId,
@@ -5013,14 +5013,14 @@ class ChatThreadsController
     }
   }
 
-  void _upsertMessageAgentSyncRecord(
+  void _upsertPersonalAgentSyncRecord(
     String threadId,
-    MessageAgentSyncRecord record,
+    PersonalAgentSyncRecord record,
   ) {
     final current = thread(threadId);
-    final nextRecords = <MessageAgentSyncRecord>[];
+    final nextRecords = <PersonalAgentSyncRecord>[];
     var replaced = false;
-    for (final item in current.messageAgentSyncs) {
+    for (final item in current.personalAgentSyncs) {
       if (item.identityKey == record.identityKey) {
         nextRecords.add(record);
         replaced = true;
@@ -5034,13 +5034,13 @@ class ChatThreadsController
     state = <String, ChatThreadState>{
       ...state,
       threadId: current.copyWith(
-        messageAgentSyncs: _limitMessageAgentSyncs(nextRecords),
+        personalAgentSyncs: _limitPersonalAgentSyncs(nextRecords),
       ),
     };
   }
 
-  List<MessageAgentSyncRecord> _limitMessageAgentSyncs(
-    List<MessageAgentSyncRecord> records,
+  List<PersonalAgentSyncRecord> _limitPersonalAgentSyncs(
+    List<PersonalAgentSyncRecord> records,
   ) {
     if (records.length <= 40) {
       return records;
@@ -5113,7 +5113,7 @@ class ChatThreadsController
         request: request,
         state: appActionStateFailed,
         errorCode: 'app_action_result_target_missing',
-        errorSummary: 'message agent daemon target is missing',
+        errorSummary: 'personal agent daemon target is missing',
       );
       _applyLocalAppActionResult(threadId, failed);
       return;
@@ -5212,7 +5212,7 @@ class ChatThreadsController
     return null;
   }
 
-  String? _threadIdForMessageAgentSync(MessageAgentSyncRecord record) {
+  String? _threadIdForPersonalAgentSync(PersonalAgentSyncRecord record) {
     return _threadIdForSourceMessage(record.messageId) ??
         _threadIdForConversationControl(record.conversationId) ??
         (record.runtimeAgentDid == null
@@ -5275,7 +5275,7 @@ class ChatThreadsController
     return null;
   }
 
-  void _clearAgentPendingTurnsForMessageAgent({
+  void _clearAgentPendingTurnsForPersonalAgent({
     required String threadId,
     required String runtimeAgentDid,
     required String? sourceMessageId,

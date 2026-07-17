@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
-import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
+import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -1971,7 +1971,7 @@ void main() {
   );
 
   test(
-    'message Agent lifecycle actions target Hermes message runtime',
+    'personal agent lifecycle actions target Hermes message runtime',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1988,7 +1988,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-app-1',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -1999,27 +1999,27 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .pauseMessageAgentForDaemon('did:agent:daemon');
+          .pausePersonalAgentForDaemon('did:agent:daemon');
       await container
           .read(agentsProvider.notifier)
-          .deleteMessageAgentForDaemon('did:agent:daemon');
+          .deletePersonalAgentForDaemon('did:agent:daemon');
       await container
           .read(agentsProvider.notifier)
-          .revokeMessageAgentAuthorizationForDaemon('did:agent:daemon');
+          .revokePersonalAgentAuthorizationForDaemon('did:agent:daemon');
 
-      expect(control.lastPausedMessageAgentDaemonDid, 'did:agent:daemon');
-      expect(control.lastPausedMessageAgentDid, 'did:agent:message');
-      expect(control.lastDeletedMessageAgentDaemonDid, 'did:agent:daemon');
-      expect(control.lastDeletedMessageAgentDid, 'did:agent:message');
+      expect(control.lastPausedPersonalAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastPausedPersonalAgentDid, 'did:agent:message');
+      expect(control.lastDeletedPersonalAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastDeletedPersonalAgentDid, 'did:agent:message');
       expect(control.lastDeletedRuntimeDaemonDid, 'did:agent:daemon');
       expect(control.lastDeletedRuntimeDid, 'did:agent:message');
-      expect(control.lastRevokedMessageAgentDaemonDid, 'did:agent:daemon');
-      expect(control.lastRevokedMessageAgentDid, 'did:agent:message');
+      expect(control.lastRevokedPersonalAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastRevokedPersonalAgentDid, 'did:agent:message');
     },
   );
 
   test(
-    'future provider runtime is not treated as enabled message Agent',
+    'future provider runtime is not treated as enabled personal agent',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2036,7 +2036,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'codex',
             handle: 'codex-msg-app-1',
-            displayName: 'Codex Message Agent',
+            displayName: 'Codex Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -2047,12 +2047,12 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .pauseMessageAgentForDaemon('did:agent:daemon');
+          .pausePersonalAgentForDaemon('did:agent:daemon');
 
-      expect(control.lastPausedMessageAgentDid, isNull);
+      expect(control.lastPausedPersonalAgentDid, isNull);
       expect(
         container.read(agentsProvider).error,
-        AgentUiMessageCodes.messageAgentMissing,
+        AgentUiMessageCodes.personalAgentMissing,
       );
     },
   );
@@ -2219,7 +2219,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent ensures daemon subkey and delegates desired state',
+    'bootstrapPersonalAgent ensures daemon subkey and delegates desired state',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2255,7 +2255,7 @@ void main() {
       addTearDown(container.dispose);
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2278,7 +2278,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent reuses existing Hermes message runtime for binding',
+    'bootstrapPersonalAgent reuses existing Hermes message runtime for binding',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2303,7 +2303,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-app-1',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -2316,17 +2316,17 @@ void main() {
           privateKeyMultibase: 'zPrivate',
         ),
       );
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       final container = _container(
         control,
         identities: identities,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
       );
       addTearDown(container.dispose);
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2335,7 +2335,7 @@ void main() {
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(bindings.lastUserDid, 'did:human:me');
       expect(bindings.lastDaemonAgentDid, 'did:agent:daemon');
-      expect(bindings.lastMessageAgentDid, 'did:agent:message');
+      expect(bindings.lastPersonalAgentDid, 'did:agent:message');
       expect(
         bindings.lastDelegatedKeyVerificationMethod,
         'did:human:me#daemon-key-1',
@@ -2344,7 +2344,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent keeps raw diagnostic error while showing friendly text',
+    'bootstrapPersonalAgent keeps raw diagnostic error while showing friendly text',
     () async {
       final control =
           _FailingBootstrapAgentControlService(
@@ -2374,7 +2374,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2387,7 +2387,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent is blocked before delegated subkey when feature flag is off',
+    'bootstrapPersonalAgent is blocked before delegated subkey when feature flag is off',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2424,7 +2424,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2439,7 +2439,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent accepts nested bootstrap key diagnostics',
+    'bootstrapPersonalAgent accepts nested bootstrap key diagnostics',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2481,7 +2481,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2496,7 +2496,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent accepts flat config summary bootstrap key diagnostics',
+    'bootstrapPersonalAgent accepts flat config summary bootstrap key diagnostics',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2536,7 +2536,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2551,7 +2551,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent requires daemon bootstrap public key before delegated subkey',
+    'bootstrapPersonalAgent requires daemon bootstrap public key before delegated subkey',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2580,7 +2580,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -3026,7 +3026,7 @@ void main() {
   });
 
   test(
-    'empty daemon snapshot keeps inventory runtime during Message Agent bootstrap',
+    'empty daemon snapshot keeps inventory runtime during Personal Agent bootstrap',
     () async {
       final control = FakeAgentControlService()
         ..agents = <AgentSummary>[
@@ -3046,7 +3046,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-controller-001',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(
               status: 'ready',
@@ -3079,7 +3079,7 @@ void main() {
         ['did:agent:runtime'],
       );
       expect(
-        state.messageAgentRuntimeFor('did:agent:daemon')?.agentDid,
+        state.personalAgentRuntimeFor('did:agent:daemon')?.agentDid,
         'did:agent:runtime',
       );
     },
@@ -3338,7 +3338,7 @@ ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
-  MessageAgentBindingPort? messageAgentBindings,
+  PersonalAgentBindingPort? personalAgentBindings,
   AgentControlStatusStore? statusStore,
   bool agentImEnabled = true,
   SessionIdentity session = const SessionIdentity(
@@ -3357,8 +3357,10 @@ ProviderContainer _container(
       productLocalStoreProvider.overrideWithValue(
         localStore ?? FakeProductLocalStore(),
       ),
-      if (messageAgentBindings != null)
-        messageAgentBindingPortProvider.overrideWithValue(messageAgentBindings),
+      if (personalAgentBindings != null)
+        personalAgentBindingPortProvider.overrideWithValue(
+          personalAgentBindings,
+        ),
       if (statusStore != null)
         agentControlStatusStoreProvider.overrideWithValue(statusStore),
       agentImEnabledProvider.overrideWithValue(agentImEnabled),
@@ -3429,34 +3431,34 @@ class _HangingAgentControlStatusStore implements AgentControlStatusStore {
   }
 }
 
-class _MessageAgentBindingsStub implements MessageAgentBindingPort {
+class _PersonalAgentBindingsStub implements PersonalAgentBindingPort {
   String? lastUserDid;
   String? lastDaemonAgentDid;
-  String? lastMessageAgentDid;
+  String? lastPersonalAgentDid;
   String? lastRuntimeProvider;
   Map<String, Object?>? lastRuntimeProfile;
   String? lastDelegatedKeyVerificationMethod;
 
   @override
-  Future<MessageAgentBinding> ensureBinding({
+  Future<PersonalAgentBinding> ensureBinding({
     required String userDid,
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
     required String runtimeProvider,
     required Map<String, Object?> runtimeProfile,
     required String delegatedKeyVerificationMethod,
   }) async {
     lastUserDid = userDid;
     lastDaemonAgentDid = daemonAgentDid;
-    lastMessageAgentDid = messageAgentDid;
+    lastPersonalAgentDid = personalAgentDid;
     lastRuntimeProvider = runtimeProvider;
     lastRuntimeProfile = runtimeProfile;
     lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
-    return MessageAgentBinding(
+    return PersonalAgentBinding(
       id: 'binding-1',
       userDid: userDid,
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       runtimeProvider: runtimeProvider,
       runtimeProfile: runtimeProfile,
       delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
@@ -3465,20 +3467,20 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
   }
 
   @override
-  Future<MessageAgentBinding?> getActiveBinding() async => null;
+  Future<PersonalAgentBinding?> getActiveBinding() async => null;
 
   @override
-  Future<MessageAgentBinding> disableBinding({
+  Future<PersonalAgentBinding> disableBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
     throw UnimplementedError();
   }
 
   @override
-  Future<MessageAgentBinding> revokeBinding({
+  Future<PersonalAgentBinding> revokeBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
     throw UnimplementedError();
   }
@@ -3501,7 +3503,7 @@ class _FailingBootstrapAgentControlService extends FakeAgentControlService {
   final Object error;
 
   @override
-  Future<void> ensureMessageAgentBootstrap({
+  Future<void> ensurePersonalAgentBootstrap({
     required String daemonAgentDid,
     required String controllerDid,
     required String appInstanceId,

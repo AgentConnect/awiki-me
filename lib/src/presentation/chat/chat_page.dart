@@ -583,7 +583,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final activePendingTurns = thread.agentPendingTurns
         .where((turn) => turn.isActive)
         .toList(growable: false);
-    final messageAgentItems = _messageAgentTimelineItems(thread);
+    final personalAgentItems = _personalAgentTimelineItems(thread);
     final messageIdsWithAgentProcessing = <String>{
       for (final message in messages)
         if (thread.pendingAgentTurnsForMessage(message).isNotEmpty)
@@ -597,7 +597,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final messageListItemCount =
         messages.length +
         unmatchedPendingTurns.length +
-        messageAgentItems.length;
+        personalAgentItems.length;
     buildWatch.stop();
     AwikiPerformanceLogger.log(
       'chat_page.build.prepare',
@@ -606,7 +606,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         ...AwikiPerformanceLogger.threadField(currentConversation.threadId),
         'messages': messages.length,
         'pending': activePendingTurns.length,
-        'timeline': messageAgentItems.length,
+        'timeline': personalAgentItems.length,
         'items': messageListItemCount,
       },
       minMs: 1,
@@ -668,7 +668,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                               messages.length -
                               unmatchedPendingTurns.length;
                           if (recoveryIndex >= 0) {
-                            final item = messageAgentItems[recoveryIndex];
+                            final item = personalAgentItems[recoveryIndex];
                             return Padding(
                               padding: EdgeInsets.only(
                                 bottom: isLastItem
@@ -677,11 +677,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                     ? responsive.displayScaled(16)
                                     : responsive.spacing(18),
                               ),
-                              child: _MessageAgentRecoveryCard(
+                              child: _PersonalAgentRecoveryCard(
                                 item: item,
                                 macStyle: macStyle,
                                 onConfirm:
-                                    item is _MessageAgentActionTimelineItem
+                                    item is _PersonalAgentActionTimelineItem
                                     ? () async {
                                         await ref
                                             .read(chatThreadsProvider.notifier)
@@ -698,7 +698,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                       }
                                     : null,
                                 onReject:
-                                    item is _MessageAgentActionTimelineItem
+                                    item is _PersonalAgentActionTimelineItem
                                     ? () => ref
                                           .read(chatThreadsProvider.notifier)
                                           .rejectAppAction(
@@ -850,7 +850,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         ? responsive.displayScaled(7)
                                         : responsive.spacing(7),
                                   ),
-                                  _MessageAgentProcessingStatus(
+                                  _PersonalAgentProcessingStatus(
                                     label: _agentProcessingLabel(
                                       context,
                                       pendingTurns,
@@ -1524,7 +1524,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final pendingAdded =
         _activePendingTurnCount(next) > _activePendingTurnCount(previous);
     final recoveryAdded =
-        next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
+        next.personalAgentTimelineCount > previous.personalAgentTimelineCount;
     final wasNearBottom = !_userAwayFromBottom || _isNearBottom();
     if (messageAdded) {
       if (nextLast.isMine || wasNearBottom) {
@@ -1552,7 +1552,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final contentGrew =
         next.messages.length > previous.messages.length ||
         next.agentPendingTurns.length > previous.agentPendingTurns.length ||
-        next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
+        next.personalAgentTimelineCount > previous.personalAgentTimelineCount;
     if (contentGrew && wasNearBottom) {
       _scheduleScrollToBottom();
     }
@@ -1644,7 +1644,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     return next.messages.length != previous.messages.length ||
         _activePendingTurnCount(next) != _activePendingTurnCount(previous) ||
-        next.messageAgentTimelineCount != previous.messageAgentTimelineCount;
+        next.personalAgentTimelineCount != previous.personalAgentTimelineCount;
   }
 
   void _settleOpeningBottomAnchorForCurrentThread(ChatThreadState thread) {
@@ -1661,7 +1661,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _threadHasBottomAnchorContent(ChatThreadState thread) {
     return thread.messages.isNotEmpty ||
         _activePendingTurnCount(thread) > 0 ||
-        thread.messageAgentTimelineCount > 0;
+        thread.personalAgentTimelineCount > 0;
   }
 
   void _scheduleOpeningBottomAnchorSettle({required int settleFrames}) {
@@ -1764,14 +1764,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return thread.agentPendingTurns.where((turn) => turn.isActive).length;
   }
 
-  List<_MessageAgentTimelineItem> _messageAgentTimelineItems(
+  List<_PersonalAgentTimelineItem> _personalAgentTimelineItems(
     ChatThreadState thread,
   ) {
-    return <_MessageAgentTimelineItem>[
-      for (final sync in thread.messageAgentSyncs)
-        _MessageAgentSyncTimelineItem(sync),
+    return <_PersonalAgentTimelineItem>[
+      for (final sync in thread.personalAgentSyncs)
+        _PersonalAgentSyncTimelineItem(sync),
       for (final action in thread.appActionRecords.values)
-        _MessageAgentActionTimelineItem(action),
+        _PersonalAgentActionTimelineItem(action),
     ];
   }
 

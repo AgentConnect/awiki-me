@@ -1,17 +1,17 @@
 part of 'agents_page.dart';
 
-class MessageAgentSettingsPage extends ConsumerStatefulWidget {
-  const MessageAgentSettingsPage({super.key, this.initialDaemonDid});
+class PersonalAgentSettingsPage extends ConsumerStatefulWidget {
+  const PersonalAgentSettingsPage({super.key, this.initialDaemonDid});
 
   final String? initialDaemonDid;
 
   @override
-  ConsumerState<MessageAgentSettingsPage> createState() =>
-      _MessageAgentSettingsPageState();
+  ConsumerState<PersonalAgentSettingsPage> createState() =>
+      _PersonalAgentSettingsPageState();
 }
 
-class _MessageAgentSettingsPageState
-    extends ConsumerState<MessageAgentSettingsPage> {
+class _PersonalAgentSettingsPageState
+    extends ConsumerState<PersonalAgentSettingsPage> {
   String? _selectedDaemonDid;
 
   @override
@@ -28,6 +28,7 @@ class _MessageAgentSettingsPageState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final state = ref.watch(agentsProvider);
     final enabled = ref.watch(agentImEnabledProvider);
     final responsive = context.awikiResponsive;
@@ -35,27 +36,29 @@ class _MessageAgentSettingsPageState
     final daemons = state.daemonAgents;
     final selectedDaemon = _selectedDaemon(state, daemons);
     final selectedDid = selectedDaemon?.agentDid;
-    final messageAgent = selectedDid == null
+    final personalAgent = selectedDid == null
         ? null
-        : state.messageAgentRuntimeFor(selectedDid);
+        : state.personalAgentRuntimeFor(selectedDid);
     final selectionLabel = selectedDaemon == null
-        ? '未选择运行 Daemon'
-        : '当前运行 Daemon：${localizeAgentTitle(context.l10n, selectedDaemon)}';
+        ? l10n.personalAgentNoDaemonSelected
+        : l10n.personalAgentSelectedDaemon(
+            localizeAgentTitle(l10n, selectedDaemon),
+          );
     final isEnablePending =
         selectedDid != null &&
         state.isActionPending(
-          AgentActionKeys.bootstrapMessageAgent(selectedDid),
+          AgentActionKeys.bootstrapPersonalAgent(selectedDid),
         );
     final isManagementPending =
         selectedDid != null &&
         (state.isActionPending(
-              AgentActionKeys.pauseMessageAgent(selectedDid),
+              AgentActionKeys.pausePersonalAgent(selectedDid),
             ) ||
             state.isActionPending(
-              AgentActionKeys.deleteMessageAgent(selectedDid),
+              AgentActionKeys.deletePersonalAgent(selectedDid),
             ) ||
             state.isActionPending(
-              AgentActionKeys.revokeMessageAgent(selectedDid),
+              AgentActionKeys.revokePersonalAgent(selectedDid),
             ));
 
     return CupertinoPageScaffold(
@@ -67,7 +70,7 @@ class _MessageAgentSettingsPageState
           bottom: false,
           child: SelectionArea(
             child: ListView(
-              key: const Key('message-agent-settings-page'),
+              key: const Key('personal-agent-settings-page'),
               padding: EdgeInsets.fromLTRB(
                 responsive.spacing(16),
                 responsive.spacing(14),
@@ -76,12 +79,12 @@ class _MessageAgentSettingsPageState
               ),
               children: <Widget>[
                 AwikiMeTopBar(
-                  title: '消息处理 Agent',
+                  title: l10n.personalAgentTitle,
                   padding: EdgeInsets.zero,
                   leading: TopBarActionButton(
                     onTap: () => Navigator.of(context).maybePop(),
-                    semanticsLabel: '返回',
-                    tooltip: '返回',
+                    semanticsLabel: l10n.commonBack,
+                    tooltip: l10n.commonBack,
                     child: const AwikiAssetIcon(
                       assetName: 'assets/icons/icon_left.svg',
                       color: AwikiMeColors.primaryDark,
@@ -94,36 +97,36 @@ class _MessageAgentSettingsPageState
                   _AgentErrorBanner(message: state.error!),
                   SizedBox(height: responsive.spacing(12)),
                 ],
-                _MessageAgentHeroCard(
+                _PersonalAgentHeroCard(
                   enabled: enabled,
                   daemon: selectedDaemon,
-                  messageAgent: messageAgent,
+                  personalAgent: personalAgent,
                   isEnablePending: isEnablePending,
                   isManagementPending: isManagementPending,
                   onEnable: selectedDaemon == null
                       ? null
                       : () => ref
                             .read(agentsProvider.notifier)
-                            .bootstrapMessageAgent(
+                            .bootstrapPersonalAgent(
                               daemonDid: selectedDaemon.agentDid,
                             ),
                   onPause: selectedDaemon == null
                       ? null
-                      : () => _confirmPauseMessageAgent(
+                      : () => _confirmPausePersonalAgent(
                           context,
                           ref,
                           selectedDaemon,
                         ),
                   onDelete: selectedDaemon == null
                       ? null
-                      : () => _confirmDeleteMessageAgent(
+                      : () => _confirmDeletePersonalAgent(
                           context,
                           ref,
                           selectedDaemon,
                         ),
                   onRevoke: selectedDaemon == null
                       ? null
-                      : () => _confirmRevokeMessageAgentAuthorization(
+                      : () => _confirmRevokePersonalAgentAuthorization(
                           context,
                           ref,
                           selectedDaemon,
@@ -137,11 +140,11 @@ class _MessageAgentSettingsPageState
                 SizedBox(height: responsive.spacing(16)),
                 E2eMarker(
                   selectedDid == null
-                      ? 'message-agent-selected-daemon:none'
-                      : 'message-agent-selected-daemon:$selectedDid',
+                      ? 'personal-agent-selected-daemon:none'
+                      : 'personal-agent-selected-daemon:$selectedDid',
                 ),
                 e2eSemantics(
-                  identifier: 'message-agent-selected-daemon-label',
+                  identifier: 'personal-agent-selected-daemon-label',
                   label: selectionLabel,
                   child: Text(
                     selectionLabel,
@@ -153,7 +156,7 @@ class _MessageAgentSettingsPageState
                   ),
                 ),
                 SizedBox(height: responsive.spacing(8)),
-                _MessageAgentDaemonSelector(
+                _PersonalAgentDaemonSelector(
                   daemons: daemons,
                   selectedDaemonDid: selectedDaemon?.agentDid,
                   state: state,
@@ -165,7 +168,7 @@ class _MessageAgentSettingsPageState
                       .refreshDaemonStatus(daemon.agentDid),
                 ),
                 SizedBox(height: responsive.spacing(16)),
-                _MessageAgentLimitsCard(enabled: enabled),
+                _PersonalAgentLimitsCard(enabled: enabled),
               ],
             ),
           ),
@@ -190,11 +193,11 @@ class _MessageAgentSettingsPageState
   }
 }
 
-class _MessageAgentHeroCard extends StatelessWidget {
-  const _MessageAgentHeroCard({
+class _PersonalAgentHeroCard extends StatelessWidget {
+  const _PersonalAgentHeroCard({
     required this.enabled,
     required this.daemon,
-    required this.messageAgent,
+    required this.personalAgent,
     required this.isEnablePending,
     required this.isManagementPending,
     required this.onEnable,
@@ -206,7 +209,7 @@ class _MessageAgentHeroCard extends StatelessWidget {
 
   final bool enabled;
   final AgentSummary? daemon;
-  final AgentSummary? messageAgent;
+  final AgentSummary? personalAgent;
   final bool isEnablePending;
   final bool isManagementPending;
   final VoidCallback? onEnable;
@@ -217,25 +220,28 @@ class _MessageAgentHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final responsive = context.awikiResponsive;
     final daemon = this.daemon;
     final diagnostics =
         daemon?.latest.diagnosticsSummary ?? const <String, Object?>{};
     final hasBootstrapKey =
         daemon != null && _daemonHasBootstrapPublicKey(daemon, diagnostics);
-    final daemonReady = daemon != null && _messageAgentDaemonReady(daemon);
-    final messageAgent = this.messageAgent;
+    final daemonReady = daemon != null && _personalAgentDaemonReady(daemon);
+    final personalAgent = this.personalAgent;
     final isBusy = isEnablePending || isManagementPending;
     final canEnable = enabled && daemonReady && hasBootstrapKey && !isBusy;
-    final canManage = enabled && daemonReady && messageAgent != null && !isBusy;
-    final stateLabel = _messageAgentStateLabel(
+    final canManage =
+        enabled && daemonReady && personalAgent != null && !isBusy;
+    final stateLabel = _personalAgentStateLabel(
       enabled: enabled,
       daemon: daemon,
       hasBootstrapKey: hasBootstrapKey,
-      messageAgent: messageAgent,
+      personalAgent: personalAgent,
       isBusy: isBusy,
+      l10n: l10n,
     );
-    const provider = defaultMessageAgentRuntimeProvider;
+    const provider = defaultPersonalAgentRuntimeProvider;
     return AppCardSection(
       padding: EdgeInsets.all(responsive.spacing(18)),
       child: Column(
@@ -263,7 +269,7 @@ class _MessageAgentHeroCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '消息处理 Agent',
+                      l10n.personalAgentTitle,
                       style: TextStyle(
                         color: const Color(0xFF101B32),
                         fontSize: responsive.titleLg,
@@ -273,8 +279,8 @@ class _MessageAgentHeroCard extends StatelessWidget {
                     SizedBox(height: responsive.spacing(4)),
                     Text(
                       enabled
-                          ? '读取普通 direct text，为你整理并生成草稿；发送前必须由你确认。'
-                          : '实验功能未开启，当前不会发送 bootstrap 或授权请求。',
+                          ? l10n.personalAgentDescription
+                          : l10n.personalAgentDisabledDescription,
                       style: TextStyle(
                         color: const Color(0xFF66728A),
                         fontSize: responsive.bodySm,
@@ -285,51 +291,63 @@ class _MessageAgentHeroCard extends StatelessWidget {
                 ),
               ),
               SizedBox(width: responsive.spacing(10)),
-              _MessageAgentStatePill(
+              _PersonalAgentStatePill(
                 text: stateLabel,
-                active: enabled && (messageAgent != null || hasBootstrapKey),
+                active: enabled && (personalAgent != null || hasBootstrapKey),
               ),
             ],
           ),
           SizedBox(height: responsive.spacing(16)),
-          _MessageAgentFactGrid(
-            rows: <_MessageAgentFact>[
-              _MessageAgentFact(
-                '运行 Daemon',
+          _PersonalAgentFactGrid(
+            rows: <_PersonalAgentFact>[
+              _PersonalAgentFact(
+                l10n.personalAgentRunningDaemon,
                 daemon == null
-                    ? '未选择'
-                    : localizeAgentTitle(context.l10n, daemon),
+                    ? l10n.personalAgentNotSelected
+                    : localizeAgentTitle(l10n, daemon),
               ),
-              _MessageAgentFact('引擎', provider.displayLabel),
-              const _MessageAgentFact('处理范围', '普通 direct text'),
-              _MessageAgentFact(
-                'Daemon 状态',
-                daemon == null ? '无可用 Daemon' : daemon.latest.status,
+              _PersonalAgentFact(
+                l10n.personalAgentEngine,
+                provider.displayLabel,
               ),
-              _MessageAgentFact(
-                'Daemon 版本',
-                daemon == null ? '未知' : _daemonRuntimeSummary(context, daemon),
+              _PersonalAgentFact(
+                l10n.personalAgentScope,
+                l10n.personalAgentDirectTextScope,
               ),
-              _MessageAgentFact(
-                '安全 bootstrap',
-                hasBootstrapKey ? '已上报公钥' : '等待刷新状态',
+              _PersonalAgentFact(
+                l10n.personalAgentDaemonStatus,
+                daemon == null
+                    ? l10n.personalAgentNoDaemon
+                    : daemon.latest.status,
               ),
-              _MessageAgentFact(
-                '授权状态',
-                messageAgent == null
-                    ? '尚未绑定'
-                    : '已绑定 ${messageAgent.displayName}',
+              _PersonalAgentFact(
+                l10n.personalAgentDaemonVersion,
+                daemon == null
+                    ? l10n.commonUnknown
+                    : _daemonRuntimeSummary(context, daemon),
+              ),
+              _PersonalAgentFact(
+                l10n.personalAgentSecureBootstrap,
+                hasBootstrapKey
+                    ? l10n.personalAgentPublicKeyReported
+                    : l10n.personalAgentWaitingStatusRefresh,
+              ),
+              _PersonalAgentFact(
+                l10n.personalAgentAuthorizationStatus,
+                personalAgent == null
+                    ? l10n.personalAgentNotBound
+                    : l10n.personalAgentBound(personalAgent.displayName),
               ),
             ],
           ),
           SizedBox(height: responsive.spacing(14)),
-          _MessageAgentPermissionSummary(enabled: enabled),
+          _PersonalAgentPermissionSummary(enabled: enabled),
           if (!enabled ||
               daemon == null ||
               !daemonReady ||
               !hasBootstrapKey) ...<Widget>[
             SizedBox(height: responsive.spacing(12)),
-            _MessageAgentReadinessNotice(
+            _PersonalAgentReadinessNotice(
               enabled: enabled,
               daemon: daemon,
               daemonReady: daemonReady,
@@ -343,34 +361,36 @@ class _MessageAgentHeroCard extends StatelessWidget {
             children: <Widget>[
               _ActionButton(
                 icon: CupertinoIcons.check_mark_circled,
-                label: isEnablePending ? '启用中' : '启用消息处理 Agent',
-                semanticsIdentifier: 'message-agent-enable-action',
+                label: isEnablePending
+                    ? l10n.personalAgentEnabling
+                    : l10n.personalAgentEnable,
+                semanticsIdentifier: 'personal-agent-enable-action',
                 onPressed: canEnable ? onEnable : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.pause_circle,
-                label: '暂停处理消息',
-                semanticsIdentifier: 'message-agent-pause-action',
+                label: l10n.personalAgentPause,
+                semanticsIdentifier: 'personal-agent-pause-action',
                 onPressed: canManage ? onPause : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.trash,
-                label: '删除消息处理 Agent',
-                semanticsIdentifier: 'message-agent-delete-action',
+                label: l10n.personalAgentDelete,
+                semanticsIdentifier: 'personal-agent-delete-action',
                 danger: true,
                 onPressed: canManage ? onDelete : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.lock_slash,
-                label: '撤销 Daemon 消息授权',
-                semanticsIdentifier: 'message-agent-revoke-action',
+                label: l10n.personalAgentRevokeAuthorization,
+                semanticsIdentifier: 'personal-agent-revoke-action',
                 danger: true,
                 onPressed: canManage ? onRevoke : null,
               ),
               _ActionButton(
                 icon: CupertinoIcons.refresh,
-                label: '刷新 Daemon 状态',
-                semanticsIdentifier: 'message-agent-refresh-action',
+                label: l10n.personalAgentRefreshDaemonStatus,
+                semanticsIdentifier: 'personal-agent-refresh-action',
                 onPressed: daemon == null || isBusy ? null : onRefresh,
               ),
             ],
@@ -381,8 +401,8 @@ class _MessageAgentHeroCard extends StatelessWidget {
   }
 }
 
-class _MessageAgentDaemonSelector extends StatelessWidget {
-  const _MessageAgentDaemonSelector({
+class _PersonalAgentDaemonSelector extends StatelessWidget {
+  const _PersonalAgentDaemonSelector({
     required this.daemons,
     required this.selectedDaemonDid,
     required this.state,
@@ -398,6 +418,7 @@ class _MessageAgentDaemonSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final responsive = context.awikiResponsive;
     return AppCardSection(
       padding: EdgeInsets.all(responsive.spacing(16)),
@@ -405,7 +426,7 @@ class _MessageAgentDaemonSelector extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            '选择运行 Daemon',
+            l10n.personalAgentSelectDaemon,
             style: TextStyle(
               color: const Color(0xFF101B32),
               fontSize: responsive.bodyMd,
@@ -414,7 +435,7 @@ class _MessageAgentDaemonSelector extends StatelessWidget {
           ),
           SizedBox(height: responsive.spacing(6)),
           Text(
-            'Message Agent 会运行在你选择的 Daemon 内。',
+            l10n.personalAgentRunsOnSelectedDaemon,
             style: TextStyle(
               color: const Color(0xFF66728A),
               fontSize: responsive.bodySm,
@@ -423,7 +444,7 @@ class _MessageAgentDaemonSelector extends StatelessWidget {
           SizedBox(height: responsive.spacing(12)),
           if (daemons.isEmpty)
             Text(
-              '暂无可用 Daemon，请先在智能体页创建或安装 Daemon。',
+              l10n.personalAgentNoDaemons,
               style: TextStyle(
                 color: const Color(0xFF66728A),
                 fontSize: responsive.bodySm,
@@ -435,7 +456,7 @@ class _MessageAgentDaemonSelector extends StatelessWidget {
                 for (final daemon in daemons)
                   Padding(
                     padding: EdgeInsets.only(bottom: responsive.spacing(8)),
-                    child: _MessageAgentDaemonOption(
+                    child: _PersonalAgentDaemonOption(
                       daemon: daemon,
                       selected: daemon.agentDid == selectedDaemonDid,
                       isRefreshing: state.isStatusQueryPending(daemon.agentDid),
@@ -451,8 +472,8 @@ class _MessageAgentDaemonSelector extends StatelessWidget {
   }
 }
 
-class _MessageAgentDaemonOption extends StatelessWidget {
-  const _MessageAgentDaemonOption({
+class _PersonalAgentDaemonOption extends StatelessWidget {
+  const _PersonalAgentDaemonOption({
     required this.daemon,
     required this.selected,
     required this.isRefreshing,
@@ -468,21 +489,24 @@ class _MessageAgentDaemonOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final responsive = context.awikiResponsive;
     final hasBootstrapKey = _daemonHasBootstrapPublicKey(
       daemon,
       daemon.latest.diagnosticsSummary,
     );
-    final status = _messageAgentDaemonReady(daemon)
+    final status = _personalAgentDaemonReady(daemon)
         ? hasBootstrapKey
-              ? 'Ready · 已上报公钥'
-              : 'Ready · 等待 bootstrap 公钥'
-        : '${daemon.latest.status} · 需刷新或检查 Daemon';
+              ? l10n.personalAgentReadyWithPublicKey
+              : l10n.personalAgentReadyWaitingPublicKey
+        : l10n.personalAgentDaemonNeedsAttention(daemon.latest.status);
     return AppPressableTile(
       onTap: onTap,
       selected: selected,
-      semanticLabel: '选择 ${localizeAgentTitle(context.l10n, daemon)}',
-      semanticsIdentifier: 'message-agent-daemon-option:${daemon.agentDid}',
+      semanticLabel: l10n.personalAgentSelectDaemonSemantic(
+        localizeAgentTitle(l10n, daemon),
+      ),
+      semanticsIdentifier: 'personal-agent-daemon-option:${daemon.agentDid}',
       borderRadius: BorderRadius.circular(responsive.radius(10)),
       backgroundColor: const Color(0xFFF8FAFD),
       selectedBackgroundColor: const Color(0xFFEAF2FF),
@@ -508,7 +532,7 @@ class _MessageAgentDaemonOption extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    localizeAgentTitle(context.l10n, daemon),
+                    localizeAgentTitle(l10n, daemon),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -542,8 +566,8 @@ class _MessageAgentDaemonOption extends StatelessWidget {
   }
 }
 
-class _MessageAgentReadinessNotice extends StatelessWidget {
-  const _MessageAgentReadinessNotice({
+class _PersonalAgentReadinessNotice extends StatelessWidget {
+  const _PersonalAgentReadinessNotice({
     required this.enabled,
     required this.daemon,
     required this.daemonReady,
@@ -557,16 +581,17 @@ class _MessageAgentReadinessNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final responsive = context.awikiResponsive;
     final text = !enabled
-        ? 'AWIKI_AGENT_IM_ENABLED=false，入口只显示状态，不会发送 bootstrap、binding 或身份授权请求。'
+        ? l10n.personalAgentFeatureDisabledNotice
         : daemon == null
-        ? '没有可用 Daemon。请先安装并启动 Daemon。'
+        ? l10n.personalAgentNoDaemonNotice
         : !daemonReady
-        ? '当前 Daemon 未 ready，请刷新状态或检查 Daemon 运行情况。'
+        ? l10n.personalAgentDaemonNotReadyNotice
         : !hasBootstrapKey
-        ? '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新 Daemon 状态。'
-        : '可以启用。';
+        ? l10n.personalAgentBootstrapKeyMissingNotice
+        : l10n.personalAgentCanEnableNotice;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(responsive.spacing(12)),
@@ -588,13 +613,14 @@ class _MessageAgentReadinessNotice extends StatelessWidget {
   }
 }
 
-class _MessageAgentLimitsCard extends StatelessWidget {
-  const _MessageAgentLimitsCard({required this.enabled});
+class _PersonalAgentLimitsCard extends StatelessWidget {
+  const _PersonalAgentLimitsCard({required this.enabled});
 
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final responsive = context.awikiResponsive;
     return AppCardSection(
       padding: EdgeInsets.all(responsive.spacing(16)),
@@ -602,7 +628,7 @@ class _MessageAgentLimitsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            '安全边界',
+            l10n.personalAgentSafetyTitle,
             style: TextStyle(
               color: const Color(0xFF101B32),
               fontSize: responsive.bodyMd,
@@ -610,22 +636,22 @@ class _MessageAgentLimitsCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: responsive.spacing(10)),
-          const _MessageAgentLimitRow(
+          _PersonalAgentLimitRow(
             icon: CupertinoIcons.doc_text,
-            text: '只读取可处理的普通 direct text；不处理 E2EE 明文（Direct / Group）。',
+            text: l10n.personalAgentSafetyPlainText,
           ),
-          const _MessageAgentLimitRow(
+          _PersonalAgentLimitRow(
             icon: CupertinoIcons.pencil_outline,
-            text: '只生成草稿和需要确认的 action；不会自动发送消息。',
+            text: l10n.personalAgentSafetyDraftOnly,
           ),
-          const _MessageAgentLimitRow(
+          _PersonalAgentLimitRow(
             icon: CupertinoIcons.lock_shield,
-            text: 'runtime 不持有 DID 主私钥，不直连 message-service。',
+            text: l10n.personalAgentSafetyNoPrimaryKey,
           ),
           if (!enabled)
-            const _MessageAgentLimitRow(
+            _PersonalAgentLimitRow(
               icon: CupertinoIcons.slash_circle,
-              text: '实验功能关闭时不会触发授权、bootstrap 或 delegated key 操作。',
+              text: l10n.personalAgentSafetyFeatureDisabled,
             ),
         ],
       ),
@@ -633,8 +659,8 @@ class _MessageAgentLimitsCard extends StatelessWidget {
   }
 }
 
-class _MessageAgentLimitRow extends StatelessWidget {
-  const _MessageAgentLimitRow({required this.icon, required this.text});
+class _PersonalAgentLimitRow extends StatelessWidget {
+  const _PersonalAgentLimitRow({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -665,35 +691,36 @@ class _MessageAgentLimitRow extends StatelessWidget {
   }
 }
 
-bool _messageAgentDaemonReady(AgentSummary daemon) {
+bool _personalAgentDaemonReady(AgentSummary daemon) {
   final status = daemon.latest.status.trim().toLowerCase();
   return status == 'ready' || status == 'needs_upgrade';
 }
 
-String _messageAgentStateLabel({
+String _personalAgentStateLabel({
   required bool enabled,
   required AgentSummary? daemon,
   required bool hasBootstrapKey,
-  required AgentSummary? messageAgent,
+  required AgentSummary? personalAgent,
   required bool isBusy,
+  required AppLocalizations l10n,
 }) {
   if (!enabled) {
-    return '实验功能关闭';
+    return l10n.personalAgentExperimentDisabled;
   }
   if (isBusy) {
-    return '处理中';
+    return l10n.personalAgentBusy;
   }
   if (daemon == null) {
-    return '无 Daemon';
+    return l10n.personalAgentNoDaemon;
   }
-  if (!_messageAgentDaemonReady(daemon)) {
-    return 'Daemon 未就绪';
+  if (!_personalAgentDaemonReady(daemon)) {
+    return l10n.personalAgentDaemonNotReady;
   }
   if (!hasBootstrapKey) {
-    return '未就绪';
+    return l10n.personalAgentNotReady;
   }
-  if (messageAgent != null) {
-    return '已启用';
+  if (personalAgent != null) {
+    return l10n.personalAgentEnabledState;
   }
-  return '可启用';
+  return l10n.personalAgentReadyToEnable;
 }

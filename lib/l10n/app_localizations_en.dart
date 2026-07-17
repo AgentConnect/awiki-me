@@ -1788,7 +1788,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'This account has no available Handle, so a daemon install command cannot be created right now.';
 
   @override
-  String get agentErrorMessageAgentDisabled => 'Message Agent is not enabled.';
+  String get agentErrorPersonalAgentDisabled =>
+      'Personal Agent is not enabled.';
 
   @override
   String get agentTenantUnsupportedTitle =>
@@ -1818,8 +1819,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'The daemon is currently unreachable and cannot be upgraded yet. Refresh status or reinstall it first.';
 
   @override
-  String get agentErrorMessageAgentMissing =>
-      'This daemon has not created a Message Agent yet.';
+  String get agentErrorPersonalAgentMissing =>
+      'This daemon has not created a Personal Agent yet.';
 
   @override
   String get agentStatusSyncStillWaiting =>
@@ -2001,152 +2002,283 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentDiagnosticActiveSessionCount => 'Active sessions';
 
   @override
-  String get messageAgentSkipped => 'Message Agent skipped this message';
+  String get personalAgentSkipped => 'Personal Agent skipped this message';
 
   @override
-  String get messageAgentFailed => 'Message Agent failed';
+  String get personalAgentFailed => 'Personal Agent failed';
 
   @override
-  String get messageAgentCompleted => 'Message Agent completed';
+  String get personalAgentCompleted => 'Personal Agent completed';
 
   @override
-  String get messageAgentProcessing => 'Message Agent is processing';
+  String get personalAgentProcessing => 'Personal Agent is processing';
 
   @override
-  String get messageAgentReceived => 'Message Agent received the message';
+  String get personalAgentReceived => 'Personal Agent received the message';
 
   @override
-  String get messageAgentResultGenerated => 'Result generated';
+  String get personalAgentResultGenerated => 'Result generated';
 
   @override
-  String get messageAgentDraftApplied => 'Draft inserted into the composer';
+  String get personalAgentDraftApplied => 'Draft inserted into the composer';
 
   @override
-  String get messageAgentAppActionCompleted => 'App action completed';
+  String get personalAgentAppActionCompleted => 'App action completed';
 
   @override
-  String get messageAgentRequestRejected => 'Message Agent request rejected';
+  String get personalAgentRequestRejected => 'Personal Agent request rejected';
 
   @override
-  String get messageAgentAppActionFailed => 'App action failed';
+  String get personalAgentAppActionFailed => 'App action failed';
 
   @override
-  String get messageAgentWaitingConfirmation => 'Waiting for confirmation';
+  String get personalAgentWaitingConfirmation => 'Waiting for confirmation';
 
   @override
-  String get messageAgentUseDraft => 'Use draft';
+  String get personalAgentUseDraft => 'Use draft';
 
   @override
-  String get messageAgentActionCreateDraft => 'Message Agent created a draft';
+  String get personalAgentActionCreateDraft => 'Personal Agent created a draft';
 
   @override
-  String get messageAgentActionSummarize => 'Message Agent created a summary';
+  String get personalAgentActionSummarize => 'Personal Agent created a summary';
 
   @override
-  String get messageAgentActionReadContact =>
-      'Message Agent requests contact access';
+  String get personalAgentActionReadContact =>
+      'Personal Agent requests contact access';
 
   @override
-  String get messageAgentActionUpdateDisplayName =>
-      'Message Agent requests a contact name change';
+  String get personalAgentActionUpdateDisplayName =>
+      'Personal Agent requests a contact name change';
 
   @override
-  String get messageAgentActionUpdateNote =>
-      'Message Agent requests a contact note change';
+  String get personalAgentActionUpdateNote =>
+      'Personal Agent requests a contact note change';
 
   @override
-  String get messageAgentActionGeneric =>
-      'Message Agent requests an app action';
+  String get personalAgentActionGeneric =>
+      'Personal Agent requests an app action';
 
   @override
-  String get messageAgentTitle => 'Message Agent';
+  String get personalAgentTitle => 'Personal Agent';
 
   @override
-  String messageAgentRuntimeSubtitle(Object provider) {
+  String personalAgentRuntimeSubtitle(Object provider) {
     return 'Runs a $provider runtime inside the daemon';
   }
 
   @override
-  String get messageAgentExperimentDisabled => 'Experimental feature disabled';
+  String get personalAgentExperimentDisabled => 'Experimental feature disabled';
 
   @override
-  String get messageAgentReadyToEnable => 'Ready';
+  String get personalAgentReadyToEnable => 'Ready';
 
   @override
-  String get messageAgentNotReady => 'Not ready';
+  String get personalAgentNotReady => 'Not ready';
 
   @override
-  String get messageAgentRunningDaemon => 'Running daemon';
+  String get personalAgentRunningDaemon => 'Running daemon';
 
   @override
-  String get messageAgentEngine => 'Engine';
+  String get personalAgentEngine => 'Engine';
 
   @override
-  String get messageAgentScope => 'Scope';
+  String get personalAgentScope => 'Scope';
 
   @override
-  String get messageAgentAllProcessableConversations =>
+  String get personalAgentAllProcessableConversations =>
       'All processable conversations';
 
   @override
-  String get messageAgentDaemonVersion => 'Daemon version';
+  String get personalAgentDaemonVersion => 'Daemon version';
 
   @override
-  String get messageAgentCapabilities => 'Capabilities';
+  String get personalAgentCapabilities => 'Capabilities';
 
   @override
-  String get messageAgentSecureBootstrap => 'Secure bootstrap';
+  String get personalAgentSecureBootstrap => 'Secure bootstrap';
 
   @override
-  String get messageAgentPublicKeyReported => 'Public key reported';
+  String get personalAgentPublicKeyReported => 'Public key reported';
 
   @override
-  String get messageAgentWaitingStatusRefresh => 'Waiting for status refresh';
+  String get personalAgentWaitingStatusRefresh => 'Waiting for status refresh';
 
   @override
-  String get messageAgentEnable => 'Enable Message Agent';
+  String get personalAgentEnable => 'Enable Personal Agent';
 
   @override
-  String get messageAgentEnabling => 'Enabling';
+  String get personalAgentEnabling => 'Enabling';
 
   @override
-  String get messageAgentPause => 'Pause message processing';
+  String get personalAgentPause => 'Pause message processing';
 
   @override
-  String get messageAgentDelete => 'Delete Message Agent';
+  String get personalAgentDelete => 'Delete Personal Agent';
 
   @override
-  String get messageAgentRevokeAuthorization =>
+  String get personalAgentRevokeAuthorization =>
       'Revoke daemon message authorization';
 
   @override
-  String get messageAgentPermissionSummaryEnabled =>
+  String get personalAgentPermissionSummaryEnabled =>
       'Permission summary: reads regular messages, analyzes and summarizes them, creates drafts, and requests user-confirmed app actions.';
 
   @override
-  String get messageAgentPermissionSummaryDisabled =>
-      'Switch to a tenant on an approved AWiki realm to configure Message Agent.';
+  String get personalAgentPermissionSummaryDisabled =>
+      'Switch to a tenant on an approved AWiki realm to configure Personal Agent.';
 
   @override
-  String get messageAgentPauseTitle => 'Pause message processing';
+  String get personalAgentPauseTitle => 'Pause message processing';
 
   @override
-  String get messageAgentPauseMessage =>
-      'After pausing, the Message Agent stops reading and processing new messages. The runtime and authorization remain and can be enabled again.';
+  String get personalAgentPauseMessage =>
+      'After pausing, the Personal Agent stops reading and processing new messages. The runtime and authorization remain and can be enabled again.';
 
   @override
-  String get messageAgentDeleteTitle => 'Delete Message Agent';
+  String get personalAgentDeleteTitle => 'Delete Personal Agent';
 
   @override
-  String get messageAgentDeleteMessage =>
+  String get personalAgentDeleteMessage =>
       'Deletion pauses message processing first, then archives the runtime. The daemon and authorization are not deleted.';
 
   @override
-  String get messageAgentRevokeTitle => 'Revoke daemon message authorization';
+  String get personalAgentRevokeTitle => 'Revoke daemon message authorization';
 
   @override
-  String get messageAgentRevokeMessage =>
+  String get personalAgentRevokeMessage =>
       'Revocation must remove daemon-key-1 through a signed DID Document update. If the update is not completed, it fails and will not treat pause as a successful revoke.';
+
+  @override
+  String get personalAgentSettingsSubtitle =>
+      'Configure enablement, pause, and daemon message authorization.';
+
+  @override
+  String get personalAgentSettingsDisabledSubtitle =>
+      'Personal Agent is disabled and will not send bootstrap or authorization requests.';
+
+  @override
+  String get personalAgentNoDaemonSelected => 'No running daemon selected';
+
+  @override
+  String personalAgentSelectedDaemon(Object name) {
+    return 'Running daemon: $name';
+  }
+
+  @override
+  String get personalAgentDescription =>
+      'Reads regular direct text, organizes it, and prepares drafts for your confirmation.';
+
+  @override
+  String get personalAgentDisabledDescription =>
+      'This experimental feature is disabled. No bootstrap or authorization request will be sent.';
+
+  @override
+  String get personalAgentDaemonStatus => 'Daemon status';
+
+  @override
+  String get personalAgentAuthorizationStatus => 'Authorization';
+
+  @override
+  String get personalAgentDirectTextScope => 'Regular direct text';
+
+  @override
+  String get personalAgentNotSelected => 'Not selected';
+
+  @override
+  String get personalAgentNoDaemon => 'No daemon available';
+
+  @override
+  String get personalAgentNotBound => 'Not bound';
+
+  @override
+  String personalAgentBound(Object name) {
+    return 'Bound to $name';
+  }
+
+  @override
+  String get personalAgentRefreshDaemonStatus => 'Refresh daemon status';
+
+  @override
+  String get personalAgentSelectDaemon => 'Select running daemon';
+
+  @override
+  String get personalAgentRunsOnSelectedDaemon =>
+      'Personal Agent runs inside the selected daemon.';
+
+  @override
+  String get personalAgentNoDaemons =>
+      'No daemon is available. Create or install one from Agents first.';
+
+  @override
+  String personalAgentSelectDaemonSemantic(Object name) {
+    return 'Select $name';
+  }
+
+  @override
+  String get personalAgentReadyWithPublicKey => 'Ready · public key reported';
+
+  @override
+  String get personalAgentReadyWaitingPublicKey =>
+      'Ready · waiting for bootstrap public key';
+
+  @override
+  String personalAgentDaemonNeedsAttention(Object status) {
+    return '$status · refresh or inspect the daemon';
+  }
+
+  @override
+  String get personalAgentFeatureDisabledNotice =>
+      'AWIKI_AGENT_IM_ENABLED=false. This entry is read-only and sends no bootstrap, binding, or authorization request.';
+
+  @override
+  String get personalAgentNoDaemonNotice =>
+      'No daemon is available. Install and start a daemon first.';
+
+  @override
+  String get personalAgentDaemonNotReadyNotice =>
+      'The selected daemon is not ready. Refresh its status or inspect the daemon.';
+
+  @override
+  String get personalAgentBootstrapKeyMissingNotice =>
+      'The selected daemon has not reported a secure bootstrap public key. Refresh daemon status first.';
+
+  @override
+  String get personalAgentCanEnableNotice => 'Personal Agent can be enabled.';
+
+  @override
+  String get personalAgentSafetyTitle => 'Safety boundaries';
+
+  @override
+  String get personalAgentSafetyPlainText =>
+      'Reads only supported regular direct text and never processes Direct or Group E2EE plaintext.';
+
+  @override
+  String get personalAgentSafetyDraftOnly =>
+      'Creates drafts and confirmation-required actions; it never sends messages automatically.';
+
+  @override
+  String get personalAgentSafetyNoPrimaryKey =>
+      'The runtime never holds the primary DID private key or connects directly to message-service.';
+
+  @override
+  String get personalAgentSafetyFeatureDisabled =>
+      'When disabled, the feature performs no authorization, bootstrap, or delegated-key operation.';
+
+  @override
+  String get personalAgentBusy => 'Working';
+
+  @override
+  String get personalAgentDaemonNotReady => 'Daemon not ready';
+
+  @override
+  String get personalAgentEnabledState => 'Enabled';
+
+  @override
+  String get personalAgentCreated => 'Personal Agent created';
+
+  @override
+  String get personalAgentConfigure => 'Configure Personal Agent';
 
   @override
   String get agentInboxTitle => 'Agent inbox';

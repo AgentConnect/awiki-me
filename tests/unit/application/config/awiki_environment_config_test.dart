@@ -74,7 +74,7 @@ void main() {
     expect(config.releasesUrl, 'https://anpclaw.com/#download');
   });
 
-  test('explicit Message Agent flag override can disable IM agent', () {
+  test('explicit Personal Agent flag override can disable IM agent', () {
     final config = AwikiEnvironmentConfig(agentImEnabled: false);
 
     expect(config.agentImEnabled, isFalse);

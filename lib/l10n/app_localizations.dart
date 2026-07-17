@@ -3254,11 +3254,11 @@ abstract class AppLocalizations {
   /// **'当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。'**
   String get agentErrorHandleUnavailable;
 
-  /// No description provided for @agentErrorMessageAgentDisabled.
+  /// No description provided for @agentErrorPersonalAgentDisabled.
   ///
   /// In zh, this message translates to:
-  /// **'消息处理 Agent 功能未开启。'**
-  String get agentErrorMessageAgentDisabled;
+  /// **'个人助理功能未开启。'**
+  String get agentErrorPersonalAgentDisabled;
 
   /// No description provided for @agentTenantUnsupportedTitle.
   ///
@@ -3302,11 +3302,11 @@ abstract class AppLocalizations {
   /// **'Daemon 当前不可达，暂时不能升级。请先刷新状态或重新安装。'**
   String get agentErrorDaemonUnreachableUpgrade;
 
-  /// No description provided for @agentErrorMessageAgentMissing.
+  /// No description provided for @agentErrorPersonalAgentMissing.
   ///
   /// In zh, this message translates to:
-  /// **'当前 Daemon 尚未创建消息处理 Agent。'**
-  String get agentErrorMessageAgentMissing;
+  /// **'当前 Daemon 尚未创建个人助理。'**
+  String get agentErrorPersonalAgentMissing;
 
   /// No description provided for @agentStatusSyncStillWaiting.
   ///
@@ -3632,275 +3632,491 @@ abstract class AppLocalizations {
   /// **'活跃会话'**
   String get agentDiagnosticActiveSessionCount;
 
-  /// No description provided for @messageAgentSkipped.
+  /// No description provided for @personalAgentSkipped.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 跳过此消息'**
-  String get messageAgentSkipped;
+  /// **'个人助理跳过此消息'**
+  String get personalAgentSkipped;
 
-  /// No description provided for @messageAgentFailed.
+  /// No description provided for @personalAgentFailed.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 处理失败'**
-  String get messageAgentFailed;
+  /// **'个人助理处理失败'**
+  String get personalAgentFailed;
 
-  /// No description provided for @messageAgentCompleted.
+  /// No description provided for @personalAgentCompleted.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 已完成处理'**
-  String get messageAgentCompleted;
+  /// **'个人助理已完成处理'**
+  String get personalAgentCompleted;
 
-  /// No description provided for @messageAgentProcessing.
+  /// No description provided for @personalAgentProcessing.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 正在处理'**
-  String get messageAgentProcessing;
+  /// **'个人助理正在处理'**
+  String get personalAgentProcessing;
 
-  /// No description provided for @messageAgentReceived.
+  /// No description provided for @personalAgentReceived.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 已收到消息'**
-  String get messageAgentReceived;
+  /// **'个人助理已收到消息'**
+  String get personalAgentReceived;
 
-  /// No description provided for @messageAgentResultGenerated.
+  /// No description provided for @personalAgentResultGenerated.
   ///
   /// In zh, this message translates to:
   /// **'已生成处理结果'**
-  String get messageAgentResultGenerated;
+  String get personalAgentResultGenerated;
 
-  /// No description provided for @messageAgentDraftApplied.
+  /// No description provided for @personalAgentDraftApplied.
   ///
   /// In zh, this message translates to:
   /// **'草稿已放入输入框'**
-  String get messageAgentDraftApplied;
+  String get personalAgentDraftApplied;
 
-  /// No description provided for @messageAgentAppActionCompleted.
+  /// No description provided for @personalAgentAppActionCompleted.
   ///
   /// In zh, this message translates to:
   /// **'App action 已完成'**
-  String get messageAgentAppActionCompleted;
+  String get personalAgentAppActionCompleted;
 
-  /// No description provided for @messageAgentRequestRejected.
+  /// No description provided for @personalAgentRequestRejected.
   ///
   /// In zh, this message translates to:
-  /// **'已拒绝消息 Agent 请求'**
-  String get messageAgentRequestRejected;
+  /// **'已拒绝个人助理请求'**
+  String get personalAgentRequestRejected;
 
-  /// No description provided for @messageAgentAppActionFailed.
+  /// No description provided for @personalAgentAppActionFailed.
   ///
   /// In zh, this message translates to:
   /// **'App action 处理失败'**
-  String get messageAgentAppActionFailed;
+  String get personalAgentAppActionFailed;
 
-  /// No description provided for @messageAgentWaitingConfirmation.
+  /// No description provided for @personalAgentWaitingConfirmation.
   ///
   /// In zh, this message translates to:
   /// **'等待确认'**
-  String get messageAgentWaitingConfirmation;
+  String get personalAgentWaitingConfirmation;
 
-  /// No description provided for @messageAgentUseDraft.
+  /// No description provided for @personalAgentUseDraft.
   ///
   /// In zh, this message translates to:
   /// **'使用草稿'**
-  String get messageAgentUseDraft;
+  String get personalAgentUseDraft;
 
-  /// No description provided for @messageAgentActionCreateDraft.
+  /// No description provided for @personalAgentActionCreateDraft.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 生成了草稿'**
-  String get messageAgentActionCreateDraft;
+  /// **'个人助理生成了草稿'**
+  String get personalAgentActionCreateDraft;
 
-  /// No description provided for @messageAgentActionSummarize.
+  /// No description provided for @personalAgentActionSummarize.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 生成了摘要'**
-  String get messageAgentActionSummarize;
+  /// **'个人助理生成了摘要'**
+  String get personalAgentActionSummarize;
 
-  /// No description provided for @messageAgentActionReadContact.
+  /// No description provided for @personalAgentActionReadContact.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 请求读取联系人'**
-  String get messageAgentActionReadContact;
+  /// **'个人助理请求读取联系人'**
+  String get personalAgentActionReadContact;
 
-  /// No description provided for @messageAgentActionUpdateDisplayName.
+  /// No description provided for @personalAgentActionUpdateDisplayName.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 请求修改联系人名称'**
-  String get messageAgentActionUpdateDisplayName;
+  /// **'个人助理请求修改联系人名称'**
+  String get personalAgentActionUpdateDisplayName;
 
-  /// No description provided for @messageAgentActionUpdateNote.
+  /// No description provided for @personalAgentActionUpdateNote.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 请求修改联系人备注'**
-  String get messageAgentActionUpdateNote;
+  /// **'个人助理请求修改联系人备注'**
+  String get personalAgentActionUpdateNote;
 
-  /// No description provided for @messageAgentActionGeneric.
+  /// No description provided for @personalAgentActionGeneric.
   ///
   /// In zh, this message translates to:
-  /// **'消息 Agent 请求 App action'**
-  String get messageAgentActionGeneric;
+  /// **'个人助理请求 App action'**
+  String get personalAgentActionGeneric;
 
-  /// No description provided for @messageAgentTitle.
+  /// No description provided for @personalAgentTitle.
   ///
   /// In zh, this message translates to:
-  /// **'消息处理 Agent'**
-  String get messageAgentTitle;
+  /// **'个人助理'**
+  String get personalAgentTitle;
 
-  /// No description provided for @messageAgentRuntimeSubtitle.
+  /// No description provided for @personalAgentRuntimeSubtitle.
   ///
   /// In zh, this message translates to:
   /// **'运行 Daemon 内创建 {provider} runtime'**
-  String messageAgentRuntimeSubtitle(Object provider);
+  String personalAgentRuntimeSubtitle(Object provider);
 
-  /// No description provided for @messageAgentExperimentDisabled.
+  /// No description provided for @personalAgentExperimentDisabled.
   ///
   /// In zh, this message translates to:
   /// **'实验功能关闭'**
-  String get messageAgentExperimentDisabled;
+  String get personalAgentExperimentDisabled;
 
-  /// No description provided for @messageAgentReadyToEnable.
+  /// No description provided for @personalAgentReadyToEnable.
   ///
   /// In zh, this message translates to:
   /// **'可启用'**
-  String get messageAgentReadyToEnable;
+  String get personalAgentReadyToEnable;
 
-  /// No description provided for @messageAgentNotReady.
+  /// No description provided for @personalAgentNotReady.
   ///
   /// In zh, this message translates to:
   /// **'未就绪'**
-  String get messageAgentNotReady;
+  String get personalAgentNotReady;
 
-  /// No description provided for @messageAgentRunningDaemon.
+  /// No description provided for @personalAgentRunningDaemon.
   ///
   /// In zh, this message translates to:
   /// **'运行 Daemon'**
-  String get messageAgentRunningDaemon;
+  String get personalAgentRunningDaemon;
 
-  /// No description provided for @messageAgentEngine.
+  /// No description provided for @personalAgentEngine.
   ///
   /// In zh, this message translates to:
   /// **'引擎'**
-  String get messageAgentEngine;
+  String get personalAgentEngine;
 
-  /// No description provided for @messageAgentScope.
+  /// No description provided for @personalAgentScope.
   ///
   /// In zh, this message translates to:
   /// **'处理范围'**
-  String get messageAgentScope;
+  String get personalAgentScope;
 
-  /// No description provided for @messageAgentAllProcessableConversations.
+  /// No description provided for @personalAgentAllProcessableConversations.
   ///
   /// In zh, this message translates to:
   /// **'所有可处理会话'**
-  String get messageAgentAllProcessableConversations;
+  String get personalAgentAllProcessableConversations;
 
-  /// No description provided for @messageAgentDaemonVersion.
+  /// No description provided for @personalAgentDaemonVersion.
   ///
   /// In zh, this message translates to:
   /// **'Daemon 版本'**
-  String get messageAgentDaemonVersion;
+  String get personalAgentDaemonVersion;
 
-  /// No description provided for @messageAgentCapabilities.
+  /// No description provided for @personalAgentCapabilities.
   ///
   /// In zh, this message translates to:
   /// **'可用能力'**
-  String get messageAgentCapabilities;
+  String get personalAgentCapabilities;
 
-  /// No description provided for @messageAgentSecureBootstrap.
+  /// No description provided for @personalAgentSecureBootstrap.
   ///
   /// In zh, this message translates to:
   /// **'安全 bootstrap'**
-  String get messageAgentSecureBootstrap;
+  String get personalAgentSecureBootstrap;
 
-  /// No description provided for @messageAgentPublicKeyReported.
+  /// No description provided for @personalAgentPublicKeyReported.
   ///
   /// In zh, this message translates to:
   /// **'已上报公钥'**
-  String get messageAgentPublicKeyReported;
+  String get personalAgentPublicKeyReported;
 
-  /// No description provided for @messageAgentWaitingStatusRefresh.
+  /// No description provided for @personalAgentWaitingStatusRefresh.
   ///
   /// In zh, this message translates to:
   /// **'等待刷新状态'**
-  String get messageAgentWaitingStatusRefresh;
+  String get personalAgentWaitingStatusRefresh;
 
-  /// No description provided for @messageAgentEnable.
+  /// No description provided for @personalAgentEnable.
   ///
   /// In zh, this message translates to:
-  /// **'启用消息处理 Agent'**
-  String get messageAgentEnable;
+  /// **'启用个人助理'**
+  String get personalAgentEnable;
 
-  /// No description provided for @messageAgentEnabling.
+  /// No description provided for @personalAgentEnabling.
   ///
   /// In zh, this message translates to:
   /// **'启用中'**
-  String get messageAgentEnabling;
+  String get personalAgentEnabling;
 
-  /// No description provided for @messageAgentPause.
+  /// No description provided for @personalAgentPause.
   ///
   /// In zh, this message translates to:
   /// **'暂停处理消息'**
-  String get messageAgentPause;
+  String get personalAgentPause;
 
-  /// No description provided for @messageAgentDelete.
+  /// No description provided for @personalAgentDelete.
   ///
   /// In zh, this message translates to:
-  /// **'删除消息处理 Agent'**
-  String get messageAgentDelete;
+  /// **'删除个人助理'**
+  String get personalAgentDelete;
 
-  /// No description provided for @messageAgentRevokeAuthorization.
+  /// No description provided for @personalAgentRevokeAuthorization.
   ///
   /// In zh, this message translates to:
   /// **'撤销 Daemon 消息授权'**
-  String get messageAgentRevokeAuthorization;
+  String get personalAgentRevokeAuthorization;
 
-  /// No description provided for @messageAgentPermissionSummaryEnabled.
+  /// No description provided for @personalAgentPermissionSummaryEnabled.
   ///
   /// In zh, this message translates to:
-  /// **'权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。'**
-  String get messageAgentPermissionSummaryEnabled;
+  /// **'权限摘要：读取普通消息，分析、总结并生成草稿；不会自动发送消息，也不处理 E2EE 明文。'**
+  String get personalAgentPermissionSummaryEnabled;
 
-  /// No description provided for @messageAgentPermissionSummaryDisabled.
+  /// No description provided for @personalAgentPermissionSummaryDisabled.
   ///
   /// In zh, this message translates to:
-  /// **'切换到已批准 AWiki 域名的租户后可配置消息处理 Agent。'**
-  String get messageAgentPermissionSummaryDisabled;
+  /// **'切换到已批准 AWiki 域名的租户后可配置个人助理。'**
+  String get personalAgentPermissionSummaryDisabled;
 
-  /// No description provided for @messageAgentPauseTitle.
+  /// No description provided for @personalAgentPauseTitle.
   ///
   /// In zh, this message translates to:
   /// **'暂停处理消息'**
-  String get messageAgentPauseTitle;
+  String get personalAgentPauseTitle;
 
-  /// No description provided for @messageAgentPauseMessage.
+  /// No description provided for @personalAgentPauseMessage.
   ///
   /// In zh, this message translates to:
-  /// **'暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。'**
-  String get messageAgentPauseMessage;
+  /// **'暂停后，个人助理不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。'**
+  String get personalAgentPauseMessage;
 
-  /// No description provided for @messageAgentDeleteTitle.
+  /// No description provided for @personalAgentDeleteTitle.
   ///
   /// In zh, this message translates to:
-  /// **'删除消息处理 Agent'**
-  String get messageAgentDeleteTitle;
+  /// **'删除个人助理'**
+  String get personalAgentDeleteTitle;
 
-  /// No description provided for @messageAgentDeleteMessage.
+  /// No description provided for @personalAgentDeleteMessage.
   ///
   /// In zh, this message translates to:
   /// **'删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。'**
-  String get messageAgentDeleteMessage;
+  String get personalAgentDeleteMessage;
 
-  /// No description provided for @messageAgentRevokeTitle.
+  /// No description provided for @personalAgentRevokeTitle.
   ///
   /// In zh, this message translates to:
   /// **'撤销 Daemon 消息授权'**
-  String get messageAgentRevokeTitle;
+  String get personalAgentRevokeTitle;
 
-  /// No description provided for @messageAgentRevokeMessage.
+  /// No description provided for @personalAgentRevokeMessage.
   ///
   /// In zh, this message translates to:
   /// **'撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。'**
-  String get messageAgentRevokeMessage;
+  String get personalAgentRevokeMessage;
+
+  /// No description provided for @personalAgentSettingsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'配置个人助理的启用、暂停和 Daemon 消息授权。'**
+  String get personalAgentSettingsSubtitle;
+
+  /// No description provided for @personalAgentSettingsDisabledSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'个人助理已关闭，不会发送 bootstrap 或授权请求。'**
+  String get personalAgentSettingsDisabledSubtitle;
+
+  /// No description provided for @personalAgentNoDaemonSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'未选择运行 Daemon'**
+  String get personalAgentNoDaemonSelected;
+
+  /// No description provided for @personalAgentSelectedDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前运行 Daemon：{name}'**
+  String personalAgentSelectedDaemon(Object name);
+
+  /// No description provided for @personalAgentDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'读取普通 direct text，为你整理并生成草稿；发送前必须由你确认。'**
+  String get personalAgentDescription;
+
+  /// No description provided for @personalAgentDisabledDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'实验功能未开启，当前不会发送 bootstrap 或授权请求。'**
+  String get personalAgentDisabledDescription;
+
+  /// No description provided for @personalAgentDaemonStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 状态'**
+  String get personalAgentDaemonStatus;
+
+  /// No description provided for @personalAgentAuthorizationStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'授权状态'**
+  String get personalAgentAuthorizationStatus;
+
+  /// No description provided for @personalAgentDirectTextScope.
+  ///
+  /// In zh, this message translates to:
+  /// **'普通 direct text'**
+  String get personalAgentDirectTextScope;
+
+  /// No description provided for @personalAgentNotSelected.
+  ///
+  /// In zh, this message translates to:
+  /// **'未选择'**
+  String get personalAgentNotSelected;
+
+  /// No description provided for @personalAgentNoDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'无可用 Daemon'**
+  String get personalAgentNoDaemon;
+
+  /// No description provided for @personalAgentNotBound.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未绑定'**
+  String get personalAgentNotBound;
+
+  /// No description provided for @personalAgentBound.
+  ///
+  /// In zh, this message translates to:
+  /// **'已绑定 {name}'**
+  String personalAgentBound(Object name);
+
+  /// No description provided for @personalAgentRefreshDaemonStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新 Daemon 状态'**
+  String get personalAgentRefreshDaemonStatus;
+
+  /// No description provided for @personalAgentSelectDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择运行 Daemon'**
+  String get personalAgentSelectDaemon;
+
+  /// No description provided for @personalAgentRunsOnSelectedDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'个人助理会运行在你选择的 Daemon 内。'**
+  String get personalAgentRunsOnSelectedDaemon;
+
+  /// No description provided for @personalAgentNoDaemons.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无可用 Daemon，请先在智能体页创建或安装 Daemon。'**
+  String get personalAgentNoDaemons;
+
+  /// No description provided for @personalAgentSelectDaemonSemantic.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择 {name}'**
+  String personalAgentSelectDaemonSemantic(Object name);
+
+  /// No description provided for @personalAgentReadyWithPublicKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'Ready · 已上报公钥'**
+  String get personalAgentReadyWithPublicKey;
+
+  /// No description provided for @personalAgentReadyWaitingPublicKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'Ready · 等待 bootstrap 公钥'**
+  String get personalAgentReadyWaitingPublicKey;
+
+  /// No description provided for @personalAgentDaemonNeedsAttention.
+  ///
+  /// In zh, this message translates to:
+  /// **'{status} · 需刷新或检查 Daemon'**
+  String personalAgentDaemonNeedsAttention(Object status);
+
+  /// No description provided for @personalAgentFeatureDisabledNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'AWIKI_AGENT_IM_ENABLED=false，入口只显示状态，不会发送 bootstrap、binding 或身份授权请求。'**
+  String get personalAgentFeatureDisabledNotice;
+
+  /// No description provided for @personalAgentNoDaemonNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可用 Daemon。请先安装并启动 Daemon。'**
+  String get personalAgentNoDaemonNotice;
+
+  /// No description provided for @personalAgentDaemonNotReadyNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前 Daemon 未 ready，请刷新状态或检查 Daemon 运行情况。'**
+  String get personalAgentDaemonNotReadyNotice;
+
+  /// No description provided for @personalAgentBootstrapKeyMissingNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新 Daemon 状态。'**
+  String get personalAgentBootstrapKeyMissingNotice;
+
+  /// No description provided for @personalAgentCanEnableNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以启用个人助理。'**
+  String get personalAgentCanEnableNotice;
+
+  /// No description provided for @personalAgentSafetyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全边界'**
+  String get personalAgentSafetyTitle;
+
+  /// No description provided for @personalAgentSafetyPlainText.
+  ///
+  /// In zh, this message translates to:
+  /// **'只读取可处理的普通 direct text；不处理 E2EE 明文（Direct / Group）。'**
+  String get personalAgentSafetyPlainText;
+
+  /// No description provided for @personalAgentSafetyDraftOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只生成草稿和需要确认的 action；不会自动发送消息。'**
+  String get personalAgentSafetyDraftOnly;
+
+  /// No description provided for @personalAgentSafetyNoPrimaryKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'runtime 不持有 DID 主私钥，不直连 message-service。'**
+  String get personalAgentSafetyNoPrimaryKey;
+
+  /// No description provided for @personalAgentSafetyFeatureDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'实验功能关闭时不会触发授权、bootstrap 或 delegated key 操作。'**
+  String get personalAgentSafetyFeatureDisabled;
+
+  /// No description provided for @personalAgentBusy.
+  ///
+  /// In zh, this message translates to:
+  /// **'处理中'**
+  String get personalAgentBusy;
+
+  /// No description provided for @personalAgentDaemonNotReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon 未就绪'**
+  String get personalAgentDaemonNotReady;
+
+  /// No description provided for @personalAgentEnabledState.
+  ///
+  /// In zh, this message translates to:
+  /// **'已启用'**
+  String get personalAgentEnabledState;
+
+  /// No description provided for @personalAgentCreated.
+  ///
+  /// In zh, this message translates to:
+  /// **'已创建个人助理'**
+  String get personalAgentCreated;
+
+  /// No description provided for @personalAgentConfigure.
+  ///
+  /// In zh, this message translates to:
+  /// **'配置个人助理'**
+  String get personalAgentConfigure;
 
   /// No description provided for @agentInboxTitle.
   ///

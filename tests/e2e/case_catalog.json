@@ -1244,11 +1244,11 @@
       }
     },
     {
-      "caseId": "MSGAGENT-E2E-001",
-      "feature": "Message Agent enable UI",
+      "caseId": "PERSONALAGENT-E2E-001",
+      "feature": "Personal Agent enable UI",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Select the daemon and enable Message Agent through visible UI.",
+      "action": "Select the daemon and enable Personal Agent through visible UI.",
       "exactOracles": [
         "Daemon selection, active binding and enabled UI agree."
       ],
@@ -1261,13 +1261,13 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
     },
     {
-      "caseId": "MSGAGENT-E2E-002",
-      "feature": "Message Agent receive/process",
+      "caseId": "PERSONALAGENT-E2E-002",
+      "feature": "Personal Agent receive/process",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send from CLI and wait for App/runtime recovery.",
@@ -1283,13 +1283,13 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
     },
     {
-      "caseId": "MSGAGENT-E2E-003",
-      "feature": "Message Agent confirmation/result",
+      "caseId": "PERSONALAGENT-E2E-003",
+      "feature": "Personal Agent confirmation/result",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Confirm the visible draft/action and await its result.",
@@ -1305,13 +1305,13 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
     },
     {
-      "caseId": "MSGAGENT-E2E-004",
-      "feature": "Message Agent revoke lifecycle",
+      "caseId": "PERSONALAGENT-E2E-004",
+      "feature": "Personal Agent revoke lifecycle",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Revoke Daemon message authorization through the visible confirmation flow.",
@@ -1327,7 +1327,7 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
     },

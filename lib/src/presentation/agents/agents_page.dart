@@ -16,7 +16,7 @@ import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
-import '../../domain/entities/agent/message_agent_runtime_provider.dart';
+import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -41,7 +41,7 @@ part 'parts/agents_list_part.dart';
 part 'parts/agents_detail_part.dart';
 part 'parts/agents_access_policy_part.dart';
 part 'parts/agents_dialogs_part.dart';
-part 'message_agent_settings_page.dart';
+part 'personal_agent_settings_page.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
   const AgentsWorkspacePage({super.key, this.listFooter});
@@ -111,8 +111,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
-    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
-    if (!messageAgentEnabled) {
+    final personalAgentEnabled = ref.watch(agentImEnabledProvider);
+    if (!personalAgentEnabled) {
       return const _AgentsTenantUnsupportedView();
     }
     ref.listen<AgentsState>(agentsProvider, (previous, next) {
@@ -182,20 +182,20 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onCancelUpgrade: (agent) =>
           ref.read(agentsProvider.notifier).cancelDaemonUpgrade(agent.agentDid),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
-      messageAgentEnabled: messageAgentEnabled,
-      onOpenMessageAgentSettings: (agent) => AppNavigator.push<void>(
+      personalAgentEnabled: personalAgentEnabled,
+      onOpenPersonalAgentSettings: (agent) => AppNavigator.push<void>(
         context,
-        (_) => MessageAgentSettingsPage(initialDaemonDid: agent.agentDid),
+        (_) => PersonalAgentSettingsPage(initialDaemonDid: agent.agentDid),
       ),
-      onBootstrapMessageAgent: (agent) => ref
+      onBootstrapPersonalAgent: (agent) => ref
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(daemonDid: agent.agentDid),
-      onPauseMessageAgent: (agent) =>
-          _confirmPauseMessageAgent(context, ref, agent),
-      onDeleteMessageAgent: (agent) =>
-          _confirmDeleteMessageAgent(context, ref, agent),
-      onRevokeMessageAgentAuthorization: (agent) =>
-          _confirmRevokeMessageAgentAuthorization(context, ref, agent),
+          .bootstrapPersonalAgent(daemonDid: agent.agentDid),
+      onPausePersonalAgent: (agent) =>
+          _confirmPausePersonalAgent(context, ref, agent),
+      onDeletePersonalAgent: (agent) =>
+          _confirmDeletePersonalAgent(context, ref, agent),
+      onRevokePersonalAgentAuthorization: (agent) =>
+          _confirmRevokePersonalAgentAuthorization(context, ref, agent),
       onSaveInvocationPolicy: (agentDid, policy) => ref
           .read(agentsProvider.notifier)
           .saveInvocationPolicy(agentDid, policy),

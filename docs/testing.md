@@ -293,7 +293,7 @@ Supported E2E cases:
 - `direct`: App and CLI peer direct-message flow.
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
-- `message-agent`: full App UI Message Agent real-backend gate.
+- `personal-agent`: full App UI Personal Agent real-backend gate.
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `full`: all App + CLI peer flows.
@@ -365,24 +365,24 @@ onboarding, group role/remove/leave flows, and secure-trust UI remain roadmap
 cases until they receive their own case IDs and vertical slices; `full` does
 not imply those features are covered.
 
-Message Agent UI changes must keep coverage in both active test domains:
+Personal Agent UI changes must keep coverage in both active test domains:
 
 - Focused widget/provider/layout coverage under `tests/unit/`, including Settings entry visibility, daemon readiness, missing bootstrap key, and feature-disabled no-op behavior.
-- Durable App flow coverage under `tests/e2e/flutter/app/message_agent_full_ui_test.dart`, with root `integration_test/message_agent_full_ui_test.dart` kept as a thin Flutter shim.
-- The fake-backed Message Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `message-agent-settings-entry`.
-- The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case message-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
-- Product gate evidence must include `MSGAGENT-E2E-001` through `MSGAGENT-E2E-005`, plus report flags for `uiEnabled`, `runtimeFinalReceived`, `draftConfirmed`, `actionResultReturned`, and `authorizationRevoked`.
-- Treat `status: success` as the first required report condition. Failed Message Agent reports now keep evidence flags false, so old failed reports with true-looking flags must not be reused as pass evidence.
+- Durable App flow coverage under `tests/e2e/flutter/app/personal_agent_full_ui_test.dart`, with root `integration_test/personal_agent_full_ui_test.dart` kept as a thin Flutter shim.
+- The fake-backed Personal Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `personal-agent-settings-entry`.
+- The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case personal-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
+- Product gate evidence must include passed attestations for `PERSONALAGENT-E2E-001`, `PERSONALAGENT-E2E-002`, and `PERSONALAGENT-E2E-004`; `uiEnabled`, `runtimeFinalReceived`, and `authorizationRevoked` must be derived from those individual case results, not overall runner success. `PERSONALAGENT-E2E-003` remains planned, and there is no executable `PERSONALAGENT-E2E-005` in the current suite.
+- Treat `status: success` as the first required report condition. Failed Personal Agent reports now keep evidence flags false, so old failed reports with true-looking flags must not be reused as pass evidence.
 
-Run the Message Agent full UI real-backend gate:
+Run the Personal Agent full UI real-backend gate:
 
 ```bash
 flutter pub run tests/e2e/runner.dart \
-  --case message-agent \
+  --case personal-agent \
   --config tests/e2e/configs/e2e.local.yaml
 ```
 
-`message-agent` requires the normal backend/OTP/account/CLI values plus:
+`personal-agent` requires the normal backend/OTP/account/CLI values plus:
 
 - `service.messageServiceUrl`
 - `service.messageServiceWsUrl`
@@ -391,14 +391,14 @@ flutter pub run tests/e2e/runner.dart \
 - `daemon.stateRoot`
 - `daemon.readyFile`
 - `daemon.fakeHermesGatewayCommand`
-- `messageAgent.runtimeProvider: hermes`
-- `messageAgent.realBackend: true`
+- `personalAgent.runtimeProvider: hermes`
+- `personalAgent.realBackend: true`
 
-When `--case message-agent` is selected, omitted `messageAgent.realBackend`
+When `--case personal-agent` is selected, omitted `personalAgent.realBackend`
 defaults to true. Setting it to false, omitting any required backend/daemon field,
 or using a provider other than `hermes` is a configuration failure. This gate uses
-the real Settings / Message Agent UI, isolates the product scenario with the
-plain-name `Message Agent full UI drives real backend daemon and recovery`, sends
+the real Settings / Personal Agent UI, isolates the product scenario with the
+plain-name `Personal Agent full UI drives real backend daemon and recovery`, sends
 a CLI peer direct text, waits for daemon `runtime_final`, confirms the App draft
 action, checks a redacted `awiki.app.action.result.v1`, and revokes Daemon message
 authorization. Focused fake-backed shim tests can diagnose UI behavior, but they
@@ -647,14 +647,14 @@ and timestamps. This is the first assertion-evidence layer; one-to-one trace
 from every catalog exact oracle/negative guard to a dedicated assertion ID is
 still required before the conversation-correctness plan is complete.
 
-Message Agent fake Widget coverage is not product acceptance. The optional real
-`message-agent` suite currently attests only implemented vertical slices:
-`MSGAGENT-E2E-001` enable/binding, `MSGAGENT-E2E-002` CLI message plus runtime
-result, and `MSGAGENT-E2E-004` UI revoke plus exact User Service/daemon
-convergence. `MSGAGENT-E2E-003` (visible action/draft confirmation) is planned
-in the catalog but is not in the executable manifest because the current real
-scenario has no such visible action. Missing provider/configuration or any
-non-attested runnable case remains failed/not-run, never passed.
+Personal Agent fake Widget coverage is not product acceptance. The optional real
+`personal-agent` suite currently attests only implemented vertical slices:
+`PERSONALAGENT-E2E-001` enable/binding, `PERSONALAGENT-E2E-002` CLI message plus runtime
+result, and `PERSONALAGENT-E2E-004` UI revoke plus exact User Service/daemon
+convergence. `PERSONALAGENT-E2E-003` (visible action/draft confirmation) is planned
+in the catalog because the supporting action step does not yet have its own
+accepted case attestation. Missing provider/configuration or any non-attested
+runnable case remains failed/not-run, never passed.
 
 ## Maintenance Rules
 

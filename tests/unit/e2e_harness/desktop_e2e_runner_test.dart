@@ -209,23 +209,23 @@ void main() {
       expect(performance.e2eCase.runConfigPath, contains('desktop-cli-peer'));
     });
 
-    test('parses message-agent case aliases', () {
+    test('parses personal-agent case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',
-        'message-agent',
+        'personal-agent',
         '--dry-run',
       ]);
       final underscore = DesktopE2eOptions.parse(const <String>[
         '--case',
-        'message_agent',
+        'personal_agent',
         '--dry-run',
       ]);
 
-      expect(hyphen.e2eCase, DesktopE2eCase.messageAgent);
-      expect(underscore.e2eCase, DesktopE2eCase.messageAgent);
-      expect(hyphen.e2eCase.caseName, 'message-agent');
-      expect(hyphen.e2eCase.reportScope, 'message-agent');
-      expect(hyphen.e2eCase.runConfigPath, contains('message-agent'));
+      expect(hyphen.e2eCase, DesktopE2eCase.personalAgent);
+      expect(underscore.e2eCase, DesktopE2eCase.personalAgent);
+      expect(hyphen.e2eCase.caseName, 'personal-agent');
+      expect(hyphen.e2eCase.reportScope, 'personal-agent');
+      expect(hyphen.e2eCase.runConfigPath, contains('personal-agent'));
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 16));
     });
 
@@ -277,7 +277,7 @@ void main() {
             'Unsupported E2E case "unknown". '
                 'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
-                'message-agent, codex-agent, or claude-code-agent.',
+                'personal-agent, codex-agent, or claude-code-agent.',
           ),
         ),
       );
@@ -400,14 +400,14 @@ service:
   anpServiceUrl: https://service.example.test/anp-im/rpc
   anpServiceDid: did:wba:example.test
 daemon:
-  rustRepo: ../awiki-cli-rs2-message-agent
-  binary: ../awiki-cli-rs2-message-agent/target/release/awiki-deamon
+  rustRepo: ../awiki-cli-rs2-personal-agent
+  binary: ../awiki-cli-rs2-personal-agent/target/release/awiki-deamon
   stateRoot: .e2e/daemon-state
   readyFile: .e2e/daemon-ready.json
   envFile: .e2e/agent-cli.env
   handle: daemon-from-file
   fakeHermesGatewayCommand: python3 fake_hermes_gateway.py
-messageAgent:
+personalAgent:
   enabled: true
   runtimeProvider: hermes
   processingScope: all_conversations
@@ -439,10 +439,10 @@ cliPeer:
       expect(config.didDomain, 'example.test');
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
-      expect(config.daemonRustRepo, '../awiki-cli-rs2-message-agent');
+      expect(config.daemonRustRepo, '../awiki-cli-rs2-personal-agent');
       expect(
         config.daemonBinary,
-        '${root.path}/../awiki-cli-rs2-message-agent/target/release/awiki-deamon',
+        '${root.path}/../awiki-cli-rs2-personal-agent/target/release/awiki-deamon',
       );
       expect(config.daemonStateRoot, '${root.path}/.e2e/daemon-state');
       expect(config.daemonReadyFile, '${root.path}/.e2e/daemon-ready.json');
@@ -452,10 +452,10 @@ cliPeer:
         config.daemonFakeHermesGatewayCommand,
         'python3 fake_hermes_gateway.py',
       );
-      expect(config.messageAgentEnabled, isTrue);
-      expect(config.messageAgentRuntimeProvider, 'hermes');
-      expect(config.messageAgentProcessingScope, 'all_conversations');
-      expect(config.messageAgentRealBackend, isTrue);
+      expect(config.personalAgentEnabled, isTrue);
+      expect(config.personalAgentRuntimeProvider, 'hermes');
+      expect(config.personalAgentProcessingScope, 'all_conversations');
+      expect(config.personalAgentRealBackend, isTrue);
       expect(config.otpPhone, 'test-phone-secret');
       expect(config.otpCode, 'test-otp-secret');
       expect(config.appHandle, 'app-from-file');
@@ -525,17 +525,17 @@ cliHandle: legacy-cli
           didDomain: 'example.test',
           anpServiceUrl: 'https://service.example.test/anp-im/rpc',
           anpServiceDid: 'did:wba:example.test',
-          daemonRustRepo: '../awiki-cli-rs2-message-agent',
+          daemonRustRepo: '../awiki-cli-rs2-personal-agent',
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '/tmp/daemon-state',
           daemonReadyFile: '/tmp/daemon-ready.json',
           daemonEnvFile: '/tmp/agent-cli.env',
           daemonHandle: 'daemon-from-file',
           daemonFakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
-          messageAgentEnabled: true,
-          messageAgentRuntimeProvider: 'hermes',
-          messageAgentProcessingScope: 'all_conversations',
-          messageAgentRealBackend: true,
+          personalAgentEnabled: true,
+          personalAgentRuntimeProvider: 'hermes',
+          personalAgentProcessingScope: 'all_conversations',
+          personalAgentRealBackend: true,
           otpPhone: 'test-phone-secret',
           otpCode: 'test-otp-secret',
           appHandle: 'app-from-file',
@@ -553,7 +553,7 @@ cliHandle: legacy-cli
       expect(config.didDomain, 'example.test');
       expect(config.anpServiceUrl, 'https://service.example.test/anp-im/rpc');
       expect(config.anpServiceDid, 'did:wba:example.test');
-      expect(config.daemonRustRepo, '../awiki-cli-rs2-message-agent');
+      expect(config.daemonRustRepo, '../awiki-cli-rs2-personal-agent');
       expect(config.daemonBinary, '/tmp/awiki-deamon');
       expect(config.daemonStateRoot, '/tmp/daemon-state');
       expect(config.daemonReadyFile, '/tmp/daemon-ready.json');
@@ -563,10 +563,10 @@ cliHandle: legacy-cli
         config.daemonFakeHermesGatewayCommand,
         'python3 fake_hermes_gateway.py',
       );
-      expect(config.messageAgentEnabled, isTrue);
-      expect(config.messageAgentRuntimeProvider, 'hermes');
-      expect(config.messageAgentProcessingScope, 'all_conversations');
-      expect(config.messageAgentRealBackend, isTrue);
+      expect(config.personalAgentEnabled, isTrue);
+      expect(config.personalAgentRuntimeProvider, 'hermes');
+      expect(config.personalAgentProcessingScope, 'all_conversations');
+      expect(config.personalAgentRealBackend, isTrue);
       expect(config.otpPhone, 'test-phone-secret');
       expect(config.otpCode, 'test-otp-secret');
       expect(config.appHandle, 'app-from-file');
@@ -635,10 +635,10 @@ cliHandle: legacy-cli
     });
 
     test(
-      'defaults message-agent case to enabled real backend when YAML omits it',
+      'defaults personal-agent case to enabled real backend when YAML omits it',
       () {
         final config = DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+          DesktopE2eOptions.parse(const <String>['--case', 'personal-agent']),
           const DesktopE2eFileConfig(
             path: '/tmp/e2e.local.yaml',
             platform: DesktopE2ePlatform.linux,
@@ -646,7 +646,7 @@ cliHandle: legacy-cli
             messageServiceUrl: 'https://messages.example.test',
             messageServiceWsUrl: 'wss://messages.example.test/im/ws',
             didDomain: 'example.test',
-            daemonRustRepo: '../awiki-cli-rs2-message-agent',
+            daemonRustRepo: '../awiki-cli-rs2-personal-agent',
             daemonBinary: '/tmp/awiki-deamon',
             daemonStateRoot: '/tmp/daemon-state',
             daemonReadyFile: '/tmp/daemon-ready.json',
@@ -659,21 +659,21 @@ cliHandle: legacy-cli
           ),
         );
 
-        expect(config.messageAgentEnabled, isTrue);
-        expect(config.messageAgentRealBackend, isTrue);
+        expect(config.personalAgentEnabled, isTrue);
+        expect(config.personalAgentRealBackend, isTrue);
       },
     );
 
-    test('rejects message-agent case when YAML disables it', () {
+    test('rejects personal-agent case when YAML disables it', () {
       expect(
         () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+          DesktopE2eOptions.parse(const <String>['--case', 'personal-agent']),
           const DesktopE2eFileConfig(
             path: '/tmp/e2e.local.yaml',
             platform: DesktopE2ePlatform.linux,
             serviceBaseUrl: 'https://service.example.test',
             didDomain: 'example.test',
-            messageAgentEnabled: false,
+            personalAgentEnabled: false,
             otpPhone: 'test-phone-secret',
             otpCode: 'test-otp-secret',
             appHandle: 'app-from-file',
@@ -685,23 +685,23 @@ cliHandle: legacy-cli
           isA<E2eFailure>().having(
             (error) => error.message,
             'message',
-            'messageAgent.enabled must be true for --case message-agent '
+            'personalAgent.enabled must be true for --case personal-agent '
                 'in /tmp/e2e.local.yaml.',
           ),
         ),
       );
     });
 
-    test('rejects message-agent case when YAML disables real backend', () {
+    test('rejects personal-agent case when YAML disables real backend', () {
       expect(
         () => DesktopCliPeerConfig.from(
-          DesktopE2eOptions.parse(const <String>['--case', 'message-agent']),
+          DesktopE2eOptions.parse(const <String>['--case', 'personal-agent']),
           const DesktopE2eFileConfig(
             path: '/tmp/e2e.local.yaml',
             platform: DesktopE2ePlatform.linux,
             serviceBaseUrl: 'https://service.example.test',
             didDomain: 'example.test',
-            messageAgentRealBackend: false,
+            personalAgentRealBackend: false,
             otpPhone: 'test-phone-secret',
             otpCode: 'test-otp-secret',
             appHandle: 'app-from-file',
@@ -713,14 +713,14 @@ cliHandle: legacy-cli
           isA<E2eFailure>().having(
             (error) => error.message,
             'message',
-            'messageAgent.realBackend must be true for --case message-agent '
+            'personalAgent.realBackend must be true for --case personal-agent '
                 'in /tmp/e2e.local.yaml.',
           ),
         ),
       );
     });
 
-    test('keeps non-message-agent cases disabled by default', () {
+    test('keeps non-personal-agent cases disabled by default', () {
       final config = DesktopCliPeerConfig.from(
         DesktopE2eOptions.parse(const <String>['--case', 'full']),
         const DesktopE2eFileConfig(
@@ -736,7 +736,7 @@ cliHandle: legacy-cli
         ),
       );
 
-      expect(config.messageAgentEnabled, isFalse);
+      expect(config.personalAgentEnabled, isFalse);
     });
 
     test('defaults codex-agent case to enabled real backend', () {
@@ -1978,9 +1978,9 @@ performance:
       ]);
     });
 
-    test('generates message-agent Flutter command and report case IDs', () async {
+    test('generates personal-agent Flutter command and report case IDs', () async {
       final root = await Directory.systemTemp.createTemp(
-        'awiki_message_agent_runner_test_',
+        'awiki_personal_agent_runner_test_',
       );
       addTearDown(() async {
         if (await root.exists()) {
@@ -1990,29 +1990,29 @@ performance:
       _writeLocalConfig(
         root,
         platform: 'linux',
-        appHandle: 'message-agent-app',
-        cliHandle: 'message-agent-cli',
+        appHandle: 'personal-agent-app',
+        cliHandle: 'personal-agent-cli',
         cliBin: '/tmp/fake-awiki-cli',
         messageServiceUrl: 'https://messages.example.test',
         messageServiceWsUrl: 'wss://messages.example.test/im/ws',
-        daemonRustRepo: '../awiki-cli-rs2-message-agent',
+        daemonRustRepo: '../awiki-cli-rs2-personal-agent',
         daemonBinary: '/tmp/awiki-deamon',
         daemonStateRoot: '.e2e/daemon-state',
         daemonReadyFile: '.e2e/daemon-ready.json',
-        daemonHandle: 'message-agent-daemon',
+        daemonHandle: 'personal-agent-daemon',
         fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
-        messageAgentEnabled: true,
-        messageAgentRealBackend: true,
+        personalAgentEnabled: true,
+        personalAgentRealBackend: true,
       );
       final lines = <String>[];
       final runner = DesktopE2eRunner(
         root: root,
         options: DesktopE2eOptions.parse(const <String>[
           '--case',
-          'message-agent',
+          'personal-agent',
           '--dry-run',
           '--run-id',
-          'run-message-agent',
+          'run-personal-agent',
         ]),
         commands: DesktopCommandRunner(
           root: root,
@@ -2028,70 +2028,70 @@ performance:
       await runner.run();
 
       final log = lines.join('\n');
-      expect(log, contains('case: message-agent'));
+      expect(log, contains('case: personal-agent'));
       expect(
         log,
         contains(
-          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --plain-name 'Message Agent full UI drives real backend daemon and recovery' integration_test/message_agent_full_ui_test.dart -d linux",
+          r"$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --plain-name 'Personal Agent full UI drives real backend daemon and recovery' integration_test/personal_agent_full_ui_test.dart -d linux",
         ),
       );
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
 
       final timings = File(
-        '${root.path}/.e2e/message-agent/run-message-agent/reports/timings.json',
+        '${root.path}/.e2e/personal-agent/run-personal-agent/reports/timings.json',
       );
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
-      expect(decoded['scenario'], 'message-agent-full-ui');
-      expect(decoded['case'], 'message-agent');
+      expect(decoded['scenario'], 'personal-agent-full-ui');
+      expect(decoded['case'], 'personal-agent');
       expect(decoded['caseIds'], <dynamic>[
-        'MSGAGENT-E2E-001',
-        'MSGAGENT-E2E-002',
-        'MSGAGENT-E2E-004',
+        'PERSONALAGENT-E2E-001',
+        'PERSONALAGENT-E2E-002',
+        'PERSONALAGENT-E2E-004',
       ]);
       expect(
         decoded['messageServiceWsUrl'],
         'wss://messages.example.test/im/ws',
       );
       expect(decoded['daemonRustRepo'], '<redacted-daemon-repo>');
-      final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
-      expect(messageAgent['enabled'], isTrue);
-      expect(messageAgent['runtimeProvider'], 'hermes');
-      expect(messageAgent['processingScope'], 'all_conversations');
-      expect(messageAgent['realBackend'], isTrue);
-      expect(messageAgent['uiEnabled'], isFalse);
-      expect(messageAgent['runtimeFinalReceived'], isFalse);
-      expect(messageAgent.containsKey('draftConfirmed'), isFalse);
-      expect(messageAgent.containsKey('actionResultReturned'), isFalse);
-      expect(messageAgent['authorizationRevoked'], isFalse);
+      final personalAgent = decoded['personalAgent'] as Map<String, dynamic>;
+      expect(personalAgent['enabled'], isTrue);
+      expect(personalAgent['runtimeProvider'], 'hermes');
+      expect(personalAgent['processingScope'], 'all_conversations');
+      expect(personalAgent['realBackend'], isTrue);
+      expect(personalAgent['uiEnabled'], isFalse);
+      expect(personalAgent['runtimeFinalReceived'], isFalse);
+      expect(personalAgent.containsKey('draftConfirmed'), isFalse);
+      expect(personalAgent.containsKey('actionResultReturned'), isFalse);
+      expect(personalAgent['authorizationRevoked'], isFalse);
 
       final runConfig = File(
-        '${root.path}/.e2e/message-agent/current/run_config.json',
+        '${root.path}/.e2e/personal-agent/current/run_config.json',
       );
       expect(runConfig.existsSync(), isTrue);
       final runConfigJson =
           jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
-      expect(runConfigJson['case'], 'message-agent');
+      expect(runConfigJson['case'], 'personal-agent');
       expect(runConfigJson['daemon'], isA<Map<String, dynamic>>());
-      expect(runConfigJson['messageAgent'], isA<Map<String, dynamic>>());
+      expect(runConfigJson['personalAgent'], isA<Map<String, dynamic>>());
       final daemon = runConfigJson['daemon'] as Map<String, dynamic>;
-      expect(daemon['rustRepo'], '../awiki-cli-rs2-message-agent');
+      expect(daemon['rustRepo'], '../awiki-cli-rs2-personal-agent');
       expect(daemon['binary'], '/tmp/awiki-deamon');
       expect(daemon['stateRoot'], '${root.path}/.e2e/daemon-state');
       expect(daemon['readyFile'], '${root.path}/.e2e/daemon-ready.json');
-      expect(daemon['handle'], 'message-agent-daemon');
+      expect(daemon['handle'], 'personal-agent-daemon');
       expect(
         daemon['fakeHermesGatewayCommand'],
         'python3 fake_hermes_gateway.py',
       );
-      final runMessageAgent =
-          runConfigJson['messageAgent'] as Map<String, dynamic>;
-      expect(runMessageAgent['enabled'], isTrue);
-      expect(runMessageAgent['runtimeProvider'], 'hermes');
-      expect(runMessageAgent['processingScope'], 'all_conversations');
-      expect(runMessageAgent['realBackend'], isTrue);
-      expect(runMessageAgent['enabled'], messageAgent['enabled']);
+      final runPersonalAgent =
+          runConfigJson['personalAgent'] as Map<String, dynamic>;
+      expect(runPersonalAgent['enabled'], isTrue);
+      expect(runPersonalAgent['runtimeProvider'], 'hermes');
+      expect(runPersonalAgent['processingScope'], 'all_conversations');
+      expect(runPersonalAgent['realBackend'], isTrue);
+      expect(runPersonalAgent['enabled'], personalAgent['enabled']);
       final service = runConfigJson['service'] as Map<String, dynamic>;
       expect(
         service['messageServiceWsUrl'],
@@ -2100,10 +2100,10 @@ performance:
     });
 
     test(
-      'defaults message-agent runner report and run config to enabled',
+      'defaults personal-agent runner report and run config to enabled',
       () async {
         final root = await Directory.systemTemp.createTemp(
-          'awiki_message_agent_runner_default_test_',
+          'awiki_personal_agent_runner_default_test_',
         );
         addTearDown(() async {
           if (await root.exists()) {
@@ -2113,27 +2113,27 @@ performance:
         _writeLocalConfig(
           root,
           platform: 'linux',
-          appHandle: 'message-agent-app',
-          cliHandle: 'message-agent-cli',
+          appHandle: 'personal-agent-app',
+          cliHandle: 'personal-agent-cli',
           cliBin: '/tmp/fake-awiki-cli',
           messageServiceUrl: 'https://messages.example.test',
           messageServiceWsUrl: 'wss://messages.example.test/im/ws',
-          daemonRustRepo: '../awiki-cli-rs2-message-agent',
+          daemonRustRepo: '../awiki-cli-rs2-personal-agent',
           daemonBinary: '/tmp/awiki-deamon',
           daemonStateRoot: '.e2e/daemon-state',
           daemonReadyFile: '.e2e/daemon-ready.json',
           fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
-          includeMessageAgent: false,
+          includePersonalAgent: false,
         );
         final lines = <String>[];
         final runner = DesktopE2eRunner(
           root: root,
           options: DesktopE2eOptions.parse(const <String>[
             '--case',
-            'message-agent',
+            'personal-agent',
             '--dry-run',
             '--run-id',
-            'run-message-agent-default',
+            'run-personal-agent-default',
           ]),
           commands: DesktopCommandRunner(
             root: root,
@@ -2149,99 +2149,102 @@ performance:
         await runner.run();
 
         final timings = File(
-          '${root.path}/.e2e/message-agent/run-message-agent-default/reports/timings.json',
+          '${root.path}/.e2e/personal-agent/run-personal-agent-default/reports/timings.json',
         );
         final decoded =
             jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
-        final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
-        expect(messageAgent['enabled'], isTrue);
-        expect(messageAgent['realBackend'], isTrue);
-        expect(messageAgent['uiEnabled'], isFalse);
-        expect(messageAgent['runtimeFinalReceived'], isFalse);
-        expect(messageAgent.containsKey('draftConfirmed'), isFalse);
-        expect(messageAgent.containsKey('actionResultReturned'), isFalse);
-        expect(messageAgent['authorizationRevoked'], isFalse);
+        final personalAgent = decoded['personalAgent'] as Map<String, dynamic>;
+        expect(personalAgent['enabled'], isTrue);
+        expect(personalAgent['realBackend'], isTrue);
+        expect(personalAgent['uiEnabled'], isFalse);
+        expect(personalAgent['runtimeFinalReceived'], isFalse);
+        expect(personalAgent.containsKey('draftConfirmed'), isFalse);
+        expect(personalAgent.containsKey('actionResultReturned'), isFalse);
+        expect(personalAgent['authorizationRevoked'], isFalse);
 
         final runConfig = File(
-          '${root.path}/.e2e/message-agent/current/run_config.json',
+          '${root.path}/.e2e/personal-agent/current/run_config.json',
         );
         final runConfigJson =
             jsonDecode(await runConfig.readAsString()) as Map<String, dynamic>;
-        final runMessageAgent =
-            runConfigJson['messageAgent'] as Map<String, dynamic>;
-        expect(runMessageAgent['enabled'], isTrue);
-        expect(runMessageAgent['realBackend'], isTrue);
-        expect(runMessageAgent['enabled'], messageAgent['enabled']);
+        final runPersonalAgent =
+            runConfigJson['personalAgent'] as Map<String, dynamic>;
+        expect(runPersonalAgent['enabled'], isTrue);
+        expect(runPersonalAgent['realBackend'], isTrue);
+        expect(runPersonalAgent['enabled'], personalAgent['enabled']);
       },
     );
 
-    test('marks message-agent evidence flags false when the run fails', () async {
-      final root = await Directory.systemTemp.createTemp(
-        'awiki_message_agent_runner_failed_report_test_',
-      );
-      addTearDown(() async {
-        if (await root.exists()) {
-          await root.delete(recursive: true);
-        }
-      });
-      final cliBinary = File('${root.path}/fake-awiki-cli')
-        ..createSync(recursive: true);
-      _writeLocalConfig(
-        root,
-        platform: 'macos',
-        baseUrl: 'https://awiki.info',
-        didDomain: 'awiki.info',
-        appHandle: 'message-agent-app',
-        cliHandle: 'message-agent-cli',
-        cliBin: cliBinary.path,
-        cliSourceRef: '0123456789abcdef0123456789abcdef01234567',
-        messageServiceUrl: 'https://awiki.info',
-        messageServiceWsUrl: 'wss://awiki.info/im/ws',
-        daemonRustRepo: '../awiki-cli-rs2-message-agent',
-        daemonBinary: '/tmp/awiki-deamon',
-        daemonStateRoot: '.e2e/daemon-state',
-        daemonReadyFile: '.e2e/daemon-ready.json',
-        fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
-        messageAgentEnabled: true,
-        messageAgentRealBackend: true,
-      );
-      final runner = DesktopE2eRunner(
-        root: root,
-        options: DesktopE2eOptions.parse(const <String>[
-          '--case',
-          'message-agent',
-          '--run-id',
-          'run-message-agent-failed',
-        ]),
-        commands: _FailingFlutterCommandRunner(root: root),
-      );
+    test(
+      'marks personal-agent evidence flags false when the run fails',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'awiki_personal_agent_runner_failed_report_test_',
+        );
+        addTearDown(() async {
+          if (await root.exists()) {
+            await root.delete(recursive: true);
+          }
+        });
+        final cliBinary = File('${root.path}/fake-awiki-cli')
+          ..createSync(recursive: true);
+        _writeLocalConfig(
+          root,
+          platform: 'macos',
+          baseUrl: 'https://awiki.info',
+          didDomain: 'awiki.info',
+          appHandle: 'personal-agent-app',
+          cliHandle: 'personal-agent-cli',
+          cliBin: cliBinary.path,
+          cliSourceRef: '0123456789abcdef0123456789abcdef01234567',
+          messageServiceUrl: 'https://awiki.info',
+          messageServiceWsUrl: 'wss://awiki.info/im/ws',
+          daemonRustRepo: '../awiki-cli-rs2-personal-agent',
+          daemonBinary: '/tmp/awiki-deamon',
+          daemonStateRoot: '.e2e/daemon-state',
+          daemonReadyFile: '.e2e/daemon-ready.json',
+          fakeHermesGatewayCommand: 'python3 fake_hermes_gateway.py',
+          personalAgentEnabled: true,
+          personalAgentRealBackend: true,
+        );
+        final runner = DesktopE2eRunner(
+          root: root,
+          options: DesktopE2eOptions.parse(const <String>[
+            '--case',
+            'personal-agent',
+            '--run-id',
+            'run-personal-agent-failed',
+          ]),
+          commands: _FailingFlutterCommandRunner(root: root),
+        );
 
-      await expectLater(
-        runner.run(),
-        throwsA(
-          isA<E2eFailure>().having(
-            (error) => error.message,
-            'message',
-            contains('flutter exited with code 42'),
+        await expectLater(
+          runner.run(),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('flutter exited with code 42'),
+            ),
           ),
-        ),
-      );
+        );
 
-      final timings = File(
-        '${root.path}/.e2e/message-agent/run-message-agent-failed/reports/timings.json',
-      );
-      final decoded =
-          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
-      expect(decoded['status'], 'failed');
-      final messageAgent = decoded['messageAgent'] as Map<String, dynamic>;
-      expect(messageAgent['enabled'], isTrue);
-      expect(messageAgent['realBackend'], isTrue);
-      expect(messageAgent['uiEnabled'], isFalse);
-      expect(messageAgent['runtimeFinalReceived'], isFalse);
-      expect(messageAgent.containsKey('draftConfirmed'), isFalse);
-      expect(messageAgent.containsKey('actionResultReturned'), isFalse);
-      expect(messageAgent['authorizationRevoked'], isFalse);
-    });
+        final timings = File(
+          '${root.path}/.e2e/personal-agent/run-personal-agent-failed/reports/timings.json',
+        );
+        final decoded =
+            jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+        expect(decoded['status'], 'failed');
+        final personalAgent = decoded['personalAgent'] as Map<String, dynamic>;
+        expect(personalAgent['enabled'], isTrue);
+        expect(personalAgent['realBackend'], isTrue);
+        expect(personalAgent['uiEnabled'], isFalse);
+        expect(personalAgent['runtimeFinalReceived'], isFalse);
+        expect(personalAgent.containsKey('draftConfirmed'), isFalse);
+        expect(personalAgent.containsKey('actionResultReturned'), isFalse);
+        expect(personalAgent['authorizationRevoked'], isFalse);
+      },
+    );
 
     test(
       'writes Codex Agent runner report and deterministic run config',
@@ -2878,9 +2881,8 @@ performance:
 }
 
 class _FailingFlutterCommandRunner extends DesktopCommandRunner {
-  _FailingFlutterCommandRunner({required Directory root})
+  _FailingFlutterCommandRunner({required super.root})
     : super(
-        root: root,
         dryRun: false,
         redactor: DesktopSecretRedactor(const <String>[
           'test-phone-secret',
@@ -2926,7 +2928,7 @@ class _FailingFlutterCommandRunner extends DesktopCommandRunner {
     }
     if (args.contains('id') && args.contains('resolve')) {
       final handle = args[args.indexOf('--handle') + 1];
-      final did = handle.contains('message-agent-cli')
+      final did = handle.contains('personal-agent-cli')
           ? 'did:wba:awiki.info:cli'
           : 'did:wba:awiki.info:app';
       return DesktopCommandResult(
@@ -3003,9 +3005,9 @@ void _writeLocalConfig(
   String? daemonEnvFile,
   String? daemonHandle,
   String? fakeHermesGatewayCommand,
-  bool messageAgentEnabled = false,
-  bool messageAgentRealBackend = false,
-  bool includeMessageAgent = true,
+  bool personalAgentEnabled = false,
+  bool personalAgentRealBackend = false,
+  bool includePersonalAgent = true,
   bool codexAgentEnabled = false,
   bool codexAgentRealBackend = false,
   String? codexAgentPrompt,
@@ -3037,13 +3039,13 @@ void _writeLocalConfig(
 daemon:
 ${daemonRustRepo == null ? '' : '  rustRepo: $daemonRustRepo\n'}${daemonBinary == null ? '' : '  binary: $daemonBinary\n'}${daemonStateRoot == null ? '' : '  stateRoot: $daemonStateRoot\n'}${daemonReadyFile == null ? '' : '  readyFile: $daemonReadyFile\n'}${daemonEnvFile == null ? '' : '  envFile: $daemonEnvFile\n'}${daemonHandle == null ? '' : '  handle: $daemonHandle\n'}${fakeHermesGatewayCommand == null ? '' : '  fakeHermesGatewayCommand: $fakeHermesGatewayCommand\n'}
 ''';
-  final messageAgent = includeMessageAgent
+  final personalAgent = includePersonalAgent
       ? '''
-messageAgent:
-  enabled: $messageAgentEnabled
+personalAgent:
+  enabled: $personalAgentEnabled
   runtimeProvider: hermes
   processingScope: all_conversations
-  realBackend: $messageAgentRealBackend
+  realBackend: $personalAgentRealBackend
 '''
       : '';
   final codexPromptLine = codexAgentPrompt == null
@@ -3083,7 +3085,7 @@ service:
   didDomain: $didDomain
 $messageService
 $messageServiceWs
-$daemon$messageAgent$codexAgent$claudeCodeAgent$performanceBlock
+$daemon$personalAgent$codexAgent$claudeCodeAgent$performanceBlock
 otp:
   phone: test-phone-secret
   code: test-otp-secret

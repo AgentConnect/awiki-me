@@ -228,8 +228,7 @@ void main() {
             isGroup: false,
             targetDid: 'did:test:smoke-peer:previous',
             targetPeer: 'smoke-peer.awiki.ai',
-            peerPersonaId:
-                'test-persona:dm:peer-scope:v1:smoke-peer',
+            peerPersonaId: 'test-persona:dm:peer-scope:v1:smoke-peer',
           ),
         ];
         await container.read(conversationListProvider.notifier).refresh();
@@ -314,7 +313,7 @@ void main() {
     }
   });
 
-  testWidgets('AwikiMeApp authenticated smoke hides Message Agent settings', (
+  testWidgets('AwikiMeApp authenticated smoke hides Personal Agent settings', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -374,12 +373,12 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('个人助理'), findsNothing);
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('启用个人助理'), findsNothing);
       expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('删除个人助理'), findsNothing);
       expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
@@ -539,7 +538,7 @@ void main() {
     }
   });
 
-  testWidgets('AwikiMeApp smoke recovers Message Agent action into chat', (
+  testWidgets('AwikiMeApp smoke recovers Personal Agent action into chat', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -596,7 +595,7 @@ void main() {
         kind: AgentKind.runtime,
         daemonAgentDid: 'did:agent:daemon',
         runtime: 'hermes',
-        displayName: 'Hermes Message Agent',
+        displayName: 'Hermes Personal Agent',
         activeState: 'active',
         latest: AgentLatestStatus(status: 'ready'),
       ),
@@ -629,7 +628,7 @@ void main() {
       );
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.message.sync.v1',
             'sync_type': 'runtime_final',
             'runtime_agent_did': 'did:agent:runtime',
@@ -642,7 +641,7 @@ void main() {
           });
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.app.action.v1',
             'action_id': 'act_draft',
             'action': 'message.create_draft',
@@ -656,8 +655,8 @@ void main() {
           });
       await _pumpSmokeFrame(tester);
 
-      expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
-      expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
+      expect(find.text('个人助理 已完成处理'), findsOneWidget);
+      expect(find.text('个人助理 生成了草稿'), findsOneWidget);
       await tester.tap(find.text('使用草稿'));
       await _pumpSmokeFrame(tester);
 

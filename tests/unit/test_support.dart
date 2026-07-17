@@ -26,7 +26,7 @@ import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
-import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
+import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
@@ -46,7 +46,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
@@ -330,8 +330,8 @@ List<Override> fakeApplicationServiceOverrides(
         failureBackoff: Duration.zero,
       ),
     ),
-    messageAgentBindingPortProvider.overrideWithValue(
-      FakeMessageAgentBindingPort(),
+    personalAgentBindingPortProvider.overrideWithValue(
+      FakePersonalAgentBindingPort(),
     ),
     attachmentCacheServiceProvider.overrideWithValue(
       attachmentCacheService ?? FakeAttachmentCacheService(),
@@ -2566,12 +2566,12 @@ class FakeAgentControlService implements AgentControlService {
   String? lastDeletedDaemonDid;
   String? lastDeletedRuntimeDaemonDid;
   String? lastDeletedRuntimeDid;
-  String? lastPausedMessageAgentDaemonDid;
-  String? lastPausedMessageAgentDid;
-  String? lastDeletedMessageAgentDaemonDid;
-  String? lastDeletedMessageAgentDid;
-  String? lastRevokedMessageAgentDaemonDid;
-  String? lastRevokedMessageAgentDid;
+  String? lastPausedPersonalAgentDaemonDid;
+  String? lastPausedPersonalAgentDid;
+  String? lastDeletedPersonalAgentDaemonDid;
+  String? lastDeletedPersonalAgentDid;
+  String? lastRevokedPersonalAgentDaemonDid;
+  String? lastRevokedPersonalAgentDid;
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
@@ -2637,7 +2637,7 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> ensureMessageAgentBootstrap({
+  Future<void> ensurePersonalAgentBootstrap({
     required String daemonAgentDid,
     required String controllerDid,
     required String appInstanceId,
@@ -2760,47 +2760,47 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<MessageAgentBinding> pauseMessageAgent({
+  Future<PersonalAgentBinding> pausePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
-    lastPausedMessageAgentDaemonDid = daemonAgentDid;
-    lastPausedMessageAgentDid = messageAgentDid;
-    return _messageAgentBinding(
+    lastPausedPersonalAgentDaemonDid = daemonAgentDid;
+    lastPausedPersonalAgentDid = personalAgentDid;
+    return _personalAgentBinding(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       status: 'disabled',
     );
   }
 
   @override
-  Future<MessageAgentBinding> deleteMessageAgent({
+  Future<PersonalAgentBinding> deletePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
-    lastDeletedMessageAgentDaemonDid = daemonAgentDid;
-    lastDeletedMessageAgentDid = messageAgentDid;
-    lastPausedMessageAgentDaemonDid = daemonAgentDid;
-    lastPausedMessageAgentDid = messageAgentDid;
+    lastDeletedPersonalAgentDaemonDid = daemonAgentDid;
+    lastDeletedPersonalAgentDid = personalAgentDid;
+    lastPausedPersonalAgentDaemonDid = daemonAgentDid;
+    lastPausedPersonalAgentDid = personalAgentDid;
     lastDeletedRuntimeDaemonDid = daemonAgentDid;
-    lastDeletedRuntimeDid = messageAgentDid;
-    return _messageAgentBinding(
+    lastDeletedRuntimeDid = personalAgentDid;
+    return _personalAgentBinding(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       status: 'disabled',
     );
   }
 
   @override
-  Future<MessageAgentBinding> revokeMessageAgentAuthorization({
+  Future<PersonalAgentBinding> revokePersonalAgentAuthorization({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
-    lastRevokedMessageAgentDaemonDid = daemonAgentDid;
-    lastRevokedMessageAgentDid = messageAgentDid;
-    return _messageAgentBinding(
+    lastRevokedPersonalAgentDaemonDid = daemonAgentDid;
+    lastRevokedPersonalAgentDid = personalAgentDid;
+    return _personalAgentBinding(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       status: 'revoked',
     );
   }
@@ -2963,25 +2963,25 @@ AppTenantRegistry _defaultTestTenantRegistry() {
   );
 }
 
-class FakeMessageAgentBindingPort implements MessageAgentBindingPort {
-  MessageAgentBinding? activeBinding;
+class FakePersonalAgentBindingPort implements PersonalAgentBindingPort {
+  PersonalAgentBinding? activeBinding;
   String? lastUserDid;
   String? lastDaemonAgentDid;
-  String? lastMessageAgentDid;
+  String? lastPersonalAgentDid;
   String? lastRuntimeProvider;
   Map<String, Object?>? lastRuntimeProfile;
   String? lastDelegatedKeyVerificationMethod;
   String? lastDisabledBindingId;
-  String? lastDisabledMessageAgentDid;
+  String? lastDisabledPersonalAgentDid;
   String? lastRevokedBindingId;
-  String? lastRevokedMessageAgentDid;
+  String? lastRevokedPersonalAgentDid;
   final List<String> calls = <String>[];
 
   @override
-  Future<MessageAgentBinding> ensureBinding({
+  Future<PersonalAgentBinding> ensureBinding({
     required String userDid,
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
     required String runtimeProvider,
     required Map<String, Object?> runtimeProfile,
     required String delegatedKeyVerificationMethod,
@@ -2989,15 +2989,15 @@ class FakeMessageAgentBindingPort implements MessageAgentBindingPort {
     calls.add('ensureBinding');
     lastUserDid = userDid;
     lastDaemonAgentDid = daemonAgentDid;
-    lastMessageAgentDid = messageAgentDid;
+    lastPersonalAgentDid = personalAgentDid;
     lastRuntimeProvider = runtimeProvider;
     lastRuntimeProfile = runtimeProfile;
     lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
-    return activeBinding = MessageAgentBinding(
-      id: 'binding_$messageAgentDid',
+    return activeBinding = PersonalAgentBinding(
+      id: 'binding_$personalAgentDid',
       userDid: userDid,
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       runtimeProvider: runtimeProvider,
       runtimeProfile: runtimeProfile,
       delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
@@ -3006,32 +3006,32 @@ class FakeMessageAgentBindingPort implements MessageAgentBindingPort {
   }
 
   @override
-  Future<MessageAgentBinding?> getActiveBinding() async {
+  Future<PersonalAgentBinding?> getActiveBinding() async {
     calls.add('getActiveBinding');
     return activeBinding;
   }
 
   @override
-  Future<MessageAgentBinding> disableBinding({
+  Future<PersonalAgentBinding> disableBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
     calls.add('disableBinding');
     lastDisabledBindingId = bindingId;
-    lastDisabledMessageAgentDid = messageAgentDid;
+    lastDisabledPersonalAgentDid = personalAgentDid;
     final current = activeBinding;
     final resolved =
         current ??
-        _messageAgentBinding(
+        _personalAgentBinding(
           daemonAgentDid: 'did:agent:daemon',
-          messageAgentDid: messageAgentDid ?? 'did:agent:message',
+          personalAgentDid: personalAgentDid ?? 'did:agent:message',
           status: 'active',
         );
-    return activeBinding = MessageAgentBinding(
+    return activeBinding = PersonalAgentBinding(
       id: bindingId ?? resolved.id,
       userDid: resolved.userDid,
       daemonAgentDid: resolved.daemonAgentDid,
-      messageAgentDid: messageAgentDid ?? resolved.messageAgentDid,
+      personalAgentDid: personalAgentDid ?? resolved.personalAgentDid,
       runtimeProvider: resolved.runtimeProvider,
       runtimeProfile: resolved.runtimeProfile,
       delegatedKeyVerificationMethod: resolved.delegatedKeyVerificationMethod,
@@ -3040,26 +3040,26 @@ class FakeMessageAgentBindingPort implements MessageAgentBindingPort {
   }
 
   @override
-  Future<MessageAgentBinding> revokeBinding({
+  Future<PersonalAgentBinding> revokeBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
     calls.add('revokeBinding');
     lastRevokedBindingId = bindingId;
-    lastRevokedMessageAgentDid = messageAgentDid;
+    lastRevokedPersonalAgentDid = personalAgentDid;
     final current = activeBinding;
     final resolved =
         current ??
-        _messageAgentBinding(
+        _personalAgentBinding(
           daemonAgentDid: 'did:agent:daemon',
-          messageAgentDid: messageAgentDid ?? 'did:agent:message',
+          personalAgentDid: personalAgentDid ?? 'did:agent:message',
           status: 'active',
         );
-    return activeBinding = MessageAgentBinding(
+    return activeBinding = PersonalAgentBinding(
       id: bindingId ?? resolved.id,
       userDid: resolved.userDid,
       daemonAgentDid: resolved.daemonAgentDid,
-      messageAgentDid: messageAgentDid ?? resolved.messageAgentDid,
+      personalAgentDid: personalAgentDid ?? resolved.personalAgentDid,
       runtimeProvider: resolved.runtimeProvider,
       runtimeProfile: resolved.runtimeProfile,
       delegatedKeyVerificationMethod: resolved.delegatedKeyVerificationMethod,
@@ -4094,18 +4094,18 @@ class TestProfileController extends ProfileController {
   }
 }
 
-MessageAgentBinding _messageAgentBinding({
+PersonalAgentBinding _personalAgentBinding({
   required String daemonAgentDid,
-  required String messageAgentDid,
+  required String personalAgentDid,
   required String status,
 }) {
-  return MessageAgentBinding(
-    id: 'binding_$messageAgentDid',
+  return PersonalAgentBinding(
+    id: 'binding_$personalAgentDid',
     userDid: 'did:human:me',
     daemonAgentDid: daemonAgentDid,
-    messageAgentDid: messageAgentDid,
+    personalAgentDid: personalAgentDid,
     runtimeProvider: 'hermes',
-    runtimeProfile: const <String, Object?>{'profile': 'message_agent'},
+    runtimeProfile: const <String, Object?>{'profile': 'personal_agent'},
     delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
     status: status,
   );

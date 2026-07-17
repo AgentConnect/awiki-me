@@ -1272,7 +1272,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('实时 Message Agent 控制 payload 回收到 chat provider', () async {
+    test('实时 Personal Agent 控制 payload 回收到 chat provider', () async {
       final conversation = ConversationSummary(
         threadId: 'direct:did:human:bob',
         conversationId: 'direct:did:human:bob',
@@ -1317,7 +1317,7 @@ void main() {
               'daemon_agent_did': 'did:agent:daemon',
               'runtime': 'hermes',
               'status': 'ready',
-              'display_name': 'Hermes Message Agent',
+              'display_name': 'Hermes Personal Agent',
             },
           ],
         },

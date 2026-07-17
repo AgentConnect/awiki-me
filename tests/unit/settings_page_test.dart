@@ -226,7 +226,7 @@ void main() {
     expect(await localePreferenceService.loadMode(), AppLocaleMode.english);
   });
 
-  testWidgets('设置页可进入 Message Agent 独立设置页并从真实入口启用', (tester) async {
+  testWidgets('设置页可进入 Personal Agent 独立设置页并从真实入口启用', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -268,22 +268,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Message Agent'), findsOneWidget);
-    await tester.tap(find.text('Message Agent'));
+    expect(find.text('个人助理'), findsOneWidget);
+    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('message-agent-settings-page')),
+      find.byKey(const Key('personal-agent-settings-page')),
       findsOneWidget,
     );
-    expect(find.text('消息处理 Agent'), findsWidgets);
+    expect(find.text('个人助理'), findsWidgets);
     expect(find.text('运行 Daemon 1'), findsWidgets);
     expect(find.text('已上报公钥'), findsOneWidget);
     expect(find.text('可启用'), findsWidgets);
     expect(find.textContaining('不会自动发送消息'), findsWidgets);
     expect(find.textContaining('不处理 E2EE 明文'), findsWidgets);
 
-    await tester.tap(find.text('启用消息处理 Agent'));
+    await tester.tap(find.text('启用个人助理'));
     await tester.pumpAndSettle();
 
     expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
@@ -297,7 +297,7 @@ void main() {
     expect(find.textContaining('代发'), findsNothing);
   });
 
-  testWidgets('Message Agent feature 关闭时设置入口禁用且不触发授权', (tester) async {
+  testWidgets('Personal Agent feature 关闭时设置入口禁用且不触发授权', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -337,14 +337,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Message Agent'), findsNothing);
-    expect(find.text('实验功能未开启'), findsOneWidget);
-    expect(find.text('消息处理 Agent'), findsNothing);
+    expect(find.text('Personal Agent'), findsNothing);
+    expect(find.text('实验功能关闭'), findsOneWidget);
+    expect(find.text('个人助理'), findsNothing);
     expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
 
-  testWidgets('Message Agent 设置页缺 bootstrap key 时禁用启用并提示刷新', (tester) async {
+  testWidgets('Personal Agent 设置页缺 bootstrap key 时禁用启用并提示刷新', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -375,25 +375,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Message Agent'));
+    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('message-agent-settings-page')),
+      find.byKey(const Key('personal-agent-settings-page')),
       findsOneWidget,
     );
     expect(find.text('未就绪'), findsOneWidget);
     expect(find.text('等待刷新状态'), findsOneWidget);
     expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsOneWidget);
 
-    await tester.tap(find.text('启用消息处理 Agent'));
+    await tester.tap(find.text('启用个人助理'));
     await tester.pumpAndSettle();
 
     expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
   });
 
-  testWidgets('Message Agent 设置页按当前 Daemon 执行撤销授权', (tester) async {
+  testWidgets('Personal Agent 设置页按当前 Daemon 执行撤销授权', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -419,7 +419,7 @@ void main() {
           daemonAgentDid: 'did:agent:daemon:one',
           runtime: 'hermes',
           handle: 'hermes-msg-one',
-          displayName: 'Hermes Message Agent',
+          displayName: 'Hermes Personal Agent',
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
@@ -446,7 +446,7 @@ void main() {
           daemonAgentDid: 'did:agent:daemon:two',
           runtime: 'hermes',
           handle: 'hermes-msg-two',
-          displayName: 'Hermes Message Agent',
+          displayName: 'Hermes Personal Agent',
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
@@ -471,7 +471,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Message Agent'));
+    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
     expect(find.text('当前运行 Daemon：运行 Daemon 1'), findsOneWidget);
 
@@ -486,8 +486,8 @@ void main() {
     await tester.tap(find.text('撤销授权'));
     await tester.pumpAndSettle();
 
-    expect(control.lastRevokedMessageAgentDaemonDid, 'did:agent:daemon:two');
-    expect(control.lastRevokedMessageAgentDid, 'did:agent:message:two');
+    expect(control.lastRevokedPersonalAgentDaemonDid, 'did:agent:daemon:two');
+    expect(control.lastRevokedPersonalAgentDid, 'did:agent:message:two');
     expect(identities.lastRevokedDaemonSubkeySelector, isNull);
   });
 }

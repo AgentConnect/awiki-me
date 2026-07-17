@@ -8,7 +8,7 @@ loading. These tests may run against a Flutter desktop target such as `macos` or
 Current groups:
 
 - `app/`: App shell smoke with fake bootstrap, onboarding/authenticated shell,
-  basic profile/settings navigation, Message Agent full-UI harness, Codex
+  basic profile/settings navigation, Personal Agent full-UI harness, Codex
   Agent, and Claude Code Agent user-visible reply acceptance.
 - `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` product E2E for
   UI-driven direct/unread/read/retry, group/mention, attachment, and
@@ -25,7 +25,7 @@ dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
-dart run tests/e2e/runner.dart --case message-agent
+dart run tests/e2e/runner.dart --case personal-agent
 dart run tests/e2e/runner.dart --case codex-agent
 dart run tests/e2e/runner.dart --case claude-code-agent
 ```
@@ -121,13 +121,13 @@ generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
 later self-healing title fail. CLI is only the remote identity/traffic stimulus,
 not the product assertion surface.
 
-`--case message-agent` is the durable acceptance entry for Message Agent
+`--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide
-`messageAgent.realBackend: true`, `service.messageServiceUrl`,
+`personalAgent.realBackend: true`, `service.messageServiceUrl`,
 `service.messageServiceWsUrl`, `daemon.rustRepo`, `daemon.binary`,
 `daemon.stateRoot`, `daemon.readyFile`, and `daemon.fakeHermesGatewayCommand`.
 The selected gate must exercise the App UI path for selecting a daemon,
-enabling the Message Agent, recovering `message.sync` / `runtime_final` /
+enabling the Personal Agent, recovering `message.sync` / `runtime_final` /
 `app.action` payloads, confirming or rejecting App actions, returning
 `awiki.app.action.result.v1`, and revoking daemon message authorization without
 silently returning from a skipped test. Lower-level probes such as
@@ -139,12 +139,13 @@ a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
 the final text equals the deterministic expected reply, and the daemon audit log
 contains a redacted `app.action.result.received` record for the confirmed draft.
 
-The executable case IDs are `MSGAGENT-E2E-001/002/004`. The visible
-action/draft confirmation `MSGAGENT-E2E-003` is cataloged as planned and is not
-in the executable manifest because the current real scenario has no such UI
-action. Fake-backed Widget tests, an outer `flutter test` exit code, a missing
-config, or a partial runnable lifecycle cannot attest a pass. Lower-level
-backend coverage remains separate and must not be relabeled as UI acceptance.
+The executable case IDs are `PERSONALAGENT-E2E-001/002/004`. The flow exercises
+the visible action/draft confirmation as a supporting step, but
+`PERSONALAGENT-E2E-003` remains planned until it has its own accepted case
+attestation. Fake-backed Widget tests, an outer `flutter test` exit code, a
+missing config, or a partial runnable lifecycle cannot attest a pass.
+Lower-level backend coverage remains separate and must not be relabeled as UI
+acceptance.
 
 Every runner-owned Flutter invocation receives an ignored local attestation
 path through dart-defines. Durable scenarios call
@@ -201,7 +202,7 @@ bypass that protection and are intended only for deliberate low-level debugging.
 
 ```bash
 flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos
-flutter test --dart-define=AWIKI_E2E=true integration_test/message_agent_full_ui_test.dart -d macos
+flutter test --dart-define=AWIKI_E2E=true integration_test/personal_agent_full_ui_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d macos

@@ -8,11 +8,11 @@ import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revo
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
-import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
+import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
@@ -26,7 +26,7 @@ void main() {
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       inventory.agents = const <AgentSummary>[
         AgentSummary(
           agentDid: 'did:agent:message',
@@ -34,7 +34,7 @@ void main() {
           daemonAgentDid: 'did:agent:daemon',
           runtime: 'hermes',
           handle: 'hermes-msg-macos-e2e-app-7fe1fc2b5661',
-          displayName: 'Hermes Message Agent',
+          displayName: 'Hermes Personal Agent',
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
@@ -42,7 +42,7 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
         agentImEnabled: true,
       );
 
@@ -203,55 +203,58 @@ void main() {
   );
 
   test(
-    'pauseMessageAgent disables service binding and local daemon binding',
+    'pausePersonalAgent disables service binding and local daemon binding',
     () async {
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       final service = DefaultAgentControlService(
         inventory: _InventoryStub(),
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
       );
 
-      final binding = await service.pauseMessageAgent(
+      final binding = await service.pausePersonalAgent(
         daemonAgentDid: 'did:agent:daemon',
-        messageAgentDid: 'did:agent:message',
+        personalAgentDid: 'did:agent:message',
       );
 
       expect(binding.status, 'disabled');
-      expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
-      expect(bindings.lastRevokedMessageAgentDid, isNull);
+      expect(bindings.lastDisabledPersonalAgentDid, 'did:agent:message');
+      expect(bindings.lastRevokedPersonalAgentDid, isNull);
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(
         messages.lastIdempotencyKey,
-        'message-agent-disable:did:agent:message',
+        'personal-agent-disable:did:agent:message',
       );
-      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
+      expect(
+        messages.lastPayload?['command'],
+        'personal_agent.binding.disable',
+      );
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
-      expect(args['message_agent_did'], 'did:agent:message');
+      expect(args['personal_agent_did'], 'did:agent:message');
       expect(args['runtime_agent_did'], 'did:agent:message');
       expect(args['binding_id'], 'binding_1');
       expect(args['lifecycle_action'], 'pause');
     },
   );
 
-  test('deleteMessageAgent pauses binding before runtime archive', () async {
+  test('deletePersonalAgent pauses binding before runtime archive', () async {
     final messages = _MessagesStub();
-    final bindings = _MessageAgentBindingsStub();
+    final bindings = _PersonalAgentBindingsStub();
     final service = DefaultAgentControlService(
       inventory: _InventoryStub(),
       messages: messages,
-      messageAgentBindings: bindings,
+      personalAgentBindings: bindings,
     );
 
-    await service.deleteMessageAgent(
+    await service.deletePersonalAgent(
       daemonAgentDid: 'did:agent:daemon',
-      messageAgentDid: 'did:agent:message',
+      personalAgentDid: 'did:agent:message',
     );
 
-    expect(bindings.lastDisabledMessageAgentDid, 'did:agent:message');
+    expect(bindings.lastDisabledPersonalAgentDid, 'did:agent:message');
     expect(messages.payloads.map((payload) => payload['command']), [
-      'message_agent.binding.disable',
+      'personal_agent.binding.disable',
       'runtime.agent.delete',
     ]);
     final deleteArgs = messages.payloads.last['args'] as Map<String, Object?>;
@@ -259,36 +262,39 @@ void main() {
   });
 
   test(
-    'revokeMessageAgentAuthorization updates DID Document and notifies daemon before service binding revoke',
+    'revokePersonalAgentAuthorization updates DID Document and notifies daemon before service binding revoke',
     () async {
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       final identities = _IdentityCoreStub();
       final service = DefaultAgentControlService(
         inventory: _InventoryStub(),
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
         identities: identities,
       );
 
-      final binding = await service.revokeMessageAgentAuthorization(
+      final binding = await service.revokePersonalAgentAuthorization(
         daemonAgentDid: 'did:agent:daemon',
-        messageAgentDid: 'did:agent:message',
+        personalAgentDid: 'did:agent:message',
       );
 
       expect(binding.status, 'revoked');
       expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
       expect(identities.calls, <String>['revoke:did:human:me']);
       expect(bindings.lastRevokedBindingId, 'binding_1');
-      expect(bindings.lastRevokedMessageAgentDid, isNull);
+      expect(bindings.lastRevokedPersonalAgentDid, isNull);
       expect(messages.lastThread?.stableId, 'dm:did:agent:daemon');
       expect(
         messages.lastIdempotencyKey,
-        'message-agent-revoke:did:agent:message',
+        'personal-agent-revoke:did:agent:message',
       );
-      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
+      expect(
+        messages.lastPayload?['command'],
+        'personal_agent.binding.disable',
+      );
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
-      expect(args['message_agent_did'], 'did:agent:message');
+      expect(args['personal_agent_did'], 'did:agent:message');
       expect(args['runtime_agent_did'], 'did:agent:message');
       expect(args['binding_id'], 'binding_1');
       expect(args['lifecycle_action'], 'revoke');
@@ -296,59 +302,62 @@ void main() {
   );
 
   test(
-    'revokeMessageAgentAuthorization fails before binding revoke when DID update fails',
+    'revokePersonalAgentAuthorization fails before binding revoke when DID update fails',
     () async {
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       final identities = _IdentityCoreStub()
         ..revokeError = StateError('did_document_update_failed');
       final service = DefaultAgentControlService(
         inventory: _InventoryStub(),
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
         identities: identities,
       );
 
       await expectLater(
-        service.revokeMessageAgentAuthorization(
+        service.revokePersonalAgentAuthorization(
           daemonAgentDid: 'did:agent:daemon',
-          messageAgentDid: 'did:agent:message',
+          personalAgentDid: 'did:agent:message',
         ),
         throwsStateError,
       );
 
       expect(bindings.calls, <String>['get_active']);
       expect(identities.calls, <String>['revoke:did:human:me']);
-      expect(bindings.lastRevokedMessageAgentDid, isNull);
+      expect(bindings.lastRevokedPersonalAgentDid, isNull);
       expect(messages.payloads, isEmpty);
     },
   );
 
   test(
-    'revokeMessageAgentAuthorization notifies daemon before service binding revoke',
+    'revokePersonalAgentAuthorization notifies daemon before service binding revoke',
     () async {
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub()
+      final bindings = _PersonalAgentBindingsStub()
         ..revokeError = StateError('delegated_key_still_active');
       final identities = _IdentityCoreStub();
       final service = DefaultAgentControlService(
         inventory: _InventoryStub(),
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
         identities: identities,
       );
 
       await expectLater(
-        service.revokeMessageAgentAuthorization(
+        service.revokePersonalAgentAuthorization(
           daemonAgentDid: 'did:agent:daemon',
-          messageAgentDid: 'did:agent:message',
+          personalAgentDid: 'did:agent:message',
         ),
         throwsStateError,
       );
 
       expect(bindings.calls, <String>['get_active', 'revoke:binding_1']);
       expect(identities.calls, <String>['revoke:did:human:me']);
-      expect(messages.lastPayload?['command'], 'message_agent.binding.disable');
+      expect(
+        messages.lastPayload?['command'],
+        'personal_agent.binding.disable',
+      );
       final args = messages.lastPayload?['args'] as Map<String, Object?>;
       expect(args['binding_id'], 'binding_1');
       expect(args['lifecycle_action'], 'revoke');
@@ -356,11 +365,11 @@ void main() {
   );
 
   test(
-    'ensureMessageAgentBootstrap sends encrypted bootstrap envelope without private package',
+    'ensurePersonalAgentBootstrap sends encrypted bootstrap envelope without private package',
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       inventory.agents = const <AgentSummary>[
         AgentSummary(
           agentDid: 'did:agent:daemon',
@@ -375,7 +384,7 @@ void main() {
           daemonAgentDid: 'did:agent:daemon',
           runtime: 'hermes',
           handle: 'hermes-msg-app-1-334c10a06052',
-          displayName: 'Hermes Message Agent',
+          displayName: 'Hermes Personal Agent',
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
@@ -383,12 +392,12 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
         agentImEnabled: true,
         preferredLanguageProvider: () => 'en-US',
       );
 
-      await service.ensureMessageAgentBootstrap(
+      await service.ensurePersonalAgentBootstrap(
         daemonAgentDid: 'did:agent:daemon',
         controllerDid: 'did:human:me',
         appInstanceId: 'app_1',
@@ -409,7 +418,7 @@ void main() {
       expect(messages.lastSecure, isFalse);
       expect(
         messages.lastIdempotencyKey,
-        'message-agent-bootstrap:did:human:me:app_1',
+        'personal-agent-bootstrap:did:human:me:app_1',
       );
       expect(messages.lastPayload?['schema'], daemonBootstrapSecureSchema);
       expect(messages.lastPayload?['recipient_daemon_did'], 'did:agent:daemon');
@@ -420,7 +429,7 @@ void main() {
       expect(messages.lastPayload?['sender_human_did'], 'did:human:me');
       expect(
         messages.lastPayload?['operation_id'],
-        'message-agent-bootstrap:did:human:me:app_1',
+        'personal-agent-bootstrap:did:human:me:app_1',
       );
       expect(
         messages.lastPayload?['sender_ephemeral_public_key'],
@@ -433,11 +442,11 @@ void main() {
         matches(RegExp(r'^[0-9a-f]{64}$')),
       );
       final aad = messages.lastPayload?['aad'] as Map<String, Object?>;
-      expect(aad['binding_id'], 'app-message-agent:did:human:me:app_1');
+      expect(aad['binding_id'], 'app-personal-agent:did:human:me:app_1');
       expect(aad['runtime_provider'], appMessageHandlerRuntimeProvider);
       expect(bindings.lastEnsuredUserDid, 'did:human:me');
       expect(bindings.lastEnsuredDaemonDid, 'did:agent:daemon');
-      expect(bindings.lastEnsuredMessageAgentDid, 'did:agent:message');
+      expect(bindings.lastEnsuredPersonalAgentDid, 'did:agent:message');
       expect(
         bindings.lastEnsuredRuntimeProvider,
         appMessageHandlerRuntimeProvider,
@@ -458,10 +467,10 @@ void main() {
     },
   );
 
-  test('desired message agent serializes preferred language contract', () {
-    final desired = const DesiredMessageAgent(
+  test('desired personal agent serializes preferred language contract', () {
+    final desired = const DesiredPersonalAgent(
       preferredLanguage: 'en',
-      ensureOnceKey: 'app-message-agent:did:human:me:app_1',
+      ensureOnceKey: 'app-personal-agent:did:human:me:app_1',
       runtimeRegistrationToken: 'runtime-token',
     ).toJson();
 
@@ -469,6 +478,70 @@ void main() {
     expect(desired['runtime_registration_token'], 'runtime-token');
     expect(desired['runtime_provider'], appMessageHandlerRuntimeProvider);
     expect(desired['runtime_profile'], appMessageHandlerRuntimeProfile);
+  });
+
+  test('bootstrap emits only canonical Personal Agent fields and new keys', () {
+    final payload = const DaemonBootstrapEnvelope(
+      bootstrapId: 'boot_1',
+      idempotencyKey: 'personal-agent-bootstrap:did:human:me:app_1',
+      appInstanceId: 'app_1',
+      controllerDid: 'did:human:me',
+      userSubkeyPackage: UserSubkeyPackage(
+        userDid: 'did:human:me',
+        verificationMethod: 'did:human:me#daemon-key-1',
+        publicKeyMultibase: 'zPublic',
+        privateKeyPem: 'private-pem',
+      ),
+      desiredPersonalAgent: DesiredPersonalAgent(
+        preferredLanguage: 'en',
+        ensureOnceKey: 'app-personal-agent:did:human:me:app_1',
+      ),
+    ).toJson();
+
+    expect(payload['desired_personal_agent'], isA<Map<String, Object?>>());
+    expect(payload.containsKey('desired_message_agent'), isFalse);
+    final desired = payload['desired_personal_agent'] as Map<String, Object?>;
+    expect(desired['runtime_profile'], 'personal_agent');
+    expect(desired['ensure_once_key'], 'app-personal-agent:did:human:me:app_1');
+    expect(
+      personalAgentBootstrapIdempotencyKey(
+        userDid: 'did:human:me',
+        appInstanceId: 'app_1',
+      ),
+      'personal-agent-bootstrap:did:human:me:app_1',
+    );
+    expect(
+      personalAgentEnsureOnceKey(
+        userDid: 'did:human:me',
+        appInstanceId: 'app_1',
+      ),
+      'app-personal-agent:did:human:me:app_1',
+    );
+  });
+
+  test('legacy Personal Agent keys are recognized but never emitted', () {
+    expect(
+      isPersonalAgentBootstrapIdempotencyKey(
+        'message-agent-bootstrap:did:human:me:app_1',
+      ),
+      isTrue,
+    );
+    expect(
+      isPersonalAgentEnsureOnceKey('app-message-agent:did:human:me:app_1'),
+      isTrue,
+    );
+    final payload = personalAgentBindingDisablePayload(
+      personalAgentDid: 'did:agent:personal',
+    );
+    final args = payload['args'] as Map<String, Object?>;
+    expect(payload['command'], 'personal_agent.binding.disable');
+    expect(payload.containsKey('legacy_command'), isFalse);
+    expect(args['personal_agent_did'], 'did:agent:personal');
+    expect(args.containsKey('message_agent_did'), isFalse);
+    expect(
+      isPersonalAgentBindingDisableCommand('message_agent.binding.disable'),
+      isTrue,
+    );
   });
 
   test(
@@ -479,7 +552,7 @@ void main() {
         recipientDaemonDid: 'did:agent:daemon',
         recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
         senderHumanDid: 'did:human:me',
-        operationId: 'message-agent-bootstrap:did:human:me:app_1',
+        operationId: 'personal-agent-bootstrap:did:human:me:app_1',
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
@@ -489,7 +562,7 @@ void main() {
         aad: const <String, Object?>{
           'human_did': 'did:human:me',
           'daemon_agent_did': 'did:agent:daemon',
-          'binding_id': 'app-message-agent:did:human:me:app_1',
+          'binding_id': 'app-personal-agent:did:human:me:app_1',
         },
       ).toJson();
 
@@ -510,7 +583,7 @@ void main() {
         recipientDaemonDid: 'did:agent:daemon',
         recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
         senderHumanDid: 'did:human:me',
-        operationId: 'message-agent-bootstrap:did:human:me:app_1',
+        operationId: 'personal-agent-bootstrap:did:human:me:app_1',
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
@@ -529,7 +602,7 @@ void main() {
         recipientDaemonDid: 'did:agent:daemon',
         recipientKeyId: 'did:agent:daemon#bootstrap-key-1',
         senderHumanDid: 'did:human:me',
-        operationId: 'message-agent-bootstrap:did:human:me:app_1',
+        operationId: 'personal-agent-bootstrap:did:human:me:app_1',
         issuedAt: issuedAt,
         expiresAt: issuedAt.add(const Duration(minutes: 5)),
         nonce: 'nonce_1',
@@ -537,7 +610,7 @@ void main() {
         ciphertext: 'base64:ciphertext',
         payloadSha256: 'not-a-valid-hash',
         aad: const <String, Object?>{
-          'binding_id': 'app-message-agent:did:human:me:app_1',
+          'binding_id': 'app-personal-agent:did:human:me:app_1',
         },
       ).toJson(),
       throwsArgumentError,
@@ -565,7 +638,7 @@ void main() {
         throwsStateError,
       );
       await expectLater(
-        service.ensureMessageAgentBootstrap(
+        service.ensurePersonalAgentBootstrap(
           daemonAgentDid: 'did:agent:daemon',
           controllerDid: 'did:human:me',
           appInstanceId: 'app_1',
@@ -587,11 +660,11 @@ void main() {
   );
 
   test(
-    'ensureMessageAgentBootstrap keeps app instance stable while run scopes attempt idempotency',
+    'ensurePersonalAgentBootstrap keeps app instance stable while run scopes attempt idempotency',
     () async {
       final inventory = _InventoryStub();
       final messages = _MessagesStub();
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       inventory.agents = const <AgentSummary>[
         AgentSummary(
           agentDid: 'did:agent:message',
@@ -599,7 +672,7 @@ void main() {
           daemonAgentDid: 'did:agent:daemon',
           runtime: 'hermes',
           handle: 'hermes-msg-macos-e2e-app-7fe1fc2b5661',
-          displayName: 'Hermes Message Agent',
+          displayName: 'Hermes Personal Agent',
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
@@ -607,12 +680,12 @@ void main() {
       final service = DefaultAgentControlService(
         inventory: inventory,
         messages: messages,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
         agentImEnabled: true,
       );
 
       Future<Map<String, Object?>> send(String runId) async {
-        await service.ensureMessageAgentBootstrap(
+        await service.ensurePersonalAgentBootstrap(
           daemonAgentDid: 'did:agent:daemon',
           controllerDid: 'did:human:me',
           appInstanceId: 'macos-e2e-app',
@@ -639,7 +712,10 @@ void main() {
       expect(first['operation_id'], isNot(secondRun['operation_id']));
 
       final aad = first['aad'] as Map<String, Object?>;
-      expect(aad['binding_id'], 'app-message-agent:did:human:me:macos-e2e-app');
+      expect(
+        aad['binding_id'],
+        'app-personal-agent:did:human:me:macos-e2e-app',
+      );
       expect(
         inventory.runtimeTokenHandle,
         'hermes-msg-macos-e2e-app-7fe1fc2b5661',
@@ -685,11 +761,11 @@ void main() {
   });
 
   test('bootstrap id is stable and avoids truncation collisions', () {
-    final first = messageAgentBootstrapId(
+    final first = personalAgentBootstrapId(
       userDid: 'did:human:${'a' * 160}',
       appInstanceId: 'app_${'x' * 160}',
     );
-    final second = messageAgentBootstrapId(
+    final second = personalAgentBootstrapId(
       userDid: 'did:human:${'a' * 159}b',
       appInstanceId: 'app_${'x' * 160}',
     );
@@ -699,7 +775,7 @@ void main() {
     expect(first, isNot(second));
     expect(
       first,
-      messageAgentBootstrapId(
+      personalAgentBootstrapId(
         userDid: 'did:human:${'a' * 160}',
         appInstanceId: 'app_${'x' * 160}',
       ),
@@ -1117,88 +1193,88 @@ class _MessagesStub implements MessagingService {
   }
 }
 
-class _MessageAgentBindingsStub implements MessageAgentBindingPort {
+class _PersonalAgentBindingsStub implements PersonalAgentBindingPort {
   final List<String> calls = <String>[];
   String? lastEnsuredUserDid;
   String? lastEnsuredDaemonDid;
-  String? lastEnsuredMessageAgentDid;
+  String? lastEnsuredPersonalAgentDid;
   String? lastEnsuredRuntimeProvider;
   Map<String, Object?>? lastEnsuredRuntimeProfile;
   String? lastEnsuredDelegatedKeyVerificationMethod;
   String? lastDisabledBindingId;
-  String? lastDisabledMessageAgentDid;
+  String? lastDisabledPersonalAgentDid;
   String? lastRevokedBindingId;
-  String? lastRevokedMessageAgentDid;
+  String? lastRevokedPersonalAgentDid;
   Object? revokeError;
 
   @override
-  Future<MessageAgentBinding> ensureBinding({
+  Future<PersonalAgentBinding> ensureBinding({
     required String userDid,
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
     required String runtimeProvider,
     required Map<String, Object?> runtimeProfile,
     required String delegatedKeyVerificationMethod,
   }) async {
-    calls.add('ensure:$messageAgentDid');
+    calls.add('ensure:$personalAgentDid');
     lastEnsuredUserDid = userDid;
     lastEnsuredDaemonDid = daemonAgentDid;
-    lastEnsuredMessageAgentDid = messageAgentDid;
+    lastEnsuredPersonalAgentDid = personalAgentDid;
     lastEnsuredRuntimeProvider = runtimeProvider;
     lastEnsuredRuntimeProfile = runtimeProfile;
     lastEnsuredDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
-    return _binding(messageAgentDid: messageAgentDid, status: 'active');
+    return _binding(personalAgentDid: personalAgentDid, status: 'active');
   }
 
   @override
-  Future<MessageAgentBinding?> getActiveBinding() async {
+  Future<PersonalAgentBinding?> getActiveBinding() async {
     calls.add('get_active');
     return _binding(status: 'active');
   }
 
   @override
-  Future<MessageAgentBinding> disableBinding({
+  Future<PersonalAgentBinding> disableBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
-    calls.add('disable:${bindingId ?? messageAgentDid}');
+    calls.add('disable:${bindingId ?? personalAgentDid}');
     lastDisabledBindingId = bindingId;
-    lastDisabledMessageAgentDid = messageAgentDid;
+    lastDisabledPersonalAgentDid = personalAgentDid;
     return _binding(
-      messageAgentDid: messageAgentDid ?? 'did:agent:message',
+      personalAgentDid: personalAgentDid ?? 'did:agent:message',
       status: 'disabled',
     );
   }
 
   @override
-  Future<MessageAgentBinding> revokeBinding({
+  Future<PersonalAgentBinding> revokeBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
-    calls.add('revoke:${bindingId ?? messageAgentDid}');
+    calls.add('revoke:${bindingId ?? personalAgentDid}');
     lastRevokedBindingId = bindingId;
-    lastRevokedMessageAgentDid = messageAgentDid;
+    lastRevokedPersonalAgentDid = personalAgentDid;
     final error = revokeError;
     if (error != null) {
       throw error;
     }
     return _binding(
-      messageAgentDid: messageAgentDid ?? 'did:agent:message',
+      personalAgentDid: personalAgentDid ?? 'did:agent:message',
       status: 'revoked',
     );
   }
 
-  MessageAgentBinding _binding({
-    String messageAgentDid = 'did:agent:message',
+  PersonalAgentBinding _binding({
+    String personalAgentDid = 'did:agent:message',
     required String status,
   }) {
-    return MessageAgentBinding(
+    return PersonalAgentBinding(
       id: 'binding_1',
       userDid: 'did:human:me',
       daemonAgentDid: 'did:agent:daemon',
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       runtimeProvider: 'hermes',
-      runtimeProfile: const <String, Object?>{'profile': 'message_agent'},
+      runtimeProfile: const <String, Object?>{'profile': 'personal_agent'},
       delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
       status: status,
     );

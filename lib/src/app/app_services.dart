@@ -18,7 +18,7 @@ import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/identity_core_port.dart';
-import '../application/ports/message_agent_binding_port.dart';
+import '../application/ports/personal_agent_binding_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
@@ -109,9 +109,9 @@ final agentControlServiceProvider = Provider<AgentControlService>(
   ),
 );
 
-final messageAgentBindingPortProvider = Provider<MessageAgentBindingPort>(
+final personalAgentBindingPortProvider = Provider<PersonalAgentBindingPort>(
   (ref) => throw UnimplementedError(
-    'messageAgentBindingPortProvider must be overridden',
+    'personalAgentBindingPortProvider must be overridden',
   ),
 );
 

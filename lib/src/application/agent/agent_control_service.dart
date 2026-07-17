@@ -6,15 +6,15 @@ import '../config/awiki_environment_config.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
-import '../../domain/entities/agent/message_agent_runtime_provider.dart';
-import '../../domain/entities/agent/message_agent_binding.dart';
+import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
+import '../../domain/entities/agent/personal_agent_binding.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../models/app_thread_ref.dart';
 import '../messaging_service.dart';
 import '../ports/agent_inventory_port.dart';
 import '../ports/identity_core_port.dart';
-import '../ports/message_agent_binding_port.dart';
+import '../ports/personal_agent_binding_port.dart';
 
 abstract interface class AgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false});
@@ -37,7 +37,7 @@ abstract interface class AgentControlService {
     required String displayName,
     String? clientRequestId,
   });
-  Future<void> ensureMessageAgentBootstrap({
+  Future<void> ensurePersonalAgentBootstrap({
     required String daemonAgentDid,
     required String controllerDid,
     required String appInstanceId,
@@ -76,17 +76,17 @@ abstract interface class AgentControlService {
     required String daemonAgentDid,
     required String runtimeAgentDid,
   });
-  Future<MessageAgentBinding> pauseMessageAgent({
+  Future<PersonalAgentBinding> pausePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   });
-  Future<MessageAgentBinding> deleteMessageAgent({
+  Future<PersonalAgentBinding> deletePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   });
-  Future<MessageAgentBinding> revokeMessageAgentAuthorization({
+  Future<PersonalAgentBinding> revokePersonalAgentAuthorization({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   });
   Future<AgentSummary> updateDisplayName({
     required String agentDid,
@@ -105,7 +105,7 @@ class DefaultAgentControlService implements AgentControlService {
   DefaultAgentControlService({
     required AgentInventoryPort inventory,
     required MessagingService messages,
-    MessageAgentBindingPort? messageAgentBindings,
+    PersonalAgentBindingPort? personalAgentBindings,
     IdentityCorePort? identities,
     String? downloadBaseUrl,
     AwikiEnvironmentConfig? environment,
@@ -114,7 +114,7 @@ class DefaultAgentControlService implements AgentControlService {
   }) : this._(
          inventory: inventory,
          messages: messages,
-         messageAgentBindings: messageAgentBindings,
+         personalAgentBindings: personalAgentBindings,
          identities: identities,
          environment: environment ?? AwikiEnvironmentConfig.fromEnvironment(),
          downloadBaseUrl: downloadBaseUrl,
@@ -125,7 +125,7 @@ class DefaultAgentControlService implements AgentControlService {
   DefaultAgentControlService._({
     required AgentInventoryPort inventory,
     required MessagingService messages,
-    MessageAgentBindingPort? messageAgentBindings,
+    PersonalAgentBindingPort? personalAgentBindings,
     IdentityCorePort? identities,
     required AwikiEnvironmentConfig environment,
     String? downloadBaseUrl,
@@ -133,7 +133,7 @@ class DefaultAgentControlService implements AgentControlService {
     String Function()? preferredLanguageProvider,
   }) : _inventory = inventory,
        _messages = messages,
-       _messageAgentBindings = messageAgentBindings,
+       _personalAgentBindings = personalAgentBindings,
        _identities = identities,
        _environment = environment,
        _agentImEnabled = agentImEnabled ?? environment.agentImEnabled,
@@ -145,14 +145,18 @@ class DefaultAgentControlService implements AgentControlService {
 
   final AgentInventoryPort _inventory;
   final MessagingService _messages;
-  final MessageAgentBindingPort? _messageAgentBindings;
+  final PersonalAgentBindingPort? _personalAgentBindings;
   final IdentityCorePort? _identities;
   final AwikiEnvironmentConfig _environment;
   final bool _agentImEnabled;
   final String Function() _preferredLanguageProvider;
   final String downloadBaseUrl;
-  static const Duration _messageAgentRuntimeWaitTimeout = Duration(seconds: 90);
-  static const Duration _messageAgentRuntimeWaitInterval = Duration(seconds: 2);
+  static const Duration _personalAgentRuntimeWaitTimeout = Duration(
+    seconds: 90,
+  );
+  static const Duration _personalAgentRuntimeWaitInterval = Duration(
+    seconds: 2,
+  );
   static const Duration _daemonPayloadSendTimeout = Duration(seconds: 12);
 
   @override
@@ -279,7 +283,7 @@ class DefaultAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> ensureMessageAgentBootstrap({
+  Future<void> ensurePersonalAgentBootstrap({
     required String daemonAgentDid,
     required String controllerDid,
     required String appInstanceId,
@@ -291,7 +295,7 @@ class DefaultAgentControlService implements AgentControlService {
   }) async {
     _requireAgentsEnabled();
     final userDid = userSubkeyPackage.userDid;
-    final idempotencyKey = messageAgentBootstrapAttemptIdempotencyKey(
+    final idempotencyKey = personalAgentBootstrapAttemptIdempotencyKey(
       userDid: userDid,
       appInstanceId: appInstanceId,
       runId: runId,
@@ -302,16 +306,16 @@ class DefaultAgentControlService implements AgentControlService {
         (await _inventory.issueRuntimeToken(
           controllerDid: controllerDid,
           daemonAgentDid: daemonAgentDid,
-          runtime: defaultMessageAgentRuntimeProvider.runtime,
-          handle: _messageAgentRuntimeHandle(
+          runtime: defaultPersonalAgentRuntimeProvider.runtime,
+          handle: _personalAgentRuntimeHandle(
             userDid: userDid,
             appInstanceId: appInstanceId,
           ),
-          displayName: defaultMessageAgentRuntimeProvider.runtimeDisplayName,
+          displayName: defaultPersonalAgentRuntimeProvider.runtimeDisplayName,
           preferredLanguage: preferredLanguage,
         )).token;
     final envelope = DaemonBootstrapEnvelope(
-      bootstrapId: messageAgentBootstrapAttemptId(
+      bootstrapId: personalAgentBootstrapAttemptId(
         userDid: userDid,
         appInstanceId: appInstanceId,
         runId: runId,
@@ -322,9 +326,9 @@ class DefaultAgentControlService implements AgentControlService {
       userHandle: userHandle,
       runId: runId,
       userSubkeyPackage: userSubkeyPackage,
-      desiredMessageAgent: DesiredMessageAgent(
+      desiredPersonalAgent: DesiredPersonalAgent(
         preferredLanguage: preferredLanguage,
-        ensureOnceKey: messageAgentEnsureOnceKey(
+        ensureOnceKey: personalAgentEnsureOnceKey(
           userDid: userDid,
           appInstanceId: appInstanceId,
         ),
@@ -342,15 +346,15 @@ class DefaultAgentControlService implements AgentControlService {
       idempotencyKey: idempotencyKey,
       secure: false,
     );
-    final runtime = await _waitForMessageAgentRuntime(
+    final runtime = await _waitForPersonalAgentRuntime(
       daemonAgentDid: daemonAgentDid,
       userDid: userDid,
       appInstanceId: appInstanceId,
     );
-    await _requireMessageAgentBindings().ensureBinding(
+    await _requirePersonalAgentBindings().ensureBinding(
       userDid: userDid,
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: runtime.agentDid,
+      personalAgentDid: runtime.agentDid,
       runtimeProvider: appMessageHandlerRuntimeProvider,
       runtimeProfile: const <String, Object?>{
         'profile': appMessageHandlerRuntimeProfile,
@@ -500,57 +504,59 @@ class DefaultAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<MessageAgentBinding> pauseMessageAgent({
+  Future<PersonalAgentBinding> pausePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
     _requireAgentsEnabled();
-    final binding = await _requireMessageAgentBindings().disableBinding(
-      messageAgentDid: messageAgentDid,
+    final binding = await _requirePersonalAgentBindings().disableBinding(
+      personalAgentDid: personalAgentDid,
     );
     await _sendDaemonPayload(
       daemonAgentDid,
-      messageAgentBindingDisablePayload(
-        messageAgentDid: messageAgentDid,
+      personalAgentBindingDisablePayload(
+        personalAgentDid: personalAgentDid,
         bindingId: binding.id,
         lifecycleAction: 'pause',
       ),
-      idempotencyKey: 'message-agent-disable:$messageAgentDid',
+      idempotencyKey: 'personal-agent-disable:$personalAgentDid',
     );
     return binding;
   }
 
   @override
-  Future<MessageAgentBinding> deleteMessageAgent({
+  Future<PersonalAgentBinding> deletePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
     _requireAgentsEnabled();
-    final binding = await pauseMessageAgent(
+    final binding = await pausePersonalAgent(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
     );
     await deleteRuntimeAgent(
       daemonAgentDid: daemonAgentDid,
-      runtimeAgentDid: messageAgentDid,
+      runtimeAgentDid: personalAgentDid,
     );
     return binding;
   }
 
   @override
-  Future<MessageAgentBinding> revokeMessageAgentAuthorization({
+  Future<PersonalAgentBinding> revokePersonalAgentAuthorization({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
     _requireAgentsEnabled();
-    final bindings = _requireMessageAgentBindings();
+    final bindings = _requirePersonalAgentBindings();
     final activeBinding = await bindings.getActiveBinding();
     if (activeBinding == null) {
-      throw StateError('Message Agent binding is not active.');
+      throw StateError('Personal Agent binding is not active.');
     }
     if (activeBinding.daemonAgentDid != daemonAgentDid ||
-        activeBinding.messageAgentDid != messageAgentDid) {
-      throw StateError('Message Agent binding does not match selected daemon.');
+        activeBinding.personalAgentDid != personalAgentDid) {
+      throw StateError(
+        'Personal Agent binding does not match selected daemon.',
+      );
     }
     final revokeResult = await _requireIdentities()
         .revokeDaemonSubkeyAuthorization(activeBinding.userDid);
@@ -562,12 +568,12 @@ class DefaultAgentControlService implements AgentControlService {
     }
     await _sendDaemonPayload(
       daemonAgentDid,
-      messageAgentBindingDisablePayload(
-        messageAgentDid: messageAgentDid,
+      personalAgentBindingDisablePayload(
+        personalAgentDid: personalAgentDid,
         bindingId: activeBinding.id,
         lifecycleAction: 'revoke',
       ),
-      idempotencyKey: 'message-agent-revoke:$messageAgentDid',
+      idempotencyKey: 'personal-agent-revoke:$personalAgentDid',
     );
     final binding = await bindings.revokeBinding(bindingId: activeBinding.id);
     return binding;
@@ -637,10 +643,10 @@ class DefaultAgentControlService implements AgentControlService {
     }
   }
 
-  MessageAgentBindingPort _requireMessageAgentBindings() {
-    final bindings = _messageAgentBindings;
+  PersonalAgentBindingPort _requirePersonalAgentBindings() {
+    final bindings = _personalAgentBindings;
     if (bindings == null) {
-      throw StateError('Message Agent binding service is unavailable.');
+      throw StateError('Personal Agent binding service is unavailable.');
     }
     return bindings;
   }
@@ -653,20 +659,20 @@ class DefaultAgentControlService implements AgentControlService {
     return identities;
   }
 
-  Future<AgentSummary> _waitForMessageAgentRuntime({
+  Future<AgentSummary> _waitForPersonalAgentRuntime({
     required String daemonAgentDid,
     required String userDid,
     required String appInstanceId,
   }) async {
-    final expectedHandle = _messageAgentRuntimeHandle(
+    final expectedHandle = _personalAgentRuntimeHandle(
       userDid: userDid,
       appInstanceId: appInstanceId,
     );
-    final deadline = DateTime.now().add(_messageAgentRuntimeWaitTimeout);
+    final deadline = DateTime.now().add(_personalAgentRuntimeWaitTimeout);
     Object? lastError;
     while (DateTime.now().isBefore(deadline)) {
       try {
-        final runtime = await _findMessageAgentRuntime(
+        final runtime = await _findPersonalAgentRuntime(
           daemonAgentDid: daemonAgentDid,
           expectedHandle: expectedHandle,
         );
@@ -676,15 +682,15 @@ class DefaultAgentControlService implements AgentControlService {
       } on Object catch (error) {
         lastError = error;
       }
-      await Future<void>.delayed(_messageAgentRuntimeWaitInterval);
+      await Future<void>.delayed(_personalAgentRuntimeWaitInterval);
     }
     throw StateError(
-      'Message Agent runtime was not published by daemon.'
+      'Personal Agent runtime was not published by daemon.'
       '${lastError == null ? '' : ' Last error: $lastError'}',
     );
   }
 
-  Future<AgentSummary?> _findMessageAgentRuntime({
+  Future<AgentSummary?> _findPersonalAgentRuntime({
     required String daemonAgentDid,
     required String expectedHandle,
   }) async {
@@ -700,8 +706,9 @@ class DefaultAgentControlService implements AgentControlService {
       }
       if (runtime == appMessageHandlerRuntime &&
           (agent.displayName ==
-                  defaultMessageAgentRuntimeProvider.runtimeDisplayName ||
-              handle?.startsWith(messageAgentProviderHermesHandlePrefix) ==
+                  defaultPersonalAgentRuntimeProvider.runtimeDisplayName ||
+              agent.displayName == legacyPersonalAgentRuntimeDisplayName ||
+              handle?.startsWith(personalAgentProviderHermesHandlePrefix) ==
                   true)) {
         return agent;
       }
@@ -758,11 +765,11 @@ String? _normalizeDownloadBaseUrl(String? value) {
   return trimmed.replaceAll(RegExp(r'/+$'), '');
 }
 
-String _messageAgentRuntimeHandle({
+String _personalAgentRuntimeHandle({
   required String userDid,
   required String appInstanceId,
 }) {
-  const prefix = messageAgentProviderHermesHandlePrefix;
+  const prefix = personalAgentProviderHermesHandlePrefix;
   final seed = '${userDid.trim()}|${appInstanceId.trim()}';
   final hash = crypto.sha256
       .convert(utf8.encode(seed))

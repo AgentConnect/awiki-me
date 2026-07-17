@@ -12,8 +12,8 @@ const String _desktopCliPeerRunConfigPath =
     '.e2e/desktop-cli-peer/current/run_config.json';
 const String _desktopCliPeerProductTimingsFileName = 'product_timings.json';
 const String _caseAttestationFileName = 'case_attestation.json';
-const String _messageAgentRunConfigPath =
-    '.e2e/message-agent/current/run_config.json';
+const String _personalAgentRunConfigPath =
+    '.e2e/personal-agent/current/run_config.json';
 const String _codexAgentRunConfigPath =
     '.e2e/codex-agent/current/run_config.json';
 const String _claudeCodeAgentRunConfigPath =
@@ -22,7 +22,7 @@ const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
 const String _desktopCliPeerPerformanceScenario =
     'desktop-app-cli-peer-performance';
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
-const String _messageAgentScenario = 'message-agent-full-ui';
+const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
 const String _claudeCodeAgentScenario = 'claude-code-agent-full-ui';
 const List<String> _desktopCliPeerCaseIds = <String>[
@@ -181,10 +181,10 @@ const Set<String> _desktopCliPeerPerformanceRequiredCounters = <String>{
 const int _desktopCliPeerPerformanceMaxCachedMessages = 1200;
 const int _desktopCliPeerPerformanceMaxCachedCanonicalThreads = 100;
 const int _desktopCliPeerPerformanceMaxActivePatchSubscriptions = 100;
-const List<String> _messageAgentCaseIds = <String>[
-  'MSGAGENT-E2E-001', // App UI selects daemon and enables Message Agent.
-  'MSGAGENT-E2E-002', // CLI peer message is recovered into App UI.
-  'MSGAGENT-E2E-004', // UI revoke converges in User Service and daemon state.
+const List<String> _personalAgentCaseIds = <String>[
+  'PERSONALAGENT-E2E-001', // App UI selects daemon and enables Personal Agent.
+  'PERSONALAGENT-E2E-002', // CLI peer message is recovered into App UI.
+  'PERSONALAGENT-E2E-004', // UI revoke converges in User Service and daemon state.
 ];
 const List<String> _codexAgentCaseIds = <String>[
   'CODEXAGENT-E2E-001', // App creates/selects a Codex runtime Agent.
@@ -857,9 +857,9 @@ class DesktopE2eRunner {
       'test',
       '--dart-define=AWIKI_E2E=true',
       '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
-      if (peerConfig.e2eCase == DesktopE2eCase.messageAgent) ...<String>[
+      if (peerConfig.e2eCase == DesktopE2eCase.personalAgent) ...<String>[
         '--plain-name',
-        'Message Agent full UI drives real backend daemon and recovery',
+        'Personal Agent full UI drives real backend daemon and recovery',
       ],
       peerConfig.e2eCase.testFile,
       '-d',
@@ -934,11 +934,11 @@ class DesktopE2eRunner {
         'envFile': peerConfig.daemonEnvFile,
         'fakeHermesGatewayCommand': peerConfig.daemonFakeHermesGatewayCommand,
       },
-      'messageAgent': <String, Object?>{
-        'enabled': peerConfig.messageAgentEnabled,
-        'runtimeProvider': peerConfig.messageAgentRuntimeProvider,
-        'processingScope': peerConfig.messageAgentProcessingScope,
-        'realBackend': peerConfig.messageAgentRealBackend,
+      'personalAgent': <String, Object?>{
+        'enabled': peerConfig.personalAgentEnabled,
+        'runtimeProvider': peerConfig.personalAgentRuntimeProvider,
+        'processingScope': peerConfig.personalAgentProcessingScope,
+        'realBackend': peerConfig.personalAgentRealBackend,
       },
       'codexAgent': <String, Object?>{
         'enabled': peerConfig.codexAgentEnabled,
@@ -1361,17 +1361,17 @@ class DesktopE2eRunner {
               ? null
               : '<redacted-daemon-env-file>',
         if (config != null)
-          'messageAgent': <String, Object?>{
-            'enabled': config!.messageAgentEnabled,
-            'runtimeProvider': config!.messageAgentRuntimeProvider,
-            'processingScope': config!.messageAgentProcessingScope,
-            'realBackend': config!.messageAgentRealBackend,
-            if (config!.e2eCase == DesktopE2eCase.messageAgent) ...{
-              'uiEnabled': _caseStatus('MSGAGENT-E2E-001') == 'passed',
+          'personalAgent': <String, Object?>{
+            'enabled': config!.personalAgentEnabled,
+            'runtimeProvider': config!.personalAgentRuntimeProvider,
+            'processingScope': config!.personalAgentProcessingScope,
+            'realBackend': config!.personalAgentRealBackend,
+            if (config!.e2eCase == DesktopE2eCase.personalAgent) ...{
+              'uiEnabled': _caseStatus('PERSONALAGENT-E2E-001') == 'passed',
               'runtimeFinalReceived':
-                  _caseStatus('MSGAGENT-E2E-002') == 'passed',
+                  _caseStatus('PERSONALAGENT-E2E-002') == 'passed',
               'authorizationRevoked':
-                  _caseStatus('MSGAGENT-E2E-004') == 'passed',
+                  _caseStatus('PERSONALAGENT-E2E-004') == 'passed',
             },
           },
         if (config != null)
@@ -2357,14 +2357,14 @@ Usage:
   dart run tests/e2e/runner.dart --case restart
   dart run tests/e2e/runner.dart --case display-name-fallback
   dart run tests/e2e/runner.dart --case performance
-  dart run tests/e2e/runner.dart --case message-agent
+  dart run tests/e2e/runner.dart --case personal-agent
   dart run tests/e2e/runner.dart --case codex-agent
   dart run tests/e2e/runner.dart --case claude-code-agent
 
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|message-agent|codex-agent|claude-code-agent
+  --case smoke|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke runs local App/native checks. The other
                                cases run real App+CLI peer flows. The
                                performance case records product-level startup,
@@ -2372,8 +2372,8 @@ Options:
                                applies the configured performance budgets. The
                                restart case launches two Flutter processes
                                against one isolated App state root. The
-                               message-agent case is the full UI acceptance
-                               gate for Message Agent; codex-agent and
+                               personal-agent case is the full UI acceptance
+                               gate for Personal Agent; codex-agent and
                                claude-code-agent are user-visible runtime
                                Agent reply gates. Probes are only lower level
                                helpers.
@@ -2409,10 +2409,10 @@ class DesktopCliPeerConfig {
     this.daemonHandle,
     this.daemonEnvFile,
     this.daemonFakeHermesGatewayCommand,
-    this.messageAgentEnabled = false,
-    this.messageAgentRuntimeProvider = 'hermes',
-    this.messageAgentProcessingScope = 'all_conversations',
-    this.messageAgentRealBackend = false,
+    this.personalAgentEnabled = false,
+    this.personalAgentRuntimeProvider = 'hermes',
+    this.personalAgentProcessingScope = 'all_conversations',
+    this.personalAgentRealBackend = false,
     this.codexAgentEnabled = false,
     this.codexAgentRealBackend = false,
     this.codexAgentPrompt,
@@ -2447,10 +2447,10 @@ class DesktopCliPeerConfig {
   final String? daemonHandle;
   final String? daemonEnvFile;
   final String? daemonFakeHermesGatewayCommand;
-  final bool messageAgentEnabled;
-  final String messageAgentRuntimeProvider;
-  final String messageAgentProcessingScope;
-  final bool messageAgentRealBackend;
+  final bool personalAgentEnabled;
+  final String personalAgentRuntimeProvider;
+  final String personalAgentProcessingScope;
+  final bool personalAgentRealBackend;
   final bool codexAgentEnabled;
   final bool codexAgentRealBackend;
   final String? codexAgentPrompt;
@@ -2535,16 +2535,16 @@ class DesktopCliPeerConfig {
       daemonHandle: fileConfig.daemonHandle,
       daemonEnvFile: fileConfig.daemonEnvFile,
       daemonFakeHermesGatewayCommand: fileConfig.daemonFakeHermesGatewayCommand,
-      messageAgentEnabled: _effectiveMessageAgentEnabled(
+      personalAgentEnabled: _effectivePersonalAgentEnabled(
         options,
         fileConfig,
         sourcePath,
       ),
-      messageAgentRuntimeProvider:
-          fileConfig.messageAgentRuntimeProvider ?? 'hermes',
-      messageAgentProcessingScope:
-          fileConfig.messageAgentProcessingScope ?? 'all_conversations',
-      messageAgentRealBackend: _effectiveMessageAgentRealBackend(
+      personalAgentRuntimeProvider:
+          fileConfig.personalAgentRuntimeProvider ?? 'hermes',
+      personalAgentProcessingScope:
+          fileConfig.personalAgentProcessingScope ?? 'all_conversations',
+      personalAgentRealBackend: _effectivePersonalAgentRealBackend(
         options,
         fileConfig,
         sourcePath,
@@ -2577,7 +2577,7 @@ class DesktopCliPeerConfig {
   }
 
   void validateSelectedCaseConfig(String sourcePath) {
-    if (e2eCase != DesktopE2eCase.messageAgent) {
+    if (e2eCase != DesktopE2eCase.personalAgent) {
       return;
     }
     _requiredConfig(messageServiceUrl, 'service.messageServiceUrl', sourcePath);
@@ -2595,43 +2595,43 @@ class DesktopCliPeerConfig {
       'daemon.fakeHermesGatewayCommand',
       sourcePath,
     );
-    if (messageAgentRuntimeProvider.trim().toLowerCase() != 'hermes') {
+    if (personalAgentRuntimeProvider.trim().toLowerCase() != 'hermes') {
       throw E2eFailure(
-        'messageAgent.runtimeProvider must be hermes for --case message-agent in $sourcePath.',
+        'personalAgent.runtimeProvider must be hermes for --case personal-agent in $sourcePath.',
       );
     }
   }
 }
 
-bool _effectiveMessageAgentEnabled(
+bool _effectivePersonalAgentEnabled(
   DesktopE2eOptions options,
   DesktopE2eFileConfig fileConfig,
   String sourcePath,
 ) {
-  final configured = fileConfig.messageAgentEnabled;
-  if (options.e2eCase != DesktopE2eCase.messageAgent) {
+  final configured = fileConfig.personalAgentEnabled;
+  if (options.e2eCase != DesktopE2eCase.personalAgent) {
     return configured ?? false;
   }
   if (configured == false) {
     throw E2eFailure(
-      'messageAgent.enabled must be true for --case message-agent in $sourcePath.',
+      'personalAgent.enabled must be true for --case personal-agent in $sourcePath.',
     );
   }
   return true;
 }
 
-bool _effectiveMessageAgentRealBackend(
+bool _effectivePersonalAgentRealBackend(
   DesktopE2eOptions options,
   DesktopE2eFileConfig fileConfig,
   String sourcePath,
 ) {
-  final configured = fileConfig.messageAgentRealBackend;
-  if (options.e2eCase != DesktopE2eCase.messageAgent) {
+  final configured = fileConfig.personalAgentRealBackend;
+  if (options.e2eCase != DesktopE2eCase.personalAgent) {
     return configured ?? false;
   }
   if (configured == false) {
     throw E2eFailure(
-      'messageAgent.realBackend must be true for --case message-agent in $sourcePath.',
+      'personalAgent.realBackend must be true for --case personal-agent in $sourcePath.',
     );
   }
   return true;
@@ -2736,10 +2736,10 @@ class DesktopE2eFileConfig {
     this.daemonHandle,
     this.daemonEnvFile,
     this.daemonFakeHermesGatewayCommand,
-    this.messageAgentEnabled,
-    this.messageAgentRuntimeProvider,
-    this.messageAgentProcessingScope,
-    this.messageAgentRealBackend,
+    this.personalAgentEnabled,
+    this.personalAgentRuntimeProvider,
+    this.personalAgentProcessingScope,
+    this.personalAgentRealBackend,
     this.codexAgentEnabled,
     this.codexAgentRealBackend,
     this.codexAgentPrompt,
@@ -2775,10 +2775,10 @@ class DesktopE2eFileConfig {
       daemonHandle = null,
       daemonEnvFile = null,
       daemonFakeHermesGatewayCommand = null,
-      messageAgentEnabled = null,
-      messageAgentRuntimeProvider = null,
-      messageAgentProcessingScope = null,
-      messageAgentRealBackend = null,
+      personalAgentEnabled = null,
+      personalAgentRuntimeProvider = null,
+      personalAgentProcessingScope = null,
+      personalAgentRealBackend = null,
       codexAgentEnabled = null,
       codexAgentRealBackend = null,
       codexAgentPrompt = null,
@@ -2812,10 +2812,10 @@ class DesktopE2eFileConfig {
   final String? daemonHandle;
   final String? daemonEnvFile;
   final String? daemonFakeHermesGatewayCommand;
-  final bool? messageAgentEnabled;
-  final String? messageAgentRuntimeProvider;
-  final String? messageAgentProcessingScope;
-  final bool? messageAgentRealBackend;
+  final bool? personalAgentEnabled;
+  final String? personalAgentRuntimeProvider;
+  final String? personalAgentProcessingScope;
+  final bool? personalAgentRealBackend;
   final bool? codexAgentEnabled;
   final bool? codexAgentRealBackend;
   final String? codexAgentPrompt;
@@ -2847,7 +2847,9 @@ class DesktopE2eFileConfig {
     final cliUser = _mapAt(accounts, 'cliPeer', optional: true);
     final cliPeer = _mapAt(raw, 'cliPeer', optional: true);
     final daemon = _mapAt(raw, 'daemon', optional: true);
-    final messageAgent = _mapAt(raw, 'messageAgent', optional: true);
+    final personalAgent = raw.containsKey('personalAgent')
+        ? _mapAt(raw, 'personalAgent', optional: true)
+        : _mapAt(raw, 'messageAgent', optional: true);
     final codexAgent = _mapAt(raw, 'codexAgent', optional: true);
     final claudeCodeAgent = _mapAt(raw, 'claudeCodeAgent', optional: true);
     final performance = _mapAt(raw, 'performance', optional: true);
@@ -2891,10 +2893,10 @@ class DesktopE2eFileConfig {
         daemon,
         'fakeHermesGatewayCommand',
       ),
-      messageAgentEnabled: _boolAt(messageAgent, 'enabled'),
-      messageAgentRuntimeProvider: _stringAt(messageAgent, 'runtimeProvider'),
-      messageAgentProcessingScope: _stringAt(messageAgent, 'processingScope'),
-      messageAgentRealBackend: _boolAt(messageAgent, 'realBackend'),
+      personalAgentEnabled: _boolAt(personalAgent, 'enabled'),
+      personalAgentRuntimeProvider: _stringAt(personalAgent, 'runtimeProvider'),
+      personalAgentProcessingScope: _stringAt(personalAgent, 'processingScope'),
+      personalAgentRealBackend: _boolAt(personalAgent, 'realBackend'),
       codexAgentEnabled: _boolAt(codexAgent, 'enabled'),
       codexAgentRealBackend: _boolAt(codexAgent, 'realBackend'),
       codexAgentPrompt: _stringAt(codexAgent, 'prompt'),
@@ -3230,7 +3232,7 @@ enum DesktopE2eCase {
   inbound(_desktopCliPeerInboundCaseIds),
   restart(_desktopCliPeerRestartCaseIds),
   displayNameFallback(_desktopCliPeerDisplayNameFallbackCaseIds),
-  messageAgent(_messageAgentCaseIds),
+  personalAgent(_personalAgentCaseIds),
   codexAgent(_codexAgentCaseIds),
   claudeCodeAgent(_claudeCodeAgentCaseIds);
 
@@ -3259,8 +3261,8 @@ enum DesktopE2eCase {
         'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
       DesktopE2eCase.displayNameFallback =>
         'integration_test/desktop_cli_peer_display_name_fallback_test.dart',
-      DesktopE2eCase.messageAgent =>
-        'integration_test/message_agent_full_ui_test.dart',
+      DesktopE2eCase.personalAgent =>
+        'integration_test/personal_agent_full_ui_test.dart',
       DesktopE2eCase.codexAgent =>
         'integration_test/codex_agent_full_ui_test.dart',
       DesktopE2eCase.claudeCodeAgent =>
@@ -3270,7 +3272,7 @@ enum DesktopE2eCase {
 
   String get caseName {
     return switch (this) {
-      DesktopE2eCase.messageAgent => 'message-agent',
+      DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
@@ -3287,7 +3289,7 @@ enum DesktopE2eCase {
   String get reportScope {
     return switch (this) {
       DesktopE2eCase.smoke => 'smoke',
-      DesktopE2eCase.messageAgent => 'message-agent',
+      DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       _ => 'desktop-cli-peer',
@@ -3298,7 +3300,7 @@ enum DesktopE2eCase {
     return switch (this) {
       DesktopE2eCase.claudeCodeAgent => const Duration(minutes: 15),
       DesktopE2eCase.codexAgent => const Duration(minutes: 8),
-      DesktopE2eCase.messageAgent => const Duration(minutes: 16),
+      DesktopE2eCase.personalAgent => const Duration(minutes: 16),
       DesktopE2eCase.performance => const Duration(minutes: 12),
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
@@ -3308,7 +3310,7 @@ enum DesktopE2eCase {
 
   String get scenario {
     return switch (this) {
-      DesktopE2eCase.messageAgent => _messageAgentScenario,
+      DesktopE2eCase.personalAgent => _personalAgentScenario,
       DesktopE2eCase.codexAgent => _codexAgentScenario,
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
@@ -3318,7 +3320,7 @@ enum DesktopE2eCase {
 
   String get runConfigPath {
     return switch (this) {
-      DesktopE2eCase.messageAgent => _messageAgentRunConfigPath,
+      DesktopE2eCase.personalAgent => _personalAgentRunConfigPath,
       DesktopE2eCase.codexAgent => _codexAgentRunConfigPath,
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
@@ -3364,11 +3366,13 @@ enum DesktopE2eCase {
       'display_name_fallback' ||
       'handle-fallback' ||
       'handle_fallback' => DesktopE2eCase.displayNameFallback,
+      'personal-agent' ||
+      'personal_agent' ||
       'message-agent' ||
       'message_agent' ||
       'msgagent' ||
       'im-agent' ||
-      'im_agent' => DesktopE2eCase.messageAgent,
+      'im_agent' => DesktopE2eCase.personalAgent,
       'codex-agent' ||
       'codex_agent' ||
       'codexagent' ||
@@ -3385,7 +3389,7 @@ enum DesktopE2eCase {
         'Unsupported E2E case "$value". '
         'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
         'display-name-fallback, '
-        'message-agent, codex-agent, or claude-code-agent.',
+        'personal-agent, codex-agent, or claude-code-agent.',
       ),
     };
   }

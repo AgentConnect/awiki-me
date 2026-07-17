@@ -176,13 +176,13 @@ void main() {
       'error',
     ]) {
       final payload =
-          '{"schema":"awiki.message.sync.v1","kind":"$kind","message_id":"msg_1","runtime_provider":"hermes","runtime_profile":"message_agent"}';
+          '{"schema":"awiki.message.sync.v1","kind":"$kind","message_id":"msg_1","runtime_provider":"hermes","runtime_profile":"personal_agent"}';
       final sync = AgentControlPayloads.decodeMessageSync(payload);
 
       expect(sync, isNotNull, reason: kind);
       expect(sync!.payload['kind'], kind);
       expect(sync.payload['runtime_provider'], 'hermes');
-      expect(sync.payload['runtime_profile'], 'message_agent');
+      expect(sync.payload['runtime_profile'], 'personal_agent');
       expect(AgentControlPayloads.isControl(payload), isTrue);
     }
   });

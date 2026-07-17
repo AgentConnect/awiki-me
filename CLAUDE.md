@@ -25,7 +25,7 @@
 | `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、schema-v2 case/assertion attestation、首失败脱敏诊断、configs、Flutter implementations、真实远端 `awiki.info` App+CLI/backend/device flows与资源台账 |
 | `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
 | `scripts/` | packaging/build helper与显式developer/release gate；cleanup默认dry-run，不进入production startup |
-| `docs/` | 产品、架构、测试、Message Agent、SecretVault、性能和计划文档 |
+| `docs/` | 产品、架构、测试、Personal Agent、SecretVault、性能和计划文档 |
 | `android/`, `ios/`, `macos/`, `web/` | 平台 runners |
 
 ## 权威入口
@@ -39,7 +39,7 @@
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
 - [docs/pre-release-storage-cleanup.md](docs/pre-release-storage-cleanup.md)：首发前旧 namespace 目录/Keychain inventory、dry-run、archive 与显式删除 runbook。
-- [docs/message-agent/message-agent-design.md](docs/message-agent/message-agent-design.md)：Message Agent 产品与 daemon binding。
+- [docs/personal-agent/personal-agent-design.md](docs/personal-agent/personal-agent-design.md)：Personal Agent 产品与 daemon binding。
 - [../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md](../awiki-cli-rs2/docs/flutter-sdk/awiki-im-core-flutter-sdk.md)：Dart/Flutter SDK 权威。
 
 ## 验证
@@ -52,6 +52,6 @@ dart run tool/validate_test_catalog.dart
 dart run tests/e2e/runner.dart --case smoke
 ```
 
-真实 backend/CLI peer/Message Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
+真实 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

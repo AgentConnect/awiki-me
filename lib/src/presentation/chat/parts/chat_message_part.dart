@@ -144,8 +144,8 @@ class _AgentProcessingIndicator extends StatelessWidget {
   }
 }
 
-class _MessageAgentProcessingStatus extends StatelessWidget {
-  const _MessageAgentProcessingStatus({
+class _PersonalAgentProcessingStatus extends StatelessWidget {
+  const _PersonalAgentProcessingStatus({
     required this.label,
     required this.overdue,
     required this.macStyle,
@@ -370,31 +370,31 @@ class _GroupSystemEventNotice extends ConsumerWidget {
   }
 }
 
-sealed class _MessageAgentTimelineItem {
-  const _MessageAgentTimelineItem();
+sealed class _PersonalAgentTimelineItem {
+  const _PersonalAgentTimelineItem();
 }
 
-class _MessageAgentSyncTimelineItem extends _MessageAgentTimelineItem {
-  const _MessageAgentSyncTimelineItem(this.record);
+class _PersonalAgentSyncTimelineItem extends _PersonalAgentTimelineItem {
+  const _PersonalAgentSyncTimelineItem(this.record);
 
-  final MessageAgentSyncRecord record;
+  final PersonalAgentSyncRecord record;
 }
 
-class _MessageAgentActionTimelineItem extends _MessageAgentTimelineItem {
-  const _MessageAgentActionTimelineItem(this.record);
+class _PersonalAgentActionTimelineItem extends _PersonalAgentTimelineItem {
+  const _PersonalAgentActionTimelineItem(this.record);
 
   final AppActionRecord record;
 }
 
-class _MessageAgentRecoveryCard extends StatelessWidget {
-  const _MessageAgentRecoveryCard({
+class _PersonalAgentRecoveryCard extends StatelessWidget {
+  const _PersonalAgentRecoveryCard({
     required this.item,
     required this.macStyle,
     this.onConfirm,
     this.onReject,
   });
 
-  final _MessageAgentTimelineItem item;
+  final _PersonalAgentTimelineItem item;
   final bool macStyle;
   final Future<void> Function()? onConfirm;
   final Future<void> Function()? onReject;
@@ -404,13 +404,13 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final content = switch (item) {
-      _MessageAgentSyncTimelineItem(:final record) =>
-        _MessageAgentCardContent.sync(record, context.l10n),
-      _MessageAgentActionTimelineItem(:final record) =>
-        _MessageAgentCardContent.action(record, context.l10n),
+      _PersonalAgentSyncTimelineItem(:final record) =>
+        _PersonalAgentCardContent.sync(record, context.l10n),
+      _PersonalAgentActionTimelineItem(:final record) =>
+        _PersonalAgentCardContent.action(record, context.l10n),
     };
-    final isAttention = content.tone == _MessageAgentCardTone.attention;
-    final isDanger = content.tone == _MessageAgentCardTone.danger;
+    final isAttention = content.tone == _PersonalAgentCardTone.attention;
+    final isDanger = content.tone == _PersonalAgentCardTone.danger;
     final accent = isDanger
         ? theme.danger
         : isAttention
@@ -441,7 +441,7 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: width),
           child: Container(
-            key: Key('message-agent-card:${content.keySuffix}'),
+            key: Key('personal-agent-card:${content.keySuffix}'),
             padding: EdgeInsets.symmetric(
               horizontal: macStyle
                   ? responsive.displayScaled(12)
@@ -565,28 +565,28 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
                         ? responsive.displayScaled(8)
                         : responsive.spacing(8),
                     children: <Widget>[
-                      _MessageAgentActionButton(
+                      _PersonalAgentActionButton(
                         key: Key(
-                          'message-agent-action-confirm:${content.keySuffix}',
+                          'personal-agent-action-confirm:${content.keySuffix}',
                         ),
                         label: content.confirmLabel,
                         icon: CupertinoIcons.check_mark_circled,
                         accent: theme.primary,
                         macStyle: macStyle,
                         semanticsIdentifier:
-                            'message-agent-action-confirm:${content.keySuffix}',
+                            'personal-agent-action-confirm:${content.keySuffix}',
                         onTap: onConfirm,
                       ),
-                      _MessageAgentActionButton(
+                      _PersonalAgentActionButton(
                         key: Key(
-                          'message-agent-action-reject:${content.keySuffix}',
+                          'personal-agent-action-reject:${content.keySuffix}',
                         ),
                         label: content.rejectLabel,
                         icon: CupertinoIcons.xmark_circle,
                         accent: theme.secondaryText,
                         macStyle: macStyle,
                         semanticsIdentifier:
-                            'message-agent-action-reject:${content.keySuffix}',
+                            'personal-agent-action-reject:${content.keySuffix}',
                         onTap: onReject,
                       ),
                     ],
@@ -601,8 +601,8 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
   }
 }
 
-class _MessageAgentActionButton extends StatelessWidget {
-  const _MessageAgentActionButton({
+class _PersonalAgentActionButton extends StatelessWidget {
+  const _PersonalAgentActionButton({
     super.key,
     required this.label,
     required this.icon,
@@ -687,16 +687,16 @@ class _MessageAgentActionButton extends StatelessWidget {
   }
 }
 
-enum _MessageAgentCardTone { neutral, attention, danger }
+enum _PersonalAgentCardTone { neutral, attention, danger }
 
-class _MessageAgentCardContent {
-  const _MessageAgentCardContent({
+class _PersonalAgentCardContent {
+  const _PersonalAgentCardContent({
     required this.keySuffix,
     required this.title,
     required this.icon,
     this.detail,
     this.preview,
-    this.tone = _MessageAgentCardTone.neutral,
+    this.tone = _PersonalAgentCardTone.neutral,
     required this.confirmLabel,
     required this.rejectLabel,
     this.hasActions = false,
@@ -707,47 +707,47 @@ class _MessageAgentCardContent {
   final IconData icon;
   final String? detail;
   final String? preview;
-  final _MessageAgentCardTone tone;
+  final _PersonalAgentCardTone tone;
   final String confirmLabel;
   final String rejectLabel;
   final bool hasActions;
 
-  factory _MessageAgentCardContent.sync(
-    MessageAgentSyncRecord record,
+  factory _PersonalAgentCardContent.sync(
+    PersonalAgentSyncRecord record,
     AppLocalizations l10n,
   ) {
     final key = record.identityKey;
     if (record.isUnsupported) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: key,
-        title: l10n.messageAgentSkipped,
+        title: l10n.personalAgentSkipped,
         icon: CupertinoIcons.exclamationmark_triangle,
-        detail: _messageAgentOptionalDetail(record.unsupportedReason),
-        tone: _MessageAgentCardTone.attention,
+        detail: _personalAgentOptionalDetail(record.unsupportedReason),
+        tone: _PersonalAgentCardTone.attention,
         confirmLabel: l10n.commonConfirm,
         rejectLabel: l10n.commonReject,
       );
     }
     if (record.isFailed) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: key,
-        title: l10n.messageAgentFailed,
+        title: l10n.personalAgentFailed,
         icon: CupertinoIcons.exclamationmark_circle,
         detail:
-            _messageAgentOptionalDetail(record.lastErrorSummary) ??
-            _messageAgentOptionalDetail(record.lastErrorCode),
-        tone: _MessageAgentCardTone.danger,
+            _personalAgentOptionalDetail(record.lastErrorSummary) ??
+            _personalAgentOptionalDetail(record.lastErrorCode),
+        tone: _PersonalAgentCardTone.danger,
         confirmLabel: l10n.commonConfirm,
         rejectLabel: l10n.commonReject,
       );
     }
     if (record.isRuntimeFinal) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: key,
-        title: l10n.messageAgentCompleted,
+        title: l10n.personalAgentCompleted,
         icon: CupertinoIcons.check_mark_circled,
-        detail: record.hasText ? l10n.messageAgentResultGenerated : null,
-        preview: _messageAgentOptionalDetail(
+        detail: record.hasText ? l10n.personalAgentResultGenerated : null,
+        preview: _personalAgentOptionalDetail(
           record.summaryText ?? record.draftText,
         ),
         confirmLabel: l10n.commonConfirm,
@@ -755,37 +755,37 @@ class _MessageAgentCardContent {
       );
     }
     if (record.isRuntimeStatus) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: key,
-        title: l10n.messageAgentProcessing,
+        title: l10n.personalAgentProcessing,
         icon: CupertinoIcons.clock,
-        detail: _messageAgentOptionalDetail(record.state),
+        detail: _personalAgentOptionalDetail(record.state),
         confirmLabel: l10n.commonConfirm,
         rejectLabel: l10n.commonReject,
       );
     }
-    return _MessageAgentCardContent(
+    return _PersonalAgentCardContent(
       keySuffix: key,
-      title: l10n.messageAgentReceived,
+      title: l10n.personalAgentReceived,
       icon: CupertinoIcons.bolt_horizontal_circle,
-      detail: _messageAgentOptionalDetail(record.processingStatus),
+      detail: _personalAgentOptionalDetail(record.processingStatus),
       confirmLabel: l10n.commonConfirm,
       rejectLabel: l10n.commonReject,
     );
   }
 
-  factory _MessageAgentCardContent.action(
+  factory _PersonalAgentCardContent.action(
     AppActionRecord record,
     AppLocalizations l10n,
   ) {
     final request = record.request;
     final draft = _draftPreviewForAppActionRecord(record);
     if (record.state == appActionStateSucceeded) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: record.actionId,
         title: record.action == 'message.create_draft'
-            ? l10n.messageAgentDraftApplied
-            : l10n.messageAgentAppActionCompleted,
+            ? l10n.personalAgentDraftApplied
+            : l10n.personalAgentAppActionCompleted,
         icon: CupertinoIcons.check_mark_circled,
         preview: draft,
         confirmLabel: l10n.commonConfirm,
@@ -793,40 +793,40 @@ class _MessageAgentCardContent {
       );
     }
     if (record.state == appActionStateRejected) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: record.actionId,
-        title: l10n.messageAgentRequestRejected,
+        title: l10n.personalAgentRequestRejected,
         icon: CupertinoIcons.xmark_circle,
-        tone: _MessageAgentCardTone.attention,
+        tone: _PersonalAgentCardTone.attention,
         confirmLabel: l10n.commonConfirm,
         rejectLabel: l10n.commonReject,
       );
     }
     if (record.state == appActionStateFailed) {
-      return _MessageAgentCardContent(
+      return _PersonalAgentCardContent(
         keySuffix: record.actionId,
-        title: l10n.messageAgentAppActionFailed,
+        title: l10n.personalAgentAppActionFailed,
         icon: CupertinoIcons.exclamationmark_circle,
         detail:
-            _messageAgentOptionalDetail(record.result?.errorSummary) ??
-            _messageAgentOptionalDetail(record.result?.errorCode),
+            _personalAgentOptionalDetail(record.result?.errorSummary) ??
+            _personalAgentOptionalDetail(record.result?.errorCode),
         preview: draft,
-        tone: _MessageAgentCardTone.danger,
+        tone: _PersonalAgentCardTone.danger,
         confirmLabel: l10n.commonConfirm,
         rejectLabel: l10n.commonReject,
       );
     }
-    return _MessageAgentCardContent(
+    return _PersonalAgentCardContent(
       keySuffix: record.actionId,
       title: _appActionTitle(record.action, l10n),
       icon: CupertinoIcons.square_pencil,
       detail: request?.needsUserConfirmation == true
-          ? l10n.messageAgentWaitingConfirmation
+          ? l10n.personalAgentWaitingConfirmation
           : null,
       preview: draft,
       hasActions: true,
       confirmLabel: record.action == 'message.create_draft'
-          ? l10n.messageAgentUseDraft
+          ? l10n.personalAgentUseDraft
           : l10n.commonConfirm,
       rejectLabel: l10n.commonReject,
     );
@@ -835,12 +835,12 @@ class _MessageAgentCardContent {
 
 String _appActionTitle(String action, AppLocalizations l10n) {
   return switch (action) {
-    'message.create_draft' => l10n.messageAgentActionCreateDraft,
-    'message.summarize_plain' => l10n.messageAgentActionSummarize,
-    'contact.read' => l10n.messageAgentActionReadContact,
-    'contact.update_display_name' => l10n.messageAgentActionUpdateDisplayName,
-    'contact.update_note' => l10n.messageAgentActionUpdateNote,
-    _ => l10n.messageAgentActionGeneric,
+    'message.create_draft' => l10n.personalAgentActionCreateDraft,
+    'message.summarize_plain' => l10n.personalAgentActionSummarize,
+    'contact.read' => l10n.personalAgentActionReadContact,
+    'contact.update_display_name' => l10n.personalAgentActionUpdateDisplayName,
+    'contact.update_note' => l10n.personalAgentActionUpdateNote,
+    _ => l10n.personalAgentActionGeneric,
   };
 }
 
@@ -863,7 +863,7 @@ String? _draftPreviewForAppActionRecord(AppActionRecord record) {
       (message is Map ? value(message['text']) : null);
 }
 
-String? _messageAgentOptionalDetail(String? value) {
+String? _personalAgentOptionalDetail(String? value) {
   final trimmed = value?.trim();
   return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }

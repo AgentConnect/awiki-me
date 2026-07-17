@@ -1,9 +1,9 @@
-class MessageAgentBinding {
-  const MessageAgentBinding({
+class PersonalAgentBinding {
+  const PersonalAgentBinding({
     required this.id,
     required this.userDid,
     required this.daemonAgentDid,
-    required this.messageAgentDid,
+    required this.personalAgentDid,
     required this.runtimeProvider,
     required this.runtimeProfile,
     required this.delegatedKeyVerificationMethod,
@@ -13,7 +13,7 @@ class MessageAgentBinding {
   final String id;
   final String userDid;
   final String daemonAgentDid;
-  final String messageAgentDid;
+  final String personalAgentDid;
   final String runtimeProvider;
   final Map<String, Object?> runtimeProfile;
   final String delegatedKeyVerificationMethod;
@@ -21,12 +21,15 @@ class MessageAgentBinding {
 
   bool get isActive => status.trim().toLowerCase() == 'active';
 
-  factory MessageAgentBinding.fromJson(Map<String, Object?> json) {
-    return MessageAgentBinding(
+  factory PersonalAgentBinding.fromJson(Map<String, Object?> json) {
+    return PersonalAgentBinding(
       id: json['id']?.toString() ?? '',
       userDid: json['user_did']?.toString() ?? '',
       daemonAgentDid: json['daemon_agent_did']?.toString() ?? '',
-      messageAgentDid: json['message_agent_did']?.toString() ?? '',
+      personalAgentDid:
+          json['personal_agent_did']?.toString() ??
+          json['message_agent_did']?.toString() ??
+          '',
       runtimeProvider: json['runtime_provider']?.toString() ?? '',
       runtimeProfile: _readMap(json['runtime_profile']),
       delegatedKeyVerificationMethod:
@@ -40,7 +43,7 @@ class MessageAgentBinding {
       'id': id,
       'user_did': userDid,
       'daemon_agent_did': daemonAgentDid,
-      'message_agent_did': messageAgentDid,
+      'personal_agent_did': personalAgentDid,
       'runtime_provider': runtimeProvider,
       'runtime_profile': runtimeProfile,
       'delegated_key_verification_method': delegatedKeyVerificationMethod,

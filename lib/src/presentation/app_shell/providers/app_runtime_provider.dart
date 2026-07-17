@@ -481,7 +481,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .applyAgentRunStatusPayload(controlPayload);
       ref
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(controlPayload);
+          .applyPersonalAgentControlPayload(controlPayload);
       _runtimeTrace(
         'realtime.control_applied',
         fields: <String, Object?>{

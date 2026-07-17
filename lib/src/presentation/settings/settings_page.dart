@@ -29,7 +29,7 @@ class SettingsPage extends ConsumerWidget {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
-    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
+    final personalAgentEnabled = ref.watch(agentImEnabledProvider);
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
@@ -100,19 +100,19 @@ class SettingsPage extends ConsumerWidget {
               padding: EdgeInsets.zero,
               child: Column(
                 children: <Widget>[
-                  if (messageAgentEnabled)
+                  if (personalAgentEnabled)
                     AppListTile(
-                      title: 'Message Agent',
-                      subtitle: '配置消息处理 Agent：启用、暂停和撤销 Daemon 消息授权',
+                      title: l10n.personalAgentTitle,
+                      subtitle: l10n.personalAgentSettingsSubtitle,
                       onTap: () => AppNavigator.push<void>(
                         context,
-                        (_) => const MessageAgentSettingsPage(),
+                        (_) => const PersonalAgentSettingsPage(),
                       ),
                     )
                   else
-                    const AppListTile(
-                      title: '实验功能未开启',
-                      subtitle: 'Message Agent 已关闭，不会发送 bootstrap 或授权请求',
+                    AppListTile(
+                      title: l10n.personalAgentExperimentDisabled,
+                      subtitle: l10n.personalAgentSettingsDisabledSubtitle,
                     ),
                 ],
               ),

@@ -1332,59 +1332,59 @@ Future<void> _confirmDeleteAgent(
   }
 }
 
-Future<void> _confirmPauseMessageAgent(
+Future<void> _confirmPausePersonalAgent(
   BuildContext context,
   WidgetRef ref,
   AgentSummary daemon,
 ) async {
   final confirmed = await _confirm(
     context,
-    title: context.l10n.messageAgentPauseTitle,
-    message: context.l10n.messageAgentPauseMessage,
+    title: context.l10n.personalAgentPauseTitle,
+    message: context.l10n.personalAgentPauseMessage,
     actionLabel: context.l10n.commonPause,
   );
   if (confirmed) {
     await ref
         .read(agentsProvider.notifier)
-        .pauseMessageAgentForDaemon(daemon.agentDid);
+        .pausePersonalAgentForDaemon(daemon.agentDid);
   }
 }
 
-Future<void> _confirmDeleteMessageAgent(
+Future<void> _confirmDeletePersonalAgent(
   BuildContext context,
   WidgetRef ref,
   AgentSummary daemon,
 ) async {
   final confirmed = await _confirm(
     context,
-    title: context.l10n.messageAgentDeleteTitle,
-    message: context.l10n.messageAgentDeleteMessage,
+    title: context.l10n.personalAgentDeleteTitle,
+    message: context.l10n.personalAgentDeleteMessage,
     actionLabel: context.l10n.commonDelete,
     destructive: true,
   );
   if (confirmed) {
     await ref
         .read(agentsProvider.notifier)
-        .deleteMessageAgentForDaemon(daemon.agentDid);
+        .deletePersonalAgentForDaemon(daemon.agentDid);
   }
 }
 
-Future<void> _confirmRevokeMessageAgentAuthorization(
+Future<void> _confirmRevokePersonalAgentAuthorization(
   BuildContext context,
   WidgetRef ref,
   AgentSummary daemon,
 ) async {
   final confirmed = await _confirm(
     context,
-    title: context.l10n.messageAgentRevokeTitle,
-    message: context.l10n.messageAgentRevokeMessage,
+    title: context.l10n.personalAgentRevokeTitle,
+    message: context.l10n.personalAgentRevokeMessage,
     actionLabel: context.l10n.commonRevoke,
     destructive: true,
   );
   if (confirmed) {
     await ref
         .read(agentsProvider.notifier)
-        .revokeMessageAgentAuthorizationForDaemon(daemon.agentDid);
+        .revokePersonalAgentAuthorizationForDaemon(daemon.agentDid);
   }
 }
 

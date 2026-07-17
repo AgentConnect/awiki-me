@@ -1707,7 +1707,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。';
 
   @override
-  String get agentErrorMessageAgentDisabled => '消息处理 Agent 功能未开启。';
+  String get agentErrorPersonalAgentDisabled => '个人助理功能未开启。';
 
   @override
   String get agentTenantUnsupportedTitle => '当前租户暂不支持智能体';
@@ -1734,7 +1734,7 @@ class AppLocalizationsZh extends AppLocalizations {
       'Daemon 当前不可达，暂时不能升级。请先刷新状态或重新安装。';
 
   @override
-  String get agentErrorMessageAgentMissing => '当前 Daemon 尚未创建消息处理 Agent。';
+  String get agentErrorPersonalAgentMissing => '当前 Daemon 尚未创建个人助理。';
 
   @override
   String get agentStatusSyncStillWaiting => '状态同步仍在等待，请稍后刷新查看。';
@@ -1903,146 +1903,271 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentDiagnosticActiveSessionCount => '活跃会话';
 
   @override
-  String get messageAgentSkipped => '消息 Agent 跳过此消息';
+  String get personalAgentSkipped => '个人助理跳过此消息';
 
   @override
-  String get messageAgentFailed => '消息 Agent 处理失败';
+  String get personalAgentFailed => '个人助理处理失败';
 
   @override
-  String get messageAgentCompleted => '消息 Agent 已完成处理';
+  String get personalAgentCompleted => '个人助理已完成处理';
 
   @override
-  String get messageAgentProcessing => '消息 Agent 正在处理';
+  String get personalAgentProcessing => '个人助理正在处理';
 
   @override
-  String get messageAgentReceived => '消息 Agent 已收到消息';
+  String get personalAgentReceived => '个人助理已收到消息';
 
   @override
-  String get messageAgentResultGenerated => '已生成处理结果';
+  String get personalAgentResultGenerated => '已生成处理结果';
 
   @override
-  String get messageAgentDraftApplied => '草稿已放入输入框';
+  String get personalAgentDraftApplied => '草稿已放入输入框';
 
   @override
-  String get messageAgentAppActionCompleted => 'App action 已完成';
+  String get personalAgentAppActionCompleted => 'App action 已完成';
 
   @override
-  String get messageAgentRequestRejected => '已拒绝消息 Agent 请求';
+  String get personalAgentRequestRejected => '已拒绝个人助理请求';
 
   @override
-  String get messageAgentAppActionFailed => 'App action 处理失败';
+  String get personalAgentAppActionFailed => 'App action 处理失败';
 
   @override
-  String get messageAgentWaitingConfirmation => '等待确认';
+  String get personalAgentWaitingConfirmation => '等待确认';
 
   @override
-  String get messageAgentUseDraft => '使用草稿';
+  String get personalAgentUseDraft => '使用草稿';
 
   @override
-  String get messageAgentActionCreateDraft => '消息 Agent 生成了草稿';
+  String get personalAgentActionCreateDraft => '个人助理生成了草稿';
 
   @override
-  String get messageAgentActionSummarize => '消息 Agent 生成了摘要';
+  String get personalAgentActionSummarize => '个人助理生成了摘要';
 
   @override
-  String get messageAgentActionReadContact => '消息 Agent 请求读取联系人';
+  String get personalAgentActionReadContact => '个人助理请求读取联系人';
 
   @override
-  String get messageAgentActionUpdateDisplayName => '消息 Agent 请求修改联系人名称';
+  String get personalAgentActionUpdateDisplayName => '个人助理请求修改联系人名称';
 
   @override
-  String get messageAgentActionUpdateNote => '消息 Agent 请求修改联系人备注';
+  String get personalAgentActionUpdateNote => '个人助理请求修改联系人备注';
 
   @override
-  String get messageAgentActionGeneric => '消息 Agent 请求 App action';
+  String get personalAgentActionGeneric => '个人助理请求 App action';
 
   @override
-  String get messageAgentTitle => '消息处理 Agent';
+  String get personalAgentTitle => '个人助理';
 
   @override
-  String messageAgentRuntimeSubtitle(Object provider) {
+  String personalAgentRuntimeSubtitle(Object provider) {
     return '运行 Daemon 内创建 $provider runtime';
   }
 
   @override
-  String get messageAgentExperimentDisabled => '实验功能关闭';
+  String get personalAgentExperimentDisabled => '实验功能关闭';
 
   @override
-  String get messageAgentReadyToEnable => '可启用';
+  String get personalAgentReadyToEnable => '可启用';
 
   @override
-  String get messageAgentNotReady => '未就绪';
+  String get personalAgentNotReady => '未就绪';
 
   @override
-  String get messageAgentRunningDaemon => '运行 Daemon';
+  String get personalAgentRunningDaemon => '运行 Daemon';
 
   @override
-  String get messageAgentEngine => '引擎';
+  String get personalAgentEngine => '引擎';
 
   @override
-  String get messageAgentScope => '处理范围';
+  String get personalAgentScope => '处理范围';
 
   @override
-  String get messageAgentAllProcessableConversations => '所有可处理会话';
+  String get personalAgentAllProcessableConversations => '所有可处理会话';
 
   @override
-  String get messageAgentDaemonVersion => 'Daemon 版本';
+  String get personalAgentDaemonVersion => 'Daemon 版本';
 
   @override
-  String get messageAgentCapabilities => '可用能力';
+  String get personalAgentCapabilities => '可用能力';
 
   @override
-  String get messageAgentSecureBootstrap => '安全 bootstrap';
+  String get personalAgentSecureBootstrap => '安全 bootstrap';
 
   @override
-  String get messageAgentPublicKeyReported => '已上报公钥';
+  String get personalAgentPublicKeyReported => '已上报公钥';
 
   @override
-  String get messageAgentWaitingStatusRefresh => '等待刷新状态';
+  String get personalAgentWaitingStatusRefresh => '等待刷新状态';
 
   @override
-  String get messageAgentEnable => '启用消息处理 Agent';
+  String get personalAgentEnable => '启用个人助理';
 
   @override
-  String get messageAgentEnabling => '启用中';
+  String get personalAgentEnabling => '启用中';
 
   @override
-  String get messageAgentPause => '暂停处理消息';
+  String get personalAgentPause => '暂停处理消息';
 
   @override
-  String get messageAgentDelete => '删除消息处理 Agent';
+  String get personalAgentDelete => '删除个人助理';
 
   @override
-  String get messageAgentRevokeAuthorization => '撤销 Daemon 消息授权';
+  String get personalAgentRevokeAuthorization => '撤销 Daemon 消息授权';
 
   @override
-  String get messageAgentPermissionSummaryEnabled =>
-      '权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。';
+  String get personalAgentPermissionSummaryEnabled =>
+      '权限摘要：读取普通消息，分析、总结并生成草稿；不会自动发送消息，也不处理 E2EE 明文。';
 
   @override
-  String get messageAgentPermissionSummaryDisabled =>
-      '切换到已批准 AWiki 域名的租户后可配置消息处理 Agent。';
+  String get personalAgentPermissionSummaryDisabled =>
+      '切换到已批准 AWiki 域名的租户后可配置个人助理。';
 
   @override
-  String get messageAgentPauseTitle => '暂停处理消息';
+  String get personalAgentPauseTitle => '暂停处理消息';
 
   @override
-  String get messageAgentPauseMessage =>
-      '暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。';
+  String get personalAgentPauseMessage =>
+      '暂停后，个人助理不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。';
 
   @override
-  String get messageAgentDeleteTitle => '删除消息处理 Agent';
+  String get personalAgentDeleteTitle => '删除个人助理';
 
   @override
-  String get messageAgentDeleteMessage =>
+  String get personalAgentDeleteMessage =>
       '删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。';
 
   @override
-  String get messageAgentRevokeTitle => '撤销 Daemon 消息授权';
+  String get personalAgentRevokeTitle => '撤销 Daemon 消息授权';
 
   @override
-  String get messageAgentRevokeMessage =>
+  String get personalAgentRevokeMessage =>
       '撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。';
+
+  @override
+  String get personalAgentSettingsSubtitle => '配置个人助理的启用、暂停和 Daemon 消息授权。';
+
+  @override
+  String get personalAgentSettingsDisabledSubtitle =>
+      '个人助理已关闭，不会发送 bootstrap 或授权请求。';
+
+  @override
+  String get personalAgentNoDaemonSelected => '未选择运行 Daemon';
+
+  @override
+  String personalAgentSelectedDaemon(Object name) {
+    return '当前运行 Daemon：$name';
+  }
+
+  @override
+  String get personalAgentDescription =>
+      '读取普通 direct text，为你整理并生成草稿；发送前必须由你确认。';
+
+  @override
+  String get personalAgentDisabledDescription =>
+      '实验功能未开启，当前不会发送 bootstrap 或授权请求。';
+
+  @override
+  String get personalAgentDaemonStatus => 'Daemon 状态';
+
+  @override
+  String get personalAgentAuthorizationStatus => '授权状态';
+
+  @override
+  String get personalAgentDirectTextScope => '普通 direct text';
+
+  @override
+  String get personalAgentNotSelected => '未选择';
+
+  @override
+  String get personalAgentNoDaemon => '无可用 Daemon';
+
+  @override
+  String get personalAgentNotBound => '尚未绑定';
+
+  @override
+  String personalAgentBound(Object name) {
+    return '已绑定 $name';
+  }
+
+  @override
+  String get personalAgentRefreshDaemonStatus => '刷新 Daemon 状态';
+
+  @override
+  String get personalAgentSelectDaemon => '选择运行 Daemon';
+
+  @override
+  String get personalAgentRunsOnSelectedDaemon => '个人助理会运行在你选择的 Daemon 内。';
+
+  @override
+  String get personalAgentNoDaemons => '暂无可用 Daemon，请先在智能体页创建或安装 Daemon。';
+
+  @override
+  String personalAgentSelectDaemonSemantic(Object name) {
+    return '选择 $name';
+  }
+
+  @override
+  String get personalAgentReadyWithPublicKey => 'Ready · 已上报公钥';
+
+  @override
+  String get personalAgentReadyWaitingPublicKey => 'Ready · 等待 bootstrap 公钥';
+
+  @override
+  String personalAgentDaemonNeedsAttention(Object status) {
+    return '$status · 需刷新或检查 Daemon';
+  }
+
+  @override
+  String get personalAgentFeatureDisabledNotice =>
+      'AWIKI_AGENT_IM_ENABLED=false，入口只显示状态，不会发送 bootstrap、binding 或身份授权请求。';
+
+  @override
+  String get personalAgentNoDaemonNotice => '没有可用 Daemon。请先安装并启动 Daemon。';
+
+  @override
+  String get personalAgentDaemonNotReadyNotice =>
+      '当前 Daemon 未 ready，请刷新状态或检查 Daemon 运行情况。';
+
+  @override
+  String get personalAgentBootstrapKeyMissingNotice =>
+      '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新 Daemon 状态。';
+
+  @override
+  String get personalAgentCanEnableNotice => '可以启用个人助理。';
+
+  @override
+  String get personalAgentSafetyTitle => '安全边界';
+
+  @override
+  String get personalAgentSafetyPlainText =>
+      '只读取可处理的普通 direct text；不处理 E2EE 明文（Direct / Group）。';
+
+  @override
+  String get personalAgentSafetyDraftOnly => '只生成草稿和需要确认的 action；不会自动发送消息。';
+
+  @override
+  String get personalAgentSafetyNoPrimaryKey =>
+      'runtime 不持有 DID 主私钥，不直连 message-service。';
+
+  @override
+  String get personalAgentSafetyFeatureDisabled =>
+      '实验功能关闭时不会触发授权、bootstrap 或 delegated key 操作。';
+
+  @override
+  String get personalAgentBusy => '处理中';
+
+  @override
+  String get personalAgentDaemonNotReady => 'Daemon 未就绪';
+
+  @override
+  String get personalAgentEnabledState => '已启用';
+
+  @override
+  String get personalAgentCreated => '已创建个人助理';
+
+  @override
+  String get personalAgentConfigure => '配置个人助理';
 
   @override
   String get agentInboxTitle => 'Agent 收件箱';

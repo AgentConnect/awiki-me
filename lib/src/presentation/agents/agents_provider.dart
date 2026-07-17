@@ -16,7 +16,7 @@ import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
-import '../../domain/entities/agent/message_agent_runtime_provider.dart';
+import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
 import 'agent_display_name.dart';
@@ -34,8 +34,8 @@ const agentLocalCacheReadTimeout = Duration(milliseconds: 1200);
 const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
 const agentStatusRequestSendTimeout = Duration(seconds: 8);
 const agentActionTimeout = Duration(seconds: 15);
-const agentMessageAgentBootstrapActionTimeout = Duration(seconds: 105);
-const agentMessageAgentRevokeActionTimeout = Duration(seconds: 75);
+const agentPersonalAgentBootstrapActionTimeout = Duration(seconds: 105);
+const agentPersonalAgentRevokeActionTimeout = Duration(seconds: 75);
 const agentStatusQueryPollInterval = Duration(milliseconds: 700);
 const agentStatusQueryPollAttempts = 18;
 const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
@@ -50,17 +50,17 @@ final class AgentActionKeys {
 
   static String createRuntime(String daemonDid) => 'create-runtime:$daemonDid';
 
-  static String bootstrapMessageAgent(String daemonDid) =>
-      'message-agent-bootstrap:$daemonDid';
+  static String bootstrapPersonalAgent(String daemonDid) =>
+      'personal-agent-bootstrap:$daemonDid';
 
-  static String pauseMessageAgent(String daemonDid) =>
-      'message-agent-pause:$daemonDid';
+  static String pausePersonalAgent(String daemonDid) =>
+      'personal-agent-pause:$daemonDid';
 
-  static String deleteMessageAgent(String daemonDid) =>
-      'message-agent-delete:$daemonDid';
+  static String deletePersonalAgent(String daemonDid) =>
+      'personal-agent-delete:$daemonDid';
 
-  static String revokeMessageAgent(String daemonDid) =>
-      'message-agent-revoke:$daemonDid';
+  static String revokePersonalAgent(String daemonDid) =>
+      'personal-agent-revoke:$daemonDid';
 
   static String rename(String agentDid) => 'rename:$agentDid';
 
@@ -301,9 +301,9 @@ class AgentsState {
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
 
-  AgentSummary? messageAgentRuntimeFor(String daemonDid) {
+  AgentSummary? personalAgentRuntimeFor(String daemonDid) {
     for (final runtime in runtimesFor(daemonDid)) {
-      if (_isMessageAgentRuntime(runtime)) {
+      if (_isPersonalAgentRuntime(runtime)) {
         return runtime;
       }
     }
@@ -896,7 +896,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     });
   }
 
-  Future<void> bootstrapMessageAgent({
+  Future<void> bootstrapPersonalAgent({
     required String daemonDid,
     UserSubkeyPackage? userSubkeyPackage,
     String? appInstanceId,
@@ -911,7 +911,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     if (!ref.read(agentImEnabledProvider)) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentDisabled);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentDisabled);
       return;
     }
     await ensureLoaded();
@@ -930,22 +930,22 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
-    final existingMessageAgent = state.messageAgentRuntimeFor(daemonDid);
+    final existingPersonalAgent = state.personalAgentRuntimeFor(daemonDid);
     await _runAction(
-      AgentActionKeys.bootstrapMessageAgent(daemonDid),
+      AgentActionKeys.bootstrapPersonalAgent(daemonDid),
       () async {
         final subkeyPackage =
             userSubkeyPackage ??
             await ref
                 .read(identityCorePortProvider)
                 .ensureDaemonSubkeyPackage(session.credentialName);
-        if (existingMessageAgent != null) {
+        if (existingPersonalAgent != null) {
           await ref
-              .read(messageAgentBindingPortProvider)
+              .read(personalAgentBindingPortProvider)
               .ensureBinding(
                 userDid: subkeyPackage.userDid,
                 daemonAgentDid: daemonDid,
-                messageAgentDid: existingMessageAgent.agentDid,
+                personalAgentDid: existingPersonalAgent.agentDid,
                 runtimeProvider: appMessageHandlerRuntimeProvider,
                 runtimeProfile: const <String, Object?>{
                   'profile': appMessageHandlerRuntimeProfile,
@@ -957,7 +957,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
         await ref
             .read(agentControlServiceProvider)
-            .ensureMessageAgentBootstrap(
+            .ensurePersonalAgentBootstrap(
               daemonAgentDid: daemonDid,
               controllerDid: session.did,
               appInstanceId: resolvedAppInstanceId,
@@ -966,7 +966,7 @@ class AgentsController extends StateNotifier<AgentsState> {
               userHandle: session.handle,
             );
       },
-      timeout: agentMessageAgentBootstrapActionTimeout,
+      timeout: agentPersonalAgentBootstrapActionTimeout,
     );
   }
 
@@ -1369,40 +1369,40 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
   }
 
-  Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
+  Future<void> pausePersonalAgentForDaemon(String daemonDid) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
-    final target = _messageAgentTargetForDaemon(daemonDid);
+    final target = _personalAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentMissing);
       return;
     }
-    await _runAction(AgentActionKeys.pauseMessageAgent(daemonDid), () async {
+    await _runAction(AgentActionKeys.pausePersonalAgent(daemonDid), () async {
       await ref
           .read(agentControlServiceProvider)
-          .pauseMessageAgent(
+          .pausePersonalAgent(
             daemonAgentDid: daemonDid,
-            messageAgentDid: target.agentDid,
+            personalAgentDid: target.agentDid,
           );
     });
   }
 
-  Future<void> deleteMessageAgentForDaemon(String daemonDid) async {
+  Future<void> deletePersonalAgentForDaemon(String daemonDid) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
-    final target = _messageAgentTargetForDaemon(daemonDid);
+    final target = _personalAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentMissing);
       return;
     }
     if (state.isDeletingAgent(target.agentDid)) {
       return;
     }
-    final actionKey = AgentActionKeys.deleteMessageAgent(daemonDid);
+    final actionKey = AgentActionKeys.deletePersonalAgent(daemonDid);
     if (state.isActionPending(actionKey)) {
       return;
     }
@@ -1417,9 +1417,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     try {
       await ref
           .read(agentControlServiceProvider)
-          .deleteMessageAgent(
+          .deletePersonalAgent(
             daemonAgentDid: daemonDid,
-            messageAgentDid: target.agentDid,
+            personalAgentDid: target.agentDid,
           )
           .timeout(agentActionTimeout);
       if (!mounted) {
@@ -1455,29 +1455,29 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  Future<void> revokeMessageAgentAuthorizationForDaemon(
+  Future<void> revokePersonalAgentAuthorizationForDaemon(
     String daemonDid,
   ) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
-    final target = _messageAgentTargetForDaemon(daemonDid);
+    final target = _personalAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentMissing);
       return;
     }
     await _runAction(
-      AgentActionKeys.revokeMessageAgent(daemonDid),
+      AgentActionKeys.revokePersonalAgent(daemonDid),
       () async {
         await ref
             .read(agentControlServiceProvider)
-            .revokeMessageAgentAuthorization(
+            .revokePersonalAgentAuthorization(
               daemonAgentDid: daemonDid,
-              messageAgentDid: target.agentDid,
+              personalAgentDid: target.agentDid,
             );
       },
-      timeout: agentMessageAgentRevokeActionTimeout,
+      timeout: agentPersonalAgentRevokeActionTimeout,
     );
   }
 
@@ -2573,7 +2573,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     return null;
   }
 
-  AgentSummary? _messageAgentTargetForDaemon(String daemonDid) {
+  AgentSummary? _personalAgentTargetForDaemon(String daemonDid) {
     final daemon = _agentByDid(daemonDid);
     if (daemon == null ||
         !daemon.isDaemon ||
@@ -2581,7 +2581,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         !_daemonAcceptsControlCommands(daemon)) {
       return null;
     }
-    return state.messageAgentRuntimeFor(daemonDid);
+    return state.personalAgentRuntimeFor(daemonDid);
   }
 
   DaemonBootstrapPublicKey? _daemonBootstrapPublicKey(AgentSummary daemon) {
@@ -3177,18 +3177,20 @@ bool _canUnbindUnfinishedDaemonInstall(AgentSummary agent) {
   return agent.latest.lastSeenAt == null;
 }
 
-bool _isMessageAgentRuntime(AgentSummary agent) {
+bool _isPersonalAgentRuntime(AgentSummary agent) {
   if (!agent.isRuntime) {
     return false;
   }
-  final provider = MessageAgentRuntimeProviders.byRuntime(agent.runtime);
+  final provider = PersonalAgentRuntimeProviders.byRuntime(agent.runtime);
   if (provider == null || !provider.enabled) {
     return false;
   }
   final display = agent.displayName.trim().toLowerCase();
   final handle = agent.handle?.trim() ?? '';
-  return display.contains('message agent') ||
-      display.contains('消息处理') ||
+  return display.contains('personal agent') ||
+      display.contains('个人助理') ||
+      display == legacyPersonalAgentRuntimeDisplayName.toLowerCase() ||
+      display.contains(legacyPersonalAgentChineseDisplayMarker) ||
       provider.matchesHandle(handle);
 }
 

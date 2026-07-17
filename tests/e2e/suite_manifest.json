@@ -317,7 +317,7 @@
         "PERF-E2E-012"
       ]
     },
-    "message-agent": {
+    "personal-agent": {
       "tier": "optional_provider_product_ui",
       "requiredFor": [
         "optional_nightly"
@@ -333,13 +333,13 @@
         "awiki.info"
       ],
       "resourceCategories": [
-        "message_agent_bindings",
+        "personal_agent_bindings",
         "direct_messages"
       ],
       "caseIds": [
-        "MSGAGENT-E2E-001",
-        "MSGAGENT-E2E-002",
-        "MSGAGENT-E2E-004"
+        "PERSONALAGENT-E2E-001",
+        "PERSONALAGENT-E2E-002",
+        "PERSONALAGENT-E2E-004"
       ]
     },
     "codex-agent": {
