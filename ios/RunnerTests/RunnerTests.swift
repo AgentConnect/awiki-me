@@ -4,9 +4,19 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
-  func testExample() {
-    // If you add code to the Runner application, consider adding tests here.
-    // See https://developer.apple.com/documentation/xctest for more information about using XCTest.
-  }
+  func testSceneLifecycleIsConfigured() throws {
+    let manifest = try XCTUnwrap(
+      Bundle.main.object(forInfoDictionaryKey: "UIApplicationSceneManifest") as? [String: Any]
+    )
+    let configurations = try XCTUnwrap(manifest["UISceneConfigurations"] as? [String: Any])
+    let applicationScenes = try XCTUnwrap(
+      configurations["UIWindowSceneSessionRoleApplication"] as? [[String: Any]]
+    )
+    let scene = try XCTUnwrap(applicationScenes.first)
 
+    XCTAssertEqual(scene["UISceneConfigurationName"] as? String, "flutter")
+    XCTAssertTrue(
+      (scene["UISceneDelegateClassName"] as? String)?.hasSuffix(".SceneDelegate") == true
+    )
+  }
 }

@@ -37,7 +37,7 @@ for ARM, universal, Release, or packaging output. Keep the Flutter App itself
 as a Debug incremental build.
 
 ## Coding Style & Naming Conventions
-Target Dart 3.8+ and Flutter 3.24+. Follow the repository lint rules in
+Target Dart 3.8+ and Flutter 3.41+. Follow the repository lint rules in
 `analysis_options.yaml`. Keep files and functions in `snake_case`, classes in
 `PascalCase`, constants in `lowerCamelCase` or `SCREAMING_CAPS` only when that
 matches the surrounding code. Keep widgets focused and move reusable business

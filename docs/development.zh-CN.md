@@ -4,7 +4,7 @@
 
 ## 1. 技术栈
 
-- Flutter 3.24+；
+- Flutter 3.41+；
 - Dart 3.8+；
 - Riverpod；
 - sibling `awiki_im_core` Flutter/Dart SDK；

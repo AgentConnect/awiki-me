@@ -21,6 +21,9 @@ migration:
     - platform: linux
       create_revision: 80c2e84975bbd28ecf5f8d4bd4ca5a2490bfc819
       base_revision: 80c2e84975bbd28ecf5f8d4bd4ca5a2490bfc819
+    - platform: ios
+      create_revision: ee80f08bbf97172ec030b8751ceab557177a34a6
+      base_revision: ee80f08bbf97172ec030b8751ceab557177a34a6
 
   # User provided section
 

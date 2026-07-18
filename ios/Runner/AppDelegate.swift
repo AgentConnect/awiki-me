@@ -3,7 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, UIDocumentPickerDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
   private let documentChannelName = "ai.awiki.awikime/document_picker"
   private let attachmentChannelName = "ai.awiki.awikime/attachment_picker"
   private var documentChannel: FlutterMethodChannel?
@@ -17,17 +17,21 @@ import UniformTypeIdentifiers
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    registerDocumentChannel()
-    registerAttachmentChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  private func registerDocumentChannel() {
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    let registry = engineBridge.pluginRegistry
+    GeneratedPluginRegistrant.register(with: registry)
+    registerDocumentChannel(with: registry)
+    registerAttachmentChannel(with: registry)
+  }
+
+  private func registerDocumentChannel(with registry: FlutterPluginRegistry) {
     guard documentChannel == nil else {
       return
     }
-    guard let registrar = registrar(forPlugin: documentChannelName) else {
+    guard let registrar = registry.registrar(forPlugin: documentChannelName) else {
       return
     }
     let channel = FlutterMethodChannel(
@@ -62,11 +66,11 @@ import UniformTypeIdentifiers
     documentChannel = channel
   }
 
-  private func registerAttachmentChannel() {
+  private func registerAttachmentChannel(with registry: FlutterPluginRegistry) {
     guard attachmentChannel == nil else {
       return
     }
-    guard let registrar = registrar(forPlugin: attachmentChannelName) else {
+    guard let registrar = registry.registrar(forPlugin: attachmentChannelName) else {
       return
     }
     let channel = FlutterMethodChannel(
@@ -283,7 +287,13 @@ import UniformTypeIdentifiers
   }
 
   private func presentFromTopController(_ controller: UIViewController) {
-    guard let root = window?.rootViewController else {
+    let sceneWindows = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+    let activeWindow = sceneWindows.first(where: \.isKeyWindow)
+      ?? sceneWindows.first(where: { !$0.isHidden })
+      ?? window
+    guard let root = activeWindow?.rootViewController else {
       if let saveResult = pendingSaveResult {
         pendingSaveResult = nil
         pendingSaveData = nil

@@ -26,7 +26,8 @@
 | `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
 | `scripts/` | packaging/build helper与显式developer/release gate；cleanup默认dry-run，不进入production startup |
 | `docs/` | 产品、架构、测试、Personal Agent、SecretVault、性能和计划文档 |
-| `android/`, `ios/`, `macos/`, `web/` | 平台 runners |
+| `ios/` | iOS 13+ Runner；使用 `UIScene`、CocoaPods Debug/Profile/Release 配置，并承载 App 自定义 platform channels |
+| `android/`, `macos/`, `web/` | 其他平台 runners |
 
 ## 权威入口
 

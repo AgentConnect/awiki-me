@@ -37,10 +37,10 @@ Do not link:
 
 ### 3.1 Requirements
 
-- Flutter 3.24.0 or newer
+- Flutter 3.41.0 or newer
 - Dart 3.8.0 or newer
 - A sibling `awiki-cli-rs2` checkout compatible with the current app version
-- CocoaPods for macOS development
+- CocoaPods for iOS and macOS development
 - Android SDK and a working device or emulator for Android development
 - System SQLite and desktop dependencies for Linux desktop/E2E runners; Linux is not currently a public AWiki Me product target
 
@@ -112,10 +112,22 @@ scripts/flutter/build-sdk-native.sh --ios-only
 
 cd ../awiki-me
 flutter pub get
+cd ios && pod install && cd ..
+flutter build ios --simulator --debug
+open -a Simulator
+flutter devices
+flutter run --debug -d <ios-simulator-id>
+```
+
+To use Xcode:
+
+```bash
 open ios/Runner.xcworkspace
 ```
 
-Describe iOS as a development target, not a verified public release platform. A release still requires signing, physical-device, networking, background, secure-storage, and distribution validation.
+Open `Runner.xcworkspace`, not `Runner.xcodeproj`. Simulator builds do not require Apple Developer signing. To run on a physical device, select your Team for the Runner target in Xcode and keep automatic signing enabled.
+
+Describe iOS as a development target, not a verified public release platform. The project supports iOS 13+, iPhone and iPad, the `UIScene` lifecycle, Debug/Profile/Release CocoaPods configurations, and `awiki_im_core` arm64 device plus arm64/x86_64 simulator slices. A release still requires physical-device networking, background behavior, secure-storage, and distribution validation.
 
 ### 3.6 Optional dependency mirror
 

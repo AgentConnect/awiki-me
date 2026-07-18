@@ -4,7 +4,7 @@
 
 ## 1. Technology stack
 
-- Flutter 3.24+
+- Flutter 3.41+
 - Dart 3.8+
 - Riverpod
 - Sibling `awiki_im_core` Flutter/Dart SDK
