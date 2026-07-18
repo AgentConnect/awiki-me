@@ -19,12 +19,14 @@ import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
+import '../application/ports/user_presence_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
 import '../data/services/locale_preference_service.dart';
+import '../data/services/local_auth_user_presence_port.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
@@ -187,6 +189,10 @@ final localePreferenceServiceProvider = Provider<LocalePreferenceService>(
 
 final updateServiceProvider = Provider<UpdateService>(
   (ref) => throw UnimplementedError('updateServiceProvider must be overridden'),
+);
+
+final userPresencePortProvider = Provider<UserPresencePort>(
+  (ref) => LocalAuthUserPresencePort(),
 );
 
 final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(

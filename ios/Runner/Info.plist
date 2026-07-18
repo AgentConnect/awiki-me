@@ -53,6 +53,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Allow AWiki Me to discover the local Dart VM Service during debugging for hot reload and debug connections.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to confirm security-sensitive device management actions.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
