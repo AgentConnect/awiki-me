@@ -11,11 +11,14 @@ import '../../app/e2e_semantics.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../data/tenant/app_tenant_store.dart';
+import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../devices/device_join_page.dart';
+import '../recovery/handle_recovery_panel.dart';
+import '../recovery/handle_recovery_provider.dart';
 import '../shared/app_dialog.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
@@ -44,11 +47,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final otpController = TextEditingController();
   final emailController = TextEditingController();
   final handleController = TextEditingController();
+  final recoveryOtpController = TextEditingController();
   final _mobileScrollController = ScrollController();
   ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
   ProviderSubscription<SessionState>? _sessionSubscription;
   ProviderSubscription<AppTenantProfile>? _tenantSubscription;
+  ProviderSubscription<HandleRecoveryState>? _recoverySubscription;
   Timer? _e2eOtpRetryTimer;
+  Timer? _recoveryPollTimer;
   int _e2eOtpAttempts = 0;
   bool _autoEntryModeEnabled = true;
 
@@ -60,6 +66,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.initState();
     emailController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetEmailActivationTarget);
+    phoneController.addListener(_resetPhoneOtpTarget);
+    handleController.addListener(_resetPhoneOtpTarget);
     _runtimeSubscription = ref.listenManual<AppRuntimeState>(
       appRuntimeProvider,
       (_, next) {
@@ -83,6 +91,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         );
       },
     );
+    _recoverySubscription = ref.listenManual<HandleRecoveryState>(
+      handleRecoveryProvider,
+      (_, next) => _syncRecoveryPolling(next),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -95,15 +107,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   void dispose() {
     _stopE2eOtpRequestLoop();
+    _recoveryPollTimer?.cancel();
     _runtimeSubscription?.close();
     _sessionSubscription?.close();
     _tenantSubscription?.close();
+    _recoverySubscription?.close();
     emailController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetEmailActivationTarget);
+    phoneController.removeListener(_resetPhoneOtpTarget);
+    handleController.removeListener(_resetPhoneOtpTarget);
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
     handleController.dispose();
+    recoveryOtpController.dispose();
     _mobileScrollController.dispose();
     super.dispose();
   }
@@ -137,6 +154,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
     final multiDeviceEnabled = ref.watch(multiDeviceJoinEnabledProvider);
+    final recoveryEnabled = ref.watch(handleRecoveryEnabledProvider);
+    final recovery = ref.watch(handleRecoveryProvider);
+    final activeRecovery = recoveryEnabled
+        ? recovery.activeRequester ??
+              recovery.terminalRequester ??
+              recovery.activationPending
+        : null;
     final localeMode = ref.watch(appLocaleModeProvider);
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
@@ -177,9 +201,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         localeMode: localeMode,
         onLanguagePressed: _showLanguageSheet,
         onTenantPressed: _showTenantManagementDialog,
+        recoveryEnabled: recoveryEnabled,
         onJoinDevice: multiDeviceEnabled
             ? () => openDeviceJoinPage(context)
             : null,
+        recoveryPanel: activeRecovery == null
+            ? null
+            : _buildHandleRecoveryPanel(recovery, activeRecovery),
       );
     }
     return CupertinoPageScaffold(
@@ -234,16 +262,20 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
             ),
             SizedBox(height: responsive.spacing(responsive.isPhone ? 34 : 30)),
-            _SegmentedPill(
-              value: onboarding.entryMode,
-              options: <String, String>{
-                'register': context.l10n.onboardingRegister,
-                'login': context.l10n.onboardingLogin,
-              },
-              onChanged: _setEntryModeManually,
-            ),
-            SizedBox(height: responsive.spacing(24)),
-            if (onboarding.entryMode == 'login') ...<Widget>[
+            if (activeRecovery == null) ...<Widget>[
+              _SegmentedPill(
+                value: onboarding.entryMode,
+                options: <String, String>{
+                  'register': context.l10n.onboardingRegister,
+                  'login': context.l10n.onboardingLogin,
+                },
+                onChanged: _setEntryModeManually,
+              ),
+              SizedBox(height: responsive.spacing(24)),
+            ],
+            if (activeRecovery != null)
+              _buildHandleRecoveryPanel(recovery, activeRecovery)
+            else if (onboarding.entryMode == 'login') ...<Widget>[
               _LocalCredentialsCard(
                 credentials: credentials,
                 onLogin: runtime.loginWithLocalCredential,
@@ -261,9 +293,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 onboarding: onboarding,
                 responsive: responsive,
                 theme: theme,
+                recoveryEnabled: recoveryEnabled,
               ),
             ],
-            if (multiDeviceEnabled) ...<Widget>[
+            if (activeRecovery == null && multiDeviceEnabled) ...<Widget>[
               SizedBox(height: responsive.spacing(16)),
               AppSecondaryButton(
                 label: context.l10n.deviceJoinEntry,
@@ -293,6 +326,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     required OnboardingState onboarding,
     required AwikiResponsiveInfo responsive,
     required AwikiMeThemeTokens theme,
+    required bool recoveryEnabled,
   }) {
     if (onboarding.isServerInfoLoading) {
       return <Widget>[
@@ -397,6 +431,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         ),
         SizedBox(height: responsive.spacing(16)),
         if (onboarding.authMode == 'phone') ...<Widget>[
+          if (recoveryEnabled) ...<Widget>[
+            AppTextField(
+              controller: handleController,
+              label: context.l10n.onboardingHandle,
+              placeholder: context.l10n.onboardingHandlePlaceholder,
+              showLabel: !responsive.isPhone,
+              semanticsIdentifier: 'e2e-handle-input',
+            ),
+            SizedBox(height: responsive.spacing(14)),
+          ],
           AppTextField(
             controller: phoneController,
             label: context.l10n.onboardingPhone,
@@ -557,9 +601,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         phone: _normalizedPhone,
         otp: otpController.text.trim(),
         handle: handle,
+        handleDomain: ref.read(activeAppTenantProvider).didHost,
         nickName: handle,
         profileMarkdown: profileMarkdown,
       );
+      if (ref.read(handleRecoveryProvider).activeRequester != null) {
+        otpController.clear();
+        recoveryOtpController.clear();
+      }
       return;
     }
     await notifier.registerWithEmail(
@@ -573,7 +622,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   void _requestOtp() {
     if (!awikiE2eEnabled) {
       unawaited(
-        ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+        ref
+            .read(onboardingProvider.notifier)
+            .requestOtp(
+              phone: _normalizedPhone,
+              handle: _normalizedHandle,
+              handleDomain: ref.read(activeAppTenantProvider).didHost,
+            ),
       );
       return;
     }
@@ -612,6 +667,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ref.read(onboardingProvider.notifier).resetEmailActivation();
   }
 
+  void _resetPhoneOtpTarget() {
+    if (!mounted || ref.read(onboardingProvider).authMode != 'phone') return;
+    ref.read(onboardingProvider.notifier).resetPhoneOtpTarget();
+  }
+
   void _startE2eOtpRequestLoop() {
     _stopE2eOtpRequestLoop();
     _e2eOtpAttempts = 0;
@@ -643,13 +703,76 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
     _e2eOtpAttempts += 1;
     unawaited(
-      ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+      ref
+          .read(onboardingProvider.notifier)
+          .requestOtp(
+            phone: _normalizedPhone,
+            handle: _normalizedHandle,
+            handleDomain: ref.read(activeAppTenantProvider).didHost,
+          ),
     );
   }
 
   void _stopE2eOtpRequestLoop() {
     _e2eOtpRetryTimer?.cancel();
     _e2eOtpRetryTimer = null;
+  }
+
+  Widget _buildHandleRecoveryPanel(
+    HandleRecoveryState state,
+    HandleRecoveryProgress progress,
+  ) {
+    return HandleRecoveryPanel(
+      key: ValueKey<String>(progress.recoverySessionId),
+      progress: progress,
+      state: state,
+      phoneController: phoneController,
+      reconfirmationOtpController: recoveryOtpController,
+      onSendOtp: () => unawaited(
+        ref
+            .read(handleRecoveryProvider.notifier)
+            .sendReconfirmationOtp(_normalizedPhone),
+      ),
+      onRefresh: () =>
+          unawaited(ref.read(handleRecoveryProvider.notifier).pollActive()),
+      onFinalize: () {
+        final otp = recoveryOtpController.text;
+        recoveryOtpController.clear();
+        unawaited(
+          ref
+              .read(handleRecoveryProvider.notifier)
+              .finalize(
+                phone: _normalizedPhone,
+                otp: otp,
+                intentConfirmed: true,
+                presenceReason:
+                    context.l10n.handleRecoveryFinalizePresenceReason,
+              ),
+        );
+      },
+      onRetryActivation: () => unawaited(
+        ref.read(handleRecoveryProvider.notifier).retryActivation(),
+      ),
+      onDismiss: () {
+        recoveryOtpController.clear();
+        ref.read(handleRecoveryProvider.notifier).clearTerminalRequester();
+      },
+    );
+  }
+
+  void _syncRecoveryPolling(HandleRecoveryState state) {
+    final active = state.activeRequester;
+    if (active == null || active.isTerminal) {
+      _recoveryPollTimer?.cancel();
+      _recoveryPollTimer = null;
+      return;
+    }
+    if (_recoveryPollTimer != null) return;
+    _recoveryPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        unawaited(ref.read(handleRecoveryProvider.notifier).pollActive());
+      }
+    });
   }
 
   void _setRegisterStep(int step) {

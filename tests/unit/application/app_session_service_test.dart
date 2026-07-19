@@ -140,6 +140,31 @@ void main() {
     );
 
     test(
+      'activateIdentity clears partial state when active-session persistence fails',
+      () async {
+        final runtime = _FakeRuntime();
+        final active = _FakeActiveSessionStore.failing('id-old');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: _session('id-replacement'),
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+
+        expect(runtime.switchedIdentities, ['id-replacement']);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
       'explicit local identity login activates a matching local identity',
       () async {
         final runtime = _FakeRuntime();
@@ -516,9 +541,17 @@ class _FakeIdentities implements IdentityCorePort {
 }
 
 class _FakeActiveSessionStore implements ActiveSessionStore {
-  _FakeActiveSessionStore([this.activeIdentityId]);
+  _FakeActiveSessionStore([this.activeIdentityId])
+    : failWriteOnce = false,
+      writeBeforeFailure = false;
+
+  _FakeActiveSessionStore.failing([this.activeIdentityId])
+    : failWriteOnce = true,
+      writeBeforeFailure = true;
 
   String? activeIdentityId;
+  bool failWriteOnce;
+  final bool writeBeforeFailure;
 
   @override
   Future<void> clearActiveIdentityId() async {
@@ -530,6 +563,13 @@ class _FakeActiveSessionStore implements ActiveSessionStore {
 
   @override
   Future<void> writeActiveIdentityId(String identityId) async {
+    if (failWriteOnce) {
+      failWriteOnce = false;
+      if (writeBeforeFailure) {
+        activeIdentityId = identityId;
+      }
+      throw StateError('active_session_write_failed');
+    }
     activeIdentityId = identityId;
   }
 }

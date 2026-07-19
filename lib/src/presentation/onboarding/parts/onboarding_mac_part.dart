@@ -22,7 +22,9 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.localeMode,
     required this.onLanguagePressed,
     required this.onTenantPressed,
+    required this.recoveryEnabled,
     this.onJoinDevice,
+    this.recoveryPanel,
   });
 
   final OnboardingState onboarding;
@@ -45,7 +47,9 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final AppLocaleMode localeMode;
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
+  final bool recoveryEnabled;
   final VoidCallback? onJoinDevice;
+  final Widget? recoveryPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +95,8 @@ class _MacOnboardingScaffold extends StatelessWidget {
                     onRegisterStepChanged: onRegisterStepChanged,
                     onSubmitRegister: onSubmitRegister,
                     onJoinDevice: onJoinDevice,
+                    recoveryPanel: recoveryPanel,
+                    recoveryEnabled: recoveryEnabled,
                   );
                   return SafeArea(
                     minimum: const EdgeInsets.only(bottom: 88),
@@ -397,6 +403,8 @@ class _MacAuthCard extends StatelessWidget {
     required this.onRegisterStepChanged,
     required this.onSubmitRegister,
     this.onJoinDevice,
+    this.recoveryPanel,
+    required this.recoveryEnabled,
   });
 
   final double maxHeight;
@@ -417,6 +425,8 @@ class _MacAuthCard extends StatelessWidget {
   final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
   final VoidCallback? onJoinDevice;
+  final Widget? recoveryPanel;
+  final bool recoveryEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -470,41 +480,46 @@ class _MacAuthCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              _MacAuthMethodSelector(
-                onboarding: onboarding,
-                onModeChanged: onModeChanged,
-                onAuthModeChanged: onAuthModeChanged,
-              ),
-              const SizedBox(height: 20),
+              if (recoveryPanel == null) ...<Widget>[
+                _MacAuthMethodSelector(
+                  onboarding: onboarding,
+                  onModeChanged: onModeChanged,
+                  onAuthModeChanged: onAuthModeChanged,
+                ),
+                const SizedBox(height: 20),
+              ],
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                child: usingCredential
-                    ? _MacLoginForm(
-                        key: const ValueKey<String>('mac-login-form'),
-                        credentials: credentials,
-                        onLogin: onLogin,
-                        onImport: onImport,
-                        onRefresh: onRefresh,
-                      )
-                    : _MacRegisterForm(
-                        key: ValueKey<String>(
-                          'mac-register-${onboarding.authMode}-${onboarding.registerStep}',
-                        ),
-                        onboarding: onboarding,
-                        phoneController: phoneController,
-                        otpController: otpController,
-                        emailController: emailController,
-                        handleController: handleController,
-                        onRequestOtp: onRequestOtp,
-                        onRequestEmailActivation: onRequestEmailActivation,
-                        onCheckEmailActivation: onCheckEmailActivation,
-                        onRegisterStepChanged: onRegisterStepChanged,
-                        onSubmitRegister: onSubmitRegister,
-                      ),
+                child:
+                    recoveryPanel ??
+                    (usingCredential
+                        ? _MacLoginForm(
+                            key: const ValueKey<String>('mac-login-form'),
+                            credentials: credentials,
+                            onLogin: onLogin,
+                            onImport: onImport,
+                            onRefresh: onRefresh,
+                          )
+                        : _MacRegisterForm(
+                            key: ValueKey<String>(
+                              'mac-register-${onboarding.authMode}-${onboarding.registerStep}',
+                            ),
+                            onboarding: onboarding,
+                            phoneController: phoneController,
+                            otpController: otpController,
+                            emailController: emailController,
+                            handleController: handleController,
+                            onRequestOtp: onRequestOtp,
+                            onRequestEmailActivation: onRequestEmailActivation,
+                            onCheckEmailActivation: onCheckEmailActivation,
+                            onRegisterStepChanged: onRegisterStepChanged,
+                            onSubmitRegister: onSubmitRegister,
+                            recoveryEnabled: recoveryEnabled,
+                          )),
               ),
-              if (onJoinDevice != null) ...<Widget>[
+              if (recoveryPanel == null && onJoinDevice != null) ...<Widget>[
                 const SizedBox(height: 18),
                 AppSecondaryButton(
                   label: context.l10n.deviceJoinEntry,
@@ -512,7 +527,9 @@ class _MacAuthCard extends StatelessWidget {
                   onPressed: onJoinDevice,
                 ),
               ],
-              if (!usingCredential && credentials.isNotEmpty) ...<Widget>[
+              if (recoveryPanel == null &&
+                  !usingCredential &&
+                  credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _MacLocalIdentityShortcut(
                   credentials: credentials,
@@ -920,6 +937,7 @@ class _MacRegisterForm extends StatelessWidget {
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
     required this.onSubmitRegister,
+    required this.recoveryEnabled,
   });
 
   final OnboardingState onboarding;
@@ -932,6 +950,7 @@ class _MacRegisterForm extends StatelessWidget {
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
+  final bool recoveryEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -1029,6 +1048,15 @@ class _MacRegisterForm extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          if (recoveryEnabled) ...<Widget>[
+            _MacOutlinedField(
+              controller: handleController,
+              label: context.l10n.onboardingHandle,
+              placeholder: context.l10n.onboardingHandlePlaceholder,
+              icon: CupertinoIcons.at,
+            ),
+            const SizedBox(height: 16),
+          ],
           _MacOutlinedField(
             controller: phoneController,
             label: context.l10n.onboardingPhone,

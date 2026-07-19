@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-19.multi-device-join-planned-v1",
+  "sourceRevision": "2026-07-19.handle-recovery-planned-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1922,6 +1922,75 @@
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-E2E-001",
+      "feature": "AWiki Me Recovery cooling and independent reconfirmation",
+      "layer": "product_ui",
+      "preconditions": "A registered Handle, a new AWiki Me Core data root, an existing old admin identity, deployed awiki.info Recovery capability, and two independently issued real SMS codes are available.",
+      "action": "Request and exchange the first OTP with awiki.device.recovery.begin.v1 bound to the exact Handle/domain, observe cooling without identity activation, wait for authoritative ready status, then request and exchange a second awiki.device.recovery.finalize.v1 OTP bound to the same Handle/domain and Recovery Session with explicit intent and user presence.",
+      "exactOracles": [
+        "Before finalize the Handle still resolves to the old DID and AWiki Me has no active new identity; exact purpose/Handle/domain/Session binding, the second OTP, explicit intent, and successful system user presence are required before cutover."
+      ],
+      "negativeChecks": [
+        "Immediate OTP recovery, ordinary login/register OTP reuse, purpose/Handle/domain/Session mismatch, reuse of the begin grant, hidden cooling, user-presence rejection followed by a sensitive write, activation before finalize, or secret/token evidence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-E2E-002",
+      "feature": "Old AWiki Me admin cancels Handle Recovery",
+      "layer": "product_ui",
+      "preconditions": "An old management-ready AWiki Me admin has received the durable Recovery notification while the matching session remains cooling or ready.",
+      "action": "Open Devices, inspect the visible identity Recovery warning, explicitly confirm cancellation and system user presence from the old admin, then retry finalize from the requester.",
+      "exactOracles": [
+        "Cancel wins the session CAS, the Handle remains bound to the old DID, and requester finalize is rejected without creating or activating a new identity."
+      ],
+      "negativeChecks": [
+        "A normal device cancellation, notification-only dismissal, cancellation without explicit intent or successful user presence, concurrent cancel plus successful finalize, or a changed Handle mapping fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-E2E-003",
+      "feature": "Handle Recovery creates an isolated new DID",
+      "layer": "product_ui",
+      "preconditions": "A ready Recovery session can complete against deployed user-service and message-service cutover handling with isolated old and new device roots.",
+      "action": "Finalize through visible AWiki Me UI, force one AppRuntime/E2EE activation failure after cutover, retry only local activation from the Core-persisted new identity, resolve the Handle, then verify old-device rejection and attempt Direct and group access from the new identity.",
+      "exactOracles": [
+        "The consumed remote Recovery is never finalized twice; local activation is restart-resumable, and the Handle resolves to a different new DID whose first device is a ready admin; old tokens and future delivery fail, Direct is re-established, and group continuity requires explicit owner rebind approval."
+      ],
+      "negativeChecks": [
+        "Same-DID root replacement, copied root/Ratchet/MLS state, automatic group recovery, inherited history decryption, or an old device receiving future messages fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
     }

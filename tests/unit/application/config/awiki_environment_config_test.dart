@@ -28,6 +28,7 @@ void main() {
     expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
+    expect(config.handleRecoveryEnabled, isFalse);
   });
 
   test('bundled realm allowlist enables Agent and Daemon capabilities', () {
@@ -94,6 +95,7 @@ void main() {
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
       multiDeviceJoinEnabled: true,
+      handleRecoveryEnabled: true,
     );
 
     expect(config.baseUrl, 'https://anpclaw.com');
@@ -111,6 +113,7 @@ void main() {
     expect(config.releasesUrl, 'https://download.example.test/releases');
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceJoinEnabled, isTrue);
+    expect(config.handleRecoveryEnabled, isTrue);
   });
 
   test('network route config has no local storage locator', () {

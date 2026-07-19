@@ -80,6 +80,9 @@ class AppMessage {
   factory AppMessage.registrationMethodUnavailable() =>
       const AppMessage._('registrationMethodUnavailable');
 
+  factory AppMessage.handleRecoveryUnavailable() =>
+      const AppMessage._('handleRecoveryUnavailable');
+
   factory AppMessage.sessionExpiredRelogin() =>
       const AppMessage._('sessionExpiredRelogin');
 
@@ -224,6 +227,9 @@ class AppMessage {
     }
     if (raw == 'handle_already_registered_import_credential') {
       return AppMessage.handleAlreadyRegisteredImportCredential();
+    }
+    if (raw == 'handle_recovery_unavailable') {
+      return AppMessage.handleRecoveryUnavailable();
     }
     if (raw == 'handle_recovery_unsupported' ||
         raw == 'registration_method_unavailable') {
@@ -393,6 +399,8 @@ class AppMessage {
         return l10n.handleAlreadyRegisteredImportCredential;
       case 'registrationMethodUnavailable':
         return l10n.registrationMethodUnavailable;
+      case 'handleRecoveryUnavailable':
+        return l10n.handleRecoveryUnavailable;
       case 'sessionExpiredRelogin':
         return l10n.sessionExpiredRelogin;
       case 'didNotFoundOrRevoked':
@@ -508,6 +516,8 @@ class AppMessage {
         return 'This handle already exists. Import its identity credential or contact the server administrator.';
       case 'registrationMethodUnavailable':
         return 'This server does not support the selected registration method.';
+      case 'handleRecoveryUnavailable':
+        return 'Safe Handle Recovery is not available. No identity state was changed.';
       case 'didNotFoundOrRevoked':
         return 'This DID does not exist or has been revoked. Check the DID and try again, or switch to a valid identity.';
       case 'conversationRemovedFromRecents':

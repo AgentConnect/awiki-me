@@ -8,6 +8,10 @@ const bool defaultMultiDeviceJoinEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_ENABLED',
   defaultValue: false,
 );
+const bool defaultHandleRecoveryEnabled = bool.fromEnvironment(
+  'AWIKI_HANDLE_RECOVERY_ENABLED',
+  defaultValue: false,
+);
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
   'awiki.ai',
   'anpclaw.com',
@@ -28,6 +32,7 @@ class AwikiEnvironmentConfig {
     String? releasesUrl,
     bool? agentImEnabled,
     bool? multiDeviceJoinEnabled,
+    bool? handleRecoveryEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl,
@@ -75,6 +80,8 @@ class AwikiEnvironmentConfig {
         );
     this.multiDeviceJoinEnabled =
         multiDeviceJoinEnabled ?? defaultMultiDeviceJoinEnabled;
+    this.handleRecoveryEnabled =
+        handleRecoveryEnabled ?? defaultHandleRecoveryEnabled;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -93,6 +100,7 @@ class AwikiEnvironmentConfig {
   late final String releasesUrl;
   late final bool agentImEnabled;
   late final bool multiDeviceJoinEnabled;
+  late final bool handleRecoveryEnabled;
 }
 
 bool isAgentDaemonTenantRealmAllowed({

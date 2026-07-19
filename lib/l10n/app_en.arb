@@ -1173,5 +1173,55 @@
       "member": {}
     }
   },
-  "chatGroupProfileUpdated": "Group info updated"
+  "chatGroupProfileUpdated": "Group info updated",
+  "handleRecoveryTitle": "Recover AWiki Handle",
+  "handleRecoveryWarning": "This is service-assisted recovery. It cannot recover the original DID private key, and the Handle still points to the old DID until completion.",
+  "handleRecoveryCreatesNewDid": "This device will create a new root key and cryptographic DID.",
+  "handleRecoverySignsOutOldDevices": "All devices of the old DID will be signed out and cannot receive future messages after completion.",
+  "handleRecoveryNoHistoryOrGroupInheritance": "Message-history decryption, Direct security sessions, and group membership are not inherited automatically.",
+  "handleRecoveryCoolingTitle": "Recovery cooling period",
+  "handleRecoveryCoolingUntil": "Notifications to old devices and bound channels are in progress. Finalization stays unavailable until notification delivery and cooling both complete. The latest status currently reports {time}; refresh status for the authoritative deadline.",
+  "@handleRecoveryCoolingUntil": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "handleRecoveryReadyTitle": "Independent reconfirmation is ready",
+  "handleRecoveryReadyDetail": "Request a new code. The code or authorization used for the first verification cannot finalize recovery.",
+  "handleRecoveryReconfirmationHint": "Reconfirmation authorizes this device to create a new DID and switch the current Handle to it.",
+  "handleRecoveryReconfirmationOtp": "Reconfirmation code",
+  "handleRecoverySendReconfirmationOtp": "Send a new code",
+  "handleRecoveryExplicitConfirmation": "I understand that a new DID will be created, old devices will be signed out, and history and groups will not be restored automatically.",
+  "handleRecoveryFinalize": "Recover Handle and create new DID",
+  "handleRecoveryFinalizePresenceReason": "Confirm Handle recovery and creation of a new DID",
+  "handleRecoveryRefresh": "Refresh recovery status",
+  "handleRecoveryCancelledTitle": "Recovery cancelled",
+  "handleRecoveryCancelledDetail": "The Handle still points to the old DID. No new identity was created or activated.",
+  "handleRecoveryExpiredTitle": "Recovery expired",
+  "handleRecoveryExpiredDetail": "This recovery did not change the Handle. Verify again to start a new request.",
+  "handleRecoveryCompletedTitle": "Handle recovery completed",
+  "handleRecoveryCompletedDetail": "A new DID is active. Re-establish contact security sessions and rejoin groups with owner approval.",
+  "handleRecoveryActivationPendingTitle": "New DID created; local activation pending",
+  "handleRecoveryActivationPendingDetail": "Remote recovery is complete and cannot be finalized again. Retry loading the locally persisted new identity and initializing E2EE.",
+  "handleRecoveryRetryActivation": "Retry local activation",
+  "handleRecoveryActivationFailed": "The Handle was switched, but local identity or E2EE activation failed. Do not finalize again; retry local activation.",
+  "handleRecoveryCompletionAckPendingTitle": "New DID active; completion status pending",
+  "handleRecoveryCompletionAckPendingDetail": "Identity and E2EE are ready. Retry saving completion status; this will not finalize recovery, switch identity, or initialize E2EE again.",
+  "handleRecoveryRetryCompletionAck": "Retry saving completion status",
+  "handleRecoveryUserPresenceRejected": "System identity confirmation was cancelled or unavailable. No sensitive action was submitted.",
+  "handleRecoveryUnavailable": "This version has no safe Handle Recovery adapter. No identity state was changed.",
+  "handleRecoveryNotReady": "Recovery is still cooling down. Refresh the status later.",
+  "handleRecoveryConflict": "Recovery state changed or the Handle no longer points to the expected identity. Refresh and retry.",
+  "handleRecoveryAdminSectionTitle": "Identity recovery alert",
+  "handleRecoveryAdminSectionSubtitle": "Someone requested recovery of {handle} with a new DID. Cancel it immediately if this was not you.",
+  "@handleRecoveryAdminSectionSubtitle": {
+    "placeholders": {
+      "handle": {}
+    }
+  },
+  "handleRecoveryAdminCancel": "Cancel recovery",
+  "handleRecoveryAdminCancelConfirmTitle": "Cancel Handle recovery?",
+  "handleRecoveryAdminCancelConfirmDetail": "After cancellation, this request cannot complete and the Handle remains bound to the current DID.",
+  "handleRecoveryAdminCancelConfirmAction": "Cancel recovery",
+  "handleRecoveryCancelPresenceReason": "Confirm cancellation of Handle recovery"
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +16,7 @@ import '../agents/agents_page.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
 import '../profile/profile_workspace_page.dart';
+import '../recovery/handle_recovery_provider.dart';
 import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -57,9 +60,23 @@ class _AppShellState extends ConsumerState<AppShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appRuntimeProvider.notifier).initialize();
-      ref.read(appUpdateProvider.notifier).initialize();
+      unawaited(_initializeRuntimeAndRecovery());
+      unawaited(ref.read(appUpdateProvider.notifier).initialize());
     });
+  }
+
+  Future<void> _initializeRuntimeAndRecovery() async {
+    await ref.read(appRuntimeProvider.notifier).initialize();
+    if (!mounted || !ref.read(handleRecoveryEnabledProvider)) return;
+    final recovery = ref.read(handleRecoveryProvider.notifier);
+    await recovery.restore();
+    if (!mounted) return;
+    final pending = ref.read(handleRecoveryProvider).activationPending;
+    if (pending != null &&
+        ref.read(appRuntimeProvider).activatedDid == pending.newDid &&
+        ref.read(sessionProvider).session?.did == pending.newDid) {
+      await recovery.retryActivation();
+    }
   }
 
   @override
@@ -91,6 +108,13 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
+    final recoveryEnabled = ref.watch(handleRecoveryEnabledProvider);
+    final recovery = recoveryEnabled ? ref.watch(handleRecoveryProvider) : null;
+    final pendingRecovery = recovery?.activationPending;
+    final markerOnlyRetry =
+        pendingRecovery != null &&
+        runtime.activatedDid == pendingRecovery.newDid &&
+        session.session?.did == pendingRecovery.newDid;
     final realtimeStatus = ref
         .watch(realtimeConnectionStatusProvider)
         .maybeWhen(
@@ -107,7 +131,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       return Stack(
         children: <Widget>[
           const OnboardingPage(),
-          if (runtime.isBusy) const AwikiMeLoadingMask(),
+          if (runtime.isBusy || recovery?.isLoading == true)
+            const AwikiMeLoadingMask(),
         ],
       );
     }
@@ -170,6 +195,24 @@ class _AppShellState extends ConsumerState<AppShell> {
                 realtimeStatus == RealtimeConnectionStatus.connecting ||
                 realtimeStatus == RealtimeConnectionStatus.reconnecting,
             bottom: responsive.isPhone ? 96 : 32,
+          ),
+        if (recovery?.activationPending != null)
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 12,
+            child: SafeArea(
+              child: Center(
+                child: _RecoveryActivationBanner(
+                  isBusy: recovery!.isBusy,
+                  showError: recovery.error != null,
+                  markerOnlyRetry: markerOnlyRetry,
+                  onRetry: () => unawaited(
+                    ref.read(handleRecoveryProvider.notifier).retryActivation(),
+                  ),
+                ),
+              ),
+            ),
           ),
       ],
     );
@@ -244,6 +287,65 @@ class _AppShellState extends ConsumerState<AppShell> {
         return ProfileWorkspacePage(listFooter: desktopFooter);
     }
     return ConversationWorkspacePage(listFooter: desktopFooter);
+  }
+}
+
+class _RecoveryActivationBanner extends StatelessWidget {
+  const _RecoveryActivationBanner({
+    required this.isBusy,
+    required this.showError,
+    required this.markerOnlyRetry,
+    required this.onRetry,
+  });
+
+  final bool isBusy;
+  final bool showError;
+  final bool markerOnlyRetry;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSurface(
+      key: const Key('handle-recovery-global-activation'),
+      constraints: const BoxConstraints(maxWidth: 520),
+      color: context.awikiTheme.warningContainer,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            markerOnlyRetry
+                ? context.l10n.handleRecoveryCompletionAckPendingTitle
+                : context.l10n.handleRecoveryActivationPendingTitle,
+            style: TextStyle(
+              color: context.awikiTheme.title,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            markerOnlyRetry
+                ? context.l10n.handleRecoveryCompletionAckPendingDetail
+                : showError
+                ? context.l10n.handleRecoveryActivationFailed
+                : context.l10n.handleRecoveryActivationPendingDetail,
+            style: TextStyle(
+              color: showError
+                  ? context.awikiTheme.danger
+                  : context.awikiTheme.secondaryText,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          AppPrimaryButton(
+            label: markerOnlyRetry
+                ? context.l10n.handleRecoveryRetryCompletionAck
+                : context.l10n.handleRecoveryRetryActivation,
+            semanticsIdentifier: 'handle-recovery-global-retry-activation',
+            onPressed: isBusy ? null : onRetry,
+          ),
+        ],
+      ),
+    );
   }
 }
 

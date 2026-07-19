@@ -877,10 +877,9 @@ void main() {
     expect(gateway.lastRegisteredProfileMarkdown, '# alice\n\n');
   });
 
-  testWidgets('手机号提交时已注册 handle 走登录路径', (tester) async {
+  testWidgets('安全恢复开关关闭时已注册 handle 不再走旧版立即恢复', (tester) async {
     final gateway = FakeAwikiGateway()
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered
-      ..failGroupRecovery = true;
+      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -901,19 +900,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lookupHandleRegistrationCalls, 1);
-    expect(gateway.recoverHandleCalls, 1);
+    expect(gateway.recoverHandleCalls, 0);
     expect(gateway.registerHandleCalls, 0);
-    expect(gateway.resumeGroupRecoveryCalls, 1);
+    expect(gateway.resumeGroupRecoveryCalls, 0);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
-    expect(
-      container.read(sessionProvider).session?.did,
-      contains('e1_recovered'),
-    );
+    expect(container.read(sessionProvider).session, isNull);
     expect(
       container.read(uiFeedbackProvider)?.message.id,
-      'groupRecoveryStatusUnavailable',
+      'handleRecoveryUnavailable',
     );
   });
 

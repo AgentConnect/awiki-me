@@ -4909,6 +4909,246 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'群信息已更新'**
   String get chatGroupProfileUpdated;
+
+  /// No description provided for @handleRecoveryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复 AWiki Handle'**
+  String get handleRecoveryTitle;
+
+  /// No description provided for @handleRecoveryWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'这是服务辅助恢复，不会找回原 DID 私钥。完成前 Handle 仍指向原 DID。'**
+  String get handleRecoveryWarning;
+
+  /// No description provided for @handleRecoveryCreatesNewDid.
+  ///
+  /// In zh, this message translates to:
+  /// **'本设备将创建全新的根密钥和密码学 DID。'**
+  String get handleRecoveryCreatesNewDid;
+
+  /// No description provided for @handleRecoverySignsOutOldDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成后原 DID 的所有设备将退出，不能再接收未来消息。'**
+  String get handleRecoverySignsOutOldDevices;
+
+  /// No description provided for @handleRecoveryNoHistoryOrGroupInheritance.
+  ///
+  /// In zh, this message translates to:
+  /// **'历史消息解密能力、Direct 安全会话和群组成员关系不会自动继承。'**
+  String get handleRecoveryNoHistoryOrGroupInheritance;
+
+  /// No description provided for @handleRecoveryCoolingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复冷静期进行中'**
+  String get handleRecoveryCoolingTitle;
+
+  /// No description provided for @handleRecoveryCoolingUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统正在通知旧设备和绑定渠道；通知投递及完整冷静期均完成前不能最终恢复。当前最新状态给出的时间为 {time}，权威期限以后续刷新结果为准。'**
+  String handleRecoveryCoolingUntil(Object time);
+
+  /// No description provided for @handleRecoveryReadyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以进行独立的再次确认'**
+  String get handleRecoveryReadyTitle;
+
+  /// No description provided for @handleRecoveryReadyDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'请重新获取验证码。第一次验证使用的验证码或授权不能用于最终恢复。'**
+  String get handleRecoveryReadyDetail;
+
+  /// No description provided for @handleRecoveryReconfirmationHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'再次确认将授权本设备创建新 DID，并把当前 Handle 切换到新 DID。'**
+  String get handleRecoveryReconfirmationHint;
+
+  /// No description provided for @handleRecoveryReconfirmationOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'再次确认验证码'**
+  String get handleRecoveryReconfirmationOtp;
+
+  /// No description provided for @handleRecoverySendReconfirmationOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送新的验证码'**
+  String get handleRecoverySendReconfirmationOtp;
+
+  /// No description provided for @handleRecoveryExplicitConfirmation.
+  ///
+  /// In zh, this message translates to:
+  /// **'我了解将创建新 DID、原设备退出，并且历史消息和群组不会自动恢复。'**
+  String get handleRecoveryExplicitConfirmation;
+
+  /// No description provided for @handleRecoveryFinalize.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认恢复 Handle 并创建新 DID'**
+  String get handleRecoveryFinalize;
+
+  /// No description provided for @handleRecoveryFinalizePresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认恢复 Handle 并创建新 DID'**
+  String get handleRecoveryFinalizePresenceReason;
+
+  /// No description provided for @handleRecoveryRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新恢复状态'**
+  String get handleRecoveryRefresh;
+
+  /// No description provided for @handleRecoveryCancelledTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复已取消'**
+  String get handleRecoveryCancelledTitle;
+
+  /// No description provided for @handleRecoveryCancelledDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle 仍指向原 DID，没有创建或启用新身份。'**
+  String get handleRecoveryCancelledDetail;
+
+  /// No description provided for @handleRecoveryExpiredTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复已过期'**
+  String get handleRecoveryExpiredTitle;
+
+  /// No description provided for @handleRecoveryExpiredDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'本次恢复没有更改 Handle，请重新验证后发起。'**
+  String get handleRecoveryExpiredDetail;
+
+  /// No description provided for @handleRecoveryCompletedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle 恢复已完成'**
+  String get handleRecoveryCompletedTitle;
+
+  /// No description provided for @handleRecoveryCompletedDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'已创建并启用新 DID。请重新建立联系人安全会话，并按群主确认重新加入群组。'**
+  String get handleRecoveryCompletedDetail;
+
+  /// No description provided for @handleRecoveryActivationPendingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'新 DID 已创建，等待本地激活'**
+  String get handleRecoveryActivationPendingTitle;
+
+  /// No description provided for @handleRecoveryActivationPendingDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端恢复已经完成，不能再次最终恢复。请重试加载 Core 已持久化的新身份并初始化端到端加密。'**
+  String get handleRecoveryActivationPendingDetail;
+
+  /// No description provided for @handleRecoveryRetryActivation.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试本地激活'**
+  String get handleRecoveryRetryActivation;
+
+  /// No description provided for @handleRecoveryActivationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'Handle 已完成切换，但本地身份或端到端加密初始化失败。请勿再次最终恢复，只重试本地激活。'**
+  String get handleRecoveryActivationFailed;
+
+  /// No description provided for @handleRecoveryCompletionAckPendingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'新 DID 已启用，等待保存完成状态'**
+  String get handleRecoveryCompletionAckPendingTitle;
+
+  /// No description provided for @handleRecoveryCompletionAckPendingDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份和端到端加密已就绪。请重试保存完成状态；不会再次最终恢复、切换身份或初始化端到端加密。'**
+  String get handleRecoveryCompletionAckPendingDetail;
+
+  /// No description provided for @handleRecoveryRetryCompletionAck.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试保存完成状态'**
+  String get handleRecoveryRetryCompletionAck;
+
+  /// No description provided for @handleRecoveryUserPresenceRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统身份确认已取消或不可用，未提交敏感操作。'**
+  String get handleRecoveryUserPresenceRejected;
+
+  /// No description provided for @handleRecoveryUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本尚未接入安全的 Handle 恢复流程，未对身份做任何更改。'**
+  String get handleRecoveryUnavailable;
+
+  /// No description provided for @handleRecoveryNotReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复仍在冷静期内，请稍后刷新状态。'**
+  String get handleRecoveryNotReady;
+
+  /// No description provided for @handleRecoveryConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复状态已变化或 Handle 不再指向预期身份，请刷新后重试。'**
+  String get handleRecoveryConflict;
+
+  /// No description provided for @handleRecoveryAdminSectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份恢复警报'**
+  String get handleRecoveryAdminSectionTitle;
+
+  /// No description provided for @handleRecoveryAdminSectionSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'有人正在申请恢复 {handle} 并创建新 DID。若不是你本人操作，请立即取消。'**
+  String handleRecoveryAdminSectionSubtitle(Object handle);
+
+  /// No description provided for @handleRecoveryAdminCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消恢复'**
+  String get handleRecoveryAdminCancel;
+
+  /// No description provided for @handleRecoveryAdminCancelConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认取消 Handle 恢复？'**
+  String get handleRecoveryAdminCancelConfirmTitle;
+
+  /// No description provided for @handleRecoveryAdminCancelConfirmDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消后本次请求不能再完成，Handle 将继续指向当前 DID。'**
+  String get handleRecoveryAdminCancelConfirmDetail;
+
+  /// No description provided for @handleRecoveryAdminCancelConfirmAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认取消'**
+  String get handleRecoveryAdminCancelConfirmAction;
+
+  /// No description provided for @handleRecoveryCancelPresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认取消 Handle 恢复'**
+  String get handleRecoveryCancelPresenceReason;
 }
 
 class _AppLocalizationsDelegate

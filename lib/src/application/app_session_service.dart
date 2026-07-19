@@ -109,25 +109,38 @@ class ImCoreAppSessionService implements AppSessionService {
     _assertIdentityDomain(identity);
     await _runtime.ensureIdentityVault(identity.identityId);
     await _runtime.switchIdentity(identity.identityId);
+    late final AppSession activated;
     try {
       final auth = await _auth.ensureSession();
-      _current = identity.copyWith(
+      activated = identity.copyWith(
         authenticated: auth.authenticated,
         expiresAt: auth.expiresAt,
         jwtToken: auth.bearerToken,
       );
     } catch (error) {
       if (!isTransientNetworkAppError(error)) {
+        _current = null;
         rethrow;
       }
-      _current = identity.copyWith(
+      activated = identity.copyWith(
         authenticated: false,
         expiresAt: null,
         jwtToken: null,
       );
     }
-    await _activeSessionStore?.writeActiveIdentityId(identity.identityId);
-    return _current!;
+    try {
+      await _activeSessionStore?.writeActiveIdentityId(identity.identityId);
+    } catch (error, stackTrace) {
+      _current = null;
+      try {
+        await _activeSessionStore?.clearActiveIdentityId();
+      } catch (_) {
+        // Preserve the authoritative write failure for the caller.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    _current = activated;
+    return activated;
   }
 
   @override
@@ -147,9 +160,12 @@ class ImCoreAppSessionService implements AppSessionService {
 
   @override
   Future<void> logout() async {
-    await _activeSessionStore?.clearActiveIdentityId();
-    _current = null;
-    unawaited(_stopRealtimeBestEffort());
+    try {
+      await _activeSessionStore?.clearActiveIdentityId();
+    } finally {
+      _current = null;
+      unawaited(_stopRealtimeBestEffort());
+    }
   }
 
   Future<void> disposeRuntime() async {
