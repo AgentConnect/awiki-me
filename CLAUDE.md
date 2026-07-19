@@ -8,6 +8,7 @@
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
+   - Android remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`awiki.info`、`anpclaw.com` 时启用。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
    - 平台 runner 变更只触及任务明确要求的平台，避免提交无关生成文件。
@@ -19,6 +20,7 @@
 | `lib/src/domain/` | Domain entities、ports 和纯业务约束 |
 | `lib/src/application/` | auth/session/messaging/groups/profile/agents/attachments/tenant 等用例编排 |
 | `lib/src/data/` | `awiki_im_core` adapters、service clients、local/secure storage 与 platform bridge |
+| `lib/src/data/push/` | Android EMAS transport adapter、MethodChannel 与非 Android no-op factory |
 | `lib/src/data/storage/` | UUID Storage Scope registry/manifest/layout、provision/recovery、strict envelope、platform/E2E secret provider及统一root解析；runtime只可openExisting |
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |

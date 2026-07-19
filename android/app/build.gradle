@@ -4,6 +4,33 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+def emasProperties = new Properties()
+def emasPropertiesFile = rootProject.file("emas.properties")
+if (emasPropertiesFile.exists()) {
+    emasProperties.load(new FileInputStream(emasPropertiesFile))
+}
+def loadEmasVariant = { variant ->
+    def prefix = "${variant}."
+    def enabled = emasProperties.getProperty("${prefix}enabled", "false").toBoolean()
+    def appKey = emasProperties.getProperty("${prefix}appKey", "").trim()
+    def appSecret = emasProperties.getProperty("${prefix}appSecret", "").trim()
+    if (enabled && (appKey.isEmpty() || appSecret.isEmpty())) {
+        throw new GradleException("EMAS is enabled for ${variant} but appKey or appSecret is missing in android/emas.properties")
+    }
+    return [
+        enabled: enabled,
+        appKey: appKey,
+        appSecret: appSecret,
+        logDeviceId: variant == "debug" && emasProperties.getProperty("${prefix}logDeviceId", "false").toBoolean(),
+    ]
+}
+def debugEmas = loadEmasVariant("debug")
+def profileEmas = loadEmasVariant("profile")
+def releaseEmas = loadEmasVariant("release")
+def quoteBuildConfigString = { value ->
+    '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
@@ -14,6 +41,10 @@ android {
     namespace = "ai.awiki.awikime"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     compileOptions {
         coreLibraryDesugaringEnabled true
@@ -43,11 +74,23 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".dev"
+            buildConfigField "boolean", "AWIKI_EMAS_ENABLED", debugEmas.enabled.toString()
+            buildConfigField "String", "AWIKI_EMAS_APP_KEY", quoteBuildConfigString(debugEmas.appKey)
+            buildConfigField "String", "AWIKI_EMAS_APP_SECRET", quoteBuildConfigString(debugEmas.appSecret)
+            buildConfigField "boolean", "AWIKI_EMAS_LOG_DEVICE_ID", debugEmas.logDeviceId.toString()
         }
         profile {
             applicationIdSuffix = ".dev"
+            buildConfigField "boolean", "AWIKI_EMAS_ENABLED", profileEmas.enabled.toString()
+            buildConfigField "String", "AWIKI_EMAS_APP_KEY", quoteBuildConfigString(profileEmas.appKey)
+            buildConfigField "String", "AWIKI_EMAS_APP_SECRET", quoteBuildConfigString(profileEmas.appSecret)
+            buildConfigField "boolean", "AWIKI_EMAS_LOG_DEVICE_ID", "false"
         }
         release {
+            buildConfigField "boolean", "AWIKI_EMAS_ENABLED", releaseEmas.enabled.toString()
+            buildConfigField "String", "AWIKI_EMAS_APP_KEY", quoteBuildConfigString(releaseEmas.appKey)
+            buildConfigField "String", "AWIKI_EMAS_APP_SECRET", quoteBuildConfigString(releaseEmas.appSecret)
+            buildConfigField "boolean", "AWIKI_EMAS_LOG_DEVICE_ID", "false"
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.release
             }
@@ -62,6 +105,7 @@ kotlin {
 }
 
 dependencies {
+    implementation "com.aliyun.ams:alicloud-android-push:3.10.1"
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
 }
 

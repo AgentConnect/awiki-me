@@ -43,6 +43,7 @@ android/.kotlin/
 android/captures/
 android/local.properties
 android/key.properties
+android/emas.properties
 android/*.jks
 android/*.keystore
 **/android/**/GeneratedPluginRegistrant.java

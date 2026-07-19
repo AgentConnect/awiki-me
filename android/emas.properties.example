@@ -1,0 +1,17 @@
+# Copy to emas.properties and keep the local file out of Git.
+debug.enabled=false
+debug.appKey=REPLACE_WITH_ANDROID_DEBUG_EMAS_APP_KEY
+debug.appSecret=REPLACE_WITH_ANDROID_DEBUG_EMAS_APP_SECRET
+debug.logDeviceId=false
+
+profile.enabled=false
+profile.appKey=REPLACE_WITH_ANDROID_PROFILE_EMAS_APP_KEY
+profile.appSecret=REPLACE_WITH_ANDROID_PROFILE_EMAS_APP_SECRET
+
+release.enabled=false
+release.appKey=REPLACE_WITH_ANDROID_RELEASE_EMAS_APP_KEY
+release.appSecret=REPLACE_WITH_ANDROID_RELEASE_EMAS_APP_SECRET
+
+# AppRsaSecret belongs to other EMAS products such as APM/TLog. The mobile
+# push SDK does not consume it, so the Android build intentionally ignores it.
+appRsaSecret=REPLACE_WITH_EMAS_APP_RSA_SECRET
