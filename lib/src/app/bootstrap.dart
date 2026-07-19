@@ -17,6 +17,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/device_management_core_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
 import '../application/product_local_store.dart';
@@ -33,6 +34,7 @@ import '../data/im_core/awiki_im_core_agent_control_status_store.dart';
 import '../data/im_core/awiki_im_core_config.dart';
 import '../data/im_core/awiki_im_core_conversation_adapter.dart';
 import '../data/im_core/awiki_im_core_directory_adapter.dart';
+import '../data/im_core/awiki_im_core_device_management_adapter.dart';
 import '../data/im_core/awiki_im_core_group_adapter.dart';
 import '../data/im_core/awiki_im_core_identity_adapter.dart';
 import '../data/im_core/awiki_im_core_message_adapter.dart';
@@ -85,6 +87,7 @@ class AppBootstrap {
     required this.updateService,
     this.appSessionService,
     this.identityCorePort,
+    this.deviceManagementCorePort,
     this.onboardingService,
     this.onboardingSupportService,
     this.messagingService,
@@ -115,6 +118,7 @@ class AppBootstrap {
   final UpdateService updateService;
   final AppSessionService? appSessionService;
   final IdentityCorePort? identityCorePort;
+  final DeviceManagementCorePort? deviceManagementCorePort;
   final OnboardingService? onboardingService;
   final OnboardingSupportService? onboardingSupportService;
   final MessagingService? messagingService;
@@ -191,6 +195,7 @@ class AppBootstrap {
       vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
         repository: scopeSecretRepository,
       ),
+      multiDeviceJoinEnabled: effectiveEnvironment.multiDeviceJoinEnabled,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
           onProgress?.call(AppBootstrapProgress.upgradingLocalState);
@@ -225,6 +230,14 @@ class AppBootstrap {
       );
 
       final identityAdapter = AwikiImCoreIdentityAdapter(runtime: runtime);
+      final deviceManagementAdapter =
+          effectiveEnvironment.multiDeviceJoinEnabled
+          ? AwikiImCoreDeviceManagementAdapter(
+              runtime: runtime,
+              userServiceUrl: effectiveEnvironment.userServiceUrl,
+              targetHandleDomain: effectiveEnvironment.didDomain,
+            )
+          : null;
       final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
       final messageSyncAdapter = AwikiImCoreMessageSyncAdapter(
@@ -336,6 +349,7 @@ class AppBootstrap {
         updateService: updateService,
         appSessionService: appSessionService,
         identityCorePort: identityAdapter,
+        deviceManagementCorePort: deviceManagementAdapter,
         onboardingService: onboardingService,
         onboardingSupportService: onboardingSupportService,
         messagingService: messagingService,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -11,6 +12,7 @@ import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../agents/agents_page.dart';
 import '../agents/agents_provider.dart';
+import '../devices/devices_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/app_language_menu.dart';
@@ -30,6 +32,7 @@ class SettingsPage extends ConsumerWidget {
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final personalAgentEnabled = ref.watch(agentImEnabledProvider);
+    final multiDeviceEnabled = ref.watch(multiDeviceJoinEnabledProvider);
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
@@ -55,6 +58,20 @@ class SettingsPage extends ConsumerWidget {
               trailing: embedded ? const SizedBox(width: 40, height: 40) : null,
             ),
             const SizedBox(height: 16),
+            if (multiDeviceEnabled && session != null) ...<Widget>[
+              AppCardSection(
+                padding: EdgeInsets.zero,
+                child: AppListTile(
+                  title: l10n.settingsDevices,
+                  subtitle: l10n.settingsDevicesSubtitle,
+                  onTap: () => AppNavigator.push<void>(
+                    context,
+                    (_) => const DevicesPage(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             AppCardSection(
               padding: EdgeInsets.zero,
               child: Column(

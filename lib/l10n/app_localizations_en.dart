@@ -684,6 +684,154 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
+  String get settingsDevices => 'Devices';
+
+  @override
+  String get settingsDevicesSubtitle =>
+      'Review authorized devices and approve new ones';
+
+  @override
+  String get devicesTitle => 'Device management';
+
+  @override
+  String get devicesAuthorizedTitle => 'Authorized devices';
+
+  @override
+  String get devicesPendingTitle => 'Pending approval';
+
+  @override
+  String get devicesLocalJoinsTitle => 'Unfinished device joins';
+
+  @override
+  String get devicesEmpty => 'No device information';
+
+  @override
+  String get devicesPendingEmpty => 'No pending approval requests';
+
+  @override
+  String get deviceCurrent => 'Current device';
+
+  @override
+  String get deviceRoleMember => 'Member device';
+
+  @override
+  String get deviceRoleAdmin => 'Admin device';
+
+  @override
+  String get deviceStatusActive => 'Active';
+
+  @override
+  String get deviceStatusRevoked => 'Revoked';
+
+  @override
+  String get deviceManagementReady => 'Can manage devices';
+
+  @override
+  String get deviceManagementPending => 'Waiting for management readiness';
+
+  @override
+  String get deviceReviewAction => 'Review and verify';
+
+  @override
+  String get deviceResumeAction => 'Continue';
+
+  @override
+  String get deviceJoinEntry => 'Add this device to an existing account';
+
+  @override
+  String get deviceJoinEntrySubtitle =>
+      'An existing admin device must verify the 6-digit code shown on both devices';
+
+  @override
+  String get deviceJoinTitle => 'Add a new device';
+
+  @override
+  String get deviceJoinHandle => 'Existing Handle';
+
+  @override
+  String get deviceJoinPhone => 'Linked phone number';
+
+  @override
+  String get deviceJoinOtp => 'SMS verification code';
+
+  @override
+  String get deviceJoinSendOtp => 'Send code';
+
+  @override
+  String get deviceJoinStart => 'Start pairing';
+
+  @override
+  String get deviceJoinWaiting => 'Waiting for an admin device';
+
+  @override
+  String get deviceJoinRefresh => 'Refresh status';
+
+  @override
+  String get deviceJoinSasTitle => '6-digit verification code';
+
+  @override
+  String get deviceJoinSasHint =>
+      'Confirm that both devices independently show exactly the same digits. The code is never relayed by the server.';
+
+  @override
+  String get deviceJoinApprovalTitle => 'Confirm new device';
+
+  @override
+  String get deviceJoinSasMatches =>
+      'I confirmed that both devices show the same 6-digit code';
+
+  @override
+  String get deviceJoinAllowAdmin =>
+      'Allow this device to manage other devices';
+
+  @override
+  String get deviceJoinAllowAdminHint =>
+      'Off by default. Root-key import must still finish before this device can manage devices.';
+
+  @override
+  String get deviceJoinApprove => 'Confirm and authorize';
+
+  @override
+  String get deviceJoinCancel => 'Cancel pairing';
+
+  @override
+  String get deviceJoinAuthorized => 'Device added';
+
+  @override
+  String get deviceJoinCancelled => 'Device pairing cancelled';
+
+  @override
+  String get deviceJoinExpired => 'Device pairing expired. Start again.';
+
+  @override
+  String get deviceJoinUserPresenceReason =>
+      'Confirm authorization of a new device';
+
+  @override
+  String get deviceJoinErrorUnavailable =>
+      'Multi-device support is not available';
+
+  @override
+  String get deviceJoinErrorConflict =>
+      'The state changed. Refresh and try again.';
+
+  @override
+  String get deviceJoinErrorSas =>
+      'The verification code state did not match. Authorization stopped.';
+
+  @override
+  String get deviceJoinErrorPresence =>
+      'System authentication was not completed. The device was not authorized.';
+
+  @override
+  String get deviceJoinErrorNetwork =>
+      'Network connection failed. Try again later.';
+
+  @override
+  String get deviceJoinErrorFailed =>
+      'Device operation failed. Refresh and try again.';
+
+  @override
   String get settingsLanguage => 'Language';
 
   @override

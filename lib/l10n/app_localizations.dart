@@ -1346,6 +1346,276 @@ abstract class AppLocalizations {
   /// **'设置'**
   String get settingsTitle;
 
+  /// No description provided for @settingsDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备'**
+  String get settingsDevices;
+
+  /// No description provided for @settingsDevicesSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看已授权设备并审批新设备'**
+  String get settingsDevicesSubtitle;
+
+  /// No description provided for @devicesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备管理'**
+  String get devicesTitle;
+
+  /// No description provided for @devicesAuthorizedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已授权设备'**
+  String get devicesAuthorizedTitle;
+
+  /// No description provided for @devicesPendingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'待审批'**
+  String get devicesPendingTitle;
+
+  /// No description provided for @devicesLocalJoinsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'未完成的设备关联'**
+  String get devicesLocalJoinsTitle;
+
+  /// No description provided for @devicesEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂无设备信息'**
+  String get devicesEmpty;
+
+  /// No description provided for @devicesPendingEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前没有待审批请求'**
+  String get devicesPendingEmpty;
+
+  /// No description provided for @deviceCurrent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前设备'**
+  String get deviceCurrent;
+
+  /// No description provided for @deviceRoleMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'普通设备'**
+  String get deviceRoleMember;
+
+  /// No description provided for @deviceRoleAdmin.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理设备'**
+  String get deviceRoleAdmin;
+
+  /// No description provided for @deviceStatusActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'有效'**
+  String get deviceStatusActive;
+
+  /// No description provided for @deviceStatusRevoked.
+  ///
+  /// In zh, this message translates to:
+  /// **'已撤销'**
+  String get deviceStatusRevoked;
+
+  /// No description provided for @deviceManagementReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'可管理其他设备'**
+  String get deviceManagementReady;
+
+  /// No description provided for @deviceManagementPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待管理能力就绪'**
+  String get deviceManagementPending;
+
+  /// No description provided for @deviceReviewAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看并验证'**
+  String get deviceReviewAction;
+
+  /// No description provided for @deviceResumeAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续'**
+  String get deviceResumeAction;
+
+  /// No description provided for @deviceJoinEntry.
+  ///
+  /// In zh, this message translates to:
+  /// **'将此设备加入已有账户'**
+  String get deviceJoinEntry;
+
+  /// No description provided for @deviceJoinEntrySubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要已有管理设备确认两端的 6 位验证码'**
+  String get deviceJoinEntrySubtitle;
+
+  /// No description provided for @deviceJoinTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加新设备'**
+  String get deviceJoinTitle;
+
+  /// No description provided for @deviceJoinHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已有 Handle'**
+  String get deviceJoinHandle;
+
+  /// No description provided for @deviceJoinPhone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已绑定手机号'**
+  String get deviceJoinPhone;
+
+  /// No description provided for @deviceJoinOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'短信验证码'**
+  String get deviceJoinOtp;
+
+  /// No description provided for @deviceJoinSendOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送验证码'**
+  String get deviceJoinSendOtp;
+
+  /// No description provided for @deviceJoinStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始关联'**
+  String get deviceJoinStart;
+
+  /// No description provided for @deviceJoinWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待管理设备响应'**
+  String get deviceJoinWaiting;
+
+  /// No description provided for @deviceJoinRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新状态'**
+  String get deviceJoinRefresh;
+
+  /// No description provided for @deviceJoinSasTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'6 位验证码'**
+  String get deviceJoinSasTitle;
+
+  /// No description provided for @deviceJoinSasHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请确认两台设备独立显示的数字完全一致。验证码不会通过服务器传输。'**
+  String get deviceJoinSasHint;
+
+  /// No description provided for @deviceJoinApprovalTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认新设备'**
+  String get deviceJoinApprovalTitle;
+
+  /// No description provided for @deviceJoinSasMatches.
+  ///
+  /// In zh, this message translates to:
+  /// **'我已确认两台设备的 6 位验证码一致'**
+  String get deviceJoinSasMatches;
+
+  /// No description provided for @deviceJoinAllowAdmin.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许此设备管理其他设备'**
+  String get deviceJoinAllowAdmin;
+
+  /// No description provided for @deviceJoinAllowAdminHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认关闭。开启后仍需完成根密钥安全导入才能管理设备。'**
+  String get deviceJoinAllowAdminHint;
+
+  /// No description provided for @deviceJoinApprove.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认并授权'**
+  String get deviceJoinApprove;
+
+  /// No description provided for @deviceJoinCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消关联'**
+  String get deviceJoinCancel;
+
+  /// No description provided for @deviceJoinAuthorized.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入'**
+  String get deviceJoinAuthorized;
+
+  /// No description provided for @deviceJoinCancelled.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备关联已取消'**
+  String get deviceJoinCancelled;
+
+  /// No description provided for @deviceJoinExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备关联已过期，请重新发起'**
+  String get deviceJoinExpired;
+
+  /// No description provided for @deviceJoinUserPresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认授权新设备'**
+  String get deviceJoinUserPresenceReason;
+
+  /// No description provided for @deviceJoinErrorUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'多设备功能当前未开放'**
+  String get deviceJoinErrorUnavailable;
+
+  /// No description provided for @deviceJoinErrorConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'状态已发生变化，请刷新后重试'**
+  String get deviceJoinErrorConflict;
+
+  /// No description provided for @deviceJoinErrorSas.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码状态不一致，已停止授权'**
+  String get deviceJoinErrorSas;
+
+  /// No description provided for @deviceJoinErrorPresence.
+  ///
+  /// In zh, this message translates to:
+  /// **'未完成系统身份确认，设备未获授权'**
+  String get deviceJoinErrorPresence;
+
+  /// No description provided for @deviceJoinErrorNetwork.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络连接失败，请稍后重试'**
+  String get deviceJoinErrorNetwork;
+
+  /// No description provided for @deviceJoinErrorFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备操作失败，请刷新后重试'**
+  String get deviceJoinErrorFailed;
+
   /// No description provided for @settingsLanguage.
   ///
   /// In zh, this message translates to:

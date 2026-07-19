@@ -653,6 +653,141 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTitle => '设置';
 
   @override
+  String get settingsDevices => '设备';
+
+  @override
+  String get settingsDevicesSubtitle => '查看已授权设备并审批新设备';
+
+  @override
+  String get devicesTitle => '设备管理';
+
+  @override
+  String get devicesAuthorizedTitle => '已授权设备';
+
+  @override
+  String get devicesPendingTitle => '待审批';
+
+  @override
+  String get devicesLocalJoinsTitle => '未完成的设备关联';
+
+  @override
+  String get devicesEmpty => '暂无设备信息';
+
+  @override
+  String get devicesPendingEmpty => '当前没有待审批请求';
+
+  @override
+  String get deviceCurrent => '当前设备';
+
+  @override
+  String get deviceRoleMember => '普通设备';
+
+  @override
+  String get deviceRoleAdmin => '管理设备';
+
+  @override
+  String get deviceStatusActive => '有效';
+
+  @override
+  String get deviceStatusRevoked => '已撤销';
+
+  @override
+  String get deviceManagementReady => '可管理其他设备';
+
+  @override
+  String get deviceManagementPending => '等待管理能力就绪';
+
+  @override
+  String get deviceReviewAction => '查看并验证';
+
+  @override
+  String get deviceResumeAction => '继续';
+
+  @override
+  String get deviceJoinEntry => '将此设备加入已有账户';
+
+  @override
+  String get deviceJoinEntrySubtitle => '需要已有管理设备确认两端的 6 位验证码';
+
+  @override
+  String get deviceJoinTitle => '添加新设备';
+
+  @override
+  String get deviceJoinHandle => '已有 Handle';
+
+  @override
+  String get deviceJoinPhone => '已绑定手机号';
+
+  @override
+  String get deviceJoinOtp => '短信验证码';
+
+  @override
+  String get deviceJoinSendOtp => '发送验证码';
+
+  @override
+  String get deviceJoinStart => '开始关联';
+
+  @override
+  String get deviceJoinWaiting => '等待管理设备响应';
+
+  @override
+  String get deviceJoinRefresh => '刷新状态';
+
+  @override
+  String get deviceJoinSasTitle => '6 位验证码';
+
+  @override
+  String get deviceJoinSasHint => '请确认两台设备独立显示的数字完全一致。验证码不会通过服务器传输。';
+
+  @override
+  String get deviceJoinApprovalTitle => '确认新设备';
+
+  @override
+  String get deviceJoinSasMatches => '我已确认两台设备的 6 位验证码一致';
+
+  @override
+  String get deviceJoinAllowAdmin => '允许此设备管理其他设备';
+
+  @override
+  String get deviceJoinAllowAdminHint => '默认关闭。开启后仍需完成根密钥安全导入才能管理设备。';
+
+  @override
+  String get deviceJoinApprove => '确认并授权';
+
+  @override
+  String get deviceJoinCancel => '取消关联';
+
+  @override
+  String get deviceJoinAuthorized => '设备已加入';
+
+  @override
+  String get deviceJoinCancelled => '设备关联已取消';
+
+  @override
+  String get deviceJoinExpired => '设备关联已过期，请重新发起';
+
+  @override
+  String get deviceJoinUserPresenceReason => '确认授权新设备';
+
+  @override
+  String get deviceJoinErrorUnavailable => '多设备功能当前未开放';
+
+  @override
+  String get deviceJoinErrorConflict => '状态已发生变化，请刷新后重试';
+
+  @override
+  String get deviceJoinErrorSas => '验证码状态不一致，已停止授权';
+
+  @override
+  String get deviceJoinErrorPresence => '未完成系统身份确认，设备未获授权';
+
+  @override
+  String get deviceJoinErrorNetwork => '网络连接失败，请稍后重试';
+
+  @override
+  String get deviceJoinErrorFailed => '设备操作失败，请刷新后重试';
+
+  @override
   String get settingsLanguage => '语言';
 
   @override

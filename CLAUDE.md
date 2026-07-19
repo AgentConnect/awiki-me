@@ -38,6 +38,7 @@
 - [docs/test-quality.md](docs/test-quality.md)：line/branch baseline、mutation proof 与大文件治理入口。
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
+- [docs/multi-device-join-ui.md](docs/multi-device-join-ui.md)：默认关闭的设备列表、SMS Join、双端 6 位 SAS、角色选择与 App/Core 秘密边界。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
 - [docs/pre-release-storage-cleanup.md](docs/pre-release-storage-cleanup.md)：首发前旧 namespace 目录/Keychain inventory、dry-run、archive 与显式删除 runbook。

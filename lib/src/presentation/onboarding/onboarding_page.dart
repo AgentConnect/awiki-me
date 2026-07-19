@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_locale.dart';
+import '../../app/app_services.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/tenant/app_tenant.dart';
@@ -14,6 +15,7 @@ import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../devices/device_join_page.dart';
 import '../shared/app_dialog.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
@@ -134,6 +136,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final onboarding = ref.watch(onboardingProvider);
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
+    final multiDeviceEnabled = ref.watch(multiDeviceJoinEnabledProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
@@ -174,6 +177,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         localeMode: localeMode,
         onLanguagePressed: _showLanguageSheet,
         onTenantPressed: _showTenantManagementDialog,
+        onJoinDevice: multiDeviceEnabled
+            ? () => openDeviceJoinPage(context)
+            : null,
       );
     }
     return CupertinoPageScaffold(
@@ -255,6 +261,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 onboarding: onboarding,
                 responsive: responsive,
                 theme: theme,
+              ),
+            ],
+            if (multiDeviceEnabled) ...<Widget>[
+              SizedBox(height: responsive.spacing(16)),
+              AppSecondaryButton(
+                label: context.l10n.deviceJoinEntry,
+                semanticsIdentifier: 'multi-device-join-entry',
+                onPressed: () => openDeviceJoinPage(context),
               ),
             ],
             SizedBox(height: responsive.spacing(56)),

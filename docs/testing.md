@@ -91,7 +91,15 @@ dart run tests/unit/runner.dart tests/unit/agents/agent_inbox_provider_test.dart
 dart run tests/unit/runner.dart tests/unit/conversation_workspace_test.dart
 dart run tests/unit/runner.dart tests/unit/chat_page_test.dart
 dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
+flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_test.dart \
+  tests/unit/devices/device_management_service_test.dart \
+  tests/unit/devices/devices_ui_test.dart
 ```
+
+多设备 Join 的真实 App + CLI + `awiki.info` 验收用例目前以
+`DEVICE-JOIN-E2E-001` 至 `003` 登记为 planned。它们必须使用两个独立 Core 数据目录、
+真实一次性 OTP 和远端 capability；在 runner 的 `--case multi-device` 与场景级 attestation
+完成前，不得把 Widget 测试或手工演示记录为 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
 图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏

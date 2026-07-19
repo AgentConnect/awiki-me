@@ -172,6 +172,7 @@ See the [Security Model Overview](docs/security-overview.md) and [SECURITY.md](S
 | [Product Requirements](docs/awiki-me-prd.md) | Product position, core objects, user flows, and MVP acceptance. |
 | [Testing Strategy](docs/testing.md) | Unit, Smoke E2E, and real App + CLI E2E. |
 | [Identity Secret Storage](docs/identity-secret-storage.md) | Authoritative app-side SecretVault boundaries. |
+| [Multi-device Join UI](docs/multi-device-join-ui.md) | Feature-gated device list, six-digit SAS Join flow, and App/Core security boundary. |
 | [Storage Scope and Vault Contract](docs/storage-scope-vault-contract.md) | Stable Storage Scope, Keychain locator, and release/0710 upgrade contract. |
 | [Conversation Presentation Ownership](docs/conversation-presentation-ownership.md) | Canonical conversation identity and App/Core presentation ownership. |
 

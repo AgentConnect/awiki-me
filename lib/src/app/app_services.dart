@@ -10,6 +10,7 @@ import '../application/agent/agent_control_status_store.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
+import '../application/device_management_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
@@ -17,6 +18,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/device_management_core_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
 import '../application/ports/user_presence_port.dart';
@@ -71,6 +73,24 @@ final appSessionServiceProvider = Provider<AppSessionService>(
 final identityCorePortProvider = Provider<IdentityCorePort>(
   (ref) =>
       throw UnimplementedError('identityCorePortProvider must be overridden'),
+);
+
+final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
+  (ref) => throw UnimplementedError(
+    'deviceManagementCorePortProvider must be overridden',
+  ),
+);
+
+final multiDeviceJoinEnabledProvider = Provider<bool>(
+  (ref) => ref.watch(awikiEnvironmentConfigProvider).multiDeviceJoinEnabled,
+);
+
+final deviceManagementServiceProvider = Provider<DeviceManagementService>(
+  (ref) => DeviceManagementService(
+    core: ref.watch(deviceManagementCorePortProvider),
+    directory: ref.watch(directoryApplicationServiceProvider),
+    userPresence: ref.watch(userPresencePortProvider),
+  ),
 );
 
 final onboardingServiceProvider = Provider<OnboardingService>(

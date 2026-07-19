@@ -22,6 +22,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.localeMode,
     required this.onLanguagePressed,
     required this.onTenantPressed,
+    this.onJoinDevice,
   });
 
   final OnboardingState onboarding;
@@ -44,6 +45,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final AppLocaleMode localeMode;
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
+  final VoidCallback? onJoinDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +90,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
                     onCheckEmailActivation: onCheckEmailActivation,
                     onRegisterStepChanged: onRegisterStepChanged,
                     onSubmitRegister: onSubmitRegister,
+                    onJoinDevice: onJoinDevice,
                   );
                   return SafeArea(
                     minimum: const EdgeInsets.only(bottom: 88),
@@ -393,6 +396,7 @@ class _MacAuthCard extends StatelessWidget {
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
     required this.onSubmitRegister,
+    this.onJoinDevice,
   });
 
   final double maxHeight;
@@ -412,6 +416,7 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
+  final VoidCallback? onJoinDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -499,6 +504,14 @@ class _MacAuthCard extends StatelessWidget {
                         onSubmitRegister: onSubmitRegister,
                       ),
               ),
+              if (onJoinDevice != null) ...<Widget>[
+                const SizedBox(height: 18),
+                AppSecondaryButton(
+                  label: context.l10n.deviceJoinEntry,
+                  semanticsIdentifier: 'multi-device-join-entry',
+                  onPressed: onJoinDevice,
+                ),
+              ],
               if (!usingCredential && credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _MacLocalIdentityShortcut(

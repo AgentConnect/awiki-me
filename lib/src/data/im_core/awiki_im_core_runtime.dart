@@ -36,6 +36,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     required AwikiImCorePathLayout paths,
     required StorageScopeId scopeId,
     required AwikiImCoreVaultSecretProvider vaultSecretProvider,
+    this.multiDeviceJoinEnabled = false,
     AwikiImCoreOpen? openCore,
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
     AwikiImCoreUpgradeLocalState? upgradeLocalState,
@@ -54,6 +55,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCorePathLayout _paths;
   final StorageScopeId _scopeId;
   final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
+  final bool multiDeviceJoinEnabled;
   final AwikiImCoreOpen _openCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
@@ -122,6 +124,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       config: _config.toCoreConfig(),
       paths: corePaths,
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
+        multiDeviceJoinEnabled: multiDeviceJoinEnabled,
         identitySecretVault: core.ImCoreSecretVaultOptions(
           rootKey: vaultSecrets.rootKey,
           vaultDir: _paths.vaultDir,

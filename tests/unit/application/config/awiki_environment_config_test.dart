@@ -93,6 +93,7 @@ void main() {
       updateManifestUrl: 'https://updates.example.test/app/latest.json',
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
+      multiDeviceJoinEnabled: true,
     );
 
     expect(config.baseUrl, 'https://anpclaw.com');
@@ -109,6 +110,7 @@ void main() {
     );
     expect(config.releasesUrl, 'https://download.example.test/releases');
     expect(config.agentImEnabled, isTrue);
+    expect(config.multiDeviceJoinEnabled, isTrue);
   });
 
   test('network route config has no local storage locator', () {

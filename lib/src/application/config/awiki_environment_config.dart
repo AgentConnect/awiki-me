@@ -4,6 +4,10 @@ const String primaryTenantDomain = String.fromEnvironment(
   defaultValue: 'awiki.ai',
 );
 const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
+const bool defaultMultiDeviceJoinEnabled = bool.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_ENABLED',
+  defaultValue: false,
+);
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
   'awiki.ai',
   'anpclaw.com',
@@ -23,6 +27,7 @@ class AwikiEnvironmentConfig {
     String? updateManifestUrl,
     String? releasesUrl,
     bool? agentImEnabled,
+    bool? multiDeviceJoinEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl,
@@ -68,6 +73,8 @@ class AwikiEnvironmentConfig {
           backendBaseUrl: normalizedBase,
           didHost: this.didDomain,
         );
+    this.multiDeviceJoinEnabled =
+        multiDeviceJoinEnabled ?? defaultMultiDeviceJoinEnabled;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -85,6 +92,7 @@ class AwikiEnvironmentConfig {
   late final String updateManifestUrl;
   late final String releasesUrl;
   late final bool agentImEnabled;
+  late final bool multiDeviceJoinEnabled;
 }
 
 bool isAgentDaemonTenantRealmAllowed({
