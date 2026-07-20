@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-app-admin-join-v2",
+  "sourceRevision": "2026-07-20.remote-multi-device-management-v3",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -46,8 +46,8 @@
         "release"
       ],
       "owner": "awiki-me-identity",
-      "estimatedMinutes": 10,
-      "timeoutMinutes": 15,
+      "estimatedMinutes": 20,
+      "timeoutMinutes": 25,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -58,11 +58,15 @@
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",
+        "root_key_transfer",
+        "device_revoke",
         "isolated_app_state",
         "isolated_cli_state"
       ],
       "caseIds": [
-        "DEVICE-JOIN-E2E-002"
+        "DEVICE-JOIN-E2E-002",
+        "ROOT-TRANSFER-E2E-001",
+        "DEVICE-REVOKE-E2E-001"
       ]
     },
     "production-keychain": {

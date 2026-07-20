@@ -1,6 +1,6 @@
 # AWiki Me 多设备加入、设备页与永久撤销
 
-状态：实现完成，默认关闭；远端产品 E2E 待灰度环境启用
+状态：实现完成，默认关闭；Join、根导入与永久撤销已有显式远端 E2E gate
 
 整体身份和密码学方案以 Core 仓库中的
 [多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
@@ -83,9 +83,10 @@ flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_tes
   tests/unit/devices/devices_ui_test.dart
 ```
 
-真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-002` 已进入显式激活的
-`multi-device-remote-join` suite，合同位于
-`tests/e2e/flutter/app/multi_device_join_ui_test.dart`；它只有在独立 Core 数据目录、动态
-一次性 OTP、双端 SAS、真实系统 user-presence 和最终 Registry 断言全部完成后才可通过。
+真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-002` 与永久撤销
+`DEVICE-REVOKE-E2E-001` 已进入显式激活的 `multi-device-remote-join` suite，合同位于
+`tests/e2e/flutter/app/multi_device_join_ui_test.dart` 及其
+`root_key_transfer_ui_test.dart` part；它只有在独立 Core 数据目录、动态一次性 OTP、双端
+SAS、每次真实系统 user-presence 和最终 Registry 断言全部完成后才可通过。
 `DEVICE-JOIN-E2E-001` 与 `003` 仍为 planned，不得以 `002`、本地 capability gate 或
 fake-backed Widget 测试替代其通过证明。

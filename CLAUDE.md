@@ -63,8 +63,10 @@ dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-a
 
 `multi-device` 当前只证明默认关闭与 Join-only 公共入口，不代表远端 Join/SAS/Root/Recovery
 通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的真实 App 管理设备 +
-独立 CLI 请求设备用例，动态 OTP 与专用账号只从环境读取，并要求真实 macOS
-user-presence；显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807
+独立 CLI 请求设备 suite，覆盖默认-member Join、管理设备根导入/imported ACK/
+management-ready 与永久 revoke UI 主路径。动态 OTP 与专用账号只从环境读取，并要求每次
+高风险操作使用真实 macOS user-presence；显式 staged-OTP operator 模式只接受固定 SSH
+argv 与闭合 RFC7807
 503，并不证明短信送达。远端 rollout/账号前置条件未就绪时不得声称通过。其他真实
 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
 

@@ -25,7 +25,7 @@ const String _desktopCliPeerPerformanceScenario =
 const String _multiDeviceCapabilityGateScenario =
     'multi-device-capability-gate';
 const String _multiDeviceRemoteJoinScenario =
-    'multi-device-remote-app-admin-join';
+    'multi-device-remote-app-management';
 const String _multiDeviceRemoteJoinRunConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
 const String _multiDeviceRemoteJoinGateEnv =
@@ -74,6 +74,8 @@ const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
 ];
 const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-002',
+  'ROOT-TRANSFER-E2E-001',
+  'DEVICE-REVOKE-E2E-001',
 ];
 const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
@@ -502,7 +504,7 @@ class DesktopE2eRunner {
       );
     }
 
-    _section('AWiki Desktop remote multi-device App-admin Join E2E $runId');
+    _section('AWiki Desktop remote multi-device management E2E $runId');
     _line('platform: ${joinConfig.platform.name}');
     _line('config: ${fileConfig.path ?? '<not found>'}');
     _line('reports: ${redactor.redact(reportDir.path)}');
@@ -543,7 +545,7 @@ class DesktopE2eRunner {
       return;
     }
     _resourceSideEffectsPossible = true;
-    await _timed('Flutter App-admin + CLI joining-device flow', () {
+    await _timed('Flutter App-admin + CLI management lifecycle', () {
       return _runFlutterTest(
         'integration_test/multi_device_join_ui_test.dart',
         caseIds: _multiDeviceRemoteJoinCaseIds,
@@ -3668,7 +3670,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.performance => const Duration(minutes: 12),
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
-      DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 12),
+      DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 22),
       _ => const Duration(minutes: 5),
     };
   }

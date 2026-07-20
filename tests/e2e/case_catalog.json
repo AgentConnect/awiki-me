@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-app-admin-join-v2",
+  "sourceRevision": "2026-07-20.remote-multi-device-management-v3",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1961,25 +1961,58 @@
     {
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me management-device root import",
-      "layer": "product_ui",
-      "preconditions": "A management-ready AWiki Me admin and an active admin-awaiting-root device use independent native Core data roots against awiki.info with the root-transfer capability enabled; their exact-device Direct session may initially be absent.",
-      "action": "Open Devices on the ready admin, explicitly start secure import, handle a missing P5 v2 session as an Init-only pending step, sync the receiver, confirm user presence again to continue with the same foreground message ID, let Core consume the encrypted control and imported ACK, then refresh both device projections.",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The hidden Join, exact-device Direct, root-transfer, and permanent-revoke rollouts are enabled on awiki.info; macOS can present real LocalAuthentication; a management-ready AWiki Me admin and an independent CLI admin-awaiting-root device use fresh native Core roots and dynamically resolved one-time OTPs.",
+      "action": "Join the CLI explicitly as an admin, open Devices on the ready AWiki Me admin, start secure import, verify a missing P5 v2 session is shown as Init-only pending, synchronize both devices, confirm user presence again, then let Core consume the encrypted control and signed imported ACK.",
       "exactOracles": [
-        "Init-only pending is visibly distinguished from root transfer, then the recipient progresses from admin-awaiting-root through importing to Registry-backed management-ready, and only then can its product management actions become enabled."
+        "The recipient remains admin-awaiting-root while session Init is pending, and Init creates no root-transfer projection.",
+        "The second explicit action requires fresh operating-system user presence; the CLI receives no root/control content in its product inbox.",
+        "The receiver Core summary reaches completed only after the signed imported ACK, while the App enables management readiness only after both Registries project the recipient as active and management_ready."
       ],
       "negativeChecks": [
-        "A member action, treating session Init as root delivery/failure, continuation without fresh user presence, readiness on delivery acceptance alone, root/control JSON in chat or notifications, root bytes in logs/errors/reports, or a second business ACK fails."
+        "A member action, treating session Init or delivery acceptance as readiness, continuation without fresh user presence, root/control JSON in inbox or UI, root bytes in logs/errors/reports, a missing imported ACK, or management actions before Registry readiness fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
       "requiredFor": [
-        "nightly",
+        "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/root_key_transfer_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ROOT-TRANSFER-E2E-001:admin_joined_awaiting_root",
+          "ROOT-TRANSFER-E2E-001:init_only_pending_visible",
+          "ROOT-TRANSFER-E2E-001:fresh_presence_continued_import",
+          "ROOT-TRANSFER-E2E-001:signed_imported_ack_completed",
+          "ROOT-TRANSFER-E2E-001:registry_management_ready_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ROOT-TRANSFER-E2E-001:admin_joined_awaiting_root",
+            "ROOT-TRANSFER-E2E-001:init_only_pending_visible"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:fresh_presence_continued_import"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:signed_imported_ack_completed",
+            "ROOT-TRANSFER-E2E-001:registry_management_ready_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ROOT-TRANSFER-E2E-001:admin_joined_awaiting_root",
+            "ROOT-TRANSFER-E2E-001:init_only_pending_visible",
+            "ROOT-TRANSFER-E2E-001:fresh_presence_continued_import",
+            "ROOT-TRANSFER-E2E-001:signed_imported_ack_completed",
+            "ROOT-TRANSFER-E2E-001:registry_management_ready_visible"
+          ]
+        ]
+      }
     },
     {
       "caseId": "ROOT-TRANSFER-E2E-002",
@@ -2003,6 +2036,53 @@
       "implementationPath": "tests/e2e/flutter/app/root_key_transfer_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
+    },
+    {
+      "caseId": "DEVICE-REVOKE-E2E-001",
+      "feature": "AWiki Me permanent device revoke",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The same isolated awiki.info identity has two active management-ready devices after encrypted root import; the current AWiki Me device is a ready admin and real macOS user presence is available.",
+      "action": "From the real Devices page, select the non-current device, accept the visible destructive confirmation, complete one fresh operating-system user-presence check, and wait for the authoritative Registry projection.",
+      "exactOracles": [
+        "The target becomes revoked and loses its destructive action only after the Core mutation and Registry refresh, while the current AWiki Me device remains the active management-ready admin."
+      ],
+      "negativeChecks": [
+        "Self revoke, revoking the final ready admin, cancellation, missing or repeated user presence, button-only success, an active target after refresh, or internal proof/version/key material in UI or evidence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/root_key_transfer_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
+          "DEVICE-REVOKE-E2E-001:single_fresh_user_presence_confirmed",
+          "DEVICE-REVOKE-E2E-001:registry_projected_target_revoked",
+          "DEVICE-REVOKE-E2E-001:current_ready_admin_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
+            "DEVICE-REVOKE-E2E-001:single_fresh_user_presence_confirmed",
+            "DEVICE-REVOKE-E2E-001:registry_projected_target_revoked",
+            "DEVICE-REVOKE-E2E-001:current_ready_admin_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
+            "DEVICE-REVOKE-E2E-001:single_fresh_user_presence_confirmed",
+            "DEVICE-REVOKE-E2E-001:registry_projected_target_revoked",
+            "DEVICE-REVOKE-E2E-001:current_ready_admin_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "MLS-MULTI-DEVICE-E2E-001",

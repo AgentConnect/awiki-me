@@ -1,9 +1,9 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
 //          production AppBootstrap/native Core, and an independent public CLI root.
-// [OUTPUT]: Real App-admin UI evidence for SAS comparison, one native
-//           user-presence prompt, and default-member Join authorization.
+// [OUTPUT]: Real App-admin UI evidence for Join plus the registered root-import
+//           and permanent-revoke management scenarios in the sibling part.
 // [POS]: Activation-gated remote product E2E; no fake port, copied state,
-//        static OTP, or secret-bearing report is permitted.
+//        static OTP, test bypass, or secret-bearing report is permitted.
 
 import 'dart:async';
 import 'dart:convert';
@@ -33,6 +33,8 @@ import 'package:local_auth/local_auth.dart';
 
 import '../../case_attestation.dart';
 import '../../remote_multi_device_join_contract.dart';
+
+part 'root_key_transfer_ui_test.dart';
 
 const String _caseId = 'DEVICE-JOIN-E2E-002';
 const String _runConfigPath =
@@ -328,6 +330,8 @@ void main() {
     skip: !Platform.isMacOS || !_RemoteJoinRunConfig.exists(),
     timeout: const Timeout(Duration(minutes: 14)),
   );
+
+  _registerRootKeyTransferAndRevokeTests();
 }
 
 class _RemoteJoinRunConfig {
@@ -476,9 +480,17 @@ class _DedicatedAccount {
 }
 
 class _JoiningCli {
-  _JoiningCli(this.config);
+  _JoiningCli(
+    this.config, {
+    this.rootTransferEnabled = false,
+    this.deviceRevokeEnabled = false,
+    this.directE2eeEnabled = false,
+  });
 
   final _RemoteJoinRunConfig config;
+  final bool rootTransferEnabled;
+  final bool deviceRevokeEnabled;
+  final bool directE2eeEnabled;
   late final String _tenantName = 'e2e-${_safeId(config.runId, 36)}';
 
   Future<void> initialize() async {
@@ -617,6 +629,44 @@ class _JoiningCli {
         .toList(growable: false);
   }
 
+  Future<void> syncInbox() async {
+    final payload = await _run(const <String>[
+      '--format',
+      'json',
+      'msg',
+      'inbox',
+      '--limit',
+      '20',
+    ]);
+    if (_containsRootControlProjection(payload)) {
+      fail('The CLI inbox exposed root-control content to the product layer.');
+    }
+  }
+
+  Future<List<Map<String, Object?>>> loadRootTransfers() async {
+    final payload = await _run(const <String>[
+      '--format',
+      'json',
+      'id',
+      'device',
+      'root-key',
+      'list',
+      '--include-completed',
+    ]);
+    final result = _data(payload, action: 'root_key_transfer_list')['result'];
+    if (result is! List) {
+      fail('The joining CLI returned no safe root-transfer projection.');
+    }
+    return result
+        .map((value) {
+          if (value is! Map) {
+            fail('The joining CLI root-transfer projection is invalid.');
+          }
+          return _stringMap(value);
+        })
+        .toList(growable: false);
+  }
+
   Future<Map<String, Object?>> _run(
     List<String> args, {
     String? accountVerificationToken,
@@ -625,6 +675,9 @@ class _JoiningCli {
       'HOME': config.cliHome,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
       'AWIKI_MULTI_DEVICE_JOIN_ENABLED': '1',
+      if (rootTransferEnabled) 'AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED': '1',
+      if (deviceRevokeEnabled) 'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
+      if (directE2eeEnabled) 'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       if (accountVerificationToken != null)
         'AWIKI_ACCOUNT_VERIFICATION_TOKEN': accountVerificationToken,
     };
@@ -678,6 +731,32 @@ class _JoiningCli {
       }
     }
   }
+}
+
+bool _containsRootControlProjection(Object? value) {
+  if (value is Map) {
+    for (final entry in value.entries) {
+      if (_isRootControlMarker(entry.key.toString()) ||
+          _containsRootControlProjection(entry.value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (value is Iterable) {
+    return value.any(_containsRootControlProjection);
+  }
+  return value is String && _isRootControlMarker(value);
+}
+
+bool _isRootControlMarker(String value) {
+  final normalized = value.toLowerCase();
+  return normalized.contains('root_private_key') ||
+      normalized.contains('rootkeyenvelope') ||
+      normalized.contains('root-key-transfer') ||
+      normalized.contains('root_key_imported_ack') ||
+      normalized.contains('system_type') ||
+      normalized == 'ciphertext';
 }
 
 class _JoinProgress {

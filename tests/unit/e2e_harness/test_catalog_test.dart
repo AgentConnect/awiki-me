@@ -11,13 +11,14 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(67));
+      expect(catalog.cases, hasLength(68));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
           'ROOT-TRANSFER-E2E-001',
           'ROOT-TRANSFER-E2E-002',
           'DEVICE-JOIN-E2E-002',
+          'DEVICE-REVOKE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
@@ -34,12 +35,38 @@ void main() {
         ]),
       );
       expect(catalog.caseById['DEVICE-JOIN-E2E-002']!.catalogStatus, 'active');
+      expect(
+        catalog.caseById['ROOT-TRANSFER-E2E-001']!.catalogStatus,
+        'active',
+      );
+      expect(
+        catalog.caseById['DEVICE-REVOKE-E2E-001']!.catalogStatus,
+        'active',
+      );
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
         'DEVICE-JOIN-E2E-002',
+        'ROOT-TRANSFER-E2E-001',
+        'DEVICE-REVOKE-E2E-001',
       ]);
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );
+
+  test('remote management cases are executable real-product scenarios', () {
+    final source = File(
+      'tests/e2e/flutter/app/root_key_transfer_ui_test.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("part of 'multi_device_join_ui_test.dart';"));
+    expect(source, contains("'ROOT-TRANSFER-E2E-001'"));
+    expect(source, contains("'DEVICE-REVOKE-E2E-001'"));
+    expect(source, contains('LocalAuthentication().isDeviceSupported()'));
+    expect(source, contains('await cli.syncInbox()'));
+    expect(source, contains('messageSyncService!.syncNow'));
+    expect(source, contains("Key('device-revoke-"));
+    expect(source, isNot(contains('plannedRootKeyTransferCaseIds')));
+    expect(source, isNot(contains('FakeRootKeyTransferPort(')));
+  });
 
   test('every active conversation-correctness case has claim mapping', () {
     final catalog = AppTestCatalog.load(Directory.current);
