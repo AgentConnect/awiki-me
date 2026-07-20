@@ -69,7 +69,10 @@ class GroupEncryptionController
       return;
     }
     final generation = ++_generation;
-    state = state.copyWith(isRetrying: true);
+    state = GroupEncryptionViewState(
+      status: _preparingStatus(groupDid),
+      isRetrying: true,
+    );
     try {
       final status = await ref
           .read(groupEncryptionCorePortProvider)
@@ -98,6 +101,14 @@ GroupEncryptionStatus _retryStatus(String groupDid) => GroupEncryptionStatus(
   canSendSecure: false,
   retryable: true,
 );
+
+GroupEncryptionStatus _preparingStatus(String groupDid) =>
+    GroupEncryptionStatus(
+      groupDid: groupDid,
+      readiness: GroupEncryptionReadiness.preparing,
+      canSendSecure: false,
+      retryable: false,
+    );
 
 GroupEncryptionStatus _unavailableStatus(String groupDid) =>
     GroupEncryptionStatus(

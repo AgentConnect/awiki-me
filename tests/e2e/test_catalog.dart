@@ -344,8 +344,17 @@ class AppTestCatalog {
         'presence. Staged SMS-error continuation is rejected.',
       )
       ..writeln(
+        '- `multi-device-remote-mls` is a separate activation-gated '
+        '`awiki.info` suite for `MLS-MULTI-DEVICE-E2E-001` and '
+        '`MLS-MULTI-DEVICE-E2E-002`. It uses a real AWiki Me owner and an '
+        'independent CLI endpoint to cover Add/Welcome, future text and '
+        'attachment delivery, and exact-device Remove. Checked-in execution '
+        'logic is not remote pass evidence until rollout and operator gates '
+        'are available.',
+      )
+      ..writeln(
         '- `DEVICE-JOIN-E2E-003`, '
-        '`ROOT-TRANSFER-E2E-002`, `MLS-MULTI-DEVICE-E2E-*`, and '
+        '`ROOT-TRANSFER-E2E-002`, and '
         '`HANDLE-RECOVERY-E2E-003` remain planned until `awiki.info` enables '
         'the matching capabilities and each runner has independent device '
         'roots, real one-time OTPs, user presence where required, '

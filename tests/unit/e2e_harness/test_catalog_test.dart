@@ -22,6 +22,8 @@ void main() {
           'DEVICE-REVOKE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
+          'HANDLE-RECOVERY-E2E-001',
+          'HANDLE-RECOVERY-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
         ]),
       );
@@ -32,6 +34,7 @@ void main() {
           'multi-device',
           'multi-device-remote-join',
           'multi-device-remote-recovery',
+          'multi-device-remote-mls',
           'full',
           'direct',
         ]),
@@ -68,6 +71,18 @@ void main() {
         catalog.caseById['HANDLE-RECOVERY-E2E-003']!.catalogStatus,
         'planned',
       );
+      expect(
+        catalog.caseById['MLS-MULTI-DEVICE-E2E-001']!.catalogStatus,
+        'active',
+      );
+      expect(
+        catalog.caseById['MLS-MULTI-DEVICE-E2E-002']!.catalogStatus,
+        'active',
+      );
+      expect(catalog.suiteCaseIds['multi-device-remote-mls'], <String>[
+        'MLS-MULTI-DEVICE-E2E-001',
+        'MLS-MULTI-DEVICE-E2E-002',
+      ]);
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );
@@ -86,6 +101,22 @@ void main() {
     expect(source, contains("Key('device-revoke-"));
     expect(source, isNot(contains('plannedRootKeyTransferCaseIds')));
     expect(source, isNot(contains('FakeRootKeyTransferPort(')));
+  });
+
+  test('remote MLS cases use real App and independent CLI Core roots', () {
+    final source = File(
+      'tests/e2e/flutter/app/mls_multi_device_ui_test.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("part of 'multi_device_join_ui_test.dart';"));
+    expect(source, contains("'MLS-MULTI-DEVICE-E2E-001'"));
+    expect(source, contains("'MLS-MULTI-DEVICE-E2E-002'"));
+    expect(source, contains('_JoiningCli('));
+    expect(source, contains('groupE2eeEnabled: true'));
+    expect(source, contains('groupEncryptionProvider(groupDid).notifier'));
+    expect(source, contains('downloadAttachment('));
+    expect(source, isNot(contains('plannedMlsMultiDeviceCaseIds')));
+    expect(source, isNot(contains('FakeGroupEncryptionPort(')));
   });
 
   test('every active conversation-correctness case has claim mapping', () {

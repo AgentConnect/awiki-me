@@ -1,7 +1,7 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
 //          production AppBootstrap/native Core, and independent CLI/App roots.
-// [OUTPUT]: Real bidirectional Join plus registered root-import and permanent-
-//           revoke management evidence from the sibling part.
+// [OUTPUT]: Real bidirectional Join plus registered root-import, permanent-
+//           revoke, and same-DID MLS lifecycle evidence from sibling parts.
 // [POS]: Activation-gated remote product E2E; no fake port, copied state,
 //        static OTP, production bypass, or secret-bearing report is permitted.
 
@@ -15,9 +15,14 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/data/services/local_auth_user_presence_port.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/entities/group_encryption_status.dart';
+import 'package:awiki_me/src/domain/entities/group_identity.dart';
+import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
@@ -25,6 +30,9 @@ import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dar
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_encryption_status_card.dart';
+import 'package:awiki_me/src/presentation/group/group_encryption_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
@@ -38,11 +46,14 @@ import '../../case_attestation.dart';
 import '../../remote_multi_device_join_contract.dart';
 
 part 'root_key_transfer_ui_test.dart';
+part 'mls_multi_device_ui_test.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
+const String _mlsRunConfigPath =
+    '.e2e/multi-device-remote-mls/current/run_config.json';
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _phoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
 const String _otpCommandEnv = 'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
@@ -312,7 +323,10 @@ void main() {
         ],
       );
     },
-    skip: !Platform.isMacOS || !_RemoteJoinRunConfig.exists(),
+    skip:
+        !Platform.isMacOS ||
+        !_RemoteJoinRunConfig.exists() ||
+        !_invocationExpects(_newDeviceCaseId),
     timeout: const Timeout(Duration(minutes: 14)),
   );
 
@@ -579,11 +593,30 @@ void main() {
         ],
       );
     },
-    skip: !Platform.isMacOS || !_RemoteJoinRunConfig.exists(),
+    skip:
+        !Platform.isMacOS ||
+        !_RemoteJoinRunConfig.exists() ||
+        !_invocationExpects(_adminApprovalCaseId),
     timeout: const Timeout(Duration(minutes: 14)),
   );
 
   _registerRootKeyTransferAndRevokeTests();
+  _registerMlsMultiDeviceTests();
+}
+
+bool _invocationExpects(String caseId) {
+  const encoded = String.fromEnvironment(e2eCaseIdsDefine);
+  if (encoded.trim().isEmpty) {
+    return true;
+  }
+  return encoded.split(',').map((value) => value.trim()).contains(caseId);
+}
+
+String get _activeRunConfigPath {
+  const encoded = String.fromEnvironment(e2eCaseIdsDefine);
+  return encoded.trim().isNotEmpty && _invocationExpects(_mlsReadinessCaseId)
+      ? _mlsRunConfigPath
+      : _runConfigPath;
 }
 
 class _RemoteJoinRunConfig {
@@ -627,7 +660,7 @@ class _RemoteJoinRunConfig {
   final String appStateRoot;
   final String appJoiningStateRoot;
 
-  static bool exists() => File(_runConfigPath).existsSync();
+  static bool exists() => File(_activeRunConfigPath).existsSync();
 
   static _RemoteJoinRunConfig load() {
     if (Platform.environment[_activationGate]?.trim() != '1') {
@@ -635,7 +668,7 @@ class _RemoteJoinRunConfig {
         'Remote multi-device App Join is not explicitly enabled.',
       );
     }
-    final file = File(_runConfigPath);
+    final file = File(_activeRunConfigPath);
     final decoded = jsonDecode(file.readAsStringSync());
     if (decoded is! Map ||
         decoded['schemaVersion'] != 2 ||
@@ -754,6 +787,7 @@ class _JoiningCli {
     this.rootTransferEnabled = false,
     this.deviceRevokeEnabled = false,
     this.directE2eeEnabled = false,
+    this.groupE2eeEnabled = false,
   }) : workspace = config.cliWorkspace,
        home = config.cliHome,
        _tenantName = 'e2e-${_safeId(config.runId, 36)}';
@@ -766,6 +800,7 @@ class _JoiningCli {
   }) : rootTransferEnabled = false,
        deviceRevokeEnabled = false,
        directE2eeEnabled = false,
+       groupE2eeEnabled = false,
        _tenantName = 'e2e-${_safeId(config.runId, 28)}-${_safeId(role, 8)}';
 
   factory _JoiningCli.joining(_RemoteJoinRunConfig config) =>
@@ -784,6 +819,7 @@ class _JoiningCli {
   final bool rootTransferEnabled;
   final bool deviceRevokeEnabled;
   final bool directE2eeEnabled;
+  final bool groupE2eeEnabled;
   final String _tenantName;
 
   Future<void> initialize() async {
@@ -1231,21 +1267,10 @@ class _JoiningCli {
     List<String> args, {
     String? accountVerificationToken,
   }) async {
-    final environment = _environment(
+    final result = await _runProcess(
+      args,
       accountVerificationToken: accountVerificationToken,
     );
-    ProcessResult result;
-    try {
-      result = await Process.run(
-        config.cliBin,
-        args,
-        environment: environment,
-        includeParentEnvironment: false,
-        runInShell: false,
-      ).timeout(_remoteTimeout);
-    } on Object {
-      fail('The independent CLI process did not complete safely.');
-    }
     if (result.exitCode != 0) {
       fail('The independent CLI command failed without exposing output.');
     }
@@ -1261,6 +1286,48 @@ class _JoiningCli {
     return _stringMap(decoded);
   }
 
+  Future<String> _runForErrorCode(List<String> args) async {
+    final result = await _runProcess(args);
+    if (result.exitCode == 0) {
+      fail('The independent CLI unexpectedly accepted the operation.');
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(result.stdout.toString());
+    } on Object {
+      fail('The independent CLI returned invalid error JSON.');
+    }
+    if (decoded is! Map || decoded['ok'] != false || decoded['error'] is! Map) {
+      fail('The independent CLI returned no safe error projection.');
+    }
+    final error = _stringMap(decoded['error'] as Map);
+    final code = error['code']?.toString().trim() ?? '';
+    if (code.isEmpty) {
+      fail('The independent CLI returned no stable error code.');
+    }
+    return code;
+  }
+
+  Future<ProcessResult> _runProcess(
+    List<String> args, {
+    String? accountVerificationToken,
+  }) async {
+    final environment = _environment(
+      accountVerificationToken: accountVerificationToken,
+    );
+    try {
+      return await Process.run(
+        config.cliBin,
+        args,
+        environment: environment,
+        includeParentEnvironment: false,
+        runInShell: false,
+      ).timeout(_remoteTimeout);
+    } on Object {
+      fail('The independent CLI process did not complete safely.');
+    }
+  }
+
   Map<String, String> _environment({String? accountVerificationToken}) {
     final environment = <String, String>{
       'HOME': home,
@@ -1269,6 +1336,7 @@ class _JoiningCli {
       if (rootTransferEnabled) 'AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED': '1',
       if (deviceRevokeEnabled) 'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
       if (directE2eeEnabled) 'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
+      if (groupE2eeEnabled) 'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED': '1',
       if (accountVerificationToken != null)
         'AWIKI_ACCOUNT_VERIFICATION_TOKEN': accountVerificationToken,
     };

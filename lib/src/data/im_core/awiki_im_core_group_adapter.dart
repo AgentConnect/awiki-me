@@ -33,15 +33,15 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     }
     final result = await _runtime.withCurrentClient(
       (client) => client.groups.createGroup(
-        core.CreateGroupRequest(
+        mapCoreCreateGroupRequest(
           name: name,
-          identityMode: _coreIdentityMode(identity.mode),
-          identityHandle: identity.handle,
           slug: slug,
           description: description,
           goal: goal,
           rules: rules,
           messagePrompt: messagePrompt,
+          identity: identity,
+          secureRequired: _runtime.multiDeviceGroupE2eeEnabled,
         ),
       ),
     );
@@ -179,6 +179,33 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     }
     throw StateError('IM Core group response did not include a group.');
   }
+}
+
+core.CreateGroupRequest mapCoreCreateGroupRequest({
+  required String name,
+  required String slug,
+  required String description,
+  required String goal,
+  required String rules,
+  required String? messagePrompt,
+  required GroupIdentitySelection identity,
+  required bool secureRequired,
+}) {
+  return core.CreateGroupRequest(
+    name: name,
+    identityMode: _coreIdentityMode(identity.mode),
+    identityHandle: identity.handle,
+    slug: slug,
+    description: description,
+    goal: goal,
+    rules: rules,
+    messagePrompt: messagePrompt,
+    messageSecurityProfile: secureRequired
+        ? core.GroupMessageSecurityProfile.groupE2ee
+        : null,
+    e2ee: secureRequired,
+    attachmentsAllowed: secureRequired ? true : null,
+  );
 }
 
 core.JoinGroupRequest mapCoreJoinGroupRequest(

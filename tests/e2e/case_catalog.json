@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-lifecycle-v5",
+  "sourceRevision": "2026-07-20.remote-multi-device-lifecycle-mls-v6",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2122,49 +2122,121 @@
     },
     {
       "caseId": "MLS-MULTI-DEVICE-E2E-001",
-      "feature": "AWiki Me same-DID second-device MLS readiness",
-      "layer": "product_ui",
-      "preconditions": "Alice A1 is an active Leaf in one encrypted group; Alice A2 is an authorized device with an independent native Core root; awiki.info exposes the deployed P6 v2 capability.",
-      "action": "Use the group-authorized owner path to add A2's device-bound KeyPackage, deliver Commit and Welcome, then open the same group detail on A2 while status converges from preparing to ready.",
+      "feature": "AWiki Me same-DID second-device MLS lifecycle",
+      "layer": "remote_product_ui_security",
+      "preconditions": "A real AWiki Me owner device and an independently initialized CLI member device use distinct fresh native Core roots against audited awiki.info P6 v2 endpoints.",
+      "action": "Create a required-E2EE group in AWiki Me, join the CLI as the same DID, run production App MLS reconciliation, consume Welcome on the CLI, then exchange future group text and one group attachment.",
       "exactOracles": [
-        "A2 shows preparing before its own Welcome is applied and ready only after its independent local MLS state can receive a new group message; the business member count for Alice remains one."
+        "Before Welcome, the independent CLI root reports missing local MLS state and cannot see the App pre-Welcome application.",
+        "The App visibly projects preparing during production reconciliation and ready only after Add, Commit, and Welcome converge.",
+        "Future secure group text travels App-to-CLI and CLI-to-App exactly once.",
+        "One CLI group attachment object is projected once and decrypts to the exact plaintext in AWiki Me.",
+        "The same DID remains one owner business member throughout the second-device lifecycle."
       ],
       "negativeChecks": [
-        "Copied A1 state, automatic enrollment into unrelated historical groups, readiness before Welcome, duplicate Alice business members, duplicate visible messages, or any Leaf/private-state value in App UI or evidence fails."
+        "Copied native state, pre-Welcome history, stale ready during reconciliation, duplicate messages or business members, wrong attachment bytes, or MLS control/private fields in App or CLI public projections fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_multi_device_group_and_identity_cleanup",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
       "requiredFor": [
-        "nightly",
+        "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-groups",
       "implementationPath": "tests/e2e/flutter/app/mls_multi_device_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MLS-MULTI-DEVICE-E2E-001:independent_roots_and_pre_welcome_isolation",
+          "MLS-MULTI-DEVICE-E2E-001:app_reconciliation_add_welcome_ready",
+          "MLS-MULTI-DEVICE-E2E-001:bidirectional_future_group_message_once",
+          "MLS-MULTI-DEVICE-E2E-001:group_attachment_decrypted_once",
+          "MLS-MULTI-DEVICE-E2E-001:single_business_member_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-001:independent_roots_and_pre_welcome_isolation"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:app_reconciliation_add_welcome_ready"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:bidirectional_future_group_message_once"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:group_attachment_decrypted_once"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:single_business_member_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-001:independent_roots_and_pre_welcome_isolation",
+            "MLS-MULTI-DEVICE-E2E-001:app_reconciliation_add_welcome_ready",
+            "MLS-MULTI-DEVICE-E2E-001:bidirectional_future_group_message_once",
+            "MLS-MULTI-DEVICE-E2E-001:group_attachment_decrypted_once",
+            "MLS-MULTI-DEVICE-E2E-001:single_business_member_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "MLS-MULTI-DEVICE-E2E-002",
-      "feature": "AWiki Me single-device MLS revoke convergence",
-      "layer": "product_ui",
-      "preconditions": "Alice A1 and A2 have distinct active Leafs in the same encrypted group and the scenario owns both independent Core roots and cleanup ledger.",
-      "action": "Revoke A2, apply the exact Remove and Commit, observe the App retry/synchronization state during convergence, and send a new encrypted group message after the epoch advances.",
+      "feature": "AWiki Me exact-device MLS revoke convergence",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The App owner and independent CLI endpoint are active devices of one DID and have distinct MLS state in one required-E2EE group.",
+      "action": "Revoke the CLI device through the real AWiki Me Devices UI, wait for the exact Remove and Commit convergence, then send a future secure group application from the surviving App device.",
       "exactOracles": [
-        "A2 cannot decrypt the future message, A1 remains ready and receives it once, Alice remains one business member, and the App never claims ready while the revoked Leaf is still pending removal."
+        "The selected CLI device is authoritatively revoked and its exact MLS endpoint is removed.",
+        "The surviving App endpoint visibly reports ready only after Remove and Commit converge.",
+        "The revoked CLI endpoint is rejected at authorization before it can retrieve future group data.",
+        "The App continues secure group messaging while the DID remains one owner business member."
       ],
       "negativeChecks": [
-        "Removing A1 or Alice's business membership, continuing sends in an epoch that still contains revoked A2, retry silently recreating A2's Leaf, duplicate UI messages, or exposing Leaf/epoch/private values fails."
+        "Removing the surviving App endpoint or DID business membership, stale ready before removal convergence, recreating the revoked endpoint, future CLI access, duplicate messages, or MLS private fields in UI/evidence fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_multi_device_group_and_identity_cleanup",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
       "requiredFor": [
-        "nightly",
+        "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-groups",
       "implementationPath": "tests/e2e/flutter/app/mls_multi_device_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit",
+          "MLS-MULTI-DEVICE-E2E-002:app_ready_only_after_remove_convergence",
+          "MLS-MULTI-DEVICE-E2E-002:revoked_endpoint_rejected_future_group_data",
+          "MLS-MULTI-DEVICE-E2E-002:surviving_app_leaf_and_business_member_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-002:app_ready_only_after_remove_convergence"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-002:revoked_endpoint_rejected_future_group_data"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-002:surviving_app_leaf_and_business_member_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit",
+            "MLS-MULTI-DEVICE-E2E-002:app_ready_only_after_remove_convergence",
+            "MLS-MULTI-DEVICE-E2E-002:revoked_endpoint_rejected_future_group_data",
+            "MLS-MULTI-DEVICE-E2E-002:surviving_app_leaf_and_business_member_retained"
+          ]
+        ]
+      }
     },
     {
       "caseId": "HANDLE-RECOVERY-E2E-001",

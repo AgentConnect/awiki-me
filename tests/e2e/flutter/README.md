@@ -25,6 +25,7 @@ dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case multi-device
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
@@ -163,6 +164,16 @@ requires a distinct replacement DID with one ready admin. It requires two
 distinct dedicated phones and successful product SMS delivery; the synthetic
 staged-SMS-error path is deliberately rejected for this gate. Reports contain
 only fixed phase/count/boolean evidence.
+
+`--case multi-device-remote-mls` reuses that fail-closed remote contract but
+attests only `MLS-MULTI-DEVICE-E2E-001/002`. A real AWiki Me owner creates the
+required-E2EE group and drives production reconciliation; an independently
+initialized CLI member consumes its own Welcome, exchanges future text and one
+encrypted attachment, and is then revoked through the real Devices UI. The
+suite requires exact Remove convergence before the App claims ready and rejects
+future access from the revoked CLI endpoint. It never copies native state or
+projects MLS private/control values. A checked-in implementation is not remote
+pass evidence while rollout or operator prerequisites are unavailable.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide

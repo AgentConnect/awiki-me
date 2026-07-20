@@ -112,9 +112,11 @@ macOS user-presence。当
 不得声称远端通过。`HANDLE-RECOVERY-E2E-001/002` 由独立的
 `multi-device-remote-recovery` suite 承载：它要求两个专用账号、隔离 native Core roots、
 真实短信成功、至少 3600 秒权威冷静期、独立二次 OTP 和真实 macOS LocalAuthentication；
-staged SMS error 不构成该产品 gate。`DEVICE-JOIN-E2E-003`、
-`ROOT-TRANSFER-E2E-002`、`HANDLE-RECOVERY-E2E-003` 和 `MLS-MULTI-DEVICE-E2E-*` 仍为
-planned；不得把本地 capability gate、Widget fake 或手工演示记录为远端 E2E pass。
+staged SMS error 不构成该产品 gate。`MLS-MULTI-DEVICE-E2E-001/002` 已由同样显式激活的
+`multi-device-remote-mls` suite 承载：真实 App owner 与独立 CLI root 覆盖
+Add/Welcome、未来双向群消息、单对象附件和精确设备 Remove。`DEVICE-JOIN-E2E-003`、
+`ROOT-TRANSFER-E2E-002` 和 `HANDLE-RECOVERY-E2E-003` 仍为 planned；不得把本地
+capability gate、Widget fake 或手工演示记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
 图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏
@@ -199,6 +201,11 @@ AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
   --config <local-awiki-info-config.yaml>
+
+# 使用同一组受审计环境变量，单独执行多设备 MLS 生命周期：
+dart run tests/e2e/runner.dart \
+  --case multi-device-remote-mls \
+  --config <local-awiki-info-config.yaml>
 ```
 
 The local YAML supplies only the reviewed `awiki.info` service endpoints, the
@@ -208,7 +215,8 @@ or a command whose local executable is a shell is never accepted by this suite.
 Every argv item rejects whitespace, newlines, shell metacharacters and
 multi-command strings; a nested `bash`/`sh -c` after `ssh` is also rejected.
 The ali-side services must allow the dedicated phone hash and enable the hidden
-Join, root-transfer, exact-device Direct, and permanent-revoke rollouts. The CLI
+Join, group E2EE, exact-device MLS removal, root-transfer, exact-device Direct,
+and permanent-revoke rollouts. The CLI
 must be built from exactly the configured revision. The macOS operator must
 complete every real LocalAuthentication prompt; the test only counts and
 delegates those prompts and never injects success.

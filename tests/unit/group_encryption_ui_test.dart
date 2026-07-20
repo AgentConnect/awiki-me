@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/group_encryption_core_port.dart';
 import 'package:awiki_me/src/domain/entities/group_encryption_status.dart';
@@ -72,12 +74,13 @@ void main() {
     expect(find.text('群加密已就绪'), findsOneWidget);
   });
 
-  testWidgets('retry action projects only the refreshed ready state', (
+  testWidgets('retry hides stale ready until authoritative repair completes', (
     tester,
   ) async {
+    final retryGate = Completer<GroupEncryptionStatus>();
     final port = _FakeGroupEncryptionPort(
       status: _status(GroupEncryptionReadiness.needsRetry),
-      retryResult: _status(GroupEncryptionReadiness.ready),
+      retryGate: retryGate,
     );
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -94,6 +97,12 @@ void main() {
 
     expect(find.text('群加密需要重试'), findsOneWidget);
     await tester.tap(find.byKey(const Key('group-encryption-retry-button')));
+    await tester.pump();
+
+    expect(find.text('正在加入群加密'), findsOneWidget);
+    expect(find.text('群加密已就绪'), findsNothing);
+
+    retryGate.complete(_status(GroupEncryptionReadiness.ready));
     await tester.pumpAndSettle();
 
     expect(port.retryCalls, 1);
@@ -113,11 +122,11 @@ GroupEncryptionStatus _status(GroupEncryptionReadiness readiness) =>
 class _FakeGroupEncryptionPort implements GroupEncryptionCorePort {
   _FakeGroupEncryptionPort({
     required GroupEncryptionStatus status,
-    this.retryResult,
+    this.retryGate,
   }) : currentStatus = status;
 
   GroupEncryptionStatus currentStatus;
-  GroupEncryptionStatus? retryResult;
+  Completer<GroupEncryptionStatus>? retryGate;
   GroupEncryptionStatus? nextStatus;
   int statusCalls = 0;
   int retryCalls = 0;
@@ -125,7 +134,11 @@ class _FakeGroupEncryptionPort implements GroupEncryptionCorePort {
   @override
   Future<GroupEncryptionStatus> retry(String groupDid) async {
     retryCalls += 1;
-    return retryResult ?? currentStatus;
+    final gate = retryGate;
+    if (gate != null) {
+      return gate.future;
+    }
+    return currentStatus;
   }
 
   @override

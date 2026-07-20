@@ -198,6 +198,34 @@ void main() {
       );
     });
 
+    test('parses activation-gated remote multi-device MLS case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-remote-mls',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'remote_multi_device_mls',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteMls);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteMls);
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(hyphen.e2eCase.scenario, 'multi-device-remote-app-mls');
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'MLS-MULTI-DEVICE-E2E-001',
+        'MLS-MULTI-DEVICE-E2E-002',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 28));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/multi_device_join_ui_test.dart',
+      );
+      expect(hyphen.e2eCase.runConfigPath, contains('remote-mls'));
+    });
+
     test('parses direct attachment contacts and inbound cases', () {
       final direct = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -355,7 +383,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, multi-device, multi-device-remote-join, multi-device-remote-recovery, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, multi-device-remote-join, multi-device-remote-recovery, multi-device-remote-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),

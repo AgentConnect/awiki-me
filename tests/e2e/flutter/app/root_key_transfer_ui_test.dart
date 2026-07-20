@@ -416,7 +416,10 @@ void _registerRootKeyTransferAndRevokeTests() {
         ],
       );
     },
-    skip: !Platform.isMacOS || !_RemoteJoinRunConfig.exists(),
+    skip:
+        !Platform.isMacOS ||
+        !_RemoteJoinRunConfig.exists() ||
+        !_invocationExpects(_rootTransferCaseId),
     timeout: const Timeout(Duration(minutes: 20)),
   );
 }

@@ -60,6 +60,7 @@ dart run tests/e2e/runner.dart --case multi-device
 # Requires reviewed awiki.info rollout/account env and real macOS user presence:
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 ```
 
 `multi-device` 当前只证明默认关闭与 Join-only 公共入口，不代表远端 Join/SAS/Root/Recovery
@@ -73,5 +74,8 @@ user-presence。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭
 它明确拒绝 staged SMS error，必须证明产品发码路径成功。远端 rollout/账号前置条件未就绪
 时不得声称通过。其他真实
 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
+`multi-device-remote-mls` 复用同一受审计远端合同，但以真实 App owner 和独立 CLI Core
+root 覆盖 Add/Welcome、未来群文本/附件以及精确设备 Remove；实现可执行不代表已经取得
+远端 pass 证据。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。
