@@ -1,3 +1,7 @@
+// [INPUT]: Secret-free Handle Recovery projections returned by Core.
+// [OUTPUT]: Requester lifecycle and old-admin notice value objects for AWiki Me.
+// [POS]: Recovery domain model; it never carries OTPs, tokens, proofs, or keys.
+
 enum HandleRecoverySide { requester, oldAdmin }
 
 enum HandleRecoveryPhase { cooling, ready, cancelled, expired, consumed }
@@ -63,4 +67,38 @@ class HandleRecoveryCancelResult {
 
   final String recoverySessionId;
   final HandleRecoveryPhase phase;
+}
+
+/// Secret-free local discovery record for an old management device.
+///
+/// This is deliberately separate from [HandleRecoveryProgress]: discovering or
+/// hiding the notice neither grants cancellation authority nor changes the
+/// server-side Recovery Session.
+class OldAdminRecoveryNotice {
+  const OldAdminRecoveryNotice({
+    required this.eventId,
+    required this.recoverySessionId,
+    required this.canonicalHandle,
+    required this.oldDid,
+    required this.requestedAt,
+    required this.cancellableUntil,
+  });
+
+  final String eventId;
+  final String recoverySessionId;
+  final String canonicalHandle;
+  final String oldDid;
+  final DateTime requestedAt;
+  final DateTime cancellableUntil;
+}
+
+/// Result of hiding one notice on this device only.
+class OldAdminRecoveryNoticeDismissResult {
+  const OldAdminRecoveryNoticeDismissResult({
+    required this.eventId,
+    required this.dismissed,
+  });
+
+  final String eventId;
+  final bool dismissed;
 }

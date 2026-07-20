@@ -1,3 +1,7 @@
+// [INPUT]: Recovery Core port, fresh OS user presence, and App session service.
+// [OUTPUT]: Validated requester lifecycle and old-admin notice/cancel orchestration.
+// [POS]: Recovery use-case boundary; fresh notice lookup precedes every cancel.
+
 import '../domain/entities/handle_recovery.dart';
 import 'app_session_service.dart';
 import 'models/app_session.dart';
@@ -77,6 +81,82 @@ class HandleRecoveryService {
       throw const HandleRecoveryException('multiple_active_recoveries');
     }
     return sessions;
+  }
+
+  Future<List<OldAdminRecoveryNotice>> restoreOldAdminNotices(
+    String oldIdentity,
+  ) async {
+    final oldDid = _oldDid(oldIdentity);
+    final notices = await _recovery.listOldAdminRecoveryNotices(oldDid);
+    final eventIds = <String>{};
+    final recoverySessionIds = <String>{};
+    for (final notice in notices) {
+      _validateOldAdminNotice(notice, expectedOldDid: oldDid);
+      if (!eventIds.add(notice.eventId) ||
+          !recoverySessionIds.add(notice.recoverySessionId)) {
+        throw const HandleRecoveryException('duplicate_recovery_notice');
+      }
+    }
+    return notices;
+  }
+
+  Future<void> cancelOldAdminNotice({
+    required OldAdminRecoveryNotice notice,
+    required bool intentConfirmed,
+    required String presenceReason,
+  }) async {
+    _validateOldAdminNotice(notice, expectedOldDid: notice.oldDid);
+    if (!intentConfirmed) {
+      throw const HandleRecoveryException('recovery_intent_not_confirmed');
+    }
+
+    // Re-read the durable local projection immediately before user presence.
+    // A stale, expired, or locally dismissed warning must never authorize a
+    // server cancellation attempt.
+    final fresh = await _recovery.getOldAdminRecoveryNotice(
+      oldIdentity: notice.oldDid,
+      eventId: notice.eventId,
+    );
+    if (fresh == null) {
+      throw const HandleRecoveryException('recovery_notice_unavailable');
+    }
+    _validateOldAdminNotice(fresh, expectedOldDid: notice.oldDid);
+    if (!_sameOldAdminNotice(notice, fresh)) {
+      throw const HandleRecoveryException('recovery_notice_mismatch');
+    }
+
+    final present = await _userPresence.confirm(
+      reason: _required(presenceReason, 'presenceReason'),
+    );
+    if (!present) {
+      throw const HandleRecoveryException('user_presence_denied');
+    }
+    final result = await _recovery.cancelHandleRecovery(
+      selector: fresh.oldDid,
+      recoverySessionId: fresh.recoverySessionId,
+    );
+    if (result.recoverySessionId != fresh.recoverySessionId) {
+      throw const HandleRecoveryException('recovery_projection_mismatch');
+    }
+    if (result.phase != HandleRecoveryPhase.cancelled) {
+      throw const HandleRecoveryException('invalid_cancel_projection');
+    }
+
+    // The authoritative cancellation has already succeeded. This separate
+    // local-only operation prevents the resolved warning from reappearing on
+    // refresh; it is never presented as the cancellation itself.
+    await dismissOldAdminNotice(fresh);
+  }
+
+  Future<void> dismissOldAdminNotice(OldAdminRecoveryNotice notice) async {
+    _validateOldAdminNotice(notice, expectedOldDid: notice.oldDid);
+    final result = await _recovery.dismissOldAdminRecoveryNotice(
+      oldIdentity: notice.oldDid,
+      eventId: notice.eventId,
+    );
+    if (!result.dismissed || result.eventId != notice.eventId) {
+      throw const HandleRecoveryException('invalid_notice_dismiss_projection');
+    }
   }
 
   Future<HandleRecoveryProgress> beginWithSms({
@@ -333,6 +413,46 @@ void _validateProgress(HandleRecoveryProgress progress) {
           progress.newDid!.trim() == progress.oldDid.trim())) {
     throw const HandleRecoveryException('invalid_activation_projection');
   }
+}
+
+void _validateOldAdminNotice(
+  OldAdminRecoveryNotice notice, {
+  required String expectedOldDid,
+}) {
+  _required(notice.eventId, 'eventId');
+  _required(notice.recoverySessionId, 'recoverySessionId');
+  final handle = _required(notice.canonicalHandle, 'handle');
+  if (handle != handle.toLowerCase() || !handle.contains('.')) {
+    throw const HandleRecoveryException('invalid_handle_projection');
+  }
+  final oldDid = _oldDid(notice.oldDid);
+  if (oldDid != _oldDid(expectedOldDid)) {
+    throw const HandleRecoveryException('recovery_notice_mismatch');
+  }
+  if (!notice.requestedAt.isUtc ||
+      !notice.cancellableUntil.isUtc ||
+      !notice.cancellableUntil.isAfter(notice.requestedAt)) {
+    throw const HandleRecoveryException('invalid_recovery_notice_window');
+  }
+}
+
+bool _sameOldAdminNotice(
+  OldAdminRecoveryNotice expected,
+  OldAdminRecoveryNotice actual,
+) =>
+    expected.eventId == actual.eventId &&
+    expected.recoverySessionId == actual.recoverySessionId &&
+    expected.canonicalHandle == actual.canonicalHandle &&
+    expected.oldDid == actual.oldDid &&
+    expected.requestedAt == actual.requestedAt &&
+    expected.cancellableUntil == actual.cancellableUntil;
+
+String _oldDid(String value) {
+  final normalized = _required(value, 'oldDid');
+  if (!normalized.startsWith('did:')) {
+    throw const HandleRecoveryException('invalid_old_identity');
+  }
+  return normalized;
 }
 
 String _normalizeHandle(String value) {

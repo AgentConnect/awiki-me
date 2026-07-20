@@ -2794,6 +2794,19 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String handleRecoveryAdminRequestedAt(Object timestamp) {
+    return '申请时间：$timestamp';
+  }
+
+  @override
+  String handleRecoveryAdminCancellableUntil(Object timestamp) {
+    return '可取消截止时间：$timestamp';
+  }
+
+  @override
+  String get handleRecoveryAdminSecurityWarning => '安全提示：隐藏此警报不会取消服务器上的恢复请求。';
+
+  @override
   String get handleRecoveryAdminCancel => '取消恢复';
 
   @override
@@ -2805,6 +2818,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get handleRecoveryAdminCancelConfirmAction => '确认取消';
+
+  @override
+  String get handleRecoveryAdminDismiss => '仅在本设备隐藏';
+
+  @override
+  String get handleRecoveryAdminDismissConfirmTitle => '仅在本设备隐藏此警报？';
+
+  @override
+  String get handleRecoveryAdminDismissConfirmDetail =>
+      '此操作只隐藏本设备上的警报，不会取消服务器上的恢复请求。';
+
+  @override
+  String get handleRecoveryAdminDismissConfirmAction => '仅本地隐藏';
 
   @override
   String get handleRecoveryCancelPresenceReason => '确认取消 Handle 恢复';

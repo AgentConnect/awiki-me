@@ -5270,6 +5270,24 @@ abstract class AppLocalizations {
   /// **'有人正在申请恢复 {handle} 并创建新 DID。若不是你本人操作，请立即取消。'**
   String handleRecoveryAdminSectionSubtitle(Object handle);
 
+  /// No description provided for @handleRecoveryAdminRequestedAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'申请时间：{timestamp}'**
+  String handleRecoveryAdminRequestedAt(Object timestamp);
+
+  /// No description provided for @handleRecoveryAdminCancellableUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'可取消截止时间：{timestamp}'**
+  String handleRecoveryAdminCancellableUntil(Object timestamp);
+
+  /// No description provided for @handleRecoveryAdminSecurityWarning.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全提示：隐藏此警报不会取消服务器上的恢复请求。'**
+  String get handleRecoveryAdminSecurityWarning;
+
   /// No description provided for @handleRecoveryAdminCancel.
   ///
   /// In zh, this message translates to:
@@ -5293,6 +5311,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'确认取消'**
   String get handleRecoveryAdminCancelConfirmAction;
+
+  /// No description provided for @handleRecoveryAdminDismiss.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅在本设备隐藏'**
+  String get handleRecoveryAdminDismiss;
+
+  /// No description provided for @handleRecoveryAdminDismissConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅在本设备隐藏此警报？'**
+  String get handleRecoveryAdminDismissConfirmTitle;
+
+  /// No description provided for @handleRecoveryAdminDismissConfirmDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'此操作只隐藏本设备上的警报，不会取消服务器上的恢复请求。'**
+  String get handleRecoveryAdminDismissConfirmDetail;
+
+  /// No description provided for @handleRecoveryAdminDismissConfirmAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'仅本地隐藏'**
+  String get handleRecoveryAdminDismissConfirmAction;
 
   /// No description provided for @handleRecoveryCancelPresenceReason.
   ///

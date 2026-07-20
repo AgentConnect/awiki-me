@@ -87,6 +87,24 @@ class _RecoveryPort implements HandleRecoveryPort {
       const <HandleRecoveryProgress>[];
 
   @override
+  Future<List<OldAdminRecoveryNotice>> listOldAdminRecoveryNotices(
+    String oldIdentity,
+  ) async => const <OldAdminRecoveryNotice>[];
+
+  @override
+  Future<OldAdminRecoveryNotice?> getOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async => null;
+
+  @override
+  Future<OldAdminRecoveryNoticeDismissResult> dismissOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async =>
+      OldAdminRecoveryNoticeDismissResult(eventId: eventId, dismissed: true);
+
+  @override
   Future<void> markRecoveryActivationComplete(String recoverySessionId) async {}
 
   @override

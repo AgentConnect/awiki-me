@@ -1,3 +1,7 @@
+// [INPUT]: Purpose-bound OTP inputs and secret-free Recovery Core DTOs.
+// [OUTPUT]: Recovery lifecycle plus device-local old-admin notice discovery.
+// [POS]: Application boundary; notice dismiss is local UI state, never server cancel.
+
 import '../../domain/entities/handle_recovery.dart';
 import '../models/app_session.dart';
 import '../models/handle_recovery_completion.dart';
@@ -25,6 +29,21 @@ abstract interface class HandleRecoveryPort {
   });
 
   Future<List<HandleRecoveryProgress>> localHandleRecoverySessions();
+
+  Future<List<OldAdminRecoveryNotice>> listOldAdminRecoveryNotices(
+    String oldIdentity,
+  );
+
+  Future<OldAdminRecoveryNotice?> getOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  });
+
+  /// Hides a warning on this device only. It does not cancel Recovery.
+  Future<OldAdminRecoveryNoticeDismissResult> dismissOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  });
 
   Future<HandleRecoveryProgress> beginHandleRecoveryWithSms({
     required String handle,

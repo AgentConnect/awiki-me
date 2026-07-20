@@ -161,9 +161,7 @@ void main() {
     tester,
   ) async {
     final recovery = _FakeHandleRecoveryPort(
-      localSessions: <HandleRecoveryProgress>[
-        _progress(side: HandleRecoverySide.oldAdmin, canCancel: true),
-      ],
+      oldAdminNotices: <OldAdminRecoveryNotice>[_oldAdminNotice()],
     );
     final devices = FakeDeviceManagementCore()
       ..registry = const DeviceRegistrySnapshot(
@@ -204,6 +202,14 @@ void main() {
     );
     expect(find.text('身份恢复警报'), findsOneWidget);
     expect(find.textContaining('若不是你本人操作'), findsOneWidget);
+    expect(find.textContaining('申请时间：'), findsOneWidget);
+    expect(find.textContaining('可取消截止时间：'), findsOneWidget);
+    expect(find.textContaining('隐藏此警报不会取消'), findsOneWidget);
+    expect(
+      find.textContaining('awiki.identity.recovery-started.v1'),
+      findsNothing,
+    );
+    expect(find.textContaining('sync_checkpoint'), findsNothing);
 
     await tester.tap(find.text('取消恢复'));
     await tester.pumpAndSettle();
@@ -212,10 +218,137 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(recovery.cancelCalls, 1);
+    expect(recovery.getNoticeCalls, 1);
+    expect(recovery.dismissNoticeCalls, 1);
     expect(
       find.byKey(const Key('handle-recovery-admin-section')),
       findsNothing,
     );
+  });
+
+  testWidgets('local hide never calls server recovery cancel', (tester) async {
+    final recovery = _FakeHandleRecoveryPort(
+      oldAdminNotices: <OldAdminRecoveryNotice>[_oldAdminNotice()],
+    );
+    final devices = FakeDeviceManagementCore()
+      ..registry = _adminRegistry(managementReady: true);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const DevicesPage(),
+        session: const SessionIdentity(
+          did: 'did:wba:awiki.info:user:alice:e1_old',
+          credentialName: 'alice',
+          displayName: 'Alice',
+        ),
+        providerOverrides: <Override>[
+          ..._recoveryOverrides(recovery),
+          multiDeviceJoinEnabledProvider.overrideWithValue(true),
+          deviceManagementCorePortProvider.overrideWithValue(devices),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('仅在本设备隐藏'));
+    await tester.pumpAndSettle();
+    expect(find.text('此操作只隐藏本设备上的警报，不会取消服务器上的恢复请求。'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('handle-recovery-dismiss-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(recovery.dismissNoticeCalls, 1);
+    expect(recovery.cancelCalls, 0);
+    expect(
+      find.byKey(const Key('handle-recovery-admin-section')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('refresh discovers a notice persisted by realtime Core', (
+    tester,
+  ) async {
+    final recovery = _FakeHandleRecoveryPort();
+    final devices = FakeDeviceManagementCore()
+      ..registry = _adminRegistry(managementReady: true);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const DevicesPage(),
+        session: const SessionIdentity(
+          did: 'did:wba:awiki.info:user:alice:e1_old',
+          credentialName: 'alice',
+          displayName: 'Alice',
+        ),
+        providerOverrides: <Override>[
+          ..._recoveryOverrides(recovery),
+          multiDeviceJoinEnabledProvider.overrideWithValue(true),
+          deviceManagementCorePortProvider.overrideWithValue(devices),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('handle-recovery-admin-section')),
+      findsNothing,
+    );
+
+    // Simulates the already-implemented Core realtime path persisting the
+    // control event. AWiki Me discovers only the safe DTO on refresh.
+    recovery.oldAdminNotices = <OldAdminRecoveryNotice>[_oldAdminNotice()];
+    await tester.tap(find.byKey(const Key('devices-refresh')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('handle-recovery-admin-section')),
+      findsOneWidget,
+    );
+    expect(find.text('alice.awiki.info'), findsOneWidget);
+    expect(find.textContaining('proof'), findsNothing);
+    expect(find.textContaining('token'), findsNothing);
+
+    // Core omits expired, cancelled, and locally dismissed records. The App
+    // must converge to that safe list instead of retaining a stale card.
+    recovery.oldAdminNotices = const <OldAdminRecoveryNotice>[];
+    await tester.tap(find.byKey(const Key('devices-refresh')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('handle-recovery-admin-section')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('non-ready admin cannot see a recovery cancel action', (
+    tester,
+  ) async {
+    final recovery = _FakeHandleRecoveryPort(
+      oldAdminNotices: <OldAdminRecoveryNotice>[_oldAdminNotice()],
+    );
+    final devices = FakeDeviceManagementCore()
+      ..registry = _adminRegistry(managementReady: false);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const DevicesPage(),
+        session: const SessionIdentity(
+          did: 'did:wba:awiki.info:user:alice:e1_old',
+          credentialName: 'alice',
+          displayName: 'Alice',
+        ),
+        providerOverrides: <Override>[
+          ..._recoveryOverrides(recovery),
+          multiDeviceJoinEnabledProvider.overrideWithValue(true),
+          deviceManagementCorePortProvider.overrideWithValue(devices),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('handle-recovery-admin-section')),
+      findsNothing,
+    );
+    expect(find.text('取消恢复'), findsNothing);
+    expect(recovery.cancelCalls, 0);
   });
 
   testWidgets('consumed recovery resumes only local activation after restart', (
@@ -796,17 +929,46 @@ HandleRecoveryProgress _progress({
   );
 }
 
+OldAdminRecoveryNotice _oldAdminNotice() => OldAdminRecoveryNotice(
+  eventId: 'recovery-event-1',
+  recoverySessionId: 'recovery-1',
+  canonicalHandle: 'alice.awiki.info',
+  oldDid: 'did:wba:awiki.info:user:alice:e1_old',
+  requestedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 10)),
+  cancellableUntil: DateTime.now().toUtc().add(const Duration(days: 1)),
+);
+
+DeviceRegistrySnapshot _adminRegistry({required bool managementReady}) =>
+    DeviceRegistrySnapshot(
+      did: 'did:wba:awiki.info:user:alice:e1_old',
+      devices: <DeviceSummary>[
+        DeviceSummary(
+          protocolDeviceId: 'old-admin-current',
+          signingKeyId: 'did:wba:awiki.info:user:alice:e1_old#old-admin-sign',
+          e2eeKeyId: 'did:wba:awiki.info:user:alice:e1_old#old-admin-e2ee',
+          status: DeviceStatus.active,
+          role: DeviceRole.admin,
+          managementReady: managementReady,
+          isCurrent: true,
+        ),
+      ],
+    );
+
 class _FakeHandleRecoveryPort implements HandleRecoveryPort {
   _FakeHandleRecoveryPort({
     this.localSessions = const <HandleRecoveryProgress>[],
+    this.oldAdminNotices = const <OldAdminRecoveryNotice>[],
   });
 
   List<HandleRecoveryProgress> localSessions;
+  List<OldAdminRecoveryNotice> oldAdminNotices;
   int beginCalls = 0;
   int sendBeginOtpCalls = 0;
   int sendFinalizeOtpCalls = 0;
   int finalizeCalls = 0;
   int cancelCalls = 0;
+  int getNoticeCalls = 0;
+  int dismissNoticeCalls = 0;
   int markActivationCompleteCalls = 0;
   int resumeActivationCalls = 0;
   bool failFinalizeOnce = false;
@@ -911,6 +1073,38 @@ class _FakeHandleRecoveryPort implements HandleRecoveryPort {
       return pending.future;
     }
     return Future<List<HandleRecoveryProgress>>.value(localSessions);
+  }
+
+  @override
+  Future<List<OldAdminRecoveryNotice>> listOldAdminRecoveryNotices(
+    String oldIdentity,
+  ) async => oldAdminNotices;
+
+  @override
+  Future<OldAdminRecoveryNotice?> getOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async {
+    getNoticeCalls += 1;
+    for (final notice in oldAdminNotices) {
+      if (notice.eventId == eventId) return notice;
+    }
+    return null;
+  }
+
+  @override
+  Future<OldAdminRecoveryNoticeDismissResult> dismissOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async {
+    dismissNoticeCalls += 1;
+    oldAdminNotices = oldAdminNotices
+        .where((notice) => notice.eventId != eventId)
+        .toList(growable: false);
+    return OldAdminRecoveryNoticeDismissResult(
+      eventId: eventId,
+      dismissed: true,
+    );
   }
 
   @override

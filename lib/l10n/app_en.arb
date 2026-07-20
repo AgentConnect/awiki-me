@@ -1249,9 +1249,26 @@
       "handle": {}
     }
   },
+  "handleRecoveryAdminRequestedAt": "Requested: {timestamp}",
+  "@handleRecoveryAdminRequestedAt": {
+    "placeholders": {
+      "timestamp": {}
+    }
+  },
+  "handleRecoveryAdminCancellableUntil": "Cancellation deadline: {timestamp}",
+  "@handleRecoveryAdminCancellableUntil": {
+    "placeholders": {
+      "timestamp": {}
+    }
+  },
+  "handleRecoveryAdminSecurityWarning": "Security warning: hiding this alert does not cancel the recovery request.",
   "handleRecoveryAdminCancel": "Cancel recovery",
   "handleRecoveryAdminCancelConfirmTitle": "Cancel Handle recovery?",
   "handleRecoveryAdminCancelConfirmDetail": "After cancellation, this request cannot complete and the Handle remains bound to the current DID.",
   "handleRecoveryAdminCancelConfirmAction": "Cancel recovery",
+  "handleRecoveryAdminDismiss": "Hide on this device",
+  "handleRecoveryAdminDismissConfirmTitle": "Hide this alert locally?",
+  "handleRecoveryAdminDismissConfirmDetail": "This only hides the alert on this device. It does not cancel the server-side recovery request.",
+  "handleRecoveryAdminDismissConfirmAction": "Hide locally",
   "handleRecoveryCancelPresenceReason": "Confirm cancellation of Handle recovery"
 }

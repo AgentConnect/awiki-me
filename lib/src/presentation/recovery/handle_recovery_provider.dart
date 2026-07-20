@@ -1,3 +1,7 @@
+// [INPUT]: Recovery service, active App identity, runtime activation, and UI actions.
+// [OUTPUT]: Requester state plus secret-free old-admin notices for presentation.
+// [POS]: Recovery presentation state; raw control payloads/checkpoints never enter UI.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -24,6 +28,7 @@ enum HandleRecoveryErrorKind {
 class HandleRecoveryState {
   const HandleRecoveryState({
     this.sessions = const <HandleRecoveryProgress>[],
+    this.oldAdminNotices = const <OldAdminRecoveryNotice>[],
     this.activeRequester,
     this.terminalRequester,
     this.activationPending,
@@ -34,6 +39,7 @@ class HandleRecoveryState {
   });
 
   final List<HandleRecoveryProgress> sessions;
+  final List<OldAdminRecoveryNotice> oldAdminNotices;
 
   /// A requester-side Recovery that may still transition remotely.
   final HandleRecoveryProgress? activeRequester;
@@ -55,6 +61,7 @@ class HandleRecoveryState {
 
   HandleRecoveryState copyWith({
     List<HandleRecoveryProgress>? sessions,
+    List<OldAdminRecoveryNotice>? oldAdminNotices,
     Object? activeRequester = _unset,
     Object? terminalRequester = _unset,
     Object? activationPending = _unset,
@@ -65,6 +72,7 @@ class HandleRecoveryState {
   }) {
     return HandleRecoveryState(
       sessions: sessions ?? this.sessions,
+      oldAdminNotices: oldAdminNotices ?? this.oldAdminNotices,
       activeRequester: identical(activeRequester, _unset)
           ? this.activeRequester
           : activeRequester as HandleRecoveryProgress?,
@@ -110,12 +118,23 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       error: null,
     );
     try {
-      final sessions = await ref
-          .read(handleRecoveryServiceProvider)
-          .restoreLocalRecoveries();
+      final service = ref.read(handleRecoveryServiceProvider);
+      final oldDid = ref.read(sessionProvider).session?.did;
+      final sessions = await service.restoreLocalRecoveries();
+      final notices = oldDid == null
+          ? const <OldAdminRecoveryNotice>[]
+          : await service.restoreOldAdminNotices(oldDid);
       if (!_isCurrentOperation(operation)) return;
+      if (oldDid != ref.read(sessionProvider).session?.did) {
+        state = state.copyWith(
+          oldAdminNotices: const <OldAdminRecoveryNotice>[],
+          isLoading: false,
+        );
+        return;
+      }
       state = state.copyWith(
         sessions: sessions,
+        oldAdminNotices: notices,
         activeRequester: _singleActiveRequester(sessions),
         terminalRequester: null,
         activationPending: _singlePendingActivation(sessions),
@@ -127,6 +146,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       if (!_isCurrentOperation(operation)) return;
       state = state.copyWith(
         sessions: const <HandleRecoveryProgress>[],
+        oldAdminNotices: const <OldAdminRecoveryNotice>[],
         activeRequester: null,
         terminalRequester: null,
         activationPending: null,
@@ -353,6 +373,83 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     }
   }
 
+  Future<bool> cancelOldAdminNotice(
+    OldAdminRecoveryNotice notice, {
+    required bool intentConfirmed,
+    required String presenceReason,
+  }) async {
+    _requireEnabled();
+    if (state.isActionPending) return false;
+    final operation = ++_generation;
+    state = state.copyWith(
+      isLoading: false,
+      isActionPending: true,
+      error: null,
+    );
+    try {
+      await ref
+          .read(handleRecoveryServiceProvider)
+          .cancelOldAdminNotice(
+            notice: notice,
+            intentConfirmed: intentConfirmed,
+            presenceReason: presenceReason,
+          );
+      if (!_isCurrentOperation(operation)) return false;
+      state = state.copyWith(
+        oldAdminNotices: _removeOldAdminNotice(
+          state.oldAdminNotices,
+          notice.eventId,
+        ),
+        isActionPending: false,
+        error: null,
+      );
+      return true;
+    } catch (error) {
+      if (!_isCurrentOperation(operation)) return false;
+      state = state.copyWith(
+        oldAdminNotices: _dropStaleNotice(error)
+            ? _removeOldAdminNotice(state.oldAdminNotices, notice.eventId)
+            : state.oldAdminNotices,
+        isActionPending: false,
+        error: _classifyRecoveryError(error),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> dismissOldAdminNotice(OldAdminRecoveryNotice notice) async {
+    _requireEnabled();
+    if (state.isActionPending) return false;
+    final operation = ++_generation;
+    state = state.copyWith(
+      isLoading: false,
+      isActionPending: true,
+      error: null,
+    );
+    try {
+      await ref
+          .read(handleRecoveryServiceProvider)
+          .dismissOldAdminNotice(notice);
+      if (!_isCurrentOperation(operation)) return false;
+      state = state.copyWith(
+        oldAdminNotices: _removeOldAdminNotice(
+          state.oldAdminNotices,
+          notice.eventId,
+        ),
+        isActionPending: false,
+        error: null,
+      );
+      return true;
+    } catch (error) {
+      if (!_isCurrentOperation(operation)) return false;
+      state = state.copyWith(
+        isActionPending: false,
+        error: _classifyRecoveryError(error),
+      );
+      return false;
+    }
+  }
+
   void clearTerminalRequester() {
     if (state.terminalRequester == null || state.isBusy) return;
     _generation += 1;
@@ -490,6 +587,19 @@ List<HandleRecoveryProgress> _removeRecovery(
   return sessions
       .where((session) => session.recoverySessionId != recoverySessionId)
       .toList(growable: false);
+}
+
+List<OldAdminRecoveryNotice> _removeOldAdminNotice(
+  List<OldAdminRecoveryNotice> notices,
+  String eventId,
+) => notices
+    .where((notice) => notice.eventId != eventId)
+    .toList(growable: false);
+
+bool _dropStaleNotice(Object error) {
+  if (error is! HandleRecoveryException) return false;
+  return error.code == 'recovery_notice_unavailable' ||
+      error.code.contains('expired');
 }
 
 HandleRecoveryProgress? _singleActiveRequester(

@@ -294,6 +294,68 @@ void main() {
     },
   );
 
+  test(
+    'old-admin notice list get and local dismiss stay secret-free',
+    () async {
+      var listCalls = 0;
+      var getCalls = 0;
+      var dismissCalls = 0;
+      final adapter = _adapter(
+        listOldAdminNotices: ({required oldIdentity}) async {
+          listCalls += 1;
+          expect(oldIdentity, isA<core.DidIdentitySelector>());
+          return <core.OldAdminRecoveryNotice>[_coreOldAdminNotice()];
+        },
+        getOldAdminNotice: ({required oldIdentity, required eventId}) async {
+          getCalls += 1;
+          expect(oldIdentity, isA<core.DidIdentitySelector>());
+          expect(eventId, 'recovery-event-1');
+          return _coreOldAdminNotice();
+        },
+        dismissOldAdminNotice:
+            ({required oldIdentity, required eventId}) async {
+              dismissCalls += 1;
+              expect(oldIdentity, isA<core.DidIdentitySelector>());
+              return core.OldAdminRecoveryNoticeDismissResult(
+                eventId: eventId,
+                dismissed: true,
+              );
+            },
+      );
+
+      final listed = await adapter.listOldAdminRecoveryNotices(_oldDid);
+      final fetched = await adapter.getOldAdminRecoveryNotice(
+        oldIdentity: _oldDid,
+        eventId: 'recovery-event-1',
+      );
+      final dismissed = await adapter.dismissOldAdminRecoveryNotice(
+        oldIdentity: _oldDid,
+        eventId: 'recovery-event-1',
+      );
+
+      expect(listCalls, 1);
+      expect(getCalls, 1);
+      expect(dismissCalls, 1);
+      expect(listed.single.eventId, 'recovery-event-1');
+      expect(listed.single.canonicalHandle, 'alice.awiki.info');
+      expect(listed.single.oldDid, _oldDid);
+      expect(listed.single.requestedAt, DateTime.utc(2026, 7, 20));
+      expect(fetched?.recoverySessionId, 'recovery-1');
+      expect(dismissed.eventId, 'recovery-event-1');
+      expect(dismissed.dismissed, isTrue);
+      final rendered = listed.single.toString().toLowerCase();
+      for (final forbidden in <String>[
+        'sync_checkpoint',
+        'token',
+        'proof',
+        'email',
+        'secret',
+      ]) {
+        expect(rendered, isNot(contains(forbidden)));
+      }
+    },
+  );
+
   test('cross-domain Recovery fails before HTTP or Core work', () async {
     var httpCalls = 0;
     var beginCalls = 0;
@@ -331,6 +393,9 @@ void main() {
 AwikiImCoreHandleRecoveryAdapter _adapter({
   http.Client? httpClient,
   AwikiImCoreLocalHandleRecoverySessions? localSessions,
+  AwikiImCoreListOldAdminRecoveryNotices? listOldAdminNotices,
+  AwikiImCoreGetOldAdminRecoveryNotice? getOldAdminNotice,
+  AwikiImCoreDismissOldAdminRecoveryNotice? dismissOldAdminNotice,
   AwikiImCoreBeginHandleRecovery? begin,
   AwikiImCorePollHandleRecovery? poll,
   AwikiImCoreCancelHandleRecovery? cancel,
@@ -345,6 +410,9 @@ AwikiImCoreHandleRecoveryAdapter _adapter({
     targetHandleDomain: 'awiki.info',
     httpClient: httpClient,
     localSessions: localSessions,
+    listOldAdminNotices: listOldAdminNotices,
+    getOldAdminNotice: getOldAdminNotice,
+    dismissOldAdminNotice: dismissOldAdminNotice,
     begin: begin,
     poll: poll,
     cancel: cancel,
@@ -380,6 +448,16 @@ core.HandleRecoveryProgress _coreProgress({
     localActivationPending: localActivationPending,
   );
 }
+
+core.OldAdminRecoveryNotice _coreOldAdminNotice() =>
+    const core.OldAdminRecoveryNotice(
+      eventId: 'recovery-event-1',
+      recoverySessionId: 'recovery-1',
+      handle: 'alice.awiki.info',
+      oldDid: _oldDid,
+      requestedAt: '2026-07-20T00:00:00Z',
+      cancellableUntil: '2026-07-21T00:00:00Z',
+    );
 
 core.IdentitySummary _identity() => const core.IdentitySummary(
   id: 'identity-new',

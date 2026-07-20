@@ -296,6 +296,85 @@ void main() {
   test('canonical Handle uses the protocol dot form', () {
     expect(portProgress('recovery-1').canonicalHandle, 'alice.awiki.info');
   });
+
+  test('old-admin notice cancel re-reads before fresh user presence', () async {
+    final port = _FakeRecoveryPort();
+    final presence = _FakeUserPresence();
+    final notice = oldAdminNotice();
+    port.oldAdminNotices = <OldAdminRecoveryNotice>[notice];
+
+    await _service(port, presence).cancelOldAdminNotice(
+      notice: notice,
+      intentConfirmed: true,
+      presenceReason: 'Confirm cancellation',
+    );
+
+    expect(port.getNoticeCalls, 1);
+    expect(presence.calls, 1);
+    expect(port.cancelCalls, 1);
+    expect(port.dismissNoticeCalls, 1);
+    expect(port.lastCancelSelector, notice.oldDid);
+    expect(port.lastCancelRecoverySessionId, notice.recoverySessionId);
+    expect(port.lastDismissEventId, notice.eventId);
+  });
+
+  test('stale old-admin notice fails before presence or cancel', () async {
+    final port = _FakeRecoveryPort();
+    final presence = _FakeUserPresence();
+    final notice = oldAdminNotice();
+    port.oldAdminNotices = <OldAdminRecoveryNotice>[
+      OldAdminRecoveryNotice(
+        eventId: notice.eventId,
+        recoverySessionId: 'recovery-other',
+        canonicalHandle: notice.canonicalHandle,
+        oldDid: notice.oldDid,
+        requestedAt: notice.requestedAt,
+        cancellableUntil: notice.cancellableUntil,
+      ),
+    ];
+
+    await expectLater(
+      _service(port, presence).cancelOldAdminNotice(
+        notice: notice,
+        intentConfirmed: true,
+        presenceReason: 'Confirm cancellation',
+      ),
+      _throwsCode('recovery_notice_mismatch'),
+    );
+    expect(presence.calls, 0);
+    expect(port.cancelCalls, 0);
+    expect(port.dismissNoticeCalls, 0);
+  });
+
+  test('old-admin notice presence denial never calls cancel', () async {
+    final port = _FakeRecoveryPort();
+    final presence = _FakeUserPresence(confirmed: false);
+    final notice = oldAdminNotice();
+    port.oldAdminNotices = <OldAdminRecoveryNotice>[notice];
+
+    await expectLater(
+      _service(port, presence).cancelOldAdminNotice(
+        notice: notice,
+        intentConfirmed: true,
+        presenceReason: 'Confirm cancellation',
+      ),
+      _throwsCode('user_presence_denied'),
+    );
+    expect(port.getNoticeCalls, 1);
+    expect(presence.calls, 1);
+    expect(port.cancelCalls, 0);
+    expect(port.dismissNoticeCalls, 0);
+  });
+
+  test('local notice dismiss never masquerades as server cancel', () async {
+    final port = _FakeRecoveryPort();
+    final notice = oldAdminNotice();
+
+    await _service(port).dismissOldAdminNotice(notice);
+
+    expect(port.dismissNoticeCalls, 1);
+    expect(port.cancelCalls, 0);
+  });
 }
 
 HandleRecoveryService _service(
@@ -326,6 +405,15 @@ HandleRecoveryProgress portProgress(String recoverySessionId) {
   );
 }
 
+OldAdminRecoveryNotice oldAdminNotice() => OldAdminRecoveryNotice(
+  eventId: 'recovery-event-1',
+  recoverySessionId: 'recovery-1',
+  canonicalHandle: 'alice.awiki.info',
+  oldDid: 'did:wba:awiki.info:user:alice:e1_old',
+  requestedAt: DateTime.utc(2099, 7, 20),
+  cancellableUntil: DateTime.utc(2099, 7, 21),
+);
+
 class _FakeUserPresence implements UserPresencePort {
   _FakeUserPresence({this.confirmed = true});
 
@@ -348,6 +436,7 @@ class _FakeRecoveryPort implements HandleRecoveryPort {
   HandleRecoveryPhase pollPhase = HandleRecoveryPhase.ready;
   String projectedHandleDomain = 'awiki.info';
   List<HandleRecoveryProgress> localSessions = <HandleRecoveryProgress>[];
+  List<OldAdminRecoveryNotice> oldAdminNotices = <OldAdminRecoveryNotice>[];
   String? lastBeginOtpHandle;
   String? lastBeginOtpDomain;
   String? lastBeginHandle;
@@ -362,7 +451,10 @@ class _FakeRecoveryPort implements HandleRecoveryPort {
   String? lastCancelSelector;
   String? lastCancelRecoverySessionId;
   int cancelCalls = 0;
+  int getNoticeCalls = 0;
+  int dismissNoticeCalls = 0;
   int finalizeCalls = 0;
+  String? lastDismissEventId;
 
   HandleRecoveryProgress progress({
     String recoverySessionId = 'recovery-1',
@@ -473,6 +565,39 @@ class _FakeRecoveryPort implements HandleRecoveryPort {
   @override
   Future<List<HandleRecoveryProgress>> localHandleRecoverySessions() async =>
       localSessions;
+
+  @override
+  Future<List<OldAdminRecoveryNotice>> listOldAdminRecoveryNotices(
+    String oldIdentity,
+  ) async => oldAdminNotices;
+
+  @override
+  Future<OldAdminRecoveryNotice?> getOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async {
+    getNoticeCalls += 1;
+    for (final notice in oldAdminNotices) {
+      if (notice.eventId == eventId) return notice;
+    }
+    return null;
+  }
+
+  @override
+  Future<OldAdminRecoveryNoticeDismissResult> dismissOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async {
+    dismissNoticeCalls += 1;
+    lastDismissEventId = eventId;
+    oldAdminNotices = oldAdminNotices
+        .where((notice) => notice.eventId != eventId)
+        .toList(growable: false);
+    return OldAdminRecoveryNoticeDismissResult(
+      eventId: eventId,
+      dismissed: true,
+    );
+  }
 
   @override
   Future<HandleRecoveryProgress> pollHandleRecovery(

@@ -2971,6 +2971,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String handleRecoveryAdminRequestedAt(Object timestamp) {
+    return 'Requested: $timestamp';
+  }
+
+  @override
+  String handleRecoveryAdminCancellableUntil(Object timestamp) {
+    return 'Cancellation deadline: $timestamp';
+  }
+
+  @override
+  String get handleRecoveryAdminSecurityWarning =>
+      'Security warning: hiding this alert does not cancel the recovery request.';
+
+  @override
   String get handleRecoveryAdminCancel => 'Cancel recovery';
 
   @override
@@ -2982,6 +2996,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryAdminCancelConfirmAction => 'Cancel recovery';
+
+  @override
+  String get handleRecoveryAdminDismiss => 'Hide on this device';
+
+  @override
+  String get handleRecoveryAdminDismissConfirmTitle =>
+      'Hide this alert locally?';
+
+  @override
+  String get handleRecoveryAdminDismissConfirmDetail =>
+      'This only hides the alert on this device. It does not cancel the server-side recovery request.';
+
+  @override
+  String get handleRecoveryAdminDismissConfirmAction => 'Hide locally';
 
   @override
   String get handleRecoveryCancelPresenceReason =>

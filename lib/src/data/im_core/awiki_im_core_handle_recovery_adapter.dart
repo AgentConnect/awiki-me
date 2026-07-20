@@ -1,6 +1,6 @@
-// [INPUT]: Purpose-bound SMS OTPs, the local Recovery Core facade, and one tenant domain.
-// [OUTPUT]: Secret-free Handle Recovery progress and activation candidates for AWiki Me.
-// [POS]: Production Recovery adapter; credentials are method-local and immediately consumed by Core.
+// [INPUT]: Purpose-bound SMS OTPs, Recovery Core facade, and one tenant domain.
+// [OUTPUT]: Secret-free lifecycle, old-admin notices, and activation candidates.
+// [POS]: Production adapter; credentials are method-local and notice dismiss stays device-local.
 
 import 'dart:convert';
 import 'dart:math';
@@ -19,6 +19,20 @@ import 'awiki_im_core_runtime.dart';
 typedef AwikiImCoreInstance = Future<core.AwikiImCore> Function();
 typedef AwikiImCoreLocalHandleRecoverySessions =
     Future<List<core.HandleRecoveryProgress>> Function();
+typedef AwikiImCoreListOldAdminRecoveryNotices =
+    Future<List<core.OldAdminRecoveryNotice>> Function({
+      required core.IdentitySelector oldIdentity,
+    });
+typedef AwikiImCoreGetOldAdminRecoveryNotice =
+    Future<core.OldAdminRecoveryNotice?> Function({
+      required core.IdentitySelector oldIdentity,
+      required String eventId,
+    });
+typedef AwikiImCoreDismissOldAdminRecoveryNotice =
+    Future<core.OldAdminRecoveryNoticeDismissResult> Function({
+      required core.IdentitySelector oldIdentity,
+      required String eventId,
+    });
 typedef AwikiImCoreBeginHandleRecovery =
     Future<core.HandleRecoveryProgress> Function({
       required String handle,
@@ -71,6 +85,9 @@ class AwikiImCoreHandleRecoveryAdapter implements HandleRecoveryPort {
     Duration timeout = const Duration(seconds: 20),
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
     AwikiImCoreLocalHandleRecoverySessions? localSessions,
+    AwikiImCoreListOldAdminRecoveryNotices? listOldAdminNotices,
+    AwikiImCoreGetOldAdminRecoveryNotice? getOldAdminNotice,
+    AwikiImCoreDismissOldAdminRecoveryNotice? dismissOldAdminNotice,
     AwikiImCoreBeginHandleRecovery? begin,
     AwikiImCorePollHandleRecovery? poll,
     AwikiImCoreCancelHandleRecovery? cancel,
@@ -85,6 +102,24 @@ class AwikiImCoreHandleRecoveryAdapter implements HandleRecoveryPort {
        _localSessions =
            localSessions ??
            (() async => (await coreInstance()).localHandleRecoverySessions()),
+       _listOldAdminNotices =
+           listOldAdminNotices ??
+           (({required oldIdentity}) async => (await coreInstance())
+               .listOldAdminRecoveryNotices(oldIdentity: oldIdentity)),
+       _getOldAdminNotice =
+           getOldAdminNotice ??
+           (({required oldIdentity, required eventId}) async =>
+               (await coreInstance()).getOldAdminRecoveryNotice(
+                 oldIdentity: oldIdentity,
+                 eventId: eventId,
+               )),
+       _dismissOldAdminNotice =
+           dismissOldAdminNotice ??
+           (({required oldIdentity, required eventId}) async =>
+               (await coreInstance()).dismissOldAdminRecoveryNotice(
+                 oldIdentity: oldIdentity,
+                 eventId: eventId,
+               )),
        _begin =
            begin ??
            (({required handle, required verificationGrant}) async =>
@@ -141,6 +176,9 @@ class AwikiImCoreHandleRecoveryAdapter implements HandleRecoveryPort {
   final Duration _timeout;
   final AwikiImCoreMappers _mappers;
   final AwikiImCoreLocalHandleRecoverySessions _localSessions;
+  final AwikiImCoreListOldAdminRecoveryNotices _listOldAdminNotices;
+  final AwikiImCoreGetOldAdminRecoveryNotice _getOldAdminNotice;
+  final AwikiImCoreDismissOldAdminRecoveryNotice _dismissOldAdminNotice;
   final AwikiImCoreBeginHandleRecovery _begin;
   final AwikiImCorePollHandleRecovery _poll;
   final AwikiImCoreCancelHandleRecovery _cancel;
@@ -179,6 +217,42 @@ class AwikiImCoreHandleRecoveryAdapter implements HandleRecoveryPort {
   Future<List<HandleRecoveryProgress>> localHandleRecoverySessions() async {
     final sessions = await _localSessions();
     return sessions.map(_progressFromCore).toList(growable: false);
+  }
+
+  @override
+  Future<List<OldAdminRecoveryNotice>> listOldAdminRecoveryNotices(
+    String oldIdentity,
+  ) async {
+    final selector = _oldIdentitySelector(oldIdentity);
+    final notices = await _listOldAdminNotices(oldIdentity: selector);
+    return notices.map(_oldAdminNoticeFromCore).toList(growable: false);
+  }
+
+  @override
+  Future<OldAdminRecoveryNotice?> getOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async {
+    final notice = await _getOldAdminNotice(
+      oldIdentity: _oldIdentitySelector(oldIdentity),
+      eventId: _required(eventId, 'eventId'),
+    );
+    return notice == null ? null : _oldAdminNoticeFromCore(notice);
+  }
+
+  @override
+  Future<OldAdminRecoveryNoticeDismissResult> dismissOldAdminRecoveryNotice({
+    required String oldIdentity,
+    required String eventId,
+  }) async {
+    final result = await _dismissOldAdminNotice(
+      oldIdentity: _oldIdentitySelector(oldIdentity),
+      eventId: _required(eventId, 'eventId'),
+    );
+    return OldAdminRecoveryNoticeDismissResult(
+      eventId: result.eventId,
+      dismissed: result.dismissed,
+    );
   }
 
   @override
@@ -395,6 +469,26 @@ class AwikiImCoreHandleRecoveryAdapter implements HandleRecoveryPort {
     );
   }
 
+  OldAdminRecoveryNotice _oldAdminNoticeFromCore(
+    core.OldAdminRecoveryNotice value,
+  ) {
+    final target = _targetFromCanonical(value.handle);
+    return OldAdminRecoveryNotice(
+      eventId: _required(value.eventId, 'eventId'),
+      recoverySessionId: _required(
+        value.recoverySessionId,
+        'recoverySessionId',
+      ),
+      canonicalHandle: target.canonicalHandle,
+      oldDid: _oldDid(value.oldDid),
+      requestedAt: _timestamp(value.requestedAt),
+      cancellableUntil: _timestamp(value.cancellableUntil),
+    );
+  }
+
+  core.IdentitySelector _oldIdentitySelector(String value) =>
+      core.IdentitySelector.did(_oldDid(value));
+
   AppSession _activationCandidate(core.IdentitySummary identity) {
     if (!identity.readyForAuth) {
       throw const HandleRecoveryTransportException(
@@ -468,6 +562,14 @@ String _required(String value, String field) {
   final normalized = value.trim();
   if (normalized.isEmpty) {
     throw HandleRecoveryTransportException('invalid_$field');
+  }
+  return normalized;
+}
+
+String _oldDid(String value) {
+  final normalized = _required(value, 'oldIdentity');
+  if (!normalized.startsWith('did:')) {
+    throw const HandleRecoveryTransportException('invalid_old_identity');
   }
   return normalized;
 }

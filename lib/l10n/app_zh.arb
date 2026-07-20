@@ -1249,9 +1249,26 @@
       "handle": {}
     }
   },
+  "handleRecoveryAdminRequestedAt": "申请时间：{timestamp}",
+  "@handleRecoveryAdminRequestedAt": {
+    "placeholders": {
+      "timestamp": {}
+    }
+  },
+  "handleRecoveryAdminCancellableUntil": "可取消截止时间：{timestamp}",
+  "@handleRecoveryAdminCancellableUntil": {
+    "placeholders": {
+      "timestamp": {}
+    }
+  },
+  "handleRecoveryAdminSecurityWarning": "安全提示：隐藏此警报不会取消服务器上的恢复请求。",
   "handleRecoveryAdminCancel": "取消恢复",
   "handleRecoveryAdminCancelConfirmTitle": "确认取消 Handle 恢复？",
   "handleRecoveryAdminCancelConfirmDetail": "取消后本次请求不能再完成，Handle 将继续指向当前 DID。",
   "handleRecoveryAdminCancelConfirmAction": "确认取消",
+  "handleRecoveryAdminDismiss": "仅在本设备隐藏",
+  "handleRecoveryAdminDismissConfirmTitle": "仅在本设备隐藏此警报？",
+  "handleRecoveryAdminDismissConfirmDetail": "此操作只隐藏本设备上的警报，不会取消服务器上的恢复请求。",
+  "handleRecoveryAdminDismissConfirmAction": "仅本地隐藏",
   "handleRecoveryCancelPresenceReason": "确认取消 Handle 恢复"
 }
