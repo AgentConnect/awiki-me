@@ -1,3 +1,7 @@
+// [INPUT]: Compile-time flags and optional tenant/service overrides.
+// [OUTPUT]: Normalized AWiki runtime endpoints and default-off product capability gates.
+// [POS]: Application configuration boundary shared by bootstrap and feature providers.
+
 const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
 const String primaryTenantDomain = String.fromEnvironment(
   primaryTenantDomainEnvironmentKey,
@@ -6,6 +10,10 @@ const String primaryTenantDomain = String.fromEnvironment(
 const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
 const bool defaultMultiDeviceJoinEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_ENABLED',
+  defaultValue: false,
+);
+const bool defaultMultiDeviceRootTransferEnabled = bool.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED',
   defaultValue: false,
 );
 const bool defaultHandleRecoveryEnabled = bool.fromEnvironment(
@@ -32,6 +40,7 @@ class AwikiEnvironmentConfig {
     String? releasesUrl,
     bool? agentImEnabled,
     bool? multiDeviceJoinEnabled,
+    bool? multiDeviceRootTransferEnabled,
     bool? handleRecoveryEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
@@ -80,6 +89,8 @@ class AwikiEnvironmentConfig {
         );
     this.multiDeviceJoinEnabled =
         multiDeviceJoinEnabled ?? defaultMultiDeviceJoinEnabled;
+    this.multiDeviceRootTransferEnabled =
+        multiDeviceRootTransferEnabled ?? defaultMultiDeviceRootTransferEnabled;
     this.handleRecoveryEnabled =
         handleRecoveryEnabled ?? defaultHandleRecoveryEnabled;
   }
@@ -100,6 +111,7 @@ class AwikiEnvironmentConfig {
   late final String releasesUrl;
   late final bool agentImEnabled;
   late final bool multiDeviceJoinEnabled;
+  late final bool multiDeviceRootTransferEnabled;
   late final bool handleRecoveryEnabled;
 }
 

@@ -1,3 +1,7 @@
+// [INPUT]: One scope-bound AppBootstrap and optional test/provider overrides.
+// [OUTPUT]: Localized AWiki Me widget tree with scoped production providers.
+// [POS]: Top-level provider composition; secrets never enter presentation providers.
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
@@ -65,6 +69,10 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.deviceManagementCorePort != null)
           deviceManagementCorePortProvider.overrideWithValue(
             bootstrap.deviceManagementCorePort!,
+          ),
+        if (bootstrap.rootKeyTransferPort != null)
+          rootKeyTransferPortProvider.overrideWithValue(
+            bootstrap.rootKeyTransferPort!,
           ),
         if (bootstrap.onboardingService != null)
           onboardingServiceProvider.overrideWithValue(

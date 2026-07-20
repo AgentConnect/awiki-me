@@ -1,3 +1,7 @@
+// [INPUT]: Bootstrap-owned adapters, runtime configuration, and Riverpod lifecycle.
+// [OUTPUT]: Application service and capability providers used by product surfaces.
+// [POS]: Composition boundary; high-risk device operations stay behind typed ports and user presence.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
@@ -23,12 +27,14 @@ import '../application/ports/device_management_core_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/handle_recovery_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
+import '../application/ports/root_key_transfer_port.dart';
 import '../application/ports/user_presence_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
+import '../application/root_key_transfer_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/local_auth_user_presence_port.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
@@ -85,6 +91,22 @@ final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
 
 final multiDeviceJoinEnabledProvider = Provider<bool>(
   (ref) => ref.watch(awikiEnvironmentConfigProvider).multiDeviceJoinEnabled,
+);
+
+final multiDeviceRootTransferEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceRootTransferEnabled,
+);
+
+final rootKeyTransferPortProvider = Provider<RootKeyTransferPort>(
+  (ref) => throw StateError('root_key_transfer_unavailable'),
+);
+
+final rootKeyTransferServiceProvider = Provider<RootKeyTransferService>(
+  (ref) => RootKeyTransferService(
+    transfer: ref.watch(rootKeyTransferPortProvider),
+    userPresence: ref.watch(userPresencePortProvider),
+  ),
 );
 
 final handleRecoveryEnabledProvider = Provider<bool>(

@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/ports/handle_recovery_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -25,6 +26,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'devices/device_test_support.dart';
 
 void main() {
   testWidgets(
@@ -163,11 +165,35 @@ void main() {
         _progress(side: HandleRecoverySide.oldAdmin, canCancel: true),
       ],
     );
+    final devices = FakeDeviceManagementCore()
+      ..registry = const DeviceRegistrySnapshot(
+        did: 'did:wba:awiki.info:user:alice:e1_old',
+        devices: <DeviceSummary>[
+          DeviceSummary(
+            protocolDeviceId: 'old-admin-current',
+            signingKeyId: 'did:wba:awiki.info:user:alice:e1_old#old-admin-sign',
+            e2eeKeyId: 'did:wba:awiki.info:user:alice:e1_old#old-admin-e2ee',
+            status: DeviceStatus.active,
+            role: DeviceRole.admin,
+            managementReady: true,
+            isCurrent: true,
+          ),
+        ],
+      );
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const DevicesPage(),
-        providerOverrides: _recoveryOverrides(recovery),
+        session: const SessionIdentity(
+          did: 'did:wba:awiki.info:user:alice:e1_old',
+          credentialName: 'alice',
+          displayName: 'Alice',
+        ),
+        providerOverrides: <Override>[
+          ..._recoveryOverrides(recovery),
+          multiDeviceJoinEnabledProvider.overrideWithValue(true),
+          deviceManagementCorePortProvider.overrideWithValue(devices),
+        ],
       ),
     );
     await tester.pumpAndSettle();

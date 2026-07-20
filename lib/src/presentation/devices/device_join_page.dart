@@ -1,3 +1,7 @@
+// [INPUT]: New-device Join projection, user form input, and secret-free authorized-device summary.
+// [OUTPUT]: OTP/SAS Join UI plus post-authorization admin readiness status.
+// [POS]: New-device pairing surface; it never persists OTP, SAS, or root material.
+
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -195,6 +199,19 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: context.awikiTheme.secondaryText),
           ),
+          if (progress.authorizedDevice?.role == DeviceRole.admin) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              deviceManagementReadinessLabel(
+                context.l10n,
+                progress.authorizedDevice!.managementReady
+                    ? DeviceManagementReadiness.ready
+                    : DeviceManagementReadiness.adminAwaitingRoot,
+              ),
+              key: const Key('device-join-admin-readiness'),
+              style: TextStyle(color: context.awikiTheme.secondaryText),
+            ),
+          ],
           if (sas != null) ...<Widget>[
             const SizedBox(height: 24),
             Text(

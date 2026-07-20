@@ -28,6 +28,7 @@ void main() {
     expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
+    expect(config.multiDeviceRootTransferEnabled, isFalse);
     expect(config.handleRecoveryEnabled, isFalse);
   });
 
@@ -95,6 +96,7 @@ void main() {
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
       multiDeviceJoinEnabled: true,
+      multiDeviceRootTransferEnabled: true,
       handleRecoveryEnabled: true,
     );
 
@@ -113,6 +115,7 @@ void main() {
     expect(config.releasesUrl, 'https://download.example.test/releases');
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceJoinEnabled, isTrue);
+    expect(config.multiDeviceRootTransferEnabled, isTrue);
     expect(config.handleRecoveryEnabled, isTrue);
   });
 

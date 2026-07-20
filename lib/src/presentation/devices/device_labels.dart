@@ -1,3 +1,7 @@
+// [INPUT]: Secret-free device roles, authorization, Join, and root-import presentation states.
+// [OUTPUT]: Localized labels and stable generic error copy.
+// [POS]: Presentation-only mapping; no Core error body or control JSON is rendered.
+
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../domain/entities/device_management.dart';
@@ -14,6 +18,17 @@ String deviceStatusLabel(AppLocalizations l10n, DeviceStatus status) =>
       DeviceStatus.active => l10n.deviceStatusActive,
       DeviceStatus.revoked => l10n.deviceStatusRevoked,
     };
+
+String deviceManagementReadinessLabel(
+  AppLocalizations l10n,
+  DeviceManagementReadiness readiness,
+) => switch (readiness) {
+  DeviceManagementReadiness.adminAwaitingRoot =>
+    l10n.deviceManagementAwaitingRoot,
+  DeviceManagementReadiness.importing => l10n.deviceManagementImporting,
+  DeviceManagementReadiness.ready => l10n.deviceManagementReady,
+  DeviceManagementReadiness.failed => l10n.deviceManagementFailed,
+};
 
 String deviceJoinPhaseLabel(
   AppLocalizations l10n,
@@ -37,6 +52,8 @@ String deviceManagementErrorLabel(
   DeviceManagementErrorKind.conflict => l10n.deviceJoinErrorConflict,
   DeviceManagementErrorKind.sasMismatch => l10n.deviceJoinErrorSas,
   DeviceManagementErrorKind.userPresenceDenied => l10n.deviceJoinErrorPresence,
+  DeviceManagementErrorKind.sessionEstablishmentPending =>
+    l10n.deviceRootTransferSessionPending,
   DeviceManagementErrorKind.network => l10n.deviceJoinErrorNetwork,
   DeviceManagementErrorKind.failed => l10n.deviceJoinErrorFailed,
 };

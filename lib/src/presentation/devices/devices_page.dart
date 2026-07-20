@@ -1,3 +1,7 @@
+// [INPUT]: Device Registry, local Join/Recovery projections, root-transfer phase, and user actions.
+// [OUTPUT]: Device management UI with ready-admin gates and secret-free root-import status.
+// [POS]: Device administration surface; encrypted control JSON is never a renderable model.
+
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -44,12 +48,19 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     final state = ref.watch(devicesProvider);
     final recoveryEnabled = ref.watch(handleRecoveryEnabledProvider);
     final recoveryState = ref.watch(handleRecoveryProvider);
+    final registry = state.registry;
+    final canManage = state.currentDeviceCanManage;
     final cancellableRecoveries = recoveryEnabled
         ? recoveryState.cancellableAdminSessions
+              .where((_) => canManage)
+              .toList(growable: false)
         : const <HandleRecoveryProgress>[];
-    final registry = state.registry;
+    final rootTransferEnabled = ref.watch(
+      multiDeviceRootTransferEnabledProvider,
+    );
     final resumable = state.localJoins
         .where((join) => join.side == DeviceJoinSide.admin && !join.isTerminal)
+        .where((_) => canManage)
         .toList();
     return CupertinoPageScaffold(
       backgroundColor: context.awikiTheme.background,
@@ -79,7 +90,19 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
             ),
             const SizedBox(height: 16),
-            if (state.error != null) ...<Widget>[
+            if (state.error ==
+                DeviceManagementErrorKind
+                    .sessionEstablishmentPending) ...<Widget>[
+              AppSurface(
+                color: context.awikiTheme.subtleSurface,
+                child: Text(
+                  deviceManagementErrorLabel(context.l10n, state.error!),
+                  key: const Key('devices-root-session-pending'),
+                  style: TextStyle(color: context.awikiTheme.infoAccent),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ] else if (state.error != null) ...<Widget>[
               AppSurface(
                 color: context.awikiTheme.dangerContainer,
                 child: Text(
@@ -166,7 +189,32 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                           index < registry.devices.length;
                           index++
                         ) ...<Widget>[
-                          _DeviceTile(device: registry.devices[index]),
+                          _DeviceTile(
+                            device: registry.devices[index],
+                            readiness: state.readinessFor(
+                              registry.devices[index],
+                            ),
+                            sessionEstablishmentPending: state
+                                .isRootSessionEstablishing(
+                                  registry.devices[index],
+                                ),
+                            rootTransferEnabled: rootTransferEnabled,
+                            canStartRootTransfer: state.canStartRootTransfer(
+                              registry.devices[index],
+                            ),
+                            canRetryRootTransfer: state.canRetryRootTransfer(
+                              registry.devices[index],
+                            ),
+                            isActionPending: state.isActionPending,
+                            onRootTransfer: () => ref
+                                .read(devicesProvider.notifier)
+                                .startOrRetryRootTransfer(
+                                  recipient: registry.devices[index],
+                                  presenceReason: context
+                                      .l10n
+                                      .deviceRootTransferPresenceReason,
+                                ),
+                          ),
                           if (index != registry.devices.length - 1)
                             const AppSectionDivider(),
                         ],
@@ -193,9 +241,13 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                           AppListTile(
                             title:
                                 registry.pendingJoins[index].protocolDeviceId,
-                            subtitle: context.l10n.deviceReviewAction,
-                            onTap: () =>
-                                _openPending(registry.pendingJoins[index]),
+                            subtitle: canManage
+                                ? context.l10n.deviceReviewAction
+                                : context.l10n.deviceManagementActionDisabled,
+                            onTap: canManage
+                                ? () =>
+                                      _openPending(registry.pendingJoins[index])
+                                : null,
                           ),
                           if (index != registry.pendingJoins.length - 1)
                             const AppSectionDivider(),
@@ -301,19 +353,37 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _DeviceTile extends StatelessWidget {
-  const _DeviceTile({required this.device});
+  const _DeviceTile({
+    required this.device,
+    required this.readiness,
+    required this.sessionEstablishmentPending,
+    required this.rootTransferEnabled,
+    required this.canStartRootTransfer,
+    required this.canRetryRootTransfer,
+    required this.isActionPending,
+    required this.onRootTransfer,
+  });
 
   final DeviceSummary device;
+  final DeviceManagementReadiness? readiness;
+  final bool sessionEstablishmentPending;
+  final bool rootTransferEnabled;
+  final bool canStartRootTransfer;
+  final bool canRetryRootTransfer;
+  final bool isActionPending;
+  final VoidCallback onRootTransfer;
 
   @override
   Widget build(BuildContext context) {
     final role = deviceRoleLabel(context.l10n, device.role);
     final status = deviceStatusLabel(context.l10n, device.status);
-    final readiness = device.role == DeviceRole.admin
-        ? device.managementReady
-              ? context.l10n.deviceManagementReady
-              : context.l10n.deviceManagementPending
-        : null;
+    final readinessLabel = sessionEstablishmentPending
+        ? context.l10n.deviceRootTransferSessionPending
+        : readiness == null
+        ? null
+        : deviceManagementReadinessLabel(context.l10n, readiness!);
+    final canTransferRoot =
+        rootTransferEnabled && (canStartRootTransfer || canRetryRootTransfer);
     return AppListTile(
       title: device.isCurrent
           ? '${device.protocolDeviceId} · ${context.l10n.deviceCurrent}'
@@ -321,14 +391,27 @@ class _DeviceTile extends StatelessWidget {
       subtitle: <String>[
         role,
         status,
-        if (readiness != null) readiness,
+        if (readinessLabel != null) readinessLabel,
       ].join(' · '),
-      trailing: Icon(
-        device.isCurrent
-            ? CupertinoIcons.device_phone_portrait
-            : CupertinoIcons.desktopcomputer,
-        color: context.awikiTheme.secondaryText,
-      ),
+      trailing: canTransferRoot
+          ? CupertinoButton(
+              key: Key('root-transfer-${device.protocolDeviceId}'),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              onPressed: isActionPending ? null : onRootTransfer,
+              child: Text(
+                sessionEstablishmentPending
+                    ? context.l10n.deviceRootTransferContinue
+                    : canStartRootTransfer
+                    ? context.l10n.deviceRootTransferStart
+                    : context.l10n.deviceRootTransferRetry,
+              ),
+            )
+          : Icon(
+              device.isCurrent
+                  ? CupertinoIcons.device_phone_portrait
+                  : CupertinoIcons.desktopcomputer,
+              color: context.awikiTheme.secondaryText,
+            ),
     );
   }
 }

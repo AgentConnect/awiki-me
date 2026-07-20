@@ -698,6 +698,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceManagementPending => '等待管理能力就绪';
 
   @override
+  String get deviceManagementAwaitingRoot => '管理设备等待根密钥';
+
+  @override
+  String get deviceManagementImporting => '正在安全导入根密钥';
+
+  @override
+  String get deviceManagementFailed => '根密钥导入失败';
+
+  @override
+  String get deviceManagementActionDisabled => '需要已就绪的管理设备处理';
+
+  @override
+  String get deviceRootTransferStart => '开始安全导入';
+
+  @override
+  String get deviceRootTransferContinue => '继续安全导入';
+
+  @override
+  String get deviceRootTransferRetry => '重试安全导入';
+
+  @override
+  String get deviceRootTransferSessionPending => '安全会话正在建立中。请先让接收设备完成同步，然后继续。';
+
+  @override
+  String get deviceRootTransferPresenceReason => '确认安全传输根密钥';
+
+  @override
   String get deviceReviewAction => '查看并验证';
 
   @override

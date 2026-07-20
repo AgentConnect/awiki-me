@@ -1,3 +1,7 @@
+// [INPUT]: Session identity, Device Registry/Join services, root-transfer service, and UI intents.
+// [OUTPUT]: Secret-free device list, Join, and admin-readiness presentation state.
+// [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
+
 import 'dart:convert';
 import 'dart:math';
 
@@ -5,6 +9,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../application/device_management_service.dart';
+import '../../application/ports/root_key_transfer_port.dart';
+import '../../application/root_key_transfer_service.dart';
 import '../../domain/entities/device_management.dart';
 import '../app_shell/providers/session_provider.dart';
 
@@ -14,6 +20,7 @@ enum DeviceManagementErrorKind {
   conflict,
   sasMismatch,
   userPresenceDenied,
+  sessionEstablishmentPending,
   network,
   failed,
 }
@@ -25,6 +32,8 @@ class DevicesState {
     this.activeJoin,
     this.isLoading = false,
     this.isActionPending = false,
+    this.rootTransfers = const <String, RootKeyTransferSummary>{},
+    this.rootSessionEstablishingDeviceIds = const <String>{},
     this.error,
   });
 
@@ -33,7 +42,62 @@ class DevicesState {
   final DeviceJoinProgress? activeJoin;
   final bool isLoading;
   final bool isActionPending;
+  final Map<String, RootKeyTransferSummary> rootTransfers;
+  final Set<String> rootSessionEstablishingDeviceIds;
   final DeviceManagementErrorKind? error;
+
+  bool get currentDeviceCanManage =>
+      registry?.currentDevice?.canManageDevices == true;
+
+  RootKeyTransferSummary? rootTransferFor(DeviceSummary device) =>
+      rootTransfers[device.protocolDeviceId];
+
+  bool isRootSessionEstablishing(DeviceSummary device) =>
+      rootSessionEstablishingDeviceIds.contains(device.protocolDeviceId);
+
+  DeviceManagementReadiness? readinessFor(DeviceSummary device) {
+    if (device.role != DeviceRole.admin ||
+        device.status != DeviceStatus.active) {
+      return null;
+    }
+    if (device.managementReady) {
+      return DeviceManagementReadiness.ready;
+    }
+    return switch (rootTransferFor(device)?.status) {
+      RootKeyTransferStatus.failed => DeviceManagementReadiness.failed,
+      RootKeyTransferStatus.pendingDelivery ||
+      RootKeyTransferStatus.awaitingImport ||
+      RootKeyTransferStatus.importing ||
+      RootKeyTransferStatus.completed => DeviceManagementReadiness.importing,
+      null => DeviceManagementReadiness.adminAwaitingRoot,
+    };
+  }
+
+  bool canStartRootTransfer(DeviceSummary device) =>
+      currentDeviceCanManage &&
+      !device.isCurrent &&
+      device.status == DeviceStatus.active &&
+      device.role == DeviceRole.admin &&
+      !device.managementReady &&
+      rootTransferFor(device) == null;
+
+  bool canRetryRootTransfer(DeviceSummary device) {
+    final current = registry?.currentDevice;
+    final transfer = rootTransferFor(device);
+    if (current == null ||
+        transfer == null ||
+        !transfer.retryable ||
+        device.status != DeviceStatus.active ||
+        device.role != DeviceRole.admin ||
+        device.managementReady ||
+        transfer.recipientDeviceId != device.protocolDeviceId) {
+      return false;
+    }
+    if (transfer.senderDeviceId == current.protocolDeviceId) {
+      return current.canManageDevices;
+    }
+    return transfer.recipientDeviceId == current.protocolDeviceId;
+  }
 
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
@@ -42,6 +106,8 @@ class DevicesState {
     bool clearActiveJoin = false,
     bool? isLoading,
     bool? isActionPending,
+    Map<String, RootKeyTransferSummary>? rootTransfers,
+    Set<String>? rootSessionEstablishingDeviceIds,
     DeviceManagementErrorKind? error,
     bool clearError = false,
   }) {
@@ -51,6 +117,10 @@ class DevicesState {
       activeJoin: clearActiveJoin ? null : (activeJoin ?? this.activeJoin),
       isLoading: isLoading ?? this.isLoading,
       isActionPending: isActionPending ?? this.isActionPending,
+      rootTransfers: rootTransfers ?? this.rootTransfers,
+      rootSessionEstablishingDeviceIds:
+          rootSessionEstablishingDeviceIds ??
+          this.rootSessionEstablishingDeviceIds,
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -61,8 +131,12 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   final Ref ref;
   int _generation = 0;
+  final Map<String, String> _rootTransferStartMessageIds = <String, String>{};
 
   bool get _enabled => ref.read(multiDeviceJoinEnabledProvider);
+
+  bool get _rootTransferEnabled =>
+      ref.read(multiDeviceRootTransferEnabledProvider);
 
   String? get _selector {
     final did = ref.read(sessionProvider).session?.did.trim();
@@ -82,12 +156,54 @@ class DevicesController extends StateNotifier<DevicesState> {
       final results = await Future.wait<Object>(<Future<Object>>[
         service.loadRegistry(selector),
         service.restoreLocalJoins(),
+        if (_rootTransferEnabled)
+          ref
+              .read(rootKeyTransferServiceProvider)
+              .list(selector: selector, includeCompleted: true),
       ]);
       if (!mounted || generation != _generation) return;
+      final registry = results[0] as DeviceRegistrySnapshot;
+      final transfers = _rootTransferEnabled
+          ? _latestRootTransfersByRecipient(
+              registry,
+              results[2] as List<RootKeyTransferSummary>,
+            )
+          : const <String, RootKeyTransferSummary>{};
+      final eligibleRecipients = registry.devices
+          .where(
+            (device) =>
+                device.status == DeviceStatus.active &&
+                device.role == DeviceRole.admin &&
+                !device.managementReady,
+          )
+          .map((device) => device.protocolDeviceId)
+          .toSet();
+      if (!_rootTransferEnabled) {
+        _rootTransferStartMessageIds.clear();
+      } else {
+        _rootTransferStartMessageIds.removeWhere(
+          (deviceId, _) =>
+              !eligibleRecipients.contains(deviceId) ||
+              transfers.containsKey(deviceId),
+        );
+      }
+      final establishingDeviceIds = _rootTransferEnabled
+          ? state.rootSessionEstablishingDeviceIds
+                .where(
+                  (deviceId) =>
+                      eligibleRecipients.contains(deviceId) &&
+                      !transfers.containsKey(deviceId),
+                )
+                .toSet()
+          : <String>{};
       state = DevicesState(
-        registry: results[0] as DeviceRegistrySnapshot,
+        registry: registry,
         localJoins: results[1] as List<DeviceJoinProgress>,
         activeJoin: state.activeJoin,
+        rootTransfers: transfers,
+        rootSessionEstablishingDeviceIds: Set.unmodifiable(
+          establishingDeviceIds,
+        ),
       );
     } catch (error) {
       if (!mounted || generation != _generation) return;
@@ -274,6 +390,87 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
+  Future<bool> startOrRetryRootTransfer({
+    required DeviceSummary recipient,
+    required String presenceReason,
+  }) async {
+    final selector = _selector;
+    final authoritativeRecipient = _findDevice(
+      state.registry,
+      recipient.protocolDeviceId,
+    );
+    if (!_enabled ||
+        !_rootTransferEnabled ||
+        selector == null ||
+        state.isActionPending ||
+        authoritativeRecipient == null ||
+        authoritativeRecipient.status != DeviceStatus.active ||
+        authoritativeRecipient.role != DeviceRole.admin ||
+        authoritativeRecipient.managementReady) {
+      return false;
+    }
+
+    final transfer = state.rootTransferFor(authoritativeRecipient);
+    final canStart = state.canStartRootTransfer(authoritativeRecipient);
+    final canRetry = state.canRetryRootTransfer(authoritativeRecipient);
+    if (!canStart && !canRetry) return false;
+
+    state = state.copyWith(isActionPending: true, clearError: true);
+    try {
+      final service = ref.read(rootKeyTransferServiceProvider);
+      if (transfer == null) {
+        final messageId = _rootTransferStartMessageIds.putIfAbsent(
+          authoritativeRecipient.protocolDeviceId,
+          () => _newOperationId('root-control'),
+        );
+        await service.start(
+          selector: selector,
+          recipientDeviceId: authoritativeRecipient.protocolDeviceId,
+          messageId: messageId,
+          presenceReason: presenceReason,
+        );
+      } else {
+        await service.retry(
+          selector: selector,
+          messageId: transfer.messageId,
+          presenceReason: presenceReason,
+        );
+      }
+      if (!mounted) return false;
+      await loadManagement();
+      if (mounted) {
+        state = state.copyWith(isActionPending: false);
+      }
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      final kind = _classifyDeviceError(error);
+      try {
+        await loadManagement();
+      } catch (_) {
+        // loadManagement already projects a stable error and never rethrows.
+      }
+      if (mounted) {
+        final establishingDeviceIds = <String>{
+          ...state.rootSessionEstablishingDeviceIds,
+        };
+        if (kind == DeviceManagementErrorKind.sessionEstablishmentPending) {
+          establishingDeviceIds.add(authoritativeRecipient.protocolDeviceId);
+        } else if (kind != DeviceManagementErrorKind.userPresenceDenied) {
+          establishingDeviceIds.remove(authoritativeRecipient.protocolDeviceId);
+        }
+        state = state.copyWith(
+          isActionPending: false,
+          rootSessionEstablishingDeviceIds: Set.unmodifiable(
+            establishingDeviceIds,
+          ),
+          error: kind,
+        );
+      }
+      return false;
+    }
+  }
+
   Future<void> cancelActive() async {
     final progress = state.activeJoin;
     if (!_enabled || progress == null || state.isActionPending) return;
@@ -319,9 +516,64 @@ List<DeviceJoinProgress> _replaceJoin(
   ];
 }
 
+DeviceSummary? _findDevice(
+  DeviceRegistrySnapshot? registry,
+  String protocolDeviceId,
+) {
+  if (registry == null) return null;
+  for (final device in registry.devices) {
+    if (device.protocolDeviceId == protocolDeviceId) return device;
+  }
+  return null;
+}
+
+Map<String, RootKeyTransferSummary> _latestRootTransfersByRecipient(
+  DeviceRegistrySnapshot registry,
+  List<RootKeyTransferSummary> transfers,
+) {
+  final currentDeviceId = registry.currentDevice?.protocolDeviceId;
+  if (currentDeviceId == null) {
+    if (transfers.isNotEmpty) {
+      throw const RootKeyTransferException('root_transfer_device_mismatch');
+    }
+    return const <String, RootKeyTransferSummary>{};
+  }
+  final activeAdminIds = registry.devices
+      .where(
+        (device) =>
+            device.status == DeviceStatus.active &&
+            device.role == DeviceRole.admin &&
+            !device.managementReady,
+      )
+      .map((device) => device.protocolDeviceId)
+      .toSet();
+  final latest = <String, RootKeyTransferSummary>{};
+  for (final transfer in transfers) {
+    if (transfer.did != registry.did ||
+        (transfer.senderDeviceId != currentDeviceId &&
+            transfer.recipientDeviceId != currentDeviceId)) {
+      throw const RootKeyTransferException('root_transfer_device_mismatch');
+    }
+    if (!activeAdminIds.contains(transfer.recipientDeviceId)) continue;
+    final previous = latest[transfer.recipientDeviceId];
+    if (previous == null || transfer.createdAt.isAfter(previous.createdAt)) {
+      latest[transfer.recipientDeviceId] = transfer;
+    }
+  }
+  return Map<String, RootKeyTransferSummary>.unmodifiable(latest);
+}
+
 DeviceManagementErrorKind _classifyDeviceError(Object error) {
+  if (error case RootKeyTransferPortException(
+    capability: rootKeyTransferSessionEstablishmentPendingCapability,
+  )) {
+    return DeviceManagementErrorKind.sessionEstablishmentPending;
+  }
   final code = switch (error) {
     DeviceManagementException(:final code) => code,
+    RootKeyTransferException(:final code) => code,
+    RootKeyTransferPortException(:final code, :final capability) =>
+      '$code ${capability ?? ''}',
     _ => error.toString().toLowerCase(),
   };
   if (code.contains('expired')) return DeviceManagementErrorKind.expired;

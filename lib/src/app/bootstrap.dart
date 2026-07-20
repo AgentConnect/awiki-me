@@ -1,3 +1,7 @@
+// [INPUT]: Tenant scope, environment gates, platform secret storage, and native IM Core.
+// [OUTPUT]: Fully composed AWiki Me adapters/services for one immutable storage scope.
+// [POS]: Production composition root; device secrets remain owned by Vault-backed IM Core.
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -20,6 +24,7 @@ import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
+import '../application/ports/root_key_transfer_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -42,6 +47,7 @@ import '../data/im_core/awiki_im_core_message_sync_adapter.dart';
 import '../data/im_core/awiki_im_core_paths.dart';
 import '../data/im_core/awiki_im_core_profile_adapter.dart';
 import '../data/im_core/awiki_im_core_realtime_adapter.dart';
+import '../data/im_core/awiki_im_core_root_key_transfer_adapter.dart';
 import '../data/im_core/awiki_im_core_relationship_adapter.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
@@ -88,6 +94,7 @@ class AppBootstrap {
     this.appSessionService,
     this.identityCorePort,
     this.deviceManagementCorePort,
+    this.rootKeyTransferPort,
     this.onboardingService,
     this.onboardingSupportService,
     this.messagingService,
@@ -119,6 +126,7 @@ class AppBootstrap {
   final AppSessionService? appSessionService;
   final IdentityCorePort? identityCorePort;
   final DeviceManagementCorePort? deviceManagementCorePort;
+  final RootKeyTransferPort? rootKeyTransferPort;
   final OnboardingService? onboardingService;
   final OnboardingSupportService? onboardingSupportService;
   final MessagingService? messagingService;
@@ -196,6 +204,8 @@ class AppBootstrap {
         repository: scopeSecretRepository,
       ),
       multiDeviceJoinEnabled: effectiveEnvironment.multiDeviceJoinEnabled,
+      multiDeviceRootTransferEnabled:
+          effectiveEnvironment.multiDeviceRootTransferEnabled,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
           onProgress?.call(AppBootstrapProgress.upgradingLocalState);
@@ -237,6 +247,10 @@ class AppBootstrap {
               userServiceUrl: effectiveEnvironment.userServiceUrl,
               targetHandleDomain: effectiveEnvironment.didDomain,
             )
+          : null;
+      final rootKeyTransferAdapter =
+          effectiveEnvironment.multiDeviceRootTransferEnabled
+          ? AwikiImCoreRootKeyTransferAdapter(runtime: runtime)
           : null;
       final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
@@ -350,6 +364,7 @@ class AppBootstrap {
         appSessionService: appSessionService,
         identityCorePort: identityAdapter,
         deviceManagementCorePort: deviceManagementAdapter,
+        rootKeyTransferPort: rootKeyTransferAdapter,
         onboardingService: onboardingService,
         onboardingSupportService: onboardingSupportService,
         messagingService: messagingService,

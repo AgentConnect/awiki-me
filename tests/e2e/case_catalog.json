@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-19.handle-recovery-planned-v1",
+  "sourceRevision": "2026-07-20.root-transfer-planned-v3",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1922,6 +1922,52 @@
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "ROOT-TRANSFER-E2E-001",
+      "feature": "AWiki Me management-device root import",
+      "layer": "product_ui",
+      "preconditions": "A management-ready AWiki Me admin and an active admin-awaiting-root device use independent native Core data roots against awiki.info with the root-transfer capability enabled; their exact-device Direct session may initially be absent.",
+      "action": "Open Devices on the ready admin, explicitly start secure import, handle a missing P5 v2 session as an Init-only pending step, sync the receiver, confirm user presence again to continue with the same foreground message ID, let Core consume the encrypted control and imported ACK, then refresh both device projections.",
+      "exactOracles": [
+        "Init-only pending is visibly distinguished from root transfer, then the recipient progresses from admin-awaiting-root through importing to Registry-backed management-ready, and only then can its product management actions become enabled."
+      ],
+      "negativeChecks": [
+        "A member action, treating session Init as root delivery/failure, continuation without fresh user presence, readiness on delivery acceptance alone, root/control JSON in chat or notifications, root bytes in logs/errors/reports, or a second business ACK fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/root_key_transfer_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "ROOT-TRANSFER-E2E-002",
+      "feature": "AWiki Me root-import retry and idempotent readiness",
+      "layer": "product_ui",
+      "preconditions": "The same isolated management-device pair can exercise a lost response or transient delivery failure before the signed imported ACK is durably completed.",
+      "action": "Restart the sender or receiver after a persisted failed/importing transfer, restore the Core summary, retry with a fresh user-presence confirmation and the original message ID, then replay completion and refresh the authoritative Registry projection.",
+      "exactOracles": [
+        "Sender and receiver retry reuse the Core-persisted P5 message ID, duplicate success stays one readiness transition, restart projects progress from Core and ready only from Registry, and no management operation is available before ready."
+      ],
+      "negativeChecks": [
+        "A new message ID for a persisted retry, duplicate readiness generation, a second App-owned transfer state store, persisted App root secret/control payload, false ready from Core completion alone, or raw transport error text fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/root_key_transfer_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
     },

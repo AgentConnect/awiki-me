@@ -1436,6 +1436,60 @@ abstract class AppLocalizations {
   /// **'等待管理能力就绪'**
   String get deviceManagementPending;
 
+  /// No description provided for @deviceManagementAwaitingRoot.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理设备等待根密钥'**
+  String get deviceManagementAwaitingRoot;
+
+  /// No description provided for @deviceManagementImporting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在安全导入根密钥'**
+  String get deviceManagementImporting;
+
+  /// No description provided for @deviceManagementFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'根密钥导入失败'**
+  String get deviceManagementFailed;
+
+  /// No description provided for @deviceManagementActionDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要已就绪的管理设备处理'**
+  String get deviceManagementActionDisabled;
+
+  /// No description provided for @deviceRootTransferStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始安全导入'**
+  String get deviceRootTransferStart;
+
+  /// No description provided for @deviceRootTransferContinue.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续安全导入'**
+  String get deviceRootTransferContinue;
+
+  /// No description provided for @deviceRootTransferRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试安全导入'**
+  String get deviceRootTransferRetry;
+
+  /// No description provided for @deviceRootTransferSessionPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全会话正在建立中。请先让接收设备完成同步，然后继续。'**
+  String get deviceRootTransferSessionPending;
+
+  /// No description provided for @deviceRootTransferPresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认安全传输根密钥'**
+  String get deviceRootTransferPresenceReason;
+
   /// No description provided for @deviceReviewAction.
   ///
   /// In zh, this message translates to:

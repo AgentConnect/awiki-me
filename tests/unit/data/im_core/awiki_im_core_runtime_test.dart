@@ -43,6 +43,7 @@ void main() {
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: vaultProvider,
       multiDeviceJoinEnabled: true,
+      multiDeviceRootTransferEnabled: true,
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
         expect(await Directory(paths.identityRootDir).exists(), isTrue);
@@ -96,6 +97,7 @@ void main() {
               List<int>.filled(32, 7),
             );
             expect(openOptions?.multiDeviceJoinEnabled, isTrue);
+            expect(openOptions?.multiDeviceRootTransferEnabled, isTrue);
             throw UnsupportedError('fake opener stops before native load');
           },
     );

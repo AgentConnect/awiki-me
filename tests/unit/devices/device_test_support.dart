@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
+import 'package:awiki_me/src/application/ports/root_key_transfer_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
@@ -184,6 +185,133 @@ class FakeUserPresence implements UserPresencePort {
     calls += 1;
     return result;
   }
+}
+
+class FakeRootKeyTransferPort implements RootKeyTransferPort {
+  Object? error;
+  List<RootKeyTransferSummary> summaries = <RootKeyTransferSummary>[];
+  int calls = 0;
+  int listCalls = 0;
+  int retryCalls = 0;
+  String? lastSelector;
+  String? lastRecipientDeviceId;
+  String? lastMessageId;
+  bool? lastUserPresenceConfirmed;
+
+  @override
+  Future<List<RootKeyTransferSummary>> listRootKeyTransfers({
+    required String selector,
+    required bool includeCompleted,
+  }) async {
+    listCalls += 1;
+    lastSelector = selector;
+    return summaries
+        .where(
+          (summary) =>
+              includeCompleted ||
+              summary.status != RootKeyTransferStatus.completed,
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<RootKeyTransferReceipt> sendRootKeyTransfer({
+    required String selector,
+    required String recipientDeviceId,
+    required String messageId,
+    required bool userPresenceConfirmed,
+  }) async {
+    calls += 1;
+    lastSelector = selector;
+    lastRecipientDeviceId = recipientDeviceId;
+    lastMessageId = messageId;
+    lastUserPresenceConfirmed = userPresenceConfirmed;
+    if (!_isSessionEstablishmentPending(error)) {
+      _replaceSummary(
+        rootTransferSummary(
+          messageId: messageId,
+          recipientDeviceId: recipientDeviceId,
+          status: error == null
+              ? RootKeyTransferStatus.pendingDelivery
+              : RootKeyTransferStatus.failed,
+          retryable: error != null,
+        ),
+      );
+    }
+    if (error != null) throw error!;
+    return RootKeyTransferReceipt(
+      did: selector,
+      senderDeviceId: 'admin-current',
+      recipientDeviceId: recipientDeviceId,
+      messageId: messageId,
+      acceptedAt: DateTime.utc(2026, 7, 20),
+    );
+  }
+
+  @override
+  Future<RootKeyTransferSummary> retryRootKeyTransfer({
+    required String selector,
+    required String messageId,
+    required bool userPresenceConfirmed,
+  }) async {
+    retryCalls += 1;
+    lastSelector = selector;
+    lastMessageId = messageId;
+    lastUserPresenceConfirmed = userPresenceConfirmed;
+    final existing = summaries.firstWhere(
+      (summary) => summary.messageId == messageId,
+    );
+    final next = RootKeyTransferSummary(
+      did: existing.did,
+      senderDeviceId: existing.senderDeviceId,
+      recipientDeviceId: existing.recipientDeviceId,
+      messageId: existing.messageId,
+      status: error == null
+          ? RootKeyTransferStatus.importing
+          : RootKeyTransferStatus.failed,
+      createdAt: existing.createdAt,
+      acceptedAt: existing.acceptedAt,
+      completedAt: existing.completedAt,
+      retryable: error != null,
+    );
+    _replaceSummary(next);
+    if (error != null) throw error!;
+    return next;
+  }
+
+  void _replaceSummary(RootKeyTransferSummary replacement) {
+    summaries = <RootKeyTransferSummary>[
+      for (final summary in summaries)
+        if (summary.messageId != replacement.messageId) summary,
+      replacement,
+    ];
+  }
+}
+
+bool _isSessionEstablishmentPending(Object? error) =>
+    error is RootKeyTransferPortException &&
+    error.capability == rootKeyTransferSessionEstablishmentPendingCapability;
+
+RootKeyTransferSummary rootTransferSummary({
+  String messageId = 'root-message-1',
+  String senderDeviceId = 'admin-current',
+  String recipientDeviceId = 'admin-new',
+  RootKeyTransferStatus status = RootKeyTransferStatus.failed,
+  bool retryable = true,
+}) {
+  return RootKeyTransferSummary(
+    did: testDid,
+    senderDeviceId: senderDeviceId,
+    recipientDeviceId: recipientDeviceId,
+    messageId: messageId,
+    status: status,
+    createdAt: DateTime.utc(2026, 7, 20),
+    acceptedAt: DateTime.utc(2026, 7, 20, 0, 1),
+    completedAt: status == RootKeyTransferStatus.completed
+        ? DateTime.utc(2026, 7, 20, 0, 2)
+        : null,
+    retryable: retryable,
+  );
 }
 
 class FakeJoinDirectory implements DirectoryApplicationService {

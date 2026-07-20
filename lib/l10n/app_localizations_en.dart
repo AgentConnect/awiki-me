@@ -730,6 +730,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceManagementPending => 'Waiting for management readiness';
 
   @override
+  String get deviceManagementAwaitingRoot => 'Admin awaiting root key';
+
+  @override
+  String get deviceManagementImporting => 'Importing root key securely';
+
+  @override
+  String get deviceManagementFailed => 'Root-key import failed';
+
+  @override
+  String get deviceManagementActionDisabled =>
+      'A management-ready admin device is required';
+
+  @override
+  String get deviceRootTransferStart => 'Start secure import';
+
+  @override
+  String get deviceRootTransferContinue => 'Continue secure import';
+
+  @override
+  String get deviceRootTransferRetry => 'Retry secure import';
+
+  @override
+  String get deviceRootTransferSessionPending =>
+      'A secure session is being established. Sync the receiving device, then continue.';
+
+  @override
+  String get deviceRootTransferPresenceReason =>
+      'Confirm secure root-key transfer';
+
+  @override
   String get deviceReviewAction => 'Review and verify';
 
   @override
