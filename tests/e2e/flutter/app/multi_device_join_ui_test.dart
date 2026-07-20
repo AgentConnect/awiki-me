@@ -791,21 +791,21 @@ Future<String> _requestAndResolveOtp({
     fail('The purpose-bound OTP request was rejected.');
   }
   try {
-    evaluateRemoteMultiDeviceSmsResponse(
+    return continueRemoteMultiDeviceOtpAfterSmsResponse(
       statusCode: response.statusCode,
       contentType: response.headers['content-type'],
       body: response.body,
       allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
+      resolveOtp: () => _resolveOtp(
+        account: account,
+        purpose: purpose,
+        handle: handle,
+        didDomain: config.didDomain,
+      ),
     );
   } on FormatException {
     fail('The purpose-bound OTP request was rejected.');
   }
-  return _resolveOtp(
-    account: account,
-    purpose: purpose,
-    handle: handle,
-    didDomain: config.didDomain,
-  );
 }
 
 Future<String> _resolveOtp({

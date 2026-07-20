@@ -102,11 +102,11 @@ void main() {
       );
     });
 
-    test('accepts only the closed RFC7807 503 in explicit staged mode', () {
+    test('accepts only the deployed Globe provider failure in staged mode', () {
       expect(
         evaluateRemoteMultiDeviceSmsResponse(
           statusCode: 503,
-          contentType: 'application/problem+json; charset=utf-8',
+          contentType: 'application/problem+json',
           body: _validSmsProblemBody(),
           allowStagedOtpOnSmsError: true,
         ),
@@ -133,33 +133,127 @@ void main() {
         <String, Object?>{...valid, 'status': '503'},
         <String, Object?>{...valid, 'status': 502},
         <String, Object?>{...valid, 'detail': 'SMS_ERROR'},
+        <String, Object?>{
+          ...valid,
+          'detail':
+              '[SMS_ERROR] SMS send failed: [MOBILE_NUMBER_ILLEGAL] '
+              'The mobile number is illegal.',
+        },
+        <String, Object?>{
+          ...valid,
+          'detail':
+              '[SMS_ERROR] Globe SMS send failed: [OTHER_PROVIDER_ERROR] '
+              'The mobile number is illegal.',
+        },
+        <String, Object?>{
+          ...valid,
+          'detail':
+              '[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] '
+              '[OTHER_PROVIDER_ERROR] provider detail.',
+        },
+        <String, Object?>{
+          ...valid,
+          'detail':
+              '[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] '
+              '[MOBILE_NUMBER_ILLEGAL] provider detail.',
+        },
+        <String, Object?>{...valid, 'detail': '${valid['detail']}\n'},
+        <String, Object?>{...valid, 'detail': '${valid['detail']} '},
         <String, Object?>{...valid, 'instance': '/wrong'},
       ];
       for (final body in invalidBodies) {
+        var resolverCalls = 0;
         expect(
-          () => evaluateRemoteMultiDeviceSmsResponse(
+          () => continueRemoteMultiDeviceOtpAfterSmsResponse(
             statusCode: 503,
             contentType: 'application/problem+json',
             body: jsonEncode(body),
             allowStagedOtpOnSmsError: true,
+            resolveOtp: () {
+              resolverCalls += 1;
+              return 'not-used';
+            },
           ),
           throwsFormatException,
         );
+        expect(resolverCalls, 0, reason: jsonEncode(body));
       }
       for (final contentType in <String?>[
         null,
         'application/json',
+        'application/problem+json; charset=utf-8',
         'text/plain',
       ]) {
+        var resolverCalls = 0;
         expect(
-          () => evaluateRemoteMultiDeviceSmsResponse(
+          () => continueRemoteMultiDeviceOtpAfterSmsResponse(
             statusCode: 503,
             contentType: contentType,
             body: _validSmsProblemBody(),
             allowStagedOtpOnSmsError: true,
+            resolveOtp: () {
+              resolverCalls += 1;
+              return 'not-used';
+            },
           ),
           throwsFormatException,
         );
+        expect(resolverCalls, 0, reason: contentType);
+      }
+    });
+
+    test('rejects secret-like provider detail before invoking resolver', () {
+      for (final providerMessage in <String>[
+        'otp=654321',
+        'token=must-not-leak',
+        'reference 654321',
+        'authorization unavailable',
+      ]) {
+        var resolverCalls = 0;
+        expect(
+          () => continueRemoteMultiDeviceOtpAfterSmsResponse(
+            statusCode: 503,
+            contentType: 'application/problem+json',
+            body: _validSmsProblemBody(providerMessage: providerMessage),
+            allowStagedOtpOnSmsError: true,
+            resolveOtp: () {
+              resolverCalls += 1;
+              return 'not-used';
+            },
+          ),
+          throwsFormatException,
+        );
+        expect(resolverCalls, 0, reason: providerMessage);
+      }
+    });
+
+    test('invokes resolver once after 200 or the exact staged response', () {
+      for (final response
+          in <({int statusCode, String contentType, String body})>[
+            (
+              statusCode: 200,
+              contentType: 'application/json',
+              body: '{"message":"sent"}',
+            ),
+            (
+              statusCode: 503,
+              contentType: 'application/problem+json',
+              body: _validSmsProblemBody(),
+            ),
+          ]) {
+        var resolverCalls = 0;
+        final result = continueRemoteMultiDeviceOtpAfterSmsResponse(
+          statusCode: response.statusCode,
+          contentType: response.contentType,
+          body: response.body,
+          allowStagedOtpOnSmsError: response.statusCode == 503,
+          resolveOtp: () {
+            resolverCalls += 1;
+            return 'resolved';
+          },
+        );
+        expect(result, 'resolved');
+        expect(resolverCalls, 1);
       }
     });
 
@@ -173,10 +267,14 @@ void main() {
   });
 }
 
-String _validSmsProblemBody() => jsonEncode(<String, Object?>{
+String _validSmsProblemBody({
+  String providerMessage = 'The mobile number is illegal.',
+}) => jsonEncode(<String, Object?>{
   'type': 'about:blank',
   'title': 'SMS Service Error',
   'status': 503,
-  'detail': '[SMS_ERROR] provider unavailable',
+  'detail':
+      '[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] '
+      '$providerMessage',
   'instance': '/user-service/auth/sms-codes',
 });

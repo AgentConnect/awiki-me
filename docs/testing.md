@@ -217,11 +217,15 @@ This flag is accepted only with the exact reviewed resolver argv shown above.
 It permits one non-retried HTTP 503 only when the response media type is
 `application/problem+json` and its object contains exactly `type`, `title`,
 `status`, `detail`, and `instance`: `type=about:blank`,
-`title="SMS Service Error"`, integer `status=503`, `detail` beginning with
-`[SMS_ERROR]`, and `instance=/user-service/auth/sms-codes`. The same scoped
-resolver is then invoked immediately and must return exactly six ASCII digits.
-Any other status, content type, key, value, resolver output, or malformed flag
-fails closed without recording the response body.
+`title="SMS Service Error"`, integer `status=503`,
+`instance=/user-service/auth/sms-codes`, and `detail` matching the deployed
+`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` shape. The two
+fixed markers must appear exactly once; another channel prefix, provider code,
+additional marker, secret-related word, or standalone six-digit value fails
+before the scoped resolver is invoked. A valid resolver response must contain
+exactly six ASCII digits. Any other status, content type, key, value, resolver
+output, or malformed flag fails closed without recording the response body.
+The normal HTTP 200 delivery path is unchanged and does not require staged mode.
 
 Staged-OTP mode proves only the explicitly reviewed operator test path; it does
 not prove SMS delivery, does not turn the 503 into a product-visible success,

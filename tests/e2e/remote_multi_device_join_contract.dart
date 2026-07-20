@@ -1,11 +1,25 @@
 // [INPUT]: Operator-provided OTP resolver argv and redacted SMS response metadata.
-// [OUTPUT]: Strict, secret-free validation decisions for remote Join E2E only.
-// [POS]: Shared runner/integration-test security contract; never a production bypass.
+// [OUTPUT]: Strict, secret-free validation and resolver-continuation decisions
+//           for the deployed Globe remote Join E2E path only.
+// [POS]: Shared runner/integration-test security gate; rejects provider drift,
+//        extra markers, and secret-like details before invoking the resolver.
 
 import 'dart:convert';
 
 const String remoteMultiDeviceStagedOtpFlag =
     'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR';
+const String _stagedSmsProviderCode = 'MOBILE_NUMBER_ILLEGAL';
+
+final RegExp _stagedSmsDetailPattern = RegExp(
+  r'^\[SMS_ERROR\] Globe SMS send failed: '
+  r'\[([A-Z][A-Z0-9_]*)\] ([^\r\n]{1,256})$',
+);
+final RegExp _stagedSmsMarkerPattern = RegExp(r'\[[A-Z][A-Z0-9_]*\]');
+final RegExp _stagedSmsSecretWordPattern = RegExp(
+  r'\b(?:otp|token|secret|password|authorization)\b',
+  caseSensitive: false,
+);
+final RegExp _stagedSmsDigitRunPattern = RegExp(r'[0-9]+');
 
 const List<String> reviewedStagedOtpResolverCommand = <String>[
   'ssh',
@@ -78,8 +92,7 @@ RemoteMultiDeviceSmsDecision evaluateRemoteMultiDeviceSmsResponse({
   if (statusCode != 503 || !allowStagedOtpOnSmsError) {
     throw const FormatException('SMS code request was rejected.');
   }
-  final mediaType = (contentType ?? '').split(';').first.trim().toLowerCase();
-  if (mediaType != 'application/problem+json') {
+  if (contentType != 'application/problem+json') {
     throw const FormatException('SMS error response is invalid.');
   }
   Object? decoded;
@@ -102,11 +115,35 @@ RemoteMultiDeviceSmsDecision evaluateRemoteMultiDeviceSmsResponse({
       decoded['status'] is! int ||
       decoded['status'] != 503 ||
       decoded['detail'] is! String ||
-      !(decoded['detail'] as String).startsWith('[SMS_ERROR]') ||
       decoded['instance'] != '/user-service/auth/sms-codes') {
     throw const FormatException('SMS error response is invalid.');
   }
+  final detail = decoded['detail'] as String;
+  final match = _stagedSmsDetailPattern.firstMatch(detail);
+  if (match == null ||
+      match.group(0) != detail ||
+      match.group(1) != _stagedSmsProviderCode ||
+      !_hasExactStagedSmsMarkers(detail) ||
+      !_isSafeStagedSmsProviderMessage(match.group(2)!)) {
+    throw const FormatException('SMS error response is invalid.');
+  }
   return RemoteMultiDeviceSmsDecision.stagedAfterSmsError;
+}
+
+T continueRemoteMultiDeviceOtpAfterSmsResponse<T>({
+  required int statusCode,
+  required String? contentType,
+  required String body,
+  required bool allowStagedOtpOnSmsError,
+  required T Function() resolveOtp,
+}) {
+  evaluateRemoteMultiDeviceSmsResponse(
+    statusCode: statusCode,
+    contentType: contentType,
+    body: body,
+    allowStagedOtpOnSmsError: allowStagedOtpOnSmsError,
+  );
+  return resolveOtp();
 }
 
 bool isSixDigitAsciiOtp(String value) {
@@ -114,6 +151,26 @@ bool isSixDigitAsciiOtp(String value) {
     return false;
   }
   return value.codeUnits.every((value) => value >= 0x30 && value <= 0x39);
+}
+
+bool _hasExactStagedSmsMarkers(String detail) {
+  final markers = _stagedSmsMarkerPattern
+      .allMatches(detail)
+      .map((match) => match.group(0))
+      .toList(growable: false);
+  return markers.length == 2 &&
+      markers[0] == '[SMS_ERROR]' &&
+      markers[1] == '[$_stagedSmsProviderCode]';
+}
+
+bool _isSafeStagedSmsProviderMessage(String message) {
+  if (message != message.trim() ||
+      _stagedSmsSecretWordPattern.hasMatch(message)) {
+    return false;
+  }
+  return !_stagedSmsDigitRunPattern
+      .allMatches(message)
+      .any((match) => match.group(0)!.length == 6);
 }
 
 bool _containsUnsafeCommandCharacter(String value) {

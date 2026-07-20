@@ -132,9 +132,12 @@ macOS LocalAuthentication prompt, and requires the new device to converge as a
 non-admin member. It fails closed unless the dedicated account/ali allowlist,
 hidden rollout, JSON-argv OTP resolver, exact CLI source revision, and manual
 system-auth prerequisites are explicit. An unavailable rollout is not a remote
-pass. The optional synthetic-number staged-OTP mode is an explicit
-operator test path with exact RFC7807 and fixed-argv checks; it does not prove
-SMS delivery or change product behavior. See
+pass. The optional synthetic-number staged-OTP mode is an explicit operator
+test path with fixed resolver argv and an exact deployed
+`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` RFC7807 gate;
+provider/channel drift, additional markers, and secret-like detail are rejected
+before resolver execution. It does not prove SMS delivery or change product
+behavior. See
 [../../../docs/testing.md](../../../docs/testing.md) for the environment
 contract and command.
 

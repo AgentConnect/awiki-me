@@ -83,7 +83,9 @@ flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_tes
   tests/unit/devices/devices_ui_test.dart
 ```
 
-真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-001` 至 `003` 已登记为 planned，
-合同位于 `tests/e2e/flutter/app/multi_device_join_ui_test.dart`。在远端 capability、
-独立 Core 数据目录和真实一次性 OTP 流程就绪前，不得加入 executable suite，也不得以
-fake-backed Widget 测试替代通过证明。
+真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-002` 已进入显式激活的
+`multi-device-remote-join` suite，合同位于
+`tests/e2e/flutter/app/multi_device_join_ui_test.dart`；它只有在独立 Core 数据目录、动态
+一次性 OTP、双端 SAS、真实系统 user-presence 和最终 Registry 断言全部完成后才可通过。
+`DEVICE-JOIN-E2E-001` 与 `003` 仍为 planned，不得以 `002`、本地 capability gate 或
+fake-backed Widget 测试替代其通过证明。
