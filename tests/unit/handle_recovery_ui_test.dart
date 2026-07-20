@@ -847,7 +847,7 @@ class _FakeHandleRecoveryPort implements HandleRecoveryPort {
   }
 
   @override
-  Future<HandleRecoveryProgress> cancelHandleRecovery({
+  Future<HandleRecoveryCancelResult> cancelHandleRecovery({
     required String selector,
     required String recoverySessionId,
   }) async {
@@ -863,7 +863,10 @@ class _FakeHandleRecoveryPort implements HandleRecoveryPort {
       phase: HandleRecoveryPhase.cancelled,
     );
     localSessions = <HandleRecoveryProgress>[cancelled];
-    return cancelled;
+    return HandleRecoveryCancelResult(
+      recoverySessionId: cancelled.recoverySessionId,
+      phase: cancelled.phase,
+    );
   }
 
   @override

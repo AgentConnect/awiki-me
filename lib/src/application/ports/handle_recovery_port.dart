@@ -35,7 +35,7 @@ abstract interface class HandleRecoveryPort {
 
   Future<HandleRecoveryProgress> pollHandleRecovery(String recoverySessionId);
 
-  Future<HandleRecoveryProgress> cancelHandleRecovery({
+  Future<HandleRecoveryCancelResult> cancelHandleRecovery({
     required String selector,
     required String recoverySessionId,
   });

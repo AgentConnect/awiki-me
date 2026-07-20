@@ -53,3 +53,14 @@ class HandleRecoveryProgress {
       (phase == HandleRecoveryPhase.cooling ||
           phase == HandleRecoveryPhase.ready);
 }
+
+/// Minimal authoritative result returned by Core after a cancel CAS.
+class HandleRecoveryCancelResult {
+  const HandleRecoveryCancelResult({
+    required this.recoverySessionId,
+    required this.phase,
+  });
+
+  final String recoverySessionId;
+  final HandleRecoveryPhase phase;
+}

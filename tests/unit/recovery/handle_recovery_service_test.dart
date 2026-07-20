@@ -125,8 +125,30 @@ void main() {
     );
 
     expect(cancelled.phase, HandleRecoveryPhase.cancelled);
+    expect(cancelled.recoverySessionId, admin.recoverySessionId);
+    expect(cancelled.oldDid, admin.oldDid);
+    expect(cancelled.canonicalHandle, admin.canonicalHandle);
+    expect(cancelled.canCancelFromThisDevice, isFalse);
     expect(port.lastCancelSelector, admin.oldDid);
     expect(port.lastCancelRecoverySessionId, admin.recoverySessionId);
+  });
+
+  test('cancel rejects a minimal result for another session', () async {
+    final port = _FakeRecoveryPort()
+      ..cancelSessionIdOverride = 'recovery-other';
+    final admin = port.progress(
+      side: HandleRecoverySide.oldAdmin,
+      canCancel: true,
+    );
+
+    await expectLater(
+      _service(port).cancel(
+        current: admin,
+        intentConfirmed: true,
+        presenceReason: 'Confirm cancellation',
+      ),
+      _throwsCode('recovery_projection_mismatch'),
+    );
   });
 
   test('finalize requires explicit intent before user presence', () async {
@@ -319,6 +341,7 @@ class _FakeUserPresence implements UserPresencePort {
 
 class _FakeRecoveryPort implements HandleRecoveryPort {
   bool reuseOldDidOnFinalize = false;
+  String? cancelSessionIdOverride;
   bool authenticatedOnFinalize = true;
   bool finalizeSessionMismatch = false;
   bool reuseOldDidOnResume = false;
@@ -388,15 +411,15 @@ class _FakeRecoveryPort implements HandleRecoveryPort {
   }
 
   @override
-  Future<HandleRecoveryProgress> cancelHandleRecovery({
+  Future<HandleRecoveryCancelResult> cancelHandleRecovery({
     required String selector,
     required String recoverySessionId,
   }) async {
     cancelCalls += 1;
     lastCancelSelector = selector;
     lastCancelRecoverySessionId = recoverySessionId;
-    return progress(
-      side: HandleRecoverySide.oldAdmin,
+    return HandleRecoveryCancelResult(
+      recoverySessionId: cancelSessionIdOverride ?? recoverySessionId,
       phase: HandleRecoveryPhase.cancelled,
     );
   }

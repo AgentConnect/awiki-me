@@ -44,6 +44,7 @@ void main() {
       vaultSecretProvider: vaultProvider,
       multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: true,
+      multiDeviceHandleRecoveryEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
@@ -99,6 +100,7 @@ void main() {
             );
             expect(openOptions?.multiDeviceJoinEnabled, isTrue);
             expect(openOptions?.multiDeviceRootTransferEnabled, isTrue);
+            expect(openOptions?.multiDeviceHandleRecoveryEnabled, isTrue);
             expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);
             throw UnsupportedError('fake opener stops before native load');
           },

@@ -23,6 +23,7 @@ import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
+import '../application/ports/handle_recovery_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
 import '../application/ports/root_key_transfer_port.dart';
@@ -43,6 +44,7 @@ import '../data/im_core/awiki_im_core_directory_adapter.dart';
 import '../data/im_core/awiki_im_core_device_management_adapter.dart';
 import '../data/im_core/awiki_im_core_group_adapter.dart';
 import '../data/im_core/awiki_im_core_group_encryption_adapter.dart';
+import '../data/im_core/awiki_im_core_handle_recovery_adapter.dart';
 import '../data/im_core/awiki_im_core_identity_adapter.dart';
 import '../data/im_core/awiki_im_core_message_adapter.dart';
 import '../data/im_core/awiki_im_core_message_sync_adapter.dart';
@@ -98,6 +100,7 @@ class AppBootstrap {
     this.deviceManagementCorePort,
     this.rootKeyTransferPort,
     this.groupEncryptionCorePort,
+    this.handleRecoveryPort,
     this.onboardingService,
     this.onboardingSupportService,
     this.messagingService,
@@ -131,6 +134,7 @@ class AppBootstrap {
   final DeviceManagementCorePort? deviceManagementCorePort;
   final RootKeyTransferPort? rootKeyTransferPort;
   final GroupEncryptionCorePort? groupEncryptionCorePort;
+  final HandleRecoveryPort? handleRecoveryPort;
   final OnboardingService? onboardingService;
   final OnboardingSupportService? onboardingSupportService;
   final MessagingService? messagingService;
@@ -210,6 +214,8 @@ class AppBootstrap {
       multiDeviceJoinEnabled: effectiveEnvironment.multiDeviceJoinEnabled,
       multiDeviceRootTransferEnabled:
           effectiveEnvironment.multiDeviceRootTransferEnabled,
+      multiDeviceHandleRecoveryEnabled:
+          effectiveEnvironment.handleRecoveryEnabled,
       multiDeviceGroupE2eeEnabled:
           effectiveEnvironment.multiDeviceGroupE2eeEnabled,
       onProgress: (progress) {
@@ -257,6 +263,13 @@ class AppBootstrap {
       final rootKeyTransferAdapter =
           effectiveEnvironment.multiDeviceRootTransferEnabled
           ? AwikiImCoreRootKeyTransferAdapter(runtime: runtime)
+          : null;
+      final handleRecoveryAdapter = effectiveEnvironment.handleRecoveryEnabled
+          ? AwikiImCoreHandleRecoveryAdapter(
+              runtime: runtime,
+              userServiceUrl: effectiveEnvironment.userServiceUrl,
+              targetHandleDomain: effectiveEnvironment.didDomain,
+            )
           : null;
       final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
@@ -376,6 +389,7 @@ class AppBootstrap {
         deviceManagementCorePort: deviceManagementAdapter,
         rootKeyTransferPort: rootKeyTransferAdapter,
         groupEncryptionCorePort: groupEncryptionAdapter,
+        handleRecoveryPort: handleRecoveryAdapter,
         onboardingService: onboardingService,
         onboardingSupportService: onboardingSupportService,
         messagingService: messagingService,

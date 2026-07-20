@@ -136,16 +136,30 @@ class HandleRecoveryService {
     if (!present) {
       throw const HandleRecoveryException('user_presence_denied');
     }
-    final progress = await _recovery.cancelHandleRecovery(
+    final result = await _recovery.cancelHandleRecovery(
       selector: current.oldDid,
       recoverySessionId: current.recoverySessionId,
     );
-    _validateSameRecovery(current, progress);
-    _validateTransition(current.phase, progress.phase);
-    if (progress.phase != HandleRecoveryPhase.cancelled) {
+    if (result.recoverySessionId != current.recoverySessionId) {
+      throw const HandleRecoveryException('recovery_projection_mismatch');
+    }
+    _validateTransition(current.phase, result.phase);
+    if (result.phase != HandleRecoveryPhase.cancelled) {
       throw const HandleRecoveryException('invalid_cancel_projection');
     }
-    return progress;
+    return HandleRecoveryProgress(
+      recoverySessionId: current.recoverySessionId,
+      handle: current.handle,
+      handleDomain: current.handleDomain,
+      oldDid: current.oldDid,
+      side: current.side,
+      phase: result.phase,
+      coolingUntil: current.coolingUntil,
+      expiresAt: current.expiresAt,
+      canCancelFromThisDevice: false,
+      newDid: current.newDid,
+      localActivationPending: current.localActivationPending,
+    );
   }
 
   Future<HandleRecoveryCompletion> finalizeWithSms({

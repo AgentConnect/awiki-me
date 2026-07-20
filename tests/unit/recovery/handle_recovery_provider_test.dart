@@ -126,7 +126,7 @@ class _RaceRecoveryPort implements HandleRecoveryPort {
   ) async => throw UnimplementedError();
 
   @override
-  Future<HandleRecoveryProgress> cancelHandleRecovery({
+  Future<HandleRecoveryCancelResult> cancelHandleRecovery({
     required String selector,
     required String recoverySessionId,
   }) async => throw UnimplementedError();
