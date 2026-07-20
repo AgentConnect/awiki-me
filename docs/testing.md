@@ -96,10 +96,16 @@ flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_tes
   tests/unit/devices/devices_ui_test.dart
 ```
 
-多设备 Join 的真实 App + CLI + `awiki.info` 验收用例目前以
-`DEVICE-JOIN-E2E-001` 至 `003` 登记为 planned。它们必须使用两个独立 Core 数据目录、
-真实一次性 OTP 和远端 capability；在 runner 的 `--case multi-device` 与场景级 attestation
-完成前，不得把 Widget 测试或手工演示记录为 E2E pass。
+`--case multi-device` 目前是可执行的本地 capability-gate E2E：它使用两个独立临时
+Storage Scope、production `AppBootstrap` 和 native Core，验证默认关闭时不组合高风险
+adapter/入口，以及只开启 Join 时公共 onboarding 入口只能打开真实 OTP 表单。它不发送
+OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS 或 Handle Recovery。
+
+真实 App + CLI admin + `awiki.info` 验收仍以 `DEVICE-JOIN-E2E-001` 至 `003`、
+`ROOT-TRANSFER-E2E-*`、`MLS-MULTI-DEVICE-E2E-*` 和 `HANDLE-RECOVERY-E2E-*`
+登记为 planned。激活这些用例必须具备匹配的远端 capability、两个独立 Core 数据目录、
+真实一次性 OTP、所需系统 user-presence、场景级 oracle/attestation 和可审计 cleanup；
+不得把本地 capability gate、Widget fake 或手工演示记录为这些远端用例的 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
 图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏
@@ -156,6 +162,22 @@ dart run tests/e2e/runner.dart --case smoke
 native IM Core smoke. It is the default high-frequency E2E gate for a Mac with a
 normal Flutter desktop setup. It does not require test accounts, OTP, a backend,
 or `awiki-cli`.
+
+Run the local multi-device capability gate:
+
+```bash
+dart run tests/e2e/runner.dart --case multi-device
+
+# On this macOS development host, use the audited host config explicitly:
+dart run tests/e2e/runner.dart --case multi-device \
+  --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
+```
+
+This suite launches the real production bootstrap/native Core twice with
+independent temporary Storage Scopes and deletes both roots after the run. It
+checks default-off and Join-only App composition without using a backend, OTP,
+CLI peer, copied secret state, or fake providers. The remote planned case IDs
+remain separate and are not included in this suite's pass attestation.
 
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:

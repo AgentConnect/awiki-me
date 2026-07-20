@@ -315,6 +315,20 @@ class AppTestCatalog {
         'through application services; it is not required UI acceptance.',
       )
       ..writeln(
+        '- `multi-device` is currently a no-service capability-gate E2E only. '
+        'It opens two independent production AppBootstrap/native Core scopes, '
+        'checks default-off composition, and opens the Join-only public form. '
+        'It does not claim OTP, SAS, approval, root import, revoke, MLS, or '
+        'Handle Recovery acceptance.',
+      )
+      ..writeln(
+        '- `DEVICE-JOIN-E2E-*`, `ROOT-TRANSFER-E2E-*`, '
+        '`MLS-MULTI-DEVICE-E2E-*`, and `HANDLE-RECOVERY-E2E-*` remain planned '
+        'until `awiki.info` enables the matching capabilities and the runner '
+        'uses independent device roots, real one-time OTPs, user presence, '
+        'scenario-owned oracles, and cleanup.',
+      )
+      ..writeln(
         '- Personal Agent, Codex and Claude Code remain `optional_nightly`. A '
         'missing provider/configuration is reported as skipped/not-run, never passed.',
       )

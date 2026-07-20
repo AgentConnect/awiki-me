@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-17.conversation-correctness-v8",
+  "sourceRevision": "2026-07-20.multi-device-capability-gate-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -18,6 +18,25 @@
       "caseIds": [
         "SMOKE-E2E-001",
         "NATIVE-E2E-001"
+      ]
+    },
+    "multi-device": {
+      "tier": "product_ui",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 6,
+      "timeoutMinutes": 8,
+      "cleanupPolicy": "test_owned_temporary_scope_delete",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": [
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "MULTI-DEVICE-CAPABILITY-GATE-E2E-001"
       ]
     },
     "production-keychain": {

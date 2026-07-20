@@ -21,6 +21,8 @@ const String _claudeCodeAgentRunConfigPath =
 const String _desktopCliPeerScenario = 'desktop-app-cli-peer';
 const String _desktopCliPeerPerformanceScenario =
     'desktop-app-cli-peer-performance';
+const String _multiDeviceCapabilityGateScenario =
+    'multi-device-capability-gate';
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
@@ -54,6 +56,9 @@ const List<String> _desktopCliPeerCaseIds = <String>[
 const List<String> _desktopSmokeCaseIds = <String>[
   'SMOKE-E2E-001',
   'NATIVE-E2E-001',
+];
+const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
+  'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
 ];
 const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
@@ -363,10 +368,13 @@ class DesktopE2eRunner {
     final totalStopwatch = Stopwatch()..start();
     var orchestrationSucceeded = false;
     try {
-      if (options.e2eCase == DesktopE2eCase.smoke) {
-        await _runLocalSmoke();
-      } else {
-        await _runAppCliPeer();
+      switch (options.e2eCase) {
+        case DesktopE2eCase.smoke:
+          await _runLocalSmoke();
+        case DesktopE2eCase.multiDevice:
+          await _runLocalMultiDeviceCapabilityGate();
+        default:
+          await _runAppCliPeer();
       }
       orchestrationSucceeded = true;
       if (!options.dryRun && !options.prepareOnly) {
@@ -431,6 +439,27 @@ class DesktopE2eRunner {
       return _runFlutterTest(
         'integration_test/im_core_open_smoke_test.dart',
         caseIds: const <String>['NATIVE-E2E-001'],
+      );
+    });
+  }
+
+  Future<void> _runLocalMultiDeviceCapabilityGate() async {
+    _section('AWiki Desktop multi-device capability-gate E2E $runId');
+    _line('platform: ${platform.name}');
+    _line('reports: ${redactor.redact(reportDir.path)}');
+    _line('case: ${options.e2eCase.caseName}');
+    _line('flutter build dir: ${flutterBuildIsolation.buildDirectory}');
+
+    await _timed('Checking desktop tooling', () async {
+      await commands.requireExecutable('flutter');
+      if (platform == DesktopE2ePlatform.linux) {
+        await commands.requireExecutable('xvfb-run');
+      }
+    });
+    await _timed('Flutter multi-device capability gate', () {
+      return _runFlutterTest(
+        'integration_test/multi_device_capability_gate_test.dart',
+        caseIds: _multiDeviceCapabilityGateCaseIds,
       );
     });
   }
@@ -1624,6 +1653,10 @@ String desktopE2eUtf8Locale({
   for (final candidate in <String?>[lcAll, lang]) {
     final value = candidate?.trim() ?? '';
     if (RegExp(r'utf-?8', caseSensitive: false).hasMatch(value)) {
+      if (platform == DesktopE2ePlatform.macos &&
+          RegExp(r'^C[._-]', caseSensitive: false).hasMatch(value)) {
+        continue;
+      }
       return value;
     }
   }
@@ -3223,6 +3256,7 @@ class DesktopPerformanceBudgetResult {
 
 enum DesktopE2eCase {
   smoke(_desktopSmokeCaseIds),
+  multiDevice(_multiDeviceCapabilityGateCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
@@ -3243,6 +3277,8 @@ enum DesktopE2eCase {
   String get testFile {
     return switch (this) {
       DesktopE2eCase.smoke => 'integration_test/app_smoke_test.dart',
+      DesktopE2eCase.multiDevice =>
+        'integration_test/multi_device_capability_gate_test.dart',
       DesktopE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
       DesktopE2eCase.performance =>
@@ -3276,11 +3312,13 @@ enum DesktopE2eCase {
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
+      DesktopE2eCase.multiDevice => 'multi-device',
       _ => name,
     };
   }
 
-  bool get requiresCliPeer => this != DesktopE2eCase.smoke;
+  bool get requiresCliPeer =>
+      this != DesktopE2eCase.smoke && this != DesktopE2eCase.multiDevice;
 
   bool get publishesNicknameFixture =>
       this != DesktopE2eCase.performance &&
@@ -3289,6 +3327,7 @@ enum DesktopE2eCase {
   String get reportScope {
     return switch (this) {
       DesktopE2eCase.smoke => 'smoke',
+      DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
@@ -3314,6 +3353,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.codexAgent => _codexAgentScenario,
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
+      DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -3330,6 +3370,10 @@ enum DesktopE2eCase {
   static DesktopE2eCase parse(String value) {
     return switch (value.trim().toLowerCase()) {
       '' || 'smoke' || 'app' || 'local' => DesktopE2eCase.smoke,
+      'multi-device' ||
+      'multi_device' ||
+      'device-capability' ||
+      'device_capability' => DesktopE2eCase.multiDevice,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||
@@ -3387,7 +3431,7 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'Use smoke, multi-device, full, performance, direct, group, attachment, contacts, inbound, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',
       ),

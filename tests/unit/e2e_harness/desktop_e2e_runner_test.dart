@@ -118,6 +118,27 @@ void main() {
       expect(options.e2eCase, DesktopE2eCase.group);
     });
 
+    test('parses local multi-device capability-gate case', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDevice);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDevice);
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(hyphen.e2eCase.scenario, 'multi-device-capability-gate');
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+      ]);
+    });
+
     test('parses direct attachment contacts and inbound cases', () {
       final direct = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -275,7 +296,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),
@@ -340,6 +361,17 @@ void main() {
           lcAll: 'zh_CN.UTF-8',
         ),
         'zh_CN.UTF-8',
+      );
+    });
+
+    test('replaces C.UTF-8 on macOS because CocoaPods sees ASCII-8BIT', () {
+      expect(
+        desktopE2eUtf8Locale(
+          platform: DesktopE2ePlatform.macos,
+          lang: 'C.UTF-8',
+          lcAll: 'C',
+        ),
+        'en_US.UTF-8',
       );
     });
   });
@@ -1228,6 +1260,51 @@ cliPeer:
       expect(decoded['case'], 'smoke');
       expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
       expect(decoded['caseIds'], <dynamic>['SMOKE-E2E-001', 'NATIVE-E2E-001']);
+    });
+
+    test('multi-device runs only the local capability-gate shim', () async {
+      final root = await Directory.systemTemp.createTemp(
+        'awiki_multi_device_capability_runner_test_',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final lines = <String>[];
+      final runner = DesktopE2eRunner(
+        root: root,
+        options: DesktopE2eOptions.parse(const <String>[
+          '--case',
+          'multi-device',
+          '--dry-run',
+          '--run-id',
+          'run-multi-device',
+        ]),
+        commands: DesktopCommandRunner(
+          root: root,
+          dryRun: true,
+          redactor: DesktopSecretRedactor(const <String>[]),
+          logLine: lines.add,
+        ),
+      );
+
+      await runner.run();
+
+      final log = lines.join('\n');
+      expect(log, contains('case: multi-device'));
+      expect(log, contains('multi_device_capability_gate_test.dart'));
+      expect(log, isNot(contains('desktop_cli_peer_smoke_test.dart')));
+      expect(log, isNot(contains('Preparing CLI')));
+      final timings = File(
+        '${root.path}/.e2e/multi-device/run-multi-device/reports/timings.json',
+      );
+      final decoded =
+          jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
+      expect(decoded['case'], 'multi-device');
+      expect(decoded['caseIds'], <dynamic>[
+        'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+      ]);
     });
 
     test('process-restart launches two Flutter test processes', () async {

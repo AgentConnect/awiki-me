@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(66));
+      expect(catalog.cases, hasLength(67));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -19,11 +19,12 @@ void main() {
           'ROOT-TRANSFER-E2E-002',
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
+          'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
         ]),
       );
       expect(
         catalog.suiteCaseIds.keys,
-        containsAll(<String>['smoke', 'full', 'direct']),
+        containsAll(<String>['smoke', 'multi-device', 'full', 'direct']),
       );
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
