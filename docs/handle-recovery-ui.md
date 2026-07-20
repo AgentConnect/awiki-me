@@ -132,6 +132,10 @@ flutter test tests/unit/application/app_session_service_test.dart \
   tests/unit/onboarding_page_test.dart
 ```
 
-真实 App + CLI + `awiki.info` 的 `HANDLE-RECOVERY-E2E-001` 至 `003` 保持 planned。只有生产
-Core adapter、远端 capability、两个隔离设备目录、真实两次 OTP 和完整 cutover 收敛均就绪
-后，才能登记到 executable suite；fake-backed Widget 测试不能作为远端恢复通过证据。
+真实 App + CLI + `awiki.info` 的 `HANDLE-RECOVERY-E2E-001/002` 已登记到显式激活的
+`multi-device-remote-recovery` suite：前者等待至少 3600 秒权威冷静期，经独立二次 OTP 和
+真实 LocalAuthentication 激活不同的新 DID；后者证明旧 ready admin 的 durable 通知跨 App
+重启后仍可见，并经真实 LocalAuthentication 取消且阻止 finalize。该 gate 要求两个隔离账号与
+native Core roots、成功的产品短信发码和精确 CLI revision，明确不接受 staged SMS error。
+`HANDLE-RECOVERY-E2E-003` 的旧 token、未来消息、Direct 与群重绑完整收敛仍保持 planned；
+fake-backed Widget 测试不能作为远端恢复通过证据。

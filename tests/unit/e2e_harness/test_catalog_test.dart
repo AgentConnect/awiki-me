@@ -30,6 +30,7 @@ void main() {
           'smoke',
           'multi-device',
           'multi-device-remote-join',
+          'multi-device-remote-recovery',
           'full',
           'direct',
         ]),
@@ -48,6 +49,22 @@ void main() {
         'ROOT-TRANSFER-E2E-001',
         'DEVICE-REVOKE-E2E-001',
       ]);
+      expect(catalog.suiteCaseIds['multi-device-remote-recovery'], <String>[
+        'HANDLE-RECOVERY-E2E-001',
+        'HANDLE-RECOVERY-E2E-002',
+      ]);
+      expect(
+        catalog.caseById['HANDLE-RECOVERY-E2E-001']!.catalogStatus,
+        'active',
+      );
+      expect(
+        catalog.caseById['HANDLE-RECOVERY-E2E-002']!.catalogStatus,
+        'active',
+      );
+      expect(
+        catalog.caseById['HANDLE-RECOVERY-E2E-003']!.catalogStatus,
+        'planned',
+      );
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );

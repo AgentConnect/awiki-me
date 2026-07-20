@@ -166,6 +166,32 @@ void main() {
       );
     });
 
+    test('parses activation-gated remote Handle Recovery case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-remote-recovery',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'remote_handle_recovery',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteRecovery);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteRecovery);
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(hyphen.e2eCase.scenario, 'multi-device-remote-handle-recovery');
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'HANDLE-RECOVERY-E2E-001',
+        'HANDLE-RECOVERY-E2E-002',
+      ]);
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/handle_recovery_ui_test.dart',
+      );
+    });
+
     test('parses direct attachment contacts and inbound cases', () {
       final direct = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -323,7 +349,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, multi-device-remote-join, multi-device-remote-recovery, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),
@@ -509,6 +535,111 @@ void main() {
             'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
             'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': fixedResolver,
             'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': 'yes',
+          },
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+  });
+
+  group('RemoteMultiDeviceRecoveryConfig', () {
+    const sourceRef = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
+    const fileConfig = DesktopE2eFileConfig(
+      path: '/tmp/e2e.local.yaml',
+      platform: DesktopE2ePlatform.macos,
+      serviceBaseUrl: 'https://awiki.info',
+      didDomain: 'awiki.info',
+      otpPhone: 'must-not-be-used',
+      otpCode: 'must-not-be-used',
+      cliBin: '/tmp/awiki-cli',
+      cliSourceRef: sourceRef,
+    );
+
+    test('requires an explicit gate and two distinct environment accounts', () {
+      expect(
+        () => RemoteMultiDeviceRecoveryConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'primary-phone',
+            'AWIKI_MULTI_DEVICE_E2E_PEER_PHONE': 'peer-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
+          },
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1'),
+          ),
+        ),
+      );
+      expect(
+        () => RemoteMultiDeviceRecoveryConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'same-phone',
+            'AWIKI_MULTI_DEVICE_E2E_PEER_PHONE': 'same-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
+          },
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+
+    test('uses two env accounts and a bounded real cooling window', () {
+      final config = RemoteMultiDeviceRecoveryConfig.from(
+        fileConfig: fileConfig,
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
+          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'primary-phone',
+          'AWIKI_MULTI_DEVICE_E2E_PEER_PHONE': 'peer-phone',
+          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
+              '["ssh","ali","resolve-otp"]',
+          'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX': 'recoveryapp',
+          'AWIKI_MULTI_DEVICE_E2E_MAX_COOLING_SECONDS': '7200',
+        },
+      );
+
+      expect(config.primaryPhone, 'primary-phone');
+      expect(config.peerPhone, 'peer-phone');
+      expect(config.otpCommand, <String>['ssh', 'ali', 'resolve-otp']);
+      expect(config.handlePrefix, 'recoveryapp');
+      expect(config.maxCoolingSeconds, 7200);
+      expect(config.cliSourceRef, sourceRef);
+      expect(config.primaryPhone, isNot(fileConfig.otpPhone));
+      expect(config.otpCommandJson, isNot(contains(fileConfig.otpCode!)));
+    });
+
+    test('rejects staged SMS errors and invalid cooling bounds', () {
+      const base = <String, String>{
+        'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
+        'AWIKI_MULTI_DEVICE_E2E_PHONE': 'primary-phone',
+        'AWIKI_MULTI_DEVICE_E2E_PEER_PHONE': 'peer-phone',
+        'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
+      };
+      expect(
+        () => RemoteMultiDeviceRecoveryConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            ...base,
+            'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': '1',
+          },
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('requires successful SMS delivery'),
+          ),
+        ),
+      );
+      expect(
+        () => RemoteMultiDeviceRecoveryConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            ...base,
+            'AWIKI_MULTI_DEVICE_E2E_MAX_COOLING_SECONDS': '3599',
           },
         ),
         throwsA(isA<E2eFailure>()),

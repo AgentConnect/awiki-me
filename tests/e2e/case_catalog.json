@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-management-v3",
+  "sourceRevision": "2026-07-20.remote-multi-device-management-recovery-v4",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2133,14 +2133,14 @@
     {
       "caseId": "HANDLE-RECOVERY-E2E-001",
       "feature": "AWiki Me Recovery cooling and independent reconfirmation",
-      "layer": "product_ui",
-      "preconditions": "A registered Handle, a new AWiki Me Core data root, an existing old admin identity, deployed awiki.info Recovery capability, and two independently issued real SMS codes are available.",
-      "action": "Request and exchange the first OTP with awiki.device.recovery.begin.v1 bound to the exact Handle/domain, observe cooling without identity activation, wait for authoritative ready status, then request and exchange a second awiki.device.recovery.finalize.v1 OTP bound to the same Handle/domain and Recovery Session with explicit intent and user presence.",
+      "layer": "remote_product_ui_security",
+      "preconditions": "A registered Handle, a fresh AWiki Me native Core root, a distinct old ready-admin root, deployed awiki.info Recovery capability, two independently issued real SMS codes, and real macOS LocalAuthentication are available.",
+      "action": "Begin Recovery through the production AWiki Me adapter, observe the authoritative cooling phase without activation, wait the deployed cooling period, request and exchange a second Session-bound OTP, explicitly confirm the risks, finalize through real LocalAuthentication, and activate the replacement identity.",
       "exactOracles": [
-        "Before finalize the Handle still resolves to the old DID and AWiki Me has no active new identity; exact purpose/Handle/domain/Session binding, the second OTP, explicit intent, and successful system user presence are required before cutover."
+        "Before finalize the Handle still resolves to the old DID and AWiki Me has no active new identity; after finalize it resolves to a distinct new DID whose sole device is the current active management-ready admin."
       ],
       "negativeChecks": [
-        "Immediate OTP recovery, ordinary login/register OTP reuse, purpose/Handle/domain/Session mismatch, reuse of the begin grant, hidden cooling, user-presence rejection followed by a sensitive write, activation before finalize, or secret/token evidence fails."
+        "Immediate OTP recovery, ordinary login/register OTP reuse, purpose/Handle/domain/Session mismatch, reuse of the begin grant, staged SMS-error continuation, hidden cooling, user-presence rejection followed by a sensitive write, activation before finalize, copied local state, or secret/token evidence fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
@@ -2151,19 +2151,19 @@
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "active"
     },
     {
       "caseId": "HANDLE-RECOVERY-E2E-002",
       "feature": "Old AWiki Me admin cancels Handle Recovery",
-      "layer": "product_ui",
-      "preconditions": "An old management-ready AWiki Me admin has received the durable Recovery notification while the matching session remains cooling or ready.",
-      "action": "Open Devices, inspect the visible identity Recovery warning, explicitly confirm cancellation and system user presence from the old admin, then retry finalize from the requester.",
+      "layer": "remote_product_ui_security",
+      "preconditions": "An old management-ready AWiki Me admin and an independent CLI requester use distinct native Core roots; the App has durably persisted the matching Recovery-started notice while the session remains cooling.",
+      "action": "Restart the old AWiki Me admin, open Devices, inspect the durable identity Recovery warning, explicitly confirm cancellation through real LocalAuthentication, then attempt requester finalization after the cancellation.",
       "exactOracles": [
-        "Cancel wins the session CAS, the Handle remains bound to the old DID, and requester finalize is rejected without creating or activating a new identity."
+        "Cancel wins the session CAS, survives an App/requester process boundary, keeps the Handle on the old DID, removes the local warning only after authoritative cancel, and rejects requester finalize without creating or activating a new identity."
       ],
       "negativeChecks": [
-        "A normal device cancellation, notification-only dismissal, cancellation without explicit intent or successful user presence, concurrent cancel plus successful finalize, or a changed Handle mapping fails."
+        "A normal device cancellation, notification-only dismissal, a non-durable warning, cancellation without explicit intent or successful user presence, concurrent cancel plus successful finalize, copied device state, or a changed Handle mapping fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
@@ -2174,7 +2174,7 @@
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "active"
     },
     {
       "caseId": "HANDLE-RECOVERY-E2E-003",

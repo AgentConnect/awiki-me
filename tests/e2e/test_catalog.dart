@@ -333,9 +333,17 @@ class AppTestCatalog {
         'unavailable.',
       )
       ..writeln(
+        '- `multi-device-remote-recovery` is a separate, activation-gated '
+        '`awiki.info` suite for `HANDLE-RECOVERY-E2E-001/002`. It uses two '
+        'distinct dedicated accounts and independent native Core roots, '
+        'requires successful product SMS delivery, waits the deployed '
+        'cooling period, and delegates cancel/finalize to real macOS user '
+        'presence. Staged SMS-error continuation is rejected.',
+      )
+      ..writeln(
         '- `DEVICE-JOIN-E2E-001`, `DEVICE-JOIN-E2E-003`, '
         '`ROOT-TRANSFER-E2E-002`, `MLS-MULTI-DEVICE-E2E-*`, and '
-        '`HANDLE-RECOVERY-E2E-*` remain planned until `awiki.info` enables '
+        '`HANDLE-RECOVERY-E2E-003` remain planned until `awiki.info` enables '
         'the matching capabilities and each runner has independent device '
         'roots, real one-time OTPs, user presence where required, '
         'scenario-owned oracles, and cleanup.',
