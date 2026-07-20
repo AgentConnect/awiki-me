@@ -240,6 +240,51 @@ void main() {
     expect(progress.remoteState, DeviceJoinRemoteState.notObserved);
     expect(progress.isTerminal, isTrue);
   });
+
+  test(
+    'device revoke forwards only safe inputs and maps safe result',
+    () async {
+      core.IdentitySelector? capturedSelector;
+      String? capturedTarget;
+      bool? capturedPresence;
+      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+        coreInstance: _unusedCore,
+        userServiceUrl: 'https://awiki.info',
+        targetHandleDomain: 'awiki.info',
+        revokeDevice:
+            ({
+              required selector,
+              required targetDeviceId,
+              required userPresenceConfirmed,
+            }) async {
+              capturedSelector = selector;
+              capturedTarget = targetDeviceId;
+              capturedPresence = userPresenceConfirmed;
+              return const core.DeviceRevokeResult(
+                did: _did,
+                targetDeviceId: 'device-member',
+                status: core.DeviceRevokeStatus.revoked,
+              );
+            },
+      );
+
+      final result = await adapter.revokeDevice(
+        selector: _did,
+        targetDeviceId: ' device-member ',
+        userPresenceConfirmed: true,
+      );
+
+      expect(capturedSelector, isA<core.DidIdentitySelector>());
+      expect((capturedSelector! as core.DidIdentitySelector).did, _did);
+      expect(capturedTarget, 'device-member');
+      expect(capturedPresence, isTrue);
+      expect(result.did, _did);
+      expect(result.targetDeviceId, 'device-member');
+      expect(result.status, DeviceRevokeStatus.revoked);
+      expect(result.toString(), isNot(contains('auth_generation')));
+      expect(result.toString(), isNot(contains('document_hash')));
+    },
+  );
 }
 
 const _did = 'did:wba:awiki.info:user:e1_test';

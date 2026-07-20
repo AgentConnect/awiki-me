@@ -214,6 +214,8 @@ class AppBootstrap {
       multiDeviceJoinEnabled: effectiveEnvironment.multiDeviceJoinEnabled,
       multiDeviceRootTransferEnabled:
           effectiveEnvironment.multiDeviceRootTransferEnabled,
+      multiDeviceDeviceRevokeEnabled:
+          effectiveEnvironment.multiDeviceDeviceRevokeEnabled,
       multiDeviceHandleRecoveryEnabled:
           effectiveEnvironment.handleRecoveryEnabled,
       multiDeviceGroupE2eeEnabled:
@@ -253,7 +255,8 @@ class AppBootstrap {
 
       final identityAdapter = AwikiImCoreIdentityAdapter(runtime: runtime);
       final deviceManagementAdapter =
-          effectiveEnvironment.multiDeviceJoinEnabled
+          effectiveEnvironment.multiDeviceJoinEnabled ||
+              effectiveEnvironment.multiDeviceDeviceRevokeEnabled
           ? AwikiImCoreDeviceManagementAdapter(
               runtime: runtime,
               userServiceUrl: effectiveEnvironment.userServiceUrl,

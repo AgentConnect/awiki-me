@@ -37,7 +37,9 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   DeviceJoinProgress? cancelResult;
   Object? registryError;
   Object? pollError;
+  Object? revokeError;
   int registryCalls = 0;
+  int localSessionCalls = 0;
   int sendOtpCalls = 0;
   int beginCalls = 0;
   int claimCalls = 0;
@@ -45,10 +47,13 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   int prepareCalls = 0;
   int confirmCalls = 0;
   int cancelCalls = 0;
+  int revokeCalls = 0;
   String? lastOtp;
   DeviceRole? lastPreparedRole;
   bool? lastPreparedSasConfirmed;
   bool? lastPresenceConfirmed;
+  String? lastRevokedDeviceId;
+  bool? lastRevokePresenceConfirmed;
 
   @override
   Future<void> sendJoinSmsOtp(String phone) async {
@@ -130,8 +135,46 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   }
 
   @override
-  Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async =>
-      localSessions;
+  Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async {
+    localSessionCalls += 1;
+    return localSessions;
+  }
+
+  @override
+  Future<DeviceRevokeResult> revokeDevice({
+    required String selector,
+    required String targetDeviceId,
+    required bool userPresenceConfirmed,
+  }) async {
+    revokeCalls += 1;
+    lastRevokedDeviceId = targetDeviceId;
+    lastRevokePresenceConfirmed = userPresenceConfirmed;
+    if (revokeError != null) throw revokeError!;
+    registry = DeviceRegistrySnapshot(
+      did: registry.did,
+      devices: <DeviceSummary>[
+        for (final device in registry.devices)
+          if (device.protocolDeviceId == targetDeviceId)
+            DeviceSummary(
+              protocolDeviceId: device.protocolDeviceId,
+              signingKeyId: device.signingKeyId,
+              e2eeKeyId: device.e2eeKeyId,
+              status: DeviceStatus.revoked,
+              role: device.role,
+              managementReady: false,
+              isCurrent: device.isCurrent,
+            )
+          else
+            device,
+      ],
+      pendingJoins: registry.pendingJoins,
+    );
+    return DeviceRevokeResult(
+      did: registry.did,
+      targetDeviceId: targetDeviceId,
+      status: DeviceRevokeStatus.revoked,
+    );
+  }
 
   @override
   Future<DeviceJoinProgress> pollAdminDeviceJoin({

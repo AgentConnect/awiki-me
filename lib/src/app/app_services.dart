@@ -99,6 +99,11 @@ final multiDeviceRootTransferEnabledProvider = Provider<bool>(
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceRootTransferEnabled,
 );
 
+final multiDeviceDeviceRevokeEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDeviceRevokeEnabled,
+);
+
 final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,

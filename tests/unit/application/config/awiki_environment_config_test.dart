@@ -29,6 +29,7 @@ void main() {
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceRootTransferEnabled, isFalse);
+    expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
     expect(config.handleRecoveryEnabled, isFalse);
   });
@@ -98,6 +99,7 @@ void main() {
       agentImEnabled: true,
       multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: true,
+      multiDeviceDeviceRevokeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
       handleRecoveryEnabled: true,
     );
@@ -118,6 +120,7 @@ void main() {
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceJoinEnabled, isTrue);
     expect(config.multiDeviceRootTransferEnabled, isTrue);
+    expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
     expect(config.handleRecoveryEnabled, isTrue);
   });

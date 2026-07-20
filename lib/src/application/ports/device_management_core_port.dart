@@ -5,6 +5,8 @@ import '../../domain/entities/device_management.dart';
 /// The SMS OTP is a write-only input to [beginDeviceJoinWithSms]. The adapter
 /// exchanges and consumes it in the same call; no account/join token, private
 /// key, challenge plaintext, pairing secret, or root key may cross this port.
+/// Permanent revoke accepts only an identity selector, opaque target device ID,
+/// and Host user-presence result; versions, hashes and proofs stay below Core.
 abstract interface class DeviceManagementCorePort {
   Future<void> sendJoinSmsOtp(String phone);
 
@@ -24,6 +26,12 @@ abstract interface class DeviceManagementCorePort {
   Future<DeviceJoinProgress> cancelNewDeviceJoin(String joinSessionId);
 
   Future<DeviceRegistrySnapshot> identityDeviceRegistry(String selector);
+
+  Future<DeviceRevokeResult> revokeDevice({
+    required String selector,
+    required String targetDeviceId,
+    required bool userPresenceConfirmed,
+  });
 
   Future<DeviceJoinProgress> claimDeviceJoin({
     required String selector,

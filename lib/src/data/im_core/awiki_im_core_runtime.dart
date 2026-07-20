@@ -42,6 +42,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     required AwikiImCoreVaultSecretProvider vaultSecretProvider,
     this.multiDeviceJoinEnabled = false,
     this.multiDeviceRootTransferEnabled = false,
+    this.multiDeviceDeviceRevokeEnabled = false,
     this.multiDeviceHandleRecoveryEnabled = false,
     this.multiDeviceGroupE2eeEnabled = false,
     AwikiImCoreOpen? openCore,
@@ -64,6 +65,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
   final bool multiDeviceJoinEnabled;
   final bool multiDeviceRootTransferEnabled;
+  final bool multiDeviceDeviceRevokeEnabled;
   final bool multiDeviceHandleRecoveryEnabled;
   final bool multiDeviceGroupE2eeEnabled;
   final AwikiImCoreOpen _openCore;
@@ -136,6 +138,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
         multiDeviceJoinEnabled: multiDeviceJoinEnabled,
         multiDeviceRootTransferEnabled: multiDeviceRootTransferEnabled,
+        multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceHandleRecoveryEnabled: multiDeviceHandleRecoveryEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,
         identitySecretVault: core.ImCoreSecretVaultOptions(

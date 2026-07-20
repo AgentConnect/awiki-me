@@ -264,6 +264,18 @@
   "deviceRootTransferRetry": "重试安全导入",
   "deviceRootTransferSessionPending": "安全会话正在建立中。请先让接收设备完成同步，然后继续。",
   "deviceRootTransferPresenceReason": "确认安全传输根密钥",
+  "deviceRevokeAction": "撤销",
+  "deviceRevokeConfirmTitle": "撤销此设备？",
+  "deviceRevokeConfirmDetail": "将永久撤销 {deviceId}。该设备会失去未来访问权限，但已经取得的数据无法远程清除。此操作不可撤销。",
+  "@deviceRevokeConfirmDetail": {
+    "placeholders": {
+      "deviceId": {"type": "String"}
+    }
+  },
+  "deviceRevokeConfirmAction": "永久撤销",
+  "deviceRevokePresenceReason": "确认永久撤销设备",
+  "deviceRevokeProtectionHint": "当前设备不能撤销自身，系统始终保护最后一台可用管理设备。",
+  "deviceRevokeProtected": "该设备受保护，或当前设备尚未具备管理能力。当前设备和最后一台可用管理设备不能撤销。",
   "deviceReviewAction": "查看并验证",
   "deviceResumeAction": "继续",
   "deviceJoinEntry": "将此设备加入已有账户",

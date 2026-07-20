@@ -1490,6 +1490,48 @@ abstract class AppLocalizations {
   /// **'确认安全传输根密钥'**
   String get deviceRootTransferPresenceReason;
 
+  /// No description provided for @deviceRevokeAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销'**
+  String get deviceRevokeAction;
+
+  /// No description provided for @deviceRevokeConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销此设备？'**
+  String get deviceRevokeConfirmTitle;
+
+  /// No description provided for @deviceRevokeConfirmDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'将永久撤销 {deviceId}。该设备会失去未来访问权限，但已经取得的数据无法远程清除。此操作不可撤销。'**
+  String deviceRevokeConfirmDetail(String deviceId);
+
+  /// No description provided for @deviceRevokeConfirmAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'永久撤销'**
+  String get deviceRevokeConfirmAction;
+
+  /// No description provided for @deviceRevokePresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认永久撤销设备'**
+  String get deviceRevokePresenceReason;
+
+  /// No description provided for @deviceRevokeProtectionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前设备不能撤销自身，系统始终保护最后一台可用管理设备。'**
+  String get deviceRevokeProtectionHint;
+
+  /// No description provided for @deviceRevokeProtected.
+  ///
+  /// In zh, this message translates to:
+  /// **'该设备受保护，或当前设备尚未具备管理能力。当前设备和最后一台可用管理设备不能撤销。'**
+  String get deviceRevokeProtected;
+
   /// No description provided for @deviceReviewAction.
   ///
   /// In zh, this message translates to:

@@ -25,6 +25,7 @@ class DeviceManagementService {
   final DirectoryApplicationService _directory;
   final UserPresencePort _userPresence;
   final Set<String> _approvalSessionsInFlight = <String>{};
+  final Set<String> _revokeDeviceIdsInFlight = <String>{};
 
   Future<void> sendJoinSmsOtp(String phone) {
     return _core.sendJoinSmsOtp(_required(phone, 'phone'));
@@ -40,6 +41,39 @@ class DeviceManagementService {
       _validateProgress(session);
     }
     return sessions;
+  }
+
+  Future<DeviceRevokeResult> revoke({
+    required String selector,
+    required String targetDeviceId,
+    required String presenceReason,
+  }) async {
+    final normalizedSelector = _required(selector, 'selector');
+    final normalizedTarget = _required(targetDeviceId, 'targetDeviceId');
+    if (!_revokeDeviceIdsInFlight.add(normalizedTarget)) {
+      throw const DeviceManagementException('revoke_already_in_progress');
+    }
+    try {
+      final confirmed = await _userPresence.confirm(
+        reason: _required(presenceReason, 'presenceReason'),
+      );
+      if (!confirmed) {
+        throw const DeviceManagementException('user_presence_denied');
+      }
+      final result = await _core.revokeDevice(
+        selector: normalizedSelector,
+        targetDeviceId: normalizedTarget,
+        userPresenceConfirmed: true,
+      );
+      if (result.did.trim().isEmpty ||
+          result.targetDeviceId != normalizedTarget ||
+          result.status != DeviceRevokeStatus.revoked) {
+        throw const DeviceManagementException('invalid_revoke_result');
+      }
+      return result;
+    } finally {
+      _revokeDeviceIdsInFlight.remove(normalizedTarget);
+    }
   }
 
   Future<DeviceJoinProgress> beginNewDeviceJoinWithSms({

@@ -1,5 +1,5 @@
-// [INPUT]: Session identity, Device Registry/Join services, root-transfer service, and UI intents.
-// [OUTPUT]: Secret-free device list, Join, and admin-readiness presentation state.
+// [INPUT]: Session identity, Device Registry/Join/revoke services, root-transfer service, and UI intents.
+// [OUTPUT]: Secret-free device list, Join, revoke, and admin-readiness presentation state.
 // [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
 
 import 'dart:convert';
@@ -21,6 +21,7 @@ enum DeviceManagementErrorKind {
   sasMismatch,
   userPresenceDenied,
   sessionEstablishmentPending,
+  protectedDevice,
   network,
   failed,
 }
@@ -99,6 +100,11 @@ class DevicesState {
     return transfer.recipientDeviceId == current.protocolDeviceId;
   }
 
+  bool canRevokeDevice(DeviceSummary device) =>
+      currentDeviceCanManage &&
+      !device.isCurrent &&
+      device.status == DeviceStatus.active;
+
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
     List<DeviceJoinProgress>? localJoins,
@@ -133,10 +139,15 @@ class DevicesController extends StateNotifier<DevicesState> {
   int _generation = 0;
   final Map<String, String> _rootTransferStartMessageIds = <String, String>{};
 
-  bool get _enabled => ref.read(multiDeviceJoinEnabledProvider);
+  bool get _joinEnabled => ref.read(multiDeviceJoinEnabledProvider);
 
   bool get _rootTransferEnabled =>
       ref.read(multiDeviceRootTransferEnabledProvider);
+
+  bool get _deviceRevokeEnabled =>
+      ref.read(multiDeviceDeviceRevokeEnabledProvider);
+
+  bool get _managementSurfaceEnabled => _joinEnabled || _deviceRevokeEnabled;
 
   String? get _selector {
     final did = ref.read(sessionProvider).session?.did.trim();
@@ -145,7 +156,7 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   Future<void> loadManagement() async {
     final selector = _selector;
-    if (!_enabled || selector == null) {
+    if (!_managementSurfaceEnabled || selector == null) {
       state = state.copyWith(error: DeviceManagementErrorKind.unavailable);
       return;
     }
@@ -155,7 +166,10 @@ class DevicesController extends StateNotifier<DevicesState> {
       final service = ref.read(deviceManagementServiceProvider);
       final results = await Future.wait<Object>(<Future<Object>>[
         service.loadRegistry(selector),
-        service.restoreLocalJoins(),
+        if (_joinEnabled)
+          service.restoreLocalJoins()
+        else
+          Future<List<DeviceJoinProgress>>.value(const <DeviceJoinProgress>[]),
         if (_rootTransferEnabled)
           ref
               .read(rootKeyTransferServiceProvider)
@@ -215,7 +229,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   Future<void> loadNewDevice() async {
-    if (!_enabled) {
+    if (!_joinEnabled) {
       state = state.copyWith(error: DeviceManagementErrorKind.unavailable);
       return;
     }
@@ -253,7 +267,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     required String phone,
     required String otp,
   }) async {
-    if (!_enabled || state.isActionPending) return false;
+    if (!_joinEnabled || state.isActionPending) return false;
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
       final progress = await ref
@@ -283,7 +297,9 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   Future<bool> claim(PendingDeviceJoinSummary pending) async {
     final selector = _selector;
-    if (!_enabled || selector == null || state.isActionPending) return false;
+    if (!_joinEnabled || selector == null || state.isActionPending) {
+      return false;
+    }
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
       final progress = await ref
@@ -311,13 +327,13 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   void resume(DeviceJoinProgress progress) {
-    if (!_enabled) return;
+    if (!_joinEnabled) return;
     state = state.copyWith(activeJoin: progress, clearError: true);
   }
 
   Future<void> pollActive() async {
     final progress = state.activeJoin;
-    if (!_enabled ||
+    if (!_joinEnabled ||
         progress == null ||
         progress.isTerminal ||
         state.isActionPending) {
@@ -354,7 +370,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   }) async {
     final selector = _selector;
     final progress = state.activeJoin;
-    if (!_enabled ||
+    if (!_joinEnabled ||
         selector == null ||
         progress?.sas == null ||
         state.isActionPending) {
@@ -399,7 +415,7 @@ class DevicesController extends StateNotifier<DevicesState> {
       state.registry,
       recipient.protocolDeviceId,
     );
-    if (!_enabled ||
+    if (!_joinEnabled ||
         !_rootTransferEnabled ||
         selector == null ||
         state.isActionPending ||
@@ -471,9 +487,48 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
+  Future<bool> revokeDevice({
+    required DeviceSummary target,
+    required String presenceReason,
+  }) async {
+    final selector = _selector;
+    final authoritativeTarget = _findDevice(
+      state.registry,
+      target.protocolDeviceId,
+    );
+    if (!_deviceRevokeEnabled ||
+        selector == null ||
+        state.isActionPending ||
+        authoritativeTarget == null ||
+        !state.canRevokeDevice(authoritativeTarget)) {
+      return false;
+    }
+
+    state = state.copyWith(isActionPending: true, clearError: true);
+    try {
+      await ref
+          .read(deviceManagementServiceProvider)
+          .revoke(
+            selector: selector,
+            targetDeviceId: authoritativeTarget.protocolDeviceId,
+            presenceReason: presenceReason,
+          );
+      if (!mounted) return false;
+      await loadManagement();
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isActionPending: false,
+        error: _classifyDeviceError(error),
+      );
+      return false;
+    }
+  }
+
   Future<void> cancelActive() async {
     final progress = state.activeJoin;
-    if (!_enabled || progress == null || state.isActionPending) return;
+    if (!_joinEnabled || progress == null || state.isActionPending) return;
     final selector = _selector ?? progress.did;
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
@@ -582,6 +637,11 @@ DeviceManagementErrorKind _classifyDeviceError(Object error) {
   }
   if (code.contains('presence') || code.contains('cancel')) {
     return DeviceManagementErrorKind.userPresenceDenied;
+  }
+  if (code.contains('permission_denied') ||
+      code.contains('self_revoke') ||
+      code.contains('last_ready_admin')) {
+    return DeviceManagementErrorKind.protectedDevice;
   }
   if (code.contains('conflict') || code.contains('already_in_progress')) {
     return DeviceManagementErrorKind.conflict;

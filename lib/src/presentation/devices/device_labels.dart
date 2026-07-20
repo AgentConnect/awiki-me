@@ -1,4 +1,4 @@
-// [INPUT]: Secret-free device roles, authorization, Join, and root-import presentation states.
+// [INPUT]: Secret-free device roles, authorization, Join, root-import, and revoke presentation states.
 // [OUTPUT]: Localized labels and stable generic error copy.
 // [POS]: Presentation-only mapping; no Core error body or control JSON is rendered.
 
@@ -54,6 +54,7 @@ String deviceManagementErrorLabel(
   DeviceManagementErrorKind.userPresenceDenied => l10n.deviceJoinErrorPresence,
   DeviceManagementErrorKind.sessionEstablishmentPending =>
     l10n.deviceRootTransferSessionPending,
+  DeviceManagementErrorKind.protectedDevice => l10n.deviceRevokeProtected,
   DeviceManagementErrorKind.network => l10n.deviceJoinErrorNetwork,
   DeviceManagementErrorKind.failed => l10n.deviceJoinErrorFailed,
 };

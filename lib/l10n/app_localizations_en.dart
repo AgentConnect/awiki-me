@@ -760,6 +760,32 @@ class AppLocalizationsEn extends AppLocalizations {
       'Confirm secure root-key transfer';
 
   @override
+  String get deviceRevokeAction => 'Revoke';
+
+  @override
+  String get deviceRevokeConfirmTitle => 'Revoke this device?';
+
+  @override
+  String deviceRevokeConfirmDetail(String deviceId) {
+    return 'Revoke $deviceId permanently. It will lose future access, but data already obtained cannot be erased. This action cannot be undone.';
+  }
+
+  @override
+  String get deviceRevokeConfirmAction => 'Revoke permanently';
+
+  @override
+  String get deviceRevokePresenceReason =>
+      'Confirm permanent device revocation';
+
+  @override
+  String get deviceRevokeProtectionHint =>
+      'The current device cannot revoke itself, and the final ready management device is always protected.';
+
+  @override
+  String get deviceRevokeProtected =>
+      'This device is protected or you are not using a ready management device. The current device and final ready management device cannot be revoked.';
+
+  @override
   String get deviceReviewAction => 'Review and verify';
 
   @override

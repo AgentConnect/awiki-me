@@ -1,10 +1,12 @@
-// [INPUT]: Secret-free Device Registry and Join projections from IM Core.
-// [OUTPUT]: Device roles, authorization/readiness state, Join progress, and safe root-transfer receipts.
+// [INPUT]: Secret-free Device Registry, Join, and revoke projections from IM Core.
+// [OUTPUT]: Device roles, readiness, Join progress, safe root-transfer receipts, and revoke results.
 // [POS]: Domain truth used by AWiki Me's multi-device application and presentation layers.
 
 enum DeviceRole { member, admin }
 
 enum DeviceStatus { active, revoked }
+
+enum DeviceRevokeStatus { revoked }
 
 enum DeviceManagementReadiness { adminAwaitingRoot, importing, ready, failed }
 
@@ -62,6 +64,19 @@ class DeviceSummary {
       status == DeviceStatus.active &&
       role == DeviceRole.admin &&
       managementReady;
+}
+
+/// Secret-free result of permanently revoking one AWiki device.
+class DeviceRevokeResult {
+  const DeviceRevokeResult({
+    required this.did,
+    required this.targetDeviceId,
+    required this.status,
+  });
+
+  final String did;
+  final String targetDeviceId;
+  final DeviceRevokeStatus status;
 }
 
 /// Secret-free delivery acceptance returned by IM Core.

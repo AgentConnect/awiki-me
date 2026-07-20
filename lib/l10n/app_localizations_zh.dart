@@ -725,6 +725,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceRootTransferPresenceReason => '确认安全传输根密钥';
 
   @override
+  String get deviceRevokeAction => '撤销';
+
+  @override
+  String get deviceRevokeConfirmTitle => '撤销此设备？';
+
+  @override
+  String deviceRevokeConfirmDetail(String deviceId) {
+    return '将永久撤销 $deviceId。该设备会失去未来访问权限，但已经取得的数据无法远程清除。此操作不可撤销。';
+  }
+
+  @override
+  String get deviceRevokeConfirmAction => '永久撤销';
+
+  @override
+  String get deviceRevokePresenceReason => '确认永久撤销设备';
+
+  @override
+  String get deviceRevokeProtectionHint => '当前设备不能撤销自身，系统始终保护最后一台可用管理设备。';
+
+  @override
+  String get deviceRevokeProtected =>
+      '该设备受保护，或当前设备尚未具备管理能力。当前设备和最后一台可用管理设备不能撤销。';
+
+  @override
   String get deviceReviewAction => '查看并验证';
 
   @override

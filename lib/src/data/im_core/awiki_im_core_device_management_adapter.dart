@@ -17,6 +17,13 @@ typedef AwikiImCoreBeginDeviceJoin =
 
 typedef AwikiImCoreInstance = Future<core.AwikiImCore> Function();
 
+typedef AwikiImCoreRevokeDevice =
+    Future<core.DeviceRevokeResult> Function({
+      required core.IdentitySelector selector,
+      required String targetDeviceId,
+      required bool userPresenceConfirmed,
+    });
+
 /// AWiki-internal account verification plus the secret-free IM Core Join API.
 ///
 /// The account-verification token exists only as a method-local value. It is
@@ -30,6 +37,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     http.Client? httpClient,
     Duration timeout = const Duration(seconds: 20),
     AwikiImCoreBeginDeviceJoin? beginDeviceJoin,
+    AwikiImCoreRevokeDevice? revokeDevice,
   }) : this.withCoreInstance(
          coreInstance: runtime.coreInstance,
          userServiceUrl: userServiceUrl,
@@ -37,6 +45,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
          httpClient: httpClient,
          timeout: timeout,
          beginDeviceJoin: beginDeviceJoin,
+         revokeDevice: revokeDevice,
        );
 
   AwikiImCoreDeviceManagementAdapter.withCoreInstance({
@@ -46,6 +55,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     http.Client? httpClient,
     Duration timeout = const Duration(seconds: 20),
     AwikiImCoreBeginDeviceJoin? beginDeviceJoin,
+    AwikiImCoreRevokeDevice? revokeDevice,
   }) : _coreInstance = coreInstance,
        _httpClient = httpClient ?? http.Client(),
        _timeout = timeout,
@@ -64,6 +74,20 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
                ttlSeconds: ttlSeconds,
                accountVerificationGrant: accountVerificationGrant,
              );
+           }),
+       _revokeDevice =
+           revokeDevice ??
+           (({
+             required selector,
+             required targetDeviceId,
+             required userPresenceConfirmed,
+           }) async {
+             final instance = await coreInstance();
+             return instance.revokeDevice(
+               selector: selector,
+               targetDeviceId: targetDeviceId,
+               userPresenceConfirmed: userPresenceConfirmed,
+             );
            });
 
   static const String accountVerificationExchangePath =
@@ -76,6 +100,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   final http.Client _httpClient;
   final Duration _timeout;
   final AwikiImCoreBeginDeviceJoin _beginDeviceJoin;
+  final AwikiImCoreRevokeDevice _revokeDevice;
 
   @override
   Future<void> sendJoinSmsOtp(String phone) async {
@@ -155,6 +180,26 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
       _identitySelector(selector),
     );
     return deviceRegistryFromCore(result);
+  }
+
+  @override
+  Future<DeviceRevokeResult> revokeDevice({
+    required String selector,
+    required String targetDeviceId,
+    required bool userPresenceConfirmed,
+  }) async {
+    final result = await _revokeDevice(
+      selector: _identitySelector(selector),
+      targetDeviceId: targetDeviceId.trim(),
+      userPresenceConfirmed: userPresenceConfirmed,
+    );
+    return DeviceRevokeResult(
+      did: result.did,
+      targetDeviceId: result.targetDeviceId,
+      status: switch (result.status) {
+        core.DeviceRevokeStatus.revoked => DeviceRevokeStatus.revoked,
+      },
+    );
   }
 
   @override

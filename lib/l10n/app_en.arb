@@ -264,6 +264,18 @@
   "deviceRootTransferRetry": "Retry secure import",
   "deviceRootTransferSessionPending": "A secure session is being established. Sync the receiving device, then continue.",
   "deviceRootTransferPresenceReason": "Confirm secure root-key transfer",
+  "deviceRevokeAction": "Revoke",
+  "deviceRevokeConfirmTitle": "Revoke this device?",
+  "deviceRevokeConfirmDetail": "Revoke {deviceId} permanently. It will lose future access, but data already obtained cannot be erased. This action cannot be undone.",
+  "@deviceRevokeConfirmDetail": {
+    "placeholders": {
+      "deviceId": {"type": "String"}
+    }
+  },
+  "deviceRevokeConfirmAction": "Revoke permanently",
+  "deviceRevokePresenceReason": "Confirm permanent device revocation",
+  "deviceRevokeProtectionHint": "The current device cannot revoke itself, and the final ready management device is always protected.",
+  "deviceRevokeProtected": "This device is protected or you are not using a ready management device. The current device and final ready management device cannot be revoked.",
   "deviceReviewAction": "Review and verify",
   "deviceResumeAction": "Continue",
   "deviceJoinEntry": "Add this device to an existing account",

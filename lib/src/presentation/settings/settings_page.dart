@@ -32,7 +32,9 @@ class SettingsPage extends ConsumerWidget {
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final personalAgentEnabled = ref.watch(agentImEnabledProvider);
-    final multiDeviceEnabled = ref.watch(multiDeviceJoinEnabledProvider);
+    final multiDeviceEnabled =
+        ref.watch(multiDeviceJoinEnabledProvider) ||
+        ref.watch(multiDeviceDeviceRevokeEnabledProvider);
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,

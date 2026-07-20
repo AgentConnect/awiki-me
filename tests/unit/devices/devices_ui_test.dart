@@ -65,6 +65,30 @@ void main() {
     expect(find.byKey(const Key('devices-page')), findsOneWidget);
   });
 
+  testWidgets('revoke gate exposes devices without enabling Join', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore();
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: _session,
+        providerOverrides: <Override>[
+          multiDeviceJoinEnabledProvider.overrideWithValue(false),
+          multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(true),
+          deviceManagementCorePortProvider.overrideWithValue(core),
+        ],
+      ),
+    );
+
+    expect(find.text('设备'), findsOneWidget);
+    await tester.tap(find.text('设备'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('devices-page')), findsOneWidget);
+    expect(core.registryCalls, 1);
+    expect(core.localSessionCalls, 0);
+  });
+
   testWidgets('feature off keeps the legacy onboarding surface unchanged', (
     tester,
   ) async {
@@ -218,6 +242,90 @@ void main() {
       expect(find.textContaining('system_type'), findsNothing);
     },
   );
+
+  testWidgets(
+    'permanent revoke requires explicit intent then one user-presence prompt',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = DeviceRegistrySnapshot(
+          did: testDid,
+          devices: <DeviceSummary>[
+            _device(
+              id: 'admin-current',
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+            _device(id: 'member-target', role: DeviceRole.member),
+          ],
+        );
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          const DevicesPage(),
+          core,
+          presence: presence,
+          joinEnabled: false,
+          deviceRevokeEnabled: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('device-revoke-protection-hint')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('device-revoke-admin-current')),
+        findsNothing,
+      );
+      await tester.tap(find.byKey(const Key('device-revoke-member-target')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('device-revoke-confirm-dialog')),
+        findsOneWidget,
+      );
+      expect(core.revokeCalls, 0);
+      expect(presence.calls, 0);
+
+      await tester.tap(find.byKey(const Key('device-revoke-confirm-action')));
+      await tester.pumpAndSettle();
+
+      expect(presence.calls, 1);
+      expect(core.revokeCalls, 1);
+      expect(core.lastRevokedDeviceId, 'member-target');
+      expect(core.lastRevokePresenceConfirmed, isTrue);
+      expect(find.textContaining('普通设备 · 已撤销'), findsOneWidget);
+      expect(find.textContaining('auth_generation'), findsNothing);
+      expect(find.textContaining('root_proof'), findsNothing);
+      expect(find.textContaining('system_type'), findsNothing);
+    },
+  );
+
+  testWidgets('revoke rollout off does not expose destructive action', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..registry = DeviceRegistrySnapshot(
+        did: testDid,
+        devices: <DeviceSummary>[
+          _device(
+            id: 'admin-current',
+            role: DeviceRole.admin,
+            managementReady: true,
+            isCurrent: true,
+          ),
+          _device(id: 'member-target', role: DeviceRole.member),
+        ],
+      );
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(_app(const DevicesPage(), core));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('device-revoke-member-target')), findsNothing);
+    expect(core.revokeCalls, 0);
+  });
 
   testWidgets(
     'session establishment is explicit and continuation reuses send ID with fresh presence',
@@ -760,16 +868,21 @@ Widget _app(
   FakeDeviceManagementCore core, {
   FakeUserPresence? presence,
   FakeRootKeyTransferPort? rootTransfer,
+  bool joinEnabled = true,
   bool rootTransferEnabled = false,
+  bool deviceRevokeEnabled = false,
   SessionIdentity? session = _session,
 }) {
   return buildLocalizedTestApp(
     home: home,
     session: session,
     providerOverrides: <Override>[
-      multiDeviceJoinEnabledProvider.overrideWithValue(true),
+      multiDeviceJoinEnabledProvider.overrideWithValue(joinEnabled),
       multiDeviceRootTransferEnabledProvider.overrideWithValue(
         rootTransferEnabled,
+      ),
+      multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(
+        deviceRevokeEnabled,
       ),
       deviceManagementCorePortProvider.overrideWithValue(core),
       rootKeyTransferPortProvider.overrideWithValue(

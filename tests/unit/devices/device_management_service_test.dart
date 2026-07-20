@@ -108,6 +108,47 @@ void main() {
     expect(presence.calls, 0);
   });
 
+  test('revoke confirms user presence before calling Core', () async {
+    final core = _FakeDeviceCore();
+    final presence = _FakeUserPresence(result: true);
+    final service = _service(core: core, presence: presence);
+
+    final result = await service.revoke(
+      selector: 'did:wba:awiki.info:user:alice:e1_test',
+      targetDeviceId: 'device-member',
+      presenceReason: 'Confirm revocation',
+    );
+
+    expect(presence.calls, 1);
+    expect(core.revokeCalls, 1);
+    expect(core.revokedTarget, 'device-member');
+    expect(core.revokedPresence, isTrue);
+    expect(result.status, DeviceRevokeStatus.revoked);
+  });
+
+  test('revoke presence denial never calls Core', () async {
+    final core = _FakeDeviceCore();
+    final presence = _FakeUserPresence(result: false);
+    final service = _service(core: core, presence: presence);
+
+    await expectLater(
+      service.revoke(
+        selector: 'did:wba:awiki.info:user:alice:e1_test',
+        targetDeviceId: 'device-member',
+        presenceReason: 'Confirm revocation',
+      ),
+      throwsA(
+        isA<DeviceManagementException>().having(
+          (error) => error.code,
+          'code',
+          'user_presence_denied',
+        ),
+      ),
+    );
+    expect(presence.calls, 1);
+    expect(core.revokeCalls, 0);
+  });
+
   test('presence denial consumes the one-time handle with false', () async {
     final core = _FakeDeviceCore();
     final presence = _FakeUserPresence(result: false);
@@ -268,6 +309,9 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   String? confirmedHandle;
   bool? confirmedPresence;
   String? sentOtpPhone;
+  int revokeCalls = 0;
+  String? revokedTarget;
+  bool? revokedPresence;
 
   @override
   Future<void> sendJoinSmsOtp(String phone) async {
@@ -351,6 +395,22 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   @override
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async =>
       localSessions;
+
+  @override
+  Future<DeviceRevokeResult> revokeDevice({
+    required String selector,
+    required String targetDeviceId,
+    required bool userPresenceConfirmed,
+  }) async {
+    revokeCalls += 1;
+    revokedTarget = targetDeviceId;
+    revokedPresence = userPresenceConfirmed;
+    return DeviceRevokeResult(
+      did: selector,
+      targetDeviceId: targetDeviceId,
+      status: DeviceRevokeStatus.revoked,
+    );
+  }
 
   @override
   Future<DeviceJoinProgress> pollAdminDeviceJoin({

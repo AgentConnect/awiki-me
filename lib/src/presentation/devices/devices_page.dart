@@ -1,6 +1,6 @@
-// [INPUT]: Device Registry, local Join/Recovery projections, root-transfer phase, and user actions.
-// [OUTPUT]: Device management UI with ready-admin gates and secret-free root-import status.
-// [POS]: Device administration surface; encrypted control JSON is never a renderable model.
+// [INPUT]: Device Registry, Join/Recovery projections, root-transfer phase, revoke gate, and user actions.
+// [OUTPUT]: Device UI with ready-admin gates, root-import status, and confirmed permanent revoke.
+// [POS]: Device administration surface; internal proofs and encrypted control JSON are never rendered.
 
 import 'dart:async';
 
@@ -57,6 +57,9 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
         : const <HandleRecoveryProgress>[];
     final rootTransferEnabled = ref.watch(
       multiDeviceRootTransferEnabledProvider,
+    );
+    final deviceRevokeEnabled = ref.watch(
+      multiDeviceDeviceRevokeEnabledProvider,
     );
     final resumable = state.localJoins
         .where((join) => join.side == DeviceJoinSide.admin && !join.isTerminal)
@@ -205,6 +208,10 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                             canRetryRootTransfer: state.canRetryRootTransfer(
                               registry.devices[index],
                             ),
+                            revokeEnabled: deviceRevokeEnabled,
+                            canRevoke: state.canRevokeDevice(
+                              registry.devices[index],
+                            ),
                             isActionPending: state.isActionPending,
                             onRootTransfer: () => ref
                                 .read(devicesProvider.notifier)
@@ -214,6 +221,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                                       .l10n
                                       .deviceRootTransferPresenceReason,
                                 ),
+                            onRevoke: () =>
+                                _confirmDeviceRevoke(registry.devices[index]),
                           ),
                           if (index != registry.devices.length - 1)
                             const AppSectionDivider(),
@@ -221,6 +230,17 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                       ],
                     ),
             ),
+            if (deviceRevokeEnabled && canManage) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                context.l10n.deviceRevokeProtectionHint,
+                key: const Key('device-revoke-protection-hint'),
+                style: TextStyle(
+                  color: context.awikiTheme.secondaryText,
+                  fontSize: 12,
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             _SectionLabel(context.l10n.devicesPendingTitle),
             const SizedBox(height: 8),
@@ -280,6 +300,38 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeviceRevoke(DeviceSummary device) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        key: const Key('device-revoke-confirm-dialog'),
+        title: Text(context.l10n.deviceRevokeConfirmTitle),
+        content: Text(
+          context.l10n.deviceRevokeConfirmDetail(device.protocolDeviceId),
+        ),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.commonCancel),
+          ),
+          CupertinoDialogAction(
+            key: const Key('device-revoke-confirm-action'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.l10n.deviceRevokeConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    await ref
+        .read(devicesProvider.notifier)
+        .revokeDevice(
+          target: device,
+          presenceReason: context.l10n.deviceRevokePresenceReason,
+        );
   }
 
   Future<void> _openPending(PendingDeviceJoinSummary pending) async {
@@ -360,8 +412,11 @@ class _DeviceTile extends StatelessWidget {
     required this.rootTransferEnabled,
     required this.canStartRootTransfer,
     required this.canRetryRootTransfer,
+    required this.revokeEnabled,
+    required this.canRevoke,
     required this.isActionPending,
     required this.onRootTransfer,
+    required this.onRevoke,
   });
 
   final DeviceSummary device;
@@ -370,8 +425,11 @@ class _DeviceTile extends StatelessWidget {
   final bool rootTransferEnabled;
   final bool canStartRootTransfer;
   final bool canRetryRootTransfer;
+  final bool revokeEnabled;
+  final bool canRevoke;
   final bool isActionPending;
   final VoidCallback onRootTransfer;
+  final VoidCallback onRevoke;
 
   @override
   Widget build(BuildContext context) {
@@ -393,18 +451,40 @@ class _DeviceTile extends StatelessWidget {
         status,
         if (readinessLabel != null) readinessLabel,
       ].join(' · '),
-      trailing: canTransferRoot
-          ? CupertinoButton(
-              key: Key('root-transfer-${device.protocolDeviceId}'),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              onPressed: isActionPending ? null : onRootTransfer,
-              child: Text(
-                sessionEstablishmentPending
-                    ? context.l10n.deviceRootTransferContinue
-                    : canStartRootTransfer
-                    ? context.l10n.deviceRootTransferStart
-                    : context.l10n.deviceRootTransferRetry,
-              ),
+      trailing: canTransferRoot || (revokeEnabled && canRevoke)
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (canTransferRoot)
+                  CupertinoButton(
+                    key: Key('root-transfer-${device.protocolDeviceId}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    onPressed: isActionPending ? null : onRootTransfer,
+                    child: Text(
+                      sessionEstablishmentPending
+                          ? context.l10n.deviceRootTransferContinue
+                          : canStartRootTransfer
+                          ? context.l10n.deviceRootTransferStart
+                          : context.l10n.deviceRootTransferRetry,
+                    ),
+                  ),
+                if (revokeEnabled && canRevoke)
+                  CupertinoButton(
+                    key: Key('device-revoke-${device.protocolDeviceId}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    onPressed: isActionPending ? null : onRevoke,
+                    child: Text(
+                      context.l10n.deviceRevokeAction,
+                      style: TextStyle(color: context.awikiTheme.danger),
+                    ),
+                  ),
+              ],
             )
           : Icon(
               device.isCurrent
