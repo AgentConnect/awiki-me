@@ -210,6 +210,8 @@ class AppBootstrap {
       multiDeviceJoinEnabled: effectiveEnvironment.multiDeviceJoinEnabled,
       multiDeviceRootTransferEnabled:
           effectiveEnvironment.multiDeviceRootTransferEnabled,
+      multiDeviceGroupE2eeEnabled:
+          effectiveEnvironment.multiDeviceGroupE2eeEnabled,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
           onProgress?.call(AppBootstrapProgress.upgradingLocalState);

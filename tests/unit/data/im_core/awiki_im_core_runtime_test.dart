@@ -44,6 +44,7 @@ void main() {
       vaultSecretProvider: vaultProvider,
       multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: true,
+      multiDeviceGroupE2eeEnabled: true,
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
         expect(await Directory(paths.identityRootDir).exists(), isTrue);
@@ -98,6 +99,7 @@ void main() {
             );
             expect(openOptions?.multiDeviceJoinEnabled, isTrue);
             expect(openOptions?.multiDeviceRootTransferEnabled, isTrue);
+            expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);
             throw UnsupportedError('fake opener stops before native load');
           },
     );
