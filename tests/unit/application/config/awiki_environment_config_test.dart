@@ -1,4 +1,6 @@
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -30,6 +32,7 @@ void main() {
     expect(config.agentImEnabled, isTrue);
     expect(config.multiDeviceRootTransferEnabled, isFalse);
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
+    expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
     expect(config.handleRecoveryEnabled, isFalse);
   });
@@ -100,6 +103,7 @@ void main() {
       multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: true,
       multiDeviceDeviceRevokeEnabled: true,
+      multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
       handleRecoveryEnabled: true,
     );
@@ -121,6 +125,7 @@ void main() {
     expect(config.multiDeviceJoinEnabled, isTrue);
     expect(config.multiDeviceRootTransferEnabled, isTrue);
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
+    expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
     expect(config.handleRecoveryEnabled, isTrue);
   });
@@ -137,5 +142,22 @@ void main() {
 
     expect(first.baseUrl, isNot(second.baseUrl));
     expect(first.didDomain, isNot(second.didDomain));
+  });
+
+  test('Direct rollout provider is independent from other device gates', () {
+    final config = AwikiEnvironmentConfig(multiDeviceDirectE2eeEnabled: true);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(config),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
+    expect(container.read(multiDeviceJoinEnabledProvider), isFalse);
+    expect(container.read(multiDeviceRootTransferEnabledProvider), isFalse);
+    expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
+    expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
+    expect(container.read(handleRecoveryEnabledProvider), isFalse);
   });
 }

@@ -216,6 +216,8 @@ class AppBootstrap {
           effectiveEnvironment.multiDeviceRootTransferEnabled,
       multiDeviceDeviceRevokeEnabled:
           effectiveEnvironment.multiDeviceDeviceRevokeEnabled,
+      multiDeviceDirectE2eeEnabled:
+          effectiveEnvironment.multiDeviceDirectE2eeEnabled,
       multiDeviceHandleRecoveryEnabled:
           effectiveEnvironment.handleRecoveryEnabled,
       multiDeviceGroupE2eeEnabled:

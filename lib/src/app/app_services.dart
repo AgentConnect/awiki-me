@@ -104,6 +104,11 @@ final multiDeviceDeviceRevokeEnabledProvider = Provider<bool>(
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceDeviceRevokeEnabled,
 );
 
+final multiDeviceDirectE2eeEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDirectE2eeEnabled,
+);
+
 final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,

@@ -45,6 +45,7 @@ void main() {
       multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: true,
       multiDeviceDeviceRevokeEnabled: true,
+      multiDeviceDirectE2eeEnabled: true,
       multiDeviceHandleRecoveryEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
       inspectLocalStateUpgrade: (paths) async {
@@ -102,6 +103,7 @@ void main() {
             expect(openOptions?.multiDeviceJoinEnabled, isTrue);
             expect(openOptions?.multiDeviceRootTransferEnabled, isTrue);
             expect(openOptions?.multiDeviceDeviceRevokeEnabled, isTrue);
+            expect(openOptions?.multiDeviceDirectE2eeEnabled, isTrue);
             expect(openOptions?.multiDeviceHandleRecoveryEnabled, isTrue);
             expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);
             throw UnsupportedError('fake opener stops before native load');

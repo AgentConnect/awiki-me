@@ -21,6 +21,10 @@
 `false`。它只开放已登录用户的设备页和撤销能力，不会隐式开放新设备 Join；Join 或撤销
 任一开关启用时，设置页均可进入设备页读取权威 Registry。
 
+设备级 Direct 产品路径由编译期开关 `AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED` 控制，
+默认 `false`。App 只把该值传给 `AwikiImCoreOpenOptions`，不新增 UI；它与 Join、根密钥
+传输、永久撤销、Handle Recovery 和 Group E2EE 开关彼此独立，也不进入跨域协议字段。
+
 ## 2. App 状态流
 
 ```text
