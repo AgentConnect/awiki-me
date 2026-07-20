@@ -139,6 +139,29 @@ void main() {
       ]);
     });
 
+    test('parses activation-gated remote multi-device Join case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-remote-join',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'remote_multi_device_join',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteJoin);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteJoin);
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(hyphen.e2eCase.scenario, 'multi-device-remote-app-admin-join');
+      expect(hyphen.e2eCase.caseIds, <String>['DEVICE-JOIN-E2E-002']);
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/multi_device_join_ui_test.dart',
+      );
+    });
+
     test('parses direct attachment contacts and inbound cases', () {
       final direct = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -296,7 +319,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, multi-device, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),
@@ -337,6 +360,154 @@ void main() {
             'Unknown argument: --unknown',
           ),
         ),
+      );
+    });
+  });
+
+  group('RemoteMultiDeviceJoinConfig', () {
+    const sourceRef = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
+    const fileConfig = DesktopE2eFileConfig(
+      path: '/tmp/e2e.local.yaml',
+      platform: DesktopE2ePlatform.macos,
+      serviceBaseUrl: 'https://awiki.info',
+      didDomain: 'awiki.info',
+      otpPhone: 'must-not-be-used',
+      otpCode: 'must-not-be-used',
+      cliBin: '/tmp/awiki-cli',
+      cliSourceRef: sourceRef,
+    );
+
+    test('fails closed until the remote capability gate is explicit', () {
+      expect(
+        () => RemoteMultiDeviceJoinConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
+          },
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1'),
+          ),
+        ),
+      );
+    });
+
+    test('uses dedicated env OTP inputs and never static YAML OTP values', () {
+      final config = RemoteMultiDeviceJoinConfig.from(
+        fileConfig: fileConfig,
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
+              '["ssh","ali","resolve-otp"]',
+          'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX': 'joinapp',
+        },
+      );
+
+      expect(config.phone, 'dedicated-phone');
+      expect(config.otpCommand, <String>['ssh', 'ali', 'resolve-otp']);
+      expect(config.handlePrefix, 'joinapp');
+      expect(config.cliSourceRef, sourceRef);
+      expect(config.allowStagedOtpOnSmsError, isFalse);
+      expect(config.phone, isNot(fileConfig.otpPhone));
+      expect(config.otpCommandJson, isNot(contains(fileConfig.otpCode!)));
+    });
+
+    test('rejects shell strings and unauditable CLI provenance', () {
+      const environment = <String, String>{
+        'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+        'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+        'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': 'ssh ali resolve-otp',
+      };
+      expect(
+        () => RemoteMultiDeviceJoinConfig.from(
+          fileConfig: fileConfig,
+          environment: environment,
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(
+        () => RemoteMultiDeviceJoinConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
+                '["/bin/sh","-c","resolve-otp"]',
+          },
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+
+      expect(
+        () => RemoteMultiDeviceJoinConfig.from(
+          fileConfig: const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.macos,
+            serviceBaseUrl: 'https://awiki.info',
+            didDomain: 'awiki.info',
+            cliBin: '/tmp/awiki-cli',
+            cliSourceRef: '0000000000000000000000000000000000000000',
+          ),
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["resolve-otp"]',
+          },
+        ),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('exact non-zero 40-character commit SHA'),
+          ),
+        ),
+      );
+    });
+
+    test('staged OTP mode requires the exact reviewed resolver argv', () {
+      const fixedResolver =
+          '["ssh","ali","--","/home/ecs-user/awiki-space/user-service/.venv/bin/python","/home/ecs-user/awiki-space/user-service/scripts/issue_multi_device_test_otp.py","--apply"]';
+      final config = RemoteMultiDeviceJoinConfig.from(
+        fileConfig: fileConfig,
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': fixedResolver,
+          'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': '1',
+        },
+      );
+
+      expect(config.allowStagedOtpOnSmsError, isTrue);
+      expect(config.otpCommand, hasLength(6));
+      expect(
+        () => RemoteMultiDeviceJoinConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
+                '["ssh","ali","/safe/resolver","--apply"]',
+            'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': '1',
+          },
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(
+        () => RemoteMultiDeviceJoinConfig.from(
+          fileConfig: fileConfig,
+          environment: const <String, String>{
+            'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': fixedResolver,
+            'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': 'yes',
+          },
+        ),
+        throwsA(isA<E2eFailure>()),
       );
     });
   });
@@ -1192,6 +1363,8 @@ cliPeer:
       expect(decoded['serviceBaseUrl'], 'https://service.example.test');
       expect(decoded['didDomain'], 'example.test');
       expect(decoded['configPath'], isNotNull);
+      expect(decoded, contains('cliSourceRef'));
+      expect(decoded, isNot(contains('sdkSourceRef')));
     });
 
     test('default smoke runs local App and native checks only', () async {

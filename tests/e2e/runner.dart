@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:yaml/yaml.dart';
 
 import 'case_attestation.dart';
+import 'remote_multi_device_join_contract.dart';
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
 const String _desktopE2eSuiteManifestPath = 'tests/e2e/suite_manifest.json';
@@ -23,6 +24,17 @@ const String _desktopCliPeerPerformanceScenario =
     'desktop-app-cli-peer-performance';
 const String _multiDeviceCapabilityGateScenario =
     'multi-device-capability-gate';
+const String _multiDeviceRemoteJoinScenario =
+    'multi-device-remote-app-admin-join';
+const String _multiDeviceRemoteJoinRunConfigPath =
+    '.e2e/multi-device-remote-join/current/run_config.json';
+const String _multiDeviceRemoteJoinGateEnv =
+    'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
+const String _multiDeviceRemotePhoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
+const String _multiDeviceRemoteOtpCommandEnv =
+    'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
+const String _multiDeviceRemoteHandlePrefixEnv =
+    'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX';
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
@@ -59,6 +71,9 @@ const List<String> _desktopSmokeCaseIds = <String>[
 ];
 const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
   'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+];
+const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
+  'DEVICE-JOIN-E2E-002',
 ];
 const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
@@ -240,6 +255,7 @@ class DesktopE2eRunner {
 
   DesktopE2eFileConfig fileConfig = const DesktopE2eFileConfig.empty();
   DesktopCliPeerConfig? config;
+  RemoteMultiDeviceJoinConfig? remoteMultiDeviceJoinConfig;
   late final DesktopE2ePlatform platform;
   late final String runId;
   late final Directory reportDir;
@@ -373,6 +389,8 @@ class DesktopE2eRunner {
           await _runLocalSmoke();
         case DesktopE2eCase.multiDevice:
           await _runLocalMultiDeviceCapabilityGate();
+        case DesktopE2eCase.multiDeviceRemoteJoin:
+          await _runRemoteMultiDeviceJoin();
         default:
           await _runAppCliPeer();
       }
@@ -462,6 +480,126 @@ class DesktopE2eRunner {
         caseIds: _multiDeviceCapabilityGateCaseIds,
       );
     });
+  }
+
+  Future<void> _runRemoteMultiDeviceJoin() async {
+    final joinConfig = RemoteMultiDeviceJoinConfig.from(
+      fileConfig: fileConfig,
+      environment: Platform.environment,
+    );
+    remoteMultiDeviceJoinConfig = joinConfig;
+    _addRuntimeSecret(joinConfig.phone);
+    _addRuntimeSecret(joinConfig.otpCommandJson);
+    _addRuntimeSecret(joinConfig.cliBin);
+    if (!options.dryRun && !commands.dryRun) {
+      suiteDefinition.validateRemoteTargetValues(
+        didDomain: joinConfig.didDomain,
+        serviceUrls: <String>[
+          joinConfig.serviceBaseUrl,
+          joinConfig.userServiceUrl,
+          joinConfig.messageServiceUrl,
+        ],
+      );
+    }
+
+    _section('AWiki Desktop remote multi-device App-admin Join E2E $runId');
+    _line('platform: ${joinConfig.platform.name}');
+    _line('config: ${fileConfig.path ?? '<not found>'}');
+    _line('reports: ${redactor.redact(reportDir.path)}');
+    _line('cli workspace: ${redactor.redact(cliWorkspaceDir.path)}');
+    _line('cli home: ${redactor.redact(cliHomeDir.path)}');
+    _line('app state: ${redactor.redact(appStateRootDir.path)}');
+    _line('case: ${options.e2eCase.caseName}');
+    _line('flutter build dir: ${flutterBuildIsolation.buildDirectory}');
+    _line('service base: ${joinConfig.serviceBaseUrl}');
+
+    await _timed('Checking remote Join tooling and source', () async {
+      await commands.requireExecutable('flutter');
+      await commands.requireFile(joinConfig.cliBin);
+      final version = await commands.captureResult(
+        joinConfig.cliBin,
+        const <String>['--format', 'json', 'version'],
+      );
+      if (!options.dryRun && !commands.dryRun) {
+        final binaryCommit = cliBuildCommitFromVersionJson(version.output);
+        if (binaryCommit != joinConfig.cliSourceRef.toLowerCase()) {
+          throw E2eFailure(
+            'cliPeer.sourceRef does not match the commit embedded in the CLI binary.',
+          );
+        }
+      }
+      _identityPreflight = <String, Object?>{
+        'status': options.dryRun ? 'dry_run' : 'passed',
+        'auditedRemoteTarget': true,
+        'cliSourceVerified': !options.dryRun,
+        'containsRawDids': false,
+      };
+    });
+
+    await _writeRemoteMultiDeviceJoinRunConfig(joinConfig);
+    if (options.prepareOnly) {
+      _section('Prepare-only completed');
+      _line('No remote identity or Join session was created.');
+      return;
+    }
+    _resourceSideEffectsPossible = true;
+    await _timed('Flutter App-admin + CLI joining-device flow', () {
+      return _runFlutterTest(
+        'integration_test/multi_device_join_ui_test.dart',
+        caseIds: _multiDeviceRemoteJoinCaseIds,
+      );
+    });
+  }
+
+  Future<void> _writeRemoteMultiDeviceJoinRunConfig(
+    RemoteMultiDeviceJoinConfig joinConfig,
+  ) async {
+    final payload = <String, Object?>{
+      'schemaVersion': 1,
+      'enabled': true,
+      'runId': runId,
+      'platform': joinConfig.platform.name,
+      'service': <String, Object?>{
+        'baseUrl': joinConfig.serviceBaseUrl,
+        'userServiceUrl': joinConfig.userServiceUrl,
+        'messageServiceUrl': joinConfig.messageServiceUrl,
+        'mailServiceUrl': joinConfig.mailServiceUrl,
+        'didDomain': joinConfig.didDomain,
+        'anpServiceUrl': joinConfig.anpServiceUrl,
+        'anpServiceDid': joinConfig.anpServiceDid,
+      },
+      'account': <String, Object?>{
+        'handlePrefix': joinConfig.handlePrefix,
+        'allowStagedOtpOnSmsError': joinConfig.allowStagedOtpOnSmsError,
+      },
+      'cliJoiningDevice': <String, Object?>{
+        'binary': joinConfig.cliBin,
+        'sourceRef': joinConfig.cliSourceRef,
+        'workspace': cliWorkspaceDir.path,
+        'home': cliHomeDir.path,
+      },
+      'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'suite': <String, Object?>{
+        'manifestRevision': suiteManifest.sourceRevision,
+        'tier': suiteDefinition.tier,
+        'cleanupPolicy': suiteDefinition.cleanupPolicy,
+      },
+    };
+    if (options.dryRun) {
+      _line('would write remote multi-device Join run config');
+      return;
+    }
+    await runConfigFile.parent.create(recursive: true);
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['700', runConfigFile.parent.path]);
+    }
+    await runConfigFile.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(payload),
+      flush: true,
+    );
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['600', runConfigFile.path]);
+    }
   }
 
   Future<void> _runAppCliPeer() async {
@@ -732,7 +870,7 @@ class DesktopE2eRunner {
     }
     if (!isAuditableGitSha(peerConfig.cliSourceRef)) {
       throw E2eFailure(
-        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA used to build the CLI/SDK.',
+        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA embedded in the CLI binary.',
       );
     }
     final version = await _cli(const <String>['--format', 'json', 'version']);
@@ -1367,7 +1505,22 @@ class DesktopE2eRunner {
         if (config != null) 'appHandle': config!.appHandle,
         if (config != null) 'cliHandle': config!.cliHandle,
         if (config != null) 'cliSourceRef': config!.cliSourceRef,
-        if (config != null) 'sdkSourceRef': config!.cliSourceRef,
+        if (remoteMultiDeviceJoinConfig != null)
+          'serviceBaseUrl': remoteMultiDeviceJoinConfig!.serviceBaseUrl,
+        if (remoteMultiDeviceJoinConfig != null)
+          'userServiceUrl': remoteMultiDeviceJoinConfig!.userServiceUrl,
+        if (remoteMultiDeviceJoinConfig != null)
+          'messageServiceUrl': remoteMultiDeviceJoinConfig!.messageServiceUrl,
+        if (remoteMultiDeviceJoinConfig != null)
+          'mailServiceUrl': remoteMultiDeviceJoinConfig!.mailServiceUrl,
+        if (remoteMultiDeviceJoinConfig != null)
+          'anpServiceUrl': remoteMultiDeviceJoinConfig!.anpServiceUrl,
+        if (remoteMultiDeviceJoinConfig != null)
+          'anpServiceDid': '<redacted-service-did>',
+        if (remoteMultiDeviceJoinConfig != null)
+          'didDomain': remoteMultiDeviceJoinConfig!.didDomain,
+        if (remoteMultiDeviceJoinConfig != null)
+          'cliSourceRef': remoteMultiDeviceJoinConfig!.cliSourceRef,
         'identityPreflight': _identityPreflight,
         'resourceLifecycle': <String, Object?>{
           'cleanupPolicy': suiteDefinition.cleanupPolicy,
@@ -1522,9 +1675,11 @@ class DesktopE2eRunner {
 
   void _writeResourceLedger() {
     reportDir.createSync(recursive: true);
-    final targetHost = config == null
-        ? null
-        : Uri.tryParse(config!.serviceBaseUrl)?.host;
+    final targetUrl =
+        config?.serviceBaseUrl ?? remoteMultiDeviceJoinConfig?.serviceBaseUrl;
+    final targetHost = targetUrl == null ? null : Uri.tryParse(targetUrl)?.host;
+    final sourceRef =
+        config?.cliSourceRef ?? remoteMultiDeviceJoinConfig?.cliSourceRef;
     resourceLedgerFile.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(<String, Object?>{
         'schemaVersion': 1,
@@ -1538,7 +1693,11 @@ class DesktopE2eRunner {
         'reasonCode': _resourceCleanupReasonCode,
         'resourceCategories': suiteDefinition.resourceCategories,
         'resourceCounts': <String, Object?>{
-          'fixedIdentityPool': config == null ? 0 : 2,
+          'fixedIdentityPool': config != null
+              ? 2
+              : remoteMultiDeviceJoinConfig != null
+              ? 1
+              : 0,
           'createdIdentities': _resourceSideEffectsPossible ? 'unknown' : 0,
           'messages': _resourceSideEffectsPossible ? 'unknown' : 0,
           'groups': _resourceSideEffectsPossible ? 'unknown' : 0,
@@ -1547,7 +1706,7 @@ class DesktopE2eRunner {
         'identityPreflightStatus': _identityPreflight['status'],
         'containsRawDids': false,
         'containsSecrets': false,
-        if (config != null) 'cliSourceRef': config!.cliSourceRef,
+        if (sourceRef != null) 'cliSourceRef': sourceRef,
       }),
     );
   }
@@ -1619,7 +1778,7 @@ class DesktopE2eRunner {
   if (message.contains('cliPeer.sourceRef')) {
     return (
       code: 'source_ref_unverified',
-      summary: 'CLI/SDK source ref is missing or not an exact commit SHA.',
+      summary: 'CLI source ref is missing or not an exact commit SHA.',
     );
   }
   if (message.contains('audited remote')) {
@@ -1814,20 +1973,42 @@ class DesktopE2eSuiteDefinition {
   }
 
   void validateRemoteTarget(DesktopCliPeerConfig config) {
+    validateRemoteTargetValues(
+      didDomain: config.didDomain,
+      serviceUrls: <String>[
+        config.serviceBaseUrl,
+        config.userServiceUrl ?? config.serviceBaseUrl,
+        config.messageServiceUrl ?? config.serviceBaseUrl,
+      ],
+    );
     if (allowedHosts.isEmpty && allowedDidDomains.isEmpty) {
       return;
     }
-    if (!allowedDidDomains.contains(config.didDomain)) {
+    final ws = config.messageServiceWsUrl;
+    final wsUri = ws == null ? null : Uri.tryParse(ws);
+    if (wsUri == null ||
+        wsUri.scheme != 'wss' ||
+        !allowedHosts.contains(wsUri.host) ||
+        wsUri.path != '/im/ws') {
+      throw E2eFailure(
+        'E2E suite "$name" requires the audited remote WebSocket endpoint.',
+      );
+    }
+  }
+
+  void validateRemoteTargetValues({
+    required String didDomain,
+    required List<String> serviceUrls,
+  }) {
+    if (allowedHosts.isEmpty && allowedDidDomains.isEmpty) {
+      return;
+    }
+    if (!allowedDidDomains.contains(didDomain)) {
       throw E2eFailure(
         'E2E suite "$name" must target an audited remote DID domain.',
       );
     }
-    final urls = <String>[
-      config.serviceBaseUrl,
-      config.userServiceUrl ?? config.serviceBaseUrl,
-      config.messageServiceUrl ?? config.serviceBaseUrl,
-    ];
-    for (final value in urls) {
+    for (final value in serviceUrls) {
       final uri = Uri.tryParse(value);
       if (uri == null || !allowedHosts.contains(uri.host)) {
         throw E2eFailure(
@@ -1839,16 +2020,6 @@ class DesktopE2eSuiteDefinition {
           'E2E suite "$name" requires secure remote service URLs.',
         );
       }
-    }
-    final ws = config.messageServiceWsUrl;
-    final wsUri = ws == null ? null : Uri.tryParse(ws);
-    if (wsUri == null ||
-        wsUri.scheme != 'wss' ||
-        !allowedHosts.contains(wsUri.host) ||
-        wsUri.path != '/im/ws') {
-      throw E2eFailure(
-        'E2E suite "$name" requires the audited remote WebSocket endpoint.',
-      );
     }
   }
 
@@ -2385,6 +2556,8 @@ Run the AWiki Me Desktop App + CLI peer E2E smoke.
 
 Usage:
   dart run tests/e2e/runner.dart --case smoke
+  dart run tests/e2e/runner.dart --case multi-device
+  dart run tests/e2e/runner.dart --case multi-device-remote-join
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
   dart run tests/e2e/runner.dart --case restart
@@ -2397,9 +2570,12 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
-                               smoke runs local App/native checks. The other
-                               cases run real App+CLI peer flows. The
+  --case smoke|multi-device|multi-device-remote-join|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+                               smoke and multi-device run local App/native
+                               checks. multi-device-remote-join is the explicit,
+                               activation-gated real App-admin + CLI requester
+                               flow against awiki.info. The other cases run real
+                               App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
                                applies the configured performance budgets. The
@@ -2413,6 +2589,150 @@ Options:
   --prepare-only               Prepare CLI peer but do not start Flutter test.
   --dry-run                    Print planned commands without side effects.
 ''');
+  }
+}
+
+class RemoteMultiDeviceJoinConfig {
+  const RemoteMultiDeviceJoinConfig({
+    required this.platform,
+    required this.serviceBaseUrl,
+    required this.userServiceUrl,
+    required this.messageServiceUrl,
+    required this.mailServiceUrl,
+    required this.didDomain,
+    required this.anpServiceUrl,
+    required this.anpServiceDid,
+    required this.phone,
+    required this.otpCommandJson,
+    required this.otpCommand,
+    required this.allowStagedOtpOnSmsError,
+    required this.handlePrefix,
+    required this.cliBin,
+    required this.cliSourceRef,
+  });
+
+  final DesktopE2ePlatform platform;
+  final String serviceBaseUrl;
+  final String userServiceUrl;
+  final String messageServiceUrl;
+  final String mailServiceUrl;
+  final String didDomain;
+  final String anpServiceUrl;
+  final String anpServiceDid;
+  final String phone;
+  final String otpCommandJson;
+  final List<String> otpCommand;
+  final bool allowStagedOtpOnSmsError;
+  final String handlePrefix;
+  final String cliBin;
+  final String cliSourceRef;
+
+  static RemoteMultiDeviceJoinConfig from({
+    required DesktopE2eFileConfig fileConfig,
+    required Map<String, String> environment,
+  }) {
+    final sourcePath = fileConfig.path ?? '<missing-config>';
+    if (fileConfig.path == null) {
+      throw E2eFailure(
+        'Remote multi-device Join config file was not found: $sourcePath',
+      );
+    }
+    if (environment[_multiDeviceRemoteJoinGateEnv]?.trim() != '1') {
+      throw E2eFailure(
+        'Remote multi-device App Join is disabled. Set '
+        '$_multiDeviceRemoteJoinGateEnv=1 only after the dedicated account '
+        'allowlist and hidden server rollout are ready.',
+      );
+    }
+    final platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
+    if (platform != DesktopE2ePlatform.macos) {
+      throw E2eFailure(
+        'Remote multi-device App Join currently requires macOS so the real '
+        'operating-system user-presence prompt can be completed.',
+      );
+    }
+    final serviceBaseUrl = _requiredConfig(
+      fileConfig.serviceBaseUrl,
+      'service.baseUrl',
+      sourcePath,
+    );
+    final didDomain = _requiredConfig(
+      fileConfig.didDomain,
+      'service.didDomain',
+      sourcePath,
+    );
+    final phone = environment[_multiDeviceRemotePhoneEnv]?.trim() ?? '';
+    final otpCommandJson =
+        environment[_multiDeviceRemoteOtpCommandEnv]?.trim() ?? '';
+    if (phone.isEmpty || otpCommandJson.isEmpty) {
+      throw E2eFailure(
+        'Remote multi-device App Join requires the dedicated account variables '
+        '$_multiDeviceRemotePhoneEnv and $_multiDeviceRemoteOtpCommandEnv.',
+      );
+    }
+    final bool allowStagedOtpOnSmsError;
+    try {
+      allowStagedOtpOnSmsError = parseRemoteMultiDeviceStagedOtpFlag(
+        environment,
+      );
+    } on FormatException {
+      throw E2eFailure('$remoteMultiDeviceStagedOtpFlag must be 0 or 1.');
+    }
+    final List<String> otpCommand;
+    try {
+      otpCommand = parseRemoteMultiDeviceOtpCommand(
+        otpCommandJson,
+        requireReviewedStagedResolver: allowStagedOtpOnSmsError,
+      );
+    } on FormatException {
+      throw E2eFailure(
+        'Dedicated multi-device OTP resolver command is invalid.',
+      );
+    }
+    final handlePrefix =
+        (environment[_multiDeviceRemoteHandlePrefixEnv] ?? 'appmd')
+            .trim()
+            .toLowerCase();
+    if (handlePrefix.length > 20 ||
+        !RegExp(
+          r'^[a-z0-9](?:[a-z0-9-]{0,18}[a-z0-9])?$',
+        ).hasMatch(handlePrefix)) {
+      throw E2eFailure(
+        'Remote multi-device App Join handle prefix is invalid.',
+      );
+    }
+    final cliBin = _requiredConfig(
+      fileConfig.cliBin,
+      'cliPeer.binary',
+      sourcePath,
+    );
+    final cliSourceRef = _requiredConfig(
+      fileConfig.cliSourceRef,
+      'cliPeer.sourceRef',
+      sourcePath,
+    );
+    if (!isAuditableGitSha(cliSourceRef)) {
+      throw E2eFailure(
+        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA embedded in the CLI binary.',
+      );
+    }
+    return RemoteMultiDeviceJoinConfig(
+      platform: platform,
+      serviceBaseUrl: serviceBaseUrl,
+      userServiceUrl: fileConfig.userServiceUrl ?? serviceBaseUrl,
+      messageServiceUrl: fileConfig.messageServiceUrl ?? serviceBaseUrl,
+      mailServiceUrl: fileConfig.mailServiceUrl ?? serviceBaseUrl,
+      didDomain: didDomain,
+      anpServiceUrl: fileConfig.anpServiceUrl ?? '$serviceBaseUrl/anp-im/rpc',
+      anpServiceDid: fileConfig.anpServiceDid ?? 'did:wba:$didDomain',
+      phone: phone,
+      otpCommandJson: otpCommandJson,
+      otpCommand: otpCommand,
+      allowStagedOtpOnSmsError: allowStagedOtpOnSmsError,
+      handlePrefix: handlePrefix,
+      cliBin: cliBin,
+      cliSourceRef: cliSourceRef.toLowerCase(),
+    );
   }
 }
 
@@ -3257,6 +3577,7 @@ class DesktopPerformanceBudgetResult {
 enum DesktopE2eCase {
   smoke(_desktopSmokeCaseIds),
   multiDevice(_multiDeviceCapabilityGateCaseIds),
+  multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
@@ -3279,6 +3600,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.smoke => 'integration_test/app_smoke_test.dart',
       DesktopE2eCase.multiDevice =>
         'integration_test/multi_device_capability_gate_test.dart',
+      DesktopE2eCase.multiDeviceRemoteJoin =>
+        'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
       DesktopE2eCase.performance =>
@@ -3313,6 +3636,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
       DesktopE2eCase.multiDevice => 'multi-device',
+      DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       _ => name,
     };
   }
@@ -3328,6 +3652,7 @@ enum DesktopE2eCase {
     return switch (this) {
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
+      DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
@@ -3343,6 +3668,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.performance => const Duration(minutes: 12),
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
+      DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 12),
       _ => const Duration(minutes: 5),
     };
   }
@@ -3354,6 +3680,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentScenario,
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
+      DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -3363,6 +3690,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.personalAgent => _personalAgentRunConfigPath,
       DesktopE2eCase.codexAgent => _codexAgentRunConfigPath,
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
+      DesktopE2eCase.multiDeviceRemoteJoin =>
+        _multiDeviceRemoteJoinRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
     };
   }
@@ -3374,6 +3703,10 @@ enum DesktopE2eCase {
       'multi_device' ||
       'device-capability' ||
       'device_capability' => DesktopE2eCase.multiDevice,
+      'multi-device-remote-join' ||
+      'multi_device_remote_join' ||
+      'remote-multi-device-join' ||
+      'remote_multi_device_join' => DesktopE2eCase.multiDeviceRemoteJoin,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||
@@ -3431,7 +3764,7 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, multi-device, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',
       ),

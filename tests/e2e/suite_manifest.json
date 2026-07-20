@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.multi-device-capability-gate-v1",
+  "sourceRevision": "2026-07-20.remote-multi-device-app-admin-join-v2",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -37,6 +37,32 @@
       ],
       "caseIds": [
         "MULTI-DEVICE-CAPABILITY-GATE-E2E-001"
+      ]
+    },
+    "multi-device-remote-join": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 10,
+      "timeoutMinutes": 15,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state"
+      ],
+      "caseIds": [
+        "DEVICE-JOIN-E2E-002"
       ]
     },
     "production-keychain": {

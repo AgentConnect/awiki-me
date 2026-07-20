@@ -57,9 +57,15 @@ dart run tool/test_coverage_gate.dart
 dart run tool/validate_test_catalog.dart
 dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case multi-device
+# Requires reviewed awiki.info rollout/account env and real macOS user presence:
+dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 ```
 
 `multi-device` 当前只证明默认关闭与 Join-only 公共入口，不代表远端 Join/SAS/Root/Recovery
-通过；真实 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
+通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的真实 App 管理设备 +
+独立 CLI 请求设备用例，动态 OTP 与专用账号只从环境读取，并要求真实 macOS
+user-presence；显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807
+503，并不证明短信送达。远端 rollout/账号前置条件未就绪时不得声称通过。其他真实
+backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

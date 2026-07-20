@@ -17,6 +17,7 @@ void main() {
         containsAll(<String>[
           'ROOT-TRANSFER-E2E-001',
           'ROOT-TRANSFER-E2E-002',
+          'DEVICE-JOIN-E2E-002',
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
@@ -24,8 +25,18 @@ void main() {
       );
       expect(
         catalog.suiteCaseIds.keys,
-        containsAll(<String>['smoke', 'multi-device', 'full', 'direct']),
+        containsAll(<String>[
+          'smoke',
+          'multi-device',
+          'multi-device-remote-join',
+          'full',
+          'direct',
+        ]),
       );
+      expect(catalog.caseById['DEVICE-JOIN-E2E-002']!.catalogStatus, 'active');
+      expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
+        'DEVICE-JOIN-E2E-002',
+      ]);
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );

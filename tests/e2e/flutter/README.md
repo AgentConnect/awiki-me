@@ -22,6 +22,8 @@ Run E2E through the repository-level runner:
 
 ```bash
 dart run tests/e2e/runner.dart --case smoke
+dart run tests/e2e/runner.dart --case multi-device
+dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
@@ -120,6 +122,21 @@ Direct row/header, Contacts, group member/event, and sender-label surfaces;
 generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
 later self-healing title fail. CLI is only the remote identity/traffic stimulus,
 not the product assertion surface.
+
+`--case multi-device-remote-join` is the separately activation-gated
+`DEVICE-JOIN-E2E-002` product-security slice. It uses a real, newly bootstrapped
+AWiki Me ready admin and an independent CLI Join requester against
+`awiki.info`; it dynamically resolves purpose-bound OTPs, compares the
+independently derived SAS without recording it, delegates exactly one real
+macOS LocalAuthentication prompt, and requires the new device to converge as a
+non-admin member. It fails closed unless the dedicated account/ali allowlist,
+hidden rollout, JSON-argv OTP resolver, exact CLI source revision, and manual
+system-auth prerequisites are explicit. An unavailable rollout is not a remote
+pass. The optional synthetic-number staged-OTP mode is an explicit
+operator test path with exact RFC7807 and fixed-argv checks; it does not prove
+SMS delivery or change product behavior. See
+[../../../docs/testing.md](../../../docs/testing.md) for the environment
+contract and command.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide

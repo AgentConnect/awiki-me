@@ -322,10 +322,20 @@ class AppTestCatalog {
         'Handle Recovery acceptance.',
       )
       ..writeln(
-        '- `DEVICE-JOIN-E2E-*`, `ROOT-TRANSFER-E2E-*`, '
-        '`MLS-MULTI-DEVICE-E2E-*`, and `HANDLE-RECOVERY-E2E-*` remain planned '
-        'until `awiki.info` enables the matching capabilities and the runner '
-        'uses independent device roots, real one-time OTPs, user presence, '
+        '- `multi-device-remote-join` is a separate, activation-gated '
+        '`awiki.info` suite for `DEVICE-JOIN-E2E-002`. It uses a real AWiki Me '
+        'admin, an independent CLI requester, dynamically resolved one-time '
+        'OTPs, SAS comparison, and real macOS user presence. A checked-in '
+        'implementation is not evidence of a remote pass while the hidden '
+        'rollout, dedicated account allowlist, or operator prerequisites are '
+        'unavailable.',
+      )
+      ..writeln(
+        '- `DEVICE-JOIN-E2E-001`, `DEVICE-JOIN-E2E-003`, '
+        '`ROOT-TRANSFER-E2E-*`, `MLS-MULTI-DEVICE-E2E-*`, and '
+        '`HANDLE-RECOVERY-E2E-*` remain planned until `awiki.info` enables '
+        'the matching capabilities and each runner has independent device '
+        'roots, real one-time OTPs, user presence where required, '
         'scenario-owned oracles, and cleanup.',
       )
       ..writeln(
