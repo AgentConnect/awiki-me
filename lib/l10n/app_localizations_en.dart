@@ -1216,6 +1216,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupRecoveryRetry => 'Retry group recovery';
 
   @override
+  String get groupEncryptionPreparingTitle => 'Joining group encryption';
+
+  @override
+  String get groupEncryptionPreparingDetail =>
+      'This device is synchronizing group encryption and will not claim readiness until it completes.';
+
+  @override
+  String get groupEncryptionNeedsRetryTitle => 'Group encryption needs retry';
+
+  @override
+  String get groupEncryptionNeedsRetryDetail =>
+      'This device has not completed group encryption synchronization. Retry the repair.';
+
+  @override
+  String get groupEncryptionReadyTitle => 'Group encryption ready';
+
+  @override
+  String get groupEncryptionReadyDetail =>
+      'This device has independent encryption state for this group and can securely receive new messages.';
+
+  @override
+  String get groupEncryptionUnavailableTitle => 'Group encryption unavailable';
+
+  @override
+  String get groupEncryptionUnavailableDetail =>
+      'This environment does not currently provide the group encryption capability required by this device.';
+
+  @override
+  String get groupEncryptionRetry => 'Retry';
+
+  @override
   String get groupFieldName => 'Name';
 
   @override

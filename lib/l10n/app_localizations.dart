@@ -2282,6 +2282,60 @@ abstract class AppLocalizations {
   /// **'重试群身份恢复'**
   String get groupRecoveryRetry;
 
+  /// No description provided for @groupEncryptionPreparingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在加入群加密'**
+  String get groupEncryptionPreparingTitle;
+
+  /// No description provided for @groupEncryptionPreparingDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备正在同步群加密状态，完成前不会声明已就绪。'**
+  String get groupEncryptionPreparingDetail;
+
+  /// No description provided for @groupEncryptionNeedsRetryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'群加密需要重试'**
+  String get groupEncryptionNeedsRetryTitle;
+
+  /// No description provided for @groupEncryptionNeedsRetryDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备尚未完成群加密同步，请重试修复。'**
+  String get groupEncryptionNeedsRetryDetail;
+
+  /// No description provided for @groupEncryptionReadyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'群加密已就绪'**
+  String get groupEncryptionReadyTitle;
+
+  /// No description provided for @groupEncryptionReadyDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备已具备本群的独立加密状态，可以安全收发新消息。'**
+  String get groupEncryptionReadyDetail;
+
+  /// No description provided for @groupEncryptionUnavailableTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'群加密暂不可用'**
+  String get groupEncryptionUnavailableTitle;
+
+  /// No description provided for @groupEncryptionUnavailableDetail.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前环境尚未提供此设备所需的群加密能力。'**
+  String get groupEncryptionUnavailableDetail;
+
+  /// No description provided for @groupEncryptionRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get groupEncryptionRetry;
+
   /// No description provided for @groupFieldName.
   ///
   /// In zh, this message translates to:

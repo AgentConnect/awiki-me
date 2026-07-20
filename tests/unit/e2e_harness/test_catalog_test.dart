@@ -11,10 +11,15 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(64));
+      expect(catalog.cases, hasLength(66));
       expect(
         catalog.caseById.keys,
-        containsAll(<String>['ROOT-TRANSFER-E2E-001', 'ROOT-TRANSFER-E2E-002']),
+        containsAll(<String>[
+          'ROOT-TRANSFER-E2E-001',
+          'ROOT-TRANSFER-E2E-002',
+          'MLS-MULTI-DEVICE-E2E-001',
+          'MLS-MULTI-DEVICE-E2E-002',
+        ]),
       );
       expect(
         catalog.suiteCaseIds.keys,

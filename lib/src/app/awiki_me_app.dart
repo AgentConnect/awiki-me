@@ -74,6 +74,10 @@ class AwikiMeApp extends StatelessWidget {
           rootKeyTransferPortProvider.overrideWithValue(
             bootstrap.rootKeyTransferPort!,
           ),
+        if (bootstrap.groupEncryptionCorePort != null)
+          groupEncryptionCorePortProvider.overrideWithValue(
+            bootstrap.groupEncryptionCorePort!,
+          ),
         if (bootstrap.onboardingService != null)
           onboardingServiceProvider.overrideWithValue(
             bootstrap.onboardingService!,

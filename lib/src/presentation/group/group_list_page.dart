@@ -1,7 +1,12 @@
+// [INPUT]: Group application state, membership snapshots, and redacted encryption readiness.
+// [OUTPUT]: Group list/detail/member actions and minimal group-encryption status UI.
+// [POS]: Group presentation boundary; group/MLS durable truth remains in IM Core.
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
@@ -20,6 +25,7 @@ import '../app_shell/providers/session_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
+import 'group_encryption_status_card.dart';
 import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
@@ -506,6 +512,10 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                     ],
                   ),
                 ),
+                if (ref.watch(multiDeviceGroupE2eeEnabledProvider)) ...<Widget>[
+                  const SizedBox(height: 16),
+                  GroupEncryptionStatusCard(groupDid: _group.groupId),
+                ],
                 const SizedBox(height: 16),
                 AppCardSection(
                   color: members.isEmpty ? theme.subtleSurface : theme.surface,

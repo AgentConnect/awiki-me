@@ -16,6 +16,10 @@ const bool defaultMultiDeviceRootTransferEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED',
   defaultValue: false,
 );
+const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED',
+  defaultValue: false,
+);
 const bool defaultHandleRecoveryEnabled = bool.fromEnvironment(
   'AWIKI_HANDLE_RECOVERY_ENABLED',
   defaultValue: false,
@@ -41,6 +45,7 @@ class AwikiEnvironmentConfig {
     bool? agentImEnabled,
     bool? multiDeviceJoinEnabled,
     bool? multiDeviceRootTransferEnabled,
+    bool? multiDeviceGroupE2eeEnabled,
     bool? handleRecoveryEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
@@ -91,6 +96,8 @@ class AwikiEnvironmentConfig {
         multiDeviceJoinEnabled ?? defaultMultiDeviceJoinEnabled;
     this.multiDeviceRootTransferEnabled =
         multiDeviceRootTransferEnabled ?? defaultMultiDeviceRootTransferEnabled;
+    this.multiDeviceGroupE2eeEnabled =
+        multiDeviceGroupE2eeEnabled ?? defaultMultiDeviceGroupE2eeEnabled;
     this.handleRecoveryEnabled =
         handleRecoveryEnabled ?? defaultHandleRecoveryEnabled;
   }
@@ -112,6 +119,7 @@ class AwikiEnvironmentConfig {
   late final bool agentImEnabled;
   late final bool multiDeviceJoinEnabled;
   late final bool multiDeviceRootTransferEnabled;
+  late final bool multiDeviceGroupE2eeEnabled;
   late final bool handleRecoveryEnabled;
 }
 

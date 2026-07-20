@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.root-transfer-planned-v3",
+  "sourceRevision": "2026-07-20.mls-multi-device-planned-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1968,6 +1968,52 @@
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/root_key_transfer_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "MLS-MULTI-DEVICE-E2E-001",
+      "feature": "AWiki Me same-DID second-device MLS readiness",
+      "layer": "product_ui",
+      "preconditions": "Alice A1 is an active Leaf in one encrypted group; Alice A2 is an authorized device with an independent native Core root; awiki.info exposes the deployed P6 v2 capability.",
+      "action": "Use the group-authorized owner path to add A2's device-bound KeyPackage, deliver Commit and Welcome, then open the same group detail on A2 while status converges from preparing to ready.",
+      "exactOracles": [
+        "A2 shows preparing before its own Welcome is applied and ready only after its independent local MLS state can receive a new group message; the business member count for Alice remains one."
+      ],
+      "negativeChecks": [
+        "Copied A1 state, automatic enrollment into unrelated historical groups, readiness before Welcome, duplicate Alice business members, duplicate visible messages, or any Leaf/private-state value in App UI or evidence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_and_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/flutter/app/mls_multi_device_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "MLS-MULTI-DEVICE-E2E-002",
+      "feature": "AWiki Me single-device MLS revoke convergence",
+      "layer": "product_ui",
+      "preconditions": "Alice A1 and A2 have distinct active Leafs in the same encrypted group and the scenario owns both independent Core roots and cleanup ledger.",
+      "action": "Revoke A2, apply the exact Remove and Commit, observe the App retry/synchronization state during convergence, and send a new encrypted group message after the epoch advances.",
+      "exactOracles": [
+        "A2 cannot decrypt the future message, A1 remains ready and receives it once, Alice remains one business member, and the App never claims ready while the revoked Leaf is still pending removal."
+      ],
+      "negativeChecks": [
+        "Removing A1 or Alice's business membership, continuing sends in an epoch that still contains revoked A2, retry silently recreating A2's Leaf, duplicate UI messages, or exposing Leaf/epoch/private values fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_and_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/flutter/app/mls_multi_device_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
     },

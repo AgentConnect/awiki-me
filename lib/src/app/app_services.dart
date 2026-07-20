@@ -24,6 +24,7 @@ import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/device_management_core_port.dart';
+import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
 import '../application/ports/handle_recovery_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
@@ -96,6 +97,15 @@ final multiDeviceJoinEnabledProvider = Provider<bool>(
 final multiDeviceRootTransferEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceRootTransferEnabled,
+);
+
+final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
+);
+
+final groupEncryptionCorePortProvider = Provider<GroupEncryptionCorePort>(
+  (ref) => throw StateError('group_encryption_unavailable'),
 );
 
 final rootKeyTransferPortProvider = Provider<RootKeyTransferPort>(

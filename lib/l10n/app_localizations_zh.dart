@@ -1152,6 +1152,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupRecoveryRetry => '重试群身份恢复';
 
   @override
+  String get groupEncryptionPreparingTitle => '正在加入群加密';
+
+  @override
+  String get groupEncryptionPreparingDetail => '此设备正在同步群加密状态，完成前不会声明已就绪。';
+
+  @override
+  String get groupEncryptionNeedsRetryTitle => '群加密需要重试';
+
+  @override
+  String get groupEncryptionNeedsRetryDetail => '此设备尚未完成群加密同步，请重试修复。';
+
+  @override
+  String get groupEncryptionReadyTitle => '群加密已就绪';
+
+  @override
+  String get groupEncryptionReadyDetail => '此设备已具备本群的独立加密状态，可以安全收发新消息。';
+
+  @override
+  String get groupEncryptionUnavailableTitle => '群加密暂不可用';
+
+  @override
+  String get groupEncryptionUnavailableDetail => '当前环境尚未提供此设备所需的群加密能力。';
+
+  @override
+  String get groupEncryptionRetry => '重试';
+
+  @override
   String get groupFieldName => '名称';
 
   @override

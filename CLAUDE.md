@@ -40,6 +40,7 @@
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
 - [docs/multi-device-join-ui.md](docs/multi-device-join-ui.md)：默认关闭的设备列表、SMS Join、双端 6 位 SAS、角色选择与 App/Core 秘密边界。
 - [docs/root-key-transfer-ui.md](docs/root-key-transfer-ui.md)：默认关闭的管理设备根导入、user-presence、management-ready 投影与控制消息过滤边界。
+- [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认关闭的本设备群加密准备/重试/就绪投影与 P6 v2 Core 启用门禁。
 - [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Handle Recovery begin/status/cancel/finalize 产品状态、独立二次 OTP、旧管理设备取消和 Core adapter 启用门禁。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
