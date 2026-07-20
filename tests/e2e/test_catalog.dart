@@ -323,12 +323,15 @@ class AppTestCatalog {
       )
       ..writeln(
         '- `multi-device-remote-join` is a separate, activation-gated '
-        '`awiki.info` suite for `DEVICE-JOIN-E2E-002`, '
-        '`ROOT-TRANSFER-E2E-001`, and `DEVICE-REVOKE-E2E-001`. It uses a real '
-        'AWiki Me admin, an independent CLI requester, dynamically resolved '
-        'one-time OTPs, SAS comparison, exact-device Direct root control, '
-        'Registry readiness/revoke projections, and real macOS user presence. '
-        'A checked-in implementation is not evidence of a remote pass while the hidden '
+        '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002`, '
+        '`ROOT-TRANSFER-E2E-001`, and `DEVICE-REVOKE-E2E-001`. It runs both '
+        'App-new-device/CLI-admin and App-admin/CLI-new-device directions '
+        'with independent native roots, dynamically resolved one-time OTPs, '
+        'SAS comparison, pending-session App restart coverage, the production '
+        'CLI foreground contract, exact-device Direct root control, Registry '
+        'readiness/revoke projections, and real macOS user presence where the '
+        'App approves. A checked-in '
+        'implementation is not evidence of a remote pass while the hidden '
         'rollout, dedicated account allowlist, or operator prerequisites are '
         'unavailable.',
       )
@@ -341,12 +344,15 @@ class AppTestCatalog {
         'presence. Staged SMS-error continuation is rejected.',
       )
       ..writeln(
-        '- `DEVICE-JOIN-E2E-001`, `DEVICE-JOIN-E2E-003`, '
+        '- `DEVICE-JOIN-E2E-003`, '
         '`ROOT-TRANSFER-E2E-002`, `MLS-MULTI-DEVICE-E2E-*`, and '
         '`HANDLE-RECOVERY-E2E-003` remain planned until `awiki.info` enables '
         'the matching capabilities and each runner has independent device '
         'roots, real one-time OTPs, user presence where required, '
-        'scenario-owned oracles, and cleanup.',
+        'scenario-owned oracles, and cleanup. '
+        '`001` covers one pending App restart; standalone cancellation and the '
+        'real expiration path remain fail-closed rather than adding a test-only '
+        'TTL or time bypass.',
       )
       ..writeln(
         '- Personal Agent, Codex and Claude Code remain `optional_nightly`. A '

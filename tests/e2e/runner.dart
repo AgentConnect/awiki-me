@@ -25,7 +25,7 @@ const String _desktopCliPeerPerformanceScenario =
 const String _multiDeviceCapabilityGateScenario =
     'multi-device-capability-gate';
 const String _multiDeviceRemoteJoinScenario =
-    'multi-device-remote-app-management';
+    'multi-device-remote-bidirectional-management';
 const String _multiDeviceRemoteJoinRunConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
 const String _multiDeviceRemoteRecoveryScenario =
@@ -83,6 +83,7 @@ const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
   'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
 ];
 const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
+  'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
   'ROOT-TRANSFER-E2E-001',
   'DEVICE-REVOKE-E2E-001',
@@ -278,9 +279,12 @@ class DesktopE2eRunner {
   late final Directory reportDir;
   late final Directory cliWorkspaceDir;
   late final Directory cliHomeDir;
+  late final Directory multiDeviceCliAdminWorkspaceDir;
+  late final Directory multiDeviceCliAdminHomeDir;
   late final Directory appIdentityWorkspaceDir;
   late final Directory appIdentityHomeDir;
   late final Directory appStateRootDir;
+  late final Directory multiDeviceAppJoiningStateRootDir;
   late final File runConfigFile;
   late final File productTimingsFile;
   late final File caseAttestationFile;
@@ -327,6 +331,12 @@ class DesktopE2eRunner {
     commands.diagnosticDirectory = reportDir;
     cliWorkspaceDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-peer');
     cliHomeDir = Directory('${root.path}/.e2e/$runScope/$runId/cli-home');
+    multiDeviceCliAdminWorkspaceDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/cli-admin',
+    );
+    multiDeviceCliAdminHomeDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/cli-admin-home',
+    );
     appIdentityWorkspaceDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-identity-cli',
     );
@@ -334,6 +344,9 @@ class DesktopE2eRunner {
       '${root.path}/.e2e/$runScope/$runId/app-identity-home',
     );
     appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
+    multiDeviceAppJoiningStateRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-joining-device',
+    );
     runConfigFile = File('${root.path}/${options.e2eCase.runConfigPath}');
     productTimingsFile = File(
       '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
@@ -352,9 +365,12 @@ class DesktopE2eRunner {
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
+    _addRuntimeSecret(multiDeviceCliAdminWorkspaceDir.path);
+    _addRuntimeSecret(multiDeviceCliAdminHomeDir.path);
     _addRuntimeSecret(appIdentityWorkspaceDir.path);
     _addRuntimeSecret(appIdentityHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
+    _addRuntimeSecret(multiDeviceAppJoiningStateRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
     _addRuntimeSecret(productTimingsFile.path);
     _addRuntimeSecret(caseAttestationFile.path);
@@ -393,6 +409,11 @@ class DesktopE2eRunner {
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
+      if (options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin) {
+        multiDeviceCliAdminWorkspaceDir.createSync(recursive: true);
+        multiDeviceCliAdminHomeDir.createSync(recursive: true);
+        multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
+      }
       appIdentityWorkspaceDir.createSync(recursive: true);
       appIdentityHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
@@ -521,7 +542,9 @@ class DesktopE2eRunner {
       );
     }
 
-    _section('AWiki Desktop remote multi-device management E2E $runId');
+    _section(
+      'AWiki Desktop remote multi-device bidirectional management E2E $runId',
+    );
     _line('platform: ${joinConfig.platform.name}');
     _line('config: ${fileConfig.path ?? '<not found>'}');
     _line('reports: ${redactor.redact(reportDir.path)}');
@@ -562,7 +585,7 @@ class DesktopE2eRunner {
       return;
     }
     _resourceSideEffectsPossible = true;
-    await _timed('Flutter App-admin + CLI management lifecycle', () {
+    await _timed('Flutter bidirectional App + CLI management lifecycle', () {
       return _runFlutterTest(
         'integration_test/multi_device_join_ui_test.dart',
         caseIds: _multiDeviceRemoteJoinCaseIds,
@@ -574,7 +597,7 @@ class DesktopE2eRunner {
     RemoteMultiDeviceJoinConfig joinConfig,
   ) async {
     final payload = <String, Object?>{
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'enabled': true,
       'runId': runId,
       'platform': joinConfig.platform.name,
@@ -597,7 +620,16 @@ class DesktopE2eRunner {
         'workspace': cliWorkspaceDir.path,
         'home': cliHomeDir.path,
       },
+      'cliAdminDevice': <String, Object?>{
+        'binary': joinConfig.cliBin,
+        'sourceRef': joinConfig.cliSourceRef,
+        'workspace': multiDeviceCliAdminWorkspaceDir.path,
+        'home': multiDeviceCliAdminHomeDir.path,
+      },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'appJoiningDevice': <String, Object?>{
+        'stateRoot': multiDeviceAppJoiningStateRootDir.path,
+      },
       'suite': <String, Object?>{
         'manifestRevision': suiteManifest.sourceRevision,
         'tier': suiteDefinition.tier,
@@ -2712,9 +2744,10 @@ Options:
   --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
-                               activation-gated real App-admin + CLI requester
-                               flow against awiki.info. The remote Recovery case
-                               runs old-admin cancellation plus the real cooling,
+                               activation-gated real App/CLI Join flows in both
+                               directions plus root-import and revoke management
+                               against awiki.info. The remote Recovery case runs
+                               old-admin cancellation plus the real cooling,
                                reconfirmation, and replacement-identity flow. The
                                other cases run real
                                App+CLI peer flows. The

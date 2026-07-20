@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-management-recovery-v4",
+  "sourceRevision": "2026-07-20.remote-multi-device-lifecycle-v5",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -47,7 +47,7 @@
       ],
       "owner": "awiki-me-identity",
       "estimatedMinutes": 20,
-      "timeoutMinutes": 25,
+      "timeoutMinutes": 30,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -64,6 +64,7 @@
         "isolated_cli_state"
       ],
       "caseIds": [
+        "DEVICE-JOIN-E2E-001",
         "DEVICE-JOIN-E2E-002",
         "ROOT-TRANSFER-E2E-001",
         "DEVICE-REVOKE-E2E-001"

@@ -83,10 +83,14 @@ flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_tes
   tests/unit/devices/devices_ui_test.dart
 ```
 
-真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-002` 与永久撤销
-`DEVICE-REVOKE-E2E-001` 已进入显式激活的 `multi-device-remote-join` suite，合同位于
+真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-001/002`、
+`ROOT-TRANSFER-E2E-001` 与 `DEVICE-REVOKE-E2E-001` 已进入显式激活的
+`multi-device-remote-join` suite，合同位于
 `tests/e2e/flutter/app/multi_device_join_ui_test.dart` 及其
-`root_key_transfer_ui_test.dart` part；它只有在独立 Core 数据目录、动态一次性 OTP、双端
-SAS、每次真实系统 user-presence 和最终 Registry 断言全部完成后才可通过。
-`DEVICE-JOIN-E2E-001` 与 `003` 仍为 planned，不得以 `002`、本地 capability gate 或
-fake-backed Widget 测试替代其通过证明。
+`root_key_transfer_ui_test.dart` part。`001` 从真实 onboarding UI 让 App 作为新设备加入既有
+CLI ready-admin，经前台 CLI TTY 比较 SAS 并默认批准为 member；`002` 反向由 App
+ready-admin 通过真实系统 user-presence 批准 CLI 新设备，随后独立场景验证根导入/imported
+ACK/management-ready 与永久撤销。所有方向都必须使用独立 Core 数据目录、动态一次性 OTP、
+双端 SAS 和最终 Registry 断言；`001` 还验证 pending Join 在 App 重启后恢复为同一会话且不
+持久化 SAS。完整的 `DEVICE-JOIN-E2E-003` 取消与真实过期路径，以及
+`ROOT-TRANSFER-E2E-002` 仍为 planned；不得增加生产测试后门或以 fake-backed Widget 替代。

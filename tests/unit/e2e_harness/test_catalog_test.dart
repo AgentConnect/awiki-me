@@ -17,6 +17,7 @@ void main() {
         containsAll(<String>[
           'ROOT-TRANSFER-E2E-001',
           'ROOT-TRANSFER-E2E-002',
+          'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
           'DEVICE-REVOKE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
@@ -35,6 +36,7 @@ void main() {
           'direct',
         ]),
       );
+      expect(catalog.caseById['DEVICE-JOIN-E2E-001']!.catalogStatus, 'active');
       expect(catalog.caseById['DEVICE-JOIN-E2E-002']!.catalogStatus, 'active');
       expect(
         catalog.caseById['ROOT-TRANSFER-E2E-001']!.catalogStatus,
@@ -45,6 +47,7 @@ void main() {
         'active',
       );
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
+        'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
         'ROOT-TRANSFER-E2E-001',
         'DEVICE-REVOKE-E2E-001',

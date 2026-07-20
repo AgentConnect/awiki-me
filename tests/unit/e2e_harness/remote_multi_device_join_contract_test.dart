@@ -265,6 +265,63 @@ void main() {
       expect(isSixDigitAsciiOtp('48291a'), isFalse);
     });
   });
+
+  group('remote foreground CLI Join approval prompts', () {
+    test('recognizes only the exact production prompts', () {
+      final transcript = utf8.encode(
+        'Compare this one-time SAS with the new device: 482917\r\n'
+        'Type the same 6-digit SAS to continue: '
+        'Type APPROVE to confirm local user presence and authorize this device: ',
+      );
+
+      expect(remoteMultiDeviceCliApprovalSas(transcript), '482917');
+      expect(remoteMultiDeviceCliRequestsSasInput(transcript), isTrue);
+      expect(remoteMultiDeviceCliRequestsApproval(transcript), isTrue);
+    });
+
+    test('waits for a complete ASCII SAS and rejects prompt drift', () {
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('Compare this one-time SAS with the new device: 48291'),
+        ),
+        isNull,
+      );
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('Compare this one-time SAS with the new device: 48291a'),
+        ),
+        isNull,
+      );
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode(
+            'Compare this one-time SAS with the new device: 4829179\r\n',
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        remoteMultiDeviceCliApprovalSas(
+          utf8.encode('Compare SAS with the new device: 482917'),
+        ),
+        isNull,
+      );
+      expect(
+        remoteMultiDeviceCliRequestsSasInput(
+          utf8.encode('Type the same 6-digit SAS to continue:'),
+        ),
+        isFalse,
+      );
+      expect(
+        remoteMultiDeviceCliRequestsApproval(
+          utf8.encode(
+            'Type APPROVE to confirm local user presence and authorize this device:',
+          ),
+        ),
+        isFalse,
+      );
+    });
+  });
 }
 
 String _validSmsProblemBody({

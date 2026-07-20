@@ -63,15 +63,15 @@ dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <loc
 ```
 
 `multi-device` 当前只证明默认关闭与 Join-only 公共入口，不代表远端 Join/SAS/Root/Recovery
-通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的真实 App 管理设备 +
-独立 CLI 请求设备 suite，覆盖默认-member Join、管理设备根导入/imported ACK/
-management-ready 与永久 revoke UI 主路径。动态 OTP 与专用账号只从环境读取，并要求每次
-高风险操作使用真实 macOS user-presence；显式 staged-OTP operator 模式只接受固定 SSH
-argv 与闭合 RFC7807
-503，并不证明短信送达。`multi-device-remote-recovery` 使用两个隔离账号/设备根，覆盖
-durable 旧管理设备通知与真实系统认证取消，以及请求设备真实冷静期、独立二次 OTP 和新
-DID 激活；它明确拒绝 staged SMS error，必须证明产品发码路径成功。远端 rollout/账号前置
-条件未就绪时不得声称通过。其他真实
+通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的双向真实 Join suite：
+覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI 新设备，以及管理设备根导入/imported
+ACK/management-ready 和永久 revoke UI 主路径。所有方向均使用独立 native Core root、动态
+OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高风险操作要求真实 macOS
+user-presence。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
+不证明短信送达。`multi-device-remote-recovery` 使用两个隔离账号/设备根，覆盖 durable 旧
+管理设备通知与真实系统认证取消，以及请求设备真实冷静期、独立二次 OTP 和新 DID 激活；
+它明确拒绝 staged SMS error，必须证明产品发码路径成功。远端 rollout/账号前置条件未就绪
+时不得声称通过。其他真实
 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

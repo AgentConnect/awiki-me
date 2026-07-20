@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-management-recovery-v4",
+  "sourceRevision": "2026-07-20.remote-multi-device-lifecycle-v5",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1859,25 +1859,61 @@
     {
       "caseId": "DEVICE-JOIN-E2E-001",
       "feature": "AWiki Me new-device Join with CLI admin",
-      "layer": "product_ui",
-      "preconditions": "AWiki Me and the CLI admin use independent Core data roots against awiki.info with the multi-device capability enabled and a real one-time SMS code.",
-      "action": "Start Join in AWiki Me, compare the independently displayed six-digit SAS, approve on the existing CLI admin as the default member role, and wait for AWiki Me to re-resolve authorization.",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The hidden multi-device Join rollout and dedicated phone allowlist are enabled on awiki.info; AWiki Me and an exact-revision CLI admin use independent fresh native Core roots; purpose-bound OTPs are resolved through validated fixed argv; the CLI approval runs through its production foreground TTY contract.",
+      "action": "Bootstrap the existing CLI admin, start Join through the real AWiki Me onboarding UI, restart the App while Join is pending, compare the independently displayed six-digit SAS, approve through the foreground CLI as the default member role, and wait for AWiki Me to re-resolve authorization.",
       "exactOracles": [
-        "Both products display the same six-digit SAS and AWiki Me reports authorized only after its device keys and active member record are visible in the resolved identity state."
+        "The independently bootstrapped CLI admin and App requester use distinct fresh native Core roots; the OTP-authenticated App request remains pending before admin claim, and an App restart restores that same pending session without persisting SAS.",
+        "The App-visible and CLI-derived six-digit SAS match without recording either value, and the production foreground CLI contract approves the member role.",
+        "Both Registries contain exactly two devices: AWiki Me is the current active member with management_ready false only after authoritative re-resolution, while the CLI remains the current active management-ready admin."
       ],
       "negativeChecks": [
-        "OTP alone, a server-returned success flag, missing DID authorization, a QR path, copied Core state, or an admin role without explicit selection fails."
+        "A fake provider, copied state, static OTP, unsafe resolver argv, malformed SMS-error response, missing pending phase, changed or terminal Join after restart, persisted SAS, mismatched SAS/session/device, non-foreground approval, retained terminal SAS, admin role, or server success without final Registry authorization prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
       "requiredFor": [
-        "nightly",
+        "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
       "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
+          "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+          "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
+          "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
+          "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed",
+          "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+            "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas"
+          ],
+          [
+            "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed"
+          ],
+          [
+            "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+            "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
+            "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed",
+            "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+          ]
+        ]
+      }
     },
     {
       "caseId": "DEVICE-JOIN-E2E-002",

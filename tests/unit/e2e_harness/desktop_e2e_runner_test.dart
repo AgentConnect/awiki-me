@@ -154,12 +154,17 @@ void main() {
       expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteJoin);
       expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteJoin);
       expect(hyphen.e2eCase.requiresCliPeer, isTrue);
-      expect(hyphen.e2eCase.scenario, 'multi-device-remote-app-management');
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-remote-bidirectional-management',
+      );
       expect(hyphen.e2eCase.caseIds, <String>[
+        'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
         'ROOT-TRANSFER-E2E-001',
         'DEVICE-REVOKE-E2E-001',
       ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 22));
       expect(
         hyphen.e2eCase.testFile,
         'integration_test/multi_device_join_ui_test.dart',
@@ -186,6 +191,7 @@ void main() {
         'HANDLE-RECOVERY-E2E-001',
         'HANDLE-RECOVERY-E2E-002',
       ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 82));
       expect(
         hyphen.e2eCase.testFile,
         'integration_test/handle_recovery_ui_test.dart',

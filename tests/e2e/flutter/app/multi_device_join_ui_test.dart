@@ -1,9 +1,9 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
-//          production AppBootstrap/native Core, and an independent public CLI root.
-// [OUTPUT]: Real App-admin UI evidence for Join plus the registered root-import
-//           and permanent-revoke management scenarios in the sibling part.
+//          production AppBootstrap/native Core, and independent CLI/App roots.
+// [OUTPUT]: Real bidirectional Join plus registered root-import and permanent-
+//           revoke management evidence from the sibling part.
 // [POS]: Activation-gated remote product E2E; no fake port, copied state,
-//        static OTP, test bypass, or secret-bearing report is permitted.
+//        static OTP, production bypass, or secret-bearing report is permitted.
 
 import 'dart:async';
 import 'dart:convert';
@@ -22,7 +22,10 @@ import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
+import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,7 +39,8 @@ import '../../remote_multi_device_join_contract.dart';
 
 part 'root_key_transfer_ui_test.dart';
 
-const String _caseId = 'DEVICE-JOIN-E2E-002';
+const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
+const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
@@ -50,6 +54,269 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
+    'real AWiki Me joins an existing CLI admin as an authorized member',
+    (tester) async {
+      final config = _RemoteJoinRunConfig.load();
+      final account = _DedicatedAccount.fromEnvironment(
+        allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
+      );
+      final httpClient = http.Client();
+      final cli = _JoiningCli.admin(config);
+      AppBootstrap? bootstrap;
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      _requireIndependentEmptyPaths(_allLocalRoots(config));
+      addTearDown(() async {
+        httpClient.close();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bootstrap?.dispose();
+        await cli.deleteLocalState();
+        final appRoot = Directory(config.appJoiningStateRoot);
+        if (await appRoot.exists()) {
+          await appRoot.delete(recursive: true);
+        }
+        await tester.binding.setSurfaceSize(null);
+      });
+
+      if (!Platform.isMacOS || !File('/usr/bin/script').existsSync()) {
+        fail(
+          'The remote App-new-device Join gate requires a foreground macOS pseudo-terminal.',
+        );
+      }
+      await cli.initialize();
+      final handle = _uniqueHandle(config.handlePrefix);
+      final genesisOtp = await _requestAndResolveOtp(
+        client: httpClient,
+        config: config,
+        account: account,
+        purpose: _genesisPurpose,
+        handle: handle,
+      );
+      final did = await cli.registerReadyAdmin(
+        handle: handle,
+        phone: account.phone,
+        otp: genesisOtp,
+      );
+      final initialCliRegistry = await cli.loadRegistrySnapshot();
+      final bootstrapAdminDeviceId = _requireCliReadyBootstrapAdmin(
+        initialCliRegistry,
+      );
+
+      bootstrap = await AppBootstrap.create(
+        environment: _joinOnlyEnvironment(config),
+        appStateRoot: config.appJoiningStateRoot,
+      );
+      await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+      await _pumpUntil(
+        tester,
+        () => find.byType(OnboardingPage).evaluate().length == 1,
+        failure:
+            'The unauthenticated onboarding surface did not become visible.',
+      );
+      await _tapOne(
+        tester,
+        find.bySemanticsIdentifier('multi-device-join-entry'),
+        failure: 'The public new-device Join entry was not visible.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byType(DeviceJoinPage).evaluate().length == 1,
+        failure: 'The public new-device Join page did not open.',
+      );
+
+      final joinOtp = await _requestAndResolveOtp(
+        client: httpClient,
+        config: config,
+        account: account,
+        purpose: _joinPurpose,
+        handle: handle,
+      );
+      await _enterText(
+        tester,
+        'multi-device-join-handle',
+        handle,
+        failure: 'The new-device Handle field was unavailable.',
+      );
+      await _enterText(
+        tester,
+        'multi-device-join-phone',
+        account.phone,
+        failure: 'The new-device phone field was unavailable.',
+      );
+      await _enterText(
+        tester,
+        'multi-device-join-otp',
+        joinOtp,
+        failure: 'The new-device OTP field was unavailable.',
+      );
+      await _tapOne(
+        tester,
+        find.bySemanticsIdentifier('multi-device-start-join'),
+        failure: 'The new-device Join action was unavailable.',
+      );
+      var container = ProviderScope.containerOf(
+        tester.element(find.byType(DeviceJoinPage)),
+      );
+      await _pumpUntil(
+        tester,
+        () {
+          final progress = container.read(devicesProvider).activeJoin;
+          return progress?.side == DeviceJoinSide.newDevice &&
+              progress?.phase == DeviceJoinPhase.pending &&
+              progress?.remoteState == DeviceJoinRemoteState.pending &&
+              progress?.sas == null;
+        },
+        timeout: const Duration(seconds: 45),
+        failure:
+            'The App OTP did not leave the new device pending without SAS.',
+      );
+      if (find.byKey(const Key('device-join-sas')).evaluate().isNotEmpty) {
+        fail('The App displayed a SAS before the CLI admin claimed the Join.');
+      }
+      final appPending = container.read(devicesProvider).activeJoin!;
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await bootstrap.dispose();
+      bootstrap = null;
+      bootstrap = await AppBootstrap.create(
+        environment: _joinOnlyEnvironment(config),
+        appStateRoot: config.appJoiningStateRoot,
+      );
+      final restoredSessions = await bootstrap.deviceManagementCorePort!
+          .localDeviceJoinSessions();
+      final restored = restoredSessions
+          .where((session) => session.joinSessionId == appPending.joinSessionId)
+          .toList(growable: false);
+      if (restored.length != 1 ||
+          restored.single.protocolDeviceId != appPending.protocolDeviceId ||
+          restored.single.side != DeviceJoinSide.newDevice ||
+          restored.single.isTerminal ||
+          restored.single.sas != null) {
+        fail('The restarted App did not restore one secret-free pending Join.');
+      }
+      await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+      await _pumpUntil(
+        tester,
+        () => find.byType(OnboardingPage).evaluate().length == 1,
+        failure: 'The restarted App onboarding surface did not become visible.',
+      );
+      await _tapOne(
+        tester,
+        find.bySemanticsIdentifier('multi-device-join-entry'),
+        failure: 'The restarted App Join entry was not visible.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byType(DeviceJoinPage).evaluate().length == 1,
+        failure: 'The restarted App Join page did not open.',
+      );
+      container = ProviderScope.containerOf(
+        tester.element(find.byType(DeviceJoinPage)),
+      );
+      await _pumpUntil(
+        tester,
+        () {
+          final progress = container.read(devicesProvider).activeJoin;
+          return progress?.joinSessionId == appPending.joinSessionId &&
+              progress?.protocolDeviceId == appPending.protocolDeviceId &&
+              progress?.side == DeviceJoinSide.newDevice &&
+              !progress!.isTerminal &&
+              progress.sas == null;
+        },
+        timeout: const Duration(seconds: 45),
+        failure: 'The restarted App did not resume the same pending Join.',
+      );
+      final pending = await cli.pollUntilOnlyPendingJoin(
+        expectedDeviceId: appPending.protocolDeviceId,
+      );
+      if (pending.joinSessionId != appPending.joinSessionId) {
+        fail('The App and CLI did not bind the same pending Join session.');
+      }
+
+      await cli.claimJoin(pending);
+      await _tapOne(
+        tester,
+        find.bySemanticsIdentifier('multi-device-refresh-join'),
+        failure: 'The App new-device refresh action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byKey(const Key('device-join-sas')).evaluate().length == 1,
+        timeout: const Duration(seconds: 45),
+        failure: 'The App new device did not derive its Join SAS.',
+      );
+      final appSas =
+          tester.widget<Text>(find.byKey(const Key('device-join-sas'))).data ??
+          '';
+      final cliProgress = await cli.pollAdminUntilSas(
+        pending.joinSessionId,
+        expectedDeviceId: pending.protocolDeviceId,
+      );
+      if (!_validSas(appSas) ||
+          !_constantTimeAsciiEquals(appSas, cliProgress.sas!)) {
+        fail('The independently derived App and CLI SAS values did not match.');
+      }
+
+      await cli.approveJoinAsMember(
+        joinSessionId: pending.joinSessionId,
+        expectedDeviceId: pending.protocolDeviceId,
+        expectedSas: appSas,
+      );
+      await _pumpUntil(
+        tester,
+        () {
+          final progress = container.read(devicesProvider).activeJoin;
+          return progress?.phase == DeviceJoinPhase.authorized &&
+              progress?.remoteState == DeviceJoinRemoteState.consumed;
+        },
+        timeout: const Duration(seconds: 45),
+        failure: 'The App new device did not converge to authorized.',
+      );
+      final authorized = container.read(devicesProvider).activeJoin!;
+      if (authorized.sas != null ||
+          authorized.authorizedDevice?.protocolDeviceId !=
+              pending.protocolDeviceId ||
+          authorized.authorizedDevice?.role != DeviceRole.member ||
+          authorized.authorizedDevice?.managementReady != false ||
+          authorized.authorizedDevice?.isCurrent != true) {
+        fail(
+          'The App did not project the joined device as the current member.',
+        );
+      }
+      if (find.byKey(const Key('device-join-sas')).evaluate().isNotEmpty) {
+        fail('The authorized App state retained a displayable SAS.');
+      }
+      final appRegistry = await bootstrap.deviceManagementCorePort!
+          .identityDeviceRegistry(did);
+      _requireAppCurrentMemberRegistry(
+        appRegistry,
+        protocolDeviceId: pending.protocolDeviceId,
+        bootstrapAdminDeviceId: bootstrapAdminDeviceId,
+      );
+      _requireCliCurrentAdminRegistry(
+        await cli.loadRegistrySnapshot(),
+        protocolDeviceId: pending.protocolDeviceId,
+        bootstrapAdminDeviceId: bootstrapAdminDeviceId,
+      );
+
+      await E2eCaseAttestationWriter.markPassed(
+        _newDeviceCaseId,
+        phases: const <String>[
+          'independent_native_devices_bootstrapped',
+          'app_otp_left_join_pending',
+          'app_restart_restored_pending_without_sas',
+          'sas_matched_without_secret_evidence',
+          'cli_foreground_member_approval_completed',
+          'app_joined_after_authority_reresolution',
+        ],
+      );
+    },
+    skip: !Platform.isMacOS || !_RemoteJoinRunConfig.exists(),
+    timeout: const Timeout(Duration(minutes: 14)),
+  );
+
+  testWidgets(
     'real AWiki Me ready admin approves an independent CLI device as member',
     (tester) async {
       final config = _RemoteJoinRunConfig.load();
@@ -58,7 +325,7 @@ void main() {
       );
       final httpClient = http.Client();
       final presence = _CountingRealUserPresencePort();
-      final cli = _JoiningCli(config);
+      final cli = _JoiningCli.joining(config);
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       _requireIndependentEmptyRoots(config);
@@ -82,22 +349,7 @@ void main() {
       }
       await cli.initialize();
 
-      final environment = AwikiEnvironmentConfig(
-        baseUrl: config.baseUrl,
-        userServiceUrl: config.userServiceUrl,
-        messageServiceUrl: config.messageServiceUrl,
-        mailServiceUrl: config.mailServiceUrl,
-        didDomain: config.didDomain,
-        anpServiceUrl: config.anpServiceUrl,
-        anpServiceDid: config.anpServiceDid,
-        agentImEnabled: false,
-        multiDeviceJoinEnabled: true,
-        multiDeviceRootTransferEnabled: false,
-        multiDeviceDeviceRevokeEnabled: false,
-        multiDeviceDirectE2eeEnabled: false,
-        multiDeviceGroupE2eeEnabled: false,
-        handleRecoveryEnabled: false,
-      );
+      final environment = _joinOnlyEnvironment(config);
       bootstrap = await AppBootstrap.create(
         environment: environment,
         appStateRoot: config.appStateRoot,
@@ -317,7 +569,7 @@ void main() {
       );
 
       await E2eCaseAttestationWriter.markPassed(
-        _caseId,
+        _adminApprovalCaseId,
         phases: const <String>[
           'independent_native_devices_bootstrapped',
           'otp_left_join_pending',
@@ -350,7 +602,10 @@ class _RemoteJoinRunConfig {
     required this.cliSourceRef,
     required this.cliWorkspace,
     required this.cliHome,
+    required this.cliAdminWorkspace,
+    required this.cliAdminHome,
     required this.appStateRoot,
+    required this.appJoiningStateRoot,
   });
 
   final String runId;
@@ -367,7 +622,10 @@ class _RemoteJoinRunConfig {
   final String cliSourceRef;
   final String cliWorkspace;
   final String cliHome;
+  final String cliAdminWorkspace;
+  final String cliAdminHome;
   final String appStateRoot;
+  final String appJoiningStateRoot;
 
   static bool exists() => File(_runConfigPath).existsSync();
 
@@ -380,7 +638,7 @@ class _RemoteJoinRunConfig {
     final file = File(_runConfigPath);
     final decoded = jsonDecode(file.readAsStringSync());
     if (decoded is! Map ||
-        decoded['schemaVersion'] != 1 ||
+        decoded['schemaVersion'] != 2 ||
         decoded['enabled'] != true) {
       throw StateError('Remote multi-device Join run config is invalid.');
     }
@@ -388,7 +646,9 @@ class _RemoteJoinRunConfig {
     final service = _map(root, 'service');
     final account = _map(root, 'account');
     final cli = _map(root, 'cliJoiningDevice');
+    final cliAdmin = _map(root, 'cliAdminDevice');
     final app = _map(root, 'app');
+    final appJoining = _map(root, 'appJoiningDevice');
     final config = _RemoteJoinRunConfig(
       runId: _required(root, 'runId'),
       baseUrl: _required(service, 'baseUrl'),
@@ -407,7 +667,10 @@ class _RemoteJoinRunConfig {
       cliSourceRef: _required(cli, 'sourceRef'),
       cliWorkspace: _required(cli, 'workspace'),
       cliHome: _required(cli, 'home'),
+      cliAdminWorkspace: _required(cliAdmin, 'workspace'),
+      cliAdminHome: _required(cliAdmin, 'home'),
       appStateRoot: _required(app, 'stateRoot'),
+      appJoiningStateRoot: _required(appJoining, 'stateRoot'),
     );
     if (config.didDomain != 'awiki.info') {
       throw StateError('Remote multi-device Join DID domain is not audited.');
@@ -429,6 +692,12 @@ class _RemoteJoinRunConfig {
     if (!RegExp(r'^[0-9a-f]{40}$').hasMatch(config.cliSourceRef) ||
         RegExp(r'^0{40}$').hasMatch(config.cliSourceRef)) {
       throw StateError('Remote multi-device Join CLI source is not auditable.');
+    }
+    if (_required(cliAdmin, 'binary') != config.cliBin ||
+        _required(cliAdmin, 'sourceRef') != config.cliSourceRef) {
+      throw StateError(
+        'Remote multi-device Join CLI devices do not share one audited build.',
+      );
     }
     return config;
   }
@@ -485,17 +754,41 @@ class _JoiningCli {
     this.rootTransferEnabled = false,
     this.deviceRevokeEnabled = false,
     this.directE2eeEnabled = false,
-  });
+  }) : workspace = config.cliWorkspace,
+       home = config.cliHome,
+       _tenantName = 'e2e-${_safeId(config.runId, 36)}';
+
+  _JoiningCli._(
+    this.config, {
+    required this.workspace,
+    required this.home,
+    required String role,
+  }) : rootTransferEnabled = false,
+       deviceRevokeEnabled = false,
+       directE2eeEnabled = false,
+       _tenantName = 'e2e-${_safeId(config.runId, 28)}-${_safeId(role, 8)}';
+
+  factory _JoiningCli.joining(_RemoteJoinRunConfig config) =>
+      _JoiningCli(config);
+
+  factory _JoiningCli.admin(_RemoteJoinRunConfig config) => _JoiningCli._(
+    config,
+    workspace: config.cliAdminWorkspace,
+    home: config.cliAdminHome,
+    role: 'admin',
+  );
 
   final _RemoteJoinRunConfig config;
+  final String workspace;
+  final String home;
   final bool rootTransferEnabled;
   final bool deviceRevokeEnabled;
   final bool directE2eeEnabled;
-  late final String _tenantName = 'e2e-${_safeId(config.runId, 36)}';
+  final String _tenantName;
 
   Future<void> initialize() async {
-    await Directory(config.cliWorkspace).create(recursive: true);
-    await Directory(config.cliHome).create(recursive: true);
+    await Directory(workspace).create(recursive: true);
+    await Directory(home).create(recursive: true);
     final version = await _run(const <String>['--format', 'json', 'version']);
     final versionData = _data(version, action: null);
     if (versionData['commit'] != config.cliSourceRef) {
@@ -516,6 +809,31 @@ class _JoiningCli {
       'AWiki App Join E2E',
     ]);
     await _run(<String>['--format', 'json', 'tenant', 'use', _tenantName]);
+  }
+
+  Future<String> registerReadyAdmin({
+    required String handle,
+    required String phone,
+    required String otp,
+  }) async {
+    final payload = await _run(<String>[
+      '--format',
+      'json',
+      'id',
+      'register',
+      '--handle',
+      handle,
+      '--phone',
+      phone,
+      '--otp',
+      otp,
+    ]);
+    final data = _data(payload, action: 'register_handle');
+    final identity = data['identity'];
+    if (identity is! Map) {
+      fail('The CLI bootstrap returned no safe identity projection.');
+    }
+    return _required(_stringMap(identity), 'did');
   }
 
   Future<_JoinProgress> startJoin({
@@ -570,6 +888,109 @@ class _JoiningCli {
     fail('The joining CLI device did not derive its SAS in time.');
   }
 
+  Future<_CliPendingJoin> pollUntilOnlyPendingJoin({
+    required String expectedDeviceId,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final registry = await loadRegistrySnapshot();
+      if (registry.pending.length == 1 &&
+          registry.pending.single.protocolDeviceId == expectedDeviceId) {
+        return registry.pending.single;
+      }
+      if (registry.pending.length > 1) {
+        fail('The CLI admin observed more than one pending Join request.');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    fail('The CLI admin did not observe the App pending Join in time.');
+  }
+
+  Future<void> claimJoin(_CliPendingJoin pending) async {
+    final payload = await _run(<String>[
+      '--format',
+      'json',
+      'id',
+      'device',
+      'join',
+      'claim',
+      '--session',
+      pending.joinSessionId,
+      '--operation-id',
+      'app-admin-claim-${_nonce(10)}',
+    ]);
+    final progress = _JoinProgress.fromData(
+      _data(payload, action: 'device_join_claim'),
+    );
+    if (progress.joinSessionId != pending.joinSessionId ||
+        progress.protocolDeviceId != pending.protocolDeviceId ||
+        progress.remoteState != 'challenge_sent' ||
+        progress.sas != null) {
+      fail('The CLI admin did not submit exactly one Join challenge.');
+    }
+  }
+
+  Future<_JoinProgress> pollAdminUntilSas(
+    String sessionId, {
+    required String expectedDeviceId,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final data = await _pollAdminData(sessionId);
+      final progress = _JoinProgress.fromData(data);
+      if (progress.joinSessionId != sessionId ||
+          progress.protocolDeviceId != expectedDeviceId) {
+        fail('The CLI admin changed the active Join identity while polling.');
+      }
+      if (progress.remoteState == 'response_verified' &&
+          _validSas(progress.sas ?? '')) {
+        return progress;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    fail('The CLI admin did not derive its SAS in time.');
+  }
+
+  Future<void> approveJoinAsMember({
+    required String joinSessionId,
+    required String expectedDeviceId,
+    required String expectedSas,
+  }) async {
+    await _runForegroundMemberApproval(
+      joinSessionId: joinSessionId,
+      expectedSas: expectedSas,
+    );
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final data = await _pollAdminData(joinSessionId);
+      final progress = _JoinProgress.fromData(data);
+      if (progress.joinSessionId != joinSessionId ||
+          progress.protocolDeviceId != expectedDeviceId) {
+        fail('The CLI approval changed the active Join identity.');
+      }
+      if (progress.remoteState == 'consumed') {
+        if (progress.sas != null) {
+          fail('The terminal CLI approval state retained a SAS.');
+        }
+        final rawDevice = data['result'];
+        final result = rawDevice is Map ? _stringMap(rawDevice) : null;
+        final authorized = result?['authorized_device'];
+        if (authorized is! Map) {
+          fail('The CLI approval returned no authorization projection.');
+        }
+        final device = _AuthorizedDevice.fromJson(_stringMap(authorized));
+        if (device.protocolDeviceId != expectedDeviceId ||
+            device.role != 'member' ||
+            device.managementReady) {
+          fail('The CLI did not authorize the App as a rootless member.');
+        }
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    fail('The CLI member approval did not converge in time.');
+  }
+
   Future<_AuthorizedDevice> pollUntilAuthorized(
     String sessionId, {
     required String expectedDeviceId,
@@ -607,7 +1028,7 @@ class _JoiningCli {
     fail('The joining CLI device did not become authorized in time.');
   }
 
-  Future<List<Map<String, Object?>>> loadRegistry() async {
+  Future<_CliRegistrySnapshot> loadRegistrySnapshot() async {
     final payload = await _run(const <String>[
       '--format',
       'json',
@@ -616,17 +1037,156 @@ class _JoiningCli {
       'list',
     ]);
     final result = _data(payload, action: 'device_registry')['result'];
-    if (result is! Map || result['devices'] is! List) {
-      fail('The joining CLI device returned no safe Registry projection.');
+    if (result is! Map ||
+        result['devices'] is! List ||
+        result['pending_join_requests'] is! List) {
+      fail('The CLI device returned no safe Registry projection.');
     }
-    return (result['devices'] as List)
+    final devices = (result['devices'] as List)
         .map((value) {
           if (value is! Map) {
-            fail('The joining CLI Registry contains an invalid device row.');
+            fail('The CLI Registry contains an invalid device row.');
           }
           return _stringMap(value);
         })
         .toList(growable: false);
+    final pending = (result['pending_join_requests'] as List)
+        .map((value) {
+          if (value is! Map) {
+            fail('The CLI Registry contains an invalid pending Join row.');
+          }
+          return _CliPendingJoin.fromJson(_stringMap(value));
+        })
+        .toList(growable: false);
+    return _CliRegistrySnapshot(devices: devices, pending: pending);
+  }
+
+  Future<List<Map<String, Object?>>> loadRegistry() async =>
+      (await loadRegistrySnapshot()).devices;
+
+  Future<Map<String, Object?>> _pollAdminData(String sessionId) async {
+    final payload = await _run(<String>[
+      '--format',
+      'json',
+      'id',
+      'device',
+      'join',
+      'poll',
+      '--session',
+      sessionId,
+      '--admin',
+    ]);
+    return _data(payload, action: 'device_join_admin_poll');
+  }
+
+  Future<void> _runForegroundMemberApproval({
+    required String joinSessionId,
+    required String expectedSas,
+  }) async {
+    if (!_validSas(expectedSas)) {
+      fail('The foreground CLI approval received no valid SAS.');
+    }
+    Process? process;
+    final transcript = <int>[];
+    var localSasMatched = false;
+    var sasSubmitted = false;
+    var approvalSubmitted = false;
+    var invalidOutput = false;
+    var exitCode = -1;
+    try {
+      process = await Process.start(
+        '/usr/bin/script',
+        <String>[
+          '-q',
+          '/dev/null',
+          config.cliBin,
+          '--format',
+          'json',
+          'id',
+          'device',
+          'join',
+          'approve',
+          '--session',
+          joinSessionId,
+          '--role',
+          'member',
+        ],
+        environment: _environment(),
+        includeParentEnvironment: false,
+        runInShell: false,
+      );
+
+      void consume(List<int> bytes) {
+        if (invalidOutput) return;
+        if (transcript.length + bytes.length > 1024 * 1024) {
+          invalidOutput = true;
+          process?.kill(ProcessSignal.sigkill);
+          return;
+        }
+        transcript.addAll(bytes);
+        if (!localSasMatched) {
+          final localSas = remoteMultiDeviceCliApprovalSas(transcript);
+          if (localSas != null) {
+            localSasMatched = _constantTimeAsciiEquals(localSas, expectedSas);
+            if (!localSasMatched) {
+              invalidOutput = true;
+              process?.kill(ProcessSignal.sigkill);
+              return;
+            }
+          }
+        }
+        if (localSasMatched &&
+            !sasSubmitted &&
+            remoteMultiDeviceCliRequestsSasInput(transcript)) {
+          process?.stdin.writeln(expectedSas);
+          unawaited(process?.stdin.flush());
+          sasSubmitted = true;
+        }
+        if (sasSubmitted &&
+            !approvalSubmitted &&
+            remoteMultiDeviceCliRequestsApproval(transcript)) {
+          process?.stdin.writeln('APPROVE');
+          unawaited(process?.stdin.flush());
+          approvalSubmitted = true;
+        }
+      }
+
+      final outputDone = Future.wait<void>(<Future<void>>[
+        process.stdout.listen(consume).asFuture<void>(),
+        process.stderr.listen(consume).asFuture<void>(),
+      ]);
+      try {
+        exitCode = await process.exitCode.timeout(const Duration(minutes: 2));
+      } on TimeoutException {
+        process.kill(ProcessSignal.sigkill);
+      }
+      await outputDone;
+      try {
+        await process.stdin.close();
+      } on Object {
+        // The child may close its TTY immediately after rendering success.
+      }
+    } on Object {
+      invalidOutput = true;
+    } finally {
+      if (process != null && exitCode < 0) {
+        process.kill(ProcessSignal.sigkill);
+        try {
+          await process.exitCode.timeout(const Duration(seconds: 5));
+        } on Object {
+          // The transcript is still erased below and the gate fails closed.
+        }
+      }
+      transcript.fillRange(0, transcript.length, 0);
+      transcript.clear();
+    }
+    if (invalidOutput ||
+        exitCode != 0 ||
+        !localSasMatched ||
+        !sasSubmitted ||
+        !approvalSubmitted) {
+      fail('The foreground CLI member approval failed safely.');
+    }
   }
 
   Future<void> syncInbox() async {
@@ -671,9 +1231,40 @@ class _JoiningCli {
     List<String> args, {
     String? accountVerificationToken,
   }) async {
+    final environment = _environment(
+      accountVerificationToken: accountVerificationToken,
+    );
+    ProcessResult result;
+    try {
+      result = await Process.run(
+        config.cliBin,
+        args,
+        environment: environment,
+        includeParentEnvironment: false,
+        runInShell: false,
+      ).timeout(_remoteTimeout);
+    } on Object {
+      fail('The independent CLI process did not complete safely.');
+    }
+    if (result.exitCode != 0) {
+      fail('The independent CLI command failed without exposing output.');
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(result.stdout.toString());
+    } on Object {
+      fail('The independent CLI returned invalid JSON.');
+    }
+    if (decoded is! Map || decoded['ok'] != true) {
+      fail('The independent CLI returned no successful result.');
+    }
+    return _stringMap(decoded);
+  }
+
+  Map<String, String> _environment({String? accountVerificationToken}) {
     final environment = <String, String>{
-      'HOME': config.cliHome,
-      'AWIKI_CLI_WORKSPACE_HOME_DIR': config.cliWorkspace,
+      'HOME': home,
+      'AWIKI_CLI_WORKSPACE_HOME_DIR': workspace,
       'AWIKI_MULTI_DEVICE_JOIN_ENABLED': '1',
       if (rootTransferEnabled) 'AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED': '1',
       if (deviceRevokeEnabled) 'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
@@ -688,43 +1279,18 @@ class _JoiningCli {
       'TMPDIR',
       'SSL_CERT_FILE',
       'SSL_CERT_DIR',
+      'TERM',
     ]) {
       final value = Platform.environment[name];
       if (value != null && value.trim().isNotEmpty) {
         environment[name] = value;
       }
     }
-    ProcessResult result;
-    try {
-      result = await Process.run(
-        config.cliBin,
-        args,
-        environment: environment,
-        includeParentEnvironment: false,
-        runInShell: false,
-      ).timeout(_remoteTimeout);
-    } on Object {
-      fail('The independent joining CLI process did not complete safely.');
-    }
-    if (result.exitCode != 0) {
-      fail(
-        'The independent joining CLI command failed without exposing output.',
-      );
-    }
-    Object? decoded;
-    try {
-      decoded = jsonDecode(result.stdout.toString());
-    } on Object {
-      fail('The independent joining CLI returned invalid JSON.');
-    }
-    if (decoded is! Map || decoded['ok'] != true) {
-      fail('The independent joining CLI returned no successful result.');
-    }
-    return _stringMap(decoded);
+    return environment;
   }
 
   Future<void> deleteLocalState() async {
-    for (final path in <String>[config.cliWorkspace, config.cliHome]) {
+    for (final path in <String>[workspace, home]) {
       final directory = Directory(path);
       if (await directory.exists()) {
         await directory.delete(recursive: true);
@@ -757,6 +1323,28 @@ bool _isRootControlMarker(String value) {
       normalized.contains('root_key_imported_ack') ||
       normalized.contains('system_type') ||
       normalized == 'ciphertext';
+}
+
+class _CliRegistrySnapshot {
+  const _CliRegistrySnapshot({required this.devices, required this.pending});
+
+  final List<Map<String, Object?>> devices;
+  final List<_CliPendingJoin> pending;
+}
+
+class _CliPendingJoin {
+  const _CliPendingJoin({
+    required this.joinSessionId,
+    required this.protocolDeviceId,
+  });
+
+  final String joinSessionId;
+  final String protocolDeviceId;
+
+  static _CliPendingJoin fromJson(Map<String, Object?> json) => _CliPendingJoin(
+    joinSessionId: _required(json, 'join_session_id'),
+    protocolDeviceId: _required(json, 'protocol_device_id'),
+  );
 }
 
 class _JoinProgress {
@@ -829,6 +1417,24 @@ class _CountingRealUserPresencePort implements UserPresencePort {
     return lastResult;
   }
 }
+
+AwikiEnvironmentConfig _joinOnlyEnvironment(_RemoteJoinRunConfig config) =>
+    AwikiEnvironmentConfig(
+      baseUrl: config.baseUrl,
+      userServiceUrl: config.userServiceUrl,
+      messageServiceUrl: config.messageServiceUrl,
+      mailServiceUrl: config.mailServiceUrl,
+      didDomain: config.didDomain,
+      anpServiceUrl: config.anpServiceUrl,
+      anpServiceDid: config.anpServiceDid,
+      agentImEnabled: false,
+      multiDeviceJoinEnabled: true,
+      multiDeviceRootTransferEnabled: false,
+      multiDeviceDeviceRevokeEnabled: false,
+      multiDeviceDirectE2eeEnabled: false,
+      multiDeviceGroupE2eeEnabled: false,
+      handleRecoveryEnabled: false,
+    );
 
 Future<String> _requestAndResolveOtp({
   required http.Client client,
@@ -1007,13 +1613,34 @@ String _requireReadyBootstrapAdmin(DeviceRegistrySnapshot registry) {
 }
 
 void _requireIndependentEmptyRoots(_RemoteJoinRunConfig config) {
-  final roots = <String>{
-    Directory(config.appStateRoot).absolute.path,
-    Directory(config.cliWorkspace).absolute.path,
-    Directory(config.cliHome).absolute.path,
-  };
-  if (roots.length != 3) {
+  _requireIndependentEmptyPaths(<String>[
+    config.appStateRoot,
+    config.cliWorkspace,
+    config.cliHome,
+  ]);
+}
+
+List<String> _allLocalRoots(_RemoteJoinRunConfig config) => <String>[
+  config.appStateRoot,
+  config.appJoiningStateRoot,
+  config.cliWorkspace,
+  config.cliHome,
+  config.cliAdminWorkspace,
+  config.cliAdminHome,
+];
+
+void _requireIndependentEmptyPaths(List<String> paths) {
+  final roots = paths.map((path) => Directory(path).absolute.path).toSet();
+  if (roots.length != paths.length) {
     fail('The App and CLI did not receive independent local roots.');
+  }
+  for (final candidate in roots) {
+    for (final other in roots) {
+      if (candidate != other &&
+          candidate.startsWith('$other${Platform.pathSeparator}')) {
+        fail('The App and CLI local roots must not be nested.');
+      }
+    }
   }
   for (final root in roots) {
     final directory = Directory(root);
@@ -1021,6 +1648,50 @@ void _requireIndependentEmptyRoots(_RemoteJoinRunConfig config) {
         directory.listSync(followLinks: false).isNotEmpty) {
       fail('A multi-device E2E local root was missing or not fresh.');
     }
+  }
+}
+
+String _requireCliReadyBootstrapAdmin(_CliRegistrySnapshot registry) {
+  if (registry.devices.length != 1 || registry.pending.isNotEmpty) {
+    fail('The CLI bootstrap Registry did not contain exactly one device.');
+  }
+  final device = registry.devices.single;
+  if (device['is_current'] != true ||
+      device['role'] != 'admin' ||
+      device['management_ready'] != true ||
+      device['status'] != 'active') {
+    fail('The CLI bootstrap device was not the active ready admin.');
+  }
+  return _required(device, 'protocol_device_id');
+}
+
+void _requireCliCurrentAdminRegistry(
+  _CliRegistrySnapshot registry, {
+  required String protocolDeviceId,
+  required String bootstrapAdminDeviceId,
+}) {
+  if (registry.devices.length != 2 || registry.pending.isNotEmpty) {
+    fail('The CLI admin Registry did not converge to exactly two devices.');
+  }
+  final current = registry.devices
+      .where((device) => device['is_current'] == true)
+      .toList(growable: false);
+  if (current.length != 1 ||
+      current.single['protocol_device_id'] != bootstrapAdminDeviceId ||
+      current.single['role'] != 'admin' ||
+      current.single['management_ready'] != true ||
+      current.single['status'] != 'active') {
+    fail('The CLI did not remain the unique current active ready admin.');
+  }
+  final joined = registry.devices
+      .where((device) => device['protocol_device_id'] == protocolDeviceId)
+      .toList(growable: false);
+  if (joined.length != 1 ||
+      joined.single['is_current'] == true ||
+      joined.single['role'] != 'member' ||
+      joined.single['management_ready'] != false ||
+      joined.single['status'] != 'active') {
+    fail('The CLI did not resolve the App as one non-current active member.');
   }
 }
 
@@ -1084,6 +1755,34 @@ void _requireAppRegistryMember(
   }
 }
 
+void _requireAppCurrentMemberRegistry(
+  DeviceRegistrySnapshot registry, {
+  required String protocolDeviceId,
+  required String bootstrapAdminDeviceId,
+}) {
+  if (registry.devices.length != 2 || registry.pendingJoins.isNotEmpty) {
+    fail('The joined App Registry did not converge to exactly two devices.');
+  }
+  final current = registry.devices.where((device) => device.isCurrent).toList();
+  if (current.length != 1 ||
+      current.single.protocolDeviceId != protocolDeviceId ||
+      current.single.role != DeviceRole.member ||
+      current.single.managementReady ||
+      current.single.status != DeviceStatus.active) {
+    fail('The joined App did not resolve itself as the current active member.');
+  }
+  final admin = registry.devices
+      .where((device) => device.protocolDeviceId == bootstrapAdminDeviceId)
+      .toList(growable: false);
+  if (admin.length != 1 ||
+      admin.single.isCurrent ||
+      admin.single.role != DeviceRole.admin ||
+      !admin.single.managementReady ||
+      admin.single.status != DeviceStatus.active) {
+    fail('The joined App did not retain the CLI as an active ready admin.');
+  }
+}
+
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() condition, {
@@ -1110,6 +1809,24 @@ Future<void> _tapOne(
   }
   await tester.ensureVisible(target);
   await tester.tap(target);
+  await tester.pump();
+}
+
+Future<void> _enterText(
+  WidgetTester tester,
+  String semanticsIdentifier,
+  String value, {
+  required String failure,
+}) async {
+  final editable = find.descendant(
+    of: find.bySemanticsIdentifier(semanticsIdentifier),
+    matching: find.byType(EditableText),
+  );
+  if (editable.evaluate().length != 1) {
+    fail(failure);
+  }
+  await tester.ensureVisible(editable);
+  await tester.enterText(editable, value);
   await tester.pump();
 }
 

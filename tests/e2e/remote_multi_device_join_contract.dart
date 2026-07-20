@@ -1,6 +1,7 @@
-// [INPUT]: Operator-provided OTP resolver argv and redacted SMS response metadata.
-// [OUTPUT]: Strict, secret-free validation and resolver-continuation decisions
-//           for the deployed Globe remote Join E2E path only.
+// [INPUT]: Operator-provided OTP resolver argv, redacted SMS response metadata,
+//          and in-memory output from the real foreground CLI approval process.
+// [OUTPUT]: Strict, secret-free validation, resolver-continuation decisions,
+//           and exact CLI prompt recognition for remote Join E2E only.
 // [POS]: Shared runner/integration-test security gate; rejects provider drift,
 //        extra markers, and secret-like details before invoking the resolver.
 
@@ -9,6 +10,12 @@ import 'dart:convert';
 const String remoteMultiDeviceStagedOtpFlag =
     'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR';
 const String _stagedSmsProviderCode = 'MOBILE_NUMBER_ILLEGAL';
+const String _cliApprovalSasPrefix =
+    'Compare this one-time SAS with the new device: ';
+const String _cliApprovalSasInputPrompt =
+    'Type the same 6-digit SAS to continue: ';
+const String _cliApprovalConfirmationPrompt =
+    'Type APPROVE to confirm local user presence and authorize this device: ';
 
 final RegExp _stagedSmsDetailPattern = RegExp(
   r'^\[SMS_ERROR\] Globe SMS send failed: '
@@ -153,6 +160,37 @@ bool isSixDigitAsciiOtp(String value) {
   return value.codeUnits.every((value) => value >= 0x30 && value <= 0x39);
 }
 
+/// Extracts the locally derived SAS only from the production CLI's exact
+/// foreground prompt. Callers must keep the transcript in memory and erase it
+/// after the child process exits; this helper never renders or persists it.
+String? remoteMultiDeviceCliApprovalSas(List<int> transcript) {
+  final prefix = _cliApprovalSasPrefix.codeUnits;
+  final offset = _indexOfBytes(transcript, prefix);
+  if (offset < 0) {
+    return null;
+  }
+  final sasStart = offset + prefix.length;
+  final sasEnd = sasStart + 6;
+  if (sasEnd > transcript.length) {
+    return null;
+  }
+  final sasBytes = transcript.sublist(sasStart, sasEnd);
+  if (sasBytes.any((value) => value < 0x30 || value > 0x39)) {
+    return null;
+  }
+  if (sasEnd == transcript.length ||
+      (transcript[sasEnd] != 0x0a && transcript[sasEnd] != 0x0d)) {
+    return null;
+  }
+  return String.fromCharCodes(sasBytes);
+}
+
+bool remoteMultiDeviceCliRequestsSasInput(List<int> transcript) =>
+    _indexOfBytes(transcript, _cliApprovalSasInputPrompt.codeUnits) >= 0;
+
+bool remoteMultiDeviceCliRequestsApproval(List<int> transcript) =>
+    _indexOfBytes(transcript, _cliApprovalConfirmationPrompt.codeUnits) >= 0;
+
 bool _hasExactStagedSmsMarkers(String detail) {
   final markers = _stagedSmsMarkerPattern
       .allMatches(detail)
@@ -229,4 +267,24 @@ bool _sameCommand(List<String> first, List<String> second) {
 bool _sameStringSet(Iterable<String> values, Set<String> expected) {
   final actual = values.toSet();
   return actual.length == expected.length && actual.containsAll(expected);
+}
+
+int _indexOfBytes(List<int> haystack, List<int> needle) {
+  if (needle.isEmpty || haystack.length < needle.length) {
+    return -1;
+  }
+  final last = haystack.length - needle.length;
+  for (var start = 0; start <= last; start += 1) {
+    var matches = true;
+    for (var index = 0; index < needle.length; index += 1) {
+      if (haystack[start + index] != needle[index]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return start;
+    }
+  }
+  return -1;
 }

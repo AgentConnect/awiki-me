@@ -125,19 +125,25 @@ later self-healing title fail. CLI is only the remote identity/traffic stimulus,
 not the product assertion surface.
 
 `--case multi-device-remote-join` is the separately activation-gated
-`DEVICE-JOIN-E2E-002`, `ROOT-TRANSFER-E2E-001`, and
-`DEVICE-REVOKE-E2E-001` product-security slice. It uses a real, newly
-bootstrapped AWiki Me ready admin and an independent CLI device against
-`awiki.info`. The first scenario proves default-member Join. The second
-explicitly joins an admin-awaiting-root device, distinguishes Direct Init from
-root delivery, synchronizes encrypted root control and the signed imported ACK,
-waits for Registry-backed management readiness, then drives permanent revoke
-through the visible destructive confirmation. Every high-risk mutation
-delegates to real macOS LocalAuthentication; no success is injected. It fails
-closed unless the dedicated account/ali allowlist, hidden rollouts, JSON-argv
-OTP resolver, exact CLI source revision, and manual system-auth prerequisites
-are explicit. An unavailable rollout is not a remote pass. The optional
-synthetic-number staged-OTP mode is an explicit operator
+`DEVICE-JOIN-E2E-001/002`, `ROOT-TRANSFER-E2E-001`, and
+`DEVICE-REVOKE-E2E-001` product-security suite. In one direction a real
+AWiki Me onboarding surface joins an existing CLI ready admin through the
+production foreground TTY approval contract; in the other, a real AWiki Me
+ready admin approves an independent CLI requester and delegates exactly one
+real macOS LocalAuthentication prompt. Both directions use fresh independent
+native Core roots, dynamically resolve purpose-bound OTPs, compare the
+independently derived SAS without recording it, and require the new device to
+converge as a non-admin member in both Registries. The App-new-device direction
+also restarts from the same pending Core session and rejects persisted SAS. A
+third isolated scenario joins an admin-awaiting-root device, distinguishes
+Direct Init from root delivery, synchronizes encrypted root control and the
+signed imported ACK, waits for Registry-backed management readiness, then
+drives permanent revoke through the visible destructive confirmation. Every
+App-side high-risk mutation delegates to real macOS LocalAuthentication; no
+success is injected. It fails closed unless the dedicated account/ali allowlist,
+hidden rollouts, JSON-argv OTP resolver, exact CLI source revision, and manual
+system-auth prerequisites are explicit. An unavailable rollout is not a remote
+pass. The optional synthetic-number staged-OTP mode is an explicit operator
 test path with fixed resolver argv and an exact deployed
 `[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` RFC7807 gate;
 provider/channel drift, additional markers, and secret-like detail are rejected
