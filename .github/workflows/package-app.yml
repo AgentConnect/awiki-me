@@ -279,7 +279,7 @@ jobs:
       - name: Install pinned Inno Setup
         if: matrix.target == 'windows-x64'
         shell: pwsh
-        run: choco install innosetup --version=6.3.2 --no-progress --yes
+        run: choco install innosetup --version=6.3.2 --allow-downgrade --no-progress --yes
 
       - name: Build Android or macOS package
         if: matrix.target != 'windows-x64'

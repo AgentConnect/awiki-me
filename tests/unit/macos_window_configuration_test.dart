@@ -211,6 +211,8 @@ void main() {
     expect(packageWorkflow, contains('"runner": "windows-2022"'));
     expect(packageWorkflow, contains('environment: app-packaging'));
     expect(packageWorkflow, contains('AWIKI_ANDROID_STARTUP_SMOKE_TEST'));
+    expect(packageWorkflow, contains('innosetup --version=6.3.2'));
+    expect(packageWorkflow, contains('--allow-downgrade'));
     expect(
       packageWorkflow,
       contains(r'--android-startup-smoke-test "$ANDROID_STARTUP_SMOKE_TEST"'),
