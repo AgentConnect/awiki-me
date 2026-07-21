@@ -40,8 +40,13 @@ class AwikiResponsiveInfo {
 
   bool get supportsTwoPane => !isPhone;
 
+  bool get usesDesktopLayout =>
+      supportsTwoPane &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows);
+
   bool get isMacDesktop =>
-      supportsTwoPane && defaultTargetPlatform == TargetPlatform.macOS;
+      usesDesktopLayout && defaultTargetPlatform == TargetPlatform.macOS;
 
   double get uiScale {
     final baseScale = switch (breakpoint) {

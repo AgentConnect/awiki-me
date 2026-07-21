@@ -2,8 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../application/desktop_shell_service.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../storage/awiki_storage_roots.dart';
 import '../storage/awiki_storage_scope_layout.dart';
@@ -32,26 +34,47 @@ class AwikiImCorePathLayout {
     required String cacheRoot,
     required String tempRoot,
     required StorageScopeId scopeId,
+    p.Context? pathContext,
   }) => AwikiImCorePathLayout.fromStorageScope(
     AwikiStorageScopeLayout.fromRoots(
       appSupportRoot: appSupportRoot,
       cacheRoot: cacheRoot,
       tempRoot: tempRoot,
       scopeId: scopeId,
+      pathContext: pathContext,
     ),
   );
 
   static Future<AwikiImCorePathLayout> fromPlatform({
     required StorageScopeId scopeId,
     String? appStateRoot,
+    Future<DesktopStorageRoots> Function()? platformStorageRoots,
+    bool Function()? isWindows,
+    p.Context? pathContext,
   }) async {
     final stateRoot = explicitAwikiAppStateRoot(appStateRoot);
     if (stateRoot != null) {
+      final context = pathContext ?? awikiPathContextFor(<String?>[stateRoot]);
       return AwikiImCorePathLayout.fromRoots(
-        appSupportRoot: _joinAll(<String>[stateRoot, 'support']),
-        cacheRoot: _joinAll(<String>[stateRoot, 'cache']),
-        tempRoot: _joinAll(<String>[stateRoot, 'tmp']),
+        appSupportRoot: context.join(stateRoot, 'support'),
+        cacheRoot: context.join(stateRoot, 'cache'),
+        tempRoot: context.join(stateRoot, 'tmp'),
         scopeId: scopeId,
+        pathContext: context,
+      );
+    }
+    if ((isWindows ?? () => Platform.isWindows)()) {
+      final rootsProvider = platformStorageRoots;
+      if (rootsProvider == null) {
+        throw UnsupportedError('windows_storage_roots_unavailable');
+      }
+      final roots = await rootsProvider();
+      return AwikiImCorePathLayout.fromRoots(
+        appSupportRoot: roots.support,
+        cacheRoot: roots.cache,
+        tempRoot: roots.temp,
+        scopeId: scopeId,
+        pathContext: pathContext ?? p.windows,
       );
     }
     final appSupport = await getApplicationSupportDirectory();
@@ -62,6 +85,7 @@ class AwikiImCorePathLayout {
       cacheRoot: cache.path,
       tempRoot: temp.path,
       scopeId: scopeId,
+      pathContext: pathContext,
     );
   }
 
@@ -93,15 +117,18 @@ class AwikiImCorePathLayout {
       return null;
     }
     final archiveDir = Directory(
-      _joinAll(<String>[_dirname(sqlitePath), 'legacy-state']),
+      scopeLayout.pathContext.join(
+        scopeLayout.pathContext.dirname(sqlitePath),
+        'legacy-state',
+      ),
     );
     await archiveDir.create(recursive: true);
     final timestamp = _archiveTimestamp((clock ?? DateTime.now).call());
-    final baseName = _basename(sqlitePath);
+    final baseName = scopeLayout.pathContext.basename(sqlitePath);
     final archivedPaths = <String>[
       await _archiveFile(
         sqliteFile,
-        _joinAll(<String>[
+        scopeLayout.pathContext.joinAll(<String>[
           archiveDir.path,
           '$baseName.schema$schemaVersion.$timestamp',
         ]),
@@ -113,7 +140,7 @@ class AwikiImCorePathLayout {
       archivedPaths.add(
         await _archiveFile(
           sidecar,
-          _joinAll(<String>[
+          scopeLayout.pathContext.joinAll(<String>[
             archiveDir.path,
             '$baseName$suffix.schema$schemaVersion.$timestamp',
           ]),
@@ -147,38 +174,6 @@ class ArchivedLocalState {
   final int schemaVersion;
   final int minimumSchemaVersion;
   final List<String> archivedPaths;
-}
-
-String _joinAll(List<String> parts) {
-  final normalized = parts
-      .map((part) => part.trim())
-      .where((part) => part.isNotEmpty)
-      .map((part) => part.replaceAll(RegExp(r'/+$'), ''))
-      .toList();
-  if (normalized.isEmpty) {
-    return '';
-  }
-  final first = normalized.first;
-  final rest = normalized
-      .skip(1)
-      .map((part) => part.replaceAll(RegExp(r'^/+'), ''));
-  return <String>[first, ...rest].join('/');
-}
-
-String _dirname(String path) {
-  final index = path.lastIndexOf('/');
-  if (index <= 0) {
-    return '.';
-  }
-  return path.substring(0, index);
-}
-
-String _basename(String path) {
-  final index = path.lastIndexOf('/');
-  if (index < 0) {
-    return path;
-  }
-  return path.substring(index + 1);
 }
 
 Future<int?> _readSqliteUserVersion(File file) async {

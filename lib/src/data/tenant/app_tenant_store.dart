@@ -5,6 +5,7 @@ import 'package:characters/characters.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../application/desktop_shell_service.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../storage/awiki_storage_roots.dart';
 import '../storage/awiki_storage_scope_layout.dart';
@@ -27,17 +28,23 @@ class AppTenantStore {
     StorageScopeReadyValidator? readyValidator,
     AppTenantProfile Function()? initialTenantFactory,
     StorageScopeFaultInjector? faultInjector,
+    Future<DesktopStorageRoots> Function()? platformStorageRoots,
+    bool Function()? isWindows,
   }) : _secretRepository =
            secretRepository ?? const UnavailableScopeSecretRepository(),
        _readyValidator = readyValidator,
        _initialTenantFactory = initialTenantFactory,
-       _faultInjector = faultInjector;
+       _faultInjector = faultInjector,
+       _platformStorageRoots = platformStorageRoots,
+       _isWindows = isWindows ?? (() => Platform.isWindows);
 
   final String? appStateRoot;
   final ScopeSecretRepository _secretRepository;
   final StorageScopeReadyValidator? _readyValidator;
   final AppTenantProfile Function()? _initialTenantFactory;
   final StorageScopeFaultInjector? _faultInjector;
+  final Future<DesktopStorageRoots> Function()? _platformStorageRoots;
+  final bool Function() _isWindows;
 
   static const int _maxTenantNameLength = 40;
 
@@ -324,10 +331,24 @@ class AppTenantStore {
     final explicit = explicitAwikiAppStateRoot(appStateRoot);
     if (explicit != null) {
       return (
-        p.join(explicit, 'support'),
-        p.join(explicit, 'cache'),
-        p.join(explicit, 'tmp'),
+        joinAwikiPath(explicit, const <String>['support']),
+        joinAwikiPath(explicit, const <String>['cache']),
+        joinAwikiPath(explicit, const <String>['tmp']),
       );
+    }
+    if (_isWindows()) {
+      final rootsProvider = _platformStorageRoots;
+      if (rootsProvider == null) {
+        throw UnsupportedError('windows_storage_roots_unavailable');
+      }
+      final roots = await rootsProvider();
+      final support = roots.support.trim();
+      final cache = roots.cache.trim();
+      final temp = roots.temp.trim();
+      if (support.isEmpty || cache.isEmpty || temp.isEmpty) {
+        throw const FormatException('desktop_storage_roots_invalid');
+      }
+      return (support, cache, temp);
     }
     return (
       (await getApplicationSupportDirectory()).path,

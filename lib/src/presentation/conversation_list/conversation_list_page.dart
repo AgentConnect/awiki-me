@@ -89,7 +89,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       fields: <String, Object?>{
         'items': state.conversations.length,
         'loading': state.isLoading,
-        'mac_style': widget.macStyle && responsive.isMacDesktop,
+        'mac_style': widget.macStyle && responsive.usesDesktopLayout,
       },
       minMs: 1,
       level: AwikiPerformanceLogLevel.verbose,
@@ -107,7 +107,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       }
     }
 
-    if (widget.macStyle && responsive.isMacDesktop) {
+    if (widget.macStyle && responsive.usesDesktopLayout) {
       return _MacConversationList(
         conversations: state.conversations,
         loadState: state.loadState,
@@ -125,7 +125,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
     }
     return AwikiMeShellTabPage(
       title: context.l10n.conversationsTitle,
-      onSettingsTap: responsive.isMacDesktop
+      onSettingsTap: responsive.usesDesktopLayout
           ? null
           : () => AppNavigator.pushWithoutAnimation(
               context,

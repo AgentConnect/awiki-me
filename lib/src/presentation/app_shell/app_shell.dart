@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
@@ -26,15 +27,18 @@ import 'providers/app_runtime_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/session_provider.dart';
 
-const int _macSettingsTabIndex = 6;
-const _macRailActiveColor = Color(0xFF0B65F8);
-const _macRailInactiveColor = Color(0xFF7A879C);
-const _macRailActiveBackground = Color(0xFFEAF2FF);
-const double _macRailWidth = 72;
-const double _macRailMinWidth = 56;
+const int _desktopSettingsTabIndex = 6;
+const _desktopRailActiveColor = Color(0xFF0B65F8);
+const _desktopRailInactiveColor = Color(0xFF7A879C);
+const _desktopRailActiveBackground = Color(0xFFEAF2FF);
+const double _desktopRailWidth = 72;
+const double _desktopRailMinWidth = 56;
 const MethodChannel _macWindowChromeChannel = MethodChannel(
   'ai.awiki.awikime/window_chrome',
 );
+
+bool shouldInitializeAppUpdates(TargetPlatform platform) =>
+    platform != TargetPlatform.windows;
 
 String? _formatUnreadBadge(int count) {
   if (count <= 0) {
@@ -58,7 +62,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(appRuntimeProvider.notifier).initialize();
-      ref.read(appUpdateProvider.notifier).initialize();
+      if (shouldInitializeAppUpdates(defaultTargetPlatform)) {
+        ref.read(appUpdateProvider.notifier).initialize();
+      }
     });
   }
 
@@ -130,8 +136,8 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final page = _buildCurrentPage(tabIndex, responsive, embeddedBottomNav);
     final showsGlobalBottomNav = responsive.isPhone;
-    final content = responsive.isMacDesktop
-        ? _MacDesktopShell(
+    final content = responsive.usesDesktopLayout
+        ? _DesktopShell(
             currentIndex: tabIndex,
             unreadCount: unreadCount,
             session: session.session,
@@ -139,7 +145,9 @@ class _AppShellState extends ConsumerState<AppShell> {
               ref.read(shellTabProvider.notifier).setTab(index);
             },
             onOpenSettings: () {
-              ref.read(shellTabProvider.notifier).setTab(_macSettingsTabIndex);
+              ref
+                  .read(shellTabProvider.notifier)
+                  .setTab(_desktopSettingsTabIndex);
             },
             child: page,
           )
@@ -203,10 +211,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     AwikiResponsiveInfo responsive,
     Widget embeddedBottomNav,
   ) {
-    final desktopFooter = responsive.supportsTwoPane && !responsive.isMacDesktop
+    final desktopFooter =
+        responsive.supportsTwoPane && !responsive.usesDesktopLayout
         ? embeddedBottomNav
         : null;
-    if (responsive.isMacDesktop) {
+    if (responsive.usesDesktopLayout) {
       switch (tabIndex) {
         case 0:
           return const ConversationWorkspacePage();
@@ -215,21 +224,21 @@ class _AppShellState extends ConsumerState<AppShell> {
         case 2:
           return const FriendsWorkspacePage();
         case 3:
-          return _MacDesktopPlaceholderPage(
+          return _DesktopPlaceholderPage(
             title: context.l10n.shellTasksPlaceholderTitle,
             subtitle: context.l10n.shellTasksPlaceholderSubtitle,
             icon: CupertinoIcons.checkmark_square,
           );
         case 4:
-          return _MacDesktopPlaceholderPage(
+          return _DesktopPlaceholderPage(
             title: context.l10n.shellWorkspacePlaceholderTitle,
             subtitle: context.l10n.shellWorkspacePlaceholderSubtitle,
             icon: CupertinoIcons.square_grid_2x2,
           );
         case 5:
           return const ProfileWorkspacePage();
-        case _macSettingsTabIndex:
-          return const _MacEmbeddedSettingsPage();
+        case _desktopSettingsTabIndex:
+          return const _DesktopEmbeddedSettingsPage();
       }
       return const ConversationWorkspacePage();
     }
@@ -247,8 +256,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-class _MacDesktopShell extends StatelessWidget {
-  const _MacDesktopShell({
+class _DesktopShell extends StatelessWidget {
+  const _DesktopShell({
     required this.currentIndex,
     required this.unreadCount,
     required this.session,
@@ -268,29 +277,30 @@ class _MacDesktopShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final railWidth = responsive
-        .displayScaled(_macRailWidth)
-        .clamp(_macRailMinWidth, double.infinity)
+        .displayScaled(_desktopRailWidth)
+        .clamp(_desktopRailMinWidth, double.infinity)
         .toDouble();
-    return _MacWindowChromeSync(
-      railWidth: railWidth,
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            key: const Key('mac-desktop-rail-slot'),
-            width: railWidth,
-            child: _MacDesktopRail(
-              currentIndex: currentIndex,
-              unreadCount: unreadCount,
-              session: session,
-              onTap: onTap,
-              onOpenSettings: onOpenSettings,
-            ),
+    final content = Row(
+      children: <Widget>[
+        SizedBox(
+          key: const Key('mac-desktop-rail-slot'),
+          width: railWidth,
+          child: _DesktopRail(
+            currentIndex: currentIndex,
+            unreadCount: unreadCount,
+            session: session,
+            onTap: onTap,
+            onOpenSettings: onOpenSettings,
           ),
-          Container(width: 1, color: const Color(0xFFE5EAF2)),
-          Expanded(child: child),
-        ],
-      ),
+        ),
+        Container(width: 1, color: const Color(0xFFE5EAF2)),
+        Expanded(child: child),
+      ],
     );
+    if (!responsive.isMacDesktop) {
+      return content;
+    }
+    return _MacWindowChromeSync(railWidth: railWidth, child: content);
   }
 }
 
@@ -346,8 +356,8 @@ class _MacWindowChromeSyncState extends State<_MacWindowChromeSync> {
   }
 }
 
-class _MacDesktopRail extends StatelessWidget {
-  const _MacDesktopRail({
+class _DesktopRail extends StatelessWidget {
+  const _DesktopRail({
     required this.currentIndex,
     required this.unreadCount,
     required this.session,
@@ -374,7 +384,7 @@ class _MacDesktopRail extends StatelessWidget {
           return Column(
             children: <Widget>[
               SizedBox(height: responsive.displayScaled(compact ? 40 : 50)),
-              _MacRailAvatar(
+              _DesktopRailAvatar(
                 key: const Key('mac-me-rail-avatar'),
                 seed: avatar.seed,
                 labelOverride: avatar.labelOverride,
@@ -387,7 +397,7 @@ class _MacDesktopRail extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: <Widget>[
-                      _MacDesktopRailItem(
+                      _DesktopRailItem(
                         activeIcon: CupertinoIcons.chat_bubble_2_fill,
                         inactiveIcon: CupertinoIcons.chat_bubble_2,
                         label: context.l10n.shellNavMessages,
@@ -398,7 +408,7 @@ class _MacDesktopRail extends StatelessWidget {
                         onTap: () => onTap(0),
                       ),
                       SizedBox(height: gap),
-                      _MacDesktopRailItem(
+                      _DesktopRailItem(
                         activeIcon: CupertinoIcons.sparkles,
                         inactiveIcon: CupertinoIcons.sparkles,
                         label: context.l10n.shellNavAgents,
@@ -408,7 +418,7 @@ class _MacDesktopRail extends StatelessWidget {
                         onTap: () => onTap(1),
                       ),
                       SizedBox(height: gap),
-                      _MacDesktopRailItem(
+                      _DesktopRailItem(
                         activeIcon: CupertinoIcons.person_2_fill,
                         inactiveIcon: CupertinoIcons.person_2,
                         label: context.l10n.shellNavContacts,
@@ -418,7 +428,7 @@ class _MacDesktopRail extends StatelessWidget {
                         onTap: () => onTap(2),
                       ),
                       SizedBox(height: gap),
-                      _MacDesktopRailItem(
+                      _DesktopRailItem(
                         activeIcon: CupertinoIcons.checkmark_square_fill,
                         inactiveIcon: CupertinoIcons.checkmark_square,
                         label: context.l10n.shellNavTasks,
@@ -427,7 +437,7 @@ class _MacDesktopRail extends StatelessWidget {
                         onTap: () => onTap(3),
                       ),
                       SizedBox(height: gap),
-                      _MacDesktopRailItem(
+                      _DesktopRailItem(
                         activeIcon: CupertinoIcons.square_grid_2x2_fill,
                         inactiveIcon: CupertinoIcons.square_grid_2x2,
                         label: context.l10n.shellNavWorkspace,
@@ -436,12 +446,12 @@ class _MacDesktopRail extends StatelessWidget {
                         onTap: () => onTap(4),
                       ),
                       SizedBox(height: gap),
-                      _MacDesktopRailItem(
+                      _DesktopRailItem(
                         activeIcon: CupertinoIcons.gear_alt_fill,
                         inactiveIcon: CupertinoIcons.gear_alt,
                         label: context.l10n.shellNavSettings,
                         semanticsIdentifier: 'e2e-settings-tab',
-                        selected: currentIndex == _macSettingsTabIndex,
+                        selected: currentIndex == _desktopSettingsTabIndex,
                         compact: compact,
                         onTap: onOpenSettings,
                       ),
@@ -476,8 +486,8 @@ class _MacDesktopRail extends StatelessWidget {
   }
 }
 
-class _MacEmbeddedSettingsPage extends StatelessWidget {
-  const _MacEmbeddedSettingsPage();
+class _DesktopEmbeddedSettingsPage extends StatelessWidget {
+  const _DesktopEmbeddedSettingsPage();
 
   @override
   Widget build(BuildContext context) {
@@ -501,8 +511,8 @@ class _MacEmbeddedSettingsPage extends StatelessWidget {
   }
 }
 
-class _MacDesktopRailItem extends StatelessWidget {
-  const _MacDesktopRailItem({
+class _DesktopRailItem extends StatelessWidget {
+  const _DesktopRailItem({
     required this.activeIcon,
     required this.inactiveIcon,
     required this.label,
@@ -525,7 +535,9 @@ class _MacDesktopRailItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final foreground = selected ? _macRailActiveColor : _macRailInactiveColor;
+    final foreground = selected
+        ? _desktopRailActiveColor
+        : _desktopRailInactiveColor;
     final icon = selected ? activeIcon : inactiveIcon;
     final height = responsive.displayScaled(compact ? 50.0 : 56.0);
     final width = responsive.displayScaled(58);
@@ -568,7 +580,7 @@ class _MacDesktopRailItem extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: selected
-                    ? _macRailActiveBackground
+                    ? _desktopRailActiveBackground
                     : const Color(0x00FFFFFF),
                 borderRadius: BorderRadius.circular(
                   responsive.displayScaled(10),
@@ -646,8 +658,8 @@ class _MacDesktopRailItem extends StatelessWidget {
   }
 }
 
-class _MacRailAvatar extends StatelessWidget {
-  const _MacRailAvatar({
+class _DesktopRailAvatar extends StatelessWidget {
+  const _DesktopRailAvatar({
     super.key,
     required this.seed,
     this.labelOverride,
@@ -693,8 +705,8 @@ class _MacRailAvatar extends StatelessWidget {
   }
 }
 
-class _MacDesktopPlaceholderPage extends StatelessWidget {
-  const _MacDesktopPlaceholderPage({
+class _DesktopPlaceholderPage extends StatelessWidget {
+  const _DesktopPlaceholderPage({
     required this.title,
     required this.subtitle,
     required this.icon,

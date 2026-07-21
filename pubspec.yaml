@@ -29,11 +29,13 @@ dependencies:
   flutter_markdown: ^0.7.3+2
   markdown: ^7.3.0
   flutter_svg: ^2.0.10+1
-  flutter_local_notifications: ^19.4.0
+  flutter_local_notifications: 22.1.0
   flutter_riverpod: ^2.6.1
   sqlite3_flutter_libs: ^0.5.42
   desktop_drop: ^0.7.1
+  file_selector: 1.1.0
   pasteboard: ^0.5.0
+  screen_capturer: 0.2.3
   url_launcher: ^6.3.1
   sqflite_common_ffi: 2.4.0
   cryptography: ^2.7.0

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/desktop_shell_service.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/data/storage/scope_secret_repository.dart';
 import 'package:awiki_me/src/data/storage/scope_manifest.dart';
@@ -388,6 +389,52 @@ void main() {
         (await secrets.readExisting(scope)).status,
         ScopeSecretReadStatus.missing,
       );
+    },
+  );
+
+  test('Windows layout uses injected LocalAppData Known Folder roots', () async {
+    final windowsStore = AppTenantStore(
+      appStateRoot: null,
+      secretRepository: FakeScopeSecretRepository(),
+      isWindows: () => true,
+      platformStorageRoots: () async => const DesktopStorageRoots(
+        support: r'C:\Users\tester\AppData\Local\AWiki\AWikiMe\support',
+        cache: r'C:\Users\tester\AppData\Local\AWiki\AWikiMe\cache',
+        temp: r'C:\Users\tester\AppData\Local\Temp\AWikiMe',
+      ),
+    );
+
+    final layout = await windowsStore.layoutForScope(
+      StorageScopeId.parse('11111111-1111-4111-8111-111111111111'),
+    );
+
+    expect(
+      layout.scopeRoot,
+      r'C:\Users\tester\AppData\Local\AWiki\AWikiMe\support\awiki-me\storage-scopes\11111111-1111-4111-8111-111111111111',
+    );
+    expect(layout.pathContext.style, p.Style.windows);
+  });
+
+  test(
+    'explicit app state root wins over Windows Known Folder roots',
+    () async {
+      var rootCalls = 0;
+      final explicitStore = AppTenantStore(
+        appStateRoot: root.path,
+        secretRepository: FakeScopeSecretRepository(),
+        isWindows: () => true,
+        platformStorageRoots: () async {
+          rootCalls += 1;
+          throw StateError('must not be called');
+        },
+      );
+
+      final layout = await explicitStore.layoutForScope(
+        StorageScopeId.parse('11111111-1111-4111-8111-111111111111'),
+      );
+
+      expect(rootCalls, 0);
+      expect(layout.scopeRoot, startsWith(p.join(root.path, 'support')));
     },
   );
 }

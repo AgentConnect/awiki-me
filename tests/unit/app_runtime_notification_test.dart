@@ -2,24 +2,30 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/desktop_shell_service.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/notification_target.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
@@ -34,11 +40,56 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  group('Notification facade lifecycle', () {
+    AppBootstrap buildBootstrap(
+      FakeNotificationFacade notifications, {
+      required bool disposeNotificationFacade,
+    }) {
+      final gateway = FakeAwikiGateway();
+      return AppBootstrap(
+        environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+        accountGateway: gateway,
+        gateway: gateway,
+        realtimeGateway: FakeRealtimeGateway(),
+        notificationFacade: notifications,
+        e2eeFacade: FakeE2eeFacade(),
+        localePreferenceService: FakeLocalePreferenceService(),
+        updateService: FakeUpdateService(),
+        disposeNotificationFacade: disposeNotificationFacade,
+      );
+    }
+
+    test('tenant bootstrap does not dispose an app-lifetime facade', () async {
+      final notifications = FakeNotificationFacade();
+      final bootstrap = buildBootstrap(
+        notifications,
+        disposeNotificationFacade: false,
+      );
+
+      await bootstrap.dispose();
+
+      expect(notifications.disposed, isFalse);
+    });
+
+    test('standalone bootstrap still owns its notification facade', () async {
+      final notifications = FakeNotificationFacade();
+      final bootstrap = buildBootstrap(
+        notifications,
+        disposeNotificationFacade: true,
+      );
+
+      await bootstrap.dispose();
+
+      expect(notifications.disposed, isTrue);
+    });
+  });
+
   group('AppRuntime notifications', () {
     late FakeAwikiGateway gateway;
     late FakeRealtimeGateway realtimeGateway;
     late FakeNotificationFacade notificationFacade;
     late FakeMessageSyncService messageSyncService;
+    late _FakeDesktopShellService desktopShell;
     late ProviderContainer container;
 
     setUp(() {
@@ -46,6 +97,7 @@ void main() {
       realtimeGateway = FakeRealtimeGateway();
       notificationFacade = FakeNotificationFacade();
       messageSyncService = FakeMessageSyncService();
+      desktopShell = _FakeDesktopShellService();
       gateway.myProfile = const UserProfile(
         did: 'did:test:me',
         nickName: 'Me',
@@ -66,6 +118,7 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
+          desktopShellServiceProvider.overrideWithValue(desktopShell),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
@@ -156,6 +209,124 @@ void main() {
       await container.read(appRuntimeProvider.notifier).logout();
 
       expect(container.read(selectedConversationProvider), isNull);
+    });
+
+    test('非法通知 payload 只打开消息列表并清理旧选择', () async {
+      await activate();
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(staleSelectedConversation());
+      container.read(shellTabProvider.notifier).setTab(3);
+
+      notificationFacade.emitActivation(const NotificationActivation.invalid());
+      await pumpEventQueue();
+
+      expect(container.read(shellTabProvider), 0);
+      expect(container.read(selectedConversationProvider), isNull);
+      expect(desktopShell.showWindowCalls, 1);
+    });
+
+    test('跨 scope 通知不切换身份或会话', () async {
+      await activate();
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(staleSelectedConversation());
+
+      notificationFacade.emitActivation(
+        NotificationActivation.valid(
+          NotificationTarget(
+            storageScopeId: StorageScopeId.generate(),
+            conversationId: 'dm:foreign',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(container.read(shellTabProvider), 0);
+      expect(container.read(selectedConversationProvider), isNull);
+      expect(desktopShell.showWindowCalls, 1);
+    });
+
+    test('同 scope 通知打开 canonical conversation', () async {
+      final conversation = ConversationSummary(
+        threadId: 'dm:did:test:notification-peer',
+        conversationId: 'dm:did:test:notification-peer',
+        displayName: 'Notification peer',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 21),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: 'did:test:notification-peer',
+      );
+      gateway.conversations = <ConversationSummary>[conversation];
+      await activate();
+
+      notificationFacade.emitActivation(
+        NotificationActivation.valid(
+          NotificationTarget(
+            storageScopeId: container
+                .read(activeAppTenantProvider)
+                .storageScopeId,
+            conversationId: conversation.conversationId,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(selectedConversationProvider),
+        conversation.conversationId,
+      );
+      expect(desktopShell.showWindowCalls, 1);
+      expect(gateway.fetchLocalDmHistoryCalls, greaterThan(0));
+      expect(gateway.lastFetchedLocalDmPeerDid, conversation.targetDid);
+    });
+
+    test('冷启动 initial activation 聚焦并恢复 canonical conversation', () async {
+      final conversation = ConversationSummary(
+        threadId: 'dm:did:test:cold-start-peer',
+        conversationId: 'dm:did:test:cold-start-peer',
+        displayName: 'Cold start peer',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 21),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: 'did:test:cold-start-peer',
+      );
+      gateway.conversations = <ConversationSummary>[conversation];
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:test:me',
+              credentialName: 'default',
+              displayName: 'Me',
+              handle: 'me',
+              jwtToken: 'token',
+            ),
+          );
+      notificationFacade.initialNotificationActivation =
+          NotificationActivation.valid(
+            NotificationTarget(
+              storageScopeId: container
+                  .read(activeAppTenantProvider)
+                  .storageScopeId,
+              conversationId: conversation.conversationId,
+            ),
+          );
+
+      await container.read(appRuntimeProvider.notifier).initialize();
+      await pumpEventQueue();
+
+      expect(desktopShell.showWindowCalls, 1);
+      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(selectedConversationProvider),
+        conversation.conversationId,
+      );
+      expect(gateway.fetchLocalDmHistoryCalls, greaterThan(0));
+      expect(gateway.lastFetchedLocalDmPeerDid, conversation.targetDid);
     });
 
     test('前台收到消息时显示应用内提示', () async {
@@ -1565,6 +1736,42 @@ class _CountingAgentControlService extends FakeAgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     listAgentsCalls += 1;
     return super.listAgents(includeInactive: includeInactive);
+  }
+}
+
+final class _FakeDesktopShellService implements DesktopShellService {
+  int showWindowCalls = 0;
+
+  @override
+  Stream<DesktopShellEvent> get events =>
+      const Stream<DesktopShellEvent>.empty();
+
+  @override
+  Future<void> completeExit() async {}
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  Future<DesktopStorageRoots> getStorageRoots() async =>
+      const DesktopStorageRoots(
+        support: 'support',
+        cache: 'cache',
+        temp: 'temp',
+      );
+
+  @override
+  Future<void> hideWindow() async {}
+
+  @override
+  Future<void> initialize() async {}
+
+  @override
+  Future<void> setUnreadCount(int count) async {}
+
+  @override
+  Future<void> showWindow() async {
+    showWindowCalls += 1;
   }
 }
 

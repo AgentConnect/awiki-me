@@ -32,21 +32,21 @@ class _FriendsWorkspacePageState extends State<FriendsWorkspacePage> {
       sidebar: FriendsPage(
         embedded: true,
         bottomInset: widget.listFooter == null ? 24 : 16,
-        onGroupTap: responsive.isMacDesktop
+        onGroupTap: responsive.usesDesktopLayout
             ? () {
                 setState(() {
                   _detailPane = _FriendsDetailPane.groups;
                 });
               }
             : null,
-        onFollowingTap: responsive.isMacDesktop
+        onFollowingTap: responsive.usesDesktopLayout
             ? () {
                 setState(() {
                   _detailPane = _FriendsDetailPane.following;
                 });
               }
             : null,
-        onFollowersTap: responsive.isMacDesktop
+        onFollowersTap: responsive.usesDesktopLayout
             ? () {
                 setState(() {
                   _detailPane = _FriendsDetailPane.followers;

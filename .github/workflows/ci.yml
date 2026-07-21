@@ -27,8 +27,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PUB_HOSTED_URL: https://mirrors.tuna.tsinghua.edu.cn/dart-pub
-  FLUTTER_STORAGE_BASE_URL: https://mirrors.tuna.tsinghua.edu.cn/flutter
+  PUB_HOSTED_URL: https://pub.dev
+  FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
 
 jobs:
   validate:
@@ -60,13 +60,14 @@ jobs:
         run: git -C awiki-cli-rs2 rev-parse HEAD | tee /tmp/awiki-cli-ref
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v3
+        uses: subosito/flutter-action@v2.23.0
         with:
+          flutter-version: 3.44.0
           channel: stable
           cache: true
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Install Linux desktop dependencies
         run: |
@@ -172,12 +173,13 @@ jobs:
           token: ${{ secrets.AWIKI_CI_READ_TOKEN || github.token }}
           path: awiki-cli-rs2
 
-      - uses: subosito/flutter-action@v3
+      - uses: subosito/flutter-action@v2.23.0
         with:
+          flutter-version: 3.44.0
           channel: stable
           cache: true
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Install Linux desktop dependencies
         run: |
@@ -264,3 +266,163 @@ jobs:
           path: test-awiki-me/.e2e/
           if-no-files-found: error
           retention-days: 30
+
+  windows-pr:
+    name: Windows x64 build and native smoke
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: windows-2022
+    timeout-minutes: 75
+    env:
+      WINDOWS_CORE_REF: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_WINDOWS_REF || vars.AWIKI_CLI_RS2_REF }}
+      WINDOWS_ANP_REF: 67e6680fac80a5fb3dca41029c67a0ea3ecc0dd5
+    steps:
+      - name: Require read-only private Core token
+        shell: bash
+        env:
+          READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+        run: |
+          [[ "$WINDOWS_CORE_REF" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "AWIKI_CLI_RS2_WINDOWS_REF must be an exact Core commit SHA" >&2
+            exit 1
+          }
+          test -n "$READ_TOKEN" || {
+            echo "AWIKI_CI_READ_TOKEN is required for the private Core checkout" >&2
+            exit 1
+          }
+
+      - name: Checkout AWiki Me
+        uses: actions/checkout@v4
+        with:
+          path: test-awiki-me
+
+      - name: Checkout pinned CLI / IM Core
+        uses: actions/checkout@v4
+        with:
+          repository: AgentConnect/awiki-cli-rs2
+          ref: ${{ env.WINDOWS_CORE_REF }}
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: awiki-cli-rs2
+
+      - name: Verify exact CLI / IM Core checkout
+        shell: pwsh
+        run: |
+          $actual = (git -C awiki-cli-rs2 rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($actual -ne $env:WINDOWS_CORE_REF) {
+            throw "Core checkout is $actual, expected $env:WINDOWS_CORE_REF"
+          }
+
+      - name: Checkout pinned ANP
+        uses: actions/checkout@v4
+        with:
+          repository: agent-network-protocol/anp
+          ref: ${{ env.WINDOWS_ANP_REF }}
+          path: anp/anp
+
+      - name: Setup Flutter 3.44.0
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Setup Rust 1.88.0
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Enable Windows desktop
+        shell: pwsh
+        run: flutter config --enable-windows-desktop
+
+      - name: Run IM Core Rust host tests
+        working-directory: awiki-cli-rs2
+        shell: pwsh
+        run: |
+          cargo +1.88.0 test `
+            -p im-core-dart `
+            --locked `
+            --no-default-features `
+            --features blocking,sqlite,http,windows
+
+      - name: Build and verify x64 native IM Core
+        working-directory: awiki-cli-rs2
+        shell: pwsh
+        run: ./scripts/flutter/build-windows.ps1
+
+      - name: Run IM Core Flutter loader tests
+        working-directory: awiki-cli-rs2/packages/awiki_im_core
+        shell: pwsh
+        run: |
+          flutter pub get
+          flutter test --no-pub test/native_library_loader_test.dart
+
+      - name: Install AWiki Me dependencies
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: flutter pub get
+
+      - name: Run Windows runner and package contract tests
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter test --no-pub tests/unit/windows_runner_configuration_test.dart
+          flutter test --no-pub tests/unit/windows_installer_configuration_test.dart
+          flutter test --no-pub tests/unit/package_manifest_test.dart
+          flutter test --no-pub tests/unit/windows_scope_secret_integration_configuration_test.dart
+
+      - name: Build Windows Debug
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter build windows `
+            --debug `
+            --no-pub `
+            --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.ai `
+            --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }} `
+            --dart-define=AWIKI_IM_CORE_SOURCE_REF=${{ env.WINDOWS_CORE_REF }}
+
+      - name: Build Windows Release
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter build windows `
+            --release `
+            --no-pub `
+            --dart-define=AWIKI_PRIMARY_TENANT_DOMAIN=awiki.ai `
+            --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }} `
+            --dart-define=AWIKI_IM_CORE_SOURCE_REF=${{ env.WINDOWS_CORE_REF }}
+
+      - name: Real IM Core SQLite and identity Vault initialization
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter test `
+            --no-pub `
+            --dart-define=AWIKI_E2E=true `
+            integration_test/im_core_open_smoke_test.dart `
+            -d windows
+
+      - name: Run app, single-instance, shutdown, and Credential smoke
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          ./scripts/windows/run_pr_smoke.ps1 `
+            -ReleaseDir build/windows/x64/runner/Release
+
+      - name: Build production scope-secret MethodChannel probe
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          flutter build windows `
+            --release `
+            --no-pub `
+            --target tests/e2e/flutter/native/production_scope_restart_probe.dart `
+            --dart-define=AWIKI_APP_SOURCE_REF=${{ github.sha }} `
+            --dart-define=AWIKI_IM_CORE_SOURCE_REF=${{ env.WINDOWS_CORE_REF }}
+
+      - name: Verify production Credential Manager lifecycle
+        working-directory: test-awiki-me
+        shell: pwsh
+        run: |
+          ./scripts/windows/run_scope_secret_integration.ps1 `
+            -ReleaseDir build/windows/x64/runner/Release

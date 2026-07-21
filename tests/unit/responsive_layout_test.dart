@@ -2,6 +2,7 @@ import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -38,6 +39,25 @@ void main() {
 
     expect(small.displayScale, AwikiDisplayScale.min);
     expect(large.displayScale, AwikiDisplayScale.max);
+  });
+
+  test('宽屏原生桌面布局只覆盖 macOS 和 Windows', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final responsive = AwikiResponsiveInfo.fromWidth(1280);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    expect(responsive.usesDesktopLayout, isTrue);
+    expect(responsive.isMacDesktop, isTrue);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    expect(responsive.usesDesktopLayout, isTrue);
+    expect(responsive.isMacDesktop, isFalse);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    expect(responsive.usesDesktopLayout, isFalse);
+
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    expect(responsive.usesDesktopLayout, isFalse);
   });
 
   testWidgets('AwikiPaneLayout 支持拖动调整左栏宽度', (tester) async {

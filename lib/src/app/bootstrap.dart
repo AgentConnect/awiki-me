@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../application/config/awiki_environment_config.dart';
 import '../application/attachment_cache_service.dart';
+import '../application/desktop_shell_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
 import '../application/app_session_service.dart';
@@ -83,6 +84,7 @@ class AppBootstrap {
     required this.e2eeFacade,
     required this.localePreferenceService,
     required this.updateService,
+    this.desktopShellService = const NoopDesktopShellService(),
     this.appSessionService,
     this.identityCorePort,
     this.onboardingService,
@@ -103,6 +105,7 @@ class AppBootstrap {
     this.peerIdentityService,
     this.attachmentCacheService,
     this.storageScopeLayout,
+    this.disposeNotificationFacade = true,
   });
 
   final AwikiEnvironmentConfig environment;
@@ -113,6 +116,7 @@ class AppBootstrap {
   final E2eeFacade e2eeFacade;
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
+  final DesktopShellService desktopShellService;
   final AppSessionService? appSessionService;
   final IdentityCorePort? identityCorePort;
   final OnboardingService? onboardingService;
@@ -133,14 +137,19 @@ class AppBootstrap {
   final PeerIdentityService? peerIdentityService;
   final AttachmentCacheService? attachmentCacheService;
   final AwikiStorageScopeLayout? storageScopeLayout;
+  final bool disposeNotificationFacade;
+  Future<void>? _disposeOperation;
 
   static Future<AppBootstrap> create({
     AwikiEnvironmentConfig? environment,
     String? appStateRoot,
     AppTenantProfile? tenant,
+    DesktopShellService? desktopShellService,
+    NotificationFacade? notificationFacade,
     void Function(AppBootstrapProgress progress)? onProgress,
   }) async {
     final totalWatch = Stopwatch()..start();
+    final shell = desktopShellService ?? const NoopDesktopShellService();
     final scopeSecretRepository = buildScopeSecretRepository(
       appStateRoot: appStateRoot,
     );
@@ -156,6 +165,7 @@ class AppBootstrap {
               didHost: environment.didDomain,
             )
           : null,
+      platformStorageRoots: shell.getStorageRoots,
     );
     final registry = await tenantStore.loadRegistry();
     final effectiveTenant = tenant ?? registry.activeTenant;
@@ -319,7 +329,9 @@ class AppBootstrap {
         realtime: realtimeApplicationService,
       );
 
-      final notificationFacade = await AppNotificationFacade.create();
+      final effectiveNotificationFacade =
+          notificationFacade ??
+          await AppNotificationFacade.create(desktopShell: shell);
       final e2eeFacade = NoopE2eeFacade();
       final localePreferenceService = LocalePreferenceService(
         storage: preferenceStorage,
@@ -330,10 +342,11 @@ class AppBootstrap {
         accountGateway: accountGateway,
         gateway: gateway,
         realtimeGateway: realtimeGateway,
-        notificationFacade: notificationFacade,
+        notificationFacade: effectiveNotificationFacade,
         e2eeFacade: e2eeFacade,
         localePreferenceService: localePreferenceService,
         updateService: updateService,
+        desktopShellService: shell,
         appSessionService: appSessionService,
         identityCorePort: identityAdapter,
         onboardingService: onboardingService,
@@ -354,6 +367,7 @@ class AppBootstrap {
         peerIdentityService: peerIdentityService,
         attachmentCacheService: attachmentCacheService,
         storageScopeLayout: storageScopeLayout,
+        disposeNotificationFacade: notificationFacade == null,
       );
       onProgress?.call(AppBootstrapProgress.startingApplication);
       totalWatch.stop();
@@ -372,19 +386,43 @@ class AppBootstrap {
     }
   }
 
-  Future<void> dispose() async {
-    await Future.wait<void>(<Future<void>>[
-      if (realtimeApplicationService != null)
-        realtimeApplicationService!.stop().catchError((_) {}),
-      if (appSessionService is ImCoreAppSessionService)
-        (appSessionService! as ImCoreAppSessionService)
-            .disposeRuntime()
-            .catchError((_) {}),
-      if (productLocalStore is AwikiProductLocalStoreSqlite)
-        (productLocalStore! as AwikiProductLocalStoreSqlite).close().catchError(
-          (_) {},
-        ),
-    ]);
+  Future<void> dispose() {
+    return _disposeOperation ??= _disposeResources();
+  }
+
+  Future<void> _disposeResources() async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    Future<void> disposeStep(Future<void> Function() action) async {
+      try {
+        await action();
+      } on Object catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    final sessions = appSessionService;
+    if (sessions is ImCoreAppSessionService) {
+      await disposeStep(sessions.disposeRuntime);
+    } else {
+      final realtime = realtimeApplicationService;
+      if (realtime != null) {
+        await disposeStep(realtime.stop);
+      }
+    }
+    final localStore = productLocalStore;
+    if (localStore is AwikiProductLocalStoreSqlite) {
+      await disposeStep(localStore.close);
+    }
+    if (disposeNotificationFacade) {
+      await disposeStep(notificationFacade.dispose);
+    }
+
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+    }
   }
 
   @visibleForTesting

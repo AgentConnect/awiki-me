@@ -14,6 +14,12 @@ ScopeSecretRepository buildScopeSecretRepository({String? appStateRoot}) {
     throw StateError('e2e_scope_secret_root_missing');
   }
   return E2eFileScopeSecretRepository(
-    root: Directory('$explicitRoot/support/awiki-me/e2e-scope-secrets'),
+    root: Directory(
+      joinAwikiPath(explicitRoot, const <String>[
+        'support',
+        'awiki-me',
+        'e2e-scope-secrets',
+      ]),
+    ),
   );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
+import '../application/desktop_shell_service.dart';
 import '../application/attachment_cache_service.dart';
 import '../application/attachment_open_service.dart';
 import '../application/attachment_preview_service.dart';
@@ -173,6 +174,10 @@ final productLocalStoreProvider = Provider<ProductLocalStore>(
 final notificationFacadeProvider = Provider<NotificationFacade>(
   (ref) =>
       throw UnimplementedError('notificationFacadeProvider must be overridden'),
+);
+
+final desktopShellServiceProvider = Provider<DesktopShellService>(
+  (ref) => const NoopDesktopShellService(),
 );
 
 final e2eeFacadeProvider = Provider<E2eeFacade>(

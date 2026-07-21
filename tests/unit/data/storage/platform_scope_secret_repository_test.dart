@@ -7,6 +7,25 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('macOS and Windows select the shared MethodChannel store', () {
+    expect(
+      platformScopeSecretStore(targetPlatform: TargetPlatform.macOS),
+      isA<MethodChannelScopeSecretPlatformStore>(),
+    );
+    expect(
+      platformScopeSecretStore(targetPlatform: TargetPlatform.windows),
+      isA<MethodChannelScopeSecretPlatformStore>(),
+    );
+    expect(
+      platformScopeSecretStore(targetPlatform: TargetPlatform.android),
+      isA<FlutterSecureScopeSecretPlatformStore>(),
+    );
+    expect(
+      platformScopeSecretStore(targetPlatform: TargetPlatform.linux),
+      isA<UnsupportedScopeSecretPlatformStore>(),
+    );
+  });
+
   test(
     'production and development use fixed disjoint services and scope account',
     () async {
@@ -126,6 +145,78 @@ void main() {
       ),
     );
   });
+
+  test('MethodChannel error codes map to stable repository failures', () async {
+    final scope = StorageScopeId.generate();
+    final expected = <String, ScopeSecretFailure>{
+      'scope_secret_already_exists': ScopeSecretFailure.alreadyExists,
+      'scope_secret_revision_conflict': ScopeSecretFailure.revisionConflict,
+      'scope_secret_access_denied': ScopeSecretFailure.accessDenied,
+      'scope_secret_corrupt': ScopeSecretFailure.corrupt,
+      'scope_secret_provider_unavailable':
+          ScopeSecretFailure.providerUnavailable,
+      'scope_secret_platform_unsupported': ScopeSecretFailure.unsupported,
+      'unexpected_native_error': ScopeSecretFailure.operationFailed,
+    };
+
+    for (final entry in expected.entries) {
+      final store = _MemoryPlatformStore()
+        ..createError = PlatformException(code: entry.key);
+      final repository = PlatformScopeSecretRepository(
+        channel: ScopeSecretChannel.production,
+        platformStore: store,
+      );
+      await expectLater(
+        repository.createExclusive(_record(scope)),
+        throwsA(_failure(entry.value)),
+        reason: entry.key,
+      );
+    }
+  });
+
+  test(
+    'MethodChannel store preserves method names and CAS arguments',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const channel = MethodChannel('test.awiki/scope-secret');
+      final calls = <MethodCall>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            if (call.method == 'readScopeSecret') {
+              return 'encoded';
+            }
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      const store = MethodChannelScopeSecretPlatformStore(channel: channel);
+
+      expect(
+        await store.read(service: 'service', account: 'scope/id'),
+        'encoded',
+      );
+      await store.compareAndReplace(
+        service: 'service',
+        account: 'scope/id',
+        expectedRevision: 4,
+        value: 'replacement',
+      );
+
+      expect(calls.map((call) => call.method), <String>[
+        'readScopeSecret',
+        'compareAndReplaceScopeSecret',
+      ]);
+      expect(calls.last.arguments, <String, Object?>{
+        'service': 'service',
+        'account': 'scope/id',
+        'expected_revision': 4,
+        'value': 'replacement',
+      });
+    },
+  );
 
   test(
     'flutter secure store serializes operations across repository instances',

@@ -45,6 +45,9 @@ class AwikiMeApp extends StatelessWidget {
         notificationFacadeProvider.overrideWithValue(
           bootstrap.notificationFacade,
         ),
+        desktopShellServiceProvider.overrideWithValue(
+          bootstrap.desktopShellService,
+        ),
         e2eeFacadeProvider.overrideWithValue(bootstrap.e2eeFacade),
         localePreferenceServiceProvider.overrideWithValue(
           bootstrap.localePreferenceService,

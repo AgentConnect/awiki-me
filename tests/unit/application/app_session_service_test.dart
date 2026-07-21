@@ -306,6 +306,30 @@ void main() {
     });
 
     test(
+      'disposeRuntime still disposes core and reports realtime cleanup failure',
+      () async {
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime(
+          onStop: () async => throw StateError('realtime stop failed'),
+        );
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: _session('id-default')),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore('id-default'),
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+
+        await expectLater(service.disposeRuntime(), throwsStateError);
+        expect(realtime.stopCount, 1);
+        expect(runtime.disposeCount, 1);
+        expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
       'deleteLocalIdentity deletes from identity store and clears current session',
       () async {
         final runtime = _FakeRuntime();

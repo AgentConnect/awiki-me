@@ -126,9 +126,12 @@ Targets are controlled by `scripts/package_app.config`:
 android-arm64
 macos-arm64
 macos-x64
+windows-x64
 ```
 
-macOS trial and production packages must use a stable, non-ad-hoc signing identity. Private keys, `.p12`, `.pfx`, and local signing configuration must never enter the repository.
+The default remains Android arm64 plus both macOS architectures; Windows must be selected explicitly. The local script validates clean, exactly pushed APP/Core refs, dispatches the pinned GitHub Actions workflow, waits for the exact request ID, and downloads the aggregate artifact. It never changes `pubspec.yaml` or builds a package locally.
+
+macOS trial and production packages must use a stable, non-ad-hoc signing identity. Android/macOS signing material and the read-only private Core token live in the protected `app-packaging` GitHub Environment. Private keys, `.p12`, `.pfx`, and local signing configuration must never enter the repository. Windows installers are unsigned in this phase. See [Windows x64 packaging](windows-packaging.md) for installer, data-preservation, and CI details.
 
 ## 9. Change checklist
 

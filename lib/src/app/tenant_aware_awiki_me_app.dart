@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
@@ -7,8 +8,11 @@ import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../application/config/awiki_environment_config.dart';
+import '../application/desktop_shell_service.dart';
 import '../application/tenant/app_tenant.dart';
 import '../data/tenant/app_tenant_store.dart';
+import '../data/services/app_notification_facade.dart';
+import '../data/services/method_channel_desktop_shell_service.dart';
 import '../data/storage/scope_secret_repository_factory.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
@@ -20,9 +24,14 @@ import 'awiki_me_app.dart';
 import 'bootstrap.dart';
 
 class TenantAwareAwikiMeApp extends StatefulWidget {
-  const TenantAwareAwikiMeApp({super.key, this.appStateRoot});
+  const TenantAwareAwikiMeApp({
+    super.key,
+    this.appStateRoot,
+    this.desktopShellService,
+  });
 
   final String? appStateRoot;
+  final DesktopShellService? desktopShellService;
 
   @override
   State<TenantAwareAwikiMeApp> createState() => _TenantAwareAwikiMeAppState();
@@ -31,14 +40,32 @@ class TenantAwareAwikiMeApp extends StatefulWidget {
 class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     implements AppTenantActions {
   late final AppTenantStore _store;
+  late final DesktopShellService _desktopShell;
+  late final DesktopShellLifecycleCoordinator _shellLifecycle;
+  late final StreamSubscription<DesktopShellEvent> _shellSubscription;
+  late final Future<void> _shellReady;
+  late final Future<AppNotificationFacade> _notificationFacadeReady;
   Future<_TenantRuntime>? _runtimeFuture;
+  Future<void>? _runtimeDisposeOperation;
   _TenantRuntime? _runtime;
   int _runtimeGeneration = 0;
   AppBootstrapProgress _bootstrapProgress = AppBootstrapProgress.preparing;
+  bool _shutdownRequested = false;
 
   @override
   void initState() {
     super.initState();
+    _desktopShell =
+        widget.desktopShellService ??
+        (Platform.isWindows
+            ? MethodChannelDesktopShellService()
+            : const NoopDesktopShellService());
+    _shellLifecycle = DesktopShellLifecycleCoordinator(shell: _desktopShell);
+    _shellSubscription = _desktopShell.events.listen(_handleShellEvent);
+    _shellReady = _desktopShell.initialize();
+    _notificationFacadeReady = AppNotificationFacade.create(
+      desktopShell: _desktopShell,
+    );
     final scopeSecrets = buildScopeSecretRepository(
       appStateRoot: widget.appStateRoot,
     );
@@ -48,17 +75,21 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       readyValidator: StorageScopeImCoreValidator(
         repository: scopeSecrets,
       ).call,
+      platformStorageRoots: _desktopShell.getStorageRoots,
     );
     _startInitialLoad();
   }
 
   @override
   void dispose() {
-    unawaited(_runtime?.bootstrap.dispose());
+    unawaited(
+      _disposeAfterWidgetRemoval().catchError((Object _, StackTrace __) {}),
+    );
     super.dispose();
   }
 
   Future<_TenantRuntime> _loadRuntime(int generation) async {
+    await _shellReady;
     final registry = await _store.loadRegistry();
     return _createRuntime(registry, generation: generation);
   }
@@ -73,7 +104,9 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         if (!mounted ||
             generation != _runtimeGeneration ||
             !identical(_runtimeFuture, future)) {
-          await runtime.bootstrap.dispose();
+          if (!_shutdownRequested) {
+            await runtime.bootstrap.dispose();
+          }
           return;
         }
         setState(() {
@@ -88,8 +121,11 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     required int generation,
   }) async {
     final tenant = registry.activeTenant;
+    final notificationFacade = await _notificationFacadeReady;
     final bootstrap = await AppBootstrap.create(
       appStateRoot: widget.appStateRoot,
+      desktopShellService: _desktopShell,
+      notificationFacade: notificationFacade,
       tenant: tenant,
       environment: AwikiEnvironmentConfig(
         baseUrl: tenant.backendBaseUrl,
@@ -106,6 +142,75 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       bootstrap: bootstrap,
       localeMode: localeMode,
     );
+  }
+
+  void _handleShellEvent(DesktopShellEvent event) {
+    unawaited(
+      _shellLifecycle
+          .handle(event, disposeRuntime: _disposeRuntimeForExit)
+          .catchError((Object _, StackTrace __) {}),
+    );
+  }
+
+  Future<void> _disposeAfterWidgetRemoval() async {
+    await _shellSubscription.cancel();
+    try {
+      await _disposeRuntimeForExit();
+    } finally {
+      await _desktopShell.dispose();
+    }
+  }
+
+  Future<void> _disposeRuntimeForExit() {
+    return _runtimeDisposeOperation ??= _performRuntimeDisposeForExit();
+  }
+
+  Future<void> _performRuntimeDisposeForExit() async {
+    if (_shutdownRequested && _runtime == null && _runtimeFuture == null) {
+      return;
+    }
+    _shutdownRequested = true;
+    _runtimeGeneration += 1;
+    final current = _runtime;
+    final pending = _runtimeFuture;
+    if (mounted) {
+      setState(() {
+        _runtime = null;
+        _runtimeFuture = null;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+    } else {
+      _runtime = null;
+      _runtimeFuture = null;
+    }
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    Future<void> disposeStep(Future<void> Function() action) async {
+      try {
+        await action();
+      } on Object catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
+    if (current != null) {
+      await disposeStep(current.bootstrap.dispose);
+    } else if (pending != null) {
+      await disposeStep(() async {
+        final runtime = await pending;
+        await runtime.bootstrap.dispose();
+      });
+    }
+    await disposeStep(() async {
+      final notificationFacade = await _notificationFacadeReady;
+      await notificationFacade.dispose();
+    });
+
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
+    }
   }
 
   Future<void> _replaceRuntime(

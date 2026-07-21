@@ -3,8 +3,10 @@ import 'dart:typed_data';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/application/desktop_shell_service.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 const scopeValue = '11111111-1111-4111-8111-111111111111';
 
@@ -209,6 +211,89 @@ void main() {
         homeDirectory: '/Users/alice',
       ),
       '/Users/alice/awiki-e2e/app',
+    );
+  });
+
+  test('builds Windows drive, Unicode, spaces and long paths', () {
+    final longSegment = List<String>.filled(20, 'long directory').join(r'\');
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: 'C:\\Users\\测试 User\\$longSegment\\support',
+      cacheRoot: r'C:\Users\测试 User\AppData\Local\AWiki\AWikiMe\cache',
+      tempRoot: r'C:\Users\测试 User\AppData\Local\Temp\AWikiMe',
+      scopeId: StorageScopeId.parse(scopeValue),
+      pathContext: p.windows,
+    );
+
+    expect(layout.scopeLayout.pathContext.style, p.Style.windows);
+    expect(
+      layout.sqlitePath,
+      endsWith(
+        'support\\awiki-me\\storage-scopes\\$scopeValue\\im-core\\state\\im_core.sqlite',
+      ),
+    );
+    expect(layout.cacheDir, contains(r'AWiki\AWikiMe\cache\awiki-me'));
+    expect(layout.tempDir, contains(r'Temp\AWikiMe\awiki-me'));
+  });
+
+  test('preserves UNC roots with Windows separators', () {
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: r'\\server\AWiki Data\support',
+      cacheRoot: r'\\server\AWiki Data\cache',
+      tempRoot: r'\\server\AWiki Data\temp',
+      scopeId: StorageScopeId.parse(scopeValue),
+      pathContext: p.windows,
+    );
+
+    expect(
+      layout.identityRootDir,
+      r'\\server\AWiki Data\support\awiki-me\storage-scopes\11111111-1111-4111-8111-111111111111\im-core\identities',
+    );
+  });
+
+  test('Windows platform roots come from the desktop shell boundary', () async {
+    final layout = await AwikiImCorePathLayout.fromPlatform(
+      scopeId: StorageScopeId.parse(scopeValue),
+      isWindows: () => true,
+      platformStorageRoots: () async => const DesktopStorageRoots(
+        support: r'C:\Users\tester\AppData\Local\AWiki\AWikiMe\support',
+        cache: r'C:\Users\tester\AppData\Local\AWiki\AWikiMe\cache',
+        temp: r'C:\Users\tester\AppData\Local\Temp\AWikiMe',
+      ),
+    );
+
+    expect(
+      layout.sqlitePath,
+      r'C:\Users\tester\AppData\Local\AWiki\AWikiMe\support\awiki-me\storage-scopes\11111111-1111-4111-8111-111111111111\im-core\state\im_core.sqlite',
+    );
+  });
+
+  test('explicit Windows E2E root wins over Known Folder lookup', () async {
+    var rootCalls = 0;
+    final layout = await AwikiImCorePathLayout.fromPlatform(
+      scopeId: StorageScopeId.parse(scopeValue),
+      appStateRoot: r'D:\AWiki E2E\state',
+      isWindows: () => true,
+      platformStorageRoots: () async {
+        rootCalls += 1;
+        throw StateError('must not be called');
+      },
+      pathContext: p.windows,
+    );
+
+    expect(rootCalls, 0);
+    expect(layout.sqlitePath, startsWith(r'D:\AWiki E2E\state\support'));
+  });
+
+  test('normalizes relative Windows E2E roots with backslashes', () {
+    expect(
+      normalizeAwikiE2eAppStateRootForLaunch(
+        r'.e2e\smoke\app',
+        currentDirectory: r'C:\workspace\awiki-me',
+        homeDirectory: r'C:\Users\tester',
+        temporaryDirectory: r'C:\Temp',
+        pathContext: p.windows,
+      ),
+      r'C:\workspace\awiki-me\.e2e\smoke\app',
     );
   });
 }

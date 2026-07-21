@@ -83,6 +83,6 @@ void main() {
         ],
       );
     },
-    skip: !(Platform.isMacOS || Platform.isLinux),
+    skip: !(Platform.isMacOS || Platform.isLinux || Platform.isWindows),
   );
 }

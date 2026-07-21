@@ -527,7 +527,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   Widget build(BuildContext context) {
     final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
-    final macStyle = widget.macStyle && responsive.isMacDesktop;
+    final macStyle = widget.macStyle && responsive.usesDesktopLayout;
     final messageListBottomInset = macStyle
         ? responsive.displayScaled(_macChatMessageListBottomInset)
         : responsive.spacing(_chatMessageListBottomInset);

@@ -153,11 +153,29 @@ class ImCoreAppSessionService implements AppSessionService {
   }
 
   Future<void> disposeRuntime() async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    Future<void> disposeStep(Future<void> Function() action) async {
+      try {
+        await action().timeout(_logoutCleanupTimeout);
+      } on Object catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+
     try {
-      await _stopRealtimeBestEffort();
-      await _disposeRuntimeBestEffort();
+      final realtime = _realtime;
+      if (realtime != null) {
+        await disposeStep(realtime.stop);
+      }
+      await disposeStep(_runtime.dispose);
     } finally {
       _current = null;
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStackTrace!);
     }
   }
 
@@ -257,16 +275,6 @@ class ImCoreAppSessionService implements AppSessionService {
     }
     try {
       await realtime.stop().timeout(_logoutCleanupTimeout);
-    } on TimeoutException {
-      return;
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<void> _disposeRuntimeBestEffort() async {
-    try {
-      await _runtime.dispose().timeout(_logoutCleanupTimeout);
     } on TimeoutException {
       return;
     } catch (_) {

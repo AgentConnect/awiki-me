@@ -89,6 +89,32 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('Windows 宽屏进入共享桌面 onboarding 而不是移动端 fallback', (tester) async {
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-mac-auth-method-tabs')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
+    expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 单层认证入口可切换邮箱、身份凭证和手机号', (tester) async {
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;

@@ -37,7 +37,7 @@ class ConversationWorkspacePage extends ConsumerWidget {
       ref.watch(selectedConversationProvider),
       ref.watch(conversationListProvider).conversations,
     );
-    if (responsive.isMacDesktop) {
+    if (responsive.usesDesktopLayout) {
       return _MacConversationWorkspace(
         selectedConversation: selectedConversation,
         onConversationSelected: (conversation) async {

@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:path/path.dart' as p;
+import 'package:screen_capturer/screen_capturer.dart';
 
 import '../../application/attachment_picker_service.dart';
 import '../../application/models/attachment_models.dart';
@@ -12,6 +15,32 @@ typedef AttachmentProcessRunner =
 typedef AttachmentTemporaryDirectoryProvider = Future<Directory> Function();
 typedef AttachmentClipboardImageReader = Future<Uint8List?> Function();
 typedef AttachmentClipboardFilesReader = Future<List<String>> Function();
+typedef AttachmentPlatformFileSelector =
+    Future<AttachmentPlatformFile?> Function();
+typedef AttachmentPlatformFileSaver =
+    Future<String?> Function({
+      required String filename,
+      required String mimeType,
+      required Uint8List bytes,
+    });
+typedef AttachmentScreenCaptureRunner = Future<bool> Function(String imagePath);
+typedef AttachmentWindowAction = Future<void> Function();
+
+const int defaultMaxAttachmentSizeBytes = 100 * 1024 * 1024;
+
+class AttachmentPlatformFile {
+  const AttachmentPlatformFile({
+    required this.path,
+    this.filename,
+    this.mimeType,
+    this.sizeBytes,
+  });
+
+  final String path;
+  final String? filename;
+  final String? mimeType;
+  final int? sizeBytes;
+}
 
 class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   MethodChannelAttachmentPickerService({
@@ -22,33 +51,102 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     AttachmentClipboardImageReader? clipboardImageReader,
     AttachmentClipboardFilesReader? clipboardFilesReader,
     bool? preferClipboardFiles,
+    bool? windowsPlatform,
+    AttachmentPlatformFileSelector? windowsFileSelector,
+    AttachmentPlatformFileSaver? windowsFileSaver,
+    AttachmentScreenCaptureRunner? windowsScreenCaptureRunner,
+    AttachmentWindowAction? hideWindow,
+    AttachmentWindowAction? showWindow,
+    AttachmentTemporaryDirectoryProvider? attachmentTemporaryDirectoryProvider,
+    this.screenCaptureTimeout = const Duration(minutes: 2),
+    this.maxAttachmentSizeBytes = defaultMaxAttachmentSizeBytes,
   }) : _channel =
            channel ?? const MethodChannel('ai.awiki.awikime/attachment_picker'),
-       _screenshotSupported = screenshotSupported ?? Platform.isMacOS,
+       _windowsPlatform = windowsPlatform ?? Platform.isWindows,
+       _screenshotSupported =
+           screenshotSupported ?? (Platform.isMacOS || Platform.isWindows),
        _processRunner =
            processRunner ??
            ((executable, arguments) => Process.run(executable, arguments)),
        _temporaryDirectoryProvider =
            temporaryDirectoryProvider ??
            (() async => Directory(
-             p.join(Directory.systemTemp.path, 'awiki-screenshots'),
+             Platform.isWindows
+                 ? p.join(Directory.systemTemp.path, 'AWikiMe', 'screenshots')
+                 : p.join(Directory.systemTemp.path, 'awiki-screenshots'),
+           )),
+       _attachmentTemporaryDirectoryProvider =
+           attachmentTemporaryDirectoryProvider ??
+           (() async => Directory(
+             Platform.isWindows
+                 ? p.join(Directory.systemTemp.path, 'AWikiMe', 'attachments')
+                 : p.join(Directory.systemTemp.path, 'awiki-attachments'),
            )),
        _clipboardImageReader = clipboardImageReader ?? (() => Pasteboard.image),
        _clipboardFilesReader = clipboardFilesReader ?? Pasteboard.files,
-       _preferClipboardFiles = preferClipboardFiles ?? Platform.isMacOS;
+       _preferClipboardFiles = preferClipboardFiles ?? Platform.isMacOS,
+       _windowsFileSelector = windowsFileSelector ?? _selectWindowsFile,
+       _windowsFileSaver = windowsFileSaver ?? _saveWindowsFile,
+       _windowsScreenCaptureRunner =
+           windowsScreenCaptureRunner ?? _captureWindowsRegion,
+       _hideWindow = hideWindow ?? _hideDesktopWindow,
+       _showWindow = showWindow ?? _showDesktopWindow {
+    if (maxAttachmentSizeBytes <= 0) {
+      throw ArgumentError.value(
+        maxAttachmentSizeBytes,
+        'maxAttachmentSizeBytes',
+        'must be positive',
+      );
+    }
+    if (screenCaptureTimeout <= Duration.zero) {
+      throw ArgumentError.value(
+        screenCaptureTimeout,
+        'screenCaptureTimeout',
+        'must be positive',
+      );
+    }
+  }
 
   final MethodChannel _channel;
+  final bool _windowsPlatform;
   final bool _screenshotSupported;
   final AttachmentProcessRunner _processRunner;
   final AttachmentTemporaryDirectoryProvider _temporaryDirectoryProvider;
+  final AttachmentTemporaryDirectoryProvider
+  _attachmentTemporaryDirectoryProvider;
   final AttachmentClipboardImageReader _clipboardImageReader;
   final AttachmentClipboardFilesReader _clipboardFilesReader;
   final bool _preferClipboardFiles;
+  final AttachmentPlatformFileSelector _windowsFileSelector;
+  final AttachmentPlatformFileSaver _windowsFileSaver;
+  final AttachmentScreenCaptureRunner _windowsScreenCaptureRunner;
+  final AttachmentWindowAction _hideWindow;
+  final AttachmentWindowAction _showWindow;
+  final Duration screenCaptureTimeout;
+  final int maxAttachmentSizeBytes;
   bool _screenCapturePermissionRequested = false;
   static const String _fallbackMimeType = 'application/octet-stream';
 
   @override
   Future<AttachmentDraft?> pickAttachment() async {
+    if (_windowsPlatform) {
+      try {
+        final selected = await _windowsFileSelector();
+        if (selected == null) {
+          return null;
+        }
+        return draftFromExternalSource(
+          path: selected.path,
+          filename: selected.filename,
+          mimeType: selected.mimeType,
+          sizeBytes: selected.sizeBytes,
+        );
+      } on PlatformException catch (error) {
+        throw StateError(
+          _friendlyMessage(error, fallback: 'attachment_picker_failed'),
+        );
+      }
+    }
     try {
       final result = await _channel.invokeMapMethod<String, Object?>(
         'pickAttachment',
@@ -68,10 +166,10 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       if ((path == null || path.isEmpty) && bytes == null) {
         throw StateError('attachment_picker_empty_result');
       }
-      return AttachmentDraft(
+      return draftFromExternalSource(
         filename: filename,
         mimeType: mimeType,
-        localPath: path,
+        path: path,
         bytes: bytes,
         sizeBytes: sizeBytes,
       );
@@ -86,6 +184,9 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   Future<AttachmentDraft?> captureScreenshot({bool hideApp = false}) async {
     if (!_screenshotSupported) {
       return null;
+    }
+    if (_windowsPlatform) {
+      return _captureWindowsScreenshot();
     }
     if (!await _ensureScreenCapturePermission()) {
       throw StateError('screenshot_screen_recording_permission_required');
@@ -123,6 +224,49 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         }
       } catch (_) {
         // Best-effort source cleanup. The attachment copy has its own TTL.
+      }
+    }
+  }
+
+  Future<AttachmentDraft?> _captureWindowsScreenshot() async {
+    final directory = await _temporaryDirectoryProvider();
+    await directory.create(recursive: true);
+    await _cleanupOldAttachmentTempFiles(directory);
+    final filename = 'screenshot-${DateTime.now().microsecondsSinceEpoch}.png';
+    final source = File(p.join(directory.path, filename));
+    await _bestEffortWindowAction(_hideWindow);
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      final captured = await _windowsScreenCaptureRunner(
+        source.path,
+      ).timeout(screenCaptureTimeout);
+      if (!captured || !await source.exists()) {
+        return null;
+      }
+      final sizeBytes = await source.length();
+      if (sizeBytes <= 0) {
+        return null;
+      }
+      return await draftFromExternalSource(
+        path: source.path,
+        filename: filename,
+        mimeType: 'image/png',
+        sizeBytes: sizeBytes,
+      );
+    } on TimeoutException {
+      throw StateError('screenshot_capture_timeout');
+    } on PlatformException catch (error) {
+      throw StateError(
+        _friendlyMessage(error, fallback: 'screenshot_capture_failed'),
+      );
+    } finally {
+      await _bestEffortWindowAction(_showWindow);
+      try {
+        if (await source.exists()) {
+          await source.delete();
+        }
+      } catch (_) {
+        // The staged attachment is independent from the capture source.
       }
     }
   }
@@ -170,11 +314,12 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     );
     final resolvedMimeType = _resolvedMimeType(mimeType, resolvedFilename);
     if (bytes != null) {
+      _validateAttachmentSize(bytes.length);
       return AttachmentDraft(
         filename: resolvedFilename,
         mimeType: resolvedMimeType,
         bytes: bytes,
-        sizeBytes: sizeBytes ?? bytes.length,
+        sizeBytes: bytes.length,
       );
     }
     if (trimmedPath == null) {
@@ -185,6 +330,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     if (stat.type != FileSystemEntityType.file) {
       return null;
     }
+    _validateAttachmentSize(stat.size);
     final cachedPath = await _copyExternalFileToTemporaryDirectory(
       sourceFile: sourceFile,
       filename: resolvedFilename,
@@ -193,7 +339,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       filename: resolvedFilename,
       mimeType: resolvedMimeType,
       localPath: cachedPath,
-      sizeBytes: sizeBytes ?? await File(cachedPath).length(),
+      sizeBytes: stat.size,
     );
   }
 
@@ -249,6 +395,20 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     required String mimeType,
     required Uint8List bytes,
   }) async {
+    _validateAttachmentSize(bytes.length);
+    if (_windowsPlatform) {
+      try {
+        return _windowsFileSaver(
+          filename: _sanitizedFileName(filename),
+          mimeType: _resolvedMimeType(mimeType, filename),
+          bytes: bytes,
+        );
+      } on PlatformException catch (error) {
+        throw StateError(
+          _friendlyMessage(error, fallback: 'attachment_save_failed'),
+        );
+      }
+    }
     try {
       return _channel.invokeMethod<String>('saveAttachment', <String, Object?>{
         'filename': filename,
@@ -307,9 +467,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     required File sourceFile,
     required String filename,
   }) async {
-    final directory = Directory(
-      p.join(Directory.systemTemp.path, 'awiki-attachments'),
-    );
+    final directory = await _attachmentTemporaryDirectoryProvider();
     await directory.create(recursive: true);
     await _cleanupOldAttachmentTempFiles(directory);
     final safeName = _sanitizedFileName(filename);
@@ -321,6 +479,25 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     );
     await destination.parent.create(recursive: true);
     return sourceFile.copy(destination.path).then((file) => file.path);
+  }
+
+  void _validateAttachmentSize(int sizeBytes) {
+    if (sizeBytes <= 0) {
+      throw StateError('attachment_size_invalid');
+    }
+    if (sizeBytes > maxAttachmentSizeBytes) {
+      throw StateError('attachment_too_large');
+    }
+  }
+
+  Future<void> _bestEffortWindowAction(AttachmentWindowAction action) async {
+    try {
+      await action();
+    } on MissingPluginException {
+      // Unit/non-Windows hosts can exercise the shared capture pipeline.
+    } on PlatformException {
+      // Screenshot cancellation and cleanup must still restore Dart state.
+    }
   }
 
   Future<void> _cleanupOldAttachmentTempFiles(Directory directory) async {
@@ -435,3 +612,49 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     return fallback;
   }
 }
+
+Future<AttachmentPlatformFile?> _selectWindowsFile() async {
+  final selected = await openFile();
+  if (selected == null) {
+    return null;
+  }
+  return AttachmentPlatformFile(
+    path: selected.path,
+    filename: selected.name,
+    mimeType: selected.mimeType,
+    sizeBytes: await selected.length(),
+  );
+}
+
+Future<String?> _saveWindowsFile({
+  required String filename,
+  required String mimeType,
+  required Uint8List bytes,
+}) async {
+  final location = await getSaveLocation(suggestedName: filename);
+  if (location == null) {
+    return null;
+  }
+  final file = XFile.fromData(bytes, mimeType: mimeType, name: filename);
+  await file.saveTo(location.path);
+  return location.path;
+}
+
+Future<bool> _captureWindowsRegion(String imagePath) async {
+  final captured = await screenCapturer.capture(
+    mode: CaptureMode.region,
+    imagePath: imagePath,
+    copyToClipboard: true,
+  );
+  return captured != null;
+}
+
+const MethodChannel _desktopShellChannel = MethodChannel(
+  'ai.awiki.awikime/desktop_shell',
+);
+
+Future<void> _hideDesktopWindow() =>
+    _desktopShellChannel.invokeMethod<void>('hideWindow');
+
+Future<void> _showDesktopWindow() =>
+    _desktopShellChannel.invokeMethod<void>('showWindow');

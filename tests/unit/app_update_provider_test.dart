@@ -3,12 +3,21 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/app_update_manifest.dart';
 import 'package:awiki_me/src/domain/services/update_service.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_update_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
 void main() {
+  test('automatic update initialization is disabled only on Windows', () {
+    expect(shouldInitializeAppUpdates(TargetPlatform.windows), isFalse);
+    expect(shouldInitializeAppUpdates(TargetPlatform.macOS), isTrue);
+    expect(shouldInitializeAppUpdates(TargetPlatform.android), isTrue);
+    expect(shouldInitializeAppUpdates(TargetPlatform.iOS), isTrue);
+  });
+
   AppUpdateManifest buildManifest() {
     return AppUpdateManifest(
       version: '0.2.0',

@@ -11,8 +11,10 @@ import '../../../app/ui_feedback.dart';
 import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/agent/agent_control_projection.dart';
+import '../../../application/tenant/app_tenant.dart';
 import '../../../domain/entities/bridge_capabilities.dart';
 import '../../../domain/entities/conversation_summary.dart';
+import '../../../domain/entities/notification_target.dart';
 import '../../../domain/entities/realtime_update.dart';
 import '../../../domain/entities/session_identity.dart';
 import '../../../domain/services/realtime_gateway.dart';
@@ -30,6 +32,7 @@ import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
 import 'message_sync_coordinator_provider.dart';
+import 'navigation_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
@@ -67,6 +70,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         .read(realtimeApplicationServiceProvider)
         .updates
         .listen(_applyRealtimeUpdate);
+    _notificationActivationSubscription = ref
+        .read(notificationFacadeProvider)
+        .activations
+        .listen(
+          (activation) => unawaited(_handleNotificationActivation(activation)),
+        );
   }
 
   final Ref ref;
@@ -80,6 +89,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
   late final StreamSubscription<RealtimeUpdate> _realtimeUpdateSubscription;
+  late final StreamSubscription<NotificationActivation>
+  _notificationActivationSubscription;
 
   Future<void> initialize() async {
     if (state.isInitialized) {
@@ -96,6 +107,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       final session = await sessions.restoreSession();
       if (session != null) {
         await activateSession(_legacySessionFromAppSession(session));
+      }
+      final initialActivation = await ref
+          .read(notificationFacadeProvider)
+          .initialActivation();
+      if (initialActivation != null) {
+        await _handleNotificationActivation(initialActivation);
       }
       state = state.copyWith(isInitialized: true, isBusy: false);
     } on TimeoutException {
@@ -574,10 +591,48 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             .read(notificationFacadeProvider)
             .showInAppBanner(title: title, body: body);
       } else {
+        final target = NotificationTarget(
+          storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+          conversationId: normalizedConversationHint.conversationId,
+        );
         ref
             .read(notificationFacadeProvider)
-            .showSystemNotification(title: title, body: body);
+            .showSystemNotification(title: title, body: body, target: target);
       }
+    }
+  }
+
+  Future<void> _handleNotificationActivation(
+    NotificationActivation activation,
+  ) async {
+    try {
+      await ref.read(desktopShellServiceProvider).showWindow();
+    } on Object {
+      // Routing remains available even when a platform shell is absent.
+    }
+    ref.read(shellTabProvider.notifier).setTab(0);
+    ref.read(selectedConversationProvider.notifier).clearSelection();
+    final target = activation.target;
+    if (target == null ||
+        target.storageScopeId !=
+            ref.read(activeAppTenantProvider).storageScopeId) {
+      return;
+    }
+    try {
+      final conversation = await ref
+          .read(conversationListProvider.notifier)
+          .commitConversationId(target.conversationId);
+      await ref
+          .read(chatThreadsProvider.notifier)
+          .openConversation(conversation);
+      if (!mounted) {
+        return;
+      }
+      ref
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(conversation);
+    } on Object {
+      // A stale/deleted conversation target degrades to the message list.
     }
   }
 
@@ -668,6 +723,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
     _realtimeUpdateSubscription.cancel();
+    _notificationActivationSubscription.cancel();
     super.dispose();
   }
 }

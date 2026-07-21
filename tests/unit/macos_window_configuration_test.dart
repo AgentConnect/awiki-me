@@ -116,15 +116,19 @@ void main() {
     }
   });
 
-  test('macOS trial packaging requires and verifies a stable signer', () {
+  test('remote packaging preserves source and macOS signing contracts', () {
     final project = File(
       'macos/Runner.xcodeproj/project.pbxproj',
     ).readAsStringSync();
     final packageScript = File('scripts/package_app.sh').readAsStringSync();
     final packageConfig = File('scripts/package_app.config').readAsStringSync();
-    final localConfigExample = File(
-      'scripts/package_app.local.config.example',
+    final packageWorker = File(
+      'scripts/package_unix_worker.sh',
     ).readAsStringSync();
+    final packageWorkflow = File(
+      '.github/workflows/package-app.yml',
+    ).readAsStringSync();
+    final manifestTool = File('tool/package_manifest.dart').readAsStringSync();
     final signingLibrary = File(
       'scripts/lib/macos_signing.sh',
     ).readAsStringSync();
@@ -156,84 +160,86 @@ void main() {
       contains('PRODUCT_BUNDLE_IDENTIFIER = ai.awiki.awikime;'),
     );
 
-    expect(packageScript, contains('PACKAGE_APP_DISPLAY_NAME="AWikiMe"'));
-    expect(packageScript, contains('PACKAGE_MACOS_BUILD_MODE="release"'));
-    expect(packageScript, contains('XCODE_CONFIGURATION="Release"'));
-    expect(
-      packageScript,
-      contains(
-        'PACKAGE_PRODUCTION_SCOPE_SECRET_SERVICE="ai.awiki.awikime.scope-secrets"',
-      ),
-    );
-    expect(
-      packageScript,
-      contains('Dart production scope-secret service must stay'),
-    );
-    expect(
-      packageScript,
-      contains('macOS production scope-secret service must stay'),
-    );
-    expect(packageScript, contains('package_app.local.config'));
-    expect(
-      packageScript,
-      contains('CODE_SIGN_IDENTITY="\$AWIKI_MACOS_SIGNING_FINGERPRINT"'),
-    );
-    expect(packageScript, contains('awiki_verify_macos_app_signature'));
+    expect(packageScript, contains('gh workflow run'));
+    expect(packageScript, contains('require_exact_upstream_push'));
     expect(packageScript, contains("rev-parse --verify 'HEAD^{commit}'"));
     expect(
       packageScript,
       contains('status --porcelain --untracked-files=normal'),
     );
-    expect(packageScript, contains('HEAD changed during packaging'));
+    expect(packageScript, contains('--raw-field "app_ref=\$APP_SOURCE_REF"'));
     expect(
       packageScript,
-      contains(
-        'require_source_tree_matches_ref "AWiki Me" "\$ROOT_DIR" "\$APP_SOURCE_REF"',
-      ),
+      contains('--raw-field "core_ref=\$IM_CORE_SOURCE_REF"'),
     );
-    expect(
-      packageScript,
-      contains(
-        'require_source_tree_matches_ref "im-core" "\$SDK_REPO_DIR" "\$IM_CORE_SOURCE_REF"',
-      ),
-    );
-    expect(packageScript, contains('AWIKI_APP_SOURCE_REF="\$APP_SOURCE_REF"'));
-    expect(
-      packageScript,
-      contains('AWIKI_IM_CORE_SOURCE_REF="\$IM_CORE_SOURCE_REF"'),
-    );
-    expect(
-      packageScript,
-      contains(
-        'AWIKI_PRIMARY_TENANT_DOMAIN="\$PACKAGE_PRIMARY_TENANT_DOMAIN"',
-      ),
-    );
-    expect(packageScript, contains('"sourceRefs": {'));
-    expect(
-      packageScript,
-      contains('"app": \$(json_string "\$APP_SOURCE_REF")'),
-    );
-    expect(
-      packageScript,
-      contains('"imCore": \$(json_string "\$IM_CORE_SOURCE_REF")'),
-    );
-    expect(
-      packageScript,
-      contains(
-        '"primaryDomain": \$(json_string "\$PACKAGE_PRIMARY_TENANT_DOMAIN")',
-      ),
-    );
-    expect(packageConfig, contains('PACKAGE_VERSION_BUMP="none"'));
+    expect(packageScript, contains('--raw-field "anp_ref=\$ANP_SOURCE_REF"'));
+    expect(packageScript, isNot(contains('flutter build')));
+    expect(packageScript, isNot(contains('write_pubspec_version')));
     expect(
       packageConfig,
       contains(
-        'AWIKI_MACOS_SIGNING_IDENTITY="\${AWIKI_MACOS_SIGNING_IDENTITY:-}"',
+        'PACKAGE_TARGETS="android-arm64,macos-arm64,macos-x64,windows-x64"',
       ),
     );
+    expect(packageConfig, contains('windows-x64'));
+    expect(packageConfig, contains('PACKAGE_VERSION_BUMP="none"'));
+
+    expect(packageWorker, contains('AWIKI_MACOS_SIGNING_IDENTITY'));
+    expect(packageWorker, contains('AWIKI_MACOS_DEVELOPMENT_TEAM'));
+    expect(packageWorker, contains('CODE_SIGN_IDENTITY="\$fingerprint"'));
+    expect(packageWorker, contains('awiki_verify_macos_app_signature'));
+    expect(packageWorker, contains('xcodebuild'));
+    expect(packageWorker, contains('AWIKI_APP_SOURCE_REF="\$APP_REF"'));
+    expect(packageWorker, contains('AWIKI_IM_CORE_SOURCE_REF="\$CORE_REF"'));
     expect(
-      localConfigExample,
-      contains('AWIKI_MACOS_DEVELOPMENT_TEAM="REPLACE_ME"'),
+      packageWorker,
+      contains(
+        'F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:'
+        'D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75',
+      ),
     );
+    expect(packageWorker, contains('verify_android_startup_smoke'));
+    expect(packageWorker, contains('GeneratedPluginRegistrant'));
+    expect(packageWorker, contains('application-debuggable'));
+    expect(
+      packageWorker,
+      contains('AWIKI_PRIMARY_TENANT_DOMAIN="\$PRIMARY_TENANT_DOMAIN"'),
+    );
+
+    expect(packageWorkflow, contains('FLUTTER_VERSION: 3.44.0'));
+    expect(packageWorkflow, contains('RUST_VERSION: 1.88.0'));
+    expect(packageWorkflow, contains('"runner": "windows-2022"'));
+    expect(packageWorkflow, contains('environment: app-packaging'));
+    expect(packageWorkflow, contains('AWIKI_ANDROID_STARTUP_SMOKE_TEST'));
+    expect(
+      packageWorkflow,
+      contains(r'--android-startup-smoke-test "$ANDROID_STARTUP_SMOKE_TEST"'),
+    );
+    expect(packageWorkflow, contains('ref: \${{ inputs.app_ref }}'));
+    expect(packageWorkflow, contains('ref: \${{ inputs.core_ref }}'));
+    expect(packageWorkflow, contains('ref: \${{ inputs.anp_ref }}'));
+    expect(
+      packageWorkflow,
+      contains('DOWNLOAD_BASE_URL: \${{ inputs.download_base_url }}'),
+    );
+    expect(
+      packageWorkflow,
+      contains(r'--download-base-url "$DOWNLOAD_BASE_URL"'),
+    );
+    expect(
+      packageWorkflow,
+      isNot(contains('--download-base-url "\${{ inputs.download_base_url }}"')),
+    );
+    expect(
+      packageWorkflow,
+      isNot(contains('--download-page-url "\${{ inputs.download_page_url }}"')),
+    );
+    expect(packageWorkflow, isNot(contains('gh release')));
+
+    expect(manifestTool, contains("'app': app"));
+    expect(manifestTool, contains("'imCore': imCore"));
+    expect(manifestTool, contains("'anp': anp"));
+    expect(manifestTool, contains("'signingState'"));
     expect(signingLibrary, contains('codesign --verify --deep --strict'));
     expect(signingLibrary, contains('TeamIdentifier=\$expected_team'));
     expect(signingLibrary, contains('Signature=adhoc'));

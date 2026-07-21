@@ -50,6 +50,7 @@ import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/notification_target.dart';
 import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
@@ -3907,19 +3908,37 @@ class FakeRealtimeApplicationService implements RealtimeApplicationService {
 }
 
 class FakeNotificationFacade implements NotificationFacade {
+  final StreamController<NotificationActivation> _activations =
+      StreamController<NotificationActivation>.broadcast(sync: true);
   String? lastInAppTitle;
   String? lastInAppBody;
   String? lastSystemTitle;
   String? lastSystemBody;
+  NotificationTarget? lastSystemTarget;
+  NotificationActivation? initialNotificationActivation;
   int lastBadgeCount = 0;
+  bool disposed = false;
+
+  @override
+  Stream<NotificationActivation> get activations => _activations.stream;
+
+  void emitActivation(NotificationActivation activation) {
+    _activations.add(activation);
+  }
+
+  @override
+  Future<NotificationActivation?> initialActivation() async =>
+      initialNotificationActivation;
 
   @override
   Future<void> showSystemNotification({
     required String title,
     required String body,
+    required NotificationTarget target,
   }) async {
     lastSystemTitle = title;
     lastSystemBody = body;
+    lastSystemTarget = target;
   }
 
   @override
@@ -3934,6 +3953,12 @@ class FakeNotificationFacade implements NotificationFacade {
   @override
   Future<void> updateBadgeCount(int count) async {
     lastBadgeCount = count;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposed = true;
+    await _activations.close();
   }
 }
 

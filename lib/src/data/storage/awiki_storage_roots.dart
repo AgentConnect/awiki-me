@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 const bool _awikiE2eEnabled = bool.fromEnvironment('AWIKI_E2E');
 const String _awikiE2eAppStateRoot = String.fromEnvironment(
   'AWIKI_E2E_APP_STATE_ROOT',
@@ -19,24 +21,36 @@ String normalizeAwikiE2eAppStateRootForLaunch(
   String? homeDirectory,
   bool? isMacOS,
   String? temporaryDirectory,
+  p.Context? pathContext,
 }) {
   final trimmed = root.trim();
-  if (trimmed.isEmpty || _isAbsolutePath(trimmed)) return trimmed;
-  final expandedHome = _expandHomeRelativePath(trimmed, homeDirectory);
+  final context =
+      pathContext ??
+      awikiPathContextFor(<String?>[
+        trimmed,
+        currentDirectory,
+        homeDirectory,
+        temporaryDirectory,
+      ]);
+  if (trimmed.isEmpty || context.isAbsolute(trimmed)) {
+    return trimmed.isEmpty ? trimmed : context.normalize(trimmed);
+  }
+  final expandedHome = _expandHomeRelativePath(trimmed, homeDirectory, context);
   if (expandedHome != null) return expandedHome;
   final cwd = (currentDirectory ?? Directory.current.path).trim();
   if (_canAnchorRelativeE2eRootToCurrentDirectory(cwd)) {
-    return _joinAll(<String>[cwd, trimmed]);
+    return context.normalize(context.join(cwd, trimmed));
   }
   final appSupportFallback = _appSupportFallbackRoot(
     homeDirectory ?? Platform.environment['HOME'],
     isMacOS: isMacOS ?? Platform.isMacOS,
+    pathContext: context,
   );
   if (appSupportFallback != null) {
-    return _joinAll(<String>[appSupportFallback, trimmed]);
+    return context.normalize(context.join(appSupportFallback, trimmed));
   }
   final temp = (temporaryDirectory ?? Directory.systemTemp.path).trim();
-  return _joinAll(<String>[temp, 'ai.awiki.awikime', trimmed]);
+  return context.normalize(context.join(temp, 'ai.awiki.awikime', trimmed));
 }
 
 String? explicitAwikiAppStateRoot(String? appStateRoot) {
@@ -45,52 +59,73 @@ String? explicitAwikiAppStateRoot(String? appStateRoot) {
   return awikiE2eAppStateRoot();
 }
 
-bool _isAbsolutePath(String path) =>
-    path.startsWith('/') ||
-    path.startsWith(r'\\') ||
-    RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
-
-String? _expandHomeRelativePath(String path, String? homeDirectory) {
-  if (path != '~' && !path.startsWith('~/')) return null;
+String? _expandHomeRelativePath(
+  String path,
+  String? homeDirectory,
+  p.Context pathContext,
+) {
+  if (path != '~' && !path.startsWith('~/') && !path.startsWith('~\\')) {
+    return null;
+  }
   final home = homeDirectory?.trim() ?? Platform.environment['HOME']?.trim();
   if (home == null || home.isEmpty) return null;
-  return path == '~' ? home : _joinAll(<String>[home, path.substring(2)]);
+  return path == '~'
+      ? pathContext.normalize(home)
+      : pathContext.normalize(pathContext.join(home, path.substring(2)));
 }
 
 bool _canAnchorRelativeE2eRootToCurrentDirectory(String currentDirectory) {
   if (currentDirectory.isEmpty ||
       currentDirectory == '/' ||
-      currentDirectory == r'\') {
+      currentDirectory == '\\') {
     return false;
   }
-  return !currentDirectory.toLowerCase().contains('.app/contents');
+  final normalized = currentDirectory.replaceAll('\\', '/').toLowerCase();
+  return !normalized.contains('.app/contents');
 }
 
 String? _appSupportFallbackRoot(
   String? homeDirectory, {
   required bool isMacOS,
+  required p.Context pathContext,
 }) {
   final home = homeDirectory?.trim();
   if (home == null || home.isEmpty) return null;
   return isMacOS
-      ? _joinAll(<String>[
+      ? pathContext.join(
           home,
           'Library',
           'Application Support',
           'ai.awiki.awikime',
-        ])
-      : _joinAll(<String>[home, '.awiki-me']);
+        )
+      : pathContext.join(home, '.awiki-me');
 }
 
-String _joinAll(List<String> parts) {
-  final normalized = parts
-      .map((part) => part.trim())
-      .where((part) => part.isNotEmpty)
-      .map((part) => part.replaceAll(RegExp(r'/+$'), ''))
-      .toList();
-  if (normalized.isEmpty) return '';
-  return <String>[
-    normalized.first,
-    ...normalized.skip(1).map((part) => part.replaceAll(RegExp(r'^/+'), '')),
-  ].join('/');
+p.Context awikiPathContextFor(
+  Iterable<String?> candidates, {
+  p.Context? fallback,
+}) {
+  for (final candidate in candidates) {
+    final value = candidate?.trim();
+    if (value == null || value.isEmpty) {
+      continue;
+    }
+    final isWindowsPath =
+        RegExp(r'^[A-Za-z]:[\\/]').hasMatch(value) ||
+        value.startsWith(r'\\') ||
+        value.startsWith('//') ||
+        value.contains('\\');
+    if (isWindowsPath) {
+      return p.windows;
+    }
+    if (p.posix.isAbsolute(value)) {
+      return p.posix;
+    }
+  }
+  return fallback ?? p.context;
+}
+
+String joinAwikiPath(String root, Iterable<String> parts) {
+  final context = awikiPathContextFor(<String?>[root]);
+  return context.normalize(context.joinAll(<String>[root, ...parts]));
 }

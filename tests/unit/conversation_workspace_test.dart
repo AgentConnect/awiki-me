@@ -2000,6 +2000,52 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
+  testWidgets('Windows 宽屏复用桌面主导航和会话工作区', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mac-desktop-rail-slot')), findsOneWidget);
+    expect(find.text('最近会话'), findsOneWidget);
+    expect(find.text('智能体'), findsOneWidget);
+    expect(find.byKey(const Key('mac-conversation-list-pane')), findsOneWidget);
+
+    await tester.tap(find.text('任务'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('任务视图即将接入'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 主导航点击会切换模块并保持图标可点', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',

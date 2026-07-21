@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -137,16 +136,22 @@ ScopeSecretReadStatus _decodeReadStatus(FormatException error) {
   };
 }
 
-ScopeSecretPlatformStore platformScopeSecretStore() {
-  if (Platform.isMacOS) return const MacOsScopeSecretPlatformStore();
-  if (Platform.isIOS || Platform.isAndroid) {
+ScopeSecretPlatformStore platformScopeSecretStore({
+  TargetPlatform? targetPlatform,
+}) {
+  final platform = targetPlatform ?? defaultTargetPlatform;
+  if (platform == TargetPlatform.macOS || platform == TargetPlatform.windows) {
+    return const MethodChannelScopeSecretPlatformStore();
+  }
+  if (platform == TargetPlatform.iOS || platform == TargetPlatform.android) {
     return FlutterSecureScopeSecretPlatformStore();
   }
   return const UnsupportedScopeSecretPlatformStore();
 }
 
-class MacOsScopeSecretPlatformStore implements ScopeSecretPlatformStore {
-  const MacOsScopeSecretPlatformStore({MethodChannel? channel})
+class MethodChannelScopeSecretPlatformStore
+    implements ScopeSecretPlatformStore {
+  const MethodChannelScopeSecretPlatformStore({MethodChannel? channel})
     : _channel = channel ?? const MethodChannel(_channelName);
 
   static const String _channelName = 'ai.awiki.awikime/scope_secret';
@@ -189,6 +194,12 @@ class MacOsScopeSecretPlatformStore implements ScopeSecretPlatformStore {
         'service': service,
         'account': account,
       });
+}
+
+/// Compatibility name retained for existing macOS integration probes.
+class MacOsScopeSecretPlatformStore
+    extends MethodChannelScopeSecretPlatformStore {
+  const MacOsScopeSecretPlatformStore({super.channel});
 }
 
 /// iOS uses a device-only, non-synchronizable Keychain item. Android uses the

@@ -168,7 +168,7 @@ class FriendsPage extends ConsumerWidget {
     if (!responsive.supportsTwoPane) {
       final mobileContent = AwikiMeShellTabPage(
         title: context.l10n.friendsTitle,
-        onSettingsTap: responsive.isMacDesktop
+        onSettingsTap: responsive.usesDesktopLayout
             ? null
             : () => AppNavigator.pushWithoutAnimation(
                 context,
@@ -188,7 +188,7 @@ class FriendsPage extends ConsumerWidget {
 
     final content = AwikiMeShellTabPage(
       title: context.l10n.friendsTitle,
-      onSettingsTap: responsive.isMacDesktop
+      onSettingsTap: responsive.usesDesktopLayout
           ? null
           : () => AppNavigator.pushWithoutAnimation(
               context,
