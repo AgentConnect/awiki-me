@@ -25,20 +25,21 @@ void main() {
       'scripts/windows/verify_installer.ps1',
     ).readAsStringSync();
     final worker = File('scripts/package_windows.ps1').readAsStringSync();
+    final chineseMessages = File(
+      'installer/windows/languages/ChineseSimplified.isl',
+    ).readAsStringSync();
 
     expect(installer, contains('PrivilegesRequired=lowest'));
     expect(
       installer,
-      contains(
-        r'MessagesFile: "compiler:Languages\Unofficial\ChineseSimplified.isl"',
-      ),
+      contains(r'MessagesFile: "languages\ChineseSimplified.isl"'),
     );
+    expect(installer, isNot(contains(r'MessagesFile: "compiler:Languages\')));
     expect(
-      installer,
-      isNot(
-        contains(r'MessagesFile: "compiler:Languages\ChineseSimplified.isl"'),
-      ),
+      chineseMessages,
+      contains('Inno Setup version 6.1.0+ Chinese Simplified messages'),
     );
+    expect(chineseMessages, contains(r'LanguageID=$0804'));
     expect(installer, isNot(contains('vc_redist.x64.exe')));
     expect(installer, isNot(contains('[Run]')));
     expect(worker, isNot(contains('vc_redist.x64.exe')));
