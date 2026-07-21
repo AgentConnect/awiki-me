@@ -1,8 +1,8 @@
 #include "scope_secret_store.h"
 
+#include <windows.h>
 #include <wincred.h>
 #include <wincrypt.h>
-#include <windows.h>
 #include <winrt/Windows.Data.Json.h>
 #include <winrt/base.h>
 

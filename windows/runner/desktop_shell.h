@@ -1,9 +1,9 @@
 #ifndef RUNNER_DESKTOP_SHELL_H_
 #define RUNNER_DESKTOP_SHELL_H_
 
+#include <windows.h>
 #include <shellapi.h>
 #include <shobjidl.h>
-#include <windows.h>
 
 #include <flutter/encodable_value.h>
 #include <flutter/flutter_engine.h>

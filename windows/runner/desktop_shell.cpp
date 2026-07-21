@@ -1,10 +1,10 @@
 #include "desktop_shell.h"
 
 #include <flutter/standard_method_codec.h>
+#include <windows.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
-#include <windows.h>
 
 #include <algorithm>
 #include <array>

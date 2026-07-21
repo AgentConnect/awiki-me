@@ -124,6 +124,7 @@ class PackageArtifactMetadata {
         'vcruntime140_1.dll',
         'msvcp140.dll',
         'data',
+        'awiki-runtime-files.txt',
         'awiki-runtime-manifest.json',
       };
       final missing = requiredRuntimeFiles.difference(runtimeFiles.toSet());

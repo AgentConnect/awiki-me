@@ -21,6 +21,7 @@ $CoreDir = (Resolve-Path $CoreDir).Path
 $AnpDir = (Resolve-Path $AnpDir).Path
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 $RuntimeManifestName = 'awiki-runtime-manifest.json'
+$RuntimeFileListName = 'awiki-runtime-files.txt'
 
 function Assert-ExitCode([string]$Label) {
     if ($LASTEXITCODE -ne 0) {
@@ -77,6 +78,60 @@ function Compile-Installer(
         "/DMyOutputBaseFilename=$OutputBaseFilename" `
         (Join-Path $RootDir 'installer\windows\awiki-me.iss')
     Assert-ExitCode 'Inno Setup compiler'
+}
+
+function Write-RuntimeManifest(
+    [string]$StageDirectory,
+    [string]$ManifestVersion,
+    [string]$ExpectedManifest
+) {
+    $manifestPath = Join-Path $StageDirectory $RuntimeManifestName
+    $fileListPath = Join-Path $StageDirectory $RuntimeFileListName
+    Remove-Item -LiteralPath $manifestPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $fileListPath -Force -ErrorAction SilentlyContinue
+    $ownedPaths = @(
+        Get-ChildItem -LiteralPath $StageDirectory -Recurse -File |
+            Sort-Object FullName |
+            ForEach-Object {
+                [IO.Path]::GetRelativePath($StageDirectory, $_.FullName).Replace('\', '/')
+            }
+    )
+    if ($ownedPaths.Count -eq 0) {
+        throw 'Windows runtime stage is empty'
+    }
+    $ownedPaths += $RuntimeFileListName
+    $ownedPaths += $RuntimeManifestName
+    $ownedPaths = @($ownedPaths | Sort-Object -Unique)
+    [IO.File]::WriteAllLines(
+        $fileListPath,
+        [string[]]$ownedPaths,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $entries = @(
+        Get-ChildItem -LiteralPath $StageDirectory -Recurse -File |
+            Sort-Object FullName |
+            ForEach-Object {
+                $relativePath = [IO.Path]::GetRelativePath($StageDirectory, $_.FullName).Replace('\', '/')
+                [ordered]@{
+                    path = $relativePath
+                    sizeBytes = [int64]$_.Length
+                    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                }
+            }
+    )
+    $manifestData = [ordered]@{
+        schemaVersion = 1
+        version = $ManifestVersion
+        buildNumber = $BuildNumber
+        sourceRefs = [ordered]@{
+            app = $AppRef
+            imCore = $CoreRef
+            anp = $AnpRef
+        }
+        files = $entries
+    }
+    $manifestData | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    Copy-Item -LiteralPath $manifestPath -Destination $ExpectedManifest -Force
 }
 
 if ($Version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
@@ -211,37 +266,8 @@ $AppStage = Join-Path $StageRoot 'app'
 if (Test-Path $StageRoot) { Remove-Item -Recurse -Force $StageRoot }
 New-Item -ItemType Directory -Force -Path $AppStage | Out-Null
 Copy-Item (Join-Path $ReleaseDir '*') $AppStage -Recurse -Force
-
-$runtimeEntries = @(
-    Get-ChildItem -LiteralPath $AppStage -Recurse -File |
-        Sort-Object FullName |
-        ForEach-Object {
-            $relativePath = [IO.Path]::GetRelativePath($AppStage, $_.FullName).Replace('\', '/')
-            [ordered]@{
-                path = $relativePath
-                sizeBytes = [int64]$_.Length
-                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            }
-        }
-)
-if ($runtimeEntries.Count -eq 0) {
-    throw 'Windows runtime stage is empty'
-}
-$runtimeManifestData = [ordered]@{
-    schemaVersion = 1
-    version = $Version
-    buildNumber = $BuildNumber
-    sourceRefs = [ordered]@{
-        app = $AppRef
-        imCore = $CoreRef
-        anp = $AnpRef
-    }
-    files = $runtimeEntries
-}
-$RuntimeManifest = Join-Path $AppStage $RuntimeManifestName
-$runtimeManifestData | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $RuntimeManifest -Encoding utf8
 $ExpectedRuntimeManifest = Join-Path $StageRoot "expected-$RuntimeManifestName"
-Copy-Item -LiteralPath $RuntimeManifest -Destination $ExpectedRuntimeManifest -Force
+Write-RuntimeManifest $AppStage $Version $ExpectedRuntimeManifest
 
 $compiler = Find-InnoCompiler
 if (-not (Test-Path (Join-Path $RootDir 'windows\runner\resources\app_icon.ico'))) {
@@ -259,17 +285,35 @@ if ($installerHash -notmatch '^[0-9a-f]{64}$') {
 }
 Write-Output "Windows installer SHA-256: $installerHash"
 
-# A lower-version fixture exercises real overwrite, downgrade rejection, and
-# uninstall data preservation without uploading a second installer artifact.
+# A lower-version fixture contains files that do not exist in the upgrade. It
+# proves overwrite cleanup as well as downgrade and data-preservation behavior.
 $FixtureDir = Join-Path $StageRoot 'fixtures'
 $FixtureBaseName = 'AWiki-Me-test-base'
-Compile-Installer $compiler $AppStage '0.0.0' $FixtureBaseName $FixtureDir
+$BaseAppStage = Join-Path $StageRoot 'base-app'
+New-Item -ItemType Directory -Force -Path $BaseAppStage | Out-Null
+Copy-Item (Join-Path $AppStage '*') $BaseAppStage -Recurse -Force
+$ObsoleteRuntimeFiles = @(
+    'obsolete-runtime-fixture.dll'
+    'data/flutter_assets/obsolete-runtime-fixture.txt'
+)
+Set-Content `
+    -LiteralPath (Join-Path $BaseAppStage $ObsoleteRuntimeFiles[0]) `
+    -Value 'obsolete DLL fixture' `
+    -Encoding utf8
+$obsoleteAsset = Join-Path $BaseAppStage $ObsoleteRuntimeFiles[1].Replace('/', '\')
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $obsoleteAsset) | Out-Null
+Set-Content -LiteralPath $obsoleteAsset -Value 'obsolete data fixture' -Encoding utf8
+$ExpectedBaseRuntimeManifest = Join-Path $StageRoot "expected-base-$RuntimeManifestName"
+Write-RuntimeManifest $BaseAppStage '0.0.0' $ExpectedBaseRuntimeManifest
+Compile-Installer $compiler $BaseAppStage '0.0.0' $FixtureBaseName $FixtureDir
 $BaseInstaller = Join-Path $FixtureDir "$FixtureBaseName.exe"
 & (Join-Path $PSScriptRoot 'windows\verify_installer.ps1') `
     -BaseInstaller $BaseInstaller `
     -UpgradeInstaller $Installer `
     -ExpectedVersion $Version `
-    -ExpectedRuntimeManifest $ExpectedRuntimeManifest
+    -ExpectedBaseRuntimeManifest $ExpectedBaseRuntimeManifest `
+    -ExpectedRuntimeManifest $ExpectedRuntimeManifest `
+    -ObsoleteRuntimeFiles $ObsoleteRuntimeFiles
 Assert-ExitCode 'Windows installer verification'
 
 Copy-Item -LiteralPath $ExpectedRuntimeManifest -Destination (Join-Path $OutputDir $RuntimeManifestName) -Force
@@ -279,6 +323,7 @@ $runtimeFileSummary = @(
     'flutter_windows.dll'
     'data'
     $RuntimeManifestName
+    $RuntimeFileListName
     $runtimeDlls.Name
 ) | Sort-Object -Unique
 

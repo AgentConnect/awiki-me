@@ -5,6 +5,7 @@
 #define MyAppId "{{" + MyAppGuid + "}"
 #define MyUninstallKey "Software\Microsoft\Windows\CurrentVersion\Uninstall\{" + MyAppGuid + "}_is1"
 #define MyAppUserModelId "AWiki.AWikiMe"
+#define MyRuntimeFileListName "awiki-runtime-files.txt"
 
 #ifndef MyAppSourceDir
   #error MyAppSourceDir must point to the Flutter Windows Release directory
@@ -40,6 +41,7 @@ CloseApplications=no
 Compression=lzma2/ultra64
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
+DisableDirPage=yes
 DisableProgramGroupPage=yes
 MinVersion=10.0.19045
 OutputBaseFilename={#MyOutputBaseFilename}
@@ -49,6 +51,7 @@ RestartApplications=no
 SetupIconFile={#MySetupIcon}
 SolidCompression=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
+UsePreviousAppDir=no
 VersionInfoDescription={#MyAppName} Windows x64 installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyVersionInfoVersion}
@@ -70,6 +73,165 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserM
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AppUserModelID: "{#MyAppUserModelId}"
 
 [Code]
+var
+  PreviousRuntimeFiles: TArrayOfString;
+  PreviousRuntimeFilesAvailable: Boolean;
+
+function IsSafeRuntimeRelativePath(const Value: String): Boolean;
+var
+  Framed: String;
+  Index: Integer;
+begin
+  Result := False;
+  if Value = '' then
+    exit;
+  if (Value[1] = '/') or (Value[Length(Value)] = '/') then
+    exit;
+  if (Pos('\', Value) > 0) or
+     (Pos(':', Value) > 0) or
+     (Pos('*', Value) > 0) or
+     (Pos('?', Value) > 0) or
+     (Pos('//', Value) > 0) then
+    exit;
+  Framed := '/' + Value + '/';
+  if (Pos('/../', Framed) > 0) or
+     (Pos('/./', Framed) > 0) or
+     (Pos('./', Framed) > 0) or
+     (Pos(' /', Framed) > 0) then
+    exit;
+  for Index := 1 to Length(Value) do
+  begin
+    if Ord(Value[Index]) < 32 then
+      exit;
+  end;
+  Result := True;
+end;
+
+function RuntimeFileListIsValid(const Files: TArrayOfString): Boolean;
+var
+  Index: Integer;
+begin
+  Result := False;
+  if GetArrayLength(Files) = 0 then
+    exit;
+  for Index := 0 to GetArrayLength(Files) - 1 do
+  begin
+    if not IsSafeRuntimeRelativePath(Files[Index]) then
+      exit;
+  end;
+  Result := True;
+end;
+
+function RuntimeFileListContains(
+  const Files: TArrayOfString;
+  const Value: String): Boolean;
+var
+  Index: Integer;
+begin
+  Result := False;
+  for Index := 0 to GetArrayLength(Files) - 1 do
+  begin
+    if CompareText(Files[Index], Value) = 0 then
+    begin
+      Result := True;
+      exit;
+    end;
+  end;
+end;
+
+function TryGetInstalledRuntimePath(
+  const RelativePath: String;
+  var FullPath: String): Boolean;
+var
+  AppRoot: String;
+begin
+  Result := False;
+  if not IsSafeRuntimeRelativePath(RelativePath) then
+    exit;
+  AppRoot := AddBackslash(ExpandFileName(ExpandConstant('{app}')));
+  FullPath := RelativePath;
+  StringChangeEx(FullPath, '/', '\', False);
+  FullPath := ExpandFileName(AppRoot + FullPath);
+  Result :=
+    CompareText(Copy(FullPath, 1, Length(AppRoot)), AppRoot) = 0;
+end;
+
+procedure CapturePreviousRuntimeFiles();
+var
+  ListPath: String;
+begin
+  SetArrayLength(PreviousRuntimeFiles, 0);
+  PreviousRuntimeFilesAvailable := False;
+  ListPath :=
+    AddBackslash(ExpandConstant('{app}')) + '{#MyRuntimeFileListName}';
+  if not FileExists(ListPath) then
+  begin
+    Log('No previous runtime allowlist exists; stale cleanup is skipped.');
+    exit;
+  end;
+  if not LoadStringsFromFile(ListPath, PreviousRuntimeFiles) then
+  begin
+    Log('The previous runtime allowlist could not be read; stale cleanup is skipped.');
+    exit;
+  end;
+  if not RuntimeFileListIsValid(PreviousRuntimeFiles) then
+  begin
+    SetArrayLength(PreviousRuntimeFiles, 0);
+    Log('The previous runtime allowlist is invalid; stale cleanup is skipped.');
+    exit;
+  end;
+  PreviousRuntimeFilesAvailable := True;
+end;
+
+procedure RemoveObsoleteRuntimeFiles();
+var
+  CurrentRuntimeFiles: TArrayOfString;
+  Index: Integer;
+  ListPath: String;
+  ObsoletePath: String;
+begin
+  if not PreviousRuntimeFilesAvailable then
+    exit;
+  ListPath :=
+    AddBackslash(ExpandConstant('{app}')) + '{#MyRuntimeFileListName}';
+  if not LoadStringsFromFile(ListPath, CurrentRuntimeFiles) then
+  begin
+    Log('The installed runtime allowlist could not be read; stale cleanup is skipped.');
+    exit;
+  end;
+  if not RuntimeFileListIsValid(CurrentRuntimeFiles) then
+  begin
+    Log('The installed runtime allowlist is invalid; stale cleanup is skipped.');
+    exit;
+  end;
+  for Index := 0 to GetArrayLength(PreviousRuntimeFiles) - 1 do
+  begin
+    if not RuntimeFileListContains(
+         CurrentRuntimeFiles,
+         PreviousRuntimeFiles[Index]) then
+    begin
+      if TryGetInstalledRuntimePath(
+           PreviousRuntimeFiles[Index],
+           ObsoletePath) then
+      begin
+        if FileExists(ObsoletePath) then
+        begin
+          if DelTree(ObsoletePath, False, True, False) then
+            Log('Removed obsolete runtime file: ' + ObsoletePath)
+          else
+            Log('Could not remove obsolete runtime file: ' + ObsoletePath);
+        end;
+      end
+      else
+      begin
+        Log(
+          'Rejected obsolete runtime path outside the install root: ' +
+          PreviousRuntimeFiles[Index]);
+      end;
+    end;
+  end;
+end;
+
 function NumericVersionPart(const Value: String; Index: Integer): Integer;
 var
   Cursor: Integer;
@@ -171,7 +333,15 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
   if not RequestRunningAppShutdown() then
-    Result := '{#MyAppName} could not exit safely. Close the app and retry the installation.';
+    Result := '{#MyAppName} could not exit safely. Close the app and retry the installation.'
+  else
+    CapturePreviousRuntimeFiles();
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    RemoveObsoleteRuntimeFiles();
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

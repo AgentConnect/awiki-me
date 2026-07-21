@@ -174,6 +174,7 @@ Future<void> _writeFixture(
               'vcruntime140_1.dll',
               'msvcp140.dll',
               'data',
+              'awiki-runtime-files.txt',
               'awiki-runtime-manifest.json',
             ]
           : const <String>[],

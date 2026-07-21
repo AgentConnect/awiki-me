@@ -2,7 +2,41 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+void expectWindowsHeaderBefore(String path, List<String> dependentHeaders) {
+  final source = File(path).readAsStringSync();
+  final windowsHeader = source.indexOf('#include <windows.h>');
+  expect(windowsHeader, greaterThanOrEqualTo(0), reason: path);
+  for (final header in dependentHeaders) {
+    final dependentHeader = source.indexOf('#include <$header>');
+    expect(
+      dependentHeader,
+      greaterThan(windowsHeader),
+      reason: '$path: $header',
+    );
+  }
+}
+
 void main() {
+  test('Windows SDK headers follow the required base-header order', () {
+    expectWindowsHeaderBefore('windows/runner/desktop_shell.h', <String>[
+      'shellapi.h',
+      'shobjidl.h',
+    ]);
+    expectWindowsHeaderBefore('windows/runner/desktop_shell.cpp', <String>[
+      'shellapi.h',
+      'shlobj.h',
+      'shobjidl.h',
+    ]);
+    expectWindowsHeaderBefore('windows/runner/main.cpp', <String>[
+      'shellapi.h',
+      'shobjidl.h',
+    ]);
+    expectWindowsHeaderBefore('windows/runner/scope_secret_store.cpp', <String>[
+      'wincred.h',
+      'wincrypt.h',
+    ]);
+  });
+
   test('Windows runner keeps the stable x64 product and window contract', () {
     final cmake = File('windows/CMakeLists.txt').readAsStringSync();
     final runnerCmake = File(
