@@ -94,10 +94,12 @@ if ((Read-GitRef $RootDir) -ne $AppRef) { throw 'APP checkout ref mismatch' }
 if ((Read-GitRef $CoreDir) -ne $CoreRef) { throw 'Core checkout ref mismatch' }
 if ((Read-GitRef $AnpDir) -ne $AnpRef) { throw 'ANP checkout ref mismatch' }
 
-$flutterInfo = ((& flutter --version --machine) -join "`n") | ConvertFrom-Json
+$flutterOutput = @(& flutter --version)
 Assert-ExitCode 'flutter --version'
-if ($flutterInfo.frameworkVersion -ne '3.44.0') {
-    throw "Flutter must be 3.44.0, got $($flutterInfo.frameworkVersion)"
+$flutterVersionLine = $flutterOutput | Where-Object { $_ -match '^Flutter\s+\S+' } | Select-Object -Last 1
+$flutterVersion = if ($flutterVersionLine -match '^Flutter\s+(\S+)') { $Matches[1] } else { '' }
+if ($flutterVersion -ne '3.44.0') {
+    throw "Flutter must be 3.44.0, got $flutterVersion"
 }
 Push-Location $CoreDir
 try {

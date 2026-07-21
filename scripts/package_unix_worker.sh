@@ -88,7 +88,7 @@ require_cmd python3
 [[ "$(git -C "$CORE_DIR" rev-parse 'HEAD^{commit}')" == "$CORE_REF" ]] || fail "Core checkout ref mismatch"
 [[ "$(git -C "$ANP_DIR" rev-parse 'HEAD^{commit}')" == "$ANP_REF" ]] || fail "ANP checkout ref mismatch"
 
-FLUTTER_VERSION="$(flutter --version --machine | python3 -c 'import json,sys; print(json.load(sys.stdin)["frameworkVersion"])')"
+FLUTTER_VERSION="$(flutter --version | sed -n 's/^Flutter \([^[:space:]]*\).*/\1/p' | tail -1)"
 [[ "$FLUTTER_VERSION" == "3.44.0" ]] || fail "Flutter must be 3.44.0, got $FLUTTER_VERSION"
 RUST_VERSION="$(cd "$CORE_DIR" && rustc --version | awk '{print $2}')"
 [[ "$RUST_VERSION" == "1.88.0" ]] || fail "Rust must be 1.88.0, got $RUST_VERSION"
