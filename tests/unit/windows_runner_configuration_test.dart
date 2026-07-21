@@ -35,6 +35,18 @@ void main() {
       'wincred.h',
       'wincrypt.h',
     ]);
+
+    final scopeSecretSource = File(
+      'windows/runner/scope_secret_store.cpp',
+    ).readAsStringSync();
+    final collectionsHeader = scopeSecretSource.indexOf(
+      '#include <winrt/Windows.Foundation.Collections.h>',
+    );
+    final jsonHeader = scopeSecretSource.indexOf(
+      '#include <winrt/Windows.Data.Json.h>',
+    );
+    expect(collectionsHeader, greaterThanOrEqualTo(0));
+    expect(jsonHeader, greaterThan(collectionsHeader));
   });
 
   test('Windows runner keeps the stable x64 product and window contract', () {
