@@ -221,7 +221,7 @@ void runDesktopCliPeerE2e({
           providerOverrides: appProviderOverrides,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
       shellWatch.stop();
       expect(find.byType(AppShell), findsOneWidget);
 
