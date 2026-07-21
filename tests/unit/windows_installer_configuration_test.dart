@@ -27,6 +27,18 @@ void main() {
     final worker = File('scripts/package_windows.ps1').readAsStringSync();
 
     expect(installer, contains('PrivilegesRequired=lowest'));
+    expect(
+      installer,
+      contains(
+        r'MessagesFile: "compiler:Languages\Unofficial\ChineseSimplified.isl"',
+      ),
+    );
+    expect(
+      installer,
+      isNot(
+        contains(r'MessagesFile: "compiler:Languages\ChineseSimplified.isl"'),
+      ),
+    );
     expect(installer, isNot(contains('vc_redist.x64.exe')));
     expect(installer, isNot(contains('[Run]')));
     expect(worker, isNot(contains('vc_redist.x64.exe')));
