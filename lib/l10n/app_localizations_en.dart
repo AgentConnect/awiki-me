@@ -1595,6 +1595,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentCopyInstallCommand => 'Copy install command';
 
   @override
+  String get agentSkillCreateInstruction => 'Create Skill Agent instruction';
+
+  @override
+  String get agentSkillInstallTitle => 'Connect a Skill Agent';
+
+  @override
+  String get agentSkillControllerHandle => 'Your Handle';
+
+  @override
+  String get agentSkillAgentHandle => 'Agent Handle';
+
+  @override
+  String get agentSkillCopyInstruction => 'Copy installation instruction';
+
+  @override
+  String get agentSkillRegenerate => 'Generate a new instruction';
+
+  @override
+  String get agentSkillSecretNotice =>
+      'Valid for 30 minutes. The copied instruction contains a one-time secret; share it only with the Agent you want to connect.';
+
+  @override
+  String get agentSkillExpired =>
+      'This instruction has expired or was cleared. Generate a new one.';
+
+  @override
   String get agentCleanupHostTitle => 'Clean up host';
 
   @override
@@ -1786,6 +1812,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get agentErrorHandleUnavailable =>
       'This account has no available Handle, so a daemon install command cannot be created right now.';
+
+  @override
+  String get agentSkillUnsupportedTenant =>
+      'Skill Agent onboarding is currently available only on awiki.info.';
+
+  @override
+  String get agentSkillInvalidResponse =>
+      'The registration scope returned by the service does not match this account.';
+
+  @override
+  String get agentSkillRequestFailed =>
+      'The Skill Agent instruction could not be generated. Try again.';
 
   @override
   String get agentErrorPersonalAgentDisabled =>

@@ -1523,6 +1523,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentCopyInstallCommand => '复制安装命令';
 
   @override
+  String get agentSkillCreateInstruction => '生成 Skill Agent 安装指令';
+
+  @override
+  String get agentSkillInstallTitle => '连接 Skill Agent';
+
+  @override
+  String get agentSkillControllerHandle => '你的 Handle';
+
+  @override
+  String get agentSkillAgentHandle => 'Agent Handle';
+
+  @override
+  String get agentSkillCopyInstruction => '复制安装指令';
+
+  @override
+  String get agentSkillRegenerate => '重新生成安装指令';
+
+  @override
+  String get agentSkillSecretNotice => '有效期 30 分钟。复制内容包含一次性密钥，只发送给你要连接的 Agent。';
+
+  @override
+  String get agentSkillExpired => '这条安装指令已过期或已清除，请重新生成。';
+
+  @override
   String get agentCleanupHostTitle => '清理宿主机';
 
   @override
@@ -1705,6 +1729,16 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get agentErrorHandleUnavailable =>
       '当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。';
+
+  @override
+  String get agentSkillUnsupportedTenant =>
+      'Skill Agent onboarding 当前仅支持 awiki.info。';
+
+  @override
+  String get agentSkillInvalidResponse => '服务端返回的注册范围与当前账号不一致。';
+
+  @override
+  String get agentSkillRequestFailed => '暂时无法生成 Skill Agent 安装指令，请重试。';
 
   @override
   String get agentErrorPersonalAgentDisabled => '个人助理功能未开启。';

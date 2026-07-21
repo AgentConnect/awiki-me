@@ -2936,6 +2936,54 @@ abstract class AppLocalizations {
   /// **'复制安装命令'**
   String get agentCopyInstallCommand;
 
+  /// No description provided for @agentSkillCreateInstruction.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成 Skill Agent 安装指令'**
+  String get agentSkillCreateInstruction;
+
+  /// No description provided for @agentSkillInstallTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接 Skill Agent'**
+  String get agentSkillInstallTitle;
+
+  /// No description provided for @agentSkillControllerHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的 Handle'**
+  String get agentSkillControllerHandle;
+
+  /// No description provided for @agentSkillAgentHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'Agent Handle'**
+  String get agentSkillAgentHandle;
+
+  /// No description provided for @agentSkillCopyInstruction.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制安装指令'**
+  String get agentSkillCopyInstruction;
+
+  /// No description provided for @agentSkillRegenerate.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新生成安装指令'**
+  String get agentSkillRegenerate;
+
+  /// No description provided for @agentSkillSecretNotice.
+  ///
+  /// In zh, this message translates to:
+  /// **'有效期 30 分钟。复制内容包含一次性密钥，只发送给你要连接的 Agent。'**
+  String get agentSkillSecretNotice;
+
+  /// No description provided for @agentSkillExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'这条安装指令已过期或已清除，请重新生成。'**
+  String get agentSkillExpired;
+
   /// No description provided for @agentCleanupHostTitle.
   ///
   /// In zh, this message translates to:
@@ -3253,6 +3301,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。'**
   String get agentErrorHandleUnavailable;
+
+  /// No description provided for @agentSkillUnsupportedTenant.
+  ///
+  /// In zh, this message translates to:
+  /// **'Skill Agent onboarding 当前仅支持 awiki.info。'**
+  String get agentSkillUnsupportedTenant;
+
+  /// No description provided for @agentSkillInvalidResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'服务端返回的注册范围与当前账号不一致。'**
+  String get agentSkillInvalidResponse;
+
+  /// No description provided for @agentSkillRequestFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时无法生成 Skill Agent 安装指令，请重试。'**
+  String get agentSkillRequestFailed;
 
   /// No description provided for @agentErrorPersonalAgentDisabled.
   ///

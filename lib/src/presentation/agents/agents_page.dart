@@ -17,6 +17,7 @@ import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
+import '../../domain/entities/agent/skill_onboarding_instruction.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -36,6 +37,7 @@ import 'agent_runtime_display.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
 import 'agents_provider.dart';
+import 'skill_onboarding_provider.dart';
 
 part 'parts/agents_list_part.dart';
 part 'parts/agents_detail_part.dart';
@@ -55,12 +57,15 @@ class AgentsWorkspacePage extends ConsumerStatefulWidget {
 
 class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   late final AgentsController _agentsController;
+  late final SkillOnboardingController _skillOnboardingController;
   bool _disposed = false;
+  bool _skillDialogOpen = false;
 
   @override
   void initState() {
     super.initState();
     _agentsController = ref.read(agentsProvider.notifier);
+    _skillOnboardingController = ref.read(skillOnboardingProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -72,6 +77,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   @override
   void dispose() {
     _disposed = true;
+    scheduleMicrotask(_skillOnboardingController.clear);
     _deferAgentsMutation(
       (controller) => controller.stopInventoryAutoSync(),
       requireMounted: false,
@@ -137,8 +143,26 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
         );
       }
     });
+    ref.listen<SkillOnboardingState>(skillOnboardingProvider, (previous, next) {
+      if (next.error != null && previous?.error != next.error) {
+        AwikiMeToast.show(
+          context,
+          _skillOnboardingErrorText(context, next.error!),
+        );
+      }
+      if (next.instruction != null &&
+          previous?.instruction != next.instruction &&
+          !_skillDialogOpen) {
+        _skillDialogOpen = true;
+        _showSkillOnboardingDialog(context, ref).whenComplete(() {
+          _skillDialogOpen = false;
+          _skillOnboardingController.clear();
+        });
+      }
+    });
 
     final state = ref.watch(agentsProvider);
+    final skillState = ref.watch(skillOnboardingProvider);
     final responsive = context.awikiResponsive;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final selected = _agentSelectionForLayout(
@@ -155,6 +179,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       selectedAgentDid: selectedAgentDidForList,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
+      onCreateSkill: () => _skillOnboardingController.generate(),
+      isCreatingSkill: skillState.isLoading,
       onRefreshDaemon: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
       },
