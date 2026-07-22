@@ -241,6 +241,16 @@ App 可见标题断言。
 The remote product suites must point every HTTP/WebSocket/DID domain at
 `awiki.info`; they do not start a local backend.
 
+Local-server verification is a separate target and must use the domains from
+the local deployment configuration. On the current server the primary target
+is `https://agentwiki.info` / `wss://agentwiki.info/im/ws`.
+`agent-connect.cn` is also registered in the local User Service domain allowlist,
+but it is not an App E2E DID target until it publishes its own
+`/.well-known/did.json`. Remote-server setup may be used as a reference for
+Linux, Flutter, and service dependencies, but its HTTP/WebSocket URLs, DID
+domain, Handle domain, certificates, and account pool must not be copied into a
+local-server run.
+
 The full real-backend E2E runner reads local configuration from
 `tests/e2e/configs/e2e.local.yaml` by default. Copy the tracked template first:
 
@@ -248,10 +258,13 @@ The full real-backend E2E runner reads local configuration from
 cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 ```
 
-Required local values:
+Required configuration values:
 
-- `service.baseUrl`: remote test backend root, `https://awiki.info`.
-- `service.didDomain`: remote DID domain, `awiki.info`.
+- `service.baseUrl`: selected backend root. Use `https://agentwiki.info` on the
+  current local server; `https://awiki.info` is only for an explicitly selected
+  remote compatibility run.
+- `service.didDomain`: selected DID domain. Use `agentwiki.info` on the current
+  local server; use `awiki.info` only for the matching remote compatibility run.
 - `otp.phone` and `otp.code`: the test OTP credential.
 - `accounts.appUser.handle`: App-side test handle.
 - `accounts.cliPeer.handle`: CLI peer test handle.
@@ -281,9 +294,11 @@ timeline ownership, but downloads through the direct peer reference required by
 the remote attachment lookup. A raw `dm:peer-scope:*` storage thread must never
 be sent to the core `thread-attachment-download` capability.
 
-All live product cases are pinned by `tests/e2e/suite_manifest.json` to
-`https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
-`awiki.test`, insecure schemes, and other domains before starting Flutter.
+All live product cases are constrained by `tests/e2e/suite_manifest.json` to an
+explicit allowlist. The selected YAML configuration remains the source of the
+actual target: remote compatibility runs use `awiki.info`, while local-server
+runs use `agentwiki.info`. They reject localhost, `awiki.test`, insecure
+schemes, and other domains before starting Flutter.
 The smoke case has no service dependency. Dry-run only validates orchestration
 and never counts as a real gate.
 
