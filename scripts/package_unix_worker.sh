@@ -233,7 +233,11 @@ verify_android_startup_smoke() {
 
 build_android() {
   [[ -f android/key.properties ]] || fail "android/key.properties is required for release signing"
-  (cd "$CORE_DIR" && scripts/flutter/build-sdk-native.sh --android-only --skip-codegen-check)
+  (cd "$CORE_DIR" &&
+    scripts/flutter/build-sdk-native.sh \
+      --android-only \
+      --android-abi arm64-v8a \
+      --skip-codegen-check)
   flutter pub get
   write_android_release_plugin_registrant
   flutter build apk \
@@ -342,10 +346,6 @@ build_macos() {
   fingerprint="$(awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY")" ||
     fail "configured macOS signing identity is unavailable"
 
-  (cd "$CORE_DIR" &&
-    scripts/flutter/build-sdk-native.sh --macos-only --skip-codegen-check)
-  flutter pub get
-  [[ -d macos/Runner.xcworkspace ]] || fail "macOS Runner workspace is missing"
   local arch arch_label filename derived app
   if [[ "$TARGET" == "macos-arm64" ]]; then
     arch="arm64"
@@ -354,6 +354,13 @@ build_macos() {
     arch="x86_64"
     arch_label="x64"
   fi
+  (cd "$CORE_DIR" &&
+    scripts/flutter/build-sdk-native.sh \
+      --macos-only \
+      --macos-arch "$arch" \
+      --skip-codegen-check)
+  flutter pub get
+  [[ -d macos/Runner.xcworkspace ]] || fail "macOS Runner workspace is missing"
   filename="AWiki-Me-macOS-$arch_label-$VERSION.dmg"
   derived="$ROOT_DIR/build/package/derived-$TARGET"
   app="$derived/Build/Products/Release/AWikiMe.app"

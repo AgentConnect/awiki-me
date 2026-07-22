@@ -142,6 +142,31 @@ ${{
     expect(verificationScript, contains(r'git -C anp/anp rev-parse HEAD'));
 
     final buildSteps = build['steps'] as YamlList;
+    final flutterSetup = _stepNamed(buildSteps, 'Setup Flutter 3.44.0');
+    final flutterSetupInputs = flutterSetup['with'] as YamlMap;
+    expect(flutterSetupInputs['cache'], isFalse);
+    expect(flutterSetupInputs['pub-cache'], isTrue);
+
+    final rustCache = _stepNamed(
+      buildSteps,
+      'Restore Rust dependency and build cache',
+    );
+    expect(rustCache['uses'], 'actions/cache@v5');
+    final rustCacheInputs = rustCache['with'] as YamlMap;
+    final rustCachePaths = rustCacheInputs['path'].toString();
+    expect(rustCachePaths, contains('~/.cargo/registry'));
+    expect(rustCachePaths, contains('~/.cargo/git'));
+    expect(rustCachePaths, contains('awiki-cli-rs2/target'));
+    final rustCacheKey = rustCacheInputs['key'].toString();
+    expect(rustCacheKey, contains(r'${{ runner.os }}'));
+    expect(rustCacheKey, contains(r'${{ runner.arch }}'));
+    expect(rustCacheKey, contains(r'${{ matrix.target }}'));
+    expect(rustCacheKey, contains(r'${{ env.RUST_VERSION }}'));
+    expect(
+      rustCacheKey,
+      contains(r"${{ hashFiles('awiki-cli-rs2/Cargo.lock') }}"),
+    );
+
     final androidNativeTool = _stepNamed(
       buildSteps,
       'Install pinned Android native build tool',
@@ -161,10 +186,17 @@ ${{
     final unixWorker = File(
       'scripts/package_unix_worker.sh',
     ).readAsStringSync();
-    expect(
-      unixWorker,
-      contains('build-sdk-native.sh --macos-only --skip-codegen-check'),
+    expect(unixWorker, contains('--macos-arch "\$arch"'));
+    expect(unixWorker, contains('--android-abi arm64-v8a'));
+
+    final aggregateSteps = aggregate['steps'] as YamlList;
+    final aggregateFlutterSetup = _stepNamed(
+      aggregateSteps,
+      'Setup Flutter 3.44.0',
     );
+    final aggregateFlutterInputs = aggregateFlutterSetup['with'] as YamlMap;
+    expect(aggregateFlutterInputs['cache'], isFalse);
+    expect(aggregateFlutterInputs['pub-cache'], isTrue);
 
     final androidSettings = File('android/settings.gradle').readAsStringSync();
     final androidBuild = File('android/build.gradle').readAsStringSync();
