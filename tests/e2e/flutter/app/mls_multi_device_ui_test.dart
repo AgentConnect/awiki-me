@@ -170,23 +170,14 @@ void _registerMlsMultiDeviceTests() {
           ],
         ),
       );
-      await tester.pumpAndSettle();
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(AppShell)),
-      );
-      await container
-          .read(appRuntimeProvider.notifier)
-          .activateSession(adminSession.toLegacySessionIdentity());
-      await _pumpUntil(
+      final container = await _waitForRestoredAuthenticatedApp(
         tester,
-        () =>
-            find.bySemanticsIdentifier('e2e-authenticated').evaluate().length ==
-            1,
-        failure: 'The authenticated MLS App shell did not become visible.',
+        expectedDid: adminSession.did,
       );
 
       final joinedDeviceId = await _joinCliMemberThroughApp(
         tester: tester,
+        container: container,
         bootstrap: bootstrap,
         cli: cli,
         client: httpClient,
@@ -420,6 +411,7 @@ void _registerMlsMultiDeviceTests() {
 
 Future<String> _joinCliMemberThroughApp({
   required WidgetTester tester,
+  required ProviderContainer container,
   required AppBootstrap bootstrap,
   required _JoiningCli cli,
   required http.Client client,
@@ -472,9 +464,23 @@ Future<String> _joinCliMemberThroughApp({
     () => find.byType(DeviceJoinApprovalSheet).evaluate().length == 1,
     failure: 'The MLS device approval surface did not open.',
   );
+  await _waitForAppAdminChallenge(
+    tester,
+    container: container,
+    expectedDid: did,
+    expectedJoinSessionId: started.joinSessionId,
+    expectedDeviceId: started.protocolDeviceId,
+  );
 
   final joiningProgress = await cli.pollUntilSas(
     started.joinSessionId,
+    expectedDeviceId: started.protocolDeviceId,
+  );
+  await _waitForAppAdminResponseVerified(
+    tester,
+    container: container,
+    expectedDid: did,
+    expectedJoinSessionId: started.joinSessionId,
     expectedDeviceId: started.protocolDeviceId,
   );
   await _pumpUntil(

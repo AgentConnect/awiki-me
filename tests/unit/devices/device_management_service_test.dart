@@ -1,12 +1,9 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/application/device_management_service.dart';
-import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
-import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
-import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -19,7 +16,7 @@ void main() {
   });
 
   test(
-    'SMS begin resolves Handle and never returns verification input',
+    'SMS begin normalizes Handle and never returns verification input',
     () async {
       final core = _FakeDeviceCore();
       final service = _service(core: core);
@@ -32,7 +29,6 @@ void main() {
       );
 
       expect(progress.joinSessionId, 'join-1');
-      expect(core.beginDid, 'did:wba:awiki.info:user:alice:e1_test');
       expect(core.beginHandle, 'alice');
       expect(core.beginPhone, '+8613800138000');
       expect(core.beginOtp, '123456');
@@ -247,7 +243,6 @@ DeviceManagementService _service({
 }) {
   return DeviceManagementService(
     core: core,
-    directory: _FakeDirectory(),
     userPresence: presence ?? _FakeUserPresence(result: true),
   );
 }
@@ -262,26 +257,6 @@ DeviceJoinProgress _adminSasProgress() => DeviceJoinProgress(
   expiresAt: DateTime.utc(2030),
   sas: '482917',
 );
-
-class _FakeDirectory implements DirectoryApplicationService {
-  @override
-  Future<DirectoryPeerResolution> lookupHandle(String handle) async {
-    return DirectoryPeerResolution(
-      input: handle,
-      did: 'did:wba:awiki.info:user:$handle:e1_test',
-      handle: handle,
-    );
-  }
-
-  @override
-  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
-    Iterable<String> dids,
-  ) async => const <PeerDisplayProfile>[];
-
-  @override
-  Future<DirectoryPeerResolution> resolvePeer(String peer) =>
-      lookupHandle(peer);
-}
 
 class _FakeUserPresence implements UserPresencePort {
   _FakeUserPresence({this.result, this.completer});
@@ -299,7 +274,6 @@ class _FakeUserPresence implements UserPresencePort {
 
 class _FakeDeviceCore implements DeviceManagementCorePort {
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
-  String? beginDid;
   String? beginHandle;
   String? beginPhone;
   String? beginOtp;
@@ -320,20 +294,18 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
 
   @override
   Future<DeviceJoinProgress> beginDeviceJoinWithSms({
-    required String did,
     required String handle,
     required String phone,
     required String otp,
     required String operationId,
     required int ttlSeconds,
   }) async {
-    beginDid = did;
     beginHandle = handle;
     beginPhone = phone;
     beginOtp = otp;
     return DeviceJoinProgress(
       joinSessionId: 'join-1',
-      did: did,
+      did: 'did:wba:awiki.info:user:alice:e1_test',
       protocolDeviceId: 'dev-new',
       side: DeviceJoinSide.newDevice,
       phase: DeviceJoinPhase.pending,

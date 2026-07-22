@@ -1,5 +1,4 @@
 import '../domain/entities/device_management.dart';
-import 'directory_application_service.dart';
 import 'ports/device_management_core_port.dart';
 import 'ports/user_presence_port.dart';
 
@@ -15,14 +14,11 @@ class DeviceManagementException implements Exception {
 class DeviceManagementService {
   DeviceManagementService({
     required DeviceManagementCorePort core,
-    required DirectoryApplicationService directory,
     required UserPresencePort userPresence,
   }) : _core = core,
-       _directory = directory,
        _userPresence = userPresence;
 
   final DeviceManagementCorePort _core;
-  final DirectoryApplicationService _directory;
   final UserPresencePort _userPresence;
   final Set<String> _approvalSessionsInFlight = <String>{};
   final Set<String> _revokeDeviceIdsInFlight = <String>{};
@@ -84,9 +80,7 @@ class DeviceManagementService {
     int ttlSeconds = 600,
   }) async {
     final normalizedHandle = _required(handle, 'handle').toLowerCase();
-    final resolution = await _directory.lookupHandle(normalizedHandle);
     final progress = await _core.beginDeviceJoinWithSms(
-      did: _required(resolution.did, 'did'),
       handle: normalizedHandle,
       phone: _required(phone, 'phone'),
       otp: _required(otp, 'otp'),

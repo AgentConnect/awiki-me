@@ -43,15 +43,28 @@ void main() {
     () async {
       const token = 'join-account-token-must-not-escape';
       late Map<String, Object?> requestBody;
+      late Map<String, Object?> profileRequestBody;
       var beginCalls = 0;
       final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
         coreInstance: _unusedCore,
         userServiceUrl: 'https://awiki.info',
         targetHandleDomain: 'awiki.info',
         httpClient: MockClient((request) async {
+          if (request.url.path == '/user-service/did/profile/rpc') {
+            profileRequestBody = (jsonDecode(request.body) as Map)
+                .cast<String, Object?>();
+            return http.Response(
+              jsonEncode(<String, Object?>{
+                'jsonrpc': '2.0',
+                'id': 'req-1',
+                'result': <String, Object?>{'did': _did},
+              }),
+              200,
+            );
+          }
           expect(
-            request.url.toString(),
-            'https://awiki.info/user-service/auth/account-verification/exchange',
+            request.url.path,
+            '/user-service/auth/account-verification/exchange',
           );
           requestBody = (jsonDecode(request.body) as Map)
               .cast<String, Object?>();
@@ -88,7 +101,6 @@ void main() {
       );
 
       final progress = await adapter.beginDeviceJoinWithSms(
-        did: _did,
         handle: 'alice',
         phone: '+8613800138000',
         otp: '987580',
@@ -97,6 +109,10 @@ void main() {
       );
 
       expect(beginCalls, 1);
+      expect(profileRequestBody['method'], 'get_public_profile');
+      expect(profileRequestBody['params'], <String, Object?>{
+        'handle': 'alice.awiki.info',
+      });
       expect(requestBody, <String, Object?>{
         'provider': 'sms',
         'purpose': 'awiki.device.join.v1',
@@ -112,8 +128,110 @@ void main() {
     },
   );
 
+  test(
+    'rejects a public profile from another DID domain before OTP exchange',
+    () async {
+      var requestCalls = 0;
+      var beginCalls = 0;
+      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+        coreInstance: _unusedCore,
+        userServiceUrl: 'https://awiki.info',
+        targetHandleDomain: 'awiki.info',
+        httpClient: MockClient((request) async {
+          requestCalls += 1;
+          expect(request.url.path, '/user-service/did/profile/rpc');
+          return http.Response(
+            jsonEncode(<String, Object?>{
+              'jsonrpc': '2.0',
+              'id': 'req-1',
+              'result': <String, Object?>{
+                'did': 'did:wba:other.example:user:alice:e1_test',
+              },
+            }),
+            200,
+          );
+        }),
+        beginDeviceJoin:
+            ({
+              required did,
+              required operationId,
+              required ttlSeconds,
+              required accountVerificationGrant,
+            }) async {
+              beginCalls += 1;
+              return _coreProgress();
+            },
+      );
+
+      await expectLater(
+        adapter.beginDeviceJoinWithSms(
+          handle: 'alice',
+          phone: '+8613800138000',
+          otp: '123456',
+          operationId: 'join-op-invalid-domain',
+          ttlSeconds: 600,
+        ),
+        throwsA(
+          isA<DeviceManagementTransportException>().having(
+            (error) => error.code,
+            'code',
+            'join_target_resolution_invalid',
+          ),
+        ),
+      );
+      expect(requestCalls, 1);
+      expect(beginCalls, 0);
+    },
+  );
+
+  test(
+    'redacts public profile response failures before OTP exchange',
+    () async {
+      const sensitive = 'profile-response-must-not-escape';
+      var beginCalls = 0;
+      final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+        coreInstance: _unusedCore,
+        userServiceUrl: 'https://awiki.info',
+        targetHandleDomain: 'awiki.info',
+        httpClient: MockClient(
+          (_) async => http.Response('{"detail":"$sensitive"}', 503),
+        ),
+        beginDeviceJoin:
+            ({
+              required did,
+              required operationId,
+              required ttlSeconds,
+              required accountVerificationGrant,
+            }) async {
+              beginCalls += 1;
+              return _coreProgress();
+            },
+      );
+
+      Object? error;
+      try {
+        await adapter.beginDeviceJoinWithSms(
+          handle: 'alice',
+          phone: '+8613800138000',
+          otp: '123456',
+          operationId: 'join-op-profile-error',
+          ttlSeconds: 600,
+        );
+      } catch (caught) {
+        error = caught;
+      }
+
+      expect(error, isA<DeviceManagementTransportException>());
+      expect(error.toString(), contains('join_target_resolution_failed'));
+      expect(error.toString(), isNot(contains(sensitive)));
+      expect(beginCalls, 0);
+    },
+  );
+
   test('uses the qualified Handle domain for the internal exchange', () async {
     late Map<String, Object?> requestBody;
+    String? resolvedHandle;
+    String? resolvedDomain;
     final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
       coreInstance: _unusedCore,
       userServiceUrl: 'https://awiki.info',
@@ -132,10 +250,14 @@ void main() {
             required ttlSeconds,
             required accountVerificationGrant,
           }) async => _coreProgress(),
+      resolveJoinTarget: ({required handle, required domain}) async {
+        resolvedHandle = handle;
+        resolvedDomain = domain;
+        return 'did:wba:example.org:user:e1_test';
+      },
     );
 
     await adapter.beginDeviceJoinWithSms(
-      did: _did,
       handle: '@alice.example.org',
       phone: '+8613800138000',
       otp: '123456',
@@ -145,6 +267,8 @@ void main() {
 
     expect(requestBody['target_handle'], 'alice');
     expect(requestBody['target_handle_domain'], 'example.org');
+    expect(resolvedHandle, 'alice');
+    expect(resolvedDomain, 'example.org');
   });
 
   test('never includes an exchange response body or token in errors', () async {
@@ -166,12 +290,12 @@ void main() {
             required ttlSeconds,
             required accountVerificationGrant,
           }) async => _coreProgress(),
+      resolveJoinTarget: _resolveAwikiJoinTarget,
     );
 
     Object? error;
     try {
       await adapter.beginDeviceJoinWithSms(
-        did: _did,
         handle: 'alice',
         phone: '+8613800138000',
         otp: '123456',
@@ -306,4 +430,13 @@ core.DeviceJoinProgress _coreProgress() {
     remoteState: core.DeviceJoinRemoteState.challengeSent,
     sas: '482917',
   );
+}
+
+Future<String> _resolveAwikiJoinTarget({
+  required String handle,
+  required String domain,
+}) async {
+  expect(handle, 'alice');
+  expect(domain, 'awiki.info');
+  return _did;
 }

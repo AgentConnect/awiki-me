@@ -26,6 +26,7 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
@@ -171,7 +172,15 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          final progress = container.read(devicesProvider).activeJoin;
+          final state = container.read(devicesProvider);
+          final error = state.error;
+          if (error != null) {
+            fail(
+              'The App rejected the pending Join with the safe error '
+              '${error.name}.',
+            );
+          }
+          final progress = state.activeJoin;
           return progress?.side == DeviceJoinSide.newDevice &&
               progress?.phase == DeviceJoinPhase.pending &&
               progress?.remoteState == DeviceJoinRemoteState.pending &&
@@ -246,11 +255,26 @@ void main() {
       }
 
       await cli.claimJoin(pending);
-      await _tapOne(
+      await _pumpUntil(
         tester,
-        find.bySemanticsIdentifier('multi-device-refresh-join'),
-        failure: 'The App new-device refresh action was unavailable.',
+        () =>
+            find.byKey(const Key('device-join-sas')).evaluate().isNotEmpty ||
+            find
+                    .bySemanticsIdentifier('multi-device-refresh-join')
+                    .hitTestable()
+                    .evaluate()
+                    .length ==
+                1,
+        timeout: const Duration(seconds: 45),
+        failure: 'The App did not auto-poll or expose Join refresh.',
       );
+      if (find.byKey(const Key('device-join-sas')).evaluate().isEmpty) {
+        await _tapOne(
+          tester,
+          find.bySemanticsIdentifier('multi-device-refresh-join'),
+          failure: 'The App new-device refresh action was unavailable.',
+        );
+      }
       await _pumpUntil(
         tester,
         () => find.byKey(const Key('device-join-sas')).evaluate().length == 1,
@@ -430,19 +454,9 @@ void main() {
           ],
         ),
       );
-      await tester.pumpAndSettle();
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(AppShell)),
-      );
-      await container
-          .read(appRuntimeProvider.notifier)
-          .activateSession(adminSession.toLegacySessionIdentity());
-      await _pumpUntil(
+      final container = await _waitForRestoredAuthenticatedApp(
         tester,
-        () =>
-            find.bySemanticsIdentifier('e2e-authenticated').evaluate().length ==
-            1,
-        failure: 'The authenticated App shell did not become visible.',
+        expectedDid: adminSession.did,
       );
 
       await _tapOne(
@@ -483,9 +497,23 @@ void main() {
         () => find.byType(DeviceJoinApprovalSheet).evaluate().length == 1,
         failure: 'The App Join approval surface did not open.',
       );
+      await _waitForAppAdminChallenge(
+        tester,
+        container: container,
+        expectedDid: adminSession.did,
+        expectedJoinSessionId: started.joinSessionId,
+        expectedDeviceId: started.protocolDeviceId,
+      );
 
       final joiningProgress = await cli.pollUntilSas(
         started.joinSessionId,
+        expectedDeviceId: started.protocolDeviceId,
+      );
+      await _waitForAppAdminResponseVerified(
+        tester,
+        container: container,
+        expectedDid: adminSession.did,
+        expectedJoinSessionId: started.joinSessionId,
         expectedDeviceId: started.protocolDeviceId,
       );
       await _pumpUntil(
@@ -959,10 +987,25 @@ class _JoiningCli {
       _data(payload, action: 'device_join_claim'),
     );
     if (progress.joinSessionId != pending.joinSessionId ||
-        progress.protocolDeviceId != pending.protocolDeviceId ||
-        progress.remoteState != 'challenge_sent' ||
-        progress.sas != null) {
-      fail('The CLI admin did not submit exactly one Join challenge.');
+        progress.protocolDeviceId != pending.protocolDeviceId) {
+      fail('The CLI admin changed the Join identity while claiming it.');
+    }
+    if (progress.remoteState != 'challenge_sent') {
+      const safeStates = <String>{
+        'pending',
+        'claimed',
+        'challenge_sent',
+        'response_verified',
+        'consumed',
+        'expired',
+      };
+      final safeState = safeStates.contains(progress.remoteState)
+          ? progress.remoteState
+          : 'invalid';
+      fail('The CLI Join claim returned safe state $safeState.');
+    }
+    if (progress.sas != null && !_validSas(progress.sas!)) {
+      fail('The CLI admin projected a malformed SAS after claiming the Join.');
     }
   }
 
@@ -1008,11 +1051,20 @@ class _JoiningCli {
         if (progress.sas != null) {
           fail('The terminal CLI approval state retained a SAS.');
         }
-        final rawDevice = data['result'];
-        final result = rawDevice is Map ? _stringMap(rawDevice) : null;
-        final authorized = result?['authorized_device'];
+        final result = data['result'];
+        var authorized = result is Map
+            ? _stringMap(result)['authorized_device']
+            : null;
         if (authorized is! Map) {
-          fail('The CLI approval returned no authorization projection.');
+          final matches = (await loadRegistrySnapshot()).devices
+              .where(
+                (device) => device['protocol_device_id'] == expectedDeviceId,
+              )
+              .toList(growable: false);
+          if (matches.length != 1) {
+            fail('The CLI Registry returned no unique authorized device.');
+          }
+          authorized = matches.single;
         }
         final device = _AuthorizedDevice.fromJson(_stringMap(authorized));
         if (device.protocolDeviceId != expectedDeviceId ||
@@ -1049,11 +1101,14 @@ class _JoiningCli {
           progress.protocolDeviceId != expectedDeviceId) {
         fail('The joining CLI changed the active Join identity while polling.');
       }
-      if (data['remote_state'] == 'consumed') {
-        if (data['sas'] != null) {
+      if (progress.remoteState == 'consumed') {
+        if (progress.sas != null) {
           fail('Terminal joining-device state retained a SAS.');
         }
-        final device = data['authorized_device'];
+        final result = data['result'];
+        final device = result is Map
+            ? _stringMap(result)['authorized_device']
+            : null;
         if (device is! Map) {
           fail('The joining CLI device returned no authorization projection.');
         }
@@ -1664,6 +1719,121 @@ Future<String> _exchangeJoinGrant({
     fail('The Join account-verification exchange returned no grant.');
   }
   return token;
+}
+
+Future<ProviderContainer> _waitForRestoredAuthenticatedApp(
+  WidgetTester tester, {
+  required String expectedDid,
+}) async {
+  await tester.pump();
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(AppShell)),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final runtime = container.read(appRuntimeProvider);
+      if (!runtime.isInitialized || runtime.isBusy) {
+        return false;
+      }
+      final sessionDid = container.read(sessionProvider).session?.did;
+      if (runtime.activatedDid != expectedDid || sessionDid != expectedDid) {
+        fail('The App did not restore the expected authenticated identity.');
+      }
+      return find
+              .bySemanticsIdentifier('e2e-authenticated')
+              .evaluate()
+              .length ==
+          1;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'The authenticated App shell did not become stable.',
+  );
+  return container;
+}
+
+Future<void> _waitForAppAdminChallenge(
+  WidgetTester tester, {
+  required ProviderContainer container,
+  required String expectedDid,
+  required String expectedJoinSessionId,
+  required String expectedDeviceId,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(devicesProvider);
+      final error = state.error;
+      if (error != null) {
+        fail(
+          'The App admin rejected the Join claim with the safe error '
+          '${error.name}.',
+        );
+      }
+      final progress = state.activeJoin;
+      if (progress == null || state.isActionPending) {
+        return false;
+      }
+      if (progress.did != expectedDid ||
+          progress.joinSessionId != expectedJoinSessionId ||
+          progress.protocolDeviceId != expectedDeviceId) {
+        fail('The App admin changed the Join identity while claiming it.');
+      }
+      if (progress.isTerminal ||
+          progress.remoteState == DeviceJoinRemoteState.expired) {
+        fail('The App admin claim reached an unexpected terminal state.');
+      }
+      return progress.side == DeviceJoinSide.admin &&
+          progress.phase == DeviceJoinPhase.challengePrepared &&
+          progress.remoteState == DeviceJoinRemoteState.challengeSent &&
+          _validSas(progress.sas ?? '') &&
+          progress.authorizedDevice == null;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'The App admin did not publish the Join challenge.',
+  );
+}
+
+Future<void> _waitForAppAdminResponseVerified(
+  WidgetTester tester, {
+  required ProviderContainer container,
+  required String expectedDid,
+  required String expectedJoinSessionId,
+  required String expectedDeviceId,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(devicesProvider);
+      final error = state.error;
+      if (error != null) {
+        fail(
+          'The App admin failed to verify the Join response with the safe '
+          'error ${error.name}.',
+        );
+      }
+      final progress = state.activeJoin;
+      if (progress == null || state.isActionPending) {
+        return false;
+      }
+      if (progress.did != expectedDid ||
+          progress.joinSessionId != expectedJoinSessionId ||
+          progress.protocolDeviceId != expectedDeviceId) {
+        fail('The App admin changed the Join identity while polling it.');
+      }
+      if (progress.isTerminal ||
+          progress.remoteState == DeviceJoinRemoteState.expired) {
+        fail('The App admin poll reached an unexpected terminal state.');
+      }
+      return progress.side == DeviceJoinSide.admin &&
+          progress.phase == DeviceJoinPhase.responseVerified &&
+          progress.remoteState == DeviceJoinRemoteState.responseVerified &&
+          _validSas(progress.sas ?? '') &&
+          progress.authorizedDevice == null;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'The App admin did not verify the Join response.',
+  );
 }
 
 String _requireReadyBootstrapAdmin(DeviceRegistrySnapshot registry) {

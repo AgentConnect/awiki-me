@@ -148,7 +148,6 @@ final handleRecoveryServiceProvider = Provider<HandleRecoveryService>(
 final deviceManagementServiceProvider = Provider<DeviceManagementService>(
   (ref) => DeviceManagementService(
     core: ref.watch(deviceManagementCorePortProvider),
-    directory: ref.watch(directoryApplicationServiceProvider),
     userPresence: ref.watch(userPresencePortProvider),
   ),
 );

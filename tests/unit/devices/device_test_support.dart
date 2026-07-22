@@ -62,7 +62,6 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
 
   @override
   Future<DeviceJoinProgress> beginDeviceJoinWithSms({
-    required String did,
     required String handle,
     required String phone,
     required String otp,

@@ -133,19 +133,9 @@ void _registerRootKeyTransferAndRevokeTests() {
           ],
         ),
       );
-      await tester.pumpAndSettle();
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(AppShell)),
-      );
-      await container
-          .read(appRuntimeProvider.notifier)
-          .activateSession(adminSession.toLegacySessionIdentity());
-      await _pumpUntil(
+      final container = await _waitForRestoredAuthenticatedApp(
         tester,
-        () =>
-            find.bySemanticsIdentifier('e2e-authenticated').evaluate().length ==
-            1,
-        failure: 'The authenticated App shell did not become visible.',
+        expectedDid: adminSession.did,
       );
       await _openDevicesPage(tester);
 
@@ -165,9 +155,23 @@ void _registerRootKeyTransferAndRevokeTests() {
         () => find.byType(DeviceJoinApprovalSheet).evaluate().length == 1,
         failure: 'The App Join approval surface did not open.',
       );
+      await _waitForAppAdminChallenge(
+        tester,
+        container: container,
+        expectedDid: adminSession.did,
+        expectedJoinSessionId: started.joinSessionId,
+        expectedDeviceId: started.protocolDeviceId,
+      );
 
       final joiningProgress = await cli.pollUntilSas(
         started.joinSessionId,
+        expectedDeviceId: started.protocolDeviceId,
+      );
+      await _waitForAppAdminResponseVerified(
+        tester,
+        container: container,
+        expectedDid: adminSession.did,
+        expectedJoinSessionId: started.joinSessionId,
         expectedDeviceId: started.protocolDeviceId,
       );
       await _pumpUntil(

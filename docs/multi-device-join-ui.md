@@ -29,6 +29,7 @@
 
 ```text
 新设备：Handle + SMS OTP
+  -> 通过公共 Profile RPC 将 Handle 解析为同域 did:wba（不要求本地已选身份）
   -> AWiki 域内 account-verification exchange
   -> token 在 data adapter 内立即交给 Core 消费
   -> Core 创建并持久化 Join
@@ -55,6 +56,12 @@ E2EE 私钥、配对共享秘密、challenge 明文和 DID 根私钥始终留在
 SMS OTP 只进入发起方法；域内 exchange 返回的 account token 只存在于 data adapter
 的局部变量，并立即包装为 Core 单次消费对象，不进入 application/presentation state、
 日志、错误、持久化或跨域协议。
+
+未登录新设备没有 current Core identity，因此不能复用要求已选身份的 Directory adapter。
+设备管理 data adapter 使用公共 Profile RPC 解析 Handle，并只接受与请求域一致、使用
+`e1_` 标识的 `did:wba`；解析错误统一投影为固定错误码。公共解析本身不构成授权，
+user-service 在创建 Join Session 时仍须权威校验 account-verification grant 绑定的
+Handle/domain 当前映射与提交 DID 完全一致。
 
 `admin` 选择只表示用户明确授予管理意图。根密钥导入完成并达到
 `management-ready` 前，UI 不应把设备描述为可管理其他设备；后续

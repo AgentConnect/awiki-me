@@ -3,8 +3,10 @@ import '../../domain/entities/device_management.dart';
 /// Secret-free projection and action boundary used by AWiki Me.
 ///
 /// The SMS OTP is a write-only input to [beginDeviceJoinWithSms]. The adapter
-/// exchanges and consumes it in the same call; no account/join token, private
-/// key, challenge plaintext, pairing secret, or root key may cross this port.
+/// resolves the public Handle without requiring a selected local identity,
+/// then exchanges and consumes the OTP in the same call; no account/join
+/// token, private key, challenge plaintext, pairing secret, or root key may
+/// cross this port.
 /// Permanent revoke accepts only an identity selector, opaque target device ID,
 /// and Host user-presence result; versions, hashes and proofs stay below Core.
 abstract interface class DeviceManagementCorePort {
@@ -13,7 +15,6 @@ abstract interface class DeviceManagementCorePort {
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions();
 
   Future<DeviceJoinProgress> beginDeviceJoinWithSms({
-    required String did,
     required String handle,
     required String phone,
     required String otp,
