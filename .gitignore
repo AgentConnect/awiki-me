@@ -54,6 +54,9 @@ android/app/release/
 # iOS and macOS local build state
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
+ios/Flutter/Emas.Debug.xcconfig
+ios/Flutter/Emas.Profile.xcconfig
+ios/Flutter/Emas.Release.xcconfig
 ios/Pods/
 ios/.symlinks/
 ios/Runner.xcworkspace/xcuserdata/

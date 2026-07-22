@@ -42,10 +42,14 @@ class RemotePushInitializationException implements Exception {
 }
 
 class AliyunEmasRemotePushClient implements RemotePushClient {
-  AliyunEmasRemotePushClient({AliyunEmasPlatform? platform})
-    : _platform = platform ?? PluginAliyunEmasPlatform();
+  AliyunEmasRemotePushClient({
+    AliyunEmasPlatform? platform,
+    this.clientPlatform = 'android',
+  }) : assert(clientPlatform == 'android' || clientPlatform == 'ios'),
+       _platform = platform ?? PluginAliyunEmasPlatform();
 
   final AliyunEmasPlatform _platform;
+  final String clientPlatform;
   final StreamController<RemotePushEvent> _events =
       StreamController<RemotePushEvent>.broadcast();
   final Map<String, RemotePushEvent> _pendingEvents =
@@ -118,7 +122,7 @@ class AliyunEmasRemotePushClient implements RemotePushClient {
     return _registration = RemotePushRegistration(
       provider: aliyunEmasPushProvider,
       providerDeviceId: deviceId,
-      platform: 'android',
+      platform: clientPlatform,
     );
   }
 
@@ -145,7 +149,7 @@ class AliyunEmasRemotePushClient implements RemotePushClient {
     _registration = RemotePushRegistration(
       provider: aliyunEmasPushProvider,
       providerDeviceId: deviceId,
-      platform: 'android',
+      platform: clientPlatform,
     );
   }
 

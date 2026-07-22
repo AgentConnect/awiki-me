@@ -169,6 +169,7 @@ See the [Security Model Overview](docs/security-overview.md) and [SECURITY.md](S
 | [Security Model Overview](docs/security-overview.md) | Storage Scope, SecretVault, tenant switching, and security invariants. |
 | [Development Guide](docs/development.md) | Architecture, repository structure, testing, and packaging. |
 | [Android Remote Push](docs/android-remote-push.md) | EMAS Android transport setup, validation, and current delivery boundary. |
+| [iOS Remote Push](docs/ios-remote-push.md) | EMAS/APNs iOS transport setup, signing requirements, validation, and current delivery boundary. |
 | [Screenshot Plan](docs/screenshot-plan.md) | Required README screenshots and GIFs. |
 | [Product Requirements](docs/awiki-me-prd.md) | Product position, core objects, user flows, and MVP acceptance. |
 | [Testing Strategy](docs/testing.md) | Unit, Smoke E2E, and real App + CLI E2E. |

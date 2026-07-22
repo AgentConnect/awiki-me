@@ -1,0 +1,6 @@
+// Copy this file to Emas.Debug.xcconfig, Emas.Profile.xcconfig, or
+// Emas.Release.xcconfig. Keep the copied files out of Git.
+AWIKI_EMAS_ENABLED = YES
+AWIKI_EMAS_APP_KEY = REPLACE_WITH_IOS_EMAS_APP_KEY
+AWIKI_EMAS_APP_SECRET = REPLACE_WITH_IOS_EMAS_APP_SECRET
+AWIKI_EMAS_LOG_DEVICE_ID = NO

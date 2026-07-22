@@ -5,8 +5,8 @@ import 'aliyun_emas_remote_push_client.dart';
 import 'noop_remote_push_client.dart';
 
 RemotePushClient buildPlatformRemotePushClient() {
-  if (!Platform.isAndroid) {
+  if (!Platform.isAndroid && !Platform.isIOS) {
     return const NoopRemotePushClient();
   }
-  return AliyunEmasRemotePushClient();
+  return AliyunEmasRemotePushClient(clientPlatform: Platform.operatingSystem);
 }

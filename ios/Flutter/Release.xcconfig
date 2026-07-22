@@ -1,2 +1,10 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+AWIKI_EMAS_ENABLED = NO
+AWIKI_EMAS_APP_KEY =
+AWIKI_EMAS_APP_SECRET =
+AWIKI_EMAS_LOG_DEVICE_ID = NO
+#include? "Emas.Release.xcconfig"
+APS_ENVIRONMENT = production
+CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements
+OTHER_LDFLAGS = $(inherited) -ObjC

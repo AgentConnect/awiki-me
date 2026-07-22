@@ -26,6 +26,21 @@ void main() {
       await client.dispose();
     });
 
+    test('reports an iOS registration for the shared native bridge', () async {
+      final platform = _FakeAliyunEmasPlatform(deviceId: 'ios-device-123');
+      final client = AliyunEmasRemotePushClient(
+        platform: platform,
+        clientPlatform: 'ios',
+      );
+
+      final registration = await client.initialize();
+
+      expect(registration?.provider, aliyunEmasPushProvider);
+      expect(registration?.providerDeviceId, 'ios-device-123');
+      expect(registration?.platform, 'ios');
+      await client.dispose();
+    });
+
     test('delivers queued and live native events through one stream', () async {
       final platform = _FakeAliyunEmasPlatform(
         pendingEvents: <Object?>[

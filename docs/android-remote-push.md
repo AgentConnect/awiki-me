@@ -5,8 +5,10 @@ slice initializes the official Android SDK, obtains the EMAS DeviceId, creates
 the message notification channel, normalizes native callbacks, and persists up
 to 32 minimal sync/open events while the Flutter engine is unavailable.
 
-It is intentionally Android-only. iOS dependencies and runner files are not
-changed.
+The equivalent iOS transport is documented in
+[`ios-remote-push.md`](ios-remote-push.md); both platforms share the same Dart
+client contract while keeping their native SDK lifecycle and credentials
+separate.
 
 ## Local configuration
 

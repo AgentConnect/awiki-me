@@ -1,3 +1,6 @@
+source 'https://github.com/aliyun/aliyun-specs.git'
+source 'https://cdn.cocoapods.org/'
+
 platform :ios, '13.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
@@ -30,6 +33,7 @@ target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
+  pod 'AlicloudPush', '>= 3.2.4', '< 4.0'
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths

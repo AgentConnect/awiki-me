@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, UIDocumentPickerDelegate {
@@ -17,6 +18,8 @@ import UniformTypeIdentifiers
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    UNUserNotificationCenter.current().delegate = self
+    RemotePushEventBridge.shared.prepare(launchOptions: launchOptions)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -25,6 +28,87 @@ import UniformTypeIdentifiers
     GeneratedPluginRegistrant.register(with: registry)
     registerDocumentChannel(with: registry)
     registerAttachmentChannel(with: registry)
+    registerRemotePushChannel(with: registry)
+  }
+
+  private func registerRemotePushChannel(with registry: FlutterPluginRegistry) {
+    guard let registrar = registry.registrar(forPlugin: "AWikiRemotePush") else {
+      return
+    }
+    RemotePushEventBridge.shared.attach(to: registrar.messenger())
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    RemotePushEventBridge.shared.register(deviceToken: deviceToken)
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+    RemotePushEventBridge.shared.handleRegistrationFailure(error)
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+  ) {
+    guard RemotePushEventBridge.shared.isAliyunNotification(userInfo) else {
+      super.application(
+        application,
+        didReceiveRemoteNotification: userInfo,
+        fetchCompletionHandler: completionHandler
+      )
+      return
+    }
+    RemotePushEventBridge.shared.handleRemoteNotification(userInfo)
+    completionHandler(.newData)
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    let userInfo = notification.request.content.userInfo
+    guard RemotePushEventBridge.shared.isAliyunNotification(userInfo) else {
+      super.userNotificationCenter(
+        center,
+        willPresent: notification,
+        withCompletionHandler: completionHandler
+      )
+      return
+    }
+    RemotePushEventBridge.shared.handleForegroundNotification(userInfo)
+    if #available(iOS 14.0, *) {
+      completionHandler([.banner, .badge, .sound])
+    } else {
+      completionHandler([.alert, .badge, .sound])
+    }
+  }
+
+  override func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    didReceive response: UNNotificationResponse,
+    withCompletionHandler completionHandler: @escaping () -> Void
+  ) {
+    let userInfo = response.notification.request.content.userInfo
+    guard RemotePushEventBridge.shared.isAliyunNotification(userInfo) else {
+      super.userNotificationCenter(
+        center,
+        didReceive: response,
+        withCompletionHandler: completionHandler
+      )
+      return
+    }
+    RemotePushEventBridge.shared.handleNotificationOpened(userInfo)
+    completionHandler()
   }
 
   private func registerDocumentChannel(with registry: FlutterPluginRegistry) {
