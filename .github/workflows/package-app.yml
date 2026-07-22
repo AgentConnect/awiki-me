@@ -55,6 +55,7 @@ concurrency:
 env:
   FLUTTER_VERSION: 3.44.0
   RUST_VERSION: 1.88.0
+  CARGO_NDK_VERSION: 4.1.2
   PUB_HOSTED_URL: https://pub.dev
   FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
 
@@ -305,6 +306,13 @@ jobs:
           rustup toolchain install "$RUST_VERSION" --profile minimal
           rustup override set --path awiki-cli-rs2 "$RUST_VERSION"
           test "$(cd awiki-cli-rs2 && rustc --version | awk '{print $2}')" = "$RUST_VERSION"
+
+      - name: Install pinned Android native build tool
+        if: matrix.target == 'android-arm64'
+        shell: bash
+        run: |
+          cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
+          test "$(cargo ndk --version)" = "cargo-ndk $CARGO_NDK_VERSION"
 
       - name: Enable Flutter desktop target
         if: matrix.target != 'android-arm64'
