@@ -485,7 +485,7 @@ String _expectedFilename(String target, String version) {
     'android-arm64' => 'AWiki-Me-Android-arm64-$version.apk',
     'macos-arm64' => 'AWiki-Me-macOS-arm64-$version.dmg',
     'macos-x64' => 'AWiki-Me-macOS-x64-$version.dmg',
-    'windows-x64' => 'AWiki-Me-$version-windows-x64.exe',
+    'windows-x64' => 'AWiki-Me-Windows-x64-$version.exe',
     _ => throw FormatException('unsupported package target: $target'),
   };
 }

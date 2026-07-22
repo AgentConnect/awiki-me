@@ -275,7 +275,7 @@ $compiler = Find-InnoCompiler
 if (-not (Test-Path (Join-Path $RootDir 'windows\runner\resources\app_icon.ico'))) {
     throw 'Windows runner app_icon.ico is required for the installer'
 }
-$CurrentBaseName = "AWiki-Me-$Version-windows-x64"
+$CurrentBaseName = "AWiki-Me-Windows-x64-$Version"
 Compile-Installer $compiler $AppStage $Version $CurrentBaseName $OutputDir
 $Installer = Join-Path $OutputDir "$CurrentBaseName.exe"
 if (-not (Test-Path $Installer)) {

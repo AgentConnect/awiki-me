@@ -116,6 +116,12 @@ void main() {
       expect(worker, contains(export));
     }
     expect(worker, contains(r'Get-FileHash -LiteralPath $Installer'));
+    expect(
+      worker,
+      contains(r'$CurrentBaseName = "AWiki-Me-Windows-x64-$Version"'),
+    );
+    expect(installer, contains('#error MyOutputBaseFilename is required'));
+    expect(installer, isNot(contains('#define MyOutputBaseFilename')));
     expect(worker, contains("-Filter '*.dll'"));
     expect(worker, contains('awiki-runtime-manifest.json'));
     expect(worker, contains('awiki-runtime-files.txt'));

@@ -174,7 +174,7 @@ Future<void> _writeFixture(
     'android-arm64' => 'AWiki-Me-Android-arm64-1.2.3.apk',
     'macos-arm64' => 'AWiki-Me-macOS-arm64-1.2.3.dmg',
     'macos-x64' => 'AWiki-Me-macOS-x64-1.2.3.dmg',
-    'windows-x64' => 'AWiki-Me-1.2.3-windows-x64.exe',
+    'windows-x64' => 'AWiki-Me-Windows-x64-1.2.3.exe',
     _ => throw StateError(target),
   };
   await File(

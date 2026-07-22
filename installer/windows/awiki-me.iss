@@ -26,7 +26,7 @@
   #define MyOutputDir "."
 #endif
 #ifndef MyOutputBaseFilename
-  #define MyOutputBaseFilename "AWiki-Me-windows-x64"
+  #error MyOutputBaseFilename is required
 #endif
 
 [Setup]

@@ -5,7 +5,7 @@ Rust 1.88.0, the `x86_64-pc-windows-msvc` target, the Visual Studio 2022 ATL
 toolchain, and Inno Setup 6.3.2. The result is an unsigned per-user installer:
 
 ```text
-AWiki-Me-<version>-windows-x64.exe
+AWiki-Me-Windows-x64-<version>.exe
 ```
 
 The installer defaults program files to

@@ -350,8 +350,8 @@ ${{
                 .toList()
               ..sort();
         expect(releaseFiles, <String>[
-          'AWiki-Me-1.2.3-windows-x64.exe',
           'AWiki-Me-Android-arm64-1.2.3.apk',
+          'AWiki-Me-Windows-x64-1.2.3.exe',
           'AWiki-Me-macOS-arm64-1.2.3.dmg',
           'AWiki-Me-macOS-x64-1.2.3.dmg',
           'package-manifest.json',
@@ -579,7 +579,7 @@ Future<void> _writeAggregate(
       'android-arm64' => 'AWiki-Me-Android-arm64-1.2.3.apk',
       'macos-arm64' => 'AWiki-Me-macOS-arm64-1.2.3.dmg',
       'macos-x64' => 'AWiki-Me-macOS-x64-1.2.3.dmg',
-      'windows-x64' => 'AWiki-Me-1.2.3-windows-x64.exe',
+      'windows-x64' => 'AWiki-Me-Windows-x64-1.2.3.exe',
       _ => throw StateError('unsupported fixture target: $target'),
     };
     final bytes = utf8.encode('package-$target');
