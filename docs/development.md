@@ -129,7 +129,7 @@ macos-x64
 windows-x64
 ```
 
-The default remains Android arm64 plus both macOS architectures; Windows must be selected explicitly. The local script validates clean, exactly pushed APP/Core refs, dispatches the pinned GitHub Actions workflow, waits for the exact request ID, and downloads the aggregate artifact. It never changes `pubspec.yaml` or builds a package locally.
+The default includes all four targets. The local script validates clean, exactly pushed APP/Core refs, dispatches the stable GitHub Actions controller from the repository default branch, waits for the exact request ID, and downloads the aggregate artifact. The APP and Core source commits can come from any reviewed, pushed branches; packaging does not require merging those sources into the default branch. The script never changes `pubspec.yaml` or builds a package locally.
 
 macOS trial and production packages must use a stable, non-ad-hoc signing identity. Android/macOS signing material and the read-only private Core token live in the protected `app-packaging` GitHub Environment. Private keys, `.p12`, `.pfx`, and local signing configuration must never enter the repository. Windows installers are unsigned in this phase. See [Windows x64 packaging](windows-packaging.md) for installer, data-preservation, and CI details.
 

@@ -137,7 +137,8 @@ jobs:
           VERSION: ${{ inputs.version }}
           BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
-          test "$GITHUB_SHA" = "$APP_REF"
+          # GITHUB_SHA identifies the stable workflow controller revision.
+          # The immutable source revisions are verified from their checkouts.
           test "$(git -C awiki-me rev-parse HEAD)" = "$APP_REF"
           test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CORE_REF"
           test "$(git -C anp/anp rev-parse HEAD)" = "$ANP_REF"

@@ -25,9 +25,16 @@ application and never changes `pubspec.yaml`. Before dispatch it requires:
 - an exact APP, IM Core, and ANP 40-character commit SHA; and
 - the ANP SHA to match `awiki-cli-rs2/scripts/release/cli/release-config.json`.
 
-The script dispatches `.github/workflows/package-app.yml` with a unique UUID,
-waits for that exact run, downloads only its aggregate artifact, and verifies
-every size and SHA-256 before writing `dist/<version>/` and `dist/latest.json`.
+The script resolves the repository's current default branch and dispatches the
+stable `.github/workflows/package-app.yml` controller from that branch with a
+unique UUID. The APP and Core source revisions remain the exact commits from
+their independently selected, pushed branches. The script waits for that exact
+run, downloads only its aggregate artifact, and verifies every size and SHA-256
+before writing `dist/<version>/` and `dist/latest.json`.
+
+The default branch registers and protects the packaging workflow; it is not the
+required source branch for a release. Any reviewed APP and Core branch can be
+packaged without first merging its source into the default branch.
 
 The workflow uploads Actions artifacts only. It does not create a GitHub Release,
 upload to a web server, alter public download configuration, or publish an
@@ -52,7 +59,9 @@ contents:
 | `AWIKI_MACOS_DEVELOPMENT_TEAM` | Matching ten-character Apple Team ID |
 
 Pull-request CI must not read these secrets. The full package workflow is a
-manual `workflow_dispatch` job after the workflow exists on the default branch.
+manual `workflow_dispatch` job registered on the default branch. Environment
+reviewers must approve the exact APP, Core, and ANP source revisions before the
+workflow can use private checkout or signing secrets.
 
 ## Targets
 
@@ -65,9 +74,8 @@ macos-x64
 windows-x64
 ```
 
-The default deliberately remains the pre-Windows set of Android arm64 plus both
-macOS architectures. Select Windows explicitly until maintainers decide to
-change the default:
+The default is the complete four-platform set. A local override can select a
+smaller subset for a focused package run:
 
 ```bash
 # scripts/package_app.local.config (Git-ignored)

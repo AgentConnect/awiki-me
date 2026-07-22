@@ -198,8 +198,8 @@ require_clean_source_tree() {
     fail "$label source tree must be clean before packaging; commit or remove local changes"
 }
 
-UPSTREAM_REMOTE=""
-UPSTREAM_BRANCH=""
+APP_SOURCE_REMOTE=""
+APP_SOURCE_BRANCH=""
 require_exact_upstream_push() {
   local label="$1"
   local repo_dir="$2"
@@ -218,9 +218,23 @@ require_exact_upstream_push() {
   [[ "$remote_ref" == "$expected_ref" ]] ||
     fail "$label HEAD $expected_ref is not the exact tip of $upstream"
   if [[ "$repo_dir" == "$ROOT_DIR" ]]; then
-    UPSTREAM_REMOTE="$remote"
-    UPSTREAM_BRANCH="$remote_branch"
+    APP_SOURCE_REMOTE="$remote"
+    APP_SOURCE_BRANCH="$remote_branch"
   fi
+}
+
+resolve_workflow_ref() {
+  local repository="$1"
+  local branch
+  branch="$(
+    gh repo view "$repository" \
+      --json defaultBranchRef \
+      --jq '.defaultBranchRef.name'
+  )" || fail "cannot resolve the default workflow branch for $repository"
+  validate_no_newline "GitHub default workflow branch" "$branch"
+  [[ -n "$branch" ]] ||
+    fail "GitHub repository $repository does not have a default workflow branch"
+  printf '%s\n' "$branch"
 }
 
 read_pubspec_version() {
@@ -266,7 +280,7 @@ if [[ -n "${PACKAGE_UPDATE_MANIFEST_PUBLIC_URL:-}" ]]; then
 fi
 DOWNLOAD_PAGE_URL="${PACKAGE_DOWNLOAD_PAGE_URL:-$RELEASE_BASE_URL/#download}"
 
-REMOTE_URL="$(git -C "$ROOT_DIR" remote get-url "$UPSTREAM_REMOTE")"
+REMOTE_URL="$(git -C "$ROOT_DIR" remote get-url "$APP_SOURCE_REMOTE")"
 REPOSITORY="$(
   printf '%s\n' "$REMOTE_URL" |
     sed -E 's#^git@github.com:##; s#^https://github.com/##; s#\.git$##'
@@ -276,6 +290,7 @@ REPOSITORY="$(
 
 gh auth status --hostname github.com >/dev/null 2>&1 ||
   fail "GitHub CLI is not authenticated for github.com"
+WORKFLOW_REF="$(resolve_workflow_ref "$REPOSITORY")"
 
 REQUEST_ID="$(python3 - <<'PY'
 import uuid
@@ -285,7 +300,8 @@ PY
 
 log "workflow:        $PACKAGE_WORKFLOW_FILE"
 log "repository:      $REPOSITORY"
-log "workflow ref:    $UPSTREAM_BRANCH"
+log "workflow ref:    $WORKFLOW_REF"
+log "App source:      $APP_SOURCE_BRANCH@$APP_SOURCE_REF"
 log "request ID:      $REQUEST_ID"
 log "version:         $VERSION_NAME+$BUILD_NUMBER"
 log "targets:         $NORMALIZED_TARGETS"
@@ -295,7 +311,7 @@ log "ANP source ref:  $ANP_SOURCE_REF"
 
 gh workflow run "$PACKAGE_WORKFLOW_FILE" \
   --repo "$REPOSITORY" \
-  --ref "$UPSTREAM_BRANCH" \
+  --ref "$WORKFLOW_REF" \
   --raw-field "request_id=$REQUEST_ID" \
   --raw-field "app_ref=$APP_SOURCE_REF" \
   --raw-field "core_ref=$IM_CORE_SOURCE_REF" \
@@ -311,7 +327,7 @@ find_run_id() {
   gh run list \
     --repo "$REPOSITORY" \
     --workflow "$PACKAGE_WORKFLOW_FILE" \
-    --branch "$UPSTREAM_BRANCH" \
+    --branch "$WORKFLOW_REF" \
     --event workflow_dispatch \
     --limit 50 \
     --json databaseId,displayTitle |

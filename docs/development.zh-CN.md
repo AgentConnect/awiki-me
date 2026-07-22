@@ -129,7 +129,7 @@ macos-x64
 windows-x64
 ```
 
-默认值仍保持 Android arm64 与 macOS 双架构，Windows 需要显式选择。本地脚本会校验 APP/Core 工作树干净且当前提交已经精确推送，随后触发固定版本的 GitHub Actions 工作流、等待唯一 request ID 并下载聚合产物；它不会修改 `pubspec.yaml`，也不会在 Mac 本机编译安装包。
+默认包含四个平台目标。本地脚本会校验 APP/Core 工作树干净且当前提交已经精确推送，然后从仓库默认分支触发稳定的 GitHub Actions 控制工作流、等待唯一 request ID 并下载聚合产物。APP 和 Core 源码可以来自任意已审核且已推送的分支，不需要先合并到默认分支。脚本不会修改 `pubspec.yaml`，也不会在 Mac 本机编译安装包。
 
 macOS 试用/正式包必须使用稳定的非 ad-hoc 签名 identity。Android/macOS 签名材料及私有 Core 仓库只读 token 放在受保护的 `app-packaging` GitHub Environment；私钥、`.p12`、`.pfx` 和本地签名配置不得进入仓库。本阶段 Windows 安装器明确不签名。安装器、数据保留和 CI 细节见 [Windows x64 packaging](windows-packaging.md)。
 
