@@ -139,3 +139,8 @@ flutter test tests/unit/application/app_session_service_test.dart \
 native Core roots、成功的产品短信发码和精确 CLI revision，明确不接受 staged SMS error。
 `HANDLE-RECOVERY-E2E-003` 的旧 token、未来消息、Direct 与群重绑完整收敛仍保持 planned；
 fake-backed Widget 测试不能作为远端恢复通过证据。
+
+当前执行状态：现有 Recovery 单元测试、服务测试和取消等短流程继续保留。至少 3600 秒的
+完整冷静期、最终确认及 Handle → 不同新 DID 切换列为后续人工验收，状态为
+`manual-verification-pending / not-run`，未执行且不计 PASS。该遗留项只阻塞 Recovery
+发布和“完整恢复已通过”的表述，不阻塞 Join、Direct、MLS、撤销等其他多设备功能。

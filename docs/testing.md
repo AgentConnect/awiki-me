@@ -112,7 +112,10 @@ macOS user-presence。当
 不得声称远端通过。`HANDLE-RECOVERY-E2E-001/002` 由独立的
 `multi-device-remote-recovery` suite 承载：它要求两个专用账号、隔离 native Core roots、
 真实短信成功、至少 3600 秒权威冷静期、独立二次 OTP 和真实 macOS LocalAuthentication；
-staged SMS error 不构成该产品 gate。`MLS-MULTI-DEVICE-E2E-001/002` 已由同样显式激活的
+staged SMS error 不构成该产品 gate。当前执行策略保留 Recovery 单元测试和取消等短流程；
+完整冷静期、最终确认及新 DID 切换记录为 `manual-verification-pending / not-run`、非 PASS，
+由后续人工验证。该项只阻塞 Recovery 发布声明，不阻塞其他多设备开发与测试。
+`MLS-MULTI-DEVICE-E2E-001/002` 已由同样显式激活的
 `multi-device-remote-mls` suite 承载：真实 App owner 与独立 CLI root 覆盖
 Add/Welcome、未来双向群消息、单对象附件和精确设备 Remove。`DEVICE-JOIN-E2E-003`、
 `ROOT-TRANSFER-E2E-002` 和 `HANDLE-RECOVERY-E2E-003` 仍为 planned；不得把本地
@@ -292,7 +295,11 @@ an App restart before one real LocalAuthentication cancel and that requester
 finalize remains rejected. The completion case observes at least 3600 seconds
 of authoritative cooling, uses an independent Session-bound second OTP, and
 requires a distinct replacement DID whose only device is a ready admin. Test
-output and attestation contain fixed phase/count/boolean evidence only.
+output and attestation contain fixed phase/count/boolean evidence only. The
+completion case is currently an operator-owned manual acceptance item and is
+reported as `not-run` (not pass); unit tests and the cancellation/short path
+remain routine gates, and this manual item does not block other multi-device
+development.
 
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:
