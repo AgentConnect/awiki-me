@@ -1,5 +1,5 @@
 name: Package App
-run-name: package-app ${{ inputs.request_id }}
+run-name: package-app ${{ inputs.version }}+${{ inputs.build_number }} by ${{ github.actor }} (${{ inputs.request_id }})
 
 on:
   workflow_dispatch:
@@ -59,7 +59,72 @@ env:
   FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
 
 jobs:
+  authorize:
+    name: Authorize release request
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require an authorized release actor and stable controller
+        env:
+          RELEASE_ACTORS: ${{ vars.AWIKI_APP_RELEASE_ACTORS }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          EVENT_NAME: ${{ github.event_name }}
+          CONTROL_REF_TYPE: ${{ github.ref_type }}
+          CONTROL_BRANCH: ${{ github.ref_name }}
+          CONTROL_REF: ${{ github.ref }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+
+          try:
+              configured = json.loads(os.environ.get("RELEASE_ACTORS", ""))
+          except json.JSONDecodeError as error:
+              raise SystemExit("AWIKI_APP_RELEASE_ACTORS must be a JSON array") from error
+          if not isinstance(configured, list) or not configured:
+              raise SystemExit("AWIKI_APP_RELEASE_ACTORS must contain at least one GitHub login")
+
+          actors = []
+          for value in configured:
+              if not isinstance(value, str) or not re.fullmatch(
+                  r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", value
+              ):
+                  raise SystemExit("AWIKI_APP_RELEASE_ACTORS contains an invalid GitHub login")
+              normalized = value.casefold()
+              if normalized in actors:
+                  raise SystemExit("AWIKI_APP_RELEASE_ACTORS contains duplicate GitHub logins")
+              actors.append(normalized)
+
+          for name in ("ACTOR", "TRIGGERING_ACTOR"):
+              actor = os.environ.get(name, "").casefold()
+              if actor not in actors:
+                  raise SystemExit(f"{name} is not authorized to package AWiki Me")
+
+          if os.environ.get("EVENT_NAME") != "workflow_dispatch":
+              raise SystemExit("package workflow only accepts workflow_dispatch events")
+          if os.environ.get("CONTROL_REF_TYPE") != "branch":
+              raise SystemExit("package workflow controller must run from a branch")
+          if os.environ.get("CONTROL_BRANCH") != os.environ.get("DEFAULT_BRANCH"):
+              raise SystemExit("package workflow controller must run from the default branch")
+          expected_ref = f'refs/heads/{os.environ.get("DEFAULT_BRANCH", "")}'
+          if os.environ.get("CONTROL_REF") != expected_ref:
+              raise SystemExit("package workflow event ref does not match the default branch")
+          if not os.environ.get("WORKFLOW_REF", "").endswith(f"@{expected_ref}"):
+              raise SystemExit("package workflow file does not come from the default branch")
+          PY
+
   validate:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
+        contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
+      }}
+    needs: authorize
     runs-on: ubuntu-24.04
     environment: app-packaging
     outputs:
@@ -113,6 +178,7 @@ jobs:
         with:
           ref: ${{ inputs.app_ref }}
           path: awiki-me
+          persist-credentials: false
 
       - name: Checkout exact CLI / IM Core source
         uses: actions/checkout@v6
@@ -121,6 +187,7 @@ jobs:
           ref: ${{ inputs.core_ref }}
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: awiki-cli-rs2
+          persist-credentials: false
 
       - name: Checkout exact ANP source
         uses: actions/checkout@v6
@@ -128,6 +195,7 @@ jobs:
           repository: agent-network-protocol/anp
           ref: ${{ inputs.anp_ref }}
           path: anp/anp
+          persist-credentials: false
 
       - name: Verify source refs and committed version
         env:
@@ -185,6 +253,14 @@ jobs:
 
   build:
     name: Build ${{ matrix.target }}
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
+        contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
+      }}
     needs: validate
     runs-on: ${{ matrix.runner }}
     environment: app-packaging
@@ -197,6 +273,7 @@ jobs:
         with:
           ref: ${{ inputs.app_ref }}
           path: awiki-me
+          persist-credentials: false
 
       - name: Checkout exact CLI / IM Core source
         uses: actions/checkout@v6
@@ -205,6 +282,7 @@ jobs:
           ref: ${{ inputs.core_ref }}
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: awiki-cli-rs2
+          persist-credentials: false
 
       - name: Checkout exact ANP source
         uses: actions/checkout@v6
@@ -212,6 +290,7 @@ jobs:
           repository: agent-network-protocol/anp
           ref: ${{ inputs.anp_ref }}
           path: anp/anp
+          persist-credentials: false
 
       - name: Setup Flutter 3.44.0
         uses: subosito/flutter-action@v2.23.0
@@ -329,6 +408,14 @@ jobs:
 
   aggregate:
     name: Aggregate verified packages
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+        endsWith(github.workflow_ref, format('@refs/heads/{0}', github.event.repository.default_branch)) &&
+        contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.actor) &&
+        contains(fromJSON(vars.AWIKI_APP_RELEASE_ACTORS), github.triggering_actor)
+      }}
     needs: [validate, build]
     runs-on: ubuntu-24.04
     environment: app-packaging
@@ -338,6 +425,7 @@ jobs:
         with:
           ref: ${{ inputs.app_ref }}
           path: awiki-me
+          persist-credentials: false
 
       - name: Checkout exact CLI / IM Core source
         uses: actions/checkout@v6
@@ -346,6 +434,7 @@ jobs:
           ref: ${{ inputs.core_ref }}
           token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
           path: awiki-cli-rs2
+          persist-credentials: false
 
       - name: Setup Flutter 3.44.0
         uses: subosito/flutter-action@v2.23.0
