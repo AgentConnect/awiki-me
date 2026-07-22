@@ -24,10 +24,10 @@ awiki_resolve_codesigning_identity() {
   identities="$(security find-identity -v -p codesigning 2>/dev/null)"
   case "$identity" in
     [0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]*)
-      line="$(printf '%s\n' "$identities" | grep -i -m 1 " $identity " || true)"
+      line="$(grep -i -m 1 " $identity " <<< "$identities" || true)"
       ;;
     *)
-      line="$(printf '%s\n' "$identities" | grep -F -m 1 "\"$identity\"" || true)"
+      line="$(grep -F -m 1 "\"$identity\"" <<< "$identities" || true)"
       ;;
   esac
   [[ -n "$line" ]] || {
@@ -35,7 +35,7 @@ awiki_resolve_codesigning_identity() {
     return 1
   }
 
-  fingerprint="$(printf '%s\n' "$line" | awk '{print $2}')"
+  fingerprint="$(awk '{print $2}' <<< "$line")"
   [[ "$fingerprint" =~ ^[0-9A-Fa-f]{40}$ ]] || {
     awiki_macos_signing_error "could not resolve the signing identity fingerprint"
     return 1
@@ -75,25 +75,25 @@ awiki_verify_macos_app_signature() {
   }
 
   details="$(codesign -dvvv "$app" 2>&1)"
-  printf '%s\n' "$details" | grep -Fqx "Identifier=$expected_bundle_id" || {
+  grep -Fqx "Identifier=$expected_bundle_id" <<< "$details" || {
     awiki_macos_signing_error "signature identifier does not match $expected_bundle_id"
     return 1
   }
-  printf '%s\n' "$details" | grep -Fqx "TeamIdentifier=$expected_team" || {
+  grep -Fqx "TeamIdentifier=$expected_team" <<< "$details" || {
     awiki_macos_signing_error "signature Team ID does not match $expected_team"
     return 1
   }
-  if printf '%s\n' "$details" | grep -Fq 'Signature=adhoc'; then
+  if grep -Fq 'Signature=adhoc' <<< "$details"; then
     awiki_macos_signing_error "ad-hoc signatures are not allowed for trial releases"
     return 1
   fi
 
   requirement="$(codesign -d -r- "$app" 2>&1)"
-  if printf '%s\n' "$requirement" | grep -Fq 'cdhash H'; then
+  if grep -Fq 'cdhash H' <<< "$requirement"; then
     awiki_macos_signing_error "designated requirement is tied to a mutable CDHash"
     return 1
   fi
-  printf '%s\n' "$requirement" | grep -Fq "identifier \"$expected_bundle_id\"" || {
+  grep -Fq "identifier \"$expected_bundle_id\"" <<< "$requirement" || {
     awiki_macos_signing_error "designated requirement does not contain the bundle identifier"
     return 1
   }

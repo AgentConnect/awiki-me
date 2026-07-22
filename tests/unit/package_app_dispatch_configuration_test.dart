@@ -166,6 +166,34 @@ ${{
       contains('build-sdk-native.sh --macos-only --skip-codegen-check'),
     );
 
+    final androidSettings = File('android/settings.gradle').readAsStringSync();
+    final androidBuild = File('android/build.gradle').readAsStringSync();
+    _expectBefore(
+      androidSettings,
+      'google()',
+      "maven { url 'https://maven.aliyun.com/repository/google' }",
+    );
+    _expectBefore(
+      androidSettings,
+      'mavenCentral()',
+      "maven { url 'https://maven.aliyun.com/repository/central' }",
+    );
+    _expectBefore(
+      androidSettings,
+      'gradlePluginPortal()',
+      "maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }",
+    );
+    _expectBefore(
+      androidBuild,
+      'google()',
+      "maven { url 'https://maven.aliyun.com/repository/google' }",
+    );
+    _expectBefore(
+      androidBuild,
+      'mavenCentral()',
+      "maven { url 'https://maven.aliyun.com/repository/central' }",
+    );
+
     for (final job in jobs.values.cast<YamlMap>()) {
       final jobSteps = job['steps'];
       if (jobSteps is! YamlList) continue;
@@ -493,6 +521,18 @@ ProcessResult _runAuthorization({
 
 String _normalizeWhitespace(String value) {
   return value.replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+void _expectBefore(String source, String first, String second) {
+  final firstIndex = source.indexOf(first);
+  final secondIndex = source.indexOf(second);
+  expect(firstIndex, isNonNegative, reason: '$first must be configured');
+  expect(secondIndex, isNonNegative, reason: '$second must be configured');
+  expect(
+    firstIndex,
+    lessThan(secondIndex),
+    reason: '$first must be preferred over $second',
+  );
 }
 
 Future<void> _writeAggregate(

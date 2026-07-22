@@ -246,6 +246,10 @@ void main() {
     expect(signingLibrary, contains('TeamIdentifier=\$expected_team'));
     expect(signingLibrary, contains('Signature=adhoc'));
     expect(signingLibrary, contains('cdhash H'));
+    expect(signingLibrary, contains('<<< "\$details"'));
+    expect(signingLibrary, contains('<<< "\$requirement"'));
+    expect(signingLibrary, isNot(contains('"\$details" | grep')));
+    expect(signingLibrary, isNot(contains('"\$requirement" | grep')));
     expect(
       nativeWindow,
       contains('bundleIdentifier.hasPrefix("ai.awiki.awikime.dev.")'),
