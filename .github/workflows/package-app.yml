@@ -1,0 +1,397 @@
+name: Package App
+run-name: package-app ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        description: Unique package request UUID
+        required: true
+        type: string
+      app_ref:
+        description: Exact 40-character awiki-me commit SHA
+        required: true
+        type: string
+      core_ref:
+        description: Exact 40-character awiki-cli-rs2 commit SHA
+        required: true
+        type: string
+      anp_ref:
+        description: Exact 40-character ANP commit SHA
+        required: true
+        type: string
+      targets:
+        description: Comma-separated package targets
+        required: true
+        type: string
+      version:
+        description: Semantic App version already committed to pubspec.yaml
+        required: true
+        type: string
+      build_number:
+        description: Positive App build number already committed to pubspec.yaml
+        required: true
+        type: string
+      primary_tenant_domain:
+        description: Built-in primary tenant hostname
+        required: true
+        type: string
+      download_base_url:
+        description: Public package URL prefix recorded in latest.json
+        required: true
+        type: string
+      download_page_url:
+        description: Download page recorded in latest.json
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: awiki-me-package-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: 3.44.0
+  RUST_VERSION: 1.88.0
+  PUB_HOSTED_URL: https://pub.dev
+  FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    environment: app-packaging
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+      normalized_targets: ${{ steps.targets.outputs.normalized_targets }}
+    steps:
+      - name: Validate immutable workflow inputs
+        env:
+          APP_REF: ${{ inputs.app_ref }}
+          CORE_REF: ${{ inputs.core_ref }}
+          ANP_REF: ${{ inputs.anp_ref }}
+          REQUEST_ID: ${{ inputs.request_id }}
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          PRIMARY_TENANT_DOMAIN: ${{ inputs.primary_tenant_domain }}
+          DOWNLOAD_BASE_URL: ${{ inputs.download_base_url }}
+          DOWNLOAD_PAGE_URL: ${{ inputs.download_page_url }}
+        run: |
+          python3 - <<'PY'
+          import os, re, urllib.parse, uuid
+
+          for name in ("APP_REF", "CORE_REF", "ANP_REF"):
+              if not re.fullmatch(r"[0-9a-f]{40}", os.environ[name]):
+                  raise SystemExit(f"{name} must be a lowercase 40-character SHA")
+          try:
+              uuid.UUID(os.environ["REQUEST_ID"])
+          except ValueError as error:
+              raise SystemExit("request_id must be a UUID") from error
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", os.environ["VERSION"]):
+              raise SystemExit("version must use semantic version format")
+          if not re.fullmatch(r"[1-9]\d*", os.environ["BUILD_NUMBER"]):
+              raise SystemExit("build_number must be positive")
+          if not re.fullmatch(
+              r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*",
+              os.environ["PRIMARY_TENANT_DOMAIN"],
+          ):
+              raise SystemExit("primary_tenant_domain must be a lowercase hostname")
+          for name in ("DOWNLOAD_BASE_URL", "DOWNLOAD_PAGE_URL"):
+              parsed = urllib.parse.urlparse(os.environ[name])
+              if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                  raise SystemExit(f"{name} must be an http(s) URL")
+          PY
+
+      - name: Require private Core checkout token
+        env:
+          READ_TOKEN: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+        run: test -n "$READ_TOKEN"
+
+      - name: Checkout exact AWiki Me source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.app_ref }}
+          path: awiki-me
+
+      - name: Checkout exact CLI / IM Core source
+        uses: actions/checkout@v6
+        with:
+          repository: AgentConnect/awiki-cli-rs2
+          ref: ${{ inputs.core_ref }}
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: awiki-cli-rs2
+
+      - name: Checkout exact ANP source
+        uses: actions/checkout@v6
+        with:
+          repository: agent-network-protocol/anp
+          ref: ${{ inputs.anp_ref }}
+          path: anp/anp
+
+      - name: Verify source refs and committed version
+        env:
+          APP_REF: ${{ inputs.app_ref }}
+          CORE_REF: ${{ inputs.core_ref }}
+          ANP_REF: ${{ inputs.anp_ref }}
+          VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          # GITHUB_SHA identifies the stable workflow controller revision.
+          # The immutable source revisions are verified from their checkouts.
+          test "$(git -C awiki-me rev-parse HEAD)" = "$APP_REF"
+          test "$(git -C awiki-cli-rs2 rev-parse HEAD)" = "$CORE_REF"
+          test "$(git -C anp/anp rev-parse HEAD)" = "$ANP_REF"
+          python3 - <<'PY'
+          import json, os, pathlib, re
+
+          pubspec = pathlib.Path("awiki-me/pubspec.yaml").read_text(encoding="utf-8")
+          match = re.search(r"^version:\s*(\S+)\s*$", pubspec, re.MULTILINE)
+          expected = f'{os.environ["VERSION"]}+{os.environ["BUILD_NUMBER"]}'
+          if not match or match.group(1) != expected:
+              raise SystemExit(f"pubspec version must be {expected}")
+          config = json.loads(pathlib.Path(
+              "awiki-cli-rs2/scripts/release/cli/release-config.json"
+          ).read_text(encoding="utf-8"))
+          if config.get("anp_commit") != os.environ["ANP_REF"]:
+              raise SystemExit("Core release config does not pin the requested ANP SHA")
+          PY
+
+      - name: Resolve target matrix
+        id: targets
+        env:
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re
+
+          definitions = {
+              "android-arm64": {"target": "android-arm64", "runner": "ubuntu-24.04"},
+              "macos-arm64": {"target": "macos-arm64", "runner": "macos-14"},
+              "macos-x64": {"target": "macos-x64", "runner": "macos-15-intel"},
+              "windows-x64": {"target": "windows-x64", "runner": "windows-2022"},
+          }
+          requested = [part for part in re.split(r"[,\s]+", os.environ["TARGETS"]) if part]
+          if not requested or len(requested) != len(set(requested)):
+              raise SystemExit("targets must be non-empty and unique")
+          unknown = [target for target in requested if target not in definitions]
+          if unknown:
+              raise SystemExit(f"unsupported targets: {', '.join(unknown)}")
+          ordered = [target for target in definitions if target in requested]
+          matrix = {"include": [definitions[target] for target in ordered]}
+          print("matrix=" + json.dumps(matrix, separators=(",", ":")))
+          print("normalized_targets=" + ",".join(ordered))
+          PY
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: validate
+    runs-on: ${{ matrix.runner }}
+    environment: app-packaging
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
+    steps:
+      - name: Checkout exact AWiki Me source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.app_ref }}
+          path: awiki-me
+
+      - name: Checkout exact CLI / IM Core source
+        uses: actions/checkout@v6
+        with:
+          repository: AgentConnect/awiki-cli-rs2
+          ref: ${{ inputs.core_ref }}
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: awiki-cli-rs2
+
+      - name: Checkout exact ANP source
+        uses: actions/checkout@v6
+        with:
+          repository: agent-network-protocol/anp
+          ref: ${{ inputs.anp_ref }}
+          path: anp/anp
+
+      - name: Setup Flutter 3.44.0
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Setup Rust 1.88.0
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup override set --path awiki-cli-rs2 "$RUST_VERSION"
+          test "$(cd awiki-cli-rs2 && rustc --version | awk '{print $2}')" = "$RUST_VERSION"
+
+      - name: Enable Flutter desktop target
+        if: matrix.target != 'android-arm64'
+        shell: bash
+        run: flutter config --enable-${{ startsWith(matrix.target, 'macos-') && 'macos' || 'windows' }}-desktop
+
+      - name: Prepare Android release signing
+        if: matrix.target == 'android-arm64'
+        working-directory: awiki-me
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.AWIKI_ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.AWIKI_ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.AWIKI_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.AWIKI_ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" && test -n "$STORE_PASSWORD"
+          test -n "$KEY_ALIAS" && test -n "$KEY_PASSWORD"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/upload-keystore.jks
+          {
+            printf 'storeFile=%s\n' "$PWD/android/upload-keystore.jks"
+            printf 'storePassword=%s\n' "$STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > android/key.properties
+
+      - name: Prepare macOS release signing keychain
+        if: startsWith(matrix.target, 'macos-')
+        shell: bash
+        env:
+          P12_BASE64: ${{ secrets.AWIKI_MACOS_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.AWIKI_MACOS_P12_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.AWIKI_MACOS_SIGNING_IDENTITY }}
+          DEVELOPMENT_TEAM: ${{ secrets.AWIKI_MACOS_DEVELOPMENT_TEAM }}
+        run: |
+          test -n "$P12_BASE64" && test -n "$P12_PASSWORD"
+          test -n "$SIGNING_IDENTITY" && test -n "$DEVELOPMENT_TEAM"
+          keychain="$RUNNER_TEMP/awiki-package.keychain-db"
+          password="$(python3 -c 'import secrets; print(secrets.token_hex(24))')"
+          printf '%s' "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/awiki-signing.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/awiki-signing.p12" \
+            -k "$keychain" -P "$P12_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          printf 'AWIKI_MACOS_SIGNING_IDENTITY=%s\n' "$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          printf 'AWIKI_MACOS_DEVELOPMENT_TEAM=%s\n' "$DEVELOPMENT_TEAM" >> "$GITHUB_ENV"
+
+      - name: Install pinned Inno Setup
+        if: matrix.target == 'windows-x64'
+        shell: pwsh
+        run: choco install innosetup --version=6.3.2 --allow-downgrade --no-progress --yes
+
+      - name: Build Android or macOS package
+        if: matrix.target != 'windows-x64'
+        working-directory: awiki-me
+        shell: bash
+        env:
+          ANDROID_STARTUP_SMOKE_TEST: ${{ vars.AWIKI_ANDROID_STARTUP_SMOKE_TEST || 'auto' }}
+        run: |
+          scripts/package_unix_worker.sh \
+            --target "${{ matrix.target }}" \
+            --version "${{ inputs.version }}" \
+            --build-number "${{ inputs.build_number }}" \
+            --app-ref "${{ inputs.app_ref }}" \
+            --core-ref "${{ inputs.core_ref }}" \
+            --anp-ref "${{ inputs.anp_ref }}" \
+            --primary-tenant-domain "${{ inputs.primary_tenant_domain }}" \
+            --android-startup-smoke-test "$ANDROID_STARTUP_SMOKE_TEST" \
+            --core-dir ../awiki-cli-rs2 \
+            --anp-dir ../anp/anp \
+            --output-dir "../package-output/${{ matrix.target }}"
+
+      - name: Build and verify Windows package
+        if: matrix.target == 'windows-x64'
+        working-directory: awiki-me
+        shell: pwsh
+        run: |
+          ./scripts/package_windows.ps1 `
+            -Target '${{ matrix.target }}' `
+            -Version '${{ inputs.version }}' `
+            -BuildNumber '${{ inputs.build_number }}' `
+            -AppRef '${{ inputs.app_ref }}' `
+            -CoreRef '${{ inputs.core_ref }}' `
+            -AnpRef '${{ inputs.anp_ref }}' `
+            -PrimaryTenantDomain '${{ inputs.primary_tenant_domain }}' `
+            -CoreDir ../awiki-cli-rs2 `
+            -AnpDir ../anp/anp `
+            -OutputDir "../package-output/${{ matrix.target }}"
+
+      - name: Upload verified platform package
+        uses: actions/upload-artifact@v7
+        with:
+          name: awiki-me-${{ matrix.target }}-${{ inputs.request_id }}
+          path: package-output/${{ matrix.target }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  aggregate:
+    name: Aggregate verified packages
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    environment: app-packaging
+    steps:
+      - name: Checkout exact AWiki Me source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.app_ref }}
+          path: awiki-me
+
+      - name: Checkout exact CLI / IM Core source
+        uses: actions/checkout@v6
+        with:
+          repository: AgentConnect/awiki-cli-rs2
+          ref: ${{ inputs.core_ref }}
+          token: ${{ secrets.AWIKI_CI_READ_TOKEN }}
+          path: awiki-cli-rs2
+
+      - name: Setup Flutter 3.44.0
+        uses: subosito/flutter-action@v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install Dart dependencies
+        working-directory: awiki-me
+        run: flutter pub get
+
+      - name: Download all selected platform packages
+        uses: actions/download-artifact@v7
+        with:
+          pattern: awiki-me-*-${{ inputs.request_id }}
+          path: package-input
+
+      - name: Recompute checksums and generate manifests
+        working-directory: awiki-me
+        env:
+          NORMALIZED_TARGETS: ${{ needs.validate.outputs.normalized_targets }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+          PACKAGE_BUILD_NUMBER: ${{ inputs.build_number }}
+          APP_REF: ${{ inputs.app_ref }}
+          CORE_REF: ${{ inputs.core_ref }}
+          ANP_REF: ${{ inputs.anp_ref }}
+          DOWNLOAD_BASE_URL: ${{ inputs.download_base_url }}
+          DOWNLOAD_PAGE_URL: ${{ inputs.download_page_url }}
+        run: |
+          dart run tool/package_manifest.dart aggregate \
+            --targets "$NORMALIZED_TARGETS" \
+            --artifacts-root ../package-input \
+            --output-dir ../package-aggregate \
+            --version "$PACKAGE_VERSION" \
+            --build-number "$PACKAGE_BUILD_NUMBER" \
+            --app-ref "$APP_REF" \
+            --core-ref "$CORE_REF" \
+            --anp-ref "$ANP_REF" \
+            --download-base-url "$DOWNLOAD_BASE_URL" \
+            --download-page-url "$DOWNLOAD_PAGE_URL"
+
+      - name: Upload aggregate package set
+        uses: actions/upload-artifact@v7
+        with:
+          name: awiki-me-packages-${{ inputs.request_id }}
+          path: package-aggregate/
+          if-no-files-found: error
+          retention-days: 14
