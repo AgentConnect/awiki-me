@@ -49,7 +49,7 @@ contents:
 | Secret | Purpose |
 | --- | --- |
 | `AWIKI_CI_READ_TOKEN` | Fine-grained, read-only access to private `AgentConnect/awiki-cli-rs2` |
-| `AWIKI_ANDROID_KEYSTORE_BASE64` | Base64-encoded Android release keystore |
+| `AWIKI_ANDROID_KEYSTORE_BASE64` | Base64-encoded existing Android debug keystore used by the current product release policy |
 | `AWIKI_ANDROID_STORE_PASSWORD` | Android keystore password |
 | `AWIKI_ANDROID_KEY_ALIAS` | Android signing alias |
 | `AWIKI_ANDROID_KEY_PASSWORD` | Android key password |
@@ -59,9 +59,24 @@ contents:
 | `AWIKI_MACOS_DEVELOPMENT_TEAM` | Matching ten-character Apple Team ID |
 
 Pull-request CI must not read these secrets. The full package workflow is a
-manual `workflow_dispatch` job registered on the default branch. Environment
-reviewers must approve the exact APP, Core, and ANP source revisions before the
-workflow can use private checkout or signing secrets.
+manual `workflow_dispatch` job registered on the default branch. The Environment
+has no required reviewer or wait timer, and its deployment policy only permits
+the default controller branch.
+
+Repository variable `AWIKI_APP_RELEASE_ACTORS` contains a non-empty JSON array
+of GitHub logins allowed to package the App, for example `["smartGrey"]`. An
+unprivileged authorization job validates the initial request. Every job that
+enters `app-packaging` independently rechecks both the original actor and the
+re-run actor on every attempt. Each release operator uses an individual GitHub
+account with two-factor authentication; release accounts and tokens are never
+shared between computers.
+
+Android intentionally retains the existing debug signing identity in this
+phase. The worker continues to require certificate SHA-256
+`F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75`.
+The APK remains a non-debuggable release-mode arm64 package; retaining this
+certificate preserves overwrite-install compatibility with existing builds.
+Changing the Android signing identity is outside this release scope.
 
 ## Targets
 
