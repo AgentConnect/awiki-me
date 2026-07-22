@@ -41,6 +41,7 @@ void main() {
     final jobs = workflow['jobs'] as YamlMap;
     final authorize = jobs['authorize'] as YamlMap;
     final validate = jobs['validate'] as YamlMap;
+    final build = jobs['build'] as YamlMap;
     final aggregate = jobs['aggregate'] as YamlMap;
     expect(authorize.containsKey('environment'), isFalse);
     expect(authorize['permissions'], isA<YamlMap>());
@@ -139,6 +140,31 @@ ${{
       contains(r'git -C awiki-cli-rs2 rev-parse HEAD'),
     );
     expect(verificationScript, contains(r'git -C anp/anp rev-parse HEAD'));
+
+    final buildSteps = build['steps'] as YamlList;
+    final androidNativeTool = _stepNamed(
+      buildSteps,
+      'Install pinned Android native build tool',
+    );
+    expect(androidNativeTool['if'], "matrix.target == 'android-arm64'");
+    expect(
+      androidNativeTool['run'].toString(),
+      contains(
+        'cargo install cargo-ndk --version "\$CARGO_NDK_VERSION" --locked',
+      ),
+    );
+    expect(
+      (workflow['env'] as YamlMap)['CARGO_NDK_VERSION'].toString(),
+      '4.1.2',
+    );
+
+    final unixWorker = File(
+      'scripts/package_unix_worker.sh',
+    ).readAsStringSync();
+    expect(
+      unixWorker,
+      contains('build-sdk-native.sh --macos-only --skip-codegen-check'),
+    );
 
     for (final job in jobs.values.cast<YamlMap>()) {
       final jobSteps = job['steps'];

@@ -342,7 +342,8 @@ build_macos() {
   fingerprint="$(awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY")" ||
     fail "configured macOS signing identity is unavailable"
 
-  (cd "$CORE_DIR" && scripts/flutter/build-sdk-native.sh --macos-only)
+  (cd "$CORE_DIR" &&
+    scripts/flutter/build-sdk-native.sh --macos-only --skip-codegen-check)
   flutter pub get
   [[ -d macos/Runner.xcworkspace ]] || fail "macOS Runner workspace is missing"
   local arch arch_label filename derived app
