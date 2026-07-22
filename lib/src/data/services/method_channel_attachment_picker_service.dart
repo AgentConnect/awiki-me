@@ -5,7 +5,6 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:pasteboard/pasteboard.dart';
 import 'package:path/path.dart' as p;
-import 'package:screen_capturer/screen_capturer.dart';
 
 import '../../application/attachment_picker_service.dart';
 import '../../application/models/attachment_models.dart';
@@ -24,7 +23,7 @@ typedef AttachmentPlatformFileSaver =
       required Uint8List bytes,
     });
 typedef AttachmentScreenCaptureRunner = Future<bool> Function(String imagePath);
-typedef AttachmentWindowAction = Future<void> Function();
+typedef AttachmentScreenCaptureCanceler = Future<bool> Function();
 
 const int defaultMaxAttachmentSizeBytes = 100 * 1024 * 1024;
 
@@ -55,10 +54,11 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     AttachmentPlatformFileSelector? windowsFileSelector,
     AttachmentPlatformFileSaver? windowsFileSaver,
     AttachmentScreenCaptureRunner? windowsScreenCaptureRunner,
-    AttachmentWindowAction? hideWindow,
-    AttachmentWindowAction? showWindow,
+    AttachmentScreenCaptureCanceler? windowsScreenCaptureCanceler,
     AttachmentTemporaryDirectoryProvider? attachmentTemporaryDirectoryProvider,
-    this.screenCaptureTimeout = const Duration(minutes: 2),
+    // Native Windows capture cancels at 120 seconds. Keep this watchdog later
+    // so an ordinary native timeout cannot race the MethodChannel future.
+    this.screenCaptureTimeout = const Duration(seconds: 125),
     this.maxAttachmentSizeBytes = defaultMaxAttachmentSizeBytes,
   }) : _channel =
            channel ?? const MethodChannel('ai.awiki.awikime/attachment_picker'),
@@ -87,10 +87,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
        _preferClipboardFiles = preferClipboardFiles ?? Platform.isMacOS,
        _windowsFileSelector = windowsFileSelector ?? _selectWindowsFile,
        _windowsFileSaver = windowsFileSaver ?? _saveWindowsFile,
-       _windowsScreenCaptureRunner =
-           windowsScreenCaptureRunner ?? _captureWindowsRegion,
-       _hideWindow = hideWindow ?? _hideDesktopWindow,
-       _showWindow = showWindow ?? _showDesktopWindow {
+       _windowsScreenCaptureRunner = windowsScreenCaptureRunner,
+       _windowsScreenCaptureCanceler = windowsScreenCaptureCanceler {
     if (maxAttachmentSizeBytes <= 0) {
       throw ArgumentError.value(
         maxAttachmentSizeBytes,
@@ -119,9 +117,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   final bool _preferClipboardFiles;
   final AttachmentPlatformFileSelector _windowsFileSelector;
   final AttachmentPlatformFileSaver _windowsFileSaver;
-  final AttachmentScreenCaptureRunner _windowsScreenCaptureRunner;
-  final AttachmentWindowAction _hideWindow;
-  final AttachmentWindowAction _showWindow;
+  final AttachmentScreenCaptureRunner? _windowsScreenCaptureRunner;
+  final AttachmentScreenCaptureCanceler? _windowsScreenCaptureCanceler;
   final Duration screenCaptureTimeout;
   final int maxAttachmentSizeBytes;
   bool _screenCapturePermissionRequested = false;
@@ -234,10 +231,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     await _cleanupOldAttachmentTempFiles(directory);
     final filename = 'screenshot-${DateTime.now().microsecondsSinceEpoch}.png';
     final source = File(p.join(directory.path, filename));
-    await _bestEffortWindowAction(_hideWindow);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 150));
-      final captured = await _windowsScreenCaptureRunner(
+      final captured = await _captureWindowsRegion(
         source.path,
       ).timeout(screenCaptureTimeout);
       if (!captured || !await source.exists()) {
@@ -254,13 +249,16 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         sizeBytes: sizeBytes,
       );
     } on TimeoutException {
+      await _cancelWindowsRegionCapture();
       throw StateError('screenshot_capture_timeout');
     } on PlatformException catch (error) {
-      throw StateError(
-        _friendlyMessage(error, fallback: 'screenshot_capture_failed'),
-      );
+      throw StateError(switch (error.code) {
+        'capture_invalid_path' ||
+        'capture_busy' ||
+        'capture_failed' => error.code,
+        _ => 'screenshot_capture_failed',
+      });
     } finally {
-      await _bestEffortWindowAction(_showWindow);
       try {
         if (await source.exists()) {
           await source.delete();
@@ -268,6 +266,33 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       } catch (_) {
         // The staged attachment is independent from the capture source.
       }
+    }
+  }
+
+  Future<bool> _captureWindowsRegion(String imagePath) {
+    final runner = _windowsScreenCaptureRunner;
+    if (runner != null) {
+      return runner(imagePath);
+    }
+    return _channel
+        .invokeMethod<bool>('captureRegion', <String, Object?>{
+          'outputPath': imagePath,
+        })
+        .then((captured) => captured ?? false);
+  }
+
+  Future<void> _cancelWindowsRegionCapture() async {
+    try {
+      final canceler = _windowsScreenCaptureCanceler;
+      if (canceler != null) {
+        await canceler();
+      } else {
+        await _channel.invokeMethod<bool>('cancelCapture');
+      }
+    } on MissingPluginException {
+      // Unit and non-Windows hosts may not install the native capture bridge.
+    } on PlatformException {
+      // The original timeout remains the user-visible failure.
     }
   }
 
@@ -490,16 +515,6 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     }
   }
 
-  Future<void> _bestEffortWindowAction(AttachmentWindowAction action) async {
-    try {
-      await action();
-    } on MissingPluginException {
-      // Unit/non-Windows hosts can exercise the shared capture pipeline.
-    } on PlatformException {
-      // Screenshot cancellation and cleanup must still restore Dart state.
-    }
-  }
-
   Future<void> _cleanupOldAttachmentTempFiles(Directory directory) async {
     final cutoff = DateTime.now().subtract(const Duration(days: 1));
     await for (final entity in directory.list(followLinks: false)) {
@@ -639,22 +654,3 @@ Future<String?> _saveWindowsFile({
   await file.saveTo(location.path);
   return location.path;
 }
-
-Future<bool> _captureWindowsRegion(String imagePath) async {
-  final captured = await screenCapturer.capture(
-    mode: CaptureMode.region,
-    imagePath: imagePath,
-    copyToClipboard: true,
-  );
-  return captured != null;
-}
-
-const MethodChannel _desktopShellChannel = MethodChannel(
-  'ai.awiki.awikime/desktop_shell',
-);
-
-Future<void> _hideDesktopWindow() =>
-    _desktopShellChannel.invokeMethod<void>('hideWindow');
-
-Future<void> _showDesktopWindow() =>
-    _desktopShellChannel.invokeMethod<void>('showWindow');

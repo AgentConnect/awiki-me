@@ -41,7 +41,7 @@ CloseApplications=no
 Compression=lzma2/ultra64
 DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
-DisableDirPage=yes
+DisableDirPage=auto
 DisableProgramGroupPage=yes
 MinVersion=10.0.19045
 OutputBaseFilename={#MyOutputBaseFilename}
@@ -51,7 +51,7 @@ RestartApplications=no
 SetupIconFile={#MySetupIcon}
 SolidCompression=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
-UsePreviousAppDir=no
+UsePreviousAppDir=yes
 VersionInfoDescription={#MyAppName} Windows x64 installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyVersionInfoVersion}
@@ -70,6 +70,7 @@ Source: "{#MyAppSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "{#MyAppUserModelId}"
+Name: "{autoprograms}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AppUserModelID: "{#MyAppUserModelId}"
 
 [Code]

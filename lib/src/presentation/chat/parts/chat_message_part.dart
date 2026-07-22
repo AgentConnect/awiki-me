@@ -1603,7 +1603,7 @@ class _InlineImageLoading extends StatelessWidget {
   }
 }
 
-class _InlineImagePreview extends ConsumerWidget {
+class _InlineImagePreview extends ConsumerStatefulWidget {
   const _InlineImagePreview({
     required this.message,
     required this.path,
@@ -1619,31 +1619,56 @@ class _InlineImagePreview extends ConsumerWidget {
   final Widget errorFallback;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_InlineImagePreview> createState() =>
+      _InlineImagePreviewState();
+}
+
+class _InlineImagePreviewState extends ConsumerState<_InlineImagePreview> {
+  bool _failed = false;
+
+  @override
+  void didUpdateWidget(covariant _InlineImagePreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) {
+      _failed = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) {
+      return widget.errorFallback;
+    }
     final responsive = context.awikiResponsive;
     final image = ref.watch(chatImageWidgetBuilderProvider)(
-      path: path,
+      path: widget.path,
       fit: BoxFit.contain,
-      errorFallback: errorFallback,
+      errorFallback: _InlineImageFailureSignal(
+        onFailure: () {
+          if (mounted && !_failed) {
+            setState(() => _failed = true);
+          }
+        },
+      ),
     );
     final preview = ClipRRect(
-      key: Key('chat-inline-image:${message.localId}'),
+      key: Key('chat-inline-image:${widget.message.localId}'),
       borderRadius: BorderRadius.circular(
-        macStyle ? responsive.displayScaled(9) : responsive.radius(12),
+        widget.macStyle ? responsive.displayScaled(9) : responsive.radius(12),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: macStyle
+          maxWidth: widget.macStyle
               ? responsive.displayScaled(320)
               : responsive.scaled(360),
-          maxHeight: macStyle
+          maxHeight: widget.macStyle
               ? responsive.displayScaled(300)
               : responsive.scaled(340),
         ),
         child: image,
       ),
     );
-    final open = onOpen;
+    final open = widget.onOpen;
     if (open == null) {
       return preview;
     }
@@ -1653,6 +1678,31 @@ class _InlineImagePreview extends ConsumerWidget {
       child: GestureDetector(onTap: () => unawaited(open()), child: preview),
     );
   }
+}
+
+class _InlineImageFailureSignal extends StatefulWidget {
+  const _InlineImageFailureSignal({required this.onFailure});
+
+  final VoidCallback onFailure;
+
+  @override
+  State<_InlineImageFailureSignal> createState() =>
+      _InlineImageFailureSignalState();
+}
+
+class _InlineImageFailureSignalState extends State<_InlineImageFailureSignal> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onFailure();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _AttachmentFileCard extends StatelessWidget {
@@ -1678,6 +1728,8 @@ class _AttachmentFileCard extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     return Row(
+      key: Key('chat-attachment-file-card:${message.localId}'),
+      mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Container(
           width: macStyle
@@ -1709,8 +1761,10 @@ class _AttachmentFileCard extends StatelessWidget {
               ? responsive.displayScaled(10)
               : responsive.spacing(10),
         ),
-        Expanded(
+        Flexible(
+          fit: FlexFit.loose,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               _MessagePlainText(

@@ -8,6 +8,16 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('Windows Dart capture watchdog runs after the native timeout', () {
+    final service = MethodChannelAttachmentPickerService(windowsPlatform: true);
+
+    expect(service.screenCaptureTimeout, const Duration(seconds: 125));
+    expect(
+      service.screenCaptureTimeout,
+      greaterThan(const Duration(seconds: 120)),
+    );
+  });
+
   test(
     'draftFromExternalSource copies local files and infers metadata',
     () async {
@@ -349,45 +359,65 @@ void main() {
     },
   );
 
-  test('Windows screenshot hides, stages, and restores the window', () async {
-    final tempDir = await Directory.systemTemp.createTemp(
-      'awiki-windows-screenshot-test-',
-    );
-    final stagedDir = Directory('${tempDir.path}/staged');
-    final events = <String>[];
-    addTearDown(() async {
-      if (await tempDir.exists()) {
-        await tempDir.delete(recursive: true);
-      }
-    });
-    final service = MethodChannelAttachmentPickerService(
-      windowsPlatform: true,
-      screenshotSupported: true,
-      temporaryDirectoryProvider: () async => tempDir,
-      attachmentTemporaryDirectoryProvider: () async => stagedDir,
-      hideWindow: () async => events.add('hide'),
-      showWindow: () async => events.add('show'),
-      windowsScreenCaptureRunner: (path) async {
-        events.add('capture');
-        await File(path).writeAsBytes(<int>[137, 80, 78, 71]);
-        return true;
-      },
-    );
+  test(
+    'Windows screenshot uses the native region channel without hiding the app',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-windows-screenshot-test-',
+      );
+      final stagedDir = Directory('${tempDir.path}/staged');
+      const channel = MethodChannel('test.awiki/windows-region-capture');
+      final channelCalls = <MethodCall>[];
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            channelCalls.add(call);
+            if (call.method == 'captureRegion') {
+              final arguments = Map<Object?, Object?>.from(
+                call.arguments! as Map<Object?, Object?>,
+              );
+              await File(
+                arguments['outputPath']! as String,
+              ).writeAsBytes(<int>[137, 80, 78, 71]);
+              return true;
+            }
+            return false;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        windowsPlatform: true,
+        screenshotSupported: true,
+        temporaryDirectoryProvider: () async => tempDir,
+        attachmentTemporaryDirectoryProvider: () async => stagedDir,
+      );
 
-    final draft = await service.captureScreenshot();
+      final draft = await service.captureScreenshot(hideApp: true);
 
-    expect(draft, isNotNull);
-    expect(draft!.mimeType, 'image/png');
-    expect(draft.sizeBytes, 4);
-    expect(events, <String>['hide', 'capture', 'show']);
-    expect(await File(draft.localPath!).exists(), isTrue);
-  });
+      expect(draft, isNotNull);
+      expect(draft!.mimeType, 'image/png');
+      expect(draft.sizeBytes, 4);
+      expect(channelCalls, hasLength(1));
+      expect(channelCalls.single.method, 'captureRegion');
+      expect(
+        (channelCalls.single.arguments! as Map<Object?, Object?>)['outputPath'],
+        endsWith('.png'),
+      );
+      expect(await File(draft.localPath!).exists(), isTrue);
+    },
+  );
 
-  test('Windows screenshot cancellation still restores the window', () async {
+  test('Windows native screenshot cancellation returns null', () async {
     final tempDir = await Directory.systemTemp.createTemp(
       'awiki-windows-screenshot-cancel-test-',
     );
-    final events = <String>[];
     addTearDown(() async {
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
@@ -397,36 +427,83 @@ void main() {
       windowsPlatform: true,
       screenshotSupported: true,
       temporaryDirectoryProvider: () async => tempDir,
-      hideWindow: () async => events.add('hide'),
-      showWindow: () async => events.add('show'),
-      windowsScreenCaptureRunner: (_) async {
-        events.add('cancel');
-        return false;
-      },
+      windowsScreenCaptureRunner: (_) async => false,
     );
 
     expect(await service.captureScreenshot(), isNull);
-    expect(events, <String>['hide', 'cancel', 'show']);
   });
 
-  test('Windows screenshot timeout fails and restores the window', () async {
+  for (final code in <String>[
+    'capture_invalid_path',
+    'capture_busy',
+    'capture_failed',
+  ]) {
+    test('Windows screenshot preserves stable native error $code', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-windows-screenshot-error-test-',
+      );
+      final channel = MethodChannel('test.awiki/windows-region-$code');
+      addTearDown(() async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            throw PlatformException(code: code, message: 'native detail');
+          });
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        windowsPlatform: true,
+        screenshotSupported: true,
+        temporaryDirectoryProvider: () async => tempDir,
+      );
+
+      await expectLater(
+        service.captureScreenshot(),
+        throwsA(
+          isA<StateError>().having((error) => error.message, 'message', code),
+        ),
+      );
+    });
+  }
+
+  test('Windows screenshot timeout cancels the native capture', () async {
     final tempDir = await Directory.systemTemp.createTemp(
       'awiki-windows-screenshot-timeout-test-',
     );
     final events = <String>[];
+    final captureResult = Completer<bool>();
+    const channel = MethodChannel('test.awiki/windows-region-timeout');
     addTearDown(() async {
       if (await tempDir.exists()) {
         await tempDir.delete(recursive: true);
       }
     });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          events.add(call.method);
+          if (call.method == 'captureRegion') {
+            return captureResult.future;
+          }
+          if (call.method == 'cancelCapture') {
+            captureResult.complete(false);
+            return true;
+          }
+          return false;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
     final service = MethodChannelAttachmentPickerService(
+      channel: channel,
       windowsPlatform: true,
       screenshotSupported: true,
       temporaryDirectoryProvider: () async => tempDir,
       screenCaptureTimeout: const Duration(milliseconds: 1),
-      hideWindow: () async => events.add('hide'),
-      showWindow: () async => events.add('show'),
-      windowsScreenCaptureRunner: (_) => Completer<bool>().future,
     );
 
     await expectLater(
@@ -439,7 +516,7 @@ void main() {
         ),
       ),
     );
-    expect(events, <String>['hide', 'show']);
+    expect(events, <String>['captureRegion', 'cancelCapture']);
   });
 
   test('shared staging rejects invalid and oversized attachments', () async {

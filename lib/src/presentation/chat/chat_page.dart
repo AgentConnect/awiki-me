@@ -15,6 +15,7 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/attachment_resource_reference.dart';
 import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
@@ -98,12 +99,12 @@ final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
     if (value == null || value.isEmpty) {
       return errorFallback;
     }
-    final uri = Uri.tryParse(value);
-    if (uri != null && uri.hasScheme && uri.scheme != 'file') {
+    final reference = AttachmentResourceReference.parse(value);
+    if (!reference.isLocalFile) {
       return errorFallback;
     }
     return Image.file(
-      uri != null && uri.scheme == 'file' ? File.fromUri(uri) : File(value),
+      File(reference.localPath!),
       width: width,
       height: height,
       cacheWidth: cacheWidth,

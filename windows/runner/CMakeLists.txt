@@ -13,6 +13,7 @@ add_executable(${BINARY_NAME} WIN32
   "scope_secret_store.cpp"
   "utils.cpp"
   "win32_window.cpp"
+  "windows_region_capture.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"
   "runner.exe.manifest"
@@ -46,6 +47,7 @@ target_link_libraries(${BINARY_NAME} PRIVATE
   "shell32.lib"
   "user32.lib"
   "uuid.lib"
+  "windowscodecs.lib"
   "windowsapp.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 

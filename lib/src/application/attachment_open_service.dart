@@ -3,19 +3,24 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'attachment_resource_reference.dart';
+
 class AttachmentOpenService {
   AttachmentOpenService({
     MethodChannel? channel,
     Future<bool> Function(Uri uri, {LaunchMode mode})? launchUrl,
     bool Function()? isAndroid,
+    bool Function()? isWindows,
   }) : _channel =
            channel ?? const MethodChannel('ai.awiki.awikime/attachment_viewer'),
        _launchUrl = launchUrl ?? launchAttachmentUrl,
-       _isAndroid = isAndroid ?? (() => Platform.isAndroid);
+       _isAndroid = isAndroid ?? (() => Platform.isAndroid),
+       _isWindows = isWindows ?? (() => Platform.isWindows);
 
   final MethodChannel _channel;
   final Future<bool> Function(Uri uri, {LaunchMode mode}) _launchUrl;
   final bool Function() _isAndroid;
+  final bool Function() _isWindows;
 
   Future<void> open(String pathOrUri) async {
     final value = pathOrUri.trim();
@@ -51,11 +56,10 @@ class AttachmentOpenService {
   }
 
   Uri _attachmentUri(String pathOrUri) {
-    final parsed = Uri.tryParse(pathOrUri);
-    if (parsed != null && parsed.hasScheme) {
-      return parsed;
-    }
-    return Uri.file(pathOrUri);
+    return AttachmentResourceReference.parse(
+      pathOrUri,
+      windows: _isWindows(),
+    ).uri;
   }
 }
 

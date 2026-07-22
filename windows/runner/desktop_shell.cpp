@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "app_constants.h"
 #include "resource.h"
@@ -23,6 +24,19 @@ namespace {
 constexpr wchar_t kTrayTooltip[] = L"AWiki Me";
 constexpr wchar_t kTrayOpenLabel[] = L"Open AWiki Me";
 constexpr wchar_t kTrayExitLabel[] = L"Exit";
+
+UINT EffectiveDpi(HWND window, UINT requested_dpi) {
+  if (requested_dpi != 0) {
+    return requested_dpi;
+  }
+  const UINT window_dpi = window == nullptr ? 0 : ::GetDpiForWindow(window);
+  return window_dpi == 0 ? USER_DEFAULT_SCREEN_DPI : window_dpi;
+}
+
+int SmallIconMetric(int metric, UINT dpi) {
+  const int value = ::GetSystemMetricsForDpi(metric, dpi);
+  return value > 0 ? value : std::max(1, ::GetSystemMetrics(metric));
+}
 
 int ReadCount(const flutter::EncodableValue* arguments) {
   if (arguments == nullptr) {
@@ -196,23 +210,67 @@ void DesktopShell::InitializeTaskbar() {
   taskbar_ = taskbar;
 }
 
-void DesktopShell::CreateTrayIcon() {
+void DesktopShell::CreateTrayIcon(UINT dpi) {
+  HICON icon = unread_count_ > 0 ? CreateUnreadTrayIcon(dpi)
+                                 : LoadBaseTrayIcon(dpi);
+  if (icon == nullptr) {
+    return;
+  }
+
   tray_icon_ = {};
   tray_icon_.cbSize = static_cast<DWORD>(sizeof(tray_icon_));
   tray_icon_.hWnd = window_;
   tray_icon_.uID = 1;
   tray_icon_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
   tray_icon_.uCallbackMessage = awiki::kTrayCallbackMessage;
-  tray_icon_.hIcon = static_cast<HICON>(
-      ::LoadImageW(::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON),
-                   IMAGE_ICON, ::GetSystemMetrics(SM_CXSMICON),
-                   ::GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
-  ::wcsncpy_s(tray_icon_.szTip, kTrayTooltip, _TRUNCATE);
+  tray_icon_.hIcon = icon;
+  const std::wstring tooltip = BuildTrayTooltip();
+  ::wcsncpy_s(tray_icon_.szTip, tooltip.c_str(), _TRUNCATE);
   tray_icon_added_ = ::Shell_NotifyIconW(NIM_ADD, &tray_icon_) != FALSE;
   if (tray_icon_added_) {
     tray_icon_.uVersion = NOTIFYICON_VERSION_4;
     tray_icon_uses_version_4_ =
         ::Shell_NotifyIconW(NIM_SETVERSION, &tray_icon_) != FALSE;
+  } else {
+    ::DestroyIcon(tray_icon_.hIcon);
+    tray_icon_.hIcon = nullptr;
+  }
+}
+
+void DesktopShell::RebuildTrayIcon(UINT dpi) {
+  if (dpi != 0 && tray_icon_added_) {
+    UpdateTrayIcon(dpi);
+    return;
+  }
+  RemoveTrayIcon();
+  CreateTrayIcon(dpi);
+}
+
+void DesktopShell::UpdateTrayIcon(UINT dpi) {
+  if (!tray_icon_added_) {
+    return;
+  }
+
+  HICON replacement = unread_count_ > 0 ? CreateUnreadTrayIcon(dpi)
+                                        : LoadBaseTrayIcon(dpi);
+  if (replacement == nullptr) {
+    return;
+  }
+  NOTIFYICONDATAW update = tray_icon_;
+  update.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+  update.hIcon = replacement;
+  const std::wstring tooltip = BuildTrayTooltip();
+  ::wcsncpy_s(update.szTip, tooltip.c_str(), _TRUNCATE);
+  if (::Shell_NotifyIconW(NIM_MODIFY, &update) == FALSE) {
+    ::DestroyIcon(replacement);
+    return;
+  }
+
+  HICON previous = tray_icon_.hIcon;
+  tray_icon_.hIcon = replacement;
+  ::wcsncpy_s(tray_icon_.szTip, tooltip.c_str(), _TRUNCATE);
+  if (previous != nullptr) {
+    ::DestroyIcon(previous);
   }
 }
 
@@ -226,6 +284,148 @@ void DesktopShell::RemoveTrayIcon() {
     ::DestroyIcon(tray_icon_.hIcon);
     tray_icon_.hIcon = nullptr;
   }
+}
+
+HICON DesktopShell::LoadBaseTrayIcon(UINT dpi) const {
+  const UINT effective_dpi = EffectiveDpi(window_, dpi);
+  const int width = SmallIconMetric(SM_CXSMICON, effective_dpi);
+  const int height = SmallIconMetric(SM_CYSMICON, effective_dpi);
+  return static_cast<HICON>(::LoadImageW(
+      ::GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON,
+      width, height, LR_DEFAULTCOLOR));
+}
+
+HICON DesktopShell::CreateUnreadTrayIcon(UINT dpi) const {
+  const UINT effective_dpi = EffectiveDpi(window_, dpi);
+  const int width = SmallIconMetric(SM_CXSMICON, effective_dpi);
+  const int height = SmallIconMetric(SM_CYSMICON, effective_dpi);
+  HICON base_icon = LoadBaseTrayIcon(effective_dpi);
+  if (base_icon == nullptr) {
+    return nullptr;
+  }
+
+  BITMAPV5HEADER header{};
+  header.bV5Size = static_cast<DWORD>(sizeof(header));
+  header.bV5Width = width;
+  header.bV5Height = -height;
+  header.bV5Planes = 1;
+  header.bV5BitCount = 32;
+  header.bV5Compression = BI_BITFIELDS;
+  header.bV5RedMask = 0x00FF0000;
+  header.bV5GreenMask = 0x0000FF00;
+  header.bV5BlueMask = 0x000000FF;
+  header.bV5AlphaMask = 0xFF000000;
+
+  HDC screen = ::GetDC(nullptr);
+  if (screen == nullptr) {
+    ::DestroyIcon(base_icon);
+    return nullptr;
+  }
+  void* pixel_data = nullptr;
+  HBITMAP color_bitmap =
+      ::CreateDIBSection(screen, reinterpret_cast<BITMAPINFO*>(&header),
+                         DIB_RGB_COLORS, &pixel_data, nullptr, 0);
+  HDC canvas = ::CreateCompatibleDC(screen);
+  ::ReleaseDC(nullptr, screen);
+  if (color_bitmap == nullptr || canvas == nullptr || pixel_data == nullptr) {
+    if (color_bitmap != nullptr) {
+      ::DeleteObject(color_bitmap);
+    }
+    if (canvas != nullptr) {
+      ::DeleteDC(canvas);
+    }
+    ::DestroyIcon(base_icon);
+    return nullptr;
+  }
+
+  ::SecureZeroMemory(pixel_data, width * height * sizeof(uint32_t));
+  HGDIOBJ old_bitmap = ::SelectObject(canvas, color_bitmap);
+  if (old_bitmap == nullptr) {
+    ::DeleteDC(canvas);
+    ::DeleteObject(color_bitmap);
+    ::DestroyIcon(base_icon);
+    return nullptr;
+  }
+  const BOOL base_icon_drawn =
+      ::DrawIconEx(canvas, 0, 0, base_icon, width, height, 0, nullptr, DI_NORMAL);
+  ::DestroyIcon(base_icon);
+  if (base_icon_drawn == FALSE) {
+    ::SelectObject(canvas, old_bitmap);
+    ::DeleteDC(canvas);
+    ::DeleteObject(color_bitmap);
+    return nullptr;
+  }
+
+  const int marker_size = std::max(6, std::min(width, height) * 7 / 16);
+  const int marker_inset = std::max(1, marker_size / 6);
+  const RECT marker_rect{width - marker_size, height - marker_size, width,
+                         height};
+  HBRUSH border_brush = ::CreateSolidBrush(RGB(255, 255, 255));
+  HBRUSH unread_brush = ::CreateSolidBrush(RGB(220, 38, 38));
+  if (border_brush == nullptr || unread_brush == nullptr) {
+    if (unread_brush != nullptr) {
+      ::DeleteObject(unread_brush);
+    }
+    if (border_brush != nullptr) {
+      ::DeleteObject(border_brush);
+    }
+    ::SelectObject(canvas, old_bitmap);
+    ::DeleteDC(canvas);
+    ::DeleteObject(color_bitmap);
+    return nullptr;
+  }
+
+  HGDIOBJ old_brush = ::SelectObject(canvas, border_brush);
+  HGDIOBJ old_pen = ::SelectObject(canvas, ::GetStockObject(NULL_PEN));
+  ::Ellipse(canvas, marker_rect.left, marker_rect.top, marker_rect.right,
+            marker_rect.bottom);
+  ::SelectObject(canvas, unread_brush);
+  ::Ellipse(canvas, marker_rect.left + marker_inset,
+            marker_rect.top + marker_inset, marker_rect.right - marker_inset,
+            marker_rect.bottom - marker_inset);
+
+  auto* pixels = static_cast<uint32_t*>(pixel_data);
+  for (int y = marker_rect.top; y < marker_rect.bottom; ++y) {
+    for (int x = marker_rect.left; x < marker_rect.right; ++x) {
+      const int index = y * width + x;
+      if ((pixels[index] & 0x00FFFFFF) != 0) {
+        pixels[index] |= 0xFF000000;
+      }
+    }
+  }
+
+  ::SelectObject(canvas, old_pen);
+  ::SelectObject(canvas, old_brush);
+  ::SelectObject(canvas, old_bitmap);
+  ::DeleteObject(unread_brush);
+  ::DeleteObject(border_brush);
+  ::DeleteDC(canvas);
+
+  const int mask_stride = ((width + 15) / 16) * 2;
+  std::vector<uint8_t> mask_bits(mask_stride * height, 0);
+  HBITMAP mask_bitmap =
+      ::CreateBitmap(width, height, 1, 1, mask_bits.data());
+  if (mask_bitmap == nullptr) {
+    ::DeleteObject(color_bitmap);
+    return nullptr;
+  }
+  ICONINFO icon_info{};
+  icon_info.fIcon = TRUE;
+  icon_info.hbmColor = color_bitmap;
+  icon_info.hbmMask = mask_bitmap;
+  HICON icon = ::CreateIconIndirect(&icon_info);
+  ::DeleteObject(mask_bitmap);
+  ::DeleteObject(color_bitmap);
+  return icon;
+}
+
+std::wstring DesktopShell::BuildTrayTooltip() const {
+  if (unread_count_ <= 0) {
+    return kTrayTooltip;
+  }
+  return std::wstring(kTrayTooltip) + L" - " +
+         std::to_wstring(unread_count_) +
+         (unread_count_ == 1 ? L" unread message" : L" unread messages");
 }
 
 void DesktopShell::ShowTrayMenu() {
@@ -297,8 +497,7 @@ std::optional<LRESULT> DesktopShell::HandleWindowMessage(UINT message,
     return 0;
   }
   if (taskbar_created_message_ != 0 && message == taskbar_created_message_) {
-    RemoveTrayIcon();
-    CreateTrayIcon();
+    RebuildTrayIcon();
     InitializeTaskbar();
     ApplyTaskbarOverlay();
     return 0;
@@ -310,6 +509,9 @@ std::optional<LRESULT> DesktopShell::HandleWindowMessage(UINT message,
   }
 
   switch (message) {
+    case WM_DPICHANGED:
+      RebuildTrayIcon(HIWORD(wparam));
+      break;
     case WM_CLOSE:
       HideWindow();
       return 0;
@@ -350,6 +552,7 @@ std::optional<LRESULT> DesktopShell::HandleWindowMessage(UINT message,
 
 void DesktopShell::UpdateUnreadCount(int count) {
   unread_count_ = std::clamp(count, 0, 1000000);
+  UpdateTrayIcon();
   ApplyTaskbarOverlay();
 }
 

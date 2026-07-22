@@ -9,6 +9,7 @@
 #include "desktop_shell.h"
 #include "scope_secret_store.h"
 #include "win32_window.h"
+#include "windows_region_capture.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -33,6 +34,7 @@ class FlutterWindow : public Win32Window {
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<DesktopShell> desktop_shell_;
+  std::unique_ptr<WindowsRegionCapture> windows_region_capture_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       scope_secret_channel_;
   ScopeSecretStore scope_secret_store_;

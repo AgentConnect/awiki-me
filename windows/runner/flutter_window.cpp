@@ -33,6 +33,8 @@ bool FlutterWindow::OnCreate() {
 
   desktop_shell_ = std::make_unique<DesktopShell>(
       GetHandle(), flutter_controller_->engine());
+  windows_region_capture_ = std::make_unique<WindowsRegionCapture>(
+      GetHandle(), flutter_controller_->engine());
   scope_secret_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -61,6 +63,7 @@ void FlutterWindow::OnDestroy() {
     scope_secret_channel_->SetMethodCallHandler(nullptr);
   }
   scope_secret_channel_.reset();
+  windows_region_capture_.reset();
   desktop_shell_.reset();
   if (flutter_controller_) {
     flutter_controller_ = nullptr;

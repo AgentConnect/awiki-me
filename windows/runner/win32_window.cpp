@@ -17,15 +17,19 @@ namespace {
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
+#ifndef DWMWA_BORDER_COLOR
+#define DWMWA_BORDER_COLOR 34
+#endif
+#ifndef DWMWA_CAPTION_COLOR
+#define DWMWA_CAPTION_COLOR 35
+#endif
+#ifndef DWMWA_TEXT_COLOR
+#define DWMWA_TEXT_COLOR 36
+#endif
 
-/// Registry key for app theme preference.
-///
-/// A value of 0 indicates apps should use dark mode. A non-zero or missing
-/// value indicates apps should use light mode.
-constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
-    L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
-constexpr const wchar_t kGetPreferredBrightnessRegValue[] =
-    L"AppsUseLightTheme";
+constexpr COLORREF kLightCaptionColor = RGB(250, 249, 254);
+constexpr COLORREF kLightCaptionTextColor = RGB(26, 28, 28);
+constexpr COLORREF kLightBorderColor = RGB(221, 229, 240);
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -145,7 +149,7 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
-  UpdateTheme(window);
+  ApplyLightTitleBar(window);
 
   return OnCreate();
 }
@@ -215,7 +219,9 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
 
     case WM_DWMCOLORIZATIONCOLORCHANGED:
-      UpdateTheme(hwnd);
+    case WM_SETTINGCHANGE:
+    case WM_THEMECHANGED:
+      ApplyLightTitleBar(hwnd);
       return 0;
   }
 
@@ -273,17 +279,14 @@ void Win32Window::OnDestroy() {
   // No-op; provided for subclasses.
 }
 
-void Win32Window::UpdateTheme(HWND const window) {
-  DWORD light_mode;
-  DWORD light_mode_size = sizeof(light_mode);
-  LSTATUS result =
-      RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
-                  kGetPreferredBrightnessRegValue, RRF_RT_REG_DWORD, nullptr,
-                  &light_mode, &light_mode_size);
-
-  if (result == ERROR_SUCCESS) {
-    BOOL enable_dark_mode = light_mode == 0;
-    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
+void Win32Window::ApplyLightTitleBar(HWND const window) {
+  const BOOL enable_dark_mode = FALSE;
+  ::DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
                           &enable_dark_mode, sizeof(enable_dark_mode));
-  }
+  ::DwmSetWindowAttribute(window, DWMWA_CAPTION_COLOR, &kLightCaptionColor,
+                          sizeof(kLightCaptionColor));
+  ::DwmSetWindowAttribute(window, DWMWA_TEXT_COLOR, &kLightCaptionTextColor,
+                          sizeof(kLightCaptionTextColor));
+  ::DwmSetWindowAttribute(window, DWMWA_BORDER_COLOR, &kLightBorderColor,
+                          sizeof(kLightBorderColor));
 }

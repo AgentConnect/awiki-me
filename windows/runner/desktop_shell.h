@@ -30,14 +30,19 @@ class DesktopShell {
  private:
   void RegisterMethodChannel(flutter::FlutterEngine* engine);
   void InitializeTaskbar();
-  void CreateTrayIcon();
+  void CreateTrayIcon(UINT dpi = 0);
+  void RebuildTrayIcon(UINT dpi = 0);
+  void UpdateTrayIcon(UINT dpi = 0);
   void RemoveTrayIcon();
   void ShowTrayMenu();
   void RequestExit(const char* event_type);
   void SendShellEvent(const char* event_type);
   void UpdateUnreadCount(int count);
   void ApplyTaskbarOverlay();
+  HICON LoadBaseTrayIcon(UINT dpi) const;
+  HICON CreateUnreadTrayIcon(UINT dpi) const;
   HICON CreateUnreadOverlayIcon(int count) const;
+  std::wstring BuildTrayTooltip() const;
   flutter::EncodableMap GetStorageRoots() const;
 
   HWND window_ = nullptr;

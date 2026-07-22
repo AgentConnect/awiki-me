@@ -8,11 +8,13 @@ toolchain, and Inno Setup 6.3.2. The result is an unsigned per-user installer:
 AWiki-Me-<version>-windows-x64.exe
 ```
 
-The installer writes program files to
-`%LOCALAPPDATA%\Programs\AWiki Me`. It never removes product data under
-`%LOCALAPPDATA%\AWiki\AWikiMe` or AWiki Credential Manager entries during an
-upgrade, repair, or uninstall. Windows may display a SmartScreen warning because
-this phase intentionally does not sign the installer.
+The installer defaults program files to
+`%LOCALAPPDATA%\Programs\AWiki Me`, lets the user choose another directory on a
+first install, and reuses that directory automatically for upgrades and repairs.
+It never removes product data under `%LOCALAPPDATA%\AWiki\AWikiMe` or AWiki
+Credential Manager entries during an upgrade, repair, or uninstall. Windows may
+display a SmartScreen warning because this phase intentionally does not sign the
+installer.
 
 ## Source and workflow contract
 
@@ -117,9 +119,22 @@ the primary instance has released the desktop shell. A non-zero result aborts
 installation, so a running DLL is never overwritten. The installer permits a
 same-version repair and a higher-version overwrite, but rejects a downgrade.
 
-The Start menu and optional desktop shortcuts use AUMID `AWiki.AWikiMe`. Toast
-initialization uses GUID `42f66431-9bea-46c4-ac14-475b9044a2be`; those identities
-must remain stable across upgrades.
+The Start menu contains launch and uninstall shortcuts. The launch and
+optional desktop shortcuts use AUMID `AWiki.AWikiMe`. Toast initialization uses
+GUID `42f66431-9bea-46c4-ac14-475b9044a2be`; those identities must remain stable
+across upgrades.
+
+The Windows ICO is generated deterministically from the canonical macOS 1024px
+app icon. Regenerate it after changing that source, or verify the committed ICO
+without writing it:
+
+```bash
+dart run tool/generate_windows_icon.dart
+dart run tool/generate_windows_icon.dart --check
+```
+
+The packaging worker runs the check before compiling the Windows executable and
+installer.
 
 ## Verification
 
@@ -137,7 +152,9 @@ that digest before publishing the manifest. The worker compiles a lower-version
 fixture and then runs a real
 silent install, application startup, graceful update shutdown, overwrite upgrade,
 downgrade rejection, uninstall, LocalAppData preservation, and Credential Manager
-preservation sequence.
+preservation sequence at both the default directory and a Unicode custom directory
+containing spaces. Upgrade and same-version repair omit `/DIR`, proving that the
+recorded custom directory remains authoritative.
 
 macOS can validate shell syntax, workflow structure, target parsing, metadata,
 manifest hashes, and Dart unit tests. MSVC compilation, Inno compilation, Windows

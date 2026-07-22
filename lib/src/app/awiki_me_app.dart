@@ -243,6 +243,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
   Widget build(BuildContext context) {
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
+    final appTheme = AwikiMeTheme.current;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: AwikiMePalette.ivory,
@@ -274,7 +275,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
           }
           return const Locale('zh');
         },
-        theme: AwikiMeTheme.cupertinoTheme,
+        theme: appTheme.cupertinoTheme,
         builder: (context, child) {
           return AwikiDisplayScaleScope(
             scale: displayScale,
@@ -286,7 +287,7 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
               onReset: () => ref.read(displayScaleProvider.notifier).reset(),
               child: _KeyboardDismissScope(
                 child: material.Theme(
-                  data: AwikiMeTheme.materialTheme,
+                  data: appTheme.materialTheme,
                   child: AppOrientationScope(
                     child: child ?? const SizedBox.shrink(),
                   ),

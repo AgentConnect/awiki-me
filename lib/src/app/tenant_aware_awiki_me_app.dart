@@ -393,9 +393,10 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final diagnosticCode = tenantBootstrapDiagnosticCode(error);
+    final appTheme = AwikiMeTheme.current;
     return CupertinoApp(
       debugShowCheckedModeBanner: false,
-      theme: AwikiMeTheme.cupertinoTheme,
+      theme: appTheme.cupertinoTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: CupertinoPageScaffold(
@@ -517,9 +518,10 @@ class _TenantBootstrapLoadingApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final appTheme = AwikiMeTheme.current;
     return CupertinoApp(
       debugShowCheckedModeBanner: false,
-      theme: AwikiMeTheme.cupertinoTheme,
+      theme: appTheme.cupertinoTheme,
       home: CupertinoPageScaffold(
         backgroundColor: AwikiMePalette.ivory,
         child: AwikiAdaptiveScaffold(

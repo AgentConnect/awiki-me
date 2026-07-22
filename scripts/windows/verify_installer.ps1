@@ -11,7 +11,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$AppDir = Join-Path $env:LOCALAPPDATA 'Programs\AWiki Me'
+$DefaultAppDir = Join-Path $env:LOCALAPPDATA 'Programs\AWiki Me'
+$CustomAppDir = Join-Path $env:LOCALAPPDATA 'AWiki Me 安装 验证\自定义 目录'
+$AppDir = $DefaultAppDir
 $AppExe = Join-Path $AppDir 'AWikiMe.exe'
 $CoreDll = Join-Path $AppDir 'awiki_im_core.dll'
 $RuntimeManifestName = 'awiki-runtime-manifest.json'
@@ -25,13 +27,37 @@ $CacheDir = Join-Path $env:LOCALAPPDATA 'AWiki\AWikiMe\cache'
 $CacheSentinel = Join-Path $CacheDir 'installer-ci-cache-sentinel.json'
 $CredentialTarget = 'ai.awiki.awikime.scope-secrets/scope/00000000-0000-4000-8000-000000000001'
 $UninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{6D68B66D-87E1-4F18-93C5-AE56D58C5211}_is1'
+$StartMenuPrograms = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
+$StartMenuAppShortcut = Join-Path $StartMenuPrograms 'AWiki Me.lnk'
+$StartMenuUninstallShortcut = Join-Path $StartMenuPrograms 'Uninstall AWiki Me.lnk'
 $ExpectedSupportSentinelHash = ''
 $ExpectedCacheSentinelHash = ''
 
-function Invoke-Installer([string]$Path, [switch]$ExpectFailure) {
+function Normalize-DirectoryPath([string]$Path) {
+    return [IO.Path]::GetFullPath($Path).TrimEnd(
+        [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    )
+}
+
+function Set-InstallDirectory([string]$Path) {
+    $script:AppDir = Normalize-DirectoryPath $Path
+    $script:AppExe = Join-Path $script:AppDir 'AWikiMe.exe'
+    $script:CoreDll = Join-Path $script:AppDir 'awiki_im_core.dll'
+    $script:InstalledRuntimeManifest = Join-Path $script:AppDir $RuntimeManifestName
+}
+
+function Invoke-Installer(
+    [string]$Path,
+    [string]$RequestedDir = '',
+    [switch]$ExpectFailure
+) {
+    $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER')
+    if ($RequestedDir) {
+        $arguments += "/DIR=`"$RequestedDir`""
+    }
     $process = Start-Process `
         -FilePath $Path `
-        -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER') `
+        -ArgumentList $arguments `
         -PassThru `
         -Wait
     if ($ExpectFailure) {
@@ -54,6 +80,19 @@ function Invoke-Uninstaller {
             throw "Uninstaller failed with exit code $($process.ExitCode)"
         }
     }
+}
+
+function Invoke-RegisteredUninstaller {
+    if (-not (Test-Path -LiteralPath $UninstallKey)) {
+        return
+    }
+    $registration = Get-ItemProperty -LiteralPath $UninstallKey
+    $registeredDir = [string]$registration.InstallLocation
+    if ([string]::IsNullOrWhiteSpace($registeredDir)) {
+        throw 'Registered installation does not contain InstallLocation'
+    }
+    Set-InstallDirectory $registeredDir
+    Invoke-Uninstaller
 }
 
 function Assert-RuntimeManifest([string]$ExpectedManifest) {
@@ -164,6 +203,17 @@ function Assert-Installed([string]$Version, [string]$ExpectedManifest) {
     if ($displayVersion -ne $Version) {
         throw "Installed version is $displayVersion, expected $Version"
     }
+    $registeredDir = Normalize-DirectoryPath (
+        [string](Get-ItemProperty -Path $UninstallKey -Name InstallLocation).InstallLocation
+    )
+    if ($registeredDir -ine $AppDir) {
+        throw "Registered install directory is $registeredDir, expected $AppDir"
+    }
+    foreach ($shortcut in @($StartMenuAppShortcut, $StartMenuUninstallShortcut)) {
+        if (-not (Test-Path -LiteralPath $shortcut -PathType Leaf)) {
+            throw "Start menu shortcut is missing: $shortcut"
+        }
+    }
     Assert-RuntimeManifest $ExpectedManifest
 }
 
@@ -218,12 +268,75 @@ function Assert-AppProcessExited([Diagnostics.Process]$Process, [string]$Operati
     }
 }
 
-try {
-    Invoke-Uninstaller
-    Invoke-Installer $BaseInstaller
-    Assert-Installed '0.0.0' $ExpectedBaseRuntimeManifest
-    Assert-ObsoleteRuntimeFiles $true
+function Assert-Uninstalled {
+    if (Test-Path -LiteralPath $AppDir) {
+        throw "Application directory remains after uninstall: $AppDir"
+    }
+    if (Test-Path -LiteralPath $UninstallKey) {
+        throw 'Uninstall registration remains after uninstall'
+    }
+    foreach ($shortcut in @($StartMenuAppShortcut, $StartMenuUninstallShortcut)) {
+        if (Test-Path -LiteralPath $shortcut) {
+            throw "Start menu shortcut remains after uninstall: $shortcut"
+        }
+    }
+}
 
+function Assert-NoApplicationAt([string]$Path) {
+    $unexpectedExe = Join-Path $Path 'AWikiMe.exe'
+    if (Test-Path -LiteralPath $unexpectedExe -PathType Leaf) {
+        throw "Installer wrote application files to an unexpected directory: $Path"
+    }
+}
+
+function Invoke-InstallLifecycle(
+    [string]$Scenario,
+    [string]$InstallDir,
+    [string]$UnexpectedInstallDir,
+    [switch]$UseCustomDirectory
+) {
+    Write-Output "Verifying $Scenario installer lifecycle at $InstallDir"
+    Set-InstallDirectory $InstallDir
+    if ($UseCustomDirectory) {
+        Invoke-Installer $BaseInstaller -RequestedDir $InstallDir
+    }
+    else {
+        Invoke-Installer $BaseInstaller
+    }
+    Assert-Installed '0.0.0' $ExpectedBaseRuntimeManifest
+    Assert-NoApplicationAt $UnexpectedInstallDir
+    Assert-ObsoleteRuntimeFiles $true
+    Assert-PreservedExternalState
+
+    $upgradeProcess = Start-AppAndAssertRunning
+    Invoke-Installer $UpgradeInstaller
+    Assert-AppProcessExited $upgradeProcess "$Scenario overwrite upgrade"
+    Assert-ObsoleteRuntimeFiles $false
+    Assert-Installed $ExpectedVersion $ExpectedRuntimeManifest
+    Assert-NoApplicationAt $UnexpectedInstallDir
+    Assert-PreservedExternalState
+
+    $repairProcess = Start-AppAndAssertRunning
+    Invoke-Installer $UpgradeInstaller
+    Assert-AppProcessExited $repairProcess "$Scenario same-version repair"
+    Assert-Installed $ExpectedVersion $ExpectedRuntimeManifest
+    Assert-NoApplicationAt $UnexpectedInstallDir
+    Assert-PreservedExternalState
+
+    Invoke-Installer $BaseInstaller -ExpectFailure
+    Assert-Installed $ExpectedVersion $ExpectedRuntimeManifest
+    Assert-NoApplicationAt $UnexpectedInstallDir
+    Assert-PreservedExternalState
+
+    $uninstallProcess = Start-AppAndAssertRunning
+    Invoke-Uninstaller
+    Assert-AppProcessExited $uninstallProcess "$Scenario running-app uninstall"
+    Assert-Uninstalled
+    Assert-PreservedExternalState
+}
+
+try {
+    Invoke-RegisteredUninstaller
     New-Item -ItemType Directory -Force -Path $SupportDir | Out-Null
     New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
     '{"preserve":"support"}' | Set-Content -Encoding UTF8 -Path $SupportSentinel
@@ -234,36 +347,18 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Failed to create Credential Manager test item' }
     Assert-PreservedExternalState
 
-    $upgradeProcess = Start-AppAndAssertRunning
-    Invoke-Installer $UpgradeInstaller
-    Assert-AppProcessExited $upgradeProcess 'overwrite upgrade'
-    Assert-ObsoleteRuntimeFiles $false
-    Assert-Installed $ExpectedVersion $ExpectedRuntimeManifest
-    Assert-PreservedExternalState
-
-    $repairProcess = Start-AppAndAssertRunning
-    Invoke-Installer $UpgradeInstaller
-    Assert-AppProcessExited $repairProcess 'same-version repair'
-    Assert-Installed $ExpectedVersion $ExpectedRuntimeManifest
-    Assert-PreservedExternalState
-
-    Invoke-Installer $BaseInstaller -ExpectFailure
-    Assert-Installed $ExpectedVersion $ExpectedRuntimeManifest
-    Assert-PreservedExternalState
-
-    $uninstallProcess = Start-AppAndAssertRunning
-    Invoke-Uninstaller
-    Assert-AppProcessExited $uninstallProcess 'running-app uninstall'
-    if (Test-Path -LiteralPath $AppDir) {
-        throw 'Application directory remains after uninstall'
-    }
-    if (Test-Path -LiteralPath $UninstallKey) {
-        throw 'Uninstall registration remains after uninstall'
-    }
-    Assert-PreservedExternalState
+    Invoke-InstallLifecycle `
+        -Scenario 'default-directory' `
+        -InstallDir $DefaultAppDir `
+        -UnexpectedInstallDir $CustomAppDir
+    Invoke-InstallLifecycle `
+        -Scenario 'custom-directory' `
+        -InstallDir $CustomAppDir `
+        -UnexpectedInstallDir $DefaultAppDir `
+        -UseCustomDirectory
 }
 finally {
-    try { Invoke-Uninstaller } catch { Write-Warning $_ }
+    try { Invoke-RegisteredUninstaller } catch { Write-Warning $_ }
     & cmdkey.exe "/delete:$CredentialTarget" | Out-Null
     Remove-Item -Force -ErrorAction SilentlyContinue $SupportSentinel
     Remove-Item -Force -ErrorAction SilentlyContinue $CacheSentinel

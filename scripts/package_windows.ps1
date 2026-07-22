@@ -178,6 +178,8 @@ Push-Location $RootDir
 try {
     & flutter pub get
     Assert-ExitCode 'flutter pub get'
+    & dart run tool/generate_windows_icon.dart --check
+    Assert-ExitCode 'Windows icon consistency check'
     & flutter build windows `
         --release `
         --no-pub `

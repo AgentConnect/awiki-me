@@ -55,8 +55,14 @@ void main() {
     expect(installer, contains('(ResultCode = 0)'));
     expect(installer, isNot(contains('deleteafterinstall recursesubdirs')));
     expect(installer, isNot(contains('[InstallDelete]')));
-    expect(installer, contains('DisableDirPage=yes'));
-    expect(installer, contains('UsePreviousAppDir=no'));
+    expect(installer, contains('DisableDirPage=auto'));
+    expect(installer, contains('UsePreviousAppDir=yes'));
+    expect(installer, contains(r'Name: "{autoprograms}\{#MyAppName}"'));
+    expect(
+      installer,
+      contains(r'Name: "{autoprograms}\Uninstall {#MyAppName}"'),
+    );
+    expect(installer, contains('Filename: "{uninstallexe}"'));
     expect(installer, isNot(contains('PurgeInstalledPayload')));
     expect(installer, contains('CapturePreviousRuntimeFiles'));
     expect(installer, contains('RemoveObsoleteRuntimeFiles'));
@@ -80,8 +86,17 @@ void main() {
     expect(verifier, contains('AWiki\\AWikiMe\\cache'));
     expect(verifier, contains('Credential Manager item was deleted'));
     expect(verifier, contains(r'^unins[0-9]{3}\.(dat|exe|msg)$'));
+    expect(verifier, contains(r'$CustomAppDir'));
+    expect(verifier, contains('AWiki Me 安装 验证'));
+    expect(verifier, contains('自定义 目录'));
+    expect(verifier, contains(r'$arguments += "/DIR=`"$RequestedDir`""'));
+    expect(verifier, contains('Registered install directory is'));
+    expect(verifier, contains('Start menu shortcut is missing'));
+    expect(verifier, contains("-Scenario 'default-directory'"));
+    expect(verifier, contains("-Scenario 'custom-directory'"));
+    expect(verifier, contains('-UseCustomDirectory'));
     expect(
-      r'Invoke-Installer $UpgradeInstaller'.allMatches(verifier),
+      RegExp(r"-Scenario '(default|custom)-directory'").allMatches(verifier),
       hasLength(2),
     );
     for (final runtime in <String>[
@@ -125,12 +140,17 @@ void main() {
       'Assert-PreservedExternalState'.allMatches(verifier).length,
       greaterThanOrEqualTo(6),
     );
-    expect(verifier, contains("'running-app uninstall'"));
+    expect(verifier, contains('running-app uninstall'));
     expect(verifier, contains('Application directory remains after uninstall'));
     expect(
       verifier,
       contains('Uninstall registration remains after uninstall'),
     );
     expect(worker, contains('-ExpectedRuntimeManifest'));
+    expect(
+      worker,
+      contains('dart run tool/generate_windows_icon.dart --check'),
+    );
+    expect(worker, contains('Windows icon consistency check'));
   });
 }

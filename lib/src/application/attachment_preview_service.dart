@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../domain/entities/chat_message.dart';
 import 'attachment_cache_service.dart';
+import 'attachment_resource_reference.dart';
 import 'models/attachment_models.dart';
 
 class AttachmentPreviewService {
@@ -52,18 +53,22 @@ class AttachmentPreviewService {
 
   final AttachmentCacheService cache;
 
-  static Future<String?> availableAttachmentPath(String? pathOrUri) async {
+  static Future<String?> availableAttachmentPath(
+    String? pathOrUri, {
+    bool? windows,
+  }) async {
     final value = pathOrUri?.trim();
     if (value == null || value.isEmpty) {
       return null;
     }
-    final parsed = Uri.tryParse(value);
-    if (parsed != null && parsed.hasScheme && parsed.scheme != 'file') {
+    final reference = AttachmentResourceReference.parse(
+      value,
+      windows: windows,
+    );
+    if (!reference.isLocalFile) {
       return value;
     }
-    final file = parsed != null && parsed.scheme == 'file'
-        ? File.fromUri(parsed)
-        : File(value);
+    final file = File(reference.localPath!);
     if (await file.exists()) {
       return file.path;
     }

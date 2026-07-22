@@ -4194,6 +4194,94 @@ void main() {
     expect(find.text('photo.png'), findsNothing);
   });
 
+  testWidgets('图片加载失败后文件卡脱离图片高度约束', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:image-fallback',
+      threadId: 'dm:image-fallback',
+      displayName: 'Tester',
+      lastMessagePreview: '[图片]',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'broken-image',
+        remoteId: 'broken-image',
+        threadId: conversation.threadId,
+        senderDid: conversation.targetDid!,
+        receiverDid: session.did,
+        content: '',
+        createdAt: DateTime(2026, 4, 5, 12, 1),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        originalType: 'application/anp-attachment-manifest+json',
+        attachment: const ChatAttachment(
+          attachmentId: 'att-broken-image',
+          filename: 'broken.png',
+          mimeType: 'image/png',
+          sizeBytes: 128,
+          localPath: '/missing/broken.png',
+        ),
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+          chatImageWidgetBuilderProvider.overrideWithValue(
+            ({
+              String? path,
+              Uint8List? bytes,
+              double? width,
+              double? height,
+              required BoxFit fit,
+              required Widget errorFallback,
+            }) => SizedBox(width: 320, height: 300, child: errorFallback),
+          ),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    final fileCard = find.byKey(
+      const Key('chat-attachment-file-card:broken-image'),
+    );
+    expect(fileCard, findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-inline-image:broken-image')),
+      findsNothing,
+    );
+    expect(tester.getSize(fileCard).height, lessThan(100));
+  });
+
   testWidgets('选择附件后输入框保持焦点', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()

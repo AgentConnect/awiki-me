@@ -1,6 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
     show ColorScheme, Theme, ThemeData, ThemeExtension;
 
@@ -206,7 +208,30 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   }
 }
 
+@immutable
+class AwikiMePlatformTheme {
+  const AwikiMePlatformTheme({
+    required this.materialTheme,
+    required this.cupertinoTheme,
+    required this.tokens,
+  });
+
+  final ThemeData materialTheme;
+  final CupertinoThemeData cupertinoTheme;
+  final AwikiMeThemeTokens tokens;
+}
+
 class AwikiMeTheme {
+  static const String windowsFontFamily = 'Segoe UI';
+  static const List<String> windowsFontFamilyFallback = <String>[
+    'Microsoft YaHei UI',
+    'Microsoft JhengHei UI',
+    'Yu Gothic UI',
+    'Malgun Gothic',
+  ];
+  static final Map<TargetPlatform, AwikiMePlatformTheme> _platformThemes =
+      <TargetPlatform, AwikiMePlatformTheme>{};
+
   static const ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.light,
     primary: AwikiMePalette.actionBlue,
@@ -241,7 +266,7 @@ class AwikiMeTheme {
     surfaceTint: AwikiMePalette.actionBlue,
   );
 
-  static const AwikiMeThemeTokens tokens = AwikiMeThemeTokens(
+  static const AwikiMeThemeTokens _baseTokens = AwikiMeThemeTokens(
     colorScheme: colorScheme,
     sectionTitle: TextStyle(
       fontSize: 20,
@@ -330,23 +355,95 @@ class AwikiMeTheme {
     overlayShadow: AwikiMeShadows.overlay,
   );
 
-  static final ThemeData materialTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: colorScheme,
-    scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
-    extensions: const <ThemeExtension<dynamic>>[tokens],
-  );
+  static AwikiMePlatformTheme forPlatform(TargetPlatform platform) =>
+      _platformThemes.putIfAbsent(platform, () => _buildForPlatform(platform));
 
-  static final CupertinoThemeData cupertinoTheme = CupertinoThemeData(
-    brightness: Brightness.light,
-    primaryColor: colorScheme.primary,
-    scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
-    barBackgroundColor: colorScheme.surface,
-    textTheme: CupertinoTextThemeData(
+  static AwikiMePlatformTheme _buildForPlatform(TargetPlatform platform) {
+    final isWindows = platform == TargetPlatform.windows;
+    final platformTokens = isWindows ? _windowsTokens() : _baseTokens;
+    return AwikiMePlatformTheme(
+      materialTheme: ThemeData(
+        useMaterial3: true,
+        platform: platform,
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
+        fontFamily: isWindows ? windowsFontFamily : null,
+        fontFamilyFallback: isWindows ? windowsFontFamilyFallback : null,
+        extensions: <ThemeExtension<dynamic>>[platformTokens],
+      ),
+      cupertinoTheme: CupertinoThemeData(
+        brightness: Brightness.light,
+        primaryColor: colorScheme.primary,
+        scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
+        barBackgroundColor: colorScheme.surface,
+        textTheme: _cupertinoTextThemeFor(platform),
+      ),
+      tokens: platformTokens,
+    );
+  }
+
+  static AwikiMePlatformTheme get current => forPlatform(defaultTargetPlatform);
+
+  static ThemeData get materialTheme => current.materialTheme;
+
+  static CupertinoThemeData get cupertinoTheme => current.cupertinoTheme;
+
+  static AwikiMeThemeTokens get tokens => current.tokens;
+
+  static AwikiMeThemeTokens _windowsTokens() {
+    TextStyle withWindowsFont(TextStyle style) => style.copyWith(
+      fontFamily: windowsFontFamily,
+      fontFamilyFallback: windowsFontFamilyFallback,
+    );
+
+    return _baseTokens.copyWith(
+      sectionTitle: withWindowsFont(_baseTokens.sectionTitle),
+      navTitle: withWindowsFont(_baseTokens.navTitle),
+      cardTitle: withWindowsFont(_baseTokens.cardTitle),
+      cardSubtitle: withWindowsFont(_baseTokens.cardSubtitle),
+      meta: withWindowsFont(_baseTokens.meta),
+      listTitle: withWindowsFont(_baseTokens.listTitle),
+      listSubtitle: withWindowsFont(_baseTokens.listSubtitle),
+      listMeta: withWindowsFont(_baseTokens.listMeta),
+      messageBody: withWindowsFont(_baseTokens.messageBody),
+      inputText: withWindowsFont(_baseTokens.inputText),
+      fieldLabel: withWindowsFont(_baseTokens.fieldLabel),
+      buttonLabel: withWindowsFont(_baseTokens.buttonLabel),
+      pillLabel: withWindowsFont(_baseTokens.pillLabel),
+      markdownBody: withWindowsFont(_baseTokens.markdownBody),
+    );
+  }
+
+  static CupertinoTextThemeData _cupertinoTextThemeFor(
+    TargetPlatform platform,
+  ) {
+    const base = CupertinoTextThemeData(
+      primaryColor: AwikiMePalette.actionBlue,
+      textStyle: TextStyle(color: AwikiMePalette.ink, fontSize: 15),
+    );
+    if (platform != TargetPlatform.windows) {
+      return base;
+    }
+
+    TextStyle withWindowsFont(TextStyle style) => style.copyWith(
+      fontFamily: windowsFontFamily,
+      fontFamilyFallback: windowsFontFamilyFallback,
+      letterSpacing: 0,
+    );
+
+    return CupertinoTextThemeData(
       primaryColor: colorScheme.primary,
-      textStyle: TextStyle(color: colorScheme.onSurface, fontSize: 15),
-    ),
-  );
+      textStyle: withWindowsFont(base.textStyle),
+      actionTextStyle: withWindowsFont(base.actionTextStyle),
+      actionSmallTextStyle: withWindowsFont(base.actionSmallTextStyle),
+      tabLabelTextStyle: withWindowsFont(base.tabLabelTextStyle),
+      navTitleTextStyle: withWindowsFont(base.navTitleTextStyle),
+      navLargeTitleTextStyle: withWindowsFont(base.navLargeTitleTextStyle),
+      navActionTextStyle: withWindowsFont(base.navActionTextStyle),
+      pickerTextStyle: withWindowsFont(base.pickerTextStyle),
+      dateTimePickerTextStyle: withWindowsFont(base.dateTimePickerTextStyle),
+    );
+  }
 }
 
 extension AwikiMeThemeX on BuildContext {

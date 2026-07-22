@@ -21,6 +21,8 @@ inline constexpr char kToastActivatorGuid[] =
     "42f66431-9bea-46c4-ac14-475b9044a2be";
 
 inline constexpr char kDesktopShellChannel[] = "ai.awiki.awikime/desktop_shell";
+inline constexpr char kAttachmentPickerChannel[] =
+    "ai.awiki.awikime/attachment_picker";
 inline constexpr char kScopeSecretChannel[] = "ai.awiki.awikime/scope_secret";
 
 inline constexpr UINT kTrayCallbackMessage = WM_APP + 0x31;

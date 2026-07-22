@@ -2697,6 +2697,139 @@ void main() {
     );
   });
 
+  test('可见会话在 timeline 水合后保留持久已读意图', () async {
+    final latest = ChatMessage(
+      localId: 'remote-visible-hydrated',
+      remoteId: 'remote-visible-hydrated',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'visible hydrated unread',
+      createdAt: DateTime(2026, 5, 8, 10, 7),
+      isMine: false,
+      serverSequence: 32,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 2,
+      lastMessageSnapshot: latest,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    final controller = container.read(chatThreadsProvider.notifier);
+
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    controller.debugSeedMessageForTesting(
+      latest,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.acknowledgeVisibleConversationRead(unreadConversation);
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.conversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: latest.remoteId,
+      sequence: latest.serverSequence.toString(),
+    );
+  });
+
+  test('多条未读持久确认后新一条 summary 只显示一条未读', () async {
+    final acknowledgedMessage = ChatMessage(
+      localId: 'remote-acknowledged-40',
+      remoteId: 'remote-acknowledged-40',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'last message in acknowledged batch',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 40,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: acknowledgedMessage.content,
+      lastMessageAt: acknowledgedMessage.createdAt,
+      unreadCount: 4,
+      lastMessageSnapshot: acknowledgedMessage,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      acknowledgedMessage,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    controller.acknowledgeVisibleConversationRead(
+      unreadConversation,
+      forcePersistentAck: true,
+    );
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: acknowledgedMessage.remoteId,
+      sequence: acknowledgedMessage.serverSequence.toString(),
+    );
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+
+    controller.markConversationHidden(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    final newerMessage = ChatMessage(
+      localId: 'remote-newer-41',
+      remoteId: 'remote-newer-41',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'one message after durable read',
+      createdAt: DateTime(2026, 5, 8, 10, 9),
+      isMine: false,
+      serverSequence: 41,
+      sendState: MessageSendState.sent,
+    );
+    final durableSummary = unreadConversation.copyWith(
+      lastMessagePreview: newerMessage.content,
+      lastMessageAt: newerMessage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: newerMessage,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(durableSummary);
+
+    final displayed = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(displayed.lastMessageSnapshot?.serverSequence, 41);
+    expect(displayed.unreadCount, 1);
+    expect(gateway.markConversationReadCalls, 1);
+  });
+
   test('可见会话收到未读 summary 更新时列表不闪现未读', () async {
     final initial = conversation.copyWith(
       lastMessagePreview: 'old visible',
@@ -2918,6 +3051,76 @@ void main() {
       messageId: 'remote-resumed-summary',
       sequence: '34',
     );
+  });
+
+  test('后台挂起的持久已读意图在恢复前台后只上报一次', () async {
+    final latest = ChatMessage(
+      localId: 'remote-pending-lifecycle-35',
+      remoteId: 'remote-pending-lifecycle-35',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'pending lifecycle read',
+      createdAt: DateTime(2026, 5, 8, 10, 7),
+      isMine: false,
+      serverSequence: 35,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 3,
+      lastMessageSnapshot: latest,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      latest,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.hidden);
+    controller.acknowledgeVisibleConversationRead(
+      unreadConversation,
+      forcePersistentAck: true,
+    );
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.inactive);
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 0);
+
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.resumed);
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.conversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: latest.remoteId,
+      sequence: latest.serverSequence.toString(),
+    );
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
   });
 
   test('重复打开当前可见未读会话时按 conversationId 补 ACK', () async {
@@ -3158,8 +3361,9 @@ void main() {
     );
     final unreadConversation = conversation.copyWith(
       lastMessagePreview: latest.content,
-      lastMessageAt: latest.createdAt,
+      lastMessageAt: latest.createdAt.add(const Duration(milliseconds: 500)),
       unreadCount: 2,
+      lastMessageSnapshot: latest,
     );
     gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
       'did:peer': <ChatMessage>[older, latest],

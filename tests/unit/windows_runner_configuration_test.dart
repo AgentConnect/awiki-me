@@ -35,6 +35,10 @@ void main() {
       'wincred.h',
       'wincrypt.h',
     ]);
+    expectWindowsHeaderBefore(
+      'windows/runner/windows_region_capture.cpp',
+      <String>['windowsx.h', 'wincodec.h'],
+    );
 
     final scopeSecretSource = File(
       'windows/runner/scope_secret_store.cpp',
@@ -111,12 +115,91 @@ void main() {
     expect(shell, contains('NOTIFYICON_VERSION_4'));
     expect(shell, contains('static_cast<UINT>(HIWORD(lparam))'));
     expect(shell, contains('!= tray_icon_.uID'));
+    expect(shell, contains('CreateUnreadTrayIcon'));
+    expect(shell, contains('BuildTrayTooltip'));
+    expect(shell, contains('std::to_wstring(unread_count_)'));
+    expect(shell, contains('Shell_NotifyIconW(NIM_MODIFY'));
+    expect(shell, contains('case WM_DPICHANGED:'));
+    expect(shell, contains('RebuildTrayIcon(HIWORD(wparam))'));
+    expect(shell, contains('message == taskbar_created_message_'));
+    expect(shell, contains('CreateUnreadOverlayIcon(unread_count_)'));
+    expect(
+      shell,
+      contains(
+        'unread_count_ > 0 ? CreateUnreadTrayIcon(dpi)\n'
+        '                                        : LoadBaseTrayIcon(dpi)',
+      ),
+    );
+    expect(
+      shell.indexOf('HICON previous = tray_icon_.hIcon'),
+      greaterThan(shell.indexOf('Shell_NotifyIconW(NIM_MODIFY')),
+    );
+    expect(
+      shell.indexOf('::DestroyIcon(previous)'),
+      greaterThan(shell.indexOf('HICON previous = tray_icon_.hIcon')),
+    );
     expect(shell, contains('FOLDERID_LocalAppData'));
     expect(shell, contains('L"AWiki" / L"AWikiMe"'));
     expect(shell, isNot(contains('::DestroyWindow(window_)')));
     final window = File('windows/runner/flutter_window.cpp').readAsStringSync();
     expect(window, contains('message == awiki::kExitReadyMessage'));
     expect(window, contains('::DestroyWindow(hwnd)'));
+  });
+
+  test('Windows native title bar remains explicitly light', () {
+    final window = File('windows/runner/win32_window.cpp').readAsStringSync();
+
+    expect(window, contains('ApplyLightTitleBar(window)'));
+    expect(window, contains('const BOOL enable_dark_mode = FALSE'));
+    expect(window, contains('DWMWA_USE_IMMERSIVE_DARK_MODE'));
+    expect(window, contains('DWMWA_CAPTION_COLOR'));
+    expect(window, contains('DWMWA_TEXT_COLOR'));
+    expect(window, contains('DWMWA_BORDER_COLOR'));
+    expect(window, contains('kLightCaptionColor = RGB(250, 249, 254)'));
+    expect(window, contains('kLightCaptionTextColor = RGB(26, 28, 28)'));
+    expect(window, contains('kLightBorderColor = RGB(221, 229, 240)'));
+    expect(window, contains('case WM_THEMECHANGED:'));
+    expect(window, isNot(contains('AppsUseLightTheme')));
+  });
+
+  test('Windows region capture is native, asynchronous, and atomic', () {
+    final constants = File('windows/runner/app_constants.h').readAsStringSync();
+    final capture = File(
+      'windows/runner/windows_region_capture.cpp',
+    ).readAsStringSync();
+    final window = File('windows/runner/flutter_window.cpp').readAsStringSync();
+    final runnerCmake = File(
+      'windows/runner/CMakeLists.txt',
+    ).readAsStringSync();
+
+    expect(constants, contains('ai.awiki.awikime/attachment_picker'));
+    expect(capture, contains('call.method_name() == "cancelCapture"'));
+    expect(capture, contains('call.method_name() != "captureRegion"'));
+    expect(capture, contains('StringArgument(*arguments, "outputPath")'));
+    expect(capture, contains('capture_invalid_path'));
+    expect(capture, contains('capture_busy'));
+    expect(capture, contains('capture_failed'));
+    expect(capture, contains('kCaptureTimeoutMilliseconds = 120000'));
+    expect(capture, contains('SM_XVIRTUALSCREEN'));
+    expect(capture, contains('SM_YVIRTUALSCREEN'));
+    expect(capture, contains('SRCCOPY | CAPTUREBLT'));
+    expect(capture, contains('::EnumDisplayMonitors'));
+    expect(capture, contains('WS_EX_TOPMOST | WS_EX_TOOLWINDOW'));
+    expect(capture, contains('WM_RBUTTONDOWN'));
+    expect(capture, contains('WM_CAPTURECHANGED'));
+    expect(capture, contains('WM_CANCELMODE'));
+    expect(capture, contains('LOWORD(wparam) == WA_INACTIVE'));
+    expect(capture, contains('wparam == VK_ESCAPE'));
+    expect(capture, contains('GUID_ContainerFormatPng'));
+    expect(capture, contains('output_path_ + L".part"'));
+    expect(capture, contains('MOVEFILE_REPLACE_EXISTING'));
+    expect(capture, contains('MOVEFILE_WRITE_THROUGH'));
+    expect(capture, isNot(contains('GetMessage')));
+    expect(capture, isNot(contains('OpenClipboard')));
+    expect(capture, isNot(contains('HideWindow')));
+    expect(window, contains('std::make_unique<WindowsRegionCapture>'));
+    expect(runnerCmake, contains('"windows_region_capture.cpp"'));
+    expect(runnerCmake, contains('"windowscodecs.lib"'));
   });
 
   test('Windows scope secrets stay in Credential Manager with CAS mutexes', () {

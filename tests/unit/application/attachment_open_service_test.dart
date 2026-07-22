@@ -59,6 +59,27 @@ void main() {
     },
   );
 
+  test(
+    'Windows local path launches as a file URI without percent corruption',
+    () async {
+      const path = r'C:\Users\00sea\AWiki Me\截图 100%.png';
+      final launchedUris = <Uri>[];
+      final service = AttachmentOpenService(
+        isAndroid: () => false,
+        isWindows: () => true,
+        launchUrl: (uri, {mode = LaunchMode.platformDefault}) async {
+          launchedUris.add(uri);
+          return true;
+        },
+      );
+
+      await service.open(path);
+
+      expect(launchedUris.single, Uri.file(path, windows: true));
+      expect(launchedUris.single.toFilePath(windows: true), path);
+    },
+  );
+
   test('Android platform error reports stable app error code', () async {
     const channel = MethodChannel('awiki.test/attachment_viewer.error');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
