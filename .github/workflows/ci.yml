@@ -44,12 +44,12 @@ jobs:
           }
 
       - name: Checkout AWiki Me
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: test-awiki-me
 
       - name: Checkout AWiki CLI / IM Core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
           ref: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_REF }}
@@ -137,7 +137,7 @@ jobs:
 
       - name: Upload deterministic reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: awiki-me-deterministic-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-awiki-me/.e2e/
@@ -162,11 +162,11 @@ jobs:
           test -n "$E2E_PHONE" && test -n "$E2E_OTP"
           test -n "$APP_HANDLE" && test -n "$CLI_HANDLE"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: test-awiki-me
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: ${{ github.repository_owner }}/awiki-cli-rs2
           ref: ${{ github.event.inputs.cli_ref || vars.AWIKI_CLI_RS2_REF }}
@@ -260,7 +260,7 @@ jobs:
 
       - name: Upload real product reports and residual ledger
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: awiki-me-remote-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-awiki-me/.e2e/
@@ -291,12 +291,12 @@ jobs:
           }
 
       - name: Checkout AWiki Me
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: test-awiki-me
 
       - name: Checkout pinned CLI / IM Core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: AgentConnect/awiki-cli-rs2
           ref: ${{ env.WINDOWS_CORE_REF }}
@@ -312,7 +312,7 @@ jobs:
           }
 
       - name: Checkout pinned ANP
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: agent-network-protocol/anp
           ref: ${{ env.WINDOWS_ANP_REF }}

@@ -109,13 +109,13 @@ jobs:
         run: test -n "$READ_TOKEN"
 
       - name: Checkout exact AWiki Me source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.app_ref }}
           path: awiki-me
 
       - name: Checkout exact CLI / IM Core source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: AgentConnect/awiki-cli-rs2
           ref: ${{ inputs.core_ref }}
@@ -123,7 +123,7 @@ jobs:
           path: awiki-cli-rs2
 
       - name: Checkout exact ANP source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: agent-network-protocol/anp
           ref: ${{ inputs.anp_ref }}
@@ -192,13 +192,13 @@ jobs:
       matrix: ${{ fromJson(needs.validate.outputs.matrix) }}
     steps:
       - name: Checkout exact AWiki Me source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.app_ref }}
           path: awiki-me
 
       - name: Checkout exact CLI / IM Core source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: AgentConnect/awiki-cli-rs2
           ref: ${{ inputs.core_ref }}
@@ -206,7 +206,7 @@ jobs:
           path: awiki-cli-rs2
 
       - name: Checkout exact ANP source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: agent-network-protocol/anp
           ref: ${{ inputs.anp_ref }}
@@ -319,7 +319,7 @@ jobs:
             -OutputDir "../package-output/${{ matrix.target }}"
 
       - name: Upload verified platform package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: awiki-me-${{ matrix.target }}-${{ inputs.request_id }}
           path: package-output/${{ matrix.target }}/
@@ -333,13 +333,13 @@ jobs:
     environment: app-packaging
     steps:
       - name: Checkout exact AWiki Me source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.app_ref }}
           path: awiki-me
 
       - name: Checkout exact CLI / IM Core source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: AgentConnect/awiki-cli-rs2
           ref: ${{ inputs.core_ref }}
@@ -358,7 +358,7 @@ jobs:
         run: flutter pub get
 
       - name: Download all selected platform packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: awiki-me-*-${{ inputs.request_id }}
           path: package-input
@@ -388,7 +388,7 @@ jobs:
             --download-page-url "$DOWNLOAD_PAGE_URL"
 
       - name: Upload aggregate package set
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: awiki-me-packages-${{ inputs.request_id }}
           path: package-aggregate/
