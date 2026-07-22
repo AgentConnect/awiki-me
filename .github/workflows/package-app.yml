@@ -459,6 +459,7 @@ jobs:
           NORMALIZED_TARGETS: ${{ needs.validate.outputs.normalized_targets }}
           PACKAGE_VERSION: ${{ inputs.version }}
           PACKAGE_BUILD_NUMBER: ${{ inputs.build_number }}
+          REQUEST_ID: ${{ inputs.request_id }}
           APP_REF: ${{ inputs.app_ref }}
           CORE_REF: ${{ inputs.core_ref }}
           ANP_REF: ${{ inputs.anp_ref }}
@@ -471,6 +472,7 @@ jobs:
             --output-dir ../package-aggregate \
             --version "$PACKAGE_VERSION" \
             --build-number "$PACKAGE_BUILD_NUMBER" \
+            --request-id "$REQUEST_ID" \
             --app-ref "$APP_REF" \
             --core-ref "$CORE_REF" \
             --anp-ref "$ANP_REF" \
