@@ -9,6 +9,7 @@ import '../../tool/package_manifest.dart';
 const _appRef = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const _coreRef = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const _anpRef = 'cccccccccccccccccccccccccccccccccccccccc';
+const _requestId = '123e4567-e89b-42d3-a456-426614174000';
 const _refs = PackageSourceRefs(app: _appRef, imCore: _coreRef, anp: _anpRef);
 
 void main() {
@@ -43,6 +44,9 @@ void main() {
       );
 
       expect(manifest['schemaVersion'], 1);
+      expect(manifest['packageSet'], 'release');
+      expect(manifest['complete'], isTrue);
+      expect(manifest['requestId'], _requestId);
       expect(manifest['publishedAt'], '2026-07-21T01:02:03.000Z');
       expect(manifest['sourceRefs'], _refs.toJson());
       final resultArtifacts = manifest['artifacts']! as Map<String, Object?>;
@@ -112,6 +116,24 @@ void main() {
     );
   });
 
+  test('marks a target subset as validation without latest.json', () async {
+    await _writeFixture(artifacts, target: 'windows-x64');
+    await output.create();
+    await File('${output.path}/latest.json').writeAsString('stale');
+
+    final manifest = await _builder(<String>{'windows-x64'}).aggregate(
+      artifactsRoot: artifacts,
+      outputDirectory: output,
+      publishedAt: DateTime.utc(2026, 7, 21, 1, 2, 3),
+    );
+
+    expect(manifest['packageSet'], 'validation');
+    expect(manifest['complete'], isFalse);
+    expect((manifest['artifacts']! as Map).keys, <String>['windows-x64']);
+    expect(await File('${output.path}/package-manifest.json').exists(), isTrue);
+    expect(await File('${output.path}/latest.json').exists(), isFalse);
+  });
+
   test('rejects an incomplete selected target set', () async {
     await _writeFixture(artifacts, target: 'android-arm64');
 
@@ -134,6 +156,7 @@ void main() {
 PackageManifestBuilder _builder(Set<String> targets) => PackageManifestBuilder(
   version: '1.2.3',
   buildNumber: 42,
+  requestId: _requestId,
   sourceRefs: _refs,
   targets: targets,
   downloadBaseUrl: 'https://awiki.ai/downloads/awiki-me',

@@ -9,3 +9,10 @@ AWIKI_MACOS_SIGNING_IDENTITY="Apple Development: REPLACE_WITH_CERTIFICATE_NAME"
 
 # The 10-character Team ID shown by codesign -dvvv on a signed app.
 AWIKI_MACOS_DEVELOPMENT_TEAM="REPLACE_ME"
+
+# Optional focused validation target override. Leave this unset to keep the
+# committed four-platform release target set. A subset still uses the same
+# GitHub workflow, but is saved under
+# dist/validation/<version>+<build>/<request-id>/ with a validation package
+# manifest. It does not generate or replace any latest.json.
+# PACKAGE_TARGETS="windows-x64"

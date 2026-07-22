@@ -142,6 +142,7 @@ class PackageManifestBuilder {
   const PackageManifestBuilder({
     required this.version,
     required this.buildNumber,
+    required this.requestId,
     required this.sourceRefs,
     required this.targets,
     required this.downloadBaseUrl,
@@ -150,6 +151,7 @@ class PackageManifestBuilder {
 
   final String version;
   final int buildNumber;
+  final String requestId;
   final PackageSourceRefs sourceRefs;
   final Set<String> targets;
   final String downloadBaseUrl;
@@ -260,8 +262,14 @@ class PackageManifestBuilder {
       };
     }
 
+    final isCompleteRelease =
+        targets.length == packageTargetOrder.length &&
+        targets.containsAll(packageTargetOrder);
     final manifest = <String, Object?>{
       'schemaVersion': 1,
+      'packageSet': isCompleteRelease ? 'release' : 'validation',
+      'complete': isCompleteRelease,
+      'requestId': requestId,
       'version': version,
       'buildNumber': buildNumber,
       'publishedAt': (publishedAt ?? DateTime.now()).toUtc().toIso8601String(),
@@ -275,9 +283,14 @@ class PackageManifestBuilder {
     await File(
       '${outputDirectory.path}${Platform.pathSeparator}package-manifest.json',
     ).writeAsString(encoded, flush: true);
-    await File(
+    final latest = File(
       '${outputDirectory.path}${Platform.pathSeparator}latest.json',
-    ).writeAsString(encoded, flush: true);
+    );
+    if (isCompleteRelease) {
+      await latest.writeAsString(encoded, flush: true);
+    } else if (await latest.exists()) {
+      await latest.delete();
+    }
     return manifest;
   }
 
@@ -285,6 +298,11 @@ class PackageManifestBuilder {
     _validateVersion(version);
     if (buildNumber <= 0) {
       throw const FormatException('buildNumber must be greater than zero');
+    }
+    if (!RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    ).hasMatch(requestId)) {
+      throw const FormatException('requestId must be a UUID');
     }
     sourceRefs.validate();
     if (targets.isEmpty ||
@@ -396,6 +414,7 @@ Future<void> main(List<String> args) async {
         await PackageManifestBuilder(
           version: version,
           buildNumber: buildNumber,
+          requestId: _option(options, '--request-id'),
           sourceRefs: refs,
           targets: targets,
           downloadBaseUrl: _option(options, '--download-base-url'),
@@ -546,7 +565,7 @@ Metadata:
 Aggregate:
   dart run tool/package_manifest.dart aggregate \\
     --targets TARGETS --artifacts-root DIR --output-dir DIR \\
-    --version VERSION --build-number NUMBER \\
+    --version VERSION --build-number NUMBER --request-id UUID \\
     --app-ref SHA --core-ref SHA --anp-ref SHA \\
     --download-base-url URL --download-page-url URL \\
     [--published-at ISO8601]

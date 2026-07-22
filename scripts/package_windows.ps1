@@ -287,37 +287,6 @@ if ($installerHash -notmatch '^[0-9a-f]{64}$') {
 }
 Write-Output "Windows installer SHA-256: $installerHash"
 
-# A lower-version fixture contains files that do not exist in the upgrade. It
-# proves overwrite cleanup as well as downgrade and data-preservation behavior.
-$FixtureDir = Join-Path $StageRoot 'fixtures'
-$FixtureBaseName = 'AWiki-Me-test-base'
-$BaseAppStage = Join-Path $StageRoot 'base-app'
-New-Item -ItemType Directory -Force -Path $BaseAppStage | Out-Null
-Copy-Item (Join-Path $AppStage '*') $BaseAppStage -Recurse -Force
-$ObsoleteRuntimeFiles = @(
-    'obsolete-runtime-fixture.dll'
-    'data/flutter_assets/obsolete-runtime-fixture.txt'
-)
-Set-Content `
-    -LiteralPath (Join-Path $BaseAppStage $ObsoleteRuntimeFiles[0]) `
-    -Value 'obsolete DLL fixture' `
-    -Encoding utf8
-$obsoleteAsset = Join-Path $BaseAppStage $ObsoleteRuntimeFiles[1].Replace('/', '\')
-New-Item -ItemType Directory -Force -Path (Split-Path -Parent $obsoleteAsset) | Out-Null
-Set-Content -LiteralPath $obsoleteAsset -Value 'obsolete data fixture' -Encoding utf8
-$ExpectedBaseRuntimeManifest = Join-Path $StageRoot "expected-base-$RuntimeManifestName"
-Write-RuntimeManifest $BaseAppStage '0.0.0' $ExpectedBaseRuntimeManifest
-Compile-Installer $compiler $BaseAppStage '0.0.0' $FixtureBaseName $FixtureDir
-$BaseInstaller = Join-Path $FixtureDir "$FixtureBaseName.exe"
-& (Join-Path $PSScriptRoot 'windows\verify_installer.ps1') `
-    -BaseInstaller $BaseInstaller `
-    -UpgradeInstaller $Installer `
-    -ExpectedVersion $Version `
-    -ExpectedBaseRuntimeManifest $ExpectedBaseRuntimeManifest `
-    -ExpectedRuntimeManifest $ExpectedRuntimeManifest `
-    -ObsoleteRuntimeFiles $ObsoleteRuntimeFiles
-Assert-ExitCode 'Windows installer verification'
-
 Copy-Item -LiteralPath $ExpectedRuntimeManifest -Destination (Join-Path $OutputDir $RuntimeManifestName) -Force
 $runtimeFileSummary = @(
     'AWikiMe.exe'

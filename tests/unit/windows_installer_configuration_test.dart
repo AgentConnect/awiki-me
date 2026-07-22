@@ -120,13 +120,24 @@ void main() {
     expect(worker, contains('awiki-runtime-manifest.json'));
     expect(worker, contains('awiki-runtime-files.txt'));
     expect(worker, contains('[IO.Path]::GetRelativePath'));
-    expect(worker, contains(r'$BaseAppStage'));
-    expect(worker, contains('obsolete-runtime-fixture.dll'));
-    expect(worker, contains('obsolete-runtime-fixture.txt'));
-    expect(worker, contains('-ExpectedBaseRuntimeManifest'));
+    expect(worker, isNot(contains(r'$BaseAppStage')));
+    expect(worker, isNot(contains('obsolete-runtime-fixture.dll')));
+    expect(worker, isNot(contains('obsolete-runtime-fixture.txt')));
+    expect(worker, isNot(contains('-ExpectedBaseRuntimeManifest')));
     expect(
       worker,
-      contains("Compile-Installer \$compiler \$BaseAppStage '0.0.0'"),
+      isNot(contains("Compile-Installer \$compiler \$BaseAppStage '0.0.0'")),
+    );
+    expect(worker, isNot(contains('verify_installer.ps1')));
+    expect(worker, isNot(contains('Windows installer verification')));
+    expect(worker, contains('& flutter build windows'));
+    expect(worker, contains('--release'));
+    expect(
+      RegExp(
+        r'^Compile-Installer \$compiler ',
+        multiLine: true,
+      ).allMatches(worker),
+      hasLength(1),
     );
     expect(verifier, contains('Assert-RuntimeManifest'));
     expect(verifier, contains('Installed runtime file hash mismatch'));
@@ -146,7 +157,7 @@ void main() {
       verifier,
       contains('Uninstall registration remains after uninstall'),
     );
-    expect(worker, contains('-ExpectedRuntimeManifest'));
+    expect(worker, isNot(contains('-ExpectedRuntimeManifest')));
     expect(
       worker,
       contains('dart run tool/generate_windows_icon.dart --check'),

@@ -32,7 +32,10 @@ stable `.github/workflows/package-app.yml` controller from that branch with a
 unique UUID. The APP and Core source revisions remain the exact commits from
 their independently selected, pushed branches. The script waits for that exact
 run, downloads only its aggregate artifact, and verifies every size and SHA-256
-before writing `dist/<version>/` and `dist/latest.json`.
+before installing it locally. A complete four-target run atomically replaces
+`dist/<version>/` and `dist/latest.json`. A strict target subset is stored under
+`dist/validation/<version>+<build>/<request-id>/` and cannot replace the global
+latest manifest.
 
 The default branch registers and protects the packaging workflow; it is not the
 required source branch for a release. Any reviewed APP and Core branch can be
@@ -101,9 +104,10 @@ PACKAGE_TARGETS="windows-x64"
 scripts/package_app.sh
 ```
 
-A one-off target selection should be made in the Git-ignored local config, or by
-editing and committing the release configuration. The packaging entry refuses a
-dirty worktree.
+A one-off target selection should be made in the Git-ignored local config. The
+tracked configuration keeps the complete four-target default, and the packaging
+entry refuses a dirty source worktree. Each run is self-contained: a later
+four-target run rebuilds every platform and never splices in a prior subset.
 
 ## Installer lifecycle
 
@@ -143,20 +147,15 @@ The Windows worker verifies the PE x64 machine type, required FRB exports,
 copies the complete x64 `Microsoft.VC143.CRT` DLL set from Visual Studio 2022
 into the application. The installer uses these app-local DLLs and never launches
 a machine-wide runtime installer, so the per-user installation stays
-non-elevated. Before compilation, the worker writes a recursive runtime manifest
-with the size and SHA-256 of every staged file. Fresh install, running-app
-upgrade, same-version repair, downgrade rejection, and running-app uninstall all
-verify the installed manifest and payload against that immutable stage. It
-computes the installer SHA-256, then the aggregate job independently recomputes
-that digest before publishing the manifest. The worker compiles a lower-version
-fixture and then runs a real
-silent install, application startup, graceful update shutdown, overwrite upgrade,
-downgrade rejection, uninstall, LocalAppData preservation, and Credential Manager
-preservation sequence at both the default directory and a Unicode custom directory
-containing spaces. Upgrade and same-version repair omit `/DIR`, proving that the
-recorded custom directory remains authoritative.
+non-elevated. The worker writes a recursive runtime manifest with the size and
+SHA-256 of every staged file, compiles one Release installer, computes its
+SHA-256, and emits artifact metadata. The aggregate job independently recomputes
+the digest before producing the selected package set.
 
-macOS can validate shell syntax, workflow structure, target parsing, metadata,
-manifest hashes, and Dart unit tests. MSVC compilation, Inno compilation, Windows
-Credential Manager, installer lifecycle, and the executable smoke test require the
-`windows-2022` GitHub runner.
+Shared analysis and automated tests remain outside the packaging workflow and
+run through the existing development validation process. The packaging workflow
+does not run a Windows-only Debug, Credential Manager, application smoke, or
+installer-lifecycle test suite. `scripts/windows/verify_installer.ps1` remains an
+explicit development tool. MSVC and Inno compilation require the `windows-2022`
+GitHub runner; DPI, tray, screenshot, font, and file-dialog behavior remain Windows
+VM acceptance checks.
