@@ -1640,10 +1640,13 @@ class _InlineImagePreviewState extends ConsumerState<_InlineImagePreview> {
       return widget.errorFallback;
     }
     final responsive = context.awikiResponsive;
+    final framePlaceholder = _InlineImageLoading(macStyle: widget.macStyle);
     final image = ref.watch(chatImageWidgetBuilderProvider)(
       path: widget.path,
       fit: BoxFit.contain,
+      framePlaceholder: framePlaceholder,
       errorFallback: _InlineImageFailureSignal(
+        placeholder: framePlaceholder,
         onFailure: () {
           if (mounted && !_failed) {
             setState(() => _failed = true);
@@ -1681,9 +1684,13 @@ class _InlineImagePreviewState extends ConsumerState<_InlineImagePreview> {
 }
 
 class _InlineImageFailureSignal extends StatefulWidget {
-  const _InlineImageFailureSignal({required this.onFailure});
+  const _InlineImageFailureSignal({
+    required this.onFailure,
+    required this.placeholder,
+  });
 
   final VoidCallback onFailure;
+  final Widget placeholder;
 
   @override
   State<_InlineImageFailureSignal> createState() =>
@@ -1702,7 +1709,7 @@ class _InlineImageFailureSignalState extends State<_InlineImageFailureSignal> {
   }
 
   @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
+  Widget build(BuildContext context) => widget.placeholder;
 }
 
 class _AttachmentFileCard extends StatelessWidget {

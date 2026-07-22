@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -64,6 +65,7 @@ part 'parts/chat_composer_part.dart';
 
 const _chatMessageListBottomInset = 12.0;
 const _macChatMessageListBottomInset = 4.0;
+const _chatBottomTolerance = 0.5;
 
 typedef ChatImageWidgetBuilder =
     Widget Function({
@@ -73,6 +75,7 @@ typedef ChatImageWidgetBuilder =
       double? height,
       required BoxFit fit,
       required Widget errorFallback,
+      Widget? framePlaceholder,
     });
 
 final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
@@ -83,8 +86,23 @@ final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
     double? height,
     required BoxFit fit,
     required Widget errorFallback,
+    Widget? framePlaceholder,
   }) {
     final cacheWidth = ((width ?? 480) * 3).ceil().clamp(64, 1440);
+    Widget buildFrame(
+      BuildContext context,
+      Widget child,
+      int? frame,
+      bool wasSynchronouslyLoaded,
+    ) {
+      if (frame == null &&
+          !wasSynchronouslyLoaded &&
+          framePlaceholder != null) {
+        return framePlaceholder;
+      }
+      return child;
+    }
+
     if (bytes != null) {
       return Image.memory(
         bytes,
@@ -92,6 +110,7 @@ final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
         height: height,
         cacheWidth: cacheWidth,
         fit: fit,
+        frameBuilder: framePlaceholder == null ? null : buildFrame,
         errorBuilder: (_, _, _) => errorFallback,
       );
     }
@@ -109,6 +128,7 @@ final chatImageWidgetBuilderProvider = Provider<ChatImageWidgetBuilder>((ref) {
       height: height,
       cacheWidth: cacheWidth,
       fit: fit,
+      frameBuilder: framePlaceholder == null ? null : buildFrame,
       errorBuilder: (_, _, _) => errorFallback,
     );
   };
@@ -242,20 +262,35 @@ class ChatView extends ConsumerStatefulWidget {
   ConsumerState<ChatView> createState() => _ChatViewState();
 }
 
-class _BottomInitialScrollController extends ScrollController {
-  _BottomInitialScrollController()
-    : super(keepScrollOffset: false, debugLabel: 'ChatView.messages');
+class _BottomAnchoredScrollController extends ScrollController {
+  _BottomAnchoredScrollController({required VoidCallback onUserScrollStart})
+    : _onUserScrollStart = onUserScrollStart,
+      super(keepScrollOffset: false, debugLabel: 'ChatView.messages');
 
-  _BottomInitialScrollPosition? get _bottomInitialPosition {
+  final VoidCallback _onUserScrollStart;
+  bool _followBottom = true;
+  bool _deferBottomCorrection = false;
+
+  _BottomAnchoredScrollPosition? get _bottomAnchoredPosition {
     if (!hasClients) {
       return null;
     }
     final position = this.position;
-    return position is _BottomInitialScrollPosition ? position : null;
+    return position is _BottomAnchoredScrollPosition ? position : null;
   }
 
   void prepareForInitialBottomPosition() {
-    _bottomInitialPosition?.prepareForInitialBottomPosition();
+    _bottomAnchoredPosition?.prepareForInitialBottomPosition();
+  }
+
+  set followBottom(bool value) {
+    _followBottom = value;
+    _bottomAnchoredPosition?.followBottom = value;
+  }
+
+  set deferBottomCorrection(bool value) {
+    _deferBottomCorrection = value;
+    _bottomAnchoredPosition?.deferBottomCorrection = value;
   }
 
   @override
@@ -264,24 +299,44 @@ class _BottomInitialScrollController extends ScrollController {
     ScrollContext context,
     ScrollPosition? oldPosition,
   ) {
-    return _BottomInitialScrollPosition(
+    return _BottomAnchoredScrollPosition(
       physics: physics,
       context: context,
       oldPosition: oldPosition,
       debugLabel: debugLabel,
+      followBottom: _followBottom,
+      deferBottomCorrection: _deferBottomCorrection,
+      onUserScrollStart: _onUserScrollStart,
     );
   }
 }
 
-class _BottomInitialScrollPosition extends ScrollPositionWithSingleContext {
-  _BottomInitialScrollPosition({
+class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
+  _BottomAnchoredScrollPosition({
     required super.physics,
     required super.context,
     super.oldPosition,
     super.debugLabel,
-  }) : super(initialPixels: 0, keepScrollOffset: false);
+    required bool followBottom,
+    required bool deferBottomCorrection,
+    required VoidCallback onUserScrollStart,
+  }) : _followBottom = followBottom,
+       _deferBottomCorrection = deferBottomCorrection,
+       _onUserScrollStart = onUserScrollStart,
+       super(initialPixels: 0, keepScrollOffset: false);
 
   bool _shouldCorrectToBottom = true;
+  bool _followBottom;
+  bool _deferBottomCorrection;
+  final VoidCallback _onUserScrollStart;
+
+  set followBottom(bool value) {
+    _followBottom = value;
+  }
+
+  set deferBottomCorrection(bool value) {
+    _deferBottomCorrection = value;
+  }
 
   void prepareForInitialBottomPosition() {
     _shouldCorrectToBottom = true;
@@ -293,7 +348,7 @@ class _BottomInitialScrollPosition extends ScrollPositionWithSingleContext {
       minScrollExtent,
       maxScrollExtent,
     );
-    if (!_shouldCorrectToBottom || !hasPixels) {
+    if (!_shouldCorrectToBottom || !_followBottom || !hasPixels) {
       return accepted;
     }
     if (maxScrollExtent <= minScrollExtent) {
@@ -306,13 +361,66 @@ class _BottomInitialScrollPosition extends ScrollPositionWithSingleContext {
     correctPixels(maxScrollExtent);
     return false;
   }
+
+  @override
+  bool correctForNewDimensions(
+    ScrollMetrics oldPosition,
+    ScrollMetrics newPosition,
+  ) {
+    if (_followBottom &&
+        !_deferBottomCorrection &&
+        (newPosition.maxScrollExtent - newPosition.pixels).abs() >
+            _chatBottomTolerance) {
+      correctPixels(newPosition.maxScrollExtent);
+      if (activity?.isScrolling ?? false) {
+        goIdle();
+      }
+      return false;
+    }
+    return super.correctForNewDimensions(oldPosition, newPosition);
+  }
+
+  @override
+  void applyUserOffset(double delta) {
+    if (delta != 0) {
+      _onUserScrollStart();
+    }
+    super.applyUserOffset(delta);
+  }
+
+  @override
+  void pointerScroll(double delta) {
+    final canMove =
+        (delta < 0 && pixels > minScrollExtent) ||
+        (delta > 0 && pixels < maxScrollExtent);
+    if (canMove) {
+      _onUserScrollStart();
+    }
+    super.pointerScroll(delta);
+  }
+
+  @override
+  Future<void> moveTo(
+    double to, {
+    Duration? duration,
+    Curve? curve,
+    bool? clamp = true,
+  }) {
+    final target = clamp == false
+        ? to
+        : to.clamp(minScrollExtent, maxScrollExtent).toDouble();
+    if ((target - pixels).abs() > _chatBottomTolerance) {
+      _onUserScrollStart();
+    }
+    return super.moveTo(to, duration: duration, curve: curve, clamp: clamp);
+  }
 }
 
 enum _ChatScrollAnchorPhase { opening, active }
 
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
-  late final _BottomInitialScrollController scrollController;
+  late final _BottomAnchoredScrollController scrollController;
   late final ChatThreadsController _chatThreadsController;
   ProviderSubscription<ConversationListState>? _conversationListSubscription;
   late String _displayThreadId;
@@ -321,6 +429,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _didRequestAgents = false;
   bool _hasDeferredBottomNotice = false;
   bool _userAwayFromBottom = false;
+  bool _followBottom = true;
   bool _isProgrammaticScroll = false;
   bool _scrollToBottomScheduled = false;
   int _scrollRequestToken = 0;
@@ -341,7 +450,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void initState() {
     super.initState();
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
-    scrollController = _BottomInitialScrollController();
+    scrollController = _BottomAnchoredScrollController(
+      onUserScrollStart: _handleUserScrollStart,
+    );
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
     _conversationListSubscription = ref.listenManual<ConversationListState>(
       conversationListProvider,
@@ -394,6 +505,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       _restoreComposerDraft(widget.conversation, updateState: true);
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
+      _setFollowBottom(true);
       _cancelPendingScrollRequests();
       _beginOpeningBottomAnchor();
     }
@@ -1470,29 +1582,70 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.depth != 0) {
+      return false;
+    }
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _endOpeningBottomAnchor();
+      _setFollowBottom(false);
+      _updateUserAwayFromBottom(notification.metrics);
+      return false;
+    }
     if (notification is UserScrollNotification) {
       _endOpeningBottomAnchor();
-      _updateUserAwayFromBottom();
+      if (notification.direction != ScrollDirection.idle) {
+        _setFollowBottom(false);
+      } else if (_isAtBottom(notification.metrics)) {
+        _setFollowBottom(true);
+      }
+      _updateUserAwayFromBottom(notification.metrics);
+      return false;
+    }
+    if (_isProgrammaticScroll) {
       return false;
     }
     if (notification is ScrollEndNotification) {
-      _updateUserAwayFromBottom();
+      if (_isAtBottom(notification.metrics)) {
+        _setFollowBottom(true);
+      }
+      _updateUserAwayFromBottom(notification.metrics);
     }
     return false;
+  }
+
+  void _handleUserScrollStart() {
+    _endOpeningBottomAnchor();
+    _setFollowBottom(false);
   }
 
   void _handleScrollPositionChanged() {
     if (_isProgrammaticScroll || !scrollController.hasClients) {
       return;
     }
+    if (_isAtBottom()) {
+      _setFollowBottom(true);
+    }
     _updateUserAwayFromBottom();
   }
 
-  void _updateUserAwayFromBottom() {
-    if (!scrollController.hasClients) {
+  void _setFollowBottom(bool value) {
+    if (_followBottom == value) {
+      scrollController.followBottom = value;
       return;
     }
-    final away = !_isNearBottom();
+    _followBottom = value;
+    scrollController.followBottom = value;
+    if (!value) {
+      _cancelPendingScrollRequests();
+    }
+  }
+
+  void _updateUserAwayFromBottom([ScrollMetrics? metrics]) {
+    if (metrics == null && !scrollController.hasClients) {
+      return;
+    }
+    final away = !_isNearBottom(metrics);
     if (_userAwayFromBottom == away) {
       return;
     }
@@ -1534,9 +1687,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _activePendingTurnCount(next) > _activePendingTurnCount(previous);
     final recoveryAdded =
         next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
-    final wasNearBottom = !_userAwayFromBottom || _isNearBottom();
+    final shouldFollowBottom = _followBottom;
     if (messageAdded) {
-      if (nextLast.isMine || wasNearBottom) {
+      if (nextLast.isMine || shouldFollowBottom) {
         _scheduleScrollToBottom(animated: !nextLast.isMine);
         if (!nextLast.isMine) {
           _acknowledgeVisibleConversationRead(
@@ -1551,7 +1704,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     if (pendingAdded || recoveryAdded) {
-      if (wasNearBottom || _latestMessageIsMine(next)) {
+      if (shouldFollowBottom || _latestMessageIsMine(next)) {
         _scheduleScrollToBottom(animated: true);
       } else {
         _showDeferredBottomNotice();
@@ -1562,7 +1715,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
         next.messages.length > previous.messages.length ||
         next.agentPendingTurns.length > previous.agentPendingTurns.length ||
         next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
-    if (contentGrew && wasNearBottom) {
+    if (contentGrew && shouldFollowBottom) {
       _scheduleScrollToBottom();
     }
   }
@@ -1581,6 +1734,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     int settleFrames = 1,
     bool forceJump = false,
   }) {
+    _setFollowBottom(true);
+    scrollController.deferBottomCorrection = true;
     _pendingScrollAnimated = forceJump
         ? false
         : _pendingScrollAnimated || animated;
@@ -1601,6 +1756,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (!mounted || token != _scrollRequestToken) {
       return;
     }
+    scrollController.deferBottomCorrection = false;
     _scrollToBottom(animated: _pendingScrollAnimated, token: token);
     final remainingFrames = _pendingScrollSettleFrames - 1;
     if (remainingFrames <= 0) {
@@ -1622,9 +1778,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _pendingScrollAnimated = false;
     _pendingScrollSettleFrames = 1;
     _isProgrammaticScroll = false;
+    scrollController.deferBottomCorrection = false;
   }
 
   void _beginOpeningBottomAnchor() {
+    _setFollowBottom(true);
     _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
     _openingAnchorObservedContent = false;
     _openingAnchorToken += 1;
@@ -1644,7 +1802,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ChatThreadState next,
   ) {
     if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening ||
-        _userAwayFromBottom ||
+        !_followBottom ||
         !_threadHasBottomAnchorContent(next)) {
       return false;
     }
@@ -1659,7 +1817,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void _settleOpeningBottomAnchorForCurrentThread(ChatThreadState thread) {
     if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening ||
         _openingAnchorObservedContent ||
-        _userAwayFromBottom) {
+        !_followBottom) {
       return;
     }
     if (_threadHasBottomAnchorContent(thread)) {
@@ -1721,6 +1879,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
               return;
             }
             _isProgrammaticScroll = false;
+            if (_followBottom && !_isAtBottom()) {
+              _jumpToLatestBottom();
+            }
             _markAtBottomAfterProgrammaticScroll();
           });
       return;
@@ -1730,8 +1891,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _markAtBottomAfterProgrammaticScroll();
   }
 
-  void _markAtBottomAfterProgrammaticScroll() {
+  void _jumpToLatestBottom() {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    _isProgrammaticScroll = true;
+    scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    _isProgrammaticScroll = false;
+  }
+
+  void _markAtBottomAfterProgrammaticScroll({bool forcePersistentAck = true}) {
+    if (!_followBottom || !_isAtBottom()) {
+      return;
+    }
     _userAwayFromBottom = false;
+    _setFollowBottom(true);
     if (_hasDeferredBottomNotice && mounted) {
       setState(() {
         _hasDeferredBottomNotice = false;
@@ -1739,16 +1913,24 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     _acknowledgeCurrentVisibleConversationRead(
       reason: 'programmatic_bottom',
-      forcePersistentAck: true,
+      forcePersistentAck: forcePersistentAck,
     );
   }
 
-  bool _isNearBottom() {
-    if (!scrollController.hasClients) {
+  bool _isNearBottom([ScrollMetrics? metrics]) {
+    if (metrics == null && !scrollController.hasClients) {
       return true;
     }
-    final position = scrollController.position;
-    return position.maxScrollExtent - position.pixels <= _nearBottomExtent;
+    final current = metrics ?? scrollController.position;
+    return current.maxScrollExtent - current.pixels <= _nearBottomExtent;
+  }
+
+  bool _isAtBottom([ScrollMetrics? metrics]) {
+    if (metrics == null && !scrollController.hasClients) {
+      return true;
+    }
+    final current = metrics ?? scrollController.position;
+    return current.maxScrollExtent - current.pixels <= _chatBottomTolerance;
   }
 
   ChatMessage? _lastMessage(List<ChatMessage> messages) {

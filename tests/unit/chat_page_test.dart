@@ -55,12 +55,49 @@ Widget _testImageWidgetBuilder({
   double? height,
   required BoxFit fit,
   required Widget errorFallback,
+  Widget? framePlaceholder,
 }) {
   return SizedBox(
     width: width ?? 120,
     height: height ?? 80,
     child: const ColoredBox(color: Color(0xFF0B65F8)),
   );
+}
+
+class _ControlledChatImageBuilder {
+  _ControlledChatImageBuilder([Size? initialSize])
+    : decodedSize = ValueNotifier<Size?>(initialSize);
+
+  final ValueNotifier<Size?> decodedSize;
+
+  Widget build({
+    String? path,
+    Uint8List? bytes,
+    double? width,
+    double? height,
+    required BoxFit fit,
+    required Widget errorFallback,
+    Widget? framePlaceholder,
+  }) {
+    return ValueListenableBuilder<Size?>(
+      valueListenable: decodedSize,
+      builder: (context, size, child) {
+        if (size == null) {
+          return framePlaceholder ?? const SizedBox.shrink();
+        }
+        return SizedBox(
+          key: const Key('controlled-chat-image-decoded'),
+          width: width ?? size.width,
+          height: height ?? size.height,
+          child: const ColoredBox(color: Color(0xFF0B65F8)),
+        );
+      },
+    );
+  }
+
+  void dispose() {
+    decodedSize.dispose();
+  }
 }
 
 class _StaticConversationListController extends ConversationListController {
@@ -228,6 +265,91 @@ List<ChatMessage> _scrollMessages({
         sendState: MessageSendState.sent,
       ),
   ];
+}
+
+ChatMessage _scrollImageMessage({
+  required String localId,
+  required String threadId,
+  required String senderDid,
+  required String receiverDid,
+  required DateTime createdAt,
+  required bool isMine,
+}) {
+  return ChatMessage(
+    localId: localId,
+    remoteId: localId,
+    conversationId: threadId,
+    threadId: threadId,
+    senderDid: senderDid,
+    receiverDid: receiverDid,
+    content: '',
+    createdAt: createdAt,
+    isMine: isMine,
+    sendState: MessageSendState.sent,
+    originalType: 'application/anp-attachment-manifest+json',
+    attachment: ChatAttachment(
+      attachmentId: 'attachment-$localId',
+      filename: '$localId.png',
+      mimeType: 'image/png',
+      sizeBytes: 1024,
+      localPath: '/test/$localId.png',
+    ),
+  );
+}
+
+Future<ProviderContainer> _pumpScrollableChatView(
+  WidgetTester tester, {
+  required FakeAwikiGateway gateway,
+  required ConversationSummary conversation,
+  required List<ChatMessage> messages,
+  ChatImageWidgetBuilder? imageBuilder,
+}) async {
+  const session = SessionIdentity(
+    did: 'did:test:me',
+    handle: 'me',
+    displayName: 'Me',
+    credentialName: 'default',
+  );
+  await tester.binding.setSurfaceSize(const Size(390, 640));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    buildLocalizedTestApp(
+      home: CupertinoPageScaffold(
+        child: ChatView(
+          key: ValueKey('chat-view:${conversation.threadId}'),
+          conversation: conversation,
+          embedded: false,
+        ),
+      ),
+      gateway: gateway,
+      session: session,
+      providerOverrides: <Override>[
+        chatThreadsProvider.overrideWith(
+          (ref) => _StaticChatThreadsController(
+            ref,
+            <String, List<ChatMessage>>{conversation.conversationId: messages},
+          ),
+        ),
+        if (imageBuilder != null)
+          chatImageWidgetBuilderProvider.overrideWithValue(imageBuilder),
+      ],
+    ),
+  );
+  await tester.pumpAndSettle();
+  return ProviderScope.containerOf(tester.element(find.byType(ChatView)));
+}
+
+ConversationSummary _scrollConversation(String id) {
+  return ConversationSummary(
+    conversationId: id,
+    threadId: id,
+    displayName: 'Alice',
+    lastMessagePreview: '',
+    lastMessageAt: DateTime(2026, 4, 5, 12),
+    unreadCount: 0,
+    isGroup: false,
+    targetDid: 'did:test:alice',
+  );
 }
 
 void main() {
@@ -2203,6 +2325,316 @@ void main() {
 
     expect(find.byKey(const Key('chat-new-messages-button')), findsNothing);
     expect(_chatScrollPixels(tester), moreOrLessEquals(_chatScrollMax(tester)));
+  });
+
+  testWidgets('非拖动 ScrollAction 仅在实际移动后退出底部跟随', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:scroll-action-away');
+    final messages = _scrollMessages(
+      threadId: conversation.conversationId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: messages,
+    );
+
+    void seedIncomingMessage(String localId, int minute) {
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(
+            ChatMessage(
+              localId: localId,
+              remoteId: localId,
+              conversationId: conversation.conversationId,
+              threadId: conversation.conversationId,
+              senderDid: 'did:test:alice',
+              receiverDid: 'did:test:me',
+              content: 'new message after a keyboard or accessibility scroll',
+              createdAt: DateTime(2026, 4, 5, 12, minute),
+              isMine: false,
+              sendState: MessageSendState.sent,
+            ),
+          );
+    }
+
+    var visibleMessage = find.byKey(
+      Key('chat-message-content:${messages.last.localId}'),
+    );
+    Actions.invoke(
+      tester.element(visibleMessage),
+      const ScrollIntent(
+        direction: AxisDirection.down,
+        type: ScrollIncrementType.page,
+      ),
+    );
+    await tester.pumpAndSettle();
+    seedIncomingMessage('incoming-after-noop-scroll-action', 29);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+    );
+
+    visibleMessage = find.byKey(
+      const Key('chat-message-content:incoming-after-noop-scroll-action'),
+    );
+    Actions.invoke(
+      tester.element(visibleMessage),
+      const ScrollIntent(
+        direction: AxisDirection.up,
+        type: ScrollIncrementType.page,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final readingPixels = _chatScrollPixels(tester);
+    expect(readingPixels, lessThan(_chatScrollMax(tester) - 96));
+
+    seedIncomingMessage('incoming-after-scroll-action', 30);
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(readingPixels, epsilon: 0.5),
+    );
+    expect(find.byKey(const Key('chat-new-messages-button')), findsOneWidget);
+  });
+
+  testWidgets('收到图片在滚底动画中逐步解码增高后始终贴住最新底部', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:scroll-incoming-image');
+    final messages = _scrollMessages(
+      threadId: conversation.conversationId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+    final imageBuilder = _ControlledChatImageBuilder();
+    addTearDown(imageBuilder.dispose);
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: messages,
+      imageBuilder: imageBuilder.build,
+    );
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _scrollImageMessage(
+            localId: 'incoming-dynamic-image',
+            threadId: conversation.conversationId,
+            senderDid: 'did:test:alice',
+            receiverDid: 'did:test:me',
+            createdAt: DateTime(2026, 4, 5, 12, 30),
+            isMine: false,
+          ),
+        );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(find.byKey(const Key('chat-inline-image-loading')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('chat-inline-image-loading'))).height,
+      greaterThan(100),
+    );
+
+    var previousPixels = _chatScrollPixels(tester);
+    for (final height in <double>[220, 280, 330]) {
+      imageBuilder.decodedSize.value = Size(240, height);
+      await tester.pump(const Duration(milliseconds: 16));
+      final pixels = _chatScrollPixels(tester);
+      expect(pixels, greaterThanOrEqualTo(previousPixels));
+      expect(pixels, moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5));
+      previousPixels = pixels;
+
+      for (var frame = 0; frame < 4; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(
+          _chatScrollPixels(tester),
+          moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+        );
+      }
+    }
+  });
+
+  testWidgets('用户离底后图片增高和视口变化保持位置，手动回底后恢复跟随', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:scroll-image-away');
+    final imageBuilder = _ControlledChatImageBuilder(const Size(240, 100));
+    addTearDown(imageBuilder.dispose);
+    final messages = <ChatMessage>[
+      ..._scrollMessages(
+        threadId: conversation.conversationId,
+        peerDid: 'did:test:alice',
+        startedAt: DateTime(2026, 4, 5, 10),
+        count: 28,
+      ),
+      _scrollImageMessage(
+        localId: 'existing-dynamic-image',
+        threadId: conversation.conversationId,
+        senderDid: 'did:test:alice',
+        receiverDid: 'did:test:me',
+        createdAt: DateTime(2026, 4, 5, 12, 30),
+        isMine: false,
+      ),
+    ];
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: messages,
+      imageBuilder: imageBuilder.build,
+    );
+
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, 420));
+    await tester.pumpAndSettle();
+    final readingPixels = _chatScrollPixels(tester);
+    var previousMax = _chatScrollMax(tester);
+    expect(readingPixels, lessThan(previousMax - 96));
+
+    for (final height in <double>[200, 300]) {
+      imageBuilder.decodedSize.value = Size(240, height);
+      await tester.pump();
+      expect(
+        _chatScrollPixels(tester),
+        moreOrLessEquals(readingPixels, epsilon: 0.5),
+      );
+      expect(_chatScrollMax(tester), greaterThan(previousMax));
+      previousMax = _chatScrollMax(tester);
+    }
+
+    await tester.binding.setSurfaceSize(const Size(390, 700));
+    await tester.pump();
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(readingPixels, epsilon: 0.5),
+    );
+
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 600));
+    imageBuilder.decodedSize.value = const Size(240, 340);
+    await tester.pump();
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+    );
+  });
+
+  testWidgets('用户离底后自己发出的图片会恢复跟随并承接后续解码高度', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:scroll-outgoing-image');
+    final imageBuilder = _ControlledChatImageBuilder();
+    addTearDown(imageBuilder.dispose);
+    final messages = _scrollMessages(
+      threadId: conversation.conversationId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: messages,
+      imageBuilder: imageBuilder.build,
+    );
+    await tester.drag(_chatMessagesListFinder(), const Offset(0, 420));
+    await tester.pumpAndSettle();
+    expect(_chatScrollPixels(tester), lessThan(_chatScrollMax(tester) - 96));
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _scrollImageMessage(
+            localId: 'outgoing-dynamic-image',
+            threadId: conversation.conversationId,
+            senderDid: 'did:test:me',
+            receiverDid: 'did:test:alice',
+            createdAt: DateTime(2026, 4, 5, 12, 30),
+            isMine: true,
+          ),
+        );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(find.byKey(const Key('chat-inline-image-loading')), findsOneWidget);
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+    );
+
+    for (final height in <double>[220, 300]) {
+      imageBuilder.decodedSize.value = Size(240, height);
+      await tester.pump();
+      expect(
+        _chatScrollPixels(tester),
+        moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+      );
+    }
+  });
+
+  testWidgets('普通文本新消息保留单向滚底动画并最终稳定到底', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:scroll-incoming-text');
+    final messages = _scrollMessages(
+      threadId: conversation.conversationId,
+      peerDid: 'did:test:alice',
+      startedAt: DateTime(2026, 4, 5, 10),
+      count: 28,
+    );
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: messages,
+    );
+    final initialPixels = _chatScrollPixels(tester);
+
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          ChatMessage(
+            localId: 'incoming-text-baseline',
+            remoteId: 'incoming-text-baseline',
+            conversationId: conversation.conversationId,
+            threadId: conversation.conversationId,
+            senderDid: 'did:test:alice',
+            receiverDid: 'did:test:me',
+            content: 'ordinary incoming text keeps the normal scroll behavior',
+            createdAt: DateTime(2026, 4, 5, 12, 30),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+    await tester.pump();
+
+    var previousPixels = initialPixels;
+    var observedMotion = false;
+    for (var frame = 0; frame < 6; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 40));
+      final pixels = _chatScrollPixels(tester);
+      expect(pixels, greaterThanOrEqualTo(previousPixels));
+      observedMotion = observedMotion || pixels > previousPixels;
+      previousPixels = pixels;
+    }
+
+    expect(observedMotion, isTrue);
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+    );
   });
 
   testWidgets('ChatView 已在底部时收到新消息会推进持久已读水位', (tester) async {
@@ -4256,6 +4688,7 @@ void main() {
               double? height,
               required BoxFit fit,
               required Widget errorFallback,
+              Widget? framePlaceholder,
             }) => SizedBox(width: 320, height: 300, child: errorFallback),
           ),
         ],
@@ -4269,6 +4702,13 @@ void main() {
         .openConversation(conversation);
     await tester.pump();
     await tester.pump();
+
+    final failurePlaceholder = find.byKey(
+      const Key('chat-inline-image-loading'),
+    );
+    expect(failurePlaceholder, findsOneWidget);
+    expect(tester.getSize(failurePlaceholder).height, greaterThan(100));
+
     await tester.pump();
 
     final fileCard = find.byKey(

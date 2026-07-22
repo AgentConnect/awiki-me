@@ -243,6 +243,7 @@ Widget buildLocalizedTestApp({
           double? height,
           required BoxFit fit,
           required Widget errorFallback,
+          Widget? framePlaceholder,
         }) => SizedBox(
           width: width ?? 120,
           height: height ?? 80,
