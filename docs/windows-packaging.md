@@ -1,8 +1,11 @@
 # Windows x64 packaging
 
-AWiki Me packages Windows 10 22H2 and Windows 11 x64 with Flutter 3.44.0,
-Rust 1.88.0, the `x86_64-pc-windows-msvc` target, the Visual Studio 2022 ATL
-toolchain, and Inno Setup 6.3.2. The result is an unsigned per-user installer:
+AWiki Me packages one Windows x64 application for Windows 10 22H2 and Windows
+11 with Flutter 3.44.0, Rust 1.88.0, the `x86_64-pc-windows-msvc` target, the
+Visual Studio 2022 ATL toolchain, and Inno Setup 6.3.2. The same x64 package
+runs natively on x64 Windows and through the operating system's x64 emulation
+on Windows 11 ARM64. It is not a native ARM64 build. The result is an unsigned
+per-user installer:
 
 ```text
 AWiki-Me-Windows-x64-<version>.exe
@@ -11,6 +14,8 @@ AWiki-Me-Windows-x64-<version>.exe
 The installer defaults program files to
 `%LOCALAPPDATA%\Programs\AWiki Me`, lets the user choose another directory on a
 first install, and reuses that directory automatically for upgrades and repairs.
+Its Inno architecture matcher is `x64compatible`, so one x64 installer accepts
+both native x64 Windows and x64-compatible Windows 11 ARM64 systems.
 It never removes product data under `%LOCALAPPDATA%\AWiki\AWikiMe` or AWiki
 Credential Manager entries during an upgrade, repair, or uninstall. Windows may
 display a SmartScreen warning because this phase intentionally does not sign the
@@ -157,5 +162,5 @@ run through the existing development validation process. The packaging workflow
 does not run a Windows-only Debug, Credential Manager, application smoke, or
 installer-lifecycle test suite. `scripts/windows/verify_installer.ps1` remains an
 explicit development tool. MSVC and Inno compilation require the `windows-2022`
-GitHub runner; DPI, tray, screenshot, font, and file-dialog behavior remain Windows
-VM acceptance checks.
+GitHub runner; DPI, tray, screenshot, font, and file-dialog behavior remain
+Windows VM acceptance checks.

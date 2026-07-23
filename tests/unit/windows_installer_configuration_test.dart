@@ -3,6 +3,19 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('x64 installer supports native x64 and Windows 11 Arm emulation', () {
+    final installer = File('installer/windows/awiki-me.iss').readAsStringSync();
+    final directives = installer.split(RegExp(r'\r?\n')).toSet();
+
+    expect(directives, contains('ArchitecturesAllowed=x64compatible'));
+    expect(
+      directives,
+      contains('ArchitecturesInstallIn64BitMode=x64compatible'),
+    );
+    expect(directives, isNot(contains('ArchitecturesAllowed=x64')));
+    expect(directives, isNot(contains('ArchitecturesInstallIn64BitMode=x64')));
+  });
+
   test('Inno keeps one escaped AppId and matching raw uninstall identity', () {
     final installer = File('installer/windows/awiki-me.iss').readAsStringSync();
     final verifier = File(

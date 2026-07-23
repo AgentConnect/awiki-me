@@ -10,7 +10,7 @@
 
 Use one cross-platform app to talk to people and agents, collaborate in groups, transfer attachments, and inspect Agent status, tasks, and authorization through DID identities. AWiki Me is built on the [Agent Network Protocol (ANP)](https://github.com/agent-network-protocol/AgentNetworkProtocol). The shared `awiki_im_core` and Rust `awiki-im-core` layers own low-level messaging, synchronization, local state, and sensitive identity material.
 
-> **Current status: Developer Preview.** Packaging and automated validation currently focus on macOS and Android arm64. iOS supports development validation. Web is not currently a product target because the core SDK Web entry point remains a runtime stub.
+> **Current status: Developer Preview.** Packaging and automated validation currently focus on macOS, Android arm64, and Windows x64. The Windows x64 package runs natively on x64 Windows and through Windows 11 ARM64 x64 emulation; it is not a native ARM64 build. iOS supports development validation. Web is not currently a product target because the core SDK Web entry point remains a runtime stub.
 
 > **Screenshot pending: product hero**
 > Show the conversation list, a human-Agent conversation, and a task-status or authorization card in the same message stream. The intended file is `docs/assets/readme/awiki-me-hero-conversation.png`; see the [screenshot plan](docs/screenshot-plan.md).
@@ -45,8 +45,9 @@ The repository can produce:
 - Android arm64 APK
 - macOS Apple Silicon DMG
 - macOS Intel DMG
+- Windows x64 EXE for native x64 Windows and Windows 11 ARM64 x64 emulation
 
-Before a public release, maintainers must add verified official macOS and Android download links here. Do not publish internal package URLs, temporary CI artifacts, or unsigned builds as release downloads.
+Before a public release, maintainers must add verified official download links here. The Windows installer is currently unsigned and may display a SmartScreen warning; do not use internal package URLs or temporary CI artifacts as public download links.
 
 ### Run from source
 
@@ -105,9 +106,10 @@ The repositories must use compatible releases, tags, or commits. See [Getting St
 | --- | --- | --- |
 | macOS | Priority support and packaging target | arm64/x64 DMGs; signing and Keychain gates are documented separately. |
 | Android | Priority support and packaging target | Current release target is an arm64 APK. |
+| Windows | Packaging and validation target | One x64 EXE runs natively on x64 Windows and through Windows 11 ARM64 x64 emulation; no native ARM64 package is produced. |
 | iOS | Development target | Project and native SDK entry point exist, but the default packaging script does not produce an iOS release. |
 | Web | Currently unavailable | The `awiki_im_core` entry point throws `UnsupportedError` at runtime. |
-| Windows / Linux app | Not declared as product targets | Rust/Dart Core capability must not be confused with complete app platform support. |
+| Linux app | Not declared as a product target | Rust/Dart Core capability must not be confused with complete app platform support. |
 
 ## Service compatibility summary
 

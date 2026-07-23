@@ -2,7 +2,7 @@
 
 [English](compatibility.md) | [简体中文](compatibility.zh-CN.md)
 
-Last reviewed: 2026-07-14. Add the actual versions or commits and latest verification date before a public release.
+Last reviewed: 2026-07-23. Add the actual versions or commits and latest verification date before a public release.
 
 ## 1. Platform matrix
 
@@ -14,7 +14,7 @@ Last reviewed: 2026-07-14. Add the actual versions or commits and latest verific
 | iOS | Flutter project and native SDK | Development target | Signing, physical-device, background, networking, secure-storage, and distribution validation. |
 | Web | UI project exists; Core is a stub | Unsupported | A real Web Core, storage, encryption, and sync implementation. |
 | Linux | `awiki_im_core` supports native Linux | Not an AWiki Me product target | App runner, packaging, UX, notifications, and secure-storage validation. |
-| Windows | Not currently listed as supported | Unsupported/not planned | App runner, SDK, packaging, and complete validation. |
+| Windows | Flutter app, native SDK, and x64 installer | Windows x64 packaging target; Windows 11 ARM64 can run the same package through OS x64 app emulation | x64 build/package checks and Windows product-flow validation; installer signing remains a separate release policy. |
 
 ## 2. Service matrix
 

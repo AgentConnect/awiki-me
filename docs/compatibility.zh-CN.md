@@ -2,7 +2,7 @@
 
 [English](compatibility.md) | [简体中文](compatibility.zh-CN.md)
 
-最后整理日期：2026-07-14。对外发布时，应补充实际版本/commit 与最近验证日期。
+最后整理日期：2026-07-23。对外发布时，应补充实际版本/commit 与最近验证日期。
 
 ## 1. 平台矩阵
 
@@ -14,7 +14,7 @@
 | iOS | Flutter 工程 + native SDK | 开发目标 | 签名、真机、后台、网络、安全存储和分发验证 |
 | Web | UI 工程存在，Core 为 stub | 不支持 | 需要真正的 Web Core/存储/加密/同步实现后再声明 |
 | Linux | `awiki_im_core` 支持 native Linux | AWiki Me 未声明为产品目标 | App runner、打包、UX、通知与安全存储验证 |
-| Windows | 当前未列为支持平台 | 不支持/未规划声明 | 需要 App runner、SDK、打包和完整验证 |
+| Windows | Flutter App、native SDK 与 x64 安装包 | Windows x64 打包目标；Windows 11 ARM64 可通过系统的 x64 应用模拟使用同一安装包 | x64 构建/打包检查与 Windows 产品流程验证；安装包签名仍属于独立发布策略 |
 
 ## 2. 服务矩阵
 
