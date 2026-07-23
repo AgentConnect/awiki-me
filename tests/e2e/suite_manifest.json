@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-23.message-driven-join-v1",
+  "sourceRevision": "2026-07-24.root-transfer-full-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -91,8 +91,8 @@
         "release"
       ],
       "owner": "awiki-me-messaging",
-      "estimatedMinutes": 25,
-      "timeoutMinutes": 30,
+      "estimatedMinutes": 40,
+      "timeoutMinutes": 45,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -105,7 +105,11 @@
         "groups",
         "relationships",
         "attachments",
-        "read_state"
+        "read_state",
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state"
       ],
       "caseIds": [
         "AUTH-E2E-001",
@@ -131,7 +135,8 @@
         "ATTACH-E2E-001",
         "ATTACH-E2E-002",
         "ATTACH-REG-001",
-        "DISPLAY-NAME-E2E-004"
+        "DISPLAY-NAME-E2E-004",
+        "ROOT-TRANSFER-E2E-001"
       ]
     },
     "direct": {

@@ -22,6 +22,7 @@ import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
@@ -40,6 +41,7 @@ import '../../remote_multi_device_join_contract.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
+const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
@@ -316,7 +318,10 @@ void main() {
       }
       await cli.initialize();
       bootstrap = await AppBootstrap.create(
-        environment: _joinOnlyEnvironment(config),
+        environment: _joinOnlyEnvironment(
+          config,
+          enableRootTransfer: _invocationExpects(_rootTransferCaseId),
+        ),
         appStateRoot: config.appStateRoot,
       );
       final handle = _uniqueHandle(config.handlePrefix);
@@ -560,22 +565,236 @@ void main() {
         joinedDeviceId: started.protocolDeviceId,
       );
 
-      await E2eCaseAttestationWriter.markPassed(
-        _adminApprovalCaseId,
-        phases: const <String>[
-          'independent_native_devices_bootstrapped',
-          'otp_left_join_pending',
-          'sas_matched_without_secret_evidence',
-          'single_real_user_presence_confirmed',
-          'joined_device_active_member_not_admin',
-        ],
-      );
+      if (_invocationExpects(_adminApprovalCaseId)) {
+        await E2eCaseAttestationWriter.markPassed(
+          _adminApprovalCaseId,
+          phases: const <String>[
+            'independent_native_devices_bootstrapped',
+            'otp_left_join_pending',
+            'sas_matched_without_secret_evidence',
+            'single_real_user_presence_confirmed',
+            'joined_device_active_member_not_admin',
+          ],
+        );
+      }
+      if (_invocationExpects(_rootTransferCaseId)) {
+        if (bootstrap.rootKeyTransferPort == null) {
+          fail('The real App bootstrap did not compose root transfer.');
+        }
+        await _verifyRootTransferCompletion(
+          tester: tester,
+          container: container,
+          cli: cli,
+          presence: presence,
+          did: adminSession.did,
+          joinSessionId: started.joinSessionId,
+          senderDeviceId: bootstrapAdminDeviceId,
+          recipientDeviceId: started.protocolDeviceId,
+        );
+      }
     },
     skip:
         !Platform.isMacOS ||
         !_RemoteJoinRunConfig.exists() ||
-        !_invocationExpects(_adminApprovalCaseId),
+        (!_invocationExpects(_adminApprovalCaseId) &&
+            !_invocationExpects(_rootTransferCaseId)),
     timeout: const Timeout(Duration(minutes: 14)),
+  );
+}
+
+Future<void> _verifyRootTransferCompletion({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required _JoinCli cli,
+  required _CountingRealUserPresencePort presence,
+  required String did,
+  required String joinSessionId,
+  required String senderDeviceId,
+  required String recipientDeviceId,
+}) async {
+  final before = container.read(devicesProvider);
+  final activeJoin = before.activeJoin;
+  final recipient = activeJoin?.authorizedDevice;
+  if (activeJoin?.joinSessionId != joinSessionId ||
+      activeJoin?.did != did ||
+      activeJoin?.protocolDeviceId != recipientDeviceId ||
+      activeJoin?.side != DeviceJoinSide.admin ||
+      activeJoin?.phase != DeviceJoinPhase.authorized ||
+      recipient?.protocolDeviceId != recipientDeviceId ||
+      recipient?.role != DeviceRole.member ||
+      recipient?.managementReady != false ||
+      recipient?.isCurrent != false) {
+    fail('Root transfer did not retain the exact authorized Join context.');
+  }
+  await cli.requireRootlessCurrentMember(
+    expectedDid: did,
+    expectedDeviceId: recipientDeviceId,
+  );
+
+  final presenceCallsBeforePrepare = presence.calls;
+  await _tapOne(
+    tester,
+    find.byKey(const Key('root-transfer-grant-management')),
+    failure: 'The exact joined member did not expose root transfer.',
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(devicesProvider);
+      _failOnDeviceError(state, 'The App failed root-transfer preparation');
+      return state.rootTransfer.phase ==
+              RootKeyTransferPhase.awaitingConfirmation &&
+          state.rootTransfer.preparation != null;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'Core did not prepare the exact root-transfer recipient.',
+  );
+  final prepared = container.read(devicesProvider).rootTransfer;
+  final preparation = prepared.preparation!;
+  if (prepared.context?.joinSessionId != joinSessionId ||
+      prepared.context?.did != did ||
+      prepared.context?.recipientDeviceId != recipientDeviceId ||
+      preparation.recipient.did != did ||
+      preparation.recipient.deviceId != recipientDeviceId ||
+      preparation.recipient.signingKeyId !=
+          prepared.context?.recipientSigningKeyId ||
+      preparation.recipient.e2eeKeyId != prepared.context?.recipientE2eeKeyId ||
+      preparation.recipient.registryVersion < 1 ||
+      presence.calls != presenceCallsBeforePrepare ||
+      prepared.receipt != null) {
+    fail('Root transfer preparation escaped the exact Join context.');
+  }
+  if (find
+              .byKey(const Key('root-transfer-recipient-summary'))
+              .evaluate()
+              .length !=
+          1 ||
+      find.byKey(const Key('root-transfer-confirm-send')).evaluate().length !=
+          1 ||
+      find.byKey(const Key('root-transfer-sent')).evaluate().isNotEmpty) {
+    fail('The App did not stop at the safe prepare-before-confirm boundary.');
+  }
+  final summaryText = tester
+      .widget<Text>(find.byKey(const Key('root-transfer-recipient-summary')))
+      .data;
+  final expectedSummary = tester
+      .element(find.byType(DeviceJoinApprovalSheet))
+      .l10n
+      .deviceRootTransferTarget(
+        preparation.recipient.deviceId,
+        preparation.recipient.signingKeyId,
+        preparation.recipient.e2eeKeyId,
+      );
+  if (summaryText != expectedSummary) {
+    fail('The App did not render only Core safe recipient summary fields.');
+  }
+
+  await _tapOne(
+    tester,
+    find.byKey(const Key('root-transfer-confirm-send')),
+    failure: 'The prepared root-transfer confirmation was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      if (presence.calls > presenceCallsBeforePrepare + 1) {
+        fail('Root transfer requested operating-system user presence twice.');
+      }
+      final state = container.read(devicesProvider);
+      _failOnDeviceError(state, 'The App failed root transfer');
+      return state.rootTransfer.phase == RootKeyTransferPhase.sent &&
+          state.rootTransfer.receipt != null;
+    },
+    timeout: const Duration(minutes: 2),
+    failure: 'The sender did not stop at standard P5 accepted.',
+  );
+  if (presence.calls != presenceCallsBeforePrepare + 1 ||
+      presence.completions != presenceCallsBeforePrepare + 1 ||
+      !presence.lastResult) {
+    fail('Root transfer did not complete exactly one fresh user presence.');
+  }
+  final sent = container.read(devicesProvider).rootTransfer;
+  final receipt = sent.receipt!;
+  if (sent.context != prepared.context ||
+      receipt.did != did ||
+      receipt.senderDeviceId != senderDeviceId ||
+      receipt.recipientDeviceId != recipientDeviceId ||
+      receipt.messageId.trim().isEmpty ||
+      receipt.acceptedAt.isAfter(DateTime.now().toUtc())) {
+    fail('The sender returned an invalid standard P5 accepted receipt.');
+  }
+  _requireAppAdminAndMember(
+    container.read(devicesProvider).registry!,
+    bootstrapAdminDeviceId: senderDeviceId,
+    joinedDeviceId: recipientDeviceId,
+  );
+
+  await cli.waitForRootImportCompletion(
+    expectedDid: did,
+    expectedDeviceId: recipientDeviceId,
+  );
+
+  await container
+      .read(messageSyncCoordinatorProvider.notifier)
+      .requestSync('e2e_root_transfer_receiver_completed', immediate: true);
+  await container.read(conversationListProvider.notifier).refresh();
+  final projectedConversations = container
+      .read(conversationListProvider)
+      .conversations;
+  final storedConversations = await container
+      .read(conversationServiceProvider)
+      .listConversations(ownerDid: did);
+  if (projectedConversations.isNotEmpty || storedConversations.isNotEmpty) {
+    fail('Root P5 entered the ordinary App conversation projection.');
+  }
+  final senderAfterReceiverCompletion = container
+      .read(devicesProvider)
+      .rootTransfer;
+  if (senderAfterReceiverCompletion.phase != RootKeyTransferPhase.sent ||
+      senderAfterReceiverCompletion.receipt?.messageId != receipt.messageId ||
+      presence.calls != presenceCallsBeforePrepare + 1) {
+    fail('Receiver completion changed the terminal sender boundary.');
+  }
+
+  final done = find.descendant(
+    of: find.byType(DeviceJoinApprovalSheet),
+    matching: find.text(
+      tester.element(find.byType(DeviceJoinApprovalSheet)).l10n.commonDone,
+    ),
+  );
+  await _tapOne(
+    tester,
+    done,
+    failure: 'The sent root-transfer sheet could not be closed.',
+  );
+  await _pumpUntil(
+    tester,
+    () => find.byType(DeviceJoinApprovalSheet).evaluate().isEmpty,
+    failure: 'The root-transfer sheet remained open after completion.',
+  );
+  for (final key in const <Key>[
+    Key('root-transfer-grant-management'),
+    Key('root-transfer-preparing'),
+    Key('root-transfer-recipient-summary'),
+    Key('root-transfer-confirm-send'),
+    Key('root-transfer-sending'),
+    Key('root-transfer-sent'),
+    Key('root-transfer-failed'),
+  ]) {
+    if (find.byKey(key).evaluate().isNotEmpty) {
+      fail('Generic Devices projected a root-transfer control.');
+    }
+  }
+
+  await E2eCaseAttestationWriter.markPassed(
+    _rootTransferCaseId,
+    phases: const <String>[
+      'member_not_ready_before_completion',
+      'safe_summary_single_presence',
+      'sender_accepted_terminal',
+      'receiver_completion_ready',
+      'root_p5_not_projected',
+    ],
   );
 }
 
@@ -1119,6 +1338,89 @@ class _JoinCli {
     fail('The CLI Registry did not converge to $expected devices.');
   }
 
+  Future<void> requireRootlessCurrentMember({
+    required String expectedDid,
+    required String expectedDeviceId,
+  }) async {
+    final identity = await _loadCurrentIdentityStatus();
+    if (identity['did'] != expectedDid ||
+        identity['has_jwt'] != true ||
+        identity['has_key1_private'] != false) {
+      fail('The joining CLI was not a fresh-auth rootless identity.');
+    }
+    _requireCliJoinedMember(
+      await waitForRegistryDeviceCount(2),
+      joinedDeviceId: expectedDeviceId,
+    );
+  }
+
+  Future<void> waitForRootImportCompletion({
+    required String expectedDid,
+    required String expectedDeviceId,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final inbox = await _run(const <String>[
+        '--format',
+        'json',
+        'msg',
+        'inbox',
+        '--scope',
+        'direct',
+        '--limit',
+        '20',
+      ]);
+      final inboxData = _data(inbox, action: null);
+      final rawMessages = inboxData['messages'];
+      if (rawMessages is! List) {
+        fail('The CLI inbox returned no safe message projection.');
+      }
+      if (rawMessages.isNotEmpty) {
+        fail('Root P5 or an ACK entered the ordinary CLI inbox projection.');
+      }
+
+      final devices = await loadRegistry();
+      final currentReadyAdmin = devices
+          .where(
+            (device) =>
+                device['protocol_device_id'] == expectedDeviceId &&
+                device['is_current'] == true &&
+                device['role'] == 'admin' &&
+                device['management_ready'] == true &&
+                device['status'] == 'active',
+          )
+          .toList(growable: false);
+      if (devices.length == 2 && currentReadyAdmin.length == 1) {
+        final identity = await _loadCurrentIdentityStatus();
+        if (identity['did'] != expectedDid ||
+            identity['has_jwt'] != true ||
+            identity['has_key1_private'] != true ||
+            identity['has_did_document'] != true) {
+          fail(
+            'Receiver Registry became ready without fresh auth and active root.',
+          );
+        }
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    fail('The CLI receiver did not complete root import and readiness.');
+  }
+
+  Future<Map<String, Object?>> _loadCurrentIdentityStatus() async {
+    final payload = await _run(const <String>[
+      '--format',
+      'json',
+      'id',
+      'status',
+    ]);
+    final identity = _data(payload, action: null)['active_identity'];
+    if (identity is! Map) {
+      fail('The CLI returned no active identity status.');
+    }
+    return _stringMap(identity);
+  }
+
   Future<Map<String, Object?>> _run(
     List<String> args, {
     String? accountVerificationToken,
@@ -1276,20 +1578,22 @@ class _CountingRealUserPresencePort implements UserPresencePort {
   }
 }
 
-AwikiEnvironmentConfig _joinOnlyEnvironment(_RemoteJoinRunConfig config) =>
-    AwikiEnvironmentConfig(
-      baseUrl: config.baseUrl,
-      userServiceUrl: config.userServiceUrl,
-      messageServiceUrl: config.messageServiceUrl,
-      mailServiceUrl: config.mailServiceUrl,
-      didDomain: config.didDomain,
-      anpServiceUrl: config.anpServiceUrl,
-      anpServiceDid: config.anpServiceDid,
-      agentImEnabled: false,
-      multiDeviceDeviceRevokeEnabled: false,
-      multiDeviceDirectE2eeEnabled: false,
-      multiDeviceGroupE2eeEnabled: false,
-    );
+AwikiEnvironmentConfig _joinOnlyEnvironment(
+  _RemoteJoinRunConfig config, {
+  bool enableRootTransfer = false,
+}) => AwikiEnvironmentConfig(
+  baseUrl: config.baseUrl,
+  userServiceUrl: config.userServiceUrl,
+  messageServiceUrl: config.messageServiceUrl,
+  mailServiceUrl: config.mailServiceUrl,
+  didDomain: config.didDomain,
+  anpServiceUrl: config.anpServiceUrl,
+  anpServiceDid: config.anpServiceDid,
+  agentImEnabled: false,
+  multiDeviceDeviceRevokeEnabled: false,
+  multiDeviceDirectE2eeEnabled: enableRootTransfer,
+  multiDeviceGroupE2eeEnabled: false,
+);
 
 Future<void> _openNewDeviceJoin(WidgetTester tester) async {
   await _pumpUntil(

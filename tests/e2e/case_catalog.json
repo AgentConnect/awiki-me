@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-23.message-driven-join-v1",
+  "sourceRevision": "2026-07-24.root-transfer-full-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1997,7 +1997,7 @@
     {
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me management-device root import",
-      "layer": "remote_product_ui_security",
+      "layer": "product_ui",
       "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots, exact protocol device IDs, and macOS can present real LocalAuthentication.",
       "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, confirm operating-system user presence once, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
       "exactOracles": [
@@ -2009,15 +2009,15 @@
         "A wrong or ineligible target, caller-supplied message ID, old list/retry/pending state, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "requiredFor": [
-        "optional_nightly",
+        "nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
-      "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned",
+      "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
           "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
@@ -2052,15 +2052,15 @@
     },
     {
       "caseId": "ROOT-TRANSFER-E2E-002",
-      "feature": "AWiki Me root-import retry and idempotent readiness",
+      "feature": "Receiver-local root completion recovery",
       "layer": "product_ui",
-      "preconditions": "The same isolated management-device pair can exercise a lost response or transient delivery failure before the signed imported ACK is durably completed.",
-      "action": "Restart the sender or receiver after a persisted failed/importing transfer, restore the Core summary, retry with a fresh user-presence confirmation and the original message ID, then replay completion and refresh the authoritative Registry projection.",
+      "preconditions": "A future focused receiver fixture has already consumed one accepted Root P5 envelope and persisted receiver-local completion-pending state before process restart.",
+      "action": "Restart only the receiving device, let Core resume its local HTTPS completion coordinator, obtain fresh device auth, read Registry once, and promote the already sealed pending root after authoritative admin-ready convergence.",
       "exactOracles": [
-        "Sender and receiver retry reuse the Core-persisted P5 message ID, duplicate success stays one readiness transition, restart projects progress from Core and ready only from Registry, and no management operation is available before ready."
+        "Receiver-local recovery is idempotent across response loss, produces one readiness transition, projects ready only from fresh auth plus Registry, and promotes the pending root without any sender participation."
       ],
       "negativeChecks": [
-        "A new message ID for a persisted retry, duplicate readiness generation, a second App-owned transfer state store, persisted App root secret/control payload, false ready from Core completion alone, or raw transport error text fails."
+        "Sender retry, a second user-presence prompt, an imported ACK/Reply, public original-message-ID retry semantics, duplicate readiness generation, a second App-owned state store, false ready before Registry, or raw transport error text fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",

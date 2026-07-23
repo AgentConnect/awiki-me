@@ -39,7 +39,7 @@ void main() {
       expect(catalog.caseById['DEVICE-JOIN-E2E-002']!.catalogStatus, 'active');
       expect(
         catalog.caseById['ROOT-TRANSFER-E2E-001']!.catalogStatus,
-        'planned',
+        'active',
       );
       expect(
         catalog.caseById['DEVICE-REVOKE-E2E-001']!.catalogStatus,
@@ -49,6 +49,7 @@ void main() {
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
       ]);
+      expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
       expect(
         catalog.caseById['MLS-MULTI-DEVICE-E2E-001']!.catalogStatus,
         'planned',
@@ -62,13 +63,12 @@ void main() {
     },
   );
 
-  test('future Root Revoke and MLS cases have one non-executable anchor', () {
+  test('future Root recovery Revoke and MLS cases have one planned anchor', () {
     final source = File(
       'tests/e2e/planned/multi_device_future_cases.md',
     ).readAsStringSync();
 
     for (final caseId in <String>[
-      'ROOT-TRANSFER-E2E-001',
       'ROOT-TRANSFER-E2E-002',
       'DEVICE-REVOKE-E2E-001',
       'MLS-MULTI-DEVICE-E2E-001',

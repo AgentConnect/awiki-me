@@ -64,6 +64,7 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'ATTACH-E2E-002',
   'ATTACH-REG-001',
   'DISPLAY-NAME-E2E-004',
+  'ROOT-TRANSFER-E2E-001',
 ];
 const List<String> _desktopSmokeCaseIds = <String>[
   'SMOKE-E2E-001',
@@ -264,11 +265,15 @@ class DesktopE2eRunner {
   late final Directory cliHomeDir;
   late final Directory multiDeviceCliAdminWorkspaceDir;
   late final Directory multiDeviceCliAdminHomeDir;
+  late final Directory rootTransferCliMemberWorkspaceDir;
+  late final Directory rootTransferCliMemberHomeDir;
   late final Directory appIdentityWorkspaceDir;
   late final Directory appIdentityHomeDir;
   late final Directory appStateRootDir;
   late final Directory multiDeviceAppJoiningStateRootDir;
+  late final Directory rootTransferAppAdminStateRootDir;
   late final File runConfigFile;
+  late final File remoteMultiDeviceRunConfigFile;
   late final File productTimingsFile;
   late final File caseAttestationFile;
   late final File scenarioProgressFile;
@@ -320,6 +325,12 @@ class DesktopE2eRunner {
     multiDeviceCliAdminHomeDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/cli-admin-home',
     );
+    rootTransferCliMemberWorkspaceDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member',
+    );
+    rootTransferCliMemberHomeDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member-home',
+    );
     appIdentityWorkspaceDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-identity-cli',
     );
@@ -330,7 +341,13 @@ class DesktopE2eRunner {
     multiDeviceAppJoiningStateRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-joining-device',
     );
+    rootTransferAppAdminStateRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/root-transfer-app-admin',
+    );
     runConfigFile = File('${root.path}/${options.e2eCase.runConfigPath}');
+    remoteMultiDeviceRunConfigFile = File(
+      '${root.path}/$_multiDeviceRemoteJoinRunConfigPath',
+    );
     productTimingsFile = File(
       '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
     );
@@ -350,11 +367,15 @@ class DesktopE2eRunner {
     _addRuntimeSecret(cliHomeDir.path);
     _addRuntimeSecret(multiDeviceCliAdminWorkspaceDir.path);
     _addRuntimeSecret(multiDeviceCliAdminHomeDir.path);
+    _addRuntimeSecret(rootTransferCliMemberWorkspaceDir.path);
+    _addRuntimeSecret(rootTransferCliMemberHomeDir.path);
     _addRuntimeSecret(appIdentityWorkspaceDir.path);
     _addRuntimeSecret(appIdentityHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(multiDeviceAppJoiningStateRootDir.path);
+    _addRuntimeSecret(rootTransferAppAdminStateRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
+    _addRuntimeSecret(remoteMultiDeviceRunConfigFile.path);
     _addRuntimeSecret(productTimingsFile.path);
     _addRuntimeSecret(caseAttestationFile.path);
     _addRuntimeSecret(scenarioProgressFile.path);
@@ -397,6 +418,11 @@ class DesktopE2eRunner {
         multiDeviceCliAdminHomeDir.createSync(recursive: true);
         multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
       }
+      if (options.e2eCase == DesktopE2eCase.full) {
+        rootTransferCliMemberWorkspaceDir.createSync(recursive: true);
+        rootTransferCliMemberHomeDir.createSync(recursive: true);
+        rootTransferAppAdminStateRootDir.createSync(recursive: true);
+      }
       appIdentityWorkspaceDir.createSync(recursive: true);
       appIdentityHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
@@ -412,6 +438,8 @@ class DesktopE2eRunner {
           await _runLocalMultiDeviceCapabilityGate();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
+        case DesktopE2eCase.full:
+          await _runFull();
         default:
           await _runAppCliPeer();
       }
@@ -453,6 +481,21 @@ class DesktopE2eRunner {
         totalElapsed: totalStopwatch.elapsed,
       );
     }
+  }
+
+  Future<void> _runFull() async {
+    await _runAppCliPeer();
+    if (options.prepareOnly) {
+      return;
+    }
+    if (options.dryRun || commands.dryRun) {
+      _line(
+        'would run real App-admin + CLI-member Join and '
+        'ROOT-TRANSFER-E2E-001 completion after the desktop peer flow',
+      );
+      return;
+    }
+    await _runRemoteMultiDeviceJoin(caseIds: suiteDefinition.caseIds);
   }
 
   Future<void> _runLocalSmoke() async {
@@ -503,7 +546,7 @@ class DesktopE2eRunner {
     });
   }
 
-  Future<void> _runRemoteMultiDeviceJoin() async {
+  Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
     final joinConfig = RemoteMultiDeviceJoinConfig.from(
       fileConfig: fileConfig,
       environment: Platform.environment,
@@ -568,8 +611,8 @@ class DesktopE2eRunner {
     _resourceSideEffectsPossible = true;
     await _timed('Flutter App + CLI multi-device lifecycle', () {
       return _runFlutterTest(
-        options.e2eCase.testFile,
-        caseIds: options.e2eCase.caseIds,
+        'integration_test/multi_device_join_ui_test.dart',
+        caseIds: caseIds ?? options.e2eCase.caseIds,
       );
     });
   }
@@ -577,6 +620,7 @@ class DesktopE2eRunner {
   Future<void> _writeRemoteMultiDeviceJoinRunConfig(
     RemoteMultiDeviceJoinConfig joinConfig,
   ) async {
+    final fullRootTransferOnly = options.e2eCase == DesktopE2eCase.full;
     final payload = <String, Object?>{
       'schemaVersion': 2,
       'enabled': true,
@@ -598,18 +642,32 @@ class DesktopE2eRunner {
       'cliJoiningDevice': <String, Object?>{
         'binary': joinConfig.cliBin,
         'sourceRef': joinConfig.cliSourceRef,
-        'workspace': cliWorkspaceDir.path,
-        'home': cliHomeDir.path,
+        'workspace': fullRootTransferOnly
+            ? rootTransferCliMemberWorkspaceDir.path
+            : cliWorkspaceDir.path,
+        'home': fullRootTransferOnly
+            ? rootTransferCliMemberHomeDir.path
+            : cliHomeDir.path,
       },
       'cliAdminDevice': <String, Object?>{
         'binary': joinConfig.cliBin,
         'sourceRef': joinConfig.cliSourceRef,
-        'workspace': multiDeviceCliAdminWorkspaceDir.path,
-        'home': multiDeviceCliAdminHomeDir.path,
+        'workspace': fullRootTransferOnly
+            ? cliWorkspaceDir.path
+            : multiDeviceCliAdminWorkspaceDir.path,
+        'home': fullRootTransferOnly
+            ? cliHomeDir.path
+            : multiDeviceCliAdminHomeDir.path,
       },
-      'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'app': <String, Object?>{
+        'stateRoot': fullRootTransferOnly
+            ? rootTransferAppAdminStateRootDir.path
+            : appStateRootDir.path,
+      },
       'appJoiningDevice': <String, Object?>{
-        'stateRoot': multiDeviceAppJoiningStateRootDir.path,
+        'stateRoot': fullRootTransferOnly
+            ? appStateRootDir.path
+            : multiDeviceAppJoiningStateRootDir.path,
       },
       'suite': <String, Object?>{
         'manifestRevision': suiteManifest.sourceRevision,
@@ -621,16 +679,22 @@ class DesktopE2eRunner {
       _line('would write remote multi-device Join run config');
       return;
     }
-    await runConfigFile.parent.create(recursive: true);
+    await remoteMultiDeviceRunConfigFile.parent.create(recursive: true);
     if (!Platform.isWindows) {
-      await Process.run('chmod', <String>['700', runConfigFile.parent.path]);
+      await Process.run('chmod', <String>[
+        '700',
+        remoteMultiDeviceRunConfigFile.parent.path,
+      ]);
     }
-    await runConfigFile.writeAsString(
+    await remoteMultiDeviceRunConfigFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
       flush: true,
     );
     if (!Platform.isWindows) {
-      await Process.run('chmod', <String>['600', runConfigFile.path]);
+      await Process.run('chmod', <String>[
+        '600',
+        remoteMultiDeviceRunConfigFile.path,
+      ]);
     }
   }
 
@@ -2608,9 +2672,12 @@ Options:
                                operator-confirmed real App/CLI message-driven
                                member Join flow in both directions against
                                awiki.info.
-                               The
-                               other cases run real
-                               App+CLI peer flows. The
+                               full runs the audited App+CLI peer flow and then
+                               one real App-admin/CLI-member Join + root
+                               completion lifecycle; it therefore also requires
+                               the remote Join gate, dedicated OTP resolver, and
+                               real macOS user presence.
+                               The other cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
                                applies the configured performance budgets. The

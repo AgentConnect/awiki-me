@@ -1624,6 +1624,13 @@ cliPeer:
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
       expect(log, contains('tenant_backend=https://service.example.test'));
+      expect(
+        log,
+        contains(
+          'would run real App-admin + CLI-member Join and '
+          'ROOT-TRANSFER-E2E-001 completion',
+        ),
+      );
       expect(log, isNot(contains('test-phone-secret')));
       expect(log, isNot(contains('test-otp-secret')));
       expect(log, isNot(contains(root.path)));
@@ -1669,13 +1676,14 @@ cliPeer:
         'ATTACH-E2E-002',
         'ATTACH-REG-001',
         'DISPLAY-NAME-E2E-004',
+        'ROOT-TRANSFER-E2E-001',
       ]);
       expect(decoded['runId'], 'run123');
       expect(decoded['platform'], 'linux');
       expect(decoded['dryRun'], isTrue);
       expect(decoded['prepareOnly'], isFalse);
       final caseResults = decoded['caseResults'] as List<dynamic>;
-      expect(caseResults, hasLength(24));
+      expect(caseResults, hasLength(25));
       expect(
         caseResults.every(
           (value) =>
