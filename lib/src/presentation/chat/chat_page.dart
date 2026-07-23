@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
-import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/rendering.dart' show RenderBox, ScrollDirection;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -262,35 +262,121 @@ class ChatView extends ConsumerStatefulWidget {
   ConsumerState<ChatView> createState() => _ChatViewState();
 }
 
-class _BottomAnchoredScrollController extends ScrollController {
-  _BottomAnchoredScrollController({required VoidCallback onUserScrollStart})
-    : _onUserScrollStart = onUserScrollStart,
-      super(keepScrollOffset: false, debugLabel: 'ChatView.messages');
+enum _ChatScrollAnchorPhase {
+  opening,
+  followingTail,
+  readingAnchor,
+  programmaticTail,
+}
+
+enum _ChatTimelineEntryKind {
+  message,
+  unmatchedPendingTurn,
+  messageAgentRecovery,
+  tail,
+}
+
+class _ChatTimelineEntry {
+  const _ChatTimelineEntry({
+    required this.id,
+    required this.kind,
+    required this.sourceIndex,
+  });
+
+  final String id;
+  final _ChatTimelineEntryKind kind;
+  final int sourceIndex;
+}
+
+class _ChatViewportAnchor {
+  const _ChatViewportAnchor({
+    required this.entryId,
+    required this.viewportOffset,
+  });
+
+  final String entryId;
+  final double viewportOffset;
+
+  _ChatViewportAnchor shiftedBy(double scrollDelta) {
+    return _ChatViewportAnchor(
+      entryId: entryId,
+      viewportOffset: viewportOffset - scrollDelta,
+    );
+  }
+}
+
+class _ChatTimelineGeometry {
+  const _ChatTimelineGeometry({
+    required this.top,
+    required this.bottom,
+    required this.viewportExtent,
+  });
+
+  final double top;
+  final double bottom;
+  final double viewportExtent;
+
+  bool get intersectsViewport => bottom > 0 && top < viewportExtent;
+}
+
+class _ChatLayoutCorrection {
+  const _ChatLayoutCorrection(
+    this.delta, {
+    this.ownsOutOfRangePosition = false,
+  });
+
+  final double delta;
+  final bool ownsOutOfRangePosition;
+}
+
+typedef _ChatLayoutCorrectionResolver =
+    _ChatLayoutCorrection? Function(
+      double minScrollExtent,
+      double maxScrollExtent,
+    );
+
+class _ChatTimelineScrollController extends ScrollController {
+  _ChatTimelineScrollController({
+    required VoidCallback onUserScrollStart,
+    required ValueChanged<double> onScrollDelta,
+    required _ChatLayoutCorrectionResolver resolveLayoutCorrection,
+  }) : _onUserScrollStart = onUserScrollStart,
+       _onScrollDelta = onScrollDelta,
+       _resolveLayoutCorrection = resolveLayoutCorrection,
+       super(keepScrollOffset: false, debugLabel: 'ChatView.messages');
 
   final VoidCallback _onUserScrollStart;
-  bool _followBottom = true;
-  bool _deferBottomCorrection = false;
+  final ValueChanged<double> _onScrollDelta;
+  final _ChatLayoutCorrectionResolver _resolveLayoutCorrection;
 
-  _BottomAnchoredScrollPosition? get _bottomAnchoredPosition {
-    if (!hasClients) {
-      return null;
+  void jumpToTimelineTarget(double value) {
+    assert(hasClients, 'Chat timeline scroll controller is not attached.');
+    for (final position in List<ScrollPosition>.of(positions)) {
+      if (position is _ChatTimelineScrollPosition) {
+        position.jumpToTimelineTarget(value);
+      } else {
+        position.jumpTo(value);
+      }
     }
-    final position = this.position;
-    return position is _BottomAnchoredScrollPosition ? position : null;
   }
 
-  void prepareForInitialBottomPosition() {
-    _bottomAnchoredPosition?.prepareForInitialBottomPosition();
-  }
-
-  set followBottom(bool value) {
-    _followBottom = value;
-    _bottomAnchoredPosition?.followBottom = value;
-  }
-
-  set deferBottomCorrection(bool value) {
-    _deferBottomCorrection = value;
-    _bottomAnchoredPosition?.deferBottomCorrection = value;
+  Future<void> animateToTimelineTarget(
+    double value, {
+    required Duration duration,
+    required Curve curve,
+  }) async {
+    assert(hasClients, 'Chat timeline scroll controller is not attached.');
+    await Future.wait<void>(<Future<void>>[
+      for (final position in List<ScrollPosition>.of(positions))
+        if (position is _ChatTimelineScrollPosition)
+          position.animateToTimelineTarget(
+            value,
+            duration: duration,
+            curve: curve,
+          )
+        else
+          position.animateTo(value, duration: duration, curve: curve),
+    ]);
   }
 
   @override
@@ -299,67 +385,88 @@ class _BottomAnchoredScrollController extends ScrollController {
     ScrollContext context,
     ScrollPosition? oldPosition,
   ) {
-    return _BottomAnchoredScrollPosition(
+    return _ChatTimelineScrollPosition(
       physics: physics,
       context: context,
       oldPosition: oldPosition,
       debugLabel: debugLabel,
-      followBottom: _followBottom,
-      deferBottomCorrection: _deferBottomCorrection,
       onUserScrollStart: _onUserScrollStart,
+      onScrollDelta: _onScrollDelta,
+      resolveLayoutCorrection: _resolveLayoutCorrection,
     );
   }
 }
 
-class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
-  _BottomAnchoredScrollPosition({
+class _ChatTimelineScrollPosition extends ScrollPositionWithSingleContext {
+  _ChatTimelineScrollPosition({
     required super.physics,
     required super.context,
     super.oldPosition,
     super.debugLabel,
-    required bool followBottom,
-    required bool deferBottomCorrection,
     required VoidCallback onUserScrollStart,
-  }) : _followBottom = followBottom,
-       _deferBottomCorrection = deferBottomCorrection,
-       _onUserScrollStart = onUserScrollStart,
+    required ValueChanged<double> onScrollDelta,
+    required _ChatLayoutCorrectionResolver resolveLayoutCorrection,
+  }) : _onUserScrollStart = onUserScrollStart,
+       _onScrollDelta = onScrollDelta,
+       _resolveLayoutCorrection = resolveLayoutCorrection,
        super(initialPixels: 0, keepScrollOffset: false);
 
-  bool _shouldCorrectToBottom = true;
-  bool _followBottom;
-  bool _deferBottomCorrection;
   final VoidCallback _onUserScrollStart;
+  final ValueChanged<double> _onScrollDelta;
+  final _ChatLayoutCorrectionResolver _resolveLayoutCorrection;
+  int _timelineProgrammaticDepth = 0;
 
-  set followBottom(bool value) {
-    _followBottom = value;
+  bool get _isTimelineProgrammatic => _timelineProgrammaticDepth > 0;
+
+  T _runTimelineProgrammatic<T>(T Function() action) {
+    _timelineProgrammaticDepth += 1;
+    try {
+      return action();
+    } finally {
+      _timelineProgrammaticDepth -= 1;
+    }
   }
 
-  set deferBottomCorrection(bool value) {
-    _deferBottomCorrection = value;
+  void jumpToTimelineTarget(double value) {
+    _runTimelineProgrammatic<void>(() => jumpTo(value));
   }
 
-  void prepareForInitialBottomPosition() {
-    _shouldCorrectToBottom = true;
+  Future<void> animateToTimelineTarget(
+    double value, {
+    required Duration duration,
+    required Curve curve,
+  }) {
+    return _runTimelineProgrammatic<Future<void>>(
+      () => animateTo(value, duration: duration, curve: curve),
+    );
   }
 
   @override
   bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    if (hasPixels) {
+      final correction = _resolveLayoutCorrection(
+        minScrollExtent,
+        maxScrollExtent,
+      );
+      if (correction != null &&
+          (correction.ownsOutOfRangePosition ||
+              !_isOutsideCurrentOrIncomingRange(
+                minScrollExtent,
+                maxScrollExtent,
+              )) &&
+          _applyResolvedLayoutCorrection(
+            correction,
+            minScrollExtent,
+            maxScrollExtent,
+          )) {
+        return false;
+      }
+    }
     final accepted = super.applyContentDimensions(
       minScrollExtent,
       maxScrollExtent,
     );
-    if (!_shouldCorrectToBottom || !_followBottom || !hasPixels) {
-      return accepted;
-    }
-    if (maxScrollExtent <= minScrollExtent) {
-      return accepted;
-    }
-    if (pixels == maxScrollExtent) {
-      _shouldCorrectToBottom = false;
-      return accepted;
-    }
-    correctPixels(maxScrollExtent);
-    return false;
+    return accepted;
   }
 
   @override
@@ -367,17 +474,112 @@ class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
     ScrollMetrics oldPosition,
     ScrollMetrics newPosition,
   ) {
-    if (_followBottom &&
-        !_deferBottomCorrection &&
-        (newPosition.maxScrollExtent - newPosition.pixels).abs() >
-            _chatBottomTolerance) {
-      correctPixels(newPosition.maxScrollExtent);
-      if (activity?.isScrolling ?? false) {
-        goIdle();
+    final correction = _resolveLayoutCorrection(
+      newPosition.minScrollExtent,
+      newPosition.maxScrollExtent,
+    );
+    if (correction?.ownsOutOfRangePosition != true &&
+        (_isOutsideRange(oldPosition) || _isOutsideRange(newPosition))) {
+      // Preserve BouncingScrollPhysics overscroll and let the default
+      // RangeMaintainingScrollPhysics compose changes to the content bounds.
+      return super.correctForNewDimensions(oldPosition, newPosition);
+    }
+    if (correction != null) {
+      final target = (pixels + correction.delta)
+          .clamp(newPosition.minScrollExtent, newPosition.maxScrollExtent)
+          .toDouble();
+      if ((target - pixels).abs() > _chatBottomTolerance) {
+        correctPixels(target);
+        return false;
       }
-      return false;
+      // The timeline owns dimension changes while following its tail or a
+      // reading anchor. Default pixel-based corrections would move that
+      // content anchor when a variable-height entry relayouts.
+      return true;
     }
     return super.correctForNewDimensions(oldPosition, newPosition);
+  }
+
+  bool _isOutsideCurrentOrIncomingRange(
+    double minScrollExtent,
+    double maxScrollExtent,
+  ) {
+    final outsideIncoming =
+        pixels < minScrollExtent - _chatBottomTolerance ||
+        pixels > maxScrollExtent + _chatBottomTolerance;
+    if (outsideIncoming || !haveDimensions) {
+      return outsideIncoming;
+    }
+    return pixels < this.minScrollExtent - _chatBottomTolerance ||
+        pixels > this.maxScrollExtent + _chatBottomTolerance;
+  }
+
+  bool _isOutsideRange(ScrollMetrics metrics) {
+    return metrics.pixels < metrics.minScrollExtent - _chatBottomTolerance ||
+        metrics.pixels > metrics.maxScrollExtent + _chatBottomTolerance;
+  }
+
+  bool _applyResolvedLayoutCorrection(
+    _ChatLayoutCorrection correction,
+    double minScrollExtent,
+    double maxScrollExtent,
+  ) {
+    final target = (pixels + correction.delta)
+        .clamp(minScrollExtent, maxScrollExtent)
+        .toDouble();
+    if ((target - pixels).abs() > _chatBottomTolerance) {
+      correctPixels(target);
+      return true;
+    }
+    return false;
+  }
+
+  void _reportScrollDelta(double before) {
+    if (!hasPixels) {
+      return;
+    }
+    final delta = pixels - before;
+    if (delta.abs() > _chatBottomTolerance) {
+      _onScrollDelta(delta);
+    }
+  }
+
+  @override
+  double setPixels(double newPixels) {
+    final before = pixels;
+    final overscroll = super.setPixels(newPixels);
+    _reportScrollDelta(before);
+    return overscroll;
+  }
+
+  @override
+  void jumpTo(double value) {
+    final externalTakeover =
+        !_isTimelineProgrammatic &&
+        ((value - pixels).abs() > _chatBottomTolerance ||
+            isScrollingNotifier.value);
+    if (!externalTakeover) {
+      super.jumpTo(value);
+      return;
+    }
+    _onUserScrollStart();
+    final before = pixels;
+    super.jumpTo(value);
+    _reportScrollDelta(before);
+  }
+
+  @override
+  Future<void> animateTo(
+    double to, {
+    required Duration duration,
+    required Curve curve,
+  }) {
+    if (!_isTimelineProgrammatic &&
+        ((to - pixels).abs() > _chatBottomTolerance ||
+            isScrollingNotifier.value)) {
+      _onUserScrollStart();
+    }
+    return super.animateTo(to, duration: duration, curve: curve);
   }
 
   @override
@@ -390,37 +592,32 @@ class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
 
   @override
   void pointerScroll(double delta) {
+    if (delta == 0) {
+      if (!_isTimelineProgrammatic && isScrollingNotifier.value) {
+        _onUserScrollStart();
+      }
+      super.pointerScroll(delta);
+      return;
+    }
     final canMove =
         (delta < 0 && pixels > minScrollExtent) ||
         (delta > 0 && pixels < maxScrollExtent);
     if (canMove) {
       _onUserScrollStart();
     }
+    final before = pixels;
     super.pointerScroll(delta);
-  }
-
-  @override
-  Future<void> moveTo(
-    double to, {
-    Duration? duration,
-    Curve? curve,
-    bool? clamp = true,
-  }) {
-    final target = clamp == false
-        ? to
-        : to.clamp(minScrollExtent, maxScrollExtent).toDouble();
-    if ((target - pixels).abs() > _chatBottomTolerance) {
-      _onUserScrollStart();
-    }
-    return super.moveTo(to, duration: duration, curve: curve, clamp: clamp);
+    _reportScrollDelta(before);
   }
 }
 
-enum _ChatScrollAnchorPhase { opening, active }
-
 class _ChatViewState extends ConsumerState<ChatView> {
   final textController = TextEditingController();
-  late final _BottomAnchoredScrollController scrollController;
+  final GlobalKey _messageListViewportKey = GlobalKey(
+    debugLabel: 'ChatView.messageViewport',
+  );
+  final Map<String, GlobalKey> _timelineMeasurementKeys = <String, GlobalKey>{};
+  late final _ChatTimelineScrollController scrollController;
   late final ChatThreadsController _chatThreadsController;
   ProviderSubscription<ConversationListState>? _conversationListSubscription;
   late String _displayThreadId;
@@ -429,15 +626,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _didRequestAgents = false;
   bool _hasDeferredBottomNotice = false;
   bool _userAwayFromBottom = false;
-  bool _followBottom = true;
   bool _isProgrammaticScroll = false;
+  bool _programmaticTailCorrectionArmed = false;
   bool _scrollToBottomScheduled = false;
+  bool _readingAnchorRefreshScheduled = false;
   int _scrollRequestToken = 0;
+  int _scrollEndCheckToken = 0;
   int _visibleReadAckToken = 0;
   int _composerFocusRequestId = 0;
   bool _pendingScrollAnimated = false;
   int _pendingScrollSettleFrames = 1;
   _ChatScrollAnchorPhase _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
+  List<_ChatViewportAnchor> _readingAnchors = const <_ChatViewportAnchor>[];
+  List<String> _activeTimelineEntryIds = const <String>[];
+  String? _activeTimelineTailId;
+  double _activeTimelineBottomInset = 0;
   bool _openingAnchorObservedContent = false;
   int _openingAnchorToken = 0;
   bool _isOpeningGroupInvite = false;
@@ -450,8 +653,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void initState() {
     super.initState();
     _displayThreadId = _timelineDisplayThreadId(widget.conversation);
-    scrollController = _BottomAnchoredScrollController(
+    scrollController = _ChatTimelineScrollController(
       onUserScrollStart: _handleUserScrollStart,
+      onScrollDelta: _handleScrollDelta,
+      resolveLayoutCorrection: _resolveLayoutCorrection,
     );
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
     _conversationListSubscription = ref.listenManual<ConversationListState>(
@@ -505,7 +710,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       _restoreComposerDraft(widget.conversation, updateState: true);
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
-      _setFollowBottom(true);
       _cancelPendingScrollRequests();
       _beginOpeningBottomAnchor();
     }
@@ -707,10 +911,37 @@ class _ChatViewState extends ConsumerState<ChatView> {
           (turn) => !messages.any((message) => turn.matchesMessage(message)),
         )
         .toList(growable: false);
-    final messageListItemCount =
-        messages.length +
-        unmatchedPendingTurns.length +
-        messageAgentItems.length;
+    final timelineEntries = <_ChatTimelineEntry>[
+      for (var index = 0; index < messages.length; index += 1)
+        _ChatTimelineEntry(
+          id: _messageTimelineEntryId(messages[index]),
+          kind: _ChatTimelineEntryKind.message,
+          sourceIndex: index,
+        ),
+      for (var index = 0; index < unmatchedPendingTurns.length; index += 1)
+        _ChatTimelineEntry(
+          id: _pendingTurnTimelineEntryId(unmatchedPendingTurns[index]),
+          kind: _ChatTimelineEntryKind.unmatchedPendingTurn,
+          sourceIndex: index,
+        ),
+      for (var index = 0; index < messageAgentItems.length; index += 1)
+        _ChatTimelineEntry(
+          id: _messageAgentTimelineEntryId(messageAgentItems[index]),
+          kind: _ChatTimelineEntryKind.messageAgentRecovery,
+          sourceIndex: index,
+        ),
+      _ChatTimelineEntry(
+        id: _scopedTimelineEntryId('tail'),
+        kind: _ChatTimelineEntryKind.tail,
+        sourceIndex: -1,
+      ),
+    ];
+    final messageListItemCount = timelineEntries.length - 1;
+    _updateActiveTimeline(timelineEntries, bottomInset: messageListBottomInset);
+    final timelineChildIndices = <Key, int>{
+      for (var index = 0; index < timelineEntries.length; index += 1)
+        _timelineChildKey(timelineEntries[index].id): index,
+    };
     buildWatch.stop();
     AwikiPerformanceLogger.log(
       'chat_page.build.prepare',
@@ -751,243 +982,270 @@ class _ChatViewState extends ConsumerState<ChatView> {
               ),
               child: Stack(
                 children: <Widget>[
-                  NotificationListener<ScrollNotification>(
-                    onNotification: _handleScrollNotification,
-                    child: ListView.builder(
-                      key: ValueKey('chat-messages:$displayThreadId'),
-                      controller: scrollController,
-                      padding: EdgeInsets.fromLTRB(
-                        macStyle
-                            ? responsive.displayScaled(28)
-                            : (widget.embedded
-                                  ? responsive.spacing(32)
-                                  : responsive.tabContentHorizontalPadding),
-                        macStyle
-                            ? responsive.displayScaled(20)
-                            : responsive.spacing(24),
-                        macStyle
-                            ? responsive.displayScaled(28)
-                            : (widget.embedded
-                                  ? responsive.spacing(32)
-                                  : responsive.tabContentHorizontalPadding),
-                        messageListBottomInset,
-                      ),
-                      itemCount: messageListItemCount,
-                      itemBuilder: (_, index) {
-                        final isLastItem = index == messageListItemCount - 1;
-                        if (index >= messages.length) {
-                          final recoveryIndex =
-                              index -
-                              messages.length -
-                              unmatchedPendingTurns.length;
-                          if (recoveryIndex >= 0) {
-                            final item = messageAgentItems[recoveryIndex];
-                            return Padding(
-                              padding: EdgeInsets.only(
-                                bottom: isLastItem
-                                    ? 0
-                                    : macStyle
-                                    ? responsive.displayScaled(16)
-                                    : responsive.spacing(18),
-                              ),
-                              child: _MessageAgentRecoveryCard(
-                                item: item,
-                                macStyle: macStyle,
-                                onConfirm:
-                                    item is _MessageAgentActionTimelineItem
-                                    ? () async {
-                                        await ref
-                                            .read(chatThreadsProvider.notifier)
-                                            .confirmAppAction(
-                                              conversation: currentConversation,
-                                              actionId: item.record.actionId,
-                                            );
-                                        if (mounted) {
-                                          _restoreComposerDraft(
-                                            currentConversation,
-                                            updateState: true,
-                                          );
-                                        }
-                                      }
-                                    : null,
-                                onReject:
-                                    item is _MessageAgentActionTimelineItem
-                                    ? () => ref
-                                          .read(chatThreadsProvider.notifier)
-                                          .rejectAppAction(
-                                            conversation: currentConversation,
-                                            actionId: item.record.actionId,
-                                          )
-                                    : null,
+                  SizedBox.expand(
+                    key: _messageListViewportKey,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: _handleScrollNotification,
+                      child: ListView.builder(
+                        key: ValueKey('chat-messages:$displayThreadId'),
+                        controller: scrollController,
+                        padding: EdgeInsets.fromLTRB(
+                          macStyle
+                              ? responsive.displayScaled(28)
+                              : (widget.embedded
+                                    ? responsive.spacing(32)
+                                    : responsive.tabContentHorizontalPadding),
+                          macStyle
+                              ? responsive.displayScaled(20)
+                              : responsive.spacing(24),
+                          macStyle
+                              ? responsive.displayScaled(28)
+                              : (widget.embedded
+                                    ? responsive.spacing(32)
+                                    : responsive.tabContentHorizontalPadding),
+                          messageListBottomInset,
+                        ),
+                        itemCount: timelineEntries.length,
+                        findChildIndexCallback: (key) =>
+                            timelineChildIndices[key],
+                        itemBuilder: (_, index) {
+                          final entry = timelineEntries[index];
+                          if (entry.kind == _ChatTimelineEntryKind.tail) {
+                            return _buildTimelineChild(
+                              entry.id,
+                              const SizedBox(
+                                key: Key('chat-timeline-tail'),
+                                width: double.infinity,
                               ),
                             );
                           }
-                          final turn =
-                              unmatchedPendingTurns[index - messages.length];
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              bottom: isLastItem
-                                  ? 0
-                                  : macStyle
-                                  ? responsive.displayScaled(16)
-                                  : responsive.spacing(24),
-                            ),
-                            child: _AgentProcessingIndicator(
-                              label: _agentProcessingLabel(
-                                context,
-                                <AgentPendingTurn>[turn],
+                          final isLastItem = index == messageListItemCount - 1;
+                          if (entry.kind ==
+                              _ChatTimelineEntryKind.messageAgentRecovery) {
+                            final item = messageAgentItems[entry.sourceIndex];
+                            return _buildTimelineChild(
+                              entry.id,
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: isLastItem
+                                      ? 0
+                                      : macStyle
+                                      ? responsive.displayScaled(16)
+                                      : responsive.spacing(18),
+                                ),
+                                child: _MessageAgentRecoveryCard(
+                                  item: item,
+                                  macStyle: macStyle,
+                                  onConfirm:
+                                      item is _MessageAgentActionTimelineItem
+                                      ? () async {
+                                          await ref
+                                              .read(
+                                                chatThreadsProvider.notifier,
+                                              )
+                                              .confirmAppAction(
+                                                conversation:
+                                                    currentConversation,
+                                                actionId: item.record.actionId,
+                                              );
+                                          if (mounted) {
+                                            _restoreComposerDraft(
+                                              currentConversation,
+                                              updateState: true,
+                                            );
+                                          }
+                                        }
+                                      : null,
+                                  onReject:
+                                      item is _MessageAgentActionTimelineItem
+                                      ? () => ref
+                                            .read(chatThreadsProvider.notifier)
+                                            .rejectAppAction(
+                                              conversation: currentConversation,
+                                              actionId: item.record.actionId,
+                                            )
+                                      : null,
+                                ),
                               ),
-                              avatarSeed: _agentProcessingAvatarSeed(
-                                context,
-                                runtimeAgent,
-                                currentConversation,
+                            );
+                          }
+                          if (entry.kind ==
+                              _ChatTimelineEntryKind.unmatchedPendingTurn) {
+                            final turn =
+                                unmatchedPendingTurns[entry.sourceIndex];
+                            return _buildTimelineChild(
+                              entry.id,
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: isLastItem
+                                      ? 0
+                                      : macStyle
+                                      ? responsive.displayScaled(16)
+                                      : responsive.spacing(24),
+                                ),
+                                child: _AgentProcessingIndicator(
+                                  label: _agentProcessingLabel(
+                                    context,
+                                    <AgentPendingTurn>[turn],
+                                  ),
+                                  avatarSeed: _agentProcessingAvatarSeed(
+                                    context,
+                                    runtimeAgent,
+                                    currentConversation,
+                                  ),
+                                  macStyle: macStyle,
+                                ),
                               ),
-                              macStyle: macStyle,
+                            );
+                          }
+                          final messageIndex = entry.sourceIndex;
+                          final message = messages[messageIndex];
+                          final pendingTurns = thread
+                              .pendingAgentTurnsForMessage(message);
+                          final previous = messageIndex == 0
+                              ? null
+                              : messages[messageIndex - 1];
+                          final next = messageIndex + 1 < messages.length
+                              ? messages[messageIndex + 1]
+                              : null;
+                          final senderLabel = _displayNameForMessage(
+                            context,
+                            message,
+                          );
+                          final senderAvatarUri = message.isMine
+                              ? null
+                              : peerAvatarUri(
+                                  ref.watch(peerDisplayProfileProvider),
+                                  message.senderDid,
+                                  peerPersonaId: message.senderPeerPersonaId,
+                                );
+                          final showSenderLabel = _shouldShowSenderLabel(
+                            previous,
+                            message,
+                          );
+                          return _buildTimelineChild(
+                            entry.id,
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom: _messageBottomSpacing(
+                                  responsive: responsive,
+                                  macStyle: macStyle,
+                                  current: message,
+                                  next: next,
+                                  hasAgentProcessing: pendingTurns.isNotEmpty,
+                                  nextHasAgentProcessing:
+                                      next != null &&
+                                      messageIdsWithAgentProcessing.contains(
+                                        next.localId,
+                                      ),
+                                  isLastItem: isLastItem,
+                                ),
+                              ),
+                              child: KeyedSubtree(
+                                key: Key(
+                                  'chat-message-content:${message.localId}',
+                                ),
+                                child: Column(
+                                  children: <Widget>[
+                                    if (_shouldShowDivider(previous, message))
+                                      _DateDivider(
+                                        label: _timeDividerLabel(
+                                          message.createdAt,
+                                          previous: previous?.createdAt,
+                                        ),
+                                      ),
+                                    if (message.isGroupSystemEvent)
+                                      _GroupSystemEventNotice(
+                                        message: message,
+                                        macStyle: macStyle,
+                                      )
+                                    else
+                                      _MessageBubble(
+                                        message: message,
+                                        senderLabel: senderLabel,
+                                        senderAvatarUri: senderAvatarUri,
+                                        showSenderLabel: showSenderLabel,
+                                        macStyle: macStyle,
+                                        onRetry:
+                                            message.sendState ==
+                                                MessageSendState.failed
+                                            ? (_canRetryMessage(message)
+                                                  ? () async {
+                                                      await ref
+                                                          .read(
+                                                            chatThreadsProvider
+                                                                .notifier,
+                                                          )
+                                                          .retryMessage(
+                                                            conversation:
+                                                                currentConversation,
+                                                            message: message,
+                                                            expectedAgentReplyDid:
+                                                                _expectedAgentReplyDidForConversation(
+                                                                  currentConversation,
+                                                                  runtimeAgent:
+                                                                      runtimeAgent,
+                                                                  classification:
+                                                                      peerClassification,
+                                                                ),
+                                                            displayThreadId:
+                                                                _displayThreadId,
+                                                          );
+                                                    }
+                                                  : null)
+                                            : null,
+                                        onDownload:
+                                            message.attachment != null &&
+                                                message.sendState ==
+                                                    MessageSendState.sent
+                                            ? () => _openAttachment(
+                                                currentConversation,
+                                                message,
+                                              )
+                                            : null,
+                                        onResolveImagePreview:
+                                            message.attachment != null &&
+                                                message.sendState ==
+                                                    MessageSendState.sent
+                                            ? () => _resolveAttachmentPreview(
+                                                currentConversation,
+                                                message,
+                                              )
+                                            : null,
+                                        isDownloading:
+                                            _downloadingAttachmentMessageIds
+                                                .contains(message.localId),
+                                        onPeerInfoTap: _peerInfoTapForMessage(
+                                          currentConversation,
+                                          message,
+                                          senderLabel,
+                                        ),
+                                      ),
+                                    if (pendingTurns.isNotEmpty) ...<Widget>[
+                                      SizedBox(
+                                        height: macStyle
+                                            ? responsive.displayScaled(7)
+                                            : responsive.spacing(7),
+                                      ),
+                                      _MessageAgentProcessingStatus(
+                                        label: _agentProcessingLabel(
+                                          context,
+                                          pendingTurns,
+                                        ),
+                                        overdue: pendingTurns.any(
+                                          (turn) => turn.isOverdue,
+                                        ),
+                                        macStyle: macStyle,
+                                        alignEnd: message.isMine,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ),
                           );
-                        }
-                        final message = messages[index];
-                        final pendingTurns = thread.pendingAgentTurnsForMessage(
-                          message,
-                        );
-                        final previous = index == 0
-                            ? null
-                            : messages[index - 1];
-                        final next = index + 1 < messages.length
-                            ? messages[index + 1]
-                            : null;
-                        final senderLabel = _displayNameForMessage(
-                          context,
-                          message,
-                        );
-                        final senderAvatarUri = message.isMine
-                            ? null
-                            : peerAvatarUri(
-                                ref.watch(peerDisplayProfileProvider),
-                                message.senderDid,
-                                peerPersonaId: message.senderPeerPersonaId,
-                              );
-                        final showSenderLabel = _shouldShowSenderLabel(
-                          previous,
-                          message,
-                        );
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            bottom: _messageBottomSpacing(
-                              responsive: responsive,
-                              macStyle: macStyle,
-                              current: message,
-                              next: next,
-                              hasAgentProcessing: pendingTurns.isNotEmpty,
-                              nextHasAgentProcessing:
-                                  next != null &&
-                                  messageIdsWithAgentProcessing.contains(
-                                    next.localId,
-                                  ),
-                              isLastItem: isLastItem,
-                            ),
-                          ),
-                          child: KeyedSubtree(
-                            key: Key('chat-message-content:${message.localId}'),
-                            child: Column(
-                              children: <Widget>[
-                                if (_shouldShowDivider(previous, message))
-                                  _DateDivider(
-                                    label: _timeDividerLabel(
-                                      message.createdAt,
-                                      previous: previous?.createdAt,
-                                    ),
-                                  ),
-                                if (message.isGroupSystemEvent)
-                                  _GroupSystemEventNotice(
-                                    message: message,
-                                    macStyle: macStyle,
-                                  )
-                                else
-                                  _MessageBubble(
-                                    message: message,
-                                    senderLabel: senderLabel,
-                                    senderAvatarUri: senderAvatarUri,
-                                    showSenderLabel: showSenderLabel,
-                                    macStyle: macStyle,
-                                    onRetry:
-                                        message.sendState ==
-                                            MessageSendState.failed
-                                        ? (_canRetryMessage(message)
-                                              ? () async {
-                                                  await ref
-                                                      .read(
-                                                        chatThreadsProvider
-                                                            .notifier,
-                                                      )
-                                                      .retryMessage(
-                                                        conversation:
-                                                            currentConversation,
-                                                        message: message,
-                                                        expectedAgentReplyDid:
-                                                            _expectedAgentReplyDidForConversation(
-                                                              currentConversation,
-                                                              runtimeAgent:
-                                                                  runtimeAgent,
-                                                              classification:
-                                                                  peerClassification,
-                                                            ),
-                                                        displayThreadId:
-                                                            _displayThreadId,
-                                                      );
-                                                }
-                                              : null)
-                                        : null,
-                                    onDownload:
-                                        message.attachment != null &&
-                                            message.sendState ==
-                                                MessageSendState.sent
-                                        ? () => _openAttachment(
-                                            currentConversation,
-                                            message,
-                                          )
-                                        : null,
-                                    onResolveImagePreview:
-                                        message.attachment != null &&
-                                            message.sendState ==
-                                                MessageSendState.sent
-                                        ? () => _resolveAttachmentPreview(
-                                            currentConversation,
-                                            message,
-                                          )
-                                        : null,
-                                    isDownloading:
-                                        _downloadingAttachmentMessageIds
-                                            .contains(message.localId),
-                                    onPeerInfoTap: _peerInfoTapForMessage(
-                                      currentConversation,
-                                      message,
-                                      senderLabel,
-                                    ),
-                                  ),
-                                if (pendingTurns.isNotEmpty) ...<Widget>[
-                                  SizedBox(
-                                    height: macStyle
-                                        ? responsive.displayScaled(7)
-                                        : responsive.spacing(7),
-                                  ),
-                                  _MessageAgentProcessingStatus(
-                                    label: _agentProcessingLabel(
-                                      context,
-                                      pendingTurns,
-                                    ),
-                                    overdue: pendingTurns.any(
-                                      (turn) => turn.isOverdue,
-                                    ),
-                                    macStyle: macStyle,
-                                    alignEnd: message.isMine,
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
                   ),
                   if (_hasDeferredBottomNotice)
@@ -1581,64 +1839,342 @@ class _ChatViewState extends ConsumerState<ChatView> {
     });
   }
 
+  String _scopedTimelineEntryId(String value) {
+    return '$_displayThreadId::$value';
+  }
+
+  String _messageTimelineEntryId(ChatMessage message) {
+    return _scopedTimelineEntryId('message:${message.localId}');
+  }
+
+  String _pendingTurnTimelineEntryId(AgentPendingTurn turn) {
+    final mention = turn.mentionId?.trim();
+    final discriminator = mention != null && mention.isNotEmpty
+        ? mention
+        : turn.startedAt.microsecondsSinceEpoch.toString();
+    return _scopedTimelineEntryId(
+      'pending:${turn.localMessageId}:${turn.agentDid}:$discriminator',
+    );
+  }
+
+  String _messageAgentTimelineEntryId(_MessageAgentTimelineItem item) {
+    return switch (item) {
+      _MessageAgentSyncTimelineItem(:final record) => _scopedTimelineEntryId(
+        'agent-sync:${record.identityKey}',
+      ),
+      _MessageAgentActionTimelineItem(:final record) => _scopedTimelineEntryId(
+        'agent-action:${record.actionId}',
+      ),
+    };
+  }
+
+  Key _timelineChildKey(String entryId) {
+    return ValueKey<String>('chat-timeline-entry:$entryId');
+  }
+
+  Widget _buildTimelineChild(String entryId, Widget child) {
+    final measurementKey = _timelineMeasurementKeys.putIfAbsent(
+      entryId,
+      () => GlobalKey(debugLabel: 'ChatView.timeline.$entryId'),
+    );
+    return KeyedSubtree(
+      key: _timelineChildKey(entryId),
+      child: KeyedSubtree(key: measurementKey, child: child),
+    );
+  }
+
+  void _updateActiveTimeline(
+    List<_ChatTimelineEntry> entries, {
+    required double bottomInset,
+  }) {
+    _activeTimelineEntryIds = <String>[for (final entry in entries) entry.id];
+    _activeTimelineTailId =
+        entries.lastOrNull?.kind == _ChatTimelineEntryKind.tail
+        ? entries.last.id
+        : null;
+    _activeTimelineBottomInset = bottomInset;
+    final retainedIds = <String>{
+      ..._activeTimelineEntryIds,
+      for (final anchor in _readingAnchors) anchor.entryId,
+    };
+    _timelineMeasurementKeys.removeWhere(
+      (entryId, _) => !retainedIds.contains(entryId),
+    );
+  }
+
+  _ChatTimelineGeometry? _timelineGeometry(String entryId) {
+    final viewportRenderObject = _activeRenderBox(_messageListViewportKey);
+    final measurementKey = _timelineMeasurementKeys[entryId];
+    final itemRenderObject = measurementKey == null
+        ? null
+        : _activeRenderBox(measurementKey);
+    if (viewportRenderObject == null ||
+        itemRenderObject == null ||
+        !viewportRenderObject.attached ||
+        !itemRenderObject.attached ||
+        !viewportRenderObject.hasSize ||
+        !itemRenderObject.hasSize) {
+      return null;
+    }
+    final top = itemRenderObject
+        .localToGlobal(Offset.zero, ancestor: viewportRenderObject)
+        .dy;
+    return _ChatTimelineGeometry(
+      top: top,
+      bottom: top + itemRenderObject.size.height,
+      viewportExtent: viewportRenderObject.size.height,
+    );
+  }
+
+  double? _timelineViewportTop(String entryId) {
+    final viewportRenderObject = _activeRenderBox(_messageListViewportKey);
+    final measurementKey = _timelineMeasurementKeys[entryId];
+    final itemRenderObject = measurementKey == null
+        ? null
+        : _activeRenderBox(measurementKey);
+    if (viewportRenderObject == null ||
+        itemRenderObject == null ||
+        !viewportRenderObject.attached ||
+        !itemRenderObject.attached) {
+      return null;
+    }
+    return itemRenderObject
+        .localToGlobal(Offset.zero, ancestor: viewportRenderObject)
+        .dy;
+  }
+
+  RenderBox? _activeRenderBox(GlobalKey key) {
+    final itemContext = key.currentContext;
+    if (itemContext == null) {
+      return null;
+    }
+    try {
+      final renderObject = itemContext.findRenderObject();
+      return renderObject is RenderBox ? renderObject : null;
+    } on FlutterError {
+      // A keyed sliver child can be inactive briefly while
+      // findChildIndexCallback moves it to a new timeline index.
+      return null;
+    }
+  }
+
+  void _captureReadingAnchors() {
+    final tailId = _activeTimelineTailId;
+    final entriesStartingInsideViewport = <_ChatViewportAnchor>[];
+    final partiallyVisibleEntries = <_ChatViewportAnchor>[];
+    for (final entryId in _activeTimelineEntryIds) {
+      if (entryId == tailId) {
+        continue;
+      }
+      final geometry = _timelineGeometry(entryId);
+      if (geometry == null || !geometry.intersectsViewport) {
+        continue;
+      }
+      final anchor = _ChatViewportAnchor(
+        entryId: entryId,
+        viewportOffset: geometry.top,
+      );
+      if (geometry.top >= 0) {
+        entriesStartingInsideViewport.add(anchor);
+      } else {
+        partiallyVisibleEntries.add(anchor);
+      }
+    }
+    // Prefer an item's actual leading edge over an entry whose content has
+    // already left the viewport and only contributes trailing list spacing.
+    // A tall partially-visible item remains the fallback when it is the only
+    // entry intersecting the viewport.
+    final next = <_ChatViewportAnchor>[
+      ...entriesStartingInsideViewport,
+      ...partiallyVisibleEntries,
+    ];
+    _readingAnchors = next;
+    final retainedIds = <String>{
+      ..._activeTimelineEntryIds,
+      for (final anchor in next) anchor.entryId,
+    };
+    _timelineMeasurementKeys.removeWhere(
+      (entryId, _) => !retainedIds.contains(entryId),
+    );
+  }
+
+  void _handleScrollDelta(double delta) {
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.readingAnchor ||
+        delta.abs() <= _chatBottomTolerance) {
+      return;
+    }
+    _readingAnchors = <_ChatViewportAnchor>[
+      for (final anchor in _readingAnchors) anchor.shiftedBy(delta),
+    ];
+    _scheduleReadingAnchorRefresh();
+  }
+
+  void _scheduleReadingAnchorRefresh() {
+    if (_readingAnchorRefreshScheduled) {
+      return;
+    }
+    _readingAnchorRefreshScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _readingAnchorRefreshScheduled = false;
+      if (!mounted ||
+          _scrollAnchorPhase != _ChatScrollAnchorPhase.readingAnchor) {
+        return;
+      }
+      _captureReadingAnchors();
+    });
+  }
+
+  _ChatLayoutCorrection? _resolveLayoutCorrection(
+    double minScrollExtent,
+    double maxScrollExtent,
+  ) {
+    switch (_scrollAnchorPhase) {
+      case _ChatScrollAnchorPhase.programmaticTail:
+        if (_isProgrammaticScroll || !_programmaticTailCorrectionArmed) {
+          return null;
+        }
+        if (maxScrollExtent <= minScrollExtent) {
+          return const _ChatLayoutCorrection(0, ownsOutOfRangePosition: true);
+        }
+        final tailCorrection = _tailViewportCorrection();
+        return _ChatLayoutCorrection(
+          tailCorrection ?? maxScrollExtent - scrollController.position.pixels,
+          ownsOutOfRangePosition: true,
+        );
+      case _ChatScrollAnchorPhase.readingAnchor:
+        for (final anchor in _readingAnchors) {
+          final top = _timelineViewportTop(anchor.entryId);
+          if (top != null) {
+            return _ChatLayoutCorrection(top - anchor.viewportOffset);
+          }
+        }
+        return const _ChatLayoutCorrection(0);
+      case _ChatScrollAnchorPhase.opening:
+      case _ChatScrollAnchorPhase.followingTail:
+        if (maxScrollExtent <= minScrollExtent) {
+          return const _ChatLayoutCorrection(0, ownsOutOfRangePosition: true);
+        }
+        final tailCorrection = _tailViewportCorrection();
+        return _ChatLayoutCorrection(
+          tailCorrection ?? maxScrollExtent - scrollController.position.pixels,
+          ownsOutOfRangePosition: true,
+        );
+    }
+  }
+
+  double? _tailViewportCorrection() {
+    final tailId = _activeTimelineTailId;
+    if (tailId == null) {
+      return null;
+    }
+    final top = _timelineViewportTop(tailId);
+    if (top == null ||
+        !scrollController.hasClients ||
+        !scrollController.position.hasViewportDimension) {
+      return null;
+    }
+    final desiredTop =
+        scrollController.position.viewportDimension -
+        _activeTimelineBottomInset;
+    return top - desiredTop;
+  }
+
+  double _tailScrollTarget() {
+    final position = scrollController.position;
+    final tailCorrection = _tailViewportCorrection();
+    if (tailCorrection == null) {
+      return position.maxScrollExtent;
+    }
+    return (position.pixels + tailCorrection)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+  }
+
+  bool _isTailVisible() {
+    final tailId = _activeTimelineTailId;
+    if (tailId == null) {
+      return false;
+    }
+    final top = _timelineViewportTop(tailId);
+    if (top == null ||
+        !scrollController.hasClients ||
+        !scrollController.position.hasViewportDimension) {
+      return false;
+    }
+    final viewportExtent = scrollController.position.viewportDimension;
+    return top >= -_chatBottomTolerance &&
+        top <= viewportExtent + _chatBottomTolerance;
+  }
+
   bool _handleScrollNotification(ScrollNotification notification) {
     if (notification.depth != 0) {
-      return false;
-    }
-    if (notification is ScrollStartNotification &&
-        notification.dragDetails != null) {
-      _endOpeningBottomAnchor();
-      _setFollowBottom(false);
-      _updateUserAwayFromBottom(notification.metrics);
-      return false;
-    }
-    if (notification is UserScrollNotification) {
-      _endOpeningBottomAnchor();
-      if (notification.direction != ScrollDirection.idle) {
-        _setFollowBottom(false);
-      } else if (_isAtBottom(notification.metrics)) {
-        _setFollowBottom(true);
-      }
-      _updateUserAwayFromBottom(notification.metrics);
       return false;
     }
     if (_isProgrammaticScroll) {
       return false;
     }
-    if (notification is ScrollEndNotification) {
-      if (_isAtBottom(notification.metrics)) {
-        _setFollowBottom(true);
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _enterReadingAnchor();
+      _updateUserAwayFromBottom(notification.metrics);
+      return false;
+    }
+    if (notification is UserScrollNotification) {
+      if (notification.direction != ScrollDirection.idle) {
+        _enterReadingAnchor();
+      } else {
+        _scheduleTailOwnershipCheck();
       }
+      _updateUserAwayFromBottom(notification.metrics);
+      return false;
+    }
+    if (notification is ScrollEndNotification) {
+      _scheduleTailOwnershipCheck();
       _updateUserAwayFromBottom(notification.metrics);
     }
     return false;
   }
 
   void _handleUserScrollStart() {
-    _endOpeningBottomAnchor();
-    _setFollowBottom(false);
+    _enterReadingAnchor();
+  }
+
+  void _enterReadingAnchor() {
+    if (_scrollAnchorPhase == _ChatScrollAnchorPhase.readingAnchor) {
+      return;
+    }
+    _captureReadingAnchors();
+    _scrollAnchorPhase = _ChatScrollAnchorPhase.readingAnchor;
+    _openingAnchorToken += 1;
+    _scrollEndCheckToken += 1;
+    _cancelPendingScrollRequests();
+  }
+
+  void _scheduleTailOwnershipCheck() {
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.readingAnchor) {
+      return;
+    }
+    final token = ++_scrollEndCheckToken;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _scrollEndCheckToken ||
+          _scrollAnchorPhase != _ChatScrollAnchorPhase.readingAnchor) {
+        return;
+      }
+      if (_isTailVisible()) {
+        _scrollAnchorPhase = _ChatScrollAnchorPhase.followingTail;
+        _readingAnchors = const <_ChatViewportAnchor>[];
+      } else {
+        _captureReadingAnchors();
+      }
+    });
   }
 
   void _handleScrollPositionChanged() {
     if (_isProgrammaticScroll || !scrollController.hasClients) {
       return;
     }
-    if (_isAtBottom()) {
-      _setFollowBottom(true);
-    }
     _updateUserAwayFromBottom();
-  }
-
-  void _setFollowBottom(bool value) {
-    if (_followBottom == value) {
-      scrollController.followBottom = value;
-      return;
-    }
-    _followBottom = value;
-    scrollController.followBottom = value;
-    if (!value) {
-      _cancelPendingScrollRequests();
-    }
   }
 
   void _updateUserAwayFromBottom([ScrollMetrics? metrics]) {
@@ -1663,6 +2199,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ChatThreadState next,
     ConversationSummary conversation,
   ) {
+    if (_scrollAnchorPhase == _ChatScrollAnchorPhase.readingAnchor) {
+      _captureReadingAnchors();
+    }
     if (_shouldUseOpeningBottomAnchor(previous, next)) {
       _scheduleOpeningBottomAnchorSettle(settleFrames: 3);
       return;
@@ -1687,7 +2226,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
         _activePendingTurnCount(next) > _activePendingTurnCount(previous);
     final recoveryAdded =
         next.messageAgentTimelineCount > previous.messageAgentTimelineCount;
-    final shouldFollowBottom = _followBottom;
+    final shouldFollowBottom =
+        _scrollAnchorPhase != _ChatScrollAnchorPhase.readingAnchor;
     if (messageAdded) {
       if (nextLast.isMine || shouldFollowBottom) {
         _scheduleScrollToBottom(animated: !nextLast.isMine);
@@ -1734,8 +2274,12 @@ class _ChatViewState extends ConsumerState<ChatView> {
     int settleFrames = 1,
     bool forceJump = false,
   }) {
-    _setFollowBottom(true);
-    scrollController.deferBottomCorrection = true;
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening) {
+      _scrollAnchorPhase = _ChatScrollAnchorPhase.programmaticTail;
+      _programmaticTailCorrectionArmed = false;
+    }
+    _readingAnchors = const <_ChatViewportAnchor>[];
+    _scrollEndCheckToken += 1;
     _pendingScrollAnimated = forceJump
         ? false
         : _pendingScrollAnimated || animated;
@@ -1756,7 +2300,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (!mounted || token != _scrollRequestToken) {
       return;
     }
-    scrollController.deferBottomCorrection = false;
     _scrollToBottom(animated: _pendingScrollAnimated, token: token);
     final remainingFrames = _pendingScrollSettleFrames - 1;
     if (remainingFrames <= 0) {
@@ -1778,22 +2321,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
     _pendingScrollAnimated = false;
     _pendingScrollSettleFrames = 1;
     _isProgrammaticScroll = false;
-    scrollController.deferBottomCorrection = false;
+    _programmaticTailCorrectionArmed = false;
   }
 
   void _beginOpeningBottomAnchor() {
-    _setFollowBottom(true);
     _scrollAnchorPhase = _ChatScrollAnchorPhase.opening;
+    _readingAnchors = const <_ChatViewportAnchor>[];
+    _scrollEndCheckToken += 1;
     _openingAnchorObservedContent = false;
-    _openingAnchorToken += 1;
-    scrollController.prepareForInitialBottomPosition();
-  }
-
-  void _endOpeningBottomAnchor() {
-    if (_scrollAnchorPhase == _ChatScrollAnchorPhase.active) {
-      return;
-    }
-    _scrollAnchorPhase = _ChatScrollAnchorPhase.active;
     _openingAnchorToken += 1;
   }
 
@@ -1802,7 +2337,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ChatThreadState next,
   ) {
     if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening ||
-        !_followBottom ||
         !_threadHasBottomAnchorContent(next)) {
       return false;
     }
@@ -1816,8 +2350,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   void _settleOpeningBottomAnchorForCurrentThread(ChatThreadState thread) {
     if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening ||
-        _openingAnchorObservedContent ||
-        !_followBottom) {
+        _openingAnchorObservedContent) {
       return;
     }
     if (_threadHasBottomAnchorContent(thread)) {
@@ -1836,7 +2369,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     _openingAnchorObservedContent = true;
-    scrollController.prepareForInitialBottomPosition();
     _scheduleScrollToBottom(settleFrames: settleFrames, forceJump: true);
     _scheduleOpeningBottomAnchorEnd(afterFrames: settleFrames + 1);
   }
@@ -1851,7 +2383,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
           return;
         }
         if (remainingFrames <= 0) {
-          _scrollAnchorPhase = _ChatScrollAnchorPhase.active;
+          _scrollAnchorPhase = _ChatScrollAnchorPhase.followingTail;
           return;
         }
         schedule(remainingFrames - 1);
@@ -1865,11 +2397,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (!scrollController.hasClients) {
       return;
     }
-    final target = scrollController.position.maxScrollExtent;
+    final target = _tailScrollTarget();
     _isProgrammaticScroll = true;
     if (animated) {
       scrollController
-          .animateTo(
+          .animateToTimelineTarget(
             target,
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
@@ -1879,16 +2411,38 @@ class _ChatViewState extends ConsumerState<ChatView> {
               return;
             }
             _isProgrammaticScroll = false;
-            if (_followBottom && !_isAtBottom()) {
+            _programmaticTailCorrectionArmed = true;
+            if (!_isTailVisible()) {
               _jumpToLatestBottom();
             }
             _markAtBottomAfterProgrammaticScroll();
+            _scheduleProgrammaticTailFinalize(token);
           });
       return;
     }
-    scrollController.jumpTo(target);
+    scrollController.jumpToTimelineTarget(target);
     _isProgrammaticScroll = false;
+    _programmaticTailCorrectionArmed = true;
     _markAtBottomAfterProgrammaticScroll();
+    _scheduleProgrammaticTailFinalize(token);
+  }
+
+  void _scheduleProgrammaticTailFinalize(int token, {int attempts = 3}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          token != _scrollRequestToken ||
+          attempts <= 0 ||
+          _scrollAnchorPhase == _ChatScrollAnchorPhase.readingAnchor) {
+        return;
+      }
+      if (!_isTailVisible()) {
+        _jumpToLatestBottom();
+      }
+      _markAtBottomAfterProgrammaticScroll();
+      if (_scrollAnchorPhase == _ChatScrollAnchorPhase.programmaticTail) {
+        _scheduleProgrammaticTailFinalize(token, attempts: attempts - 1);
+      }
+    });
   }
 
   void _jumpToLatestBottom() {
@@ -1896,16 +2450,20 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return;
     }
     _isProgrammaticScroll = true;
-    scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    scrollController.jumpToTimelineTarget(_tailScrollTarget());
     _isProgrammaticScroll = false;
+    _programmaticTailCorrectionArmed = true;
   }
 
   void _markAtBottomAfterProgrammaticScroll({bool forcePersistentAck = true}) {
-    if (!_followBottom || !_isAtBottom()) {
+    if (!_isTailVisible()) {
       return;
     }
     _userAwayFromBottom = false;
-    _setFollowBottom(true);
+    if (_scrollAnchorPhase != _ChatScrollAnchorPhase.opening) {
+      _scrollAnchorPhase = _ChatScrollAnchorPhase.followingTail;
+      _programmaticTailCorrectionArmed = false;
+    }
     if (_hasDeferredBottomNotice && mounted) {
       setState(() {
         _hasDeferredBottomNotice = false;
@@ -1923,14 +2481,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
     final current = metrics ?? scrollController.position;
     return current.maxScrollExtent - current.pixels <= _nearBottomExtent;
-  }
-
-  bool _isAtBottom([ScrollMetrics? metrics]) {
-    if (metrics == null && !scrollController.hasClients) {
-      return true;
-    }
-    final current = metrics ?? scrollController.position;
-    return current.maxScrollExtent - current.pixels <= _chatBottomTolerance;
   }
 
   ChatMessage? _lastMessage(List<ChatMessage> messages) {

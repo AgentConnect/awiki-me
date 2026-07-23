@@ -1393,7 +1393,7 @@ class _SendingMessageIndicator extends StatelessWidget {
 
 const int _maxInlineImageBytes = 20 * 1024 * 1024;
 
-class _AttachmentContent extends StatefulWidget {
+class _AttachmentContent extends ConsumerStatefulWidget {
   const _AttachmentContent({
     required this.message,
     required this.macStyle,
@@ -1409,11 +1409,11 @@ class _AttachmentContent extends StatefulWidget {
   final bool isDownloading;
 
   @override
-  State<_AttachmentContent> createState() => _AttachmentContentState();
+  ConsumerState<_AttachmentContent> createState() => _AttachmentContentState();
 }
 
-class _AttachmentContentState extends State<_AttachmentContent> {
-  Future<String?>? _previewPath;
+class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
+  AttachmentPreviewHandle? _previewHandle;
 
   @override
   void initState() {
@@ -1426,34 +1426,54 @@ class _AttachmentContentState extends State<_AttachmentContent> {
     super.didUpdateWidget(oldWidget);
     final oldAttachment = oldWidget.message.attachment;
     final attachment = widget.message.attachment;
+    final gainedRemoteResolver =
+        oldWidget.onResolveImagePreview == null &&
+        widget.onResolveImagePreview != null;
     if (oldWidget.message.localId != widget.message.localId ||
         oldAttachment?.attachmentId != attachment?.attachmentId ||
-        oldAttachment?.localPath != attachment?.localPath) {
-      _preparePreview();
+        oldAttachment?.localPath != attachment?.localPath ||
+        oldAttachment?.objectUri != attachment?.objectUri ||
+        oldAttachment?.sizeBytes != attachment?.sizeBytes ||
+        oldAttachment?.mimeType != attachment?.mimeType ||
+        oldAttachment?.filename != attachment?.filename ||
+        (oldWidget.onResolveImagePreview == null) !=
+            (widget.onResolveImagePreview == null)) {
+      _preparePreview(retryFailed: gainedRemoteResolver);
     }
   }
 
-  void _preparePreview() {
+  void _preparePreview({bool retryFailed = false}) {
     final attachment = widget.message.attachment!;
     if (!_isInlineImageAttachment(attachment)) {
-      _previewPath = null;
+      _previewHandle = null;
       return;
     }
     final localPath = attachment.localPath?.trim();
-    if (localPath != null && localPath.isNotEmpty) {
-      _previewPath = Future<String?>.value(localPath);
-      return;
-    }
     final sizeBytes = attachment.sizeBytes;
     final resolve = widget.onResolveImagePreview;
-    if (resolve == null ||
-        sizeBytes == null ||
-        sizeBytes <= 0 ||
-        sizeBytes > _maxInlineImageBytes) {
-      _previewPath = null;
+    final hasLocalSource = localPath != null && localPath.isNotEmpty;
+    final canResolveRemote =
+        resolve != null &&
+        sizeBytes != null &&
+        sizeBytes > 0 &&
+        sizeBytes <= _maxInlineImageBytes;
+    if (!hasLocalSource && !canResolveRemote) {
+      _previewHandle = null;
       return;
     }
-    _previewPath = resolve().then<String?>((path) => path);
+
+    final handle = ref
+        .read(attachmentPreviewServiceProvider)
+        .previewHandleFor(widget.message);
+    _previewHandle = handle;
+    final phase = handle.snapshot.phase;
+    if ((phase == AttachmentPreviewPhase.idle ||
+            (retryFailed && phase == AttachmentPreviewPhase.failed)) &&
+        resolve != null) {
+      unawaited(
+        resolve().then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+      );
+    }
   }
 
   @override
@@ -1535,8 +1555,8 @@ class _AttachmentContentState extends State<_AttachmentContent> {
     required TextStyle titleStyle,
     required TextStyle metaStyle,
   }) {
-    final future = _previewPath;
-    if (future == null) {
+    final handle = _previewHandle;
+    if (handle == null) {
       return _AttachmentFileCard(
         message: widget.message,
         macStyle: widget.macStyle,
@@ -1546,132 +1566,162 @@ class _AttachmentContentState extends State<_AttachmentContent> {
         metaStyle: metaStyle,
       );
     }
-    return FutureBuilder<String?>(
-      future: future,
-      builder: (context, snapshot) {
-        final path = snapshot.data?.trim();
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return _InlineImageLoading(macStyle: widget.macStyle);
-        }
-        if (snapshot.hasError || path == null || path.isEmpty) {
-          return _AttachmentFileCard(
+    return StreamBuilder<AttachmentPreviewSnapshot>(
+      key: ObjectKey(handle),
+      stream: handle.changes,
+      initialData: handle.snapshot,
+      builder: (context, _) {
+        final snapshot = handle.snapshot;
+        final path = snapshot.path?.trim();
+        final Widget content;
+        if (snapshot.phase == AttachmentPreviewPhase.ready &&
+            path != null &&
+            path.isNotEmpty) {
+          content = _InlineImagePreview(
             message: widget.message,
-            macStyle: widget.macStyle,
-            onDownload: widget.onDownload,
-            isDownloading: widget.isDownloading,
-            titleStyle: titleStyle,
-            metaStyle: metaStyle,
+            path: path,
+            onOpen: widget.onDownload,
+            onDecodeFailure: () {
+              ref
+                  .read(attachmentPreviewServiceProvider)
+                  .reportPreviewDecodeFailure(
+                    message: widget.message,
+                    path: path,
+                  );
+            },
           );
-        }
-        return _InlineImagePreview(
-          message: widget.message,
-          path: path,
-          macStyle: widget.macStyle,
-          onOpen: widget.onDownload,
-          errorFallback: _AttachmentFileCard(
-            message: widget.message,
+        } else if (snapshot.phase == AttachmentPreviewPhase.failed) {
+          content = _InlineImageFileFallback(
             macStyle: widget.macStyle,
-            onDownload: widget.onDownload,
-            isDownloading: widget.isDownloading,
-            titleStyle: titleStyle,
-            metaStyle: metaStyle,
-          ),
+            child: _AttachmentFileCard(
+              message: widget.message,
+              macStyle: widget.macStyle,
+              onDownload: widget.onDownload,
+              isDownloading: widget.isDownloading,
+              titleStyle: titleStyle,
+              metaStyle: metaStyle,
+            ),
+          );
+        } else {
+          content = const _InlineImageLoading();
+        }
+        return _InlineImageEnvelope(
+          messageId: widget.message.localId,
+          macStyle: widget.macStyle,
+          child: content,
         );
       },
     );
   }
 }
 
-class _InlineImageLoading extends StatelessWidget {
-  const _InlineImageLoading({required this.macStyle});
+const double _inlineImageFallbackAspectRatio = 4 / 3;
 
+class _InlineImageEnvelope extends StatelessWidget {
+  const _InlineImageEnvelope({
+    required this.messageId,
+    required this.macStyle,
+    required this.child,
+  });
+
+  final String messageId;
   final bool macStyle;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Container(
-      key: const Key('chat-inline-image-loading'),
-      height: macStyle ? responsive.displayScaled(150) : responsive.scaled(170),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F4F8),
-        borderRadius: BorderRadius.circular(10),
+    final maxWidth = macStyle
+        ? responsive.displayScaled(320)
+        : responsive.scaled(360);
+    final radius = macStyle
+        ? responsive.displayScaled(9)
+        : responsive.radius(12);
+    return SizedBox(
+      key: Key('chat-inline-image-envelope:$messageId'),
+      width: maxWidth,
+      child: AspectRatio(
+        aspectRatio: _inlineImageFallbackAspectRatio,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: ColoredBox(color: const Color(0xFFF1F4F8), child: child),
+        ),
       ),
-      child: const CupertinoActivityIndicator(),
     );
   }
 }
 
-class _InlineImagePreview extends ConsumerStatefulWidget {
+class _InlineImageLoading extends StatelessWidget {
+  const _InlineImageLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.expand(
+      key: Key('chat-inline-image-loading'),
+      child: Center(child: CupertinoActivityIndicator()),
+    );
+  }
+}
+
+class _InlineImageFileFallback extends StatelessWidget {
+  const _InlineImageFileFallback({required this.macStyle, required this.child});
+
+  final bool macStyle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return SizedBox.expand(
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.all(
+            macStyle ? responsive.displayScaled(12) : responsive.spacing(12),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+class _InlineImagePreview extends ConsumerWidget {
   const _InlineImagePreview({
     required this.message,
     required this.path,
-    required this.macStyle,
     required this.onOpen,
-    required this.errorFallback,
+    required this.onDecodeFailure,
   });
 
   final ChatMessage message;
   final String path;
-  final bool macStyle;
   final Future<void> Function()? onOpen;
-  final Widget errorFallback;
+  final VoidCallback onDecodeFailure;
 
   @override
-  ConsumerState<_InlineImagePreview> createState() =>
-      _InlineImagePreviewState();
-}
-
-class _InlineImagePreviewState extends ConsumerState<_InlineImagePreview> {
-  bool _failed = false;
-
-  @override
-  void didUpdateWidget(covariant _InlineImagePreview oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.path != widget.path) {
-      _failed = false;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_failed) {
-      return widget.errorFallback;
-    }
-    final responsive = context.awikiResponsive;
-    final framePlaceholder = _InlineImageLoading(macStyle: widget.macStyle);
-    final image = ref.watch(chatImageWidgetBuilderProvider)(
-      path: widget.path,
-      fit: BoxFit.contain,
-      framePlaceholder: framePlaceholder,
-      errorFallback: _InlineImageFailureSignal(
-        placeholder: framePlaceholder,
-        onFailure: () {
-          if (mounted && !_failed) {
-            setState(() => _failed = true);
-          }
-        },
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final preview = LayoutBuilder(
+      builder: (context, constraints) {
+        const framePlaceholder = _InlineImageLoading();
+        final image = ref.watch(chatImageWidgetBuilderProvider)(
+          path: path,
+          width: constraints.maxWidth,
+          height: constraints.maxHeight,
+          fit: BoxFit.contain,
+          framePlaceholder: framePlaceholder,
+          errorFallback: _InlineImageFailureSignal(
+            key: ValueKey<String>('chat-inline-image-failure:$path'),
+            placeholder: framePlaceholder,
+            onFailure: onDecodeFailure,
+          ),
+        );
+        return SizedBox.expand(
+          key: Key('chat-inline-image:${message.localId}'),
+          child: image,
+        );
+      },
     );
-    final preview = ClipRRect(
-      key: Key('chat-inline-image:${widget.message.localId}'),
-      borderRadius: BorderRadius.circular(
-        widget.macStyle ? responsive.displayScaled(9) : responsive.radius(12),
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: widget.macStyle
-              ? responsive.displayScaled(320)
-              : responsive.scaled(360),
-          maxHeight: widget.macStyle
-              ? responsive.displayScaled(300)
-              : responsive.scaled(340),
-        ),
-        child: image,
-      ),
-    );
-    final open = widget.onOpen;
+    final open = onOpen;
     if (open == null) {
       return preview;
     }
@@ -1685,6 +1735,7 @@ class _InlineImagePreviewState extends ConsumerState<_InlineImagePreview> {
 
 class _InlineImageFailureSignal extends StatefulWidget {
   const _InlineImageFailureSignal({
+    super.key,
     required this.onFailure,
     required this.placeholder,
   });
@@ -1701,9 +1752,10 @@ class _InlineImageFailureSignalState extends State<_InlineImageFailureSignal> {
   @override
   void initState() {
     super.initState();
+    final onFailure = widget.onFailure;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        widget.onFailure();
+        onFailure();
       }
     });
   }

@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:path/path.dart' as p;
+
 import '../../application/attachment_cache_service.dart';
 
 class FileAttachmentCacheService implements AttachmentCacheService {
@@ -9,6 +11,9 @@ class FileAttachmentCacheService implements AttachmentCacheService {
   }) : _rootDirectory = rootDirectory;
 
   final Future<Directory> Function() _rootDirectory;
+
+  static const String _transientPrefix = '._awiki_cache_';
+  static int _nextTransactionId = 0;
 
   @override
   Future<String?> cacheLocalSource({
@@ -22,14 +27,24 @@ class FileAttachmentCacheService implements AttachmentCacheService {
     if (!await source.exists()) {
       return null;
     }
-    final destination = await _attachmentFile(
+    final directory = await _attachmentDirectory(
       messageId: messageId,
       attachmentId: attachmentId,
-      filename: filename,
     );
-    await destination.parent.create(recursive: true);
-    await source.copy(destination.path);
-    return destination.path;
+    await directory.create(recursive: true);
+    final staging = _newTransientFile(directory, kind: 'staging');
+    try {
+      await source.copy(staging.path);
+      return _commitStagedFile(
+        directory: directory,
+        staging: staging,
+        filename: filename,
+        isCurrent: () => true,
+      );
+    } catch (_) {
+      _deleteFileBestEffort(staging);
+      rethrow;
+    }
   }
 
   @override
@@ -40,14 +55,47 @@ class FileAttachmentCacheService implements AttachmentCacheService {
     required String mimeType,
     required Uint8List bytes,
   }) async {
-    final destination = await _attachmentFile(
+    final path = await cacheDownloadedBytesIfCurrent(
       messageId: messageId,
       attachmentId: attachmentId,
       filename: filename,
+      mimeType: mimeType,
+      bytes: bytes,
+      isCurrent: () => true,
     );
-    await destination.parent.create(recursive: true);
-    await destination.writeAsBytes(bytes, flush: true);
-    return destination.path;
+    if (path == null) {
+      throw StateError('Unconditional attachment cache commit was rejected.');
+    }
+    return path;
+  }
+
+  @override
+  Future<String?> cacheDownloadedBytesIfCurrent({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required Uint8List bytes,
+    required bool Function() isCurrent,
+  }) async {
+    final directory = await _attachmentDirectory(
+      messageId: messageId,
+      attachmentId: attachmentId,
+    );
+    await directory.create(recursive: true);
+    final staging = _newTransientFile(directory, kind: 'staging');
+    try {
+      await staging.writeAsBytes(bytes, flush: true);
+      return _commitStagedFile(
+        directory: directory,
+        staging: staging,
+        filename: filename,
+        isCurrent: isCurrent,
+      );
+    } catch (_) {
+      _deleteFileBestEffort(staging);
+      rethrow;
+    }
   }
 
   @override
@@ -63,23 +111,91 @@ class FileAttachmentCacheService implements AttachmentCacheService {
       return null;
     }
     await for (final entity in directory.list(followLinks: false)) {
-      if (entity is File && await entity.exists()) {
+      if (entity is File &&
+          !_isTransientFile(entity) &&
+          await entity.exists()) {
         return entity.path;
       }
     }
     return null;
   }
 
-  Future<File> _attachmentFile({
-    required String messageId,
-    required String attachmentId,
+  String? _commitStagedFile({
+    required Directory directory,
+    required File staging,
     required String filename,
-  }) async {
-    final directory = await _attachmentDirectory(
-      messageId: messageId,
-      attachmentId: attachmentId,
-    );
-    return File('${directory.path}/${_safeFilename(filename)}');
+    required bool Function() isCurrent,
+  }) {
+    if (!isCurrent()) {
+      _deleteFileBestEffort(staging);
+      return null;
+    }
+
+    final destination = File(p.join(directory.path, _safeFilename(filename)));
+    final committedFiles = directory
+        .listSync(followLinks: false)
+        .whereType<File>()
+        .where((file) => !_isTransientFile(file))
+        .toList(growable: false);
+    final backups = <_CacheBackup>[];
+    try {
+      for (var index = 0; index < committedFiles.length; index += 1) {
+        final committed = committedFiles[index];
+        final backup = _newTransientFile(directory, kind: 'backup-$index');
+        committed.renameSync(backup.path);
+        backups.add(_CacheBackup(originalPath: committed.path, backup: backup));
+      }
+      staging.renameSync(destination.path);
+    } catch (_) {
+      _restoreBackups(backups);
+      _deleteFileBestEffort(staging);
+      rethrow;
+    }
+
+    for (final backup in backups) {
+      _deleteFileBestEffort(backup.backup);
+    }
+    return destination.path;
+  }
+
+  static File _newTransientFile(Directory directory, {required String kind}) {
+    final transactionId = _nextTransactionId++;
+    final token =
+        '${DateTime.now().microsecondsSinceEpoch}-$pid-$transactionId';
+    return File(p.join(directory.path, '$_transientPrefix$kind-$token'));
+  }
+
+  static bool _isTransientFile(File file) {
+    return p.basename(file.path).startsWith(_transientPrefix);
+  }
+
+  static void _restoreBackups(List<_CacheBackup> backups) {
+    for (final backup in backups.reversed) {
+      try {
+        if (!backup.backup.existsSync()) {
+          continue;
+        }
+        final original = File(backup.originalPath);
+        if (original.existsSync()) {
+          backup.backup.deleteSync();
+        } else {
+          backup.backup.renameSync(original.path);
+        }
+      } catch (_) {
+        // Preserve the original commit error. A leftover backup remains hidden
+        // from lookup and cannot displace a later committed file.
+      }
+    }
+  }
+
+  static void _deleteFileBestEffort(File file) {
+    try {
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    } catch (_) {
+      // Transient files are ignored by lookup, so cleanup failure is harmless.
+    }
   }
 
   Future<Directory> _attachmentDirectory({
@@ -88,7 +204,11 @@ class FileAttachmentCacheService implements AttachmentCacheService {
   }) async {
     final root = await _rootDirectory();
     return Directory(
-      '${root.path}/${_safePathSegment(messageId)}/${_safePathSegment(attachmentId)}',
+      p.join(
+        root.path,
+        _safePathSegment(messageId),
+        _safePathSegment(attachmentId),
+      ),
     );
   }
 
@@ -113,4 +233,11 @@ class FileAttachmentCacheService implements AttachmentCacheService {
     }
     return normalized;
   }
+}
+
+class _CacheBackup {
+  const _CacheBackup({required this.originalPath, required this.backup});
+
+  final String originalPath;
+  final File backup;
 }

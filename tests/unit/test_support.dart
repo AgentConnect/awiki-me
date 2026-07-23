@@ -558,11 +558,34 @@ class FakeAttachmentCacheService implements AttachmentCacheService {
     required String mimeType,
     required Uint8List bytes,
   }) async {
+    final path = await cacheDownloadedBytesIfCurrent(
+      messageId: messageId,
+      attachmentId: attachmentId,
+      filename: filename,
+      mimeType: mimeType,
+      bytes: bytes,
+      isCurrent: () => true,
+    );
+    return path!;
+  }
+
+  @override
+  Future<String?> cacheDownloadedBytesIfCurrent({
+    required String messageId,
+    required String attachmentId,
+    required String filename,
+    required String mimeType,
+    required Uint8List bytes,
+    required bool Function() isCurrent,
+  }) async {
     cacheDownloadedBytesCalls += 1;
     lastMessageId = messageId;
     lastAttachmentId = attachmentId;
     lastFilename = filename;
     lastMimeType = mimeType;
+    if (!isCurrent()) {
+      return null;
+    }
     bytesByKey[_key(messageId, attachmentId)] = bytes;
     final path = '/tmp/awiki-test-cache/$messageId/$attachmentId/$filename';
     pathsByKey[_key(messageId, attachmentId)] = path;

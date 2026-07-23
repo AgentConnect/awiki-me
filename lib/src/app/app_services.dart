@@ -204,11 +204,15 @@ final attachmentCacheServiceProvider = Provider<AttachmentCacheService>(
   ),
 );
 
-final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>(
-  (ref) => AttachmentPreviewService(
+final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>((
+  ref,
+) {
+  final service = AttachmentPreviewService(
     cache: ref.watch(attachmentCacheServiceProvider),
-  ),
-);
+  );
+  ref.onDispose(service.dispose);
+  return service;
+});
 
 final attachmentOpenServiceProvider = Provider<AttachmentOpenService>(
   (ref) => AttachmentOpenService(),
