@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:awiki_me/src/application/attachment_cache_service.dart';
+import 'package:awiki_me/src/application/attachment_image_dimensions.dart';
 import 'package:awiki_me/src/application/attachment_preview_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
@@ -681,6 +682,449 @@ void main() {
     expect(handle.snapshot.phase, AttachmentPreviewPhase.ready);
     expect(handle.snapshot.path, newFile.path);
   });
+
+  test('validated image dimensions reject non-positive pixel sizes', () {
+    expect(
+      () => AttachmentImageDimensions(pixelWidth: 0, pixelHeight: 10),
+      throwsArgumentError,
+    );
+    expect(
+      () => AttachmentImageDimensions(pixelWidth: 10, pixelHeight: -1),
+      throwsArgumentError,
+    );
+  });
+
+  test('local image dimensions are probed once per source path', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final image = File('${root.path}/portrait.png');
+    await image.writeAsBytes(<int>[1, 2, 3]);
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+    final message = _message(
+      localPath: image.uri.toString(),
+      filename: 'portrait.png',
+      mimeType: 'image/png',
+    );
+
+    final handle = service.previewHandleFor(message);
+    service.previewHandleFor(message);
+    expect(probe.calls, <String>[image.path]);
+    final update = handle.changes.firstWhere(
+      (snapshot) => snapshot.dimensions != null,
+    );
+
+    probe.complete(
+      image.path,
+      AttachmentImageDimensions(pixelWidth: 900, pixelHeight: 1600),
+    );
+    final snapshot = await update;
+
+    expect(snapshot.phase, AttachmentPreviewPhase.ready);
+    expect(snapshot.path, image.uri.toString());
+    expect(
+      snapshot.dimensions,
+      AttachmentImageDimensions(pixelWidth: 900, pixelHeight: 1600),
+    );
+    service.previewHandleFor(message);
+    expect(probe.calls, <String>[image.path]);
+  });
+
+  test(
+    'downloaded image is probed once after the local path is ready',
+    () async {
+      final root = await Directory.systemTemp.createTemp('awiki-preview-');
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final probe = _ControlledImageDimensionProbe();
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(rootDirectory: () async => root),
+        imageDimensionProbe: probe,
+      );
+      addTearDown(service.dispose);
+      final message = _message(
+        objectUri: 'awiki-object://image',
+        filename: 'landscape.webp',
+        mimeType: 'image/webp',
+      );
+      final handle = service.previewHandleFor(message);
+      final update = handle.changes.firstWhere(
+        (snapshot) => snapshot.dimensions != null,
+      );
+
+      final path = await service.previewPathFor(
+        message: message,
+        download: () async => AttachmentDownloadResult(
+          attachmentId: 'att-1',
+          filename: 'landscape.webp',
+          mimeType: 'image/webp',
+          bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        ),
+      );
+      expect(probe.calls, <String>[path]);
+      probe.complete(
+        path,
+        AttachmentImageDimensions(pixelWidth: 1600, pixelHeight: 900),
+      );
+      await update;
+
+      await service.previewPathFor(
+        message: message,
+        download: () => Future<AttachmentDownloadResult>.error(
+          StateError('the ready cache should be reused'),
+        ),
+      );
+      expect(probe.calls, <String>[path]);
+    },
+  );
+
+  test('stale image dimensions cannot overwrite a newer source', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final oldImage = File('${root.path}/old.png');
+    final newImage = File('${root.path}/new.png');
+    await oldImage.writeAsBytes(<int>[1]);
+    await newImage.writeAsBytes(<int>[2]);
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+    final oldMessage = _message(
+      localPath: oldImage.path,
+      filename: 'image.png',
+      mimeType: 'image/png',
+    );
+    final newMessage = _message(
+      localPath: newImage.path,
+      filename: 'image.png',
+      mimeType: 'image/png',
+    );
+
+    final handle = service.previewHandleFor(oldMessage);
+    service.previewHandleFor(newMessage);
+    expect(probe.calls, <String>[oldImage.path, newImage.path]);
+    final newUpdate = handle.changes.firstWhere(
+      (snapshot) => snapshot.dimensions?.pixelWidth == 1200,
+    );
+    probe.complete(
+      newImage.path,
+      AttachmentImageDimensions(pixelWidth: 1200, pixelHeight: 1200),
+    );
+    await newUpdate;
+
+    probe.complete(
+      oldImage.path,
+      AttachmentImageDimensions(pixelWidth: 900, pixelHeight: 1600),
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    expect(handle.snapshot.path, newImage.path);
+    expect(
+      handle.snapshot.dimensions,
+      AttachmentImageDimensions(pixelWidth: 1200, pixelHeight: 1200),
+    );
+  });
+
+  test('decode failure retains dimensions for the stable fallback', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final image = File('${root.path}/image.png');
+    await image.writeAsBytes(<int>[1]);
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+    final message = _message(
+      localPath: image.path,
+      filename: 'image.png',
+      mimeType: 'image/png',
+    );
+    final handle = service.previewHandleFor(message);
+    final ready = handle.changes.firstWhere(
+      (snapshot) => snapshot.dimensions != null,
+    );
+    final dimensions = AttachmentImageDimensions(
+      pixelWidth: 1600,
+      pixelHeight: 900,
+    );
+    probe.complete(image.path, dimensions);
+    await ready;
+    await Future<void>.delayed(Duration.zero);
+
+    service.reportPreviewDecodeFailure(message: message, path: image.path);
+
+    expect(handle.snapshot.phase, AttachmentPreviewPhase.failed);
+    expect(handle.snapshot.path, image.path);
+    expect(handle.snapshot.dimensions, dimensions);
+  });
+
+  test('same-path replacement invalidates the old dimension probe', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final stablePath = File('${root.path}/download.png');
+    await stablePath.writeAsBytes(<int>[1]);
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+    final message = _message(
+      objectUri: 'awiki-object://image',
+      filename: 'download.png',
+      mimeType: 'image/png',
+    );
+    final handle = service.previewHandleFor(message);
+
+    final firstPath = await service.previewPathFor(
+      message: message,
+      download: () async => AttachmentDownloadResult(
+        attachmentId: 'att-1',
+        filename: 'download.png',
+        mimeType: 'image/png',
+        localPath: stablePath.path,
+      ),
+    );
+    expect(firstPath, stablePath.path);
+    expect(probe.calls, <String>[stablePath.path]);
+
+    service.reportPreviewDecodeFailure(message: message, path: stablePath.path);
+    expect(handle.snapshot.phase, AttachmentPreviewPhase.failed);
+
+    final replacementPath = await service.previewPathFor(
+      message: message,
+      download: () async {
+        await stablePath.writeAsBytes(<int>[2]);
+        return AttachmentDownloadResult(
+          attachmentId: 'att-1',
+          filename: 'download.png',
+          mimeType: 'image/png',
+          localPath: stablePath.path,
+        );
+      },
+    );
+    expect(replacementPath, stablePath.path);
+    expect(probe.calls, <String>[stablePath.path, stablePath.path]);
+
+    probe.completeCall(
+      stablePath.path,
+      0,
+      AttachmentImageDimensions(pixelWidth: 900, pixelHeight: 1600),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(handle.snapshot.dimensions, isNull);
+
+    final corrected = handle.changes.firstWhere(
+      (snapshot) => snapshot.dimensions?.pixelWidth == 1600,
+    );
+    probe.completeCall(
+      stablePath.path,
+      1,
+      AttachmentImageDimensions(pixelWidth: 1600, pixelHeight: 900),
+    );
+    await corrected;
+
+    expect(handle.snapshot.phase, AttachmentPreviewPhase.ready);
+    expect(
+      handle.snapshot.dimensions,
+      AttachmentImageDimensions(pixelWidth: 1600, pixelHeight: 900),
+    );
+  });
+
+  test('outgoing source transitions retain provisional dimensions', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final temporaryImage = File('${root.path}/outgoing-temp.png');
+    final cachedImage = File('${root.path}/outgoing-cache.png');
+    await temporaryImage.writeAsBytes(<int>[1]);
+    await cachedImage.writeAsBytes(<int>[1]);
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+    final originalMessage = _message(
+      localPath: temporaryImage.path,
+      filename: 'outgoing.png',
+      mimeType: 'image/png',
+    );
+    final handle = service.previewHandleFor(originalMessage);
+    final initialDimensions = AttachmentImageDimensions(
+      pixelWidth: 900,
+      pixelHeight: 1600,
+    );
+    final initialUpdate = handle.changes.firstWhere(
+      (snapshot) => snapshot.dimensions == initialDimensions,
+    );
+    probe.complete(temporaryImage.path, initialDimensions);
+    await initialUpdate;
+    await Future<void>.delayed(Duration.zero);
+
+    final objectUriAdded = _message(
+      localPath: temporaryImage.path,
+      objectUri: 'awiki-object://outgoing',
+      filename: 'outgoing.png',
+      mimeType: 'image/png',
+    );
+    final metadataHandle = service.previewHandleFor(objectUriAdded);
+    expect(identical(metadataHandle, handle), isTrue);
+    expect(metadataHandle.snapshot.dimensions, initialDimensions);
+    expect(probe.calls, <String>[temporaryImage.path]);
+
+    final cachedMessage = _message(
+      localPath: cachedImage.path,
+      objectUri: 'awiki-object://outgoing',
+      filename: 'outgoing.png',
+      mimeType: 'image/png',
+    );
+    final cachedHandle = service.previewHandleFor(cachedMessage);
+    expect(identical(cachedHandle, handle), isTrue);
+    expect(cachedHandle.snapshot.path, cachedImage.path);
+    expect(cachedHandle.snapshot.dimensions, initialDimensions);
+    expect(probe.calls, <String>[temporaryImage.path, cachedImage.path]);
+
+    final correctedDimensions = AttachmentImageDimensions(
+      pixelWidth: 901,
+      pixelHeight: 1601,
+    );
+    final correctedUpdate = handle.changes.firstWhere(
+      (snapshot) => snapshot.dimensions == correctedDimensions,
+    );
+    probe.complete(cachedImage.path, correctedDimensions);
+    await correctedUpdate;
+
+    expect(handle.snapshot.dimensions, correctedDimensions);
+  });
+
+  test('non-image attachments are never dimension probed', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final file = File('${root.path}/report.txt');
+    await file.writeAsString('report');
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+
+    service.previewHandleFor(_message(localPath: file.path));
+
+    expect(probe.calls, isEmpty);
+  });
+
+  test('failed dimension probes are not repeated for the same path', () async {
+    final root = await Directory.systemTemp.createTemp('awiki-preview-');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final nullImage = File('${root.path}/null.png');
+    final errorImage = File('${root.path}/error.png');
+    await nullImage.writeAsBytes(<int>[1]);
+    await errorImage.writeAsBytes(<int>[2]);
+    final probe = _ControlledImageDimensionProbe();
+    final service = AttachmentPreviewService(
+      cache: FileAttachmentCacheService(rootDirectory: () async => root),
+      imageDimensionProbe: probe,
+    );
+    addTearDown(service.dispose);
+
+    final nullMessage = _message(
+      localPath: nullImage.path,
+      filename: 'image.png',
+      mimeType: 'image/png',
+    );
+    service.previewHandleFor(nullMessage);
+    probe.complete(nullImage.path, null);
+    await Future<void>.delayed(Duration.zero);
+    service.previewHandleFor(nullMessage);
+
+    final errorMessage = _message(
+      localPath: errorImage.path,
+      filename: 'image.png',
+      mimeType: 'image/png',
+    );
+    final handle = service.previewHandleFor(errorMessage);
+    probe.fail(errorImage.path, StateError('invalid image header'));
+    await Future<void>.delayed(Duration.zero);
+    service.previewHandleFor(errorMessage);
+
+    expect(probe.calls, <String>[nullImage.path, errorImage.path]);
+    expect(handle.snapshot.phase, AttachmentPreviewPhase.ready);
+    expect(handle.snapshot.dimensions, isNull);
+  });
+
+  test(
+    'disposing the scope prevents an in-flight probe from publishing',
+    () async {
+      final root = await Directory.systemTemp.createTemp('awiki-preview-');
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final image = File('${root.path}/image.png');
+      await image.writeAsBytes(<int>[1]);
+      final probe = _ControlledImageDimensionProbe();
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(rootDirectory: () async => root),
+        imageDimensionProbe: probe,
+      );
+      final message = _message(
+        localPath: image.path,
+        filename: 'image.png',
+        mimeType: 'image/png',
+      );
+      final handle = service.previewHandleFor(message);
+
+      service.dispose();
+      probe.complete(
+        image.path,
+        AttachmentImageDimensions(pixelWidth: 100, pixelHeight: 200),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(handle.snapshot.dimensions, isNull);
+    },
+  );
 }
 
 ChatMessage _message({
@@ -691,6 +1135,7 @@ ChatMessage _message({
   String threadId = 'dm:test',
   String attachmentId = 'att-1',
   String filename = 'report.txt',
+  String mimeType = 'text/plain',
 }) {
   return ChatMessage(
     localId: localId,
@@ -705,11 +1150,49 @@ ChatMessage _message({
     attachment: ChatAttachment(
       attachmentId: attachmentId,
       filename: filename,
-      mimeType: 'text/plain',
+      mimeType: mimeType,
       localPath: localPath,
       objectUri: objectUri,
     ),
   );
+}
+
+class _ControlledImageDimensionProbe implements AttachmentImageDimensionProbe {
+  final List<String> calls = <String>[];
+  final Map<String, List<Completer<AttachmentImageDimensions?>>> _completers =
+      <String, List<Completer<AttachmentImageDimensions?>>>{};
+
+  @override
+  Future<AttachmentImageDimensions?> probe(String localPath) {
+    calls.add(localPath);
+    final completer = Completer<AttachmentImageDimensions?>();
+    (_completers[localPath] ??= <Completer<AttachmentImageDimensions?>>[]).add(
+      completer,
+    );
+    return completer.future;
+  }
+
+  void complete(String localPath, AttachmentImageDimensions? dimensions) {
+    _nextPending(localPath).complete(dimensions);
+  }
+
+  void fail(String localPath, Object error) {
+    _nextPending(localPath).completeError(error);
+  }
+
+  void completeCall(
+    String localPath,
+    int callIndex,
+    AttachmentImageDimensions? dimensions,
+  ) {
+    _completers[localPath]![callIndex].complete(dimensions);
+  }
+
+  Completer<AttachmentImageDimensions?> _nextPending(String localPath) {
+    return _completers[localPath]!.firstWhere(
+      (completer) => !completer.isCompleted,
+    );
+  }
 }
 
 class _DelayFirstConditionalAttachmentCache implements AttachmentCacheService {

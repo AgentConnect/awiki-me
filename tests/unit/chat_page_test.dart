@@ -4,6 +4,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/attachment_preview_service.dart';
+import 'package:awiki_me/src/application/attachment_image_dimensions.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
@@ -98,6 +100,37 @@ class _ControlledChatImageBuilder {
   void dispose() {
     decodedSize.dispose();
   }
+}
+
+class _ControlledAttachmentImageDimensionProbe
+    implements AttachmentImageDimensionProbe {
+  final Completer<AttachmentImageDimensions?> _result =
+      Completer<AttachmentImageDimensions?>();
+
+  int probeCalls = 0;
+  String? probedPath;
+
+  @override
+  Future<AttachmentImageDimensions?> probe(String localPath) {
+    probeCalls += 1;
+    probedPath = localPath;
+    return _result.future;
+  }
+
+  void complete(AttachmentImageDimensions dimensions) {
+    _result.complete(dimensions);
+  }
+}
+
+class _FixedAttachmentImageDimensionProbe
+    implements AttachmentImageDimensionProbe {
+  const _FixedAttachmentImageDimensionProbe(this.dimensions);
+
+  final AttachmentImageDimensions dimensions;
+
+  @override
+  Future<AttachmentImageDimensions?> probe(String localPath) async =>
+      dimensions;
 }
 
 class _StaticConversationListController extends ConversationListController {
@@ -338,6 +371,8 @@ Future<ProviderContainer> _pumpScrollableChatView(
   required ConversationSummary conversation,
   required List<ChatMessage> messages,
   ChatImageWidgetBuilder? imageBuilder,
+  AttachmentImageDimensionProbe? imageDimensionProbe,
+  Size surfaceSize = const Size(390, 640),
 }) async {
   const session = SessionIdentity(
     did: 'did:test:me',
@@ -345,8 +380,17 @@ Future<ProviderContainer> _pumpScrollableChatView(
     displayName: 'Me',
     credentialName: 'default',
   );
-  await tester.binding.setSurfaceSize(const Size(390, 640));
+  await tester.binding.setSurfaceSize(surfaceSize);
   addTearDown(() => tester.binding.setSurfaceSize(null));
+  final previewService = imageDimensionProbe == null
+      ? null
+      : AttachmentPreviewService(
+          cache: FakeAttachmentCacheService(),
+          imageDimensionProbe: imageDimensionProbe,
+        );
+  if (previewService != null) {
+    addTearDown(previewService.dispose);
+  }
   await tester.pumpWidget(
     buildLocalizedTestApp(
       home: CupertinoPageScaffold(
@@ -367,6 +411,8 @@ Future<ProviderContainer> _pumpScrollableChatView(
         ),
         if (imageBuilder != null)
           chatImageWidgetBuilderProvider.overrideWithValue(imageBuilder),
+        if (previewService != null)
+          attachmentPreviewServiceProvider.overrideWithValue(previewService),
       ],
     ),
   );
@@ -2831,7 +2877,189 @@ void main() {
     }
   });
 
-  testWidgets('收到图片逐步解码时外框和列表范围稳定且始终贴住最新底部', (tester) async {
+  testWidgets('内联图片从占位切换到固有比例后只保留最终稳定尺寸', (tester) async {
+    final cases =
+        <
+          ({
+            String id,
+            AttachmentImageDimensions dimensions,
+            double aspectRatio,
+          })
+        >[
+          (
+            id: 'portrait',
+            dimensions: AttachmentImageDimensions(
+              pixelWidth: 9,
+              pixelHeight: 16,
+            ),
+            aspectRatio: 9 / 16,
+          ),
+          (
+            id: 'landscape',
+            dimensions: AttachmentImageDimensions(
+              pixelWidth: 16,
+              pixelHeight: 9,
+            ),
+            aspectRatio: 16 / 9,
+          ),
+          (
+            id: 'square',
+            dimensions: AttachmentImageDimensions(
+              pixelWidth: 1,
+              pixelHeight: 1,
+            ),
+            aspectRatio: 1,
+          ),
+        ];
+
+    for (final testCase in cases) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      final gateway = FakeAwikiGateway();
+      final conversation = _scrollConversation(
+        'dm:inline-ratio-${testCase.id}',
+      );
+      final probe = _ControlledAttachmentImageDimensionProbe();
+      await _pumpScrollableChatView(
+        tester,
+        gateway: gateway,
+        conversation: conversation,
+        messages: <ChatMessage>[
+          _scrollImageMessage(
+            localId: 'ratio-${testCase.id}',
+            threadId: conversation.conversationId,
+            senderDid: 'did:test:alice',
+            receiverDid: 'did:test:me',
+            createdAt: DateTime(2026, 4, 5, 12, 30),
+            isMine: false,
+          ),
+        ],
+        imageDimensionProbe: probe,
+      );
+
+      final envelope = find.byKey(
+        Key('chat-inline-image-envelope:ratio-${testCase.id}'),
+      );
+      final placeholderSize = tester.getSize(envelope);
+      expect(
+        placeholderSize.width / placeholderSize.height,
+        moreOrLessEquals(4 / 3, epsilon: 0.01),
+      );
+
+      probe.complete(testCase.dimensions);
+      await tester.pump();
+      await tester.pump();
+      final finalSize = tester.getSize(envelope);
+      expect(
+        finalSize.width / finalSize.height,
+        moreOrLessEquals(testCase.aspectRatio, epsilon: 0.01),
+      );
+      expect(finalSize.width, lessThanOrEqualTo(360));
+      expect(finalSize.height, lessThanOrEqualTo(360));
+      if (testCase.id == 'portrait') {
+        expect(
+          finalSize.height,
+          moreOrLessEquals(placeholderSize.width, epsilon: 0.5),
+        );
+        expect(finalSize.width, lessThan(210));
+        expect(
+          tester
+              .getSize(
+                find.byKey(const Key('chat-attachment-content:ratio-portrait')),
+              )
+              .width,
+          moreOrLessEquals(finalSize.width, epsilon: 0.5),
+        );
+      } else {
+        expect(
+          finalSize.width,
+          moreOrLessEquals(placeholderSize.width, epsilon: 0.5),
+        );
+      }
+
+      for (var frame = 0; frame < 4; frame += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.getSize(envelope), finalSize);
+      }
+      expect(probe.probeCalls, 1);
+    }
+  });
+
+  testWidgets('内联横图在窄父布局中保持比例并服从可用宽度', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:inline-ratio-constrained');
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[
+        _scrollImageMessage(
+          localId: 'constrained-landscape',
+          threadId: conversation.conversationId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          createdAt: DateTime(2026, 4, 5, 12, 30),
+          isMine: false,
+        ),
+      ],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 16, pixelHeight: 9),
+      ),
+      surfaceSize: const Size(260, 640),
+    );
+
+    final size = tester.getSize(
+      find.byKey(const Key('chat-inline-image-envelope:constrained-landscape')),
+    );
+    expect(size.width, lessThan(260));
+    expect(size.width, lessThan(360));
+    expect(size.width / size.height, moreOrLessEquals(16 / 9, epsilon: 0.01));
+  });
+
+  testWidgets('普通文件卡继续保留最小可操作宽度', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:file-card-min-width');
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[
+        ChatMessage(
+          localId: 'file-card-min-width',
+          remoteId: 'file-card-min-width',
+          conversationId: conversation.conversationId,
+          threadId: conversation.conversationId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          content: '',
+          createdAt: DateTime(2026, 4, 5, 12, 30),
+          isMine: false,
+          sendState: MessageSendState.sent,
+          originalType: 'application/anp-attachment-manifest+json',
+          attachment: const ChatAttachment(
+            attachmentId: 'file-card-min-width',
+            filename: 'a.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 128,
+            localPath: '/test/a.pdf',
+          ),
+        ),
+      ],
+    );
+
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const Key('chat-attachment-content:file-card-min-width'),
+            ),
+          )
+          .width,
+      greaterThanOrEqualTo(210),
+    );
+  });
+
+  testWidgets('收到图片取得固有尺寸时列表修正后始终贴住最新底部', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:scroll-incoming-image');
     final messages = _scrollMessages(
@@ -2841,6 +3069,7 @@ void main() {
       count: 28,
     );
     final imageBuilder = _ControlledChatImageBuilder();
+    final dimensionProbe = _ControlledAttachmentImageDimensionProbe();
     addTearDown(imageBuilder.dispose);
     final container = await _pumpScrollableChatView(
       tester,
@@ -2848,6 +3077,7 @@ void main() {
       conversation: conversation,
       messages: messages,
       imageBuilder: imageBuilder.build,
+      imageDimensionProbe: dimensionProbe,
     );
 
     container
@@ -2875,12 +3105,27 @@ void main() {
       const Key('chat-inline-image-envelope:incoming-dynamic-image'),
     );
     final envelopeSize = tester.getSize(envelope);
+    dimensionProbe.complete(
+      AttachmentImageDimensions(pixelWidth: 9, pixelHeight: 16),
+    );
+    await tester.pump();
+    await tester.pump();
+    final resolvedEnvelopeSize = tester.getSize(envelope);
+    expect(resolvedEnvelopeSize, isNot(envelopeSize));
+    expect(
+      resolvedEnvelopeSize.width / resolvedEnvelopeSize.height,
+      moreOrLessEquals(9 / 16, epsilon: 0.01),
+    );
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
+    );
     final stableMax = _chatScrollMax(tester);
 
     for (final height in <double>[220, 280, 330]) {
       imageBuilder.decodedSize.value = Size(240, height);
       await tester.pump(const Duration(milliseconds: 16));
-      expect(tester.getSize(envelope), envelopeSize);
+      expect(tester.getSize(envelope), resolvedEnvelopeSize);
       expect(_chatScrollMax(tester), moreOrLessEquals(stableMax, epsilon: 0.5));
       expect(
         _chatScrollPixels(tester),
@@ -2889,7 +3134,7 @@ void main() {
 
       for (var frame = 0; frame < 4; frame += 1) {
         await tester.pump(const Duration(milliseconds: 16));
-        expect(tester.getSize(envelope), envelopeSize);
+        expect(tester.getSize(envelope), resolvedEnvelopeSize);
         expect(
           _chatScrollPixels(tester),
           moreOrLessEquals(_chatScrollMax(tester), epsilon: 0.5),
@@ -2898,10 +3143,11 @@ void main() {
     }
   });
 
-  testWidgets('用户离底后图片解码和视口变化保持阅读锚点，手动回底后恢复跟随', (tester) async {
+  testWidgets('用户离底后图片固有尺寸变化保持阅读锚点，手动回底后恢复跟随', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:scroll-image-away');
     final imageBuilder = _ControlledChatImageBuilder(const Size(240, 100));
+    final dimensionProbe = _ControlledAttachmentImageDimensionProbe();
     addTearDown(imageBuilder.dispose);
     final messages = <ChatMessage>[
       ..._scrollMessages(
@@ -2925,6 +3171,7 @@ void main() {
       conversation: conversation,
       messages: messages,
       imageBuilder: imageBuilder.build,
+      imageDimensionProbe: dimensionProbe,
     );
 
     await tester.drag(_chatMessagesListFinder(), const Offset(0, 180));
@@ -2941,15 +3188,36 @@ void main() {
     );
     final envelopeSize = tester.getSize(envelope);
 
+    dimensionProbe.complete(
+      AttachmentImageDimensions(pixelWidth: 9, pixelHeight: 16),
+    );
+    await tester.pump();
+    await tester.pump();
+    final resolvedEnvelopeSize = tester.getSize(envelope);
+    expect(resolvedEnvelopeSize, isNot(envelopeSize));
+    expect(
+      _chatScrollPixels(tester),
+      moreOrLessEquals(readingPixels, epsilon: 0.5),
+    );
+    expect(
+      _messageViewportTop(tester, readingAnchor),
+      moreOrLessEquals(readingAnchorTop, epsilon: 0.5),
+    );
+    final resolvedMax = _chatScrollMax(tester);
+    expect(resolvedMax, greaterThan(stableMax));
+
     for (final height in <double>[200, 300]) {
       imageBuilder.decodedSize.value = Size(240, height);
       await tester.pump();
-      expect(tester.getSize(envelope), envelopeSize);
+      expect(tester.getSize(envelope), resolvedEnvelopeSize);
       expect(
         _chatScrollPixels(tester),
         moreOrLessEquals(readingPixels, epsilon: 0.5),
       );
-      expect(_chatScrollMax(tester), moreOrLessEquals(stableMax, epsilon: 0.5));
+      expect(
+        _chatScrollMax(tester),
+        moreOrLessEquals(resolvedMax, epsilon: 0.5),
+      );
       expect(
         _messageViewportTop(tester, readingAnchor),
         moreOrLessEquals(readingAnchorTop, epsilon: 0.5),
@@ -5198,6 +5466,13 @@ void main() {
       ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
         message,
       ];
+    final previewService = AttachmentPreviewService(
+      cache: FakeAttachmentCacheService(),
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 16, pixelHeight: 9),
+      ),
+    );
+    addTearDown(previewService.dispose);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -5208,6 +5483,7 @@ void main() {
         session: session,
         providerOverrides: <Override>[
           messagingServiceProvider.overrideWithValue(messagingService),
+          attachmentPreviewServiceProvider.overrideWithValue(previewService),
           chatImageWidgetBuilderProvider.overrideWithValue(
             ({
               String? path,
@@ -5228,12 +5504,16 @@ void main() {
     await container
         .read(chatThreadsProvider.notifier)
         .openConversation(conversation);
-    await tester.pump();
+    await tester.pumpAndSettle();
     final envelope = find.byKey(
       const Key('chat-inline-image-envelope:broken-image'),
     );
     expect(envelope, findsOneWidget);
     final envelopeSize = tester.getSize(envelope);
+    expect(
+      envelopeSize.width / envelopeSize.height,
+      moreOrLessEquals(16 / 9, epsilon: 0.01),
+    );
     await tester.pump();
     await tester.pump();
 
@@ -5247,6 +5527,94 @@ void main() {
     );
     expect(tester.getSize(envelope), envelopeSize);
     expect(tester.getSize(fileCard).height, lessThan(envelopeSize.height));
+  });
+
+  testWidgets('极端长竖图仅在解码失败后扩展为可操作紧凑外框', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:extreme-image-fallback');
+    final failImage = ValueNotifier<bool>(false);
+    addTearDown(failImage.dispose);
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[
+        _scrollImageMessage(
+          localId: 'extreme-broken-image',
+          threadId: conversation.conversationId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          createdAt: DateTime(2026, 4, 5, 12, 30),
+          isMine: false,
+        ),
+      ],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 1, pixelHeight: 64),
+      ),
+      imageBuilder:
+          ({
+            String? path,
+            Uint8List? bytes,
+            double? width,
+            double? height,
+            required BoxFit fit,
+            required Widget errorFallback,
+            Widget? framePlaceholder,
+          }) => ValueListenableBuilder<bool>(
+            valueListenable: failImage,
+            builder: (context, failed, child) => failed
+                ? errorFallback
+                : const SizedBox.expand(
+                    child: ColoredBox(color: Color(0xFF0B65F8)),
+                  ),
+          ),
+    );
+
+    final envelope = find.byKey(
+      const Key('chat-inline-image-envelope:extreme-broken-image'),
+    );
+    final readyEnvelopeSize = tester.getSize(envelope);
+    expect(
+      readyEnvelopeSize.width / readyEnvelopeSize.height,
+      moreOrLessEquals(1 / 64, epsilon: 0.001),
+    );
+    expect(readyEnvelopeSize.width, lessThan(44));
+    expect(
+      find.byKey(
+        const Key('chat-inline-image-compact-fallback:extreme-broken-image'),
+      ),
+      findsNothing,
+    );
+
+    failImage.value = true;
+    await tester.pump();
+    await tester.pump();
+    final failedEnvelopeSize = tester.getSize(envelope);
+    expect(failedEnvelopeSize.width, greaterThanOrEqualTo(44));
+    expect(failedEnvelopeSize.height, greaterThanOrEqualTo(44));
+    expect(
+      find.byKey(
+        const Key('chat-inline-image-compact-fallback:extreme-broken-image'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('chat-attachment-file-card:extreme-broken-image')),
+      findsNothing,
+    );
+    final action = find.byKey(
+      const Key('chat-open-attachment:extreme-broken-image'),
+    );
+    expect(action, findsOneWidget);
+    final actionSize = tester.getSize(action);
+    expect(actionSize.width, greaterThanOrEqualTo(44));
+    expect(actionSize.height, greaterThanOrEqualTo(44));
+
+    for (var frame = 0; frame < 4; frame += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.getSize(envelope), failedEnvelopeSize);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('选择附件后输入框保持焦点', (tester) async {

@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
+export 'attachment_image_dimensions.dart' show AttachmentImageDimensions;
+
 import '../domain/entities/chat_message.dart';
 import 'attachment_cache_service.dart';
+import 'attachment_image_dimensions.dart';
 import 'attachment_resource_reference.dart';
 import 'models/attachment_models.dart';
 
@@ -19,28 +22,43 @@ class AttachmentPreviewSnapshot {
   const AttachmentPreviewSnapshot._({
     required this.phase,
     this.path,
+    this.dimensions,
     this.error,
     this.stackTrace,
   });
 
-  const AttachmentPreviewSnapshot.idle()
-    : this._(phase: AttachmentPreviewPhase.idle);
+  const AttachmentPreviewSnapshot.idle({AttachmentImageDimensions? dimensions})
+    : this._(phase: AttachmentPreviewPhase.idle, dimensions: dimensions);
 
-  const AttachmentPreviewSnapshot.loading()
-    : this._(phase: AttachmentPreviewPhase.loading);
+  const AttachmentPreviewSnapshot.loading({
+    AttachmentImageDimensions? dimensions,
+  }) : this._(phase: AttachmentPreviewPhase.loading, dimensions: dimensions);
 
-  const AttachmentPreviewSnapshot.ready(String path)
-    : this._(phase: AttachmentPreviewPhase.ready, path: path);
+  const AttachmentPreviewSnapshot.ready(
+    String path, {
+    AttachmentImageDimensions? dimensions,
+  }) : this._(
+         phase: AttachmentPreviewPhase.ready,
+         path: path,
+         dimensions: dimensions,
+       );
 
-  const AttachmentPreviewSnapshot.failed(Object error, [StackTrace? stackTrace])
-    : this._(
-        phase: AttachmentPreviewPhase.failed,
-        error: error,
-        stackTrace: stackTrace,
-      );
+  const AttachmentPreviewSnapshot.failed(
+    Object error, {
+    String? path,
+    AttachmentImageDimensions? dimensions,
+    StackTrace? stackTrace,
+  }) : this._(
+         phase: AttachmentPreviewPhase.failed,
+         path: path,
+         dimensions: dimensions,
+         error: error,
+         stackTrace: stackTrace,
+       );
 
   final AttachmentPreviewPhase phase;
   final String? path;
+  final AttachmentImageDimensions? dimensions;
   final Object? error;
   final StackTrace? stackTrace;
 }
@@ -68,6 +86,7 @@ class AttachmentPreviewHandle {
   AttachmentPreviewSnapshot _snapshot;
   final StreamController<AttachmentPreviewSnapshot> _changes;
   Future<String>? _inFlight;
+  Future<void>? _dimensionProbeInFlight;
   int _generation = 0;
   String? _sourceLocalPath;
   String? _sourceObjectUri;
@@ -75,6 +94,7 @@ class AttachmentPreviewHandle {
   String? _rejectedDecodePath;
   _AttachmentPreviewOrigin? _rejectedDecodeOrigin;
   bool _bypassExistingCache = false;
+  String? _dimensionProbePath;
 
   bool get _hasListeners => _changes.hasListener;
 
@@ -93,10 +113,14 @@ class AttachmentPreviewHandle {
 }
 
 class AttachmentPreviewService {
-  AttachmentPreviewService({required this.cache, this.maxRetainedEntries = 512})
-    : assert(maxRetainedEntries > 0);
+  AttachmentPreviewService({
+    required this.cache,
+    this.imageDimensionProbe = const NoopAttachmentImageDimensionProbe(),
+    this.maxRetainedEntries = 512,
+  }) : assert(maxRetainedEntries > 0);
 
   final AttachmentCacheService cache;
+  final AttachmentImageDimensionProbe imageDimensionProbe;
 
   /// Maximum inactive handles retained in memory. Handles with listeners or an
   /// active resolution may temporarily exceed this value; completion and the
@@ -136,6 +160,15 @@ class AttachmentPreviewService {
       _reconcileSources(handle, message);
     }
     _entries[identity] = handle;
+    final readyPath = handle.snapshot.path;
+    if (handle.snapshot.phase == AttachmentPreviewPhase.ready &&
+        readyPath != null) {
+      _maybeProbeImageDimensions(
+        handle: handle,
+        message: message,
+        path: readyPath,
+      );
+    }
     _trimEntries(protectedHandle: handle);
     return handle;
   }
@@ -169,7 +202,11 @@ class AttachmentPreviewService {
             _resourceIdentity(rejectedDecodePath);
     if (handle.snapshot.phase != AttachmentPreviewPhase.ready &&
         !preservesRejectedLocalState) {
-      handle._replace(const AttachmentPreviewSnapshot.loading());
+      handle._replace(
+        AttachmentPreviewSnapshot.loading(
+          dimensions: handle.snapshot.dimensions,
+        ),
+      );
     }
 
     late final Future<String> resolution;
@@ -186,7 +223,11 @@ class AttachmentPreviewService {
               onRemoteResolutionStarted: () {
                 if (_isCurrent(handle, generation) &&
                     handle.snapshot.phase != AttachmentPreviewPhase.loading) {
-                  handle._replace(const AttachmentPreviewSnapshot.loading());
+                  handle._replace(
+                    AttachmentPreviewSnapshot.loading(
+                      dimensions: handle.snapshot.dimensions,
+                    ),
+                  );
                 }
               },
             )
@@ -200,19 +241,35 @@ class AttachmentPreviewService {
                           path: resolved.path,
                           origin: resolved.origin,
                         ))) {
+                  final dimensions = handle.snapshot.dimensions;
                   handle
                     .._readyOrigin = resolved.origin
                     .._rejectedDecodePath = null
                     .._rejectedDecodeOrigin = null
                     .._bypassExistingCache = false
-                    .._replace(AttachmentPreviewSnapshot.ready(resolved.path));
+                    .._replace(
+                      AttachmentPreviewSnapshot.ready(
+                        resolved.path,
+                        dimensions: dimensions,
+                      ),
+                    );
+                  _maybeProbeImageDimensions(
+                    handle: handle,
+                    message: message,
+                    path: resolved.path,
+                  );
                 }
                 return resolved.path;
               },
               onError: (Object error, StackTrace stackTrace) {
                 if (_isCurrent(handle, generation)) {
                   handle._replace(
-                    AttachmentPreviewSnapshot.failed(error, stackTrace),
+                    AttachmentPreviewSnapshot.failed(
+                      error,
+                      path: handle.snapshot.path,
+                      dimensions: handle.snapshot.dimensions,
+                      stackTrace: stackTrace,
+                    ),
                   );
                 }
                 Error.throwWithStackTrace(error, stackTrace);
@@ -247,16 +304,25 @@ class AttachmentPreviewService {
         handle._readyOrigin == null) {
       return;
     }
+    final readyOrigin = handle._readyOrigin!;
+    if (readyOrigin != _AttachmentPreviewOrigin.authoritativeLocalSource) {
+      handle
+        .._generation += 1
+        .._inFlight = null
+        .._dimensionProbeInFlight = null
+        .._dimensionProbePath = null;
+    }
     handle
       .._rejectedDecodePath = currentPath
-      .._rejectedDecodeOrigin = handle._readyOrigin
+      .._rejectedDecodeOrigin = readyOrigin
       .._bypassExistingCache =
-          handle._readyOrigin !=
-          _AttachmentPreviewOrigin.authoritativeLocalSource
+          readyOrigin != _AttachmentPreviewOrigin.authoritativeLocalSource
       .._replace(
         AttachmentPreviewSnapshot.failed(
           error ?? AttachmentPreviewDecodeException(path),
-          stackTrace,
+          path: path,
+          dimensions: handle.snapshot.dimensions,
+          stackTrace: stackTrace,
         ),
       );
   }
@@ -431,29 +497,103 @@ class AttachmentPreviewService {
         objectUri == handle._sourceObjectUri) {
       return;
     }
+    if (localPath != null && localPath == handle._sourceLocalPath) {
+      handle._sourceObjectUri = objectUri;
+      return;
+    }
 
+    final provisionalDimensions = handle.snapshot.dimensions;
     handle
       .._sourceLocalPath = localPath
       .._sourceObjectUri = objectUri
       .._generation += 1
       .._inFlight = null
+      .._dimensionProbeInFlight = null
+      .._dimensionProbePath = null
       .._rejectedDecodePath = null
       .._rejectedDecodeOrigin = null;
     if (localPath != null) {
       handle
         .._readyOrigin = _AttachmentPreviewOrigin.authoritativeLocalSource
         .._bypassExistingCache = false
-        .._replace(AttachmentPreviewSnapshot.ready(localPath));
+        .._replace(
+          AttachmentPreviewSnapshot.ready(
+            localPath,
+            dimensions: provisionalDimensions,
+          ),
+        );
     } else {
       handle
         .._readyOrigin = null
         .._bypassExistingCache = true
-        .._replace(const AttachmentPreviewSnapshot.idle());
+        .._replace(
+          AttachmentPreviewSnapshot.idle(dimensions: provisionalDimensions),
+        );
     }
   }
 
   bool _isCurrent(AttachmentPreviewHandle handle, int generation) {
     return !_disposed && handle._generation == generation;
+  }
+
+  void _maybeProbeImageDimensions({
+    required AttachmentPreviewHandle handle,
+    required ChatMessage message,
+    required String path,
+  }) {
+    final attachment = message.attachment;
+    if (_disposed ||
+        attachment == null ||
+        !isSupportedAttachmentPreviewImage(attachment)) {
+      return;
+    }
+    final localPath = AttachmentResourceReference.parse(path).localPath;
+    if (localPath == null) {
+      return;
+    }
+    final pathIdentity = _resourceIdentity(localPath)!;
+    if (_resourceIdentity(handle._dimensionProbePath) == pathIdentity) {
+      return;
+    }
+
+    handle._dimensionProbePath = pathIdentity;
+    final generation = handle._generation;
+    late final Future<void> probe;
+    probe = imageDimensionProbe
+        .probe(localPath)
+        .then<void>((dimensions) {
+          if (dimensions == null ||
+              !_isCurrent(handle, generation) ||
+              _resourceIdentity(handle._dimensionProbePath) != pathIdentity ||
+              _resourceIdentity(handle.snapshot.path) != pathIdentity) {
+            return;
+          }
+          final snapshot = handle.snapshot;
+          if (snapshot.phase == AttachmentPreviewPhase.ready) {
+            handle._replace(
+              AttachmentPreviewSnapshot.ready(
+                snapshot.path!,
+                dimensions: dimensions,
+              ),
+            );
+          } else if (snapshot.phase == AttachmentPreviewPhase.failed) {
+            handle._replace(
+              AttachmentPreviewSnapshot.failed(
+                snapshot.error!,
+                path: snapshot.path,
+                dimensions: dimensions,
+                stackTrace: snapshot.stackTrace,
+              ),
+            );
+          }
+        }, onError: (Object _, StackTrace _) {})
+        .whenComplete(() {
+          if (identical(handle._dimensionProbeInFlight, probe)) {
+            handle._dimensionProbeInFlight = null;
+          }
+          _scheduleTrim();
+        });
+    handle._dimensionProbeInFlight = probe;
   }
 
   void _scheduleTrim() {
@@ -476,6 +616,7 @@ class AttachmentPreviewService {
         final handle = entry.value;
         if (!identical(handle, protectedHandle) &&
             handle._inFlight == null &&
+            handle._dimensionProbeInFlight == null &&
             !handle._hasListeners) {
           evictionKey = entry.key;
           break;

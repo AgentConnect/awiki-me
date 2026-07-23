@@ -25,6 +25,7 @@ import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
+import '../data/services/flutter_attachment_image_dimension_probe.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
@@ -209,6 +210,7 @@ final attachmentPreviewServiceProvider = Provider<AttachmentPreviewService>((
 ) {
   final service = AttachmentPreviewService(
     cache: ref.watch(attachmentCacheServiceProvider),
+    imageDimensionProbe: const FlutterAttachmentImageDimensionProbe(),
   );
   ref.onDispose(service.dispose);
   return service;

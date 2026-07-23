@@ -16,6 +16,7 @@ import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../application/attachment_preview_service.dart';
+import '../../application/attachment_image_dimensions.dart';
 import '../../application/attachment_resource_reference.dart';
 import '../../application/models/attachment_models.dart';
 import '../../core/group_display_name.dart';

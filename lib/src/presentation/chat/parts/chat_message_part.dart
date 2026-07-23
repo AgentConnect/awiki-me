@@ -1500,10 +1500,13 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
       height: 1.25,
     );
     return ConstrainedBox(
+      key: Key('chat-attachment-content:${message.localId}'),
       constraints: BoxConstraints(
-        minWidth: widget.macStyle
-            ? responsive.displayScaled(220)
-            : responsive.scaled(210),
+        minWidth: _previewHandle == null
+            ? (widget.macStyle
+                  ? responsive.displayScaled(220)
+                  : responsive.scaled(210))
+            : 0,
         maxWidth: widget.macStyle
             ? responsive.displayScaled(360)
             : responsive.scaled(420),
@@ -1592,15 +1595,12 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
           );
         } else if (snapshot.phase == AttachmentPreviewPhase.failed) {
           content = _InlineImageFileFallback(
+            message: widget.message,
             macStyle: widget.macStyle,
-            child: _AttachmentFileCard(
-              message: widget.message,
-              macStyle: widget.macStyle,
-              onDownload: widget.onDownload,
-              isDownloading: widget.isDownloading,
-              titleStyle: titleStyle,
-              metaStyle: metaStyle,
-            ),
+            onDownload: widget.onDownload,
+            isDownloading: widget.isDownloading,
+            titleStyle: titleStyle,
+            metaStyle: metaStyle,
           );
         } else {
           content = const _InlineImageLoading();
@@ -1608,6 +1608,9 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
         return _InlineImageEnvelope(
           messageId: widget.message.localId,
           macStyle: widget.macStyle,
+          dimensions: snapshot.dimensions,
+          ensureMinimumInteractiveExtent:
+              snapshot.phase == AttachmentPreviewPhase.failed,
           child: content,
         );
       },
@@ -1616,37 +1619,97 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
 }
 
 const double _inlineImageFallbackAspectRatio = 4 / 3;
+const double _minimumInlineImageFailureExtent = 44;
+
+Size _fitInlineImageEnvelope({
+  required double aspectRatio,
+  required double maxWidth,
+  required double maxHeight,
+}) {
+  assert(aspectRatio > 0 && aspectRatio.isFinite);
+  assert(maxWidth >= 0 && maxWidth.isFinite);
+  assert(maxHeight >= 0 && maxHeight.isFinite);
+  if (maxWidth == 0 || maxHeight == 0) {
+    return Size.zero;
+  }
+  if (maxWidth / maxHeight > aspectRatio) {
+    return Size(maxHeight * aspectRatio, maxHeight);
+  }
+  return Size(maxWidth, maxWidth / aspectRatio);
+}
 
 class _InlineImageEnvelope extends StatelessWidget {
   const _InlineImageEnvelope({
     required this.messageId,
     required this.macStyle,
+    required this.dimensions,
+    required this.ensureMinimumInteractiveExtent,
     required this.child,
   });
 
   final String messageId;
   final bool macStyle;
+  final AttachmentImageDimensions? dimensions;
+  final bool ensureMinimumInteractiveExtent;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final maxWidth = macStyle
+    final preferredMaxExtent = macStyle
         ? responsive.displayScaled(320)
         : responsive.scaled(360);
     final radius = macStyle
         ? responsive.displayScaled(9)
         : responsive.radius(12);
-    return SizedBox(
-      key: Key('chat-inline-image-envelope:$messageId'),
-      width: maxWidth,
-      child: AspectRatio(
-        aspectRatio: _inlineImageFallbackAspectRatio,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          child: ColoredBox(color: const Color(0xFFF1F4F8), child: child),
-        ),
-      ),
+    final intrinsicAspectRatio = dimensions == null
+        ? _inlineImageFallbackAspectRatio
+        : dimensions!.pixelWidth / dimensions!.pixelHeight;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : preferredMaxExtent;
+        final maxExtent = availableWidth < preferredMaxExtent
+            ? availableWidth
+            : preferredMaxExtent;
+        final availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : preferredMaxExtent;
+        final maxHeight = availableHeight < preferredMaxExtent
+            ? availableHeight
+            : preferredMaxExtent;
+        final fittedSize = _fitInlineImageEnvelope(
+          aspectRatio: intrinsicAspectRatio,
+          maxWidth: maxExtent,
+          maxHeight: maxHeight,
+        );
+        final minimumWidth = maxExtent < _minimumInlineImageFailureExtent
+            ? maxExtent
+            : _minimumInlineImageFailureExtent;
+        final minimumHeight = maxHeight < _minimumInlineImageFailureExtent
+            ? maxHeight
+            : _minimumInlineImageFailureExtent;
+        final size = ensureMinimumInteractiveExtent
+            ? Size(
+                fittedSize.width < minimumWidth
+                    ? minimumWidth
+                    : fittedSize.width,
+                fittedSize.height < minimumHeight
+                    ? minimumHeight
+                    : fittedSize.height,
+              )
+            : fittedSize;
+        return SizedBox(
+          key: Key('chat-inline-image-envelope:$messageId'),
+          width: size.width,
+          height: size.height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: ColoredBox(color: const Color(0xFFF1F4F8), child: child),
+          ),
+        );
+      },
     );
   }
 }
@@ -1664,23 +1727,87 @@ class _InlineImageLoading extends StatelessWidget {
 }
 
 class _InlineImageFileFallback extends StatelessWidget {
-  const _InlineImageFileFallback({required this.macStyle, required this.child});
+  const _InlineImageFileFallback({
+    required this.message,
+    required this.macStyle,
+    required this.onDownload,
+    required this.isDownloading,
+    required this.titleStyle,
+    required this.metaStyle,
+  });
 
+  final ChatMessage message;
   final bool macStyle;
-  final Widget child;
+  final Future<void> Function()? onDownload;
+  final bool isDownloading;
+  final TextStyle titleStyle;
+  final TextStyle metaStyle;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return SizedBox.expand(
-      child: Center(
-        child: Padding(
-          padding: EdgeInsets.all(
-            macStyle ? responsive.displayScaled(12) : responsive.spacing(12),
-          ),
-          child: child,
-        ),
-      ),
+    final padding = macStyle
+        ? responsive.displayScaled(12)
+        : responsive.spacing(12);
+    final minimumCardWidth = macStyle
+        ? responsive.displayScaled(220)
+        : responsive.scaled(210);
+    final minimumCardHeight = macStyle
+        ? responsive.displayScaled(38)
+        : responsive.scaled(40);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final canShowFullCard =
+            constraints.maxWidth >= minimumCardWidth + padding * 2 &&
+            constraints.maxHeight >= minimumCardHeight + padding * 2;
+        if (canShowFullCard) {
+          return SizedBox.expand(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(padding),
+                child: _AttachmentFileCard(
+                  message: message,
+                  macStyle: macStyle,
+                  onDownload: onDownload,
+                  isDownloading: isDownloading,
+                  titleStyle: titleStyle,
+                  metaStyle: metaStyle,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final open = onDownload;
+        final compactContent = open == null
+            ? Semantics(
+                image: true,
+                label: localizeAttachmentName(
+                  context.l10n,
+                  message.attachment!,
+                ),
+                child: Icon(
+                  CupertinoIcons.doc_fill,
+                  color: macStyle
+                      ? const Color(0xFF0B65F8)
+                      : context.awikiTheme.primary,
+                  size: macStyle
+                      ? responsive.displayScaled(20)
+                      : responsive.iconSm,
+                ),
+              )
+            : _AttachmentActionButton(
+                key: Key('chat-open-attachment:${message.localId}'),
+                macStyle: macStyle,
+                isLoading: isDownloading,
+                onTap: open,
+                sizeOverride: _minimumInlineImageFailureExtent,
+              );
+        return SizedBox.expand(
+          key: Key('chat-inline-image-compact-fallback:${message.localId}'),
+          child: FittedBox(fit: BoxFit.scaleDown, child: compactContent),
+        );
+      },
     );
   }
 }
@@ -1868,10 +1995,7 @@ class _AttachmentFileCard extends StatelessWidget {
 }
 
 bool _isInlineImageAttachment(ChatAttachment attachment) {
-  return _isSupportedInlineImage(
-    mimeType: attachment.mimeType,
-    filename: attachment.filename,
-  );
+  return isSupportedAttachmentPreviewImage(attachment);
 }
 
 bool _isSupportedInlineImage({
@@ -2244,19 +2368,21 @@ class _AttachmentActionButton extends StatelessWidget {
     required this.macStyle,
     required this.isLoading,
     required this.onTap,
+    this.sizeOverride,
   });
 
   final bool macStyle;
   final bool isLoading;
   final Future<void> Function() onTap;
+  final double? sizeOverride;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final size = macStyle
-        ? responsive.displayScaled(32)
-        : responsive.scaled(34);
+    final size =
+        sizeOverride ??
+        (macStyle ? responsive.displayScaled(32) : responsive.scaled(34));
     return AppIconButton(
       onPressed: isLoading ? null : () async => onTap(),
       semanticLabel: context.l10n.chatViewAttachment,
