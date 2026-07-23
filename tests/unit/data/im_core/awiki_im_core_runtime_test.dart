@@ -42,7 +42,6 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: vaultProvider,
-      multiDeviceRootTransferEnabled: true,
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
@@ -98,7 +97,6 @@ void main() {
               openOptions?.identitySecretVault?.rootKey.bytes,
               List<int>.filled(32, 7),
             );
-            expect(openOptions?.multiDeviceRootTransferEnabled, isTrue);
             expect(openOptions?.multiDeviceDeviceRevokeEnabled, isTrue);
             expect(openOptions?.multiDeviceDirectE2eeEnabled, isTrue);
             expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);

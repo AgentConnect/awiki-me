@@ -42,9 +42,6 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     final state = ref.watch(devicesProvider);
     final registry = state.registry;
     final canManage = state.currentDeviceCanManage;
-    final rootTransferEnabled = ref.watch(
-      multiDeviceRootTransferEnabledProvider,
-    );
     final deviceRevokeEnabled = ref.watch(
       multiDeviceDeviceRevokeEnabledProvider,
     );
@@ -76,19 +73,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
             ),
             const SizedBox(height: 16),
-            if (state.error ==
-                DeviceManagementErrorKind
-                    .sessionEstablishmentPending) ...<Widget>[
-              AppSurface(
-                color: context.awikiTheme.subtleSurface,
-                child: Text(
-                  deviceManagementErrorLabel(context.l10n, state.error!),
-                  key: const Key('devices-root-session-pending'),
-                  style: TextStyle(color: context.awikiTheme.infoAccent),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ] else if (state.error != null) ...<Widget>[
+            if (state.error != null) ...<Widget>[
               AppSurface(
                 color: context.awikiTheme.dangerContainer,
                 child: Text(
@@ -120,30 +105,11 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                             readiness: state.readinessFor(
                               registry.devices[index],
                             ),
-                            sessionEstablishmentPending: state
-                                .isRootSessionEstablishing(
-                                  registry.devices[index],
-                                ),
-                            rootTransferEnabled: rootTransferEnabled,
-                            canStartRootTransfer: state.canStartRootTransfer(
-                              registry.devices[index],
-                            ),
-                            canRetryRootTransfer: state.canRetryRootTransfer(
-                              registry.devices[index],
-                            ),
                             revokeEnabled: deviceRevokeEnabled,
                             canRevoke: state.canRevokeDevice(
                               registry.devices[index],
                             ),
                             isActionPending: state.isActionPending,
-                            onRootTransfer: () => ref
-                                .read(devicesProvider.notifier)
-                                .startOrRetryRootTransfer(
-                                  recipient: registry.devices[index],
-                                  presenceReason: context
-                                      .l10n
-                                      .deviceRootTransferPresenceReason,
-                                ),
                             onRevoke: () =>
                                 _confirmDeviceRevoke(registry.devices[index]),
                           ),
@@ -275,40 +241,26 @@ class _DeviceTile extends StatelessWidget {
   const _DeviceTile({
     required this.device,
     required this.readiness,
-    required this.sessionEstablishmentPending,
-    required this.rootTransferEnabled,
-    required this.canStartRootTransfer,
-    required this.canRetryRootTransfer,
     required this.revokeEnabled,
     required this.canRevoke,
     required this.isActionPending,
-    required this.onRootTransfer,
     required this.onRevoke,
   });
 
   final DeviceSummary device;
   final DeviceManagementReadiness? readiness;
-  final bool sessionEstablishmentPending;
-  final bool rootTransferEnabled;
-  final bool canStartRootTransfer;
-  final bool canRetryRootTransfer;
   final bool revokeEnabled;
   final bool canRevoke;
   final bool isActionPending;
-  final VoidCallback onRootTransfer;
   final VoidCallback onRevoke;
 
   @override
   Widget build(BuildContext context) {
     final role = deviceRoleLabel(context.l10n, device.role);
     final status = deviceStatusLabel(context.l10n, device.status);
-    final readinessLabel = sessionEstablishmentPending
-        ? context.l10n.deviceRootTransferSessionPending
-        : readiness == null
+    final readinessLabel = readiness == null
         ? null
         : deviceManagementReadinessLabel(context.l10n, readiness!);
-    final canTransferRoot =
-        rootTransferEnabled && (canStartRootTransfer || canRetryRootTransfer);
     return AppListTile(
       title: device.isCurrent
           ? '${device.protocolDeviceId} · ${context.l10n.deviceCurrent}'
@@ -318,26 +270,10 @@ class _DeviceTile extends StatelessWidget {
         status,
         if (readinessLabel != null) readinessLabel,
       ].join(' · '),
-      trailing: canTransferRoot || (revokeEnabled && canRevoke)
+      trailing: revokeEnabled && canRevoke
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                if (canTransferRoot)
-                  CupertinoButton(
-                    key: Key('root-transfer-${device.protocolDeviceId}'),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    onPressed: isActionPending ? null : onRootTransfer,
-                    child: Text(
-                      sessionEstablishmentPending
-                          ? context.l10n.deviceRootTransferContinue
-                          : canStartRootTransfer
-                          ? context.l10n.deviceRootTransferStart
-                          : context.l10n.deviceRootTransferRetry,
-                    ),
-                  ),
                 if (revokeEnabled && canRevoke)
                   CupertinoButton(
                     key: Key('device-revoke-${device.protocolDeviceId}'),

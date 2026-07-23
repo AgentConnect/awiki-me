@@ -1,18 +1,20 @@
-// [INPUT]: A safe IM Core root-transfer port and platform user-presence confirmation.
-// [OUTPUT]: Validated restart-safe progress, delivery acceptance, or a stable secret-free error code.
-// [POS]: High-risk application policy for listing, starting, and retrying management-device root import.
+// [INPUT]: Current Join target, safe Core preparation, and one platform user-presence confirmation.
+// [OUTPUT]: Validated exact-device preparation or secret-free delivery acceptance.
+// [POS]: Application policy for the single-recipient post-Join root transfer.
 
 import '../domain/entities/device_management.dart';
 import 'ports/root_key_transfer_port.dart';
 import 'ports/user_presence_port.dart';
 
 class RootKeyTransferException implements Exception {
-  const RootKeyTransferException(this.code);
+  const RootKeyTransferException(this.code, {this.retryable = false});
 
   final String code;
+  final bool retryable;
 
   @override
-  String toString() => 'RootKeyTransferException($code)';
+  String toString() =>
+      'RootKeyTransferException(code: $code, retryable: $retryable)';
 }
 
 class RootKeyTransferService {
@@ -25,108 +27,97 @@ class RootKeyTransferService {
   final RootKeyTransferPort _transfer;
   final UserPresencePort _userPresence;
 
-  Future<List<RootKeyTransferSummary>> list({
-    required String selector,
-    bool includeCompleted = true,
+  Future<RootKeyTransferPreparation> prepare({
+    required String expectedDid,
+    required DeviceSummary recipient,
   }) async {
-    final normalizedSelector = _required(selector, 'selector');
-    final summaries = await _transfer.listRootKeyTransfers(
-      selector: normalizedSelector,
-      includeCompleted: includeCompleted,
+    _validateRecipientEligibility(recipient);
+    final preparation = await _transfer.prepare(
+      recipientDeviceId: recipient.protocolDeviceId,
     );
-    final messageIds = <String>{};
-    for (final summary in summaries) {
-      _validateSummary(summary, selector: normalizedSelector);
-      if (!messageIds.add(summary.messageId)) {
-        throw const RootKeyTransferException(
-          'root_transfer_duplicate_message_id',
-        );
-      }
+    final target = preparation.recipient;
+    if (target.did != _required(expectedDid) ||
+        target.deviceId != recipient.protocolDeviceId ||
+        target.signingKeyId != recipient.signingKeyId ||
+        target.e2eeKeyId != recipient.e2eeKeyId ||
+        target.registryVersion < 1) {
+      throw const RootKeyTransferException(
+        'root_transfer.state_changed',
+        retryable: true,
+      );
     }
-    return List<RootKeyTransferSummary>.unmodifiable(summaries);
+    return preparation;
   }
 
-  Future<RootKeyTransferReceipt> start({
-    required String selector,
-    required String recipientDeviceId,
-    required String messageId,
+  Future<RootKeyTransferReceipt> confirmAndSend({
+    required String expectedDid,
+    required DeviceSummary sender,
+    required RootKeyTransferPreparation preparation,
     required String presenceReason,
+    required bool Function() contextStillValid,
   }) async {
-    final normalizedSelector = _required(selector, 'selector');
-    final normalizedRecipient = _required(
-      recipientDeviceId,
-      'recipient_device_id',
-    );
-    final normalizedMessageId = _required(messageId, 'message_id');
+    if (!sender.isCurrent || !sender.canManageDevices) {
+      throw const RootKeyTransferException('root_transfer.sender_not_eligible');
+    }
     final confirmed = await _userPresence.confirm(
-      reason: _required(presenceReason, 'presence_reason'),
+      reason: _required(presenceReason),
+    );
+    if (confirmed && !contextStillValid()) {
+      await discard(preparation);
+      throw const RootKeyTransferException(
+        'root_transfer.state_changed',
+        retryable: true,
+      );
+    }
+    final receipt = await _transfer.confirmAndSend(
+      authorizationHandle: preparation.authorizationHandle,
+      userPresenceConfirmed: confirmed,
     );
     if (!confirmed) {
-      throw const RootKeyTransferException('user_presence_denied');
+      throw const RootKeyTransferException(
+        'root_transfer.user_presence_denied',
+      );
     }
-
-    final receipt = await _transfer.sendRootKeyTransfer(
-      selector: normalizedSelector,
-      recipientDeviceId: normalizedRecipient,
-      messageId: normalizedMessageId,
-      userPresenceConfirmed: true,
-    );
-    if (receipt.did.trim().isEmpty ||
-        receipt.senderDeviceId.trim().isEmpty ||
-        (_isDid(normalizedSelector) && receipt.did != normalizedSelector) ||
-        receipt.recipientDeviceId != normalizedRecipient ||
-        receipt.messageId != normalizedMessageId) {
-      throw const RootKeyTransferException('root_transfer_response_mismatch');
+    if (receipt.did != _required(expectedDid) ||
+        receipt.senderDeviceId != sender.protocolDeviceId ||
+        receipt.recipientDeviceId != preparation.recipient.deviceId ||
+        receipt.messageId.trim().isEmpty) {
+      throw const RootKeyTransferException(
+        'root_transfer.state_changed',
+        retryable: true,
+      );
     }
     return receipt;
   }
 
-  Future<RootKeyTransferSummary> retry({
-    required String selector,
-    required String messageId,
-    required String presenceReason,
-  }) async {
-    final normalizedSelector = _required(selector, 'selector');
-    final normalizedMessageId = _required(messageId, 'message_id');
-    final confirmed = await _userPresence.confirm(
-      reason: _required(presenceReason, 'presence_reason'),
-    );
-    if (!confirmed) {
-      throw const RootKeyTransferException('user_presence_denied');
+  Future<void> discard(RootKeyTransferPreparation preparation) async {
+    try {
+      await _transfer.confirmAndSend(
+        authorizationHandle: preparation.authorizationHandle,
+        userPresenceConfirmed: false,
+      );
+    } on Object {
+      // Discard is best-effort. The App drops its only handle reference even
+      // when Core has already consumed or expired the authorization.
     }
-
-    final summary = await _transfer.retryRootKeyTransfer(
-      selector: normalizedSelector,
-      messageId: normalizedMessageId,
-      userPresenceConfirmed: true,
-    );
-    _validateSummary(summary, selector: normalizedSelector);
-    if (summary.messageId != normalizedMessageId) {
-      throw const RootKeyTransferException('root_transfer_response_mismatch');
-    }
-    return summary;
   }
 }
 
-void _validateSummary(
-  RootKeyTransferSummary summary, {
-  required String selector,
-}) {
-  if (summary.did.trim().isEmpty ||
-      summary.senderDeviceId.trim().isEmpty ||
-      summary.recipientDeviceId.trim().isEmpty ||
-      summary.messageId.trim().isEmpty ||
-      (_isDid(selector) && summary.did != selector)) {
-    throw const RootKeyTransferException('root_transfer_response_mismatch');
+void _validateRecipientEligibility(DeviceSummary recipient) {
+  if (recipient.isCurrent ||
+      recipient.status != DeviceStatus.active ||
+      recipient.role != DeviceRole.member ||
+      recipient.managementReady) {
+    throw const RootKeyTransferException(
+      'root_transfer.recipient_not_eligible',
+    );
   }
 }
 
-bool _isDid(String selector) => selector.startsWith('did:');
-
-String _required(String value, String field) {
+String _required(String value) {
   final normalized = value.trim();
   if (normalized.isEmpty) {
-    throw RootKeyTransferException('invalid_$field');
+    throw const RootKeyTransferException('root_transfer.invalid_request');
   }
   return normalized;
 }

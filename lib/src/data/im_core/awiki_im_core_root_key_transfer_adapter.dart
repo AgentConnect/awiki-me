@@ -1,6 +1,6 @@
-// [INPUT]: AWiki Me identity/device/message identifiers and host user-presence assertions for mutations.
-// [OUTPUT]: Secret-free IM Core delivery metadata and restart-safe transfer summaries.
-// [POS]: Thin Dart adapter; root bytes and encrypted control JSON never cross this file boundary.
+// [INPUT]: Current identity-scoped client, exact recipient, opaque handle, and host presence.
+// [OUTPUT]: Secret-free preparation/acceptance or closed public error.
+// [POS]: Thin Dart adapter; root bytes and protocol internals remain inside Core.
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
@@ -8,109 +8,152 @@ import '../../application/ports/root_key_transfer_port.dart';
 import '../../domain/entities/device_management.dart';
 import 'awiki_im_core_runtime.dart';
 
-typedef AwikiImCoreRootInstance = Future<core.AwikiImCore> Function();
-
-typedef AwikiImCoreSendRootKeyTransfer =
-    Future<core.RootKeyTransferSendResult> Function({
-      required core.IdentitySelector selector,
+typedef AwikiImCorePrepareRootKeyTransfer =
+    Future<core.RootKeyTransferPreparation> Function({
       required String recipientDeviceId,
-      required String messageId,
+    });
+
+typedef AwikiImCoreConfirmRootKeyTransfer =
+    Future<core.RootKeyTransferSendResult> Function({
+      required core.RootKeyTransferAuthorizationHandle authorizationHandle,
       required bool userPresenceConfirmed,
     });
 
-typedef AwikiImCoreListRootKeyTransfers =
-    Future<List<core.RootKeyTransferSummary>> Function({
-      required core.IdentitySelector selector,
-      required bool includeCompleted,
+typedef AwikiImCoreCurrentClientAuthority = Future<Object> Function();
+
+typedef _PrepareScopedRootKeyTransfer =
+    Future<_ScopedRootKeyTransferPreparation> Function({
+      required String recipientDeviceId,
     });
 
-typedef AwikiImCoreRetryRootKeyTransfer =
-    Future<core.RootKeyTransferSummary> Function({
-      required core.IdentitySelector selector,
-      required String messageId,
+typedef _ConfirmScopedRootKeyTransfer =
+    Future<core.RootKeyTransferSendResult> Function({
+      required core.RootKeyTransferAuthorizationHandle authorizationHandle,
       required bool userPresenceConfirmed,
+      required Object expectedAuthority,
     });
 
 class AwikiImCoreRootKeyTransferAdapter implements RootKeyTransferPort {
   AwikiImCoreRootKeyTransferAdapter({required AwikiImCoreRuntime runtime})
-    : this.withCoreInstance(coreInstance: runtime.coreInstance);
+    : _prepare = (({required recipientDeviceId}) {
+        return runtime.withCurrentClient((client) async {
+          final result = await client.rootKeyTransfer.prepare(
+            recipientDeviceId: recipientDeviceId,
+          );
+          return _ScopedRootKeyTransferPreparation(
+            result: result,
+            authority: client,
+          );
+        });
+      }),
+      _confirmAndSend =
+          (({
+            required authorizationHandle,
+            required userPresenceConfirmed,
+            required expectedAuthority,
+          }) {
+            return runtime.withCurrentClient((client) {
+              if (!identical(client, expectedAuthority)) {
+                throw const RootKeyTransferPortException(
+                  code: 'root_transfer.state_changed',
+                  retryable: true,
+                );
+              }
+              return client.rootKeyTransfer.confirmAndSend(
+                authorizationHandle: authorizationHandle,
+                userPresenceConfirmed: userPresenceConfirmed,
+              );
+            });
+          });
 
-  AwikiImCoreRootKeyTransferAdapter.withCoreInstance({
-    required AwikiImCoreRootInstance coreInstance,
-    AwikiImCoreSendRootKeyTransfer? sendRootKeyTransfer,
-    AwikiImCoreListRootKeyTransfers? listRootKeyTransfers,
-    AwikiImCoreRetryRootKeyTransfer? retryRootKeyTransfer,
-  }) : _sendRootKeyTransfer =
-           sendRootKeyTransfer ??
-           (({
-             required selector,
-             required recipientDeviceId,
-             required messageId,
-             required userPresenceConfirmed,
-           }) async {
-             final instance = await coreInstance();
-             return instance.sendRootKeyTransfer(
-               selector: selector,
-               recipientDeviceId: recipientDeviceId,
-               messageId: messageId,
-               userPresenceConfirmed: userPresenceConfirmed,
-             );
-           }),
-       _listRootKeyTransfers =
-           listRootKeyTransfers ??
-           (({required selector, required includeCompleted}) async {
-             final instance = await coreInstance();
-             return instance.listRootKeyTransfers(
-               selector: selector,
-               includeCompleted: includeCompleted,
-             );
-           }),
-       _retryRootKeyTransfer =
-           retryRootKeyTransfer ??
-           (({
-             required selector,
-             required messageId,
-             required userPresenceConfirmed,
-           }) async {
-             final instance = await coreInstance();
-             return instance.retryRootKeyTransfer(
-               selector: selector,
-               messageId: messageId,
-               userPresenceConfirmed: userPresenceConfirmed,
-             );
-           });
+  factory AwikiImCoreRootKeyTransferAdapter.withOperations({
+    required AwikiImCorePrepareRootKeyTransfer prepare,
+    required AwikiImCoreConfirmRootKeyTransfer confirmAndSend,
+    AwikiImCoreCurrentClientAuthority? currentClientAuthority,
+  }) {
+    final stableAuthority = Object();
+    Future<Object> resolveAuthority() async => currentClientAuthority == null
+        ? stableAuthority
+        : currentClientAuthority();
+    return AwikiImCoreRootKeyTransferAdapter._(
+      prepare: ({required recipientDeviceId}) async {
+        final authority = await resolveAuthority();
+        final result = await prepare(recipientDeviceId: recipientDeviceId);
+        return _ScopedRootKeyTransferPreparation(
+          result: result,
+          authority: authority,
+        );
+      },
+      confirmAndSend:
+          ({
+            required authorizationHandle,
+            required userPresenceConfirmed,
+            required expectedAuthority,
+          }) async {
+            final currentAuthority = await resolveAuthority();
+            if (!identical(currentAuthority, expectedAuthority)) {
+              throw const RootKeyTransferPortException(
+                code: 'root_transfer.state_changed',
+                retryable: true,
+              );
+            }
+            return confirmAndSend(
+              authorizationHandle: authorizationHandle,
+              userPresenceConfirmed: userPresenceConfirmed,
+            );
+          },
+    );
+  }
 
-  final AwikiImCoreSendRootKeyTransfer _sendRootKeyTransfer;
-  final AwikiImCoreListRootKeyTransfers _listRootKeyTransfers;
-  final AwikiImCoreRetryRootKeyTransfer _retryRootKeyTransfer;
+  AwikiImCoreRootKeyTransferAdapter._({
+    required _PrepareScopedRootKeyTransfer prepare,
+    required _ConfirmScopedRootKeyTransfer confirmAndSend,
+  }) : _prepare = prepare,
+       _confirmAndSend = confirmAndSend;
+
+  final _PrepareScopedRootKeyTransfer _prepare;
+  final _ConfirmScopedRootKeyTransfer _confirmAndSend;
 
   @override
-  Future<List<RootKeyTransferSummary>> listRootKeyTransfers({
-    required String selector,
-    required bool includeCompleted,
+  Future<RootKeyTransferPreparation> prepare({
+    required String recipientDeviceId,
   }) async {
-    final summaries = await _redactedCoreCall(
-      () => _listRootKeyTransfers(
-        selector: _identitySelector(selector),
-        includeCompleted: includeCompleted,
-      ),
+    final scoped = await _redactedCoreCall(
+      () => _prepare(recipientDeviceId: recipientDeviceId),
     );
-    return summaries.map(_summary).toList(growable: false);
+    final result = scoped.result;
+    return RootKeyTransferPreparation(
+      authorizationHandle: _CoreRootKeyTransferAuthorizationHandle(
+        result.authorizationHandle,
+        scoped.authority,
+      ),
+      recipient: RootKeyTransferRecipientSummary(
+        did: result.recipient.did,
+        deviceId: result.recipient.deviceId,
+        signingKeyId: result.recipient.signingKeyId,
+        e2eeKeyId: result.recipient.e2eeKeyId,
+        registryVersion: result.recipient.registryVersion,
+      ),
+      expiresAt: _timestamp(result.expiresAt),
+    );
   }
 
   @override
-  Future<RootKeyTransferReceipt> sendRootKeyTransfer({
-    required String selector,
-    required String recipientDeviceId,
-    required String messageId,
+  Future<RootKeyTransferReceipt> confirmAndSend({
+    required RootKeyTransferAuthorizationHandle authorizationHandle,
     required bool userPresenceConfirmed,
   }) async {
+    if (authorizationHandle is! _CoreRootKeyTransferAuthorizationHandle) {
+      throw const RootKeyTransferPortException(
+        code: 'root_transfer.authorization_invalid',
+        retryable: false,
+      );
+    }
     final result = await _redactedCoreCall(
-      () => _sendRootKeyTransfer(
-        selector: _identitySelector(selector),
-        recipientDeviceId: recipientDeviceId,
-        messageId: messageId,
+      () => _confirmAndSend(
+        authorizationHandle: authorizationHandle.value,
         userPresenceConfirmed: userPresenceConfirmed,
+        expectedAuthority: authorizationHandle.authority,
       ),
     );
     return RootKeyTransferReceipt(
@@ -121,88 +164,54 @@ class AwikiImCoreRootKeyTransferAdapter implements RootKeyTransferPort {
       acceptedAt: _timestamp(result.acceptedAt),
     );
   }
+}
+
+class _CoreRootKeyTransferAuthorizationHandle
+    implements RootKeyTransferAuthorizationHandle {
+  const _CoreRootKeyTransferAuthorizationHandle(this.value, this.authority);
+
+  final core.RootKeyTransferAuthorizationHandle value;
+  final Object authority;
 
   @override
-  Future<RootKeyTransferSummary> retryRootKeyTransfer({
-    required String selector,
-    required String messageId,
-    required bool userPresenceConfirmed,
-  }) async {
-    final summary = await _redactedCoreCall(
-      () => _retryRootKeyTransfer(
-        selector: _identitySelector(selector),
-        messageId: messageId,
-        userPresenceConfirmed: userPresenceConfirmed,
-      ),
-    );
-    return _summary(summary);
-  }
+  String toString() => 'RootKeyTransferAuthorizationHandle(<redacted>)';
 }
 
-RootKeyTransferSummary _summary(core.RootKeyTransferSummary value) {
-  return RootKeyTransferSummary(
-    did: value.did,
-    senderDeviceId: value.senderDeviceId,
-    recipientDeviceId: value.recipientDeviceId,
-    messageId: value.messageId,
-    status: switch (value.status) {
-      core.RootKeyTransferStatus.pendingDelivery =>
-        RootKeyTransferStatus.pendingDelivery,
-      core.RootKeyTransferStatus.awaitingImport =>
-        RootKeyTransferStatus.awaitingImport,
-      core.RootKeyTransferStatus.importing => RootKeyTransferStatus.importing,
-      core.RootKeyTransferStatus.failed => RootKeyTransferStatus.failed,
-      core.RootKeyTransferStatus.completed => RootKeyTransferStatus.completed,
-    },
-    createdAt: _timestamp(value.createdAt),
-    acceptedAt: _optionalTimestamp(value.acceptedAt),
-    completedAt: _optionalTimestamp(value.completedAt),
-    retryable: value.retryable,
-  );
-}
+class _ScopedRootKeyTransferPreparation {
+  const _ScopedRootKeyTransferPreparation({
+    required this.result,
+    required this.authority,
+  });
 
-core.IdentitySelector _identitySelector(String value) {
-  final selector = value.trim();
-  if (selector.isEmpty) {
-    throw const FormatException('invalid_identity_selector');
-  }
-  if (selector == 'default') {
-    return const core.IdentitySelector.defaultIdentity();
-  }
-  if (selector.startsWith('did:')) {
-    return core.IdentitySelector.did(selector);
-  }
-  if (selector.startsWith('@')) {
-    return core.IdentitySelector.localAlias(selector.substring(1));
-  }
-  if (selector.contains('.')) {
-    return core.IdentitySelector.handle(selector);
-  }
-  return core.IdentitySelector.id(selector);
+  final core.RootKeyTransferPreparation result;
+  final Object authority;
 }
 
 DateTime _timestamp(String value) {
   try {
     return DateTime.parse(value);
   } on FormatException {
-    throw const FormatException('invalid_root_transfer_timestamp');
+    throw const RootKeyTransferPortException(
+      code: 'root_transfer.temporarily_unavailable',
+      retryable: true,
+    );
   }
 }
-
-DateTime? _optionalTimestamp(String? value) =>
-    value == null ? null : _timestamp(value);
 
 Future<T> _redactedCoreCall<T>(Future<T> Function() action) async {
   try {
     return await action();
-  } on core.AwikiImCoreException catch (error) {
+  } on core.RootKeyTransferException catch (error) {
     throw RootKeyTransferPortException(
       code: error.code,
-      capability:
-          error.capability ==
-              rootKeyTransferSessionEstablishmentPendingCapability
-          ? error.capability
-          : null,
+      retryable: error.retryable,
+    );
+  } on RootKeyTransferPortException {
+    rethrow;
+  } on Object {
+    throw const RootKeyTransferPortException(
+      code: 'root_transfer.temporarily_unavailable',
+      retryable: true,
     );
   }
 }

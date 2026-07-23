@@ -88,11 +88,6 @@ final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
   ),
 );
 
-final multiDeviceRootTransferEnabledProvider = Provider<bool>(
-  (ref) =>
-      ref.watch(awikiEnvironmentConfigProvider).multiDeviceRootTransferEnabled,
-);
-
 final multiDeviceDeviceRevokeEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceDeviceRevokeEnabled,

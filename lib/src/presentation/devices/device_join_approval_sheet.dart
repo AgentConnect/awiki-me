@@ -152,10 +152,7 @@ class _DeviceJoinApprovalSheetState
                   ],
                   const SizedBox(height: 20),
                   if (terminal)
-                    AppPrimaryButton(
-                      label: context.l10n.commonDone,
-                      onPressed: () => Navigator.of(context).maybePop(),
-                    )
+                    _buildTerminalAction(state: state, progress: progress)
                   else if (request.claimedByOther)
                     AppSecondaryButton(
                       label: context.l10n.commonDone,
@@ -236,6 +233,116 @@ class _DeviceJoinApprovalSheetState
     if (approved && mounted) {
       setState(() => _sasMatches = false);
     }
+  }
+
+  Widget _buildTerminalAction({
+    required DevicesState state,
+    required DeviceJoinProgress? progress,
+  }) {
+    final recipient = progress?.authorizedDevice;
+    final sender = state.registry?.currentDevice;
+    final eligible =
+        progress?.side == DeviceJoinSide.admin &&
+        progress?.phase == DeviceJoinPhase.authorized &&
+        recipient != null &&
+        recipient.protocolDeviceId == progress!.protocolDeviceId &&
+        recipient.status == DeviceStatus.active &&
+        recipient.role == DeviceRole.member &&
+        !recipient.managementReady &&
+        !recipient.isCurrent &&
+        sender?.canManageDevices == true &&
+        sender!.protocolDeviceId != recipient.protocolDeviceId;
+    if (!eligible) {
+      return AppPrimaryButton(
+        label: context.l10n.commonDone,
+        onPressed: () => Navigator.of(context).maybePop(),
+      );
+    }
+
+    final expectedContext = RootKeyTransferContext(
+      joinSessionId: progress.joinSessionId,
+      did: progress.did,
+      recipientDeviceId: recipient.protocolDeviceId,
+      recipientSigningKeyId: recipient.signingKeyId,
+      recipientE2eeKeyId: recipient.e2eeKeyId,
+    );
+    final transfer = state.rootTransfer.context == expectedContext
+        ? state.rootTransfer
+        : const RootKeyTransferUiState();
+    return switch (transfer.phase) {
+      RootKeyTransferPhase.idle => AppPrimaryButton(
+        key: const Key('root-transfer-grant-management'),
+        label: context.l10n.deviceRootTransferGrantManagement,
+        onPressed: () => ref
+            .read(devicesProvider.notifier)
+            .prepareRootTransferForActiveJoin(),
+      ),
+      RootKeyTransferPhase.preparing => AppPrimaryButton(
+        key: const Key('root-transfer-preparing'),
+        label: context.l10n.deviceRootTransferPreparing,
+        onPressed: null,
+      ),
+      RootKeyTransferPhase.awaitingConfirmation => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            context.l10n.deviceRootTransferTarget(
+              transfer.preparation!.recipient.deviceId,
+              transfer.preparation!.recipient.signingKeyId,
+              transfer.preparation!.recipient.e2eeKeyId,
+            ),
+            key: const Key('root-transfer-recipient-summary'),
+            style: TextStyle(color: context.awikiTheme.secondaryText),
+          ),
+          const SizedBox(height: 16),
+          AppPrimaryButton(
+            key: const Key('root-transfer-confirm-send'),
+            label: context.l10n.deviceRootTransferConfirm,
+            onPressed: () => ref
+                .read(devicesProvider.notifier)
+                .confirmAndSendRootTransfer(
+                  presenceReason: context.l10n.deviceRootTransferPresenceReason,
+                ),
+          ),
+        ],
+      ),
+      RootKeyTransferPhase.sending => AppPrimaryButton(
+        key: const Key('root-transfer-sending'),
+        label: context.l10n.deviceRootTransferSending,
+        onPressed: null,
+      ),
+      RootKeyTransferPhase.sent => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            context.l10n.deviceRootTransferSent,
+            key: const Key('root-transfer-sent'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: context.awikiTheme.infoAccent),
+          ),
+          const SizedBox(height: 16),
+          AppPrimaryButton(
+            label: context.l10n.commonDone,
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ],
+      ),
+      RootKeyTransferPhase.failed => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            context.l10n.deviceRootTransferFailed,
+            key: const Key('root-transfer-failed'),
+            style: TextStyle(color: context.awikiTheme.danger),
+          ),
+          const SizedBox(height: 16),
+          AppPrimaryButton(
+            label: context.l10n.commonDone,
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ],
+      ),
+    };
   }
 
   Future<void> _reject(DeviceJoinRejectReason reason) async {

@@ -108,7 +108,6 @@ void main() {
 }
 
 void _expectHighRiskCapabilitiesDisabled(AwikiEnvironmentConfig environment) {
-  expect(environment.multiDeviceRootTransferEnabled, isFalse);
   expect(environment.multiDeviceDeviceRevokeEnabled, isFalse);
   expect(environment.multiDeviceDirectE2eeEnabled, isFalse);
   expect(environment.multiDeviceGroupE2eeEnabled, isFalse);

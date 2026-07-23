@@ -40,7 +40,6 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     required AwikiImCorePathLayout paths,
     required StorageScopeId scopeId,
     required AwikiImCoreVaultSecretProvider vaultSecretProvider,
-    this.multiDeviceRootTransferEnabled = false,
     this.multiDeviceDeviceRevokeEnabled = false,
     this.multiDeviceDirectE2eeEnabled = false,
     this.multiDeviceGroupE2eeEnabled = false,
@@ -62,7 +61,6 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCorePathLayout _paths;
   final StorageScopeId _scopeId;
   final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
-  final bool multiDeviceRootTransferEnabled;
   final bool multiDeviceDeviceRevokeEnabled;
   final bool multiDeviceDirectE2eeEnabled;
   final bool multiDeviceGroupE2eeEnabled;
@@ -134,7 +132,6 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       config: _config.toCoreConfig(),
       paths: corePaths,
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
-        multiDeviceRootTransferEnabled: multiDeviceRootTransferEnabled,
         multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,

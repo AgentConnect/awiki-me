@@ -1,5 +1,4 @@
 import 'package:awiki_me/src/app/app_services.dart';
-import 'package:awiki_me/src/application/ports/root_key_transfer_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
@@ -165,38 +164,6 @@ void main() {
   );
 
   testWidgets(
-    'ready admin starts root import only after one user-presence prompt',
-    (tester) async {
-      final core = FakeDeviceManagementCore()
-        ..registry = _rootTransferRegistry();
-      final transfer = FakeRootKeyTransferPort();
-      final presence = FakeUserPresence();
-      await tester.pumpWidget(
-        _app(
-          const DevicesPage(),
-          core,
-          presence: presence,
-          rootTransfer: transfer,
-          rootTransferEnabled: true,
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('管理设备等待根密钥'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-      await tester.pumpAndSettle();
-
-      expect(presence.calls, 1);
-      expect(transfer.calls, 1);
-      expect(transfer.lastRecipientDeviceId, 'admin-new');
-      expect(transfer.lastUserPresenceConfirmed, isTrue);
-      expect(find.textContaining('正在安全导入根密钥'), findsOneWidget);
-      expect(find.textContaining('root_private_key'), findsNothing);
-      expect(find.textContaining('system_type'), findsNothing);
-    },
-  );
-
-  testWidgets(
     'permanent revoke requires explicit intent then one user-presence prompt',
     (tester) async {
       final core = FakeDeviceManagementCore()
@@ -277,260 +244,6 @@ void main() {
 
     expect(find.byKey(const Key('device-revoke-member-target')), findsNothing);
     expect(core.revokeCalls, 0);
-  });
-
-  testWidgets(
-    'session establishment is explicit and continuation reuses send ID with fresh presence',
-    (tester) async {
-      final core = FakeDeviceManagementCore()
-        ..registry = _rootTransferRegistry();
-      final transfer = FakeRootKeyTransferPort()
-        ..error = const RootKeyTransferPortException(
-          code: 'unsupported_capability',
-          capability: rootKeyTransferSessionEstablishmentPendingCapability,
-        );
-      final presence = FakeUserPresence();
-      await tester.pumpWidget(
-        _app(
-          const DevicesPage(),
-          core,
-          presence: presence,
-          rootTransfer: transfer,
-          rootTransferEnabled: true,
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-      await tester.pumpAndSettle();
-      final firstMessageId = transfer.lastMessageId;
-
-      expect(transfer.summaries, isEmpty);
-      expect(find.textContaining('安全会话正在建立中'), findsNWidgets(2));
-      expect(
-        find.byKey(const Key('devices-root-session-pending')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('devices-error')), findsNothing);
-      expect(find.text('继续安全导入'), findsOneWidget);
-      expect(find.textContaining('正在安全导入根密钥'), findsNothing);
-      expect(find.textContaining('根密钥导入失败'), findsNothing);
-
-      transfer.error = null;
-      await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-      await tester.pumpAndSettle();
-
-      expect(transfer.calls, 2);
-      expect(transfer.retryCalls, 0);
-      expect(transfer.lastMessageId, firstMessageId);
-      expect(presence.calls, 2);
-      expect(find.textContaining('正在安全导入根密钥'), findsOneWidget);
-    },
-  );
-
-  testWidgets('failed retry reuses the same message ID and prompts again', (
-    tester,
-  ) async {
-    const secret = 'sensitive-response-marker-must-not-render';
-    final core = FakeDeviceManagementCore()..registry = _rootTransferRegistry();
-    final transfer = FakeRootKeyTransferPort()
-      ..error = StateError('network failed $secret');
-    final presence = FakeUserPresence();
-    await tester.pumpWidget(
-      _app(
-        const DevicesPage(),
-        core,
-        presence: presence,
-        rootTransfer: transfer,
-        rootTransferEnabled: true,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-    await tester.pumpAndSettle();
-    final firstMessageId = transfer.lastMessageId;
-    expect(find.textContaining('根密钥导入失败'), findsOneWidget);
-    expect(find.textContaining(secret), findsNothing);
-
-    transfer.error = null;
-    await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-    await tester.pumpAndSettle();
-
-    expect(transfer.calls, 1);
-    expect(transfer.retryCalls, 1);
-    expect(presence.calls, 2);
-    expect(transfer.lastMessageId, firstMessageId);
-    expect(find.textContaining('正在安全导入根密钥'), findsOneWidget);
-  });
-
-  testWidgets('restart restores sender retry from the Core summary', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore()..registry = _rootTransferRegistry();
-    final transfer = FakeRootKeyTransferPort()
-      ..summaries = <RootKeyTransferSummary>[
-        rootTransferSummary(messageId: 'persisted-root-message'),
-      ];
-    final presence = FakeUserPresence();
-    await tester.pumpWidget(
-      _app(
-        const DevicesPage(),
-        core,
-        presence: presence,
-        rootTransfer: transfer,
-        rootTransferEnabled: true,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('根密钥导入失败'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-    await tester.pumpAndSettle();
-
-    expect(transfer.calls, 0);
-    expect(transfer.retryCalls, 1);
-    expect(transfer.lastMessageId, 'persisted-root-message');
-    expect(presence.calls, 1);
-    expect(find.textContaining('正在安全导入根密钥'), findsOneWidget);
-  });
-
-  testWidgets('awaiting receiver can resume the exact imported ACK', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore()
-      ..registry = DeviceRegistrySnapshot(
-        did: testDid,
-        devices: <DeviceSummary>[
-          _device(
-            id: 'admin-sender',
-            role: DeviceRole.admin,
-            managementReady: true,
-          ),
-          _device(id: 'admin-current', role: DeviceRole.admin, isCurrent: true),
-        ],
-      );
-    final transfer = FakeRootKeyTransferPort()
-      ..summaries = <RootKeyTransferSummary>[
-        rootTransferSummary(
-          messageId: 'receiver-ack-message',
-          senderDeviceId: 'admin-sender',
-          recipientDeviceId: 'admin-current',
-        ),
-      ];
-    final presence = FakeUserPresence();
-    await tester.pumpWidget(
-      _app(
-        const DevicesPage(),
-        core,
-        presence: presence,
-        rootTransfer: transfer,
-        rootTransferEnabled: true,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const Key('root-transfer-admin-current')),
-      findsOneWidget,
-    );
-    await tester.tap(find.byKey(const Key('root-transfer-admin-current')));
-    await tester.pumpAndSettle();
-
-    expect(transfer.retryCalls, 1);
-    expect(transfer.lastMessageId, 'receiver-ack-message');
-    expect(presence.calls, 1);
-    expect(find.textContaining('正在安全导入根密钥'), findsOneWidget);
-  });
-
-  testWidgets('non-retryable and completed progress never grants readiness', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore()..registry = _rootTransferRegistry();
-    final transfer = FakeRootKeyTransferPort()
-      ..summaries = <RootKeyTransferSummary>[
-        rootTransferSummary(
-          status: RootKeyTransferStatus.completed,
-          retryable: false,
-        ),
-      ];
-    await tester.pumpWidget(
-      _app(
-        const DevicesPage(),
-        core,
-        rootTransfer: transfer,
-        rootTransferEnabled: true,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('正在安全导入根密钥'), findsOneWidget);
-    expect(find.textContaining('可管理其他设备'), findsOneWidget);
-    expect(find.byKey(const Key('root-transfer-admin-new')), findsNothing);
-  });
-
-  testWidgets(
-    'Registry ready is authoritative and duplicate success is inert',
-    (tester) async {
-      final core = FakeDeviceManagementCore()
-        ..registry = _rootTransferRegistry();
-      final transfer = FakeRootKeyTransferPort();
-      await tester.pumpWidget(
-        _app(
-          const DevicesPage(),
-          core,
-          rootTransfer: transfer,
-          rootTransferEnabled: true,
-        ),
-      );
-      await tester.pumpAndSettle();
-      final recipient = core.registry.devices.last;
-
-      await tester.tap(find.byKey(const Key('root-transfer-admin-new')));
-      await tester.pumpAndSettle();
-      core.registry = _rootTransferRegistry(recipientReady: true);
-      await tester.tap(find.byIcon(CupertinoIcons.refresh));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('可管理其他设备'), findsNWidgets(2));
-      expect(find.byKey(const Key('root-transfer-admin-new')), findsNothing);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byKey(const Key('devices-page'))),
-      );
-      final repeated = await container
-          .read(devicesProvider.notifier)
-          .startOrRetryRootTransfer(
-            recipient: recipient,
-            presenceReason: 'Confirm transfer',
-          );
-      expect(repeated, isFalse);
-      expect(transfer.calls, 1);
-    },
-  );
-
-  testWidgets('member device sees no device-management actions', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore()
-      ..registry = DeviceRegistrySnapshot(
-        did: testDid,
-        devices: <DeviceSummary>[
-          _device(
-            id: 'member-current',
-            role: DeviceRole.member,
-            isCurrent: true,
-          ),
-          _device(id: 'admin-new', role: DeviceRole.admin),
-        ],
-      );
-    await tester.pumpWidget(
-      _app(const DevicesPage(), core, rootTransferEnabled: true),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('root-transfer-admin-new')), findsNothing);
-    expect(find.text('device-new'), findsNothing);
-    expect(find.byKey(const Key('device-join-approval-sheet')), findsNothing);
   });
 
   testWidgets('authorized member activates the exact DID once', (tester) async {
@@ -753,6 +466,248 @@ void main() {
     expect(find.byKey(const Key('device-approval-error')), findsNothing);
     expect(find.text('完成'), findsOneWidget);
     expect(find.text('拒绝设备'), findsNothing);
+  });
+
+  testWidgets(
+    'just-completed Join prepares before one root-transfer confirmation',
+    (tester) async {
+      final request = _request(
+        state: DeviceJoinRemoteState.responseVerified,
+        claimedByCurrentDevice: true,
+        canStartVerification: false,
+      );
+      final recipient = _device(id: 'device-new', role: DeviceRole.member);
+      final core = FakeDeviceManagementCore()
+        ..registry = DeviceRegistrySnapshot(
+          did: testDid,
+          devices: <DeviceSummary>[
+            _device(
+              id: 'admin-current',
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+            recipient,
+          ],
+        )
+        ..joinRequests = <DeviceJoinRequestNotice>[request]
+        ..verificationProgress = testJoinProgress()
+        ..confirmResult = DeviceJoinProgress(
+          joinSessionId: 'join-1',
+          did: testDid,
+          protocolDeviceId: 'device-new',
+          side: DeviceJoinSide.admin,
+          phase: DeviceJoinPhase.authorized,
+          remoteState: DeviceJoinRemoteState.consumed,
+          expiresAt: DateTime.utc(2030),
+          authorizedDevice: recipient,
+        );
+      final transfer = FakeRootKeyTransferPort();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          DeviceJoinApprovalSheet(request: request),
+          core,
+          presence: presence,
+          rootTransfer: transfer,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(CupertinoSwitch).first);
+      await tester.pump();
+      await tester.tap(find.text('确认并授权'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('root-transfer-grant-management')),
+        findsOneWidget,
+      );
+      expect(transfer.prepareCalls, 0);
+      expect(presence.calls, 1);
+
+      await tester.tap(find.byKey(const Key('root-transfer-grant-management')));
+      await tester.pumpAndSettle();
+
+      expect(transfer.prepareCalls, 1);
+      expect(transfer.confirmCalls, 0);
+      expect(presence.calls, 1);
+      expect(
+        find.byKey(const Key('root-transfer-recipient-summary')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('root-transfer-confirm-send')));
+      await tester.pumpAndSettle();
+
+      expect(presence.calls, 2);
+      expect(transfer.confirmCalls, 1);
+      expect(transfer.lastUserPresenceConfirmed, isTrue);
+      expect(find.byKey(const Key('root-transfer-sent')), findsOneWidget);
+      expect(find.textContaining('root_private_key'), findsNothing);
+      expect(find.textContaining('authorization_handle'), findsNothing);
+    },
+  );
+
+  testWidgets('slow root preparation cannot return into a closed Join', (
+    tester,
+  ) async {
+    final request = _request(
+      state: DeviceJoinRemoteState.responseVerified,
+      claimedByCurrentDevice: true,
+      canStartVerification: false,
+    );
+    final recipient = _device(id: 'device-new', role: DeviceRole.member);
+    final core = FakeDeviceManagementCore()
+      ..registry = DeviceRegistrySnapshot(
+        did: testDid,
+        devices: <DeviceSummary>[
+          _device(
+            id: 'admin-current',
+            role: DeviceRole.admin,
+            managementReady: true,
+            isCurrent: true,
+          ),
+          recipient,
+        ],
+      )
+      ..joinRequests = <DeviceJoinRequestNotice>[request]
+      ..verificationProgress = testJoinProgress()
+      ..confirmResult = DeviceJoinProgress(
+        joinSessionId: 'join-1',
+        did: testDid,
+        protocolDeviceId: 'device-new',
+        side: DeviceJoinSide.admin,
+        phase: DeviceJoinPhase.authorized,
+        remoteState: DeviceJoinRemoteState.consumed,
+        expiresAt: DateTime.utc(2030),
+        authorizedDevice: recipient,
+      );
+    final transfer = FakeRootKeyTransferPort()..deferPrepare = true;
+    final presence = FakeUserPresence();
+    await tester.pumpWidget(
+      _app(
+        DeviceJoinApprovalSheet(request: request),
+        core,
+        presence: presence,
+        rootTransfer: transfer,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CupertinoSwitch).first);
+    await tester.pump();
+    await tester.tap(find.text('确认并授权'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('root-transfer-grant-management')));
+    await tester.pump();
+    await transfer.prepareStarted.future;
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+    );
+    container.read(devicesProvider.notifier).clearActive();
+    transfer.completeDeferredPrepare();
+    await tester.pumpAndSettle();
+
+    expect(transfer.confirmCalls, 1);
+    expect(transfer.lastUserPresenceConfirmed, isFalse);
+    expect(presence.calls, 1);
+    expect(
+      find.byKey(const Key('root-transfer-recipient-summary')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('root-transfer-confirm-send')), findsNothing);
+    expect(
+      container.read(devicesProvider).rootTransfer.phase,
+      RootKeyTransferPhase.idle,
+    );
+  });
+
+  testWidgets('switching Join consumes and hides the previous root handle', (
+    tester,
+  ) async {
+    final request = _request(
+      state: DeviceJoinRemoteState.responseVerified,
+      claimedByCurrentDevice: true,
+      canStartVerification: false,
+    );
+    final recipient = _device(id: 'device-new', role: DeviceRole.member);
+    final core = FakeDeviceManagementCore()
+      ..registry = DeviceRegistrySnapshot(
+        did: testDid,
+        devices: <DeviceSummary>[
+          _device(
+            id: 'admin-current',
+            role: DeviceRole.admin,
+            managementReady: true,
+            isCurrent: true,
+          ),
+          recipient,
+        ],
+      )
+      ..joinRequests = <DeviceJoinRequestNotice>[request]
+      ..verificationProgress = testJoinProgress()
+      ..confirmResult = DeviceJoinProgress(
+        joinSessionId: 'join-1',
+        did: testDid,
+        protocolDeviceId: 'device-new',
+        side: DeviceJoinSide.admin,
+        phase: DeviceJoinPhase.authorized,
+        remoteState: DeviceJoinRemoteState.consumed,
+        expiresAt: DateTime.utc(2030),
+        authorizedDevice: recipient,
+      );
+    final transfer = FakeRootKeyTransferPort();
+    final presence = FakeUserPresence();
+    await tester.pumpWidget(
+      _app(
+        DeviceJoinApprovalSheet(request: request),
+        core,
+        presence: presence,
+        rootTransfer: transfer,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(CupertinoSwitch).first);
+    await tester.pump();
+    await tester.tap(find.text('确认并授权'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('root-transfer-grant-management')));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+    );
+    await container
+        .read(devicesProvider.notifier)
+        .selectJoinRequest(
+          _request(joinSessionId: 'join-2', protocolDeviceId: 'device-other'),
+        );
+    final sent = await container
+        .read(devicesProvider.notifier)
+        .confirmAndSendRootTransfer(presenceReason: 'Confirm root transfer');
+    await tester.pumpAndSettle();
+
+    expect(sent, isFalse);
+    expect(transfer.confirmCalls, 1);
+    expect(transfer.lastUserPresenceConfirmed, isFalse);
+    expect(presence.calls, 1);
+    expect(
+      find.byKey(const Key('root-transfer-recipient-summary')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('root-transfer-confirm-send')), findsNothing);
+  });
+
+  testWidgets('device list never exposes a generic root-transfer action', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()..registry = _rootTransferRegistry();
+    await tester.pumpWidget(_app(const DevicesPage(), core));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('root-transfer-admin-new')), findsNothing);
+    expect(find.text('继续授予管理权限'), findsNothing);
   });
 
   testWidgets('opening a notice is read-only until verification starts', (
@@ -1048,13 +1003,14 @@ void main() {
 }
 
 DeviceJoinRequestNotice _request({
+  String joinSessionId = 'join-1',
   String protocolDeviceId = 'device-new',
   DeviceJoinRemoteState state = DeviceJoinRemoteState.pending,
   bool claimedByCurrentDevice = false,
   bool canStartVerification = true,
 }) => DeviceJoinRequestNotice(
-  eventId: 'event-1',
-  joinSessionId: 'join-1',
+  eventId: 'event-$joinSessionId',
+  joinSessionId: joinSessionId,
   did: testDid,
   protocolDeviceId: protocolDeviceId,
   candidateKeyFingerprint: 'sha256:abc123',
@@ -1086,7 +1042,6 @@ Widget _app(
   FakeUserPresence? presence,
   FakeRootKeyTransferPort? rootTransfer,
   FakeAwikiGateway? gateway,
-  bool rootTransferEnabled = false,
   bool deviceRevokeEnabled = false,
   SessionIdentity? session = _session,
 }) {
@@ -1095,9 +1050,6 @@ Widget _app(
     gateway: gateway,
     session: session,
     providerOverrides: <Override>[
-      multiDeviceRootTransferEnabledProvider.overrideWithValue(
-        rootTransferEnabled,
-      ),
       multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(
         deviceRevokeEnabled,
       ),

@@ -25,9 +25,7 @@ String deviceManagementReadinessLabel(
 ) => switch (readiness) {
   DeviceManagementReadiness.adminAwaitingRoot =>
     l10n.deviceManagementAwaitingRoot,
-  DeviceManagementReadiness.importing => l10n.deviceManagementImporting,
   DeviceManagementReadiness.ready => l10n.deviceManagementReady,
-  DeviceManagementReadiness.failed => l10n.deviceManagementFailed,
 };
 
 String deviceJoinPhaseLabel(
@@ -52,8 +50,6 @@ String deviceManagementErrorLabel(
   DeviceManagementErrorKind.conflict => l10n.deviceJoinErrorConflict,
   DeviceManagementErrorKind.sasMismatch => l10n.deviceJoinErrorSas,
   DeviceManagementErrorKind.userPresenceDenied => l10n.deviceJoinErrorPresence,
-  DeviceManagementErrorKind.sessionEstablishmentPending =>
-    l10n.deviceRootTransferSessionPending,
   DeviceManagementErrorKind.protectedDevice => l10n.deviceRevokeProtected,
   DeviceManagementErrorKind.network => l10n.deviceJoinErrorNetwork,
   DeviceManagementErrorKind.failed => l10n.deviceJoinErrorFailed,

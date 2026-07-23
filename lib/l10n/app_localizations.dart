@@ -1430,47 +1430,57 @@ abstract class AppLocalizations {
   /// **'管理设备等待根密钥'**
   String get deviceManagementAwaitingRoot;
 
-  /// No description provided for @deviceManagementImporting.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在安全导入根密钥'**
-  String get deviceManagementImporting;
-
-  /// No description provided for @deviceManagementFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'根密钥导入失败'**
-  String get deviceManagementFailed;
-
   /// No description provided for @deviceManagementActionDisabled.
   ///
   /// In zh, this message translates to:
   /// **'需要已就绪的管理设备处理'**
   String get deviceManagementActionDisabled;
 
-  /// No description provided for @deviceRootTransferStart.
+  /// No description provided for @deviceRootTransferGrantManagement.
   ///
   /// In zh, this message translates to:
-  /// **'开始安全导入'**
-  String get deviceRootTransferStart;
+  /// **'继续授予管理权限'**
+  String get deviceRootTransferGrantManagement;
 
-  /// No description provided for @deviceRootTransferContinue.
+  /// No description provided for @deviceRootTransferPreparing.
   ///
   /// In zh, this message translates to:
-  /// **'继续安全导入'**
-  String get deviceRootTransferContinue;
+  /// **'正在准备安全传输…'**
+  String get deviceRootTransferPreparing;
 
-  /// No description provided for @deviceRootTransferRetry.
+  /// No description provided for @deviceRootTransferConfirm.
   ///
   /// In zh, this message translates to:
-  /// **'重试安全导入'**
-  String get deviceRootTransferRetry;
+  /// **'确认并发送根密钥'**
+  String get deviceRootTransferConfirm;
 
-  /// No description provided for @deviceRootTransferSessionPending.
+  /// No description provided for @deviceRootTransferSending.
   ///
   /// In zh, this message translates to:
-  /// **'安全会话正在建立中。请先让接收设备完成同步，然后继续。'**
-  String get deviceRootTransferSessionPending;
+  /// **'正在发送根密钥…'**
+  String get deviceRootTransferSending;
+
+  /// No description provided for @deviceRootTransferTarget.
+  ///
+  /// In zh, this message translates to:
+  /// **'目标设备：{deviceId}\n签名密钥：{signingKeyId}\n端到端加密密钥：{e2eeKeyId}'**
+  String deviceRootTransferTarget(
+    String deviceId,
+    String signingKeyId,
+    String e2eeKeyId,
+  );
+
+  /// No description provided for @deviceRootTransferSent.
+  ///
+  /// In zh, this message translates to:
+  /// **'根密钥已发送'**
+  String get deviceRootTransferSent;
+
+  /// No description provided for @deviceRootTransferFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已加入，新设备未获得管理权限，请稍后重试。'**
+  String get deviceRootTransferFailed;
 
   /// No description provided for @deviceRootTransferPresenceReason.
   ///

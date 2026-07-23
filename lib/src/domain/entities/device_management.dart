@@ -8,14 +8,15 @@ enum DeviceStatus { active, revoked }
 
 enum DeviceRevokeStatus { revoked }
 
-enum DeviceManagementReadiness { adminAwaitingRoot, importing, ready, failed }
+enum DeviceManagementReadiness { adminAwaitingRoot, ready }
 
-enum RootKeyTransferStatus {
-  pendingDelivery,
-  awaitingImport,
-  importing,
+enum RootKeyTransferPhase {
+  idle,
+  preparing,
+  awaitingConfirmation,
+  sending,
+  sent,
   failed,
-  completed,
 }
 
 enum DeviceJoinSide { newDevice, admin }
@@ -81,10 +82,43 @@ class DeviceRevokeResult {
   final DeviceRevokeStatus status;
 }
 
-/// Secret-free delivery acceptance returned by IM Core.
-///
-/// Acceptance does not mean that the receiving device has imported the root
-/// key. [DeviceSummary.managementReady] remains the durable readiness truth.
+abstract interface class RootKeyTransferAuthorizationHandle {}
+
+class RootKeyTransferRecipientSummary {
+  const RootKeyTransferRecipientSummary({
+    required this.did,
+    required this.deviceId,
+    required this.signingKeyId,
+    required this.e2eeKeyId,
+    required this.registryVersion,
+  });
+
+  final String did;
+  final String deviceId;
+  final String signingKeyId;
+  final String e2eeKeyId;
+  final int registryVersion;
+}
+
+class RootKeyTransferPreparation {
+  const RootKeyTransferPreparation({
+    required this.authorizationHandle,
+    required this.recipient,
+    required this.expiresAt,
+  });
+
+  final RootKeyTransferAuthorizationHandle authorizationHandle;
+  final RootKeyTransferRecipientSummary recipient;
+  final DateTime expiresAt;
+
+  @override
+  String toString() =>
+      'RootKeyTransferPreparation(authorizationHandle: <redacted>, '
+      'recipientDeviceId: ${recipient.deviceId}, expiresAt: $expiresAt)';
+}
+
+/// Secret-free delivery acceptance returned by IM Core. It does not imply
+/// that the recipient has completed its later import.
 class RootKeyTransferReceipt {
   const RootKeyTransferReceipt({
     required this.did,
@@ -101,32 +135,60 @@ class RootKeyTransferReceipt {
   final DateTime acceptedAt;
 }
 
-/// Secret-free, restart-safe projection of one Core-owned root transfer.
-///
-/// [status] is progress only. A completed transfer never grants management
-/// authority; [DeviceSummary.managementReady] remains authoritative.
-class RootKeyTransferSummary {
-  const RootKeyTransferSummary({
+class RootKeyTransferContext {
+  const RootKeyTransferContext({
+    required this.joinSessionId,
     required this.did,
-    required this.senderDeviceId,
     required this.recipientDeviceId,
-    required this.messageId,
-    required this.status,
-    required this.createdAt,
-    required this.retryable,
-    this.acceptedAt,
-    this.completedAt,
+    required this.recipientSigningKeyId,
+    required this.recipientE2eeKeyId,
   });
 
+  final String joinSessionId;
   final String did;
-  final String senderDeviceId;
   final String recipientDeviceId;
-  final String messageId;
-  final RootKeyTransferStatus status;
-  final DateTime createdAt;
-  final DateTime? acceptedAt;
-  final DateTime? completedAt;
+  final String recipientSigningKeyId;
+  final String recipientE2eeKeyId;
+
+  @override
+  bool operator ==(Object other) =>
+      other is RootKeyTransferContext &&
+      joinSessionId == other.joinSessionId &&
+      did == other.did &&
+      recipientDeviceId == other.recipientDeviceId &&
+      recipientSigningKeyId == other.recipientSigningKeyId &&
+      recipientE2eeKeyId == other.recipientE2eeKeyId;
+
+  @override
+  int get hashCode => Object.hash(
+    joinSessionId,
+    did,
+    recipientDeviceId,
+    recipientSigningKeyId,
+    recipientE2eeKeyId,
+  );
+}
+
+class RootKeyTransferUiState {
+  const RootKeyTransferUiState({
+    this.phase = RootKeyTransferPhase.idle,
+    this.context,
+    this.preparation,
+    this.receipt,
+    this.errorCode,
+    this.retryable = false,
+  });
+
+  final RootKeyTransferPhase phase;
+  final RootKeyTransferContext? context;
+  final RootKeyTransferPreparation? preparation;
+  final RootKeyTransferReceipt? receipt;
+  final String? errorCode;
   final bool retryable;
+
+  bool get isPending =>
+      phase == RootKeyTransferPhase.preparing ||
+      phase == RootKeyTransferPhase.sending;
 }
 
 class DeviceJoinRequestNotice {

@@ -207,8 +207,6 @@ class AppBootstrap {
       vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
         repository: scopeSecretRepository,
       ),
-      multiDeviceRootTransferEnabled:
-          effectiveEnvironment.multiDeviceRootTransferEnabled,
       multiDeviceDeviceRevokeEnabled:
           effectiveEnvironment.multiDeviceDeviceRevokeEnabled,
       multiDeviceDirectE2eeEnabled:
@@ -254,10 +252,9 @@ class AppBootstrap {
         userServiceUrl: effectiveEnvironment.userServiceUrl,
         targetHandleDomain: effectiveEnvironment.didDomain,
       );
-      final rootKeyTransferAdapter =
-          effectiveEnvironment.multiDeviceRootTransferEnabled
-          ? AwikiImCoreRootKeyTransferAdapter(runtime: runtime)
-          : null;
+      final rootKeyTransferAdapter = AwikiImCoreRootKeyTransferAdapter(
+        runtime: runtime,
+      );
       final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
       final messageSyncAdapter = AwikiImCoreMessageSyncAdapter(

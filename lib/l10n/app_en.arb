@@ -254,13 +254,21 @@
   "deviceManagementReady": "Can manage devices",
   "deviceManagementPending": "Waiting for management readiness",
   "deviceManagementAwaitingRoot": "Admin awaiting root key",
-  "deviceManagementImporting": "Importing root key securely",
-  "deviceManagementFailed": "Root-key import failed",
   "deviceManagementActionDisabled": "A management-ready admin device is required",
-  "deviceRootTransferStart": "Start secure import",
-  "deviceRootTransferContinue": "Continue secure import",
-  "deviceRootTransferRetry": "Retry secure import",
-  "deviceRootTransferSessionPending": "A secure session is being established. Sync the receiving device, then continue.",
+  "deviceRootTransferGrantManagement": "Continue granting management access",
+  "deviceRootTransferPreparing": "Preparing secure transfer…",
+  "deviceRootTransferConfirm": "Confirm and send root key",
+  "deviceRootTransferSending": "Sending root key…",
+  "deviceRootTransferTarget": "Target device: {deviceId}\nSigning key: {signingKeyId}\nEnd-to-end encryption key: {e2eeKeyId}",
+  "@deviceRootTransferTarget": {
+    "placeholders": {
+      "deviceId": {"type": "String"},
+      "signingKeyId": {"type": "String"},
+      "e2eeKeyId": {"type": "String"}
+    }
+  },
+  "deviceRootTransferSent": "Root key sent",
+  "deviceRootTransferFailed": "The device joined, but it did not receive management access. Please try again later.",
   "deviceRootTransferPresenceReason": "Confirm secure root-key transfer",
   "deviceRevokeAction": "Revoke",
   "deviceRevokeConfirmTitle": "Revoke this device?",

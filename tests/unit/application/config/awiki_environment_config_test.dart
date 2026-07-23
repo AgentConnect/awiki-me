@@ -30,7 +30,6 @@ void main() {
     expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
-    expect(config.multiDeviceRootTransferEnabled, isFalse);
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
@@ -99,7 +98,6 @@ void main() {
       updateManifestUrl: 'https://updates.example.test/app/latest.json',
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
-      multiDeviceRootTransferEnabled: true,
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
@@ -119,7 +117,6 @@ void main() {
     );
     expect(config.releasesUrl, 'https://download.example.test/releases');
     expect(config.agentImEnabled, isTrue);
-    expect(config.multiDeviceRootTransferEnabled, isTrue);
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
@@ -149,7 +146,6 @@ void main() {
     addTearDown(container.dispose);
 
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
-    expect(container.read(multiDeviceRootTransferEnabledProvider), isFalse);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
   });

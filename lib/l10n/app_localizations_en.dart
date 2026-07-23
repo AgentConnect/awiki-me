@@ -726,27 +726,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceManagementAwaitingRoot => 'Admin awaiting root key';
 
   @override
-  String get deviceManagementImporting => 'Importing root key securely';
-
-  @override
-  String get deviceManagementFailed => 'Root-key import failed';
-
-  @override
   String get deviceManagementActionDisabled =>
       'A management-ready admin device is required';
 
   @override
-  String get deviceRootTransferStart => 'Start secure import';
+  String get deviceRootTransferGrantManagement =>
+      'Continue granting management access';
 
   @override
-  String get deviceRootTransferContinue => 'Continue secure import';
+  String get deviceRootTransferPreparing => 'Preparing secure transfer…';
 
   @override
-  String get deviceRootTransferRetry => 'Retry secure import';
+  String get deviceRootTransferConfirm => 'Confirm and send root key';
 
   @override
-  String get deviceRootTransferSessionPending =>
-      'A secure session is being established. Sync the receiving device, then continue.';
+  String get deviceRootTransferSending => 'Sending root key…';
+
+  @override
+  String deviceRootTransferTarget(
+    String deviceId,
+    String signingKeyId,
+    String e2eeKeyId,
+  ) {
+    return 'Target device: $deviceId\nSigning key: $signingKeyId\nEnd-to-end encryption key: $e2eeKeyId';
+  }
+
+  @override
+  String get deviceRootTransferSent => 'Root key sent';
+
+  @override
+  String get deviceRootTransferFailed =>
+      'The device joined, but it did not receive management access. Please try again later.';
 
   @override
   String get deviceRootTransferPresenceReason =>

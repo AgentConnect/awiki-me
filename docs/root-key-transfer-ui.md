@@ -1,62 +1,60 @@
-# AWiki Me 管理设备根密钥导入
+# AWiki Me Join 后根密钥传输
 
-状态：第三步待替换的旧实现，能力默认关闭；不作为消息驱动 Join 的 active E2E
+状态：Step 3 V1 active contract；唯一原生生产路径
 
-整体密码学流程以 Core 仓库的
-[多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
-和 [Step 06](../../plan/20260718-awiki-multi-device-implementation/steps/06-admin-root-transfer-revoke.md)
-为准。本文只记录 AWiki Me 的产品状态和边界。
+总体协议与密码学边界以
+[`v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md`](../../plan/20260718-awiki-multi-device-implementation/refactor/v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md)
+为准。本文只记录 AWiki Me 的产品入口、Host API 和状态边界。
 
-## 1. 开关与状态
+## 1. 唯一产品入口
 
-根传输由编译期开关 `AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED` 控制，默认 `false`，
-并与 Join 开关独立传给 IM Core。只有当前 `active + admin +
-management_ready=true` 的设备可以开始传输；member 和尚未 ready 的 admin
-不能执行审批或其他管理动作。接收端 admin 可以在 user-presence 后仅恢复 Core
-已持久化的 imported ACK，这不授予其他管理能力。
+V1 只在当前管理设备刚完成一次 Join，并且新设备已经以
+`active + member + management_ready=false` 加入后，显示“继续授予管理权限”。
+目标固定为这次 Join 返回的 `authorizedDevice`，不能从设备列表重新选择。
+
+设备列表不提供根密钥发送、进度、重试或接收端恢复按钮。V1 也不提供通用设备选择器、
+传输历史、Registry completion 轮询或 imported-ACK 状态机。
+
+## 2. 操作顺序
+
+App 严格执行下面的单目标流程：
+
+1. 调用 identity-scoped `client.rootKeyTransfer.prepare(recipientDeviceId)`；
+2. 校验 Core 返回的 DID、设备 ID、签名密钥 ID 和 E2EE 密钥 ID 与刚完成的 Join 一致；
+3. 只展示上述无秘密目标摘要，不展示 authorization handle；
+4. 用户点击确认后，只触发一次系统 user-presence；
+5. 将 opaque authorization handle 和确认结果传给
+   `confirmAndSend`；
+6. 校验接受回执的 DID、sender、recipient 和非空 message ID；
+7. 以“根密钥已发送”结束，不等待 Registry readiness completion。
+
+页面状态只包含：
 
 ```text
-admin-awaiting-root
-    -- Direct 尚未就绪 --> 安全会话建立中（仍是 awaiting）
-    -- 本机 user-presence + Core 接受密文投递 --> importing
-    -- Registry management_ready=true ----------> ready
-    -- 安全失败 -------------------------------> failed
+idle -> preparing -> awaitingConfirmation -> sending -> sent
+                                             \-------> failed
 ```
 
-若 Direct P5 v2 会话尚未建立，首次操作只会触发 Core 的 session Init，RootKeyEnvelope
-尚未生成，也没有可供 `listRootKeyTransfers` 恢复的 sidecar。App 明确显示“安全会话
-正在建立中”的信息提示，不使用失败样式；仅在当前前台保留无秘密的
-recipient/message ID；用户让接收设备同步后，
-必须再次完成 user-presence，App 才用相同参数继续调用 `send`。该预备步骤不能显示为
-`importing` 或“传输失败”，也不能自动绕过第二次确认。
+发送期间按钮禁用，防止重复确认。失败只显示“设备已加入，新设备未获得管理权限，请稍后
+重试。”；不会把 Core 诊断、PreKey、proof、nonce、密文、checkpoint 或 handle 投影到 UI。
 
-`ready` 只来自重新读取的 Device Registry。投递成功或 Core 的 `completed` 进度仅表示
-控制流已经推进，不能提前显示为 ready。失败后的显式重试再次要求 user-presence，
-并由 Core 恢复原 Direct message ID；重复完成由 Core/服务端幂等处理。
+## 3. App/Core 边界
 
-## 2. App/Core 边界
+Host API 只接收 `recipient_device_id`、opaque authorization handle 和
+`user_presence_confirmed`。message ID 由 Core 生成。App 不接收或构造 RootKeyEnvelope、
+根密钥、PreKey、session、proof、nonce、ciphertext 或 completion checkpoint。
 
-AWiki Me 只向 Core 传递 identity selector、目标 `device_id`、初始 message ID 和已完成的
-user-presence 断言，并只接收无秘密的投递回执/进度摘要。RootKeyEnvelope、根私钥、
-Direct 密文、imported ACK 和 transport sidecar 均留在 Core/服务端既定边界中；控制
-JSON 不会进入聊天 timeline、通知、日志、错误文案或 ProductLocalStore。
+公开错误固定为 `{code, retryable}`。Web 明确返回
+`root_transfer.unsupported`，不得退回明文或 JavaScript 密码学实现。
 
-接收端导入由 native inbox 自动处理。App 每次打开或刷新设备页时，通过公共 SDK 读取
-Core 按本机 identity/device scope 保存的无秘密摘要，以恢复 sender/receiver 的
-`importing/failed` 和原 message ID；App 不在 ProductLocalStore 再维护一套状态机。
-Core 摘要只用于进度和重试，Device Registry 的 `management_ready` 仍是权限事实源。
-会话 Init 尚未创建 root sidecar，因此它只是一项前台操作意图；进程重启后回到
-`admin-awaiting-root`，不得伪造持久化 transfer。
-
-## 3. 验证
+## 4. 专项验证
 
 ```bash
-flutter test tests/unit/devices/root_key_transfer_service_test.dart \
+flutter test \
+  tests/unit/devices/root_key_transfer_service_test.dart \
   tests/unit/data/im_core/awiki_im_core_root_key_transfer_adapter_test.dart \
   tests/unit/devices/devices_ui_test.dart
 ```
 
-本文件描述的是第三步替换前暂时保留的旧 root-control/imported-ACK 产品代码。第二步的
-消息驱动 Join 固定批准为 member，不调用这些入口；`ROOT-TRANSFER-E2E-001/002` 不能作为
-第二步 active 验收。第三步完成普通 P5 RootKeyEnvelope 与 HTTP completion 后，应同步删除
-这里的旧状态机、测试断言和文档。
+专项验证覆盖精确 Join 目标、prepare 先于 user-presence、一次确认、opaque handle、无秘密
+DTO／错误映射、接受回执校验，以及设备列表不存在通用根密钥操作。

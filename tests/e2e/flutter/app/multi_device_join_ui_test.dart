@@ -1286,7 +1286,6 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(_RemoteJoinRunConfig config) =>
       anpServiceUrl: config.anpServiceUrl,
       anpServiceDid: config.anpServiceDid,
       agentImEnabled: false,
-      multiDeviceRootTransferEnabled: false,
       multiDeviceDeviceRevokeEnabled: false,
       multiDeviceDirectE2eeEnabled: false,
       multiDeviceGroupE2eeEnabled: false,
