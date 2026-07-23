@@ -28,12 +28,14 @@ DeviceJoinProgress testJoinProgress({
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
   DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(did: testDid);
+  List<DeviceJoinRequestNotice> joinRequests =
+      const <DeviceJoinRequestNotice>[];
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
   DeviceJoinProgress? beginResult;
-  DeviceJoinProgress? claimResult;
-  DeviceJoinProgress? pollAdminResult;
+  DeviceJoinProgress? verificationProgress;
   DeviceJoinProgress? pollNewResult;
   DeviceJoinProgress? confirmResult;
+  DeviceJoinProgress? rejectResult;
   DeviceJoinProgress? cancelResult;
   Object? registryError;
   Object? pollError;
@@ -42,15 +44,18 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   int localSessionCalls = 0;
   int sendOtpCalls = 0;
   int beginCalls = 0;
-  int claimCalls = 0;
+  int joinRequestCalls = 0;
+  int localVerificationCalls = 0;
+  int startVerificationCalls = 0;
   int pollCalls = 0;
   int prepareCalls = 0;
   int confirmCalls = 0;
+  int rejectCalls = 0;
   int cancelCalls = 0;
   int revokeCalls = 0;
   String? lastOtp;
-  DeviceRole? lastPreparedRole;
   bool? lastPreparedSasConfirmed;
+  DeviceJoinRejectReason? lastRejectReason;
   bool? lastPresenceConfirmed;
   String? lastRevokedDeviceId;
   bool? lastRevokePresenceConfirmed;
@@ -83,35 +88,51 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceJoinProgress> cancelAdminDeviceJoin({
-    required String selector,
-    required String joinSessionId,
-  }) async => _cancel(DeviceJoinSide.admin);
-
-  @override
   Future<DeviceJoinProgress> cancelNewDeviceJoin(String joinSessionId) async =>
-      _cancel(DeviceJoinSide.newDevice);
+      _cancel();
 
-  Future<DeviceJoinProgress> _cancel(DeviceJoinSide side) async {
+  Future<DeviceJoinProgress> _cancel() async {
     cancelCalls += 1;
     return cancelResult ??
         testJoinProgress(
-          side: side,
+          side: DeviceJoinSide.newDevice,
           phase: DeviceJoinPhase.cancelled,
-          remoteState: DeviceJoinRemoteState.pending,
+          remoteState: DeviceJoinRemoteState.cancelled,
           sas: null,
         );
   }
 
   @override
-  Future<DeviceJoinProgress> claimDeviceJoin({
+  Future<List<DeviceJoinRequestNotice>> localDeviceJoinRequests(
+    String selector,
+  ) async {
+    joinRequestCalls += 1;
+    return joinRequests;
+  }
+
+  @override
+  Future<DeviceJoinProgress> localDeviceJoinVerificationProgress({
+    required String selector,
+    required String joinSessionId,
+  }) async {
+    localVerificationCalls += 1;
+    return verificationProgress ?? testJoinProgress();
+  }
+
+  @override
+  Future<DeviceJoinProgress> startDeviceJoinVerification({
     required String selector,
     required String joinSessionId,
     required String operationId,
     required int challengeTtlSeconds,
   }) async {
-    claimCalls += 1;
-    return claimResult ?? testJoinProgress();
+    startVerificationCalls += 1;
+    return verificationProgress ??
+        testJoinProgress(
+          phase: DeviceJoinPhase.challengePrepared,
+          remoteState: DeviceJoinRemoteState.challengeSent,
+          sas: null,
+        );
   }
 
   @override
@@ -169,23 +190,12 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
           else
             device,
       ],
-      pendingJoins: registry.pendingJoins,
     );
     return DeviceRevokeResult(
       did: registry.did,
       targetDeviceId: targetDeviceId,
       status: DeviceRevokeStatus.revoked,
     );
-  }
-
-  @override
-  Future<DeviceJoinProgress> pollAdminDeviceJoin({
-    required String selector,
-    required String joinSessionId,
-  }) async {
-    pollCalls += 1;
-    if (pollError != null) throw pollError!;
-    return pollAdminResult ?? testJoinProgress();
   }
 
   @override
@@ -203,19 +213,32 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   Future<DeviceJoinApprovalPrompt> prepareDeviceJoinApproval({
     required String selector,
     required String joinSessionId,
-    required DeviceRole role,
     required bool sasConfirmed,
   }) async {
     prepareCalls += 1;
-    lastPreparedRole = role;
     lastPreparedSasConfirmed = sasConfirmed;
     return DeviceJoinApprovalPrompt(
       approvalHandle: 'approval-1',
       joinSessionId: joinSessionId,
-      role: role,
       sas: '482917',
       expiresAt: DateTime.utc(2030),
     );
+  }
+
+  @override
+  Future<DeviceJoinProgress> rejectDeviceJoin({
+    required String selector,
+    required String joinSessionId,
+    required DeviceJoinRejectReason reason,
+  }) async {
+    rejectCalls += 1;
+    lastRejectReason = reason;
+    return rejectResult ??
+        testJoinProgress(
+          phase: DeviceJoinPhase.cancelled,
+          remoteState: DeviceJoinRemoteState.rejected,
+          sas: null,
+        );
   }
 }
 

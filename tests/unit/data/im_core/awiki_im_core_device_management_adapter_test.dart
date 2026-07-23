@@ -317,7 +317,7 @@ void main() {
     expect(error.toString(), isNot(contains(token)));
   });
 
-  test('maps registry roles, readiness, and pending requests', () {
+  test('maps authorized registry roles and readiness without pending requests', () {
     final snapshot = deviceRegistryFromCore(
       const core.DeviceJoinRegistrySnapshot(
         did: _did,
@@ -332,28 +332,38 @@ void main() {
             isCurrent: true,
           ),
         ],
-        pendingJoinRequests: <core.DeviceJoinPendingSummary>[
-          core.DeviceJoinPendingSummary(
-            joinSessionId: 'join-2',
-            protocolDeviceId: 'member-2',
-            signingKeyId: 'did:key:new-sign',
-            e2eeKeyId: 'did:key:new-e2ee',
-            requestedRole: core.DeviceJoinRole.member,
-            issuedAt: '2026-07-19T00:00:00Z',
-            expiresAt: '2026-07-19T00:10:00Z',
-          ),
-        ],
       ),
     );
 
     expect(snapshot.did, _did);
     expect(snapshot.currentDevice?.role, DeviceRole.admin);
     expect(snapshot.currentDevice?.managementReady, isFalse);
-    expect(snapshot.pendingJoins.single.requestedRole, DeviceRole.member);
-    expect(snapshot.pendingJoins.single.expiresAt.isUtc, isTrue);
   });
 
-  test('local session summaries are explicitly marked not observed', () {
+  test('maps verified Join request notice without raw proof material', () {
+    final request = deviceJoinRequestFromCore(
+      const core.DeviceJoinRequestNotice(
+        eventId: 'event-1',
+        joinSessionId: 'join-2',
+        did: _did,
+        protocolDeviceId: 'member-2',
+        candidateKeyFingerprint: 'sha256:fingerprint',
+        issuedAt: '2026-07-19T00:00:00Z',
+        expiresAt: '2026-07-19T00:10:00Z',
+        state: core.DeviceJoinRemoteState.pending,
+        claimedByCurrentDevice: false,
+        canStartVerification: true,
+      ),
+    );
+
+    expect(request.joinSessionId, 'join-2');
+    expect(request.candidateKeyFingerprint, 'sha256:fingerprint');
+    expect(request.canStartVerification, isTrue);
+    expect(request.expiresAt.isUtc, isTrue);
+    expect(request.toString(), isNot(contains('proof')));
+  });
+
+  test('local session summaries default to pending until a local refresh', () {
     final progress = deviceJoinSessionFromCore(
       const core.DeviceJoinSessionSummary(
         joinSessionId: 'join-local',
@@ -367,7 +377,7 @@ void main() {
 
     expect(progress.side, DeviceJoinSide.admin);
     expect(progress.phase, DeviceJoinPhase.cancelled);
-    expect(progress.remoteState, DeviceJoinRemoteState.notObserved);
+    expect(progress.remoteState, DeviceJoinRemoteState.pending);
     expect(progress.isTerminal, isTrue);
   });
 

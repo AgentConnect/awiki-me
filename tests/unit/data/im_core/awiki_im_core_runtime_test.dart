@@ -98,7 +98,6 @@ void main() {
               openOptions?.identitySecretVault?.rootKey.bytes,
               List<int>.filled(32, 7),
             );
-            expect(openOptions?.multiDeviceJoinEnabled, isTrue);
             expect(openOptions?.multiDeviceRootTransferEnabled, isTrue);
             expect(openOptions?.multiDeviceDeviceRevokeEnabled, isTrue);
             expect(openOptions?.multiDeviceDirectE2eeEnabled, isTrue);

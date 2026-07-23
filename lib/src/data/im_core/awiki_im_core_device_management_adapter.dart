@@ -231,14 +231,39 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceJoinProgress> claimDeviceJoin({
+  Future<List<DeviceJoinRequestNotice>> localDeviceJoinRequests(
+    String selector,
+  ) async {
+    final instance = await _coreInstance();
+    final requests = await instance.localDeviceJoinRequests(
+      _identitySelector(selector),
+    );
+    return requests.map(deviceJoinRequestFromCore).toList(growable: false);
+  }
+
+  @override
+  Future<DeviceJoinProgress> localDeviceJoinVerificationProgress({
+    required String selector,
+    required String joinSessionId,
+  }) async {
+    final instance = await _coreInstance();
+    return deviceJoinProgressFromCore(
+      await instance.localDeviceJoinVerificationProgress(
+        selector: _identitySelector(selector),
+        joinSessionId: joinSessionId,
+      ),
+    );
+  }
+
+  @override
+  Future<DeviceJoinProgress> startDeviceJoinVerification({
     required String selector,
     required String joinSessionId,
     required String operationId,
     required int challengeTtlSeconds,
   }) async {
     final instance = await _coreInstance();
-    final result = await instance.claimDeviceJoin(
+    final result = await instance.startDeviceJoinVerification(
       selector: _identitySelector(selector),
       joinSessionId: joinSessionId,
       operationId: operationId,
@@ -248,36 +273,20 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceJoinProgress> pollAdminDeviceJoin({
-    required String selector,
-    required String joinSessionId,
-  }) async {
-    final instance = await _coreInstance();
-    final result = await instance.pollAdminDeviceJoin(
-      selector: _identitySelector(selector),
-      joinSessionId: joinSessionId,
-    );
-    return deviceJoinProgressFromCore(result);
-  }
-
-  @override
   Future<DeviceJoinApprovalPrompt> prepareDeviceJoinApproval({
     required String selector,
     required String joinSessionId,
-    required DeviceRole role,
     required bool sasConfirmed,
   }) async {
     final instance = await _coreInstance();
     final result = await instance.prepareDeviceJoinApproval(
       selector: _identitySelector(selector),
       joinSessionId: joinSessionId,
-      role: _roleToCore(role),
       sasConfirmed: sasConfirmed,
     );
     return DeviceJoinApprovalPrompt(
       approvalHandle: result.approvalHandle,
       joinSessionId: result.joinSessionId,
-      role: _roleFromCore(result.role),
       sas: result.sas,
       expiresAt: _timestamp(result.expiresAt),
     );
@@ -297,15 +306,22 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceJoinProgress> cancelAdminDeviceJoin({
+  Future<DeviceJoinProgress> rejectDeviceJoin({
     required String selector,
     required String joinSessionId,
+    required DeviceJoinRejectReason reason,
   }) async {
     final instance = await _coreInstance();
-    return deviceJoinSessionFromCore(
-      await instance.cancelAdminDeviceJoin(
+    return deviceJoinProgressFromCore(
+      await instance.rejectDeviceJoin(
         selector: _identitySelector(selector),
         joinSessionId: joinSessionId,
+        reason: switch (reason) {
+          DeviceJoinRejectReason.userRejected =>
+            core.DeviceJoinRejectReason.userRejected,
+          DeviceJoinRejectReason.sasMismatch =>
+            core.DeviceJoinRejectReason.sasMismatch,
+        },
       ),
     );
   }
@@ -381,8 +397,25 @@ DeviceJoinProgress deviceJoinSessionFromCore(
     protocolDeviceId: session.protocolDeviceId,
     side: _sideFromCore(session.side),
     phase: _phaseFromCore(session.phase),
-    remoteState: DeviceJoinRemoteState.notObserved,
+    remoteState: DeviceJoinRemoteState.pending,
     expiresAt: _timestamp(session.expiresAt),
+  );
+}
+
+DeviceJoinRequestNotice deviceJoinRequestFromCore(
+  core.DeviceJoinRequestNotice value,
+) {
+  return DeviceJoinRequestNotice(
+    eventId: value.eventId,
+    joinSessionId: value.joinSessionId,
+    did: value.did,
+    protocolDeviceId: value.protocolDeviceId,
+    candidateKeyFingerprint: value.candidateKeyFingerprint,
+    issuedAt: _timestamp(value.issuedAt),
+    expiresAt: _timestamp(value.expiresAt),
+    state: _remoteStateFromCore(value.state),
+    claimedByCurrentDevice: value.claimedByCurrentDevice,
+    canStartVerification: value.canStartVerification,
   );
 }
 
@@ -409,19 +442,6 @@ DeviceRegistrySnapshot deviceRegistryFromCore(
   return DeviceRegistrySnapshot(
     did: value.did,
     devices: value.devices.map(_deviceFromCore).toList(growable: false),
-    pendingJoins: value.pendingJoinRequests
-        .map(
-          (pending) => PendingDeviceJoinSummary(
-            joinSessionId: pending.joinSessionId,
-            protocolDeviceId: pending.protocolDeviceId,
-            signingKeyId: pending.signingKeyId,
-            e2eeKeyId: pending.e2eeKeyId,
-            requestedRole: _roleFromCore(pending.requestedRole),
-            issuedAt: _timestamp(pending.issuedAt),
-            expiresAt: _timestamp(pending.expiresAt),
-          ),
-        )
-        .toList(growable: false),
   );
 }
 
@@ -459,23 +479,19 @@ DeviceJoinPhase _phaseFromCore(core.DeviceJoinPhase value) => switch (value) {
 DeviceJoinRemoteState _remoteStateFromCore(core.DeviceJoinRemoteState value) =>
     switch (value) {
       core.DeviceJoinRemoteState.pending => DeviceJoinRemoteState.pending,
-      core.DeviceJoinRemoteState.claimed => DeviceJoinRemoteState.claimed,
       core.DeviceJoinRemoteState.challengeSent =>
         DeviceJoinRemoteState.challengeSent,
       core.DeviceJoinRemoteState.responseVerified =>
         DeviceJoinRemoteState.responseVerified,
       core.DeviceJoinRemoteState.consumed => DeviceJoinRemoteState.consumed,
+      core.DeviceJoinRemoteState.cancelled => DeviceJoinRemoteState.cancelled,
+      core.DeviceJoinRemoteState.rejected => DeviceJoinRemoteState.rejected,
       core.DeviceJoinRemoteState.expired => DeviceJoinRemoteState.expired,
     };
 
 DeviceRole _roleFromCore(core.DeviceJoinRole value) => switch (value) {
   core.DeviceJoinRole.member => DeviceRole.member,
   core.DeviceJoinRole.admin => DeviceRole.admin,
-};
-
-core.DeviceJoinRole _roleToCore(DeviceRole value) => switch (value) {
-  DeviceRole.member => core.DeviceJoinRole.member,
-  DeviceRole.admin => core.DeviceJoinRole.admin,
 };
 
 DateTime _timestamp(String value) {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-20.remote-multi-device-lifecycle-mls-v6",
+  "sourceRevision": "2026-07-23.message-driven-join-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -58,16 +58,12 @@
       "resourceCategories": [
         "dedicated_test_identity",
         "device_join_session",
-        "root_key_transfer",
-        "device_revoke",
         "isolated_app_state",
         "isolated_cli_state"
       ],
       "caseIds": [
         "DEVICE-JOIN-E2E-001",
-        "DEVICE-JOIN-E2E-002",
-        "ROOT-TRANSFER-E2E-001",
-        "DEVICE-REVOKE-E2E-001"
+        "DEVICE-JOIN-E2E-002"
       ]
     },
     "production-keychain": {
@@ -442,37 +438,6 @@
         "CLAUDECODEAGENT-E2E-002",
         "CLAUDECODEAGENT-E2E-003",
         "CLAUDECODEAGENT-E2E-004"
-      ]
-    },
-    "multi-device-remote-mls": {
-      "tier": "remote_product_ui_security",
-      "requiredFor": [
-        "optional_nightly",
-        "release"
-      ],
-      "owner": "awiki-me-groups",
-      "estimatedMinutes": 24,
-      "timeoutMinutes": 30,
-      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
-      "allowedHosts": [
-        "awiki.info"
-      ],
-      "allowedDidDomains": [
-        "awiki.info"
-      ],
-      "resourceCategories": [
-        "dedicated_test_identity",
-        "device_join_session",
-        "group",
-        "group_mls_leaf",
-        "group_attachment",
-        "device_revoke",
-        "isolated_app_state",
-        "isolated_cli_state"
-      ],
-      "caseIds": [
-        "MLS-MULTI-DEVICE-E2E-001",
-        "MLS-MULTI-DEVICE-E2E-002"
       ]
     }
   }

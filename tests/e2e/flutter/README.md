@@ -24,7 +24,6 @@ Run E2E through the repository-level runner:
 dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case multi-device
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
-dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
@@ -124,27 +123,21 @@ generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
 later self-healing title fail. CLI is only the remote identity/traffic stimulus,
 not the product assertion surface.
 
-`--case multi-device-remote-join` is the separately activation-gated
-`DEVICE-JOIN-E2E-001/002`, `ROOT-TRANSFER-E2E-001`, and
-`DEVICE-REVOKE-E2E-001` product-security suite. In one direction a real
-AWiki Me onboarding surface joins an existing CLI ready admin through the
-production foreground TTY approval contract; in the other, a real AWiki Me
-ready admin approves an independent CLI requester and delegates exactly one
-real macOS LocalAuthentication prompt. Both directions use fresh independent
-native Core roots, dynamically resolve purpose-bound OTPs, compare the
-independently derived SAS without recording it, and require the new device to
-converge as a non-admin member in both Registries. The App-new-device direction
-also restarts from the same pending Core session and rejects persisted SAS. A
-third isolated scenario joins an admin-awaiting-root device, distinguishes
-Direct Init from root delivery, synchronizes encrypted root control and the
-signed imported ACK, waits for Registry-backed management readiness, then
-drives permanent revoke through the visible destructive confirmation. Every
-App-side high-risk mutation delegates to real macOS LocalAuthentication; no
-success is injected. It fails closed unless the dedicated account/ali allowlist,
-hidden rollouts, JSON-argv OTP resolver, exact CLI source revision, and manual
-system-auth prerequisites are explicit. An unavailable rollout is not a remote
-pass. The optional synthetic-number staged-OTP mode is an explicit operator
-test path with fixed resolver argv and an exact deployed
+`--case multi-device-remote-join` is the operator-confirmed
+`DEVICE-JOIN-E2E-001/002` product-security suite. In one direction a real AWiki
+Me onboarding surface joins an existing CLI ready admin through the production
+foreground TTY approval contract; in the other, a real AWiki Me ready admin
+receives the system notification, starts verification explicitly, and approves
+an independent CLI requester through exactly one real macOS
+LocalAuthentication prompt. Both directions use fresh independent native Core
+roots, dynamically resolve purpose-bound OTPs, compare the independently
+derived SAS without recording it, and require the new device to converge as a
+non-admin member in both Registries. The App-new-device direction also restarts
+from the same pending Core session and rejects persisted SAS. The suite fails
+closed unless the dedicated account allowlist, JSON-argv OTP resolver, exact
+CLI source revision, and manual system-auth prerequisites are explicit. The
+optional synthetic-number staged-OTP mode is an explicit operator test path
+with fixed resolver argv and an exact deployed
 `[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` RFC7807 gate;
 provider/channel drift, additional markers, and secret-like detail are rejected
 before resolver execution. It does not prove SMS delivery or change product
@@ -152,15 +145,11 @@ behavior. See
 [../../../docs/testing.md](../../../docs/testing.md) for the environment
 contract and command.
 
-`--case multi-device-remote-mls` reuses that fail-closed remote contract but
-attests only `MLS-MULTI-DEVICE-E2E-001/002`. A real AWiki Me owner creates the
-required-E2EE group and drives production reconciliation; an independently
-initialized CLI member consumes its own Welcome, exchanges future text and one
-encrypted attachment, and is then revoked through the real Devices UI. The
-suite requires exact Remove convergence before the App claims ready and rejects
-future access from the revoked CLI endpoint. It never copies native state or
-projects MLS private/control values. A checked-in implementation is not remote
-pass evidence while rollout or operator prerequisites are unavailable.
+Root transfer, exact-device revoke, and MLS are not executable from the Step 2
+runner. `ROOT-TRANSFER-E2E-001/002`, `DEVICE-REVOKE-E2E-001`, and
+`MLS-MULTI-DEVICE-E2E-001/002` remain planned for Step 3 or a later version.
+Their old Dart implementations depended on direct-admin Join and have been
+deleted; a catalog entry or planning document is not remote pass evidence.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide

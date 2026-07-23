@@ -244,7 +244,6 @@
   "devicesTitle": "设备管理",
   "devicesAuthorizedTitle": "已授权设备",
   "devicesPendingTitle": "待审批",
-  "devicesLocalJoinsTitle": "未完成的设备关联",
   "devicesEmpty": "暂无设备信息",
   "devicesPendingEmpty": "当前没有待审批请求",
   "deviceCurrent": "当前设备",
@@ -276,7 +275,6 @@
   "deviceRevokeProtectionHint": "当前设备不能撤销自身，系统始终保护最后一台可用管理设备。",
   "deviceRevokeProtected": "该设备受保护，或当前设备尚未具备管理能力。当前设备和最后一台可用管理设备不能撤销。",
   "deviceReviewAction": "查看并验证",
-  "deviceResumeAction": "继续",
   "deviceJoinEntry": "将此设备加入已有账户",
   "deviceJoinEntrySubtitle": "需要已有管理设备确认两端的 6 位验证码",
   "deviceJoinTitle": "添加新设备",
@@ -291,13 +289,32 @@
   "deviceJoinSasHint": "请确认两台设备独立显示的数字完全一致。验证码不会通过服务器传输。",
   "deviceJoinApprovalTitle": "确认新设备",
   "deviceJoinSasMatches": "我已确认两台设备的 6 位验证码一致",
-  "deviceJoinAllowAdmin": "允许此设备管理其他设备",
-  "deviceJoinAllowAdminHint": "默认关闭。开启后仍需完成根密钥安全导入才能管理设备。",
+  "deviceJoinRequestReady": "可以开始验证",
+  "deviceJoinStartVerification": "开始验证",
+  "deviceJoinClaimedByOther": "另一台管理设备正在处理此请求",
+  "deviceJoinReject": "拒绝请求",
+  "deviceJoinRejected": "设备请求已拒绝",
+  "deviceJoinSasMismatch": "验证码不一致",
+  "deviceJoinFingerprint": "密钥指纹：{fingerprint}",
+  "@deviceJoinFingerprint": {
+    "placeholders": {
+      "fingerprint": {"type": "String"}
+    }
+  },
+  "deviceJoinRequestWindow": "发起时间：{issuedAt}；过期时间：{expiresAt}",
+  "@deviceJoinRequestWindow": {
+    "placeholders": {
+      "issuedAt": {"type": "String"},
+      "expiresAt": {"type": "String"}
+    }
+  },
   "deviceJoinApprove": "确认并授权",
   "deviceJoinCancel": "取消关联",
   "deviceJoinAuthorized": "设备已加入",
   "deviceJoinCancelled": "设备关联已取消",
   "deviceJoinExpired": "设备关联已过期，请重新发起",
+  "deviceJoinActivating": "正在激活此设备…",
+  "deviceJoinActivationRetry": "重试设备激活",
   "deviceJoinUserPresenceReason": "确认授权新设备",
   "deviceJoinErrorUnavailable": "多设备功能当前未开放",
   "deviceJoinErrorConflict": "状态已发生变化，请刷新后重试",

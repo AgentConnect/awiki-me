@@ -1,6 +1,6 @@
 # AWiki Me 多设备加入、设备页与永久撤销
 
-状态：设备入口默认存在；根导入、永久撤销和 E2EE 仍使用独立安全门禁
+状态：消息驱动的 member Join 默认存在；根导入、永久撤销和 E2EE 不属于本步骤
 
 整体身份和密码学方案以 Core 仓库中的
 [多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
@@ -15,7 +15,7 @@
 - 未登录的新设备可从 onboarding 选择“将此设备加入已有账户”；
 - V1 只比较两端独立计算的 6 位验证码，不提供二维码或扫码入口。
 
-永久撤销由独立编译期开关 `AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED` 控制，默认同样为
+永久撤销由独立编译期开关 `AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED` 控制，默认
 `false`。它只开放撤销动作；关闭时仍可进入设备页读取权威 Registry。
 
 设备级 Direct 产品路径由编译期开关 `AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED` 控制，
@@ -31,20 +31,28 @@ Recovery 服务或远端流程，只显示明确的不支持提示。
   -> token 在 data adapter 内立即交给 Core 消费
   -> Core 创建并持久化 Join
   -> App 轮询无秘密进度并短暂显示 6 位 SAS
+  -> Core finalization 得到 active + member + management_ready=false
+  -> App 按精确 DID 激活已经提交的本地 Identity
   -> authorized / cancelled / expired
 
-已有管理设备：设备页读取 Registry
-  -> claim pending Join
-  -> Core 验证 challenge 并投影 6 位 SAS
+已有管理设备：可信 system_notification_changed
+  -> App 只安排 reliable message sync
+  -> Core 验证、提交标准 P3 系统通知并形成 local Join inbox
+  -> sync 成功后 App 刷新 local_device_join_requests
+  -> 用户打开请求（只读，不 claim）
+  -> 用户明确点击“开始验证”
+  -> Core 原子绑定 claimant、生成 challenge 并发送 JoinClaimed
+  -> ResponseVerified 后 Core 才向本机投影 6 位 SAS
   -> 用户确认两端一致
-  -> 默认 member；显式开关才选择 admin
   -> 一次系统 user-presence
-  -> Core 完成授权
+  -> Core 固定按 member 完成授权
 ```
 
-App 重启后只从 Core 恢复 Session 摘要，再轮询恢复当前进度。App 不把 SAS 写入
-`ProductLocalStore`、偏好设置或 E2E 报告；终态由 Core 投影，重复点击由 service/provider
-和 Core 幂等门禁共同拒绝。
+新设备重启后从 Core 恢复 Session 摘要，并继续使用新设备 status poll；管理设备不再通过
+HTTP pending list、status timer 或 admin poll 发现/推进 Join，只恢复 Core 已验证的本地通知
+投影与本机 verification progress。App 不把 SAS 写入 `ProductLocalStore`、偏好设置或 E2E
+报告；终态由 Core 投影，重复点击由 service/provider 和 Core 幂等门禁共同拒绝。请求已由
+另一台管理设备处理时只读展示，不能继续验证或批准。
 
 ## 3. 安全边界
 
@@ -53,6 +61,12 @@ E2EE 私钥、配对共享秘密、challenge 明文和 DID 根私钥始终留在
 SMS OTP 只进入发起方法；域内 exchange 返回的 account token 只存在于 data adapter
 的局部变量，并立即包装为 Core 单次消费对象，不进入 application/presentation state、
 日志、错误、持久化或跨域协议。
+
+JoinRequested / JoinClaimed / JoinResponseVerified 是通用系统通知承载的业务 payload。
+Message Service 按标准 P3 signed message 传输，Core 负责验证可信 service DID、proof、
+audience、expiry 和业务绑定并提交本地投影。AWiki Me 只消费
+`system_notification_changed` 信号和 Core 的 typed local projection，不解析 P3 JSON、
+不验证 proof，也不把通知 title/body 投影成普通聊天 banner、conversation 或 timeline。
 
 未登录新设备没有 current Core identity，因此不能复用要求已选身份的 Directory adapter。
 onboarding 注册流程不在发送 OTP 或提交注册前用未认证的 public-profile 查询 Handle，
@@ -78,10 +92,9 @@ AWiki Me 只维护一个当前 access token 会话，不引入 refresh token 或
 次续期，第二次 401 直接向上返回。若 V1 部署期保持 User Service JWT signing key 不轮换，
 这只是上线部署约束，不能据此宣称 Message Service 已完整实现基于 `kid` 的多 key 验签。
 
-`admin` 选择只表示用户明确授予管理意图。根密钥导入完成并达到
-`management-ready` 前，UI 不应把设备描述为可管理其他设备；后续
-`admin-awaiting-root → importing → ready/failed` 产品流见
-[管理设备根密钥导入](root-key-transfer-ui.md)。
+Join V1 不提供 `admin` 选择，也不因批准 Join 触发根密钥传输；结果固定为
+`active + member + management_ready=false`。管理员升级和普通 P5 RootKeyEnvelope 属于
+第三步，当前保留的旧 root-control 实现不能从本 Join 流程被调用。
 
 ## 4. 永久撤销
 
@@ -100,19 +113,15 @@ Document/Registry 版本与 hash、`auth_generation`、operation ID 和密钥材
 确定性覆盖：
 
 ```bash
-flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_test.dart \
+flutter test tests/unit/app_runtime_notification_test.dart \
+  tests/unit/message_sync_coordinator_test.dart \
+  tests/unit/data/im_core/awiki_im_core_mappers_test.dart \
+  tests/unit/data/im_core/awiki_im_core_device_management_adapter_test.dart \
   tests/unit/devices/device_management_service_test.dart \
   tests/unit/devices/devices_ui_test.dart
 ```
 
-真实 App + CLI + `awiki.info` 的 `DEVICE-JOIN-E2E-001/002`、
-`ROOT-TRANSFER-E2E-001` 与 `DEVICE-REVOKE-E2E-001` 已进入显式激活的
-`multi-device-remote-join` suite，合同位于
-`tests/e2e/flutter/app/multi_device_join_ui_test.dart` 及其
-`root_key_transfer_ui_test.dart` part。`001` 从真实 onboarding UI 让 App 作为新设备加入既有
-CLI ready-admin，经前台 CLI TTY 比较 SAS 并默认批准为 member；`002` 反向由 App
-ready-admin 通过真实系统 user-presence 批准 CLI 新设备，随后独立场景验证根导入/imported
-ACK/management-ready 与永久撤销。所有方向都必须使用独立 Core 数据目录、动态一次性 OTP、
-双端 SAS 和最终 Registry 断言；`001` 还验证 pending Join 在 App 重启后恢复为同一会话且不
-持久化 SAS。完整的 `DEVICE-JOIN-E2E-003` 取消与真实过期路径，以及
-`ROOT-TRANSFER-E2E-002` 仍为 planned；不得增加生产测试后门或以 fake-backed Widget 替代。
+本步骤只接受上述消息驱动 Join focused tests，不执行完整 AWiki Me `full` 或第三步的
+Root/MLS E2E。现有 `multi-device-remote-join` runner 中依赖 Registry pending discovery、
+split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为本步骤通过证据；
+后续测试收口必须保留两个 Join 方向，并把 root transfer/revoke 移到第三步。

@@ -34,22 +34,25 @@ abstract interface class DeviceManagementCorePort {
     required bool userPresenceConfirmed,
   });
 
-  Future<DeviceJoinProgress> claimDeviceJoin({
+  Future<List<DeviceJoinRequestNotice>> localDeviceJoinRequests(
+    String selector,
+  );
+
+  Future<DeviceJoinProgress> localDeviceJoinVerificationProgress({
+    required String selector,
+    required String joinSessionId,
+  });
+
+  Future<DeviceJoinProgress> startDeviceJoinVerification({
     required String selector,
     required String joinSessionId,
     required String operationId,
     required int challengeTtlSeconds,
   });
 
-  Future<DeviceJoinProgress> pollAdminDeviceJoin({
-    required String selector,
-    required String joinSessionId,
-  });
-
   Future<DeviceJoinApprovalPrompt> prepareDeviceJoinApproval({
     required String selector,
     required String joinSessionId,
-    required DeviceRole role,
     required bool sasConfirmed,
   });
 
@@ -58,8 +61,9 @@ abstract interface class DeviceManagementCorePort {
     required bool userPresenceConfirmed,
   });
 
-  Future<DeviceJoinProgress> cancelAdminDeviceJoin({
+  Future<DeviceJoinProgress> rejectDeviceJoin({
     required String selector,
     required String joinSessionId,
+    required DeviceJoinRejectReason reason,
   });
 }

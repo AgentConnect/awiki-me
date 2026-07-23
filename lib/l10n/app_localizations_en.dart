@@ -696,9 +696,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get devicesPendingTitle => 'Pending approval';
 
   @override
-  String get devicesLocalJoinsTitle => 'Unfinished device joins';
-
-  @override
   String get devicesEmpty => 'No device information';
 
   @override
@@ -785,9 +782,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceReviewAction => 'Review and verify';
 
   @override
-  String get deviceResumeAction => 'Continue';
-
-  @override
   String get deviceJoinEntry => 'Add this device to an existing account';
 
   @override
@@ -833,12 +827,33 @@ class AppLocalizationsEn extends AppLocalizations {
       'I confirmed that both devices show the same 6-digit code';
 
   @override
-  String get deviceJoinAllowAdmin =>
-      'Allow this device to manage other devices';
+  String get deviceJoinRequestReady => 'Ready to start verification';
 
   @override
-  String get deviceJoinAllowAdminHint =>
-      'Off by default. Root-key import must still finish before this device can manage devices.';
+  String get deviceJoinStartVerification => 'Start verification';
+
+  @override
+  String get deviceJoinClaimedByOther =>
+      'Another management device is handling this request';
+
+  @override
+  String get deviceJoinReject => 'Reject request';
+
+  @override
+  String get deviceJoinRejected => 'Device request rejected';
+
+  @override
+  String get deviceJoinSasMismatch => 'Codes do not match';
+
+  @override
+  String deviceJoinFingerprint(String fingerprint) {
+    return 'Key fingerprint: $fingerprint';
+  }
+
+  @override
+  String deviceJoinRequestWindow(String issuedAt, String expiresAt) {
+    return 'Requested $issuedAt; expires $expiresAt';
+  }
 
   @override
   String get deviceJoinApprove => 'Confirm and authorize';
@@ -854,6 +869,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceJoinExpired => 'Device pairing expired. Start again.';
+
+  @override
+  String get deviceJoinActivating => 'Activating this device...';
+
+  @override
+  String get deviceJoinActivationRetry => 'Retry device activation';
 
   @override
   String get deviceJoinUserPresenceReason =>

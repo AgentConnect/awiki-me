@@ -875,6 +875,34 @@ void main() {
     },
   );
 
+  test('system notification event is a sync-only realtime signal', () {
+    const event = core.RealtimeEvent(
+      kind: 'system_notification_changed',
+      notificationId: 'notice-1',
+      notificationType: 'device_join_request',
+      title: 'must not become chat',
+      body: 'must not become chat preview',
+      sync: core.RealtimeSyncHint(
+        syncDirty: true,
+        gapDetected: false,
+        eventSeq: '42',
+        eventType: 'system_notification_changed',
+      ),
+    );
+
+    final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
+
+    expect(update, isNotNull);
+    expect(update!.systemNotificationChanged, isTrue);
+    expect(update.needsReliableSync, isTrue);
+    expect(update.syncDirty, isTrue);
+    expect(update.syncEventSeq, '42');
+    expect(update.message, isNull);
+    expect(update.conversation, isNull);
+    expect(update.conversationHint, isNull);
+    expect(update.agentControlPayload, isNull);
+  });
+
   test('realtime control payload is split away from normal updates', () {
     const event = core.RealtimeEvent(
       kind: 'message_received',

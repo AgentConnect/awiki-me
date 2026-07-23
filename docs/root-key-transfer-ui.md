@@ -1,6 +1,6 @@
 # AWiki Me 管理设备根密钥导入
 
-状态：App 产品流已实现，能力默认关闭；真实 `awiki.info` E2E 已进入显式激活 gate
+状态：第三步待替换的旧实现，能力默认关闭；不作为消息驱动 Join 的 active E2E
 
 整体密码学流程以 Core 仓库的
 [多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
@@ -56,8 +56,7 @@ flutter test tests/unit/devices/root_key_transfer_service_test.dart \
   tests/unit/devices/devices_ui_test.dart
 ```
 
-`ROOT-TRANSFER-E2E-001` 已加入显式激活的 `multi-device-remote-join` suite：它使用独立
-Core 数据根、动态一次性 OTP、真实 user-presence、部署后的 awiki.info 路由，以及
-CLI/Core completed imported-ACK 与两端 Registry `management_ready` 的联合断言。代码存在
-不代表远端已经通过；隐藏 rollout、账号或人工认证前置条件缺失时必须 fail closed。
-重启、失败重试和幂等 readiness 合同 `ROOT-TRANSFER-E2E-002` 仍为 planned。
+本文件描述的是第三步替换前暂时保留的旧 root-control/imported-ACK 产品代码。第二步的
+消息驱动 Join 固定批准为 member，不调用这些入口；`ROOT-TRANSFER-E2E-001/002` 不能作为
+第二步 active 验收。第三步完成普通 P5 RootKeyEnvelope 与 HTTP completion 后，应同步删除
+这里的旧状态机、测试断言和文档。

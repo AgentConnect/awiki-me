@@ -32,14 +32,16 @@ enum DeviceJoinPhase {
 }
 
 enum DeviceJoinRemoteState {
-  notObserved,
   pending,
-  claimed,
   challengeSent,
   responseVerified,
   consumed,
+  cancelled,
+  rejected,
   expired,
 }
+
+enum DeviceJoinRejectReason { userRejected, sasMismatch }
 
 class DeviceSummary {
   const DeviceSummary({
@@ -127,36 +129,48 @@ class RootKeyTransferSummary {
   final bool retryable;
 }
 
-class PendingDeviceJoinSummary {
-  const PendingDeviceJoinSummary({
+class DeviceJoinRequestNotice {
+  const DeviceJoinRequestNotice({
+    required this.eventId,
     required this.joinSessionId,
+    required this.did,
     required this.protocolDeviceId,
-    required this.signingKeyId,
-    required this.e2eeKeyId,
-    required this.requestedRole,
+    required this.candidateKeyFingerprint,
     required this.issuedAt,
     required this.expiresAt,
+    required this.state,
+    required this.claimedByCurrentDevice,
+    required this.canStartVerification,
   });
 
+  final String eventId;
   final String joinSessionId;
+  final String did;
   final String protocolDeviceId;
-  final String signingKeyId;
-  final String e2eeKeyId;
-  final DeviceRole requestedRole;
+  final String candidateKeyFingerprint;
   final DateTime issuedAt;
   final DateTime expiresAt;
+  final DeviceJoinRemoteState state;
+  final bool claimedByCurrentDevice;
+  final bool canStartVerification;
+
+  bool get isTerminal =>
+      state == DeviceJoinRemoteState.consumed ||
+      state == DeviceJoinRemoteState.cancelled ||
+      state == DeviceJoinRemoteState.rejected ||
+      state == DeviceJoinRemoteState.expired;
+
+  bool get claimedByOther =>
+      !claimedByCurrentDevice &&
+      (state == DeviceJoinRemoteState.challengeSent ||
+          state == DeviceJoinRemoteState.responseVerified);
 }
 
 class DeviceRegistrySnapshot {
-  const DeviceRegistrySnapshot({
-    required this.did,
-    this.devices = const <DeviceSummary>[],
-    this.pendingJoins = const <PendingDeviceJoinSummary>[],
-  });
+  const DeviceRegistrySnapshot({required this.did, this.devices = const []});
 
   final String did;
   final List<DeviceSummary> devices;
-  final List<PendingDeviceJoinSummary> pendingJoins;
 
   DeviceSummary? get currentDevice {
     for (final device in devices) {
@@ -209,14 +223,12 @@ class DeviceJoinApprovalPrompt {
   const DeviceJoinApprovalPrompt({
     required this.approvalHandle,
     required this.joinSessionId,
-    required this.role,
     required this.sas,
     required this.expiresAt,
   });
 
   final String approvalHandle;
   final String joinSessionId;
-  final DeviceRole role;
 
   /// Short-lived display-only SAS. It must never be persisted or logged.
   final String sas;

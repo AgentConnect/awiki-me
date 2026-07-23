@@ -244,7 +244,6 @@
   "devicesTitle": "Device management",
   "devicesAuthorizedTitle": "Authorized devices",
   "devicesPendingTitle": "Pending approval",
-  "devicesLocalJoinsTitle": "Unfinished device joins",
   "devicesEmpty": "No device information",
   "devicesPendingEmpty": "No pending approval requests",
   "deviceCurrent": "Current device",
@@ -276,7 +275,6 @@
   "deviceRevokeProtectionHint": "The current device cannot revoke itself, and the final ready management device is always protected.",
   "deviceRevokeProtected": "This device is protected or you are not using a ready management device. The current device and final ready management device cannot be revoked.",
   "deviceReviewAction": "Review and verify",
-  "deviceResumeAction": "Continue",
   "deviceJoinEntry": "Add this device to an existing account",
   "deviceJoinEntrySubtitle": "An existing admin device must verify the 6-digit code shown on both devices",
   "deviceJoinTitle": "Add a new device",
@@ -291,13 +289,32 @@
   "deviceJoinSasHint": "Confirm that both devices independently show exactly the same digits. The code is never relayed by the server.",
   "deviceJoinApprovalTitle": "Confirm new device",
   "deviceJoinSasMatches": "I confirmed that both devices show the same 6-digit code",
-  "deviceJoinAllowAdmin": "Allow this device to manage other devices",
-  "deviceJoinAllowAdminHint": "Off by default. Root-key import must still finish before this device can manage devices.",
+  "deviceJoinRequestReady": "Ready to start verification",
+  "deviceJoinStartVerification": "Start verification",
+  "deviceJoinClaimedByOther": "Another management device is handling this request",
+  "deviceJoinReject": "Reject request",
+  "deviceJoinRejected": "Device request rejected",
+  "deviceJoinSasMismatch": "Codes do not match",
+  "deviceJoinFingerprint": "Key fingerprint: {fingerprint}",
+  "@deviceJoinFingerprint": {
+    "placeholders": {
+      "fingerprint": {"type": "String"}
+    }
+  },
+  "deviceJoinRequestWindow": "Requested {issuedAt}; expires {expiresAt}",
+  "@deviceJoinRequestWindow": {
+    "placeholders": {
+      "issuedAt": {"type": "String"},
+      "expiresAt": {"type": "String"}
+    }
+  },
   "deviceJoinApprove": "Confirm and authorize",
   "deviceJoinCancel": "Cancel pairing",
   "deviceJoinAuthorized": "Device added",
   "deviceJoinCancelled": "Device pairing cancelled",
   "deviceJoinExpired": "Device pairing expired. Start again.",
+  "deviceJoinActivating": "Activating this device...",
+  "deviceJoinActivationRetry": "Retry device activation",
   "deviceJoinUserPresenceReason": "Confirm authorization of a new device",
   "deviceJoinErrorUnavailable": "Multi-device support is not available",
   "deviceJoinErrorConflict": "The state changed. Refresh and try again.",

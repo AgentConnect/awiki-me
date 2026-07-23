@@ -29,6 +29,7 @@ enum DeviceManagementErrorKind {
 class DevicesState {
   const DevicesState({
     this.registry,
+    this.joinRequests = const <DeviceJoinRequestNotice>[],
     this.localJoins = const <DeviceJoinProgress>[],
     this.activeJoin,
     this.isLoading = false,
@@ -39,6 +40,7 @@ class DevicesState {
   });
 
   final DeviceRegistrySnapshot? registry;
+  final List<DeviceJoinRequestNotice> joinRequests;
   final List<DeviceJoinProgress> localJoins;
   final DeviceJoinProgress? activeJoin;
   final bool isLoading;
@@ -46,6 +48,10 @@ class DevicesState {
   final Map<String, RootKeyTransferSummary> rootTransfers;
   final Set<String> rootSessionEstablishingDeviceIds;
   final DeviceManagementErrorKind? error;
+
+  List<DeviceJoinRequestNotice> get visibleJoinRequests => joinRequests
+      .where((request) => !request.isTerminal)
+      .toList(growable: false);
 
   bool get currentDeviceCanManage =>
       registry?.currentDevice?.canManageDevices == true;
@@ -107,6 +113,7 @@ class DevicesState {
 
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
+    List<DeviceJoinRequestNotice>? joinRequests,
     List<DeviceJoinProgress>? localJoins,
     DeviceJoinProgress? activeJoin,
     bool clearActiveJoin = false,
@@ -119,6 +126,7 @@ class DevicesState {
   }) {
     return DevicesState(
       registry: registry ?? this.registry,
+      joinRequests: joinRequests ?? this.joinRequests,
       localJoins: localJoins ?? this.localJoins,
       activeJoin: clearActiveJoin ? null : (activeJoin ?? this.activeJoin),
       isLoading: isLoading ?? this.isLoading,
@@ -137,6 +145,7 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   final Ref ref;
   int _generation = 0;
+  String? _selectedAdminJoinSessionId;
   final Map<String, String> _rootTransferStartMessageIds = <String, String>{};
 
   bool get _rootTransferEnabled =>
@@ -160,20 +169,28 @@ class DevicesController extends StateNotifier<DevicesState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final service = ref.read(deviceManagementServiceProvider);
+      final registry = await service.loadRegistry(selector);
       final results = await Future.wait<Object>(<Future<Object>>[
-        service.loadRegistry(selector),
         service.restoreLocalJoins(),
+        if (registry.currentDevice?.canManageDevices == true)
+          service.restoreAdminJoinRequests(selector),
         if (_rootTransferEnabled)
           ref
               .read(rootKeyTransferServiceProvider)
               .list(selector: selector, includeCompleted: true),
       ]);
       if (!mounted || generation != _generation) return;
-      final registry = results[0] as DeviceRegistrySnapshot;
+      var resultIndex = 0;
+      final localJoins = (results[resultIndex++] as List<DeviceJoinProgress>)
+          .where((session) => session.side == DeviceJoinSide.newDevice)
+          .toList(growable: false);
+      final joinRequests = registry.currentDevice?.canManageDevices == true
+          ? results[resultIndex++] as List<DeviceJoinRequestNotice>
+          : const <DeviceJoinRequestNotice>[];
       final transfers = _rootTransferEnabled
           ? _latestRootTransfersByRecipient(
               registry,
-              results[2] as List<RootKeyTransferSummary>,
+              results[resultIndex] as List<RootKeyTransferSummary>,
             )
           : const <String, RootKeyTransferSummary>{};
       final eligibleRecipients = registry.devices
@@ -205,7 +222,8 @@ class DevicesController extends StateNotifier<DevicesState> {
           : <String>{};
       state = DevicesState(
         registry: registry,
-        localJoins: results[1] as List<DeviceJoinProgress>,
+        joinRequests: joinRequests,
+        localJoins: localJoins,
         activeJoin: state.activeJoin,
         rootTransfers: transfers,
         rootSessionEstablishingDeviceIds: Set.unmodifiable(
@@ -218,6 +236,64 @@ class DevicesController extends StateNotifier<DevicesState> {
         isLoading: false,
         error: _classifyDeviceError(error),
       );
+    }
+  }
+
+  Future<void> refreshJoinInbox() async {
+    final selector = _selector;
+    final registry = state.registry;
+    if (selector == null) {
+      return;
+    }
+    if (registry == null) {
+      await loadManagement();
+      return;
+    }
+    if (registry.currentDevice?.canManageDevices != true) {
+      if (state.joinRequests.isNotEmpty) {
+        state = state.copyWith(joinRequests: const <DeviceJoinRequestNotice>[]);
+      }
+      return;
+    }
+    try {
+      final service = ref.read(deviceManagementServiceProvider);
+      final requests = await service.restoreAdminJoinRequests(selector);
+      if (!mounted) return;
+      var activeJoin = state.activeJoin;
+      var clearActiveJoin = false;
+      final selectedJoinSessionId = activeJoin?.side == DeviceJoinSide.admin
+          ? activeJoin!.joinSessionId
+          : _selectedAdminJoinSessionId;
+      if (selectedJoinSessionId != null) {
+        final request = _findJoinRequest(requests, selectedJoinSessionId);
+        if (request == null || request.isTerminal) {
+          if (activeJoin?.side == DeviceJoinSide.admin &&
+              activeJoin?.joinSessionId == selectedJoinSessionId) {
+            activeJoin = null;
+            clearActiveJoin = true;
+          }
+          if (_selectedAdminJoinSessionId == selectedJoinSessionId) {
+            _selectedAdminJoinSessionId = null;
+          }
+        } else if (activeJoin?.isTerminal != true &&
+            request.claimedByCurrentDevice &&
+            request.state == DeviceJoinRemoteState.responseVerified) {
+          activeJoin = await service.restoreAdminVerificationProgress(
+            selector: selector,
+            joinSessionId: request.joinSessionId,
+          );
+          if (!mounted) return;
+        }
+      }
+      state = state.copyWith(
+        joinRequests: requests,
+        activeJoin: activeJoin,
+        clearActiveJoin: clearActiveJoin,
+        clearError: true,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      state = state.copyWith(error: _classifyDeviceError(error));
     }
   }
 
@@ -239,12 +315,25 @@ class DevicesController extends StateNotifier<DevicesState> {
                 session.side == DeviceJoinSide.newDevice && !session.isTerminal,
           )
           .toList();
+      final authorized = sessions
+          .where(
+            (session) =>
+                session.side == DeviceJoinSide.newDevice &&
+                session.phase == DeviceJoinPhase.authorized,
+          )
+          .toList();
       state = DevicesState(
-        localJoins: sessions,
-        activeJoin: resumable.isEmpty ? null : resumable.last,
+        localJoins: sessions
+            .where((session) => session.side == DeviceJoinSide.newDevice)
+            .toList(growable: false),
+        activeJoin: resumable.isNotEmpty
+            ? resumable.last
+            : authorized.isEmpty
+            ? null
+            : authorized.last,
       );
       if (resumable.isNotEmpty) {
-        await pollActive();
+        await pollNewDeviceActive();
       }
     } catch (error) {
       if (!mounted || generation != _generation) return;
@@ -288,26 +377,55 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  Future<bool> claim(PendingDeviceJoinSummary pending) async {
+  Future<void> selectJoinRequest(DeviceJoinRequestNotice request) async {
     final selector = _selector;
-    if (selector == null || state.isActionPending) {
+    _selectedAdminJoinSessionId = request.isTerminal
+        ? null
+        : request.joinSessionId;
+    state = state.copyWith(clearActiveJoin: true, clearError: true);
+    if (selector == null ||
+        request.isTerminal ||
+        !request.claimedByCurrentDevice ||
+        request.state != DeviceJoinRemoteState.responseVerified) {
+      return;
+    }
+    try {
+      final progress = await ref
+          .read(deviceManagementServiceProvider)
+          .restoreAdminVerificationProgress(
+            selector: selector,
+            joinSessionId: request.joinSessionId,
+          );
+      if (!mounted) return;
+      state = state.copyWith(activeJoin: progress);
+    } catch (error) {
+      if (!mounted) return;
+      state = state.copyWith(error: _classifyDeviceError(error));
+    }
+  }
+
+  Future<bool> startVerification(DeviceJoinRequestNotice request) async {
+    final selector = _selector;
+    if (selector == null ||
+        state.isActionPending ||
+        request.isTerminal ||
+        request.claimedByOther ||
+        !request.canStartVerification) {
       return false;
     }
+    _selectedAdminJoinSessionId = request.joinSessionId;
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
       final progress = await ref
           .read(deviceManagementServiceProvider)
-          .claim(
+          .startVerification(
             selector: selector,
-            joinSessionId: pending.joinSessionId,
-            operationId: 'awiki-me-claim-${pending.joinSessionId}',
+            joinSessionId: request.joinSessionId,
+            operationId: 'awiki-me-verify-${request.joinSessionId}',
           );
       if (!mounted) return false;
-      state = state.copyWith(
-        activeJoin: progress,
-        localJoins: _replaceJoin(state.localJoins, progress),
-        isActionPending: false,
-      );
+      state = state.copyWith(activeJoin: progress, isActionPending: false);
+      await refreshJoinInbox();
       return true;
     } catch (error) {
       if (!mounted) return false;
@@ -319,21 +437,33 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  void resume(DeviceJoinProgress progress) {
-    state = state.copyWith(activeJoin: progress, clearError: true);
+  void resumeNewDevice(DeviceJoinProgress progress) {
+    if (progress.side != DeviceJoinSide.newDevice) {
+      throw StateError('invalid_new_device_join_progress');
+    }
+    state = state.copyWith(
+      activeJoin: progress,
+      localJoins: _replaceJoin(state.localJoins, progress),
+      clearError: true,
+    );
   }
 
-  Future<void> pollActive() async {
+  Future<void> pollNewDeviceActive() async {
     final progress = state.activeJoin;
-    if (progress == null || progress.isTerminal || state.isActionPending) {
+    final requiresAuthorizedHydration =
+        progress?.phase == DeviceJoinPhase.authorized &&
+        progress?.authorizedDevice == null;
+    if (progress == null ||
+        progress.side != DeviceJoinSide.newDevice ||
+        (progress.isTerminal && !requiresAuthorizedHydration) ||
+        state.isActionPending) {
       return;
     }
-    final selector = _selector ?? progress.did;
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
       final next = await ref
           .read(deviceManagementServiceProvider)
-          .poll(selector: selector, progress: progress);
+          .pollNewDeviceJoin(progress: progress);
       if (!mounted) return;
       state = state.copyWith(
         activeJoin: next,
@@ -352,8 +482,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  Future<bool> approveActive({
-    required DeviceRole role,
+  Future<bool> approveActiveAsMember({
     required bool sasConfirmed,
     required String presenceReason,
   }) async {
@@ -366,21 +495,47 @@ class DevicesController extends StateNotifier<DevicesState> {
     try {
       final next = await ref
           .read(deviceManagementServiceProvider)
-          .approve(
+          .approveAsMember(
             selector: selector,
             progress: progress!,
             displayedSas: progress.sas!,
-            role: role,
             sasConfirmed: sasConfirmed,
             presenceReason: presenceReason,
           );
       if (!mounted) return false;
-      state = state.copyWith(
-        activeJoin: next,
-        localJoins: _replaceJoin(state.localJoins, next),
-        isActionPending: false,
-      );
+      state = state.copyWith(activeJoin: next, isActionPending: false);
       await loadManagement();
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isActionPending: false,
+        error: _classifyDeviceError(error),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> rejectJoin({
+    required DeviceJoinRequestNotice request,
+    required DeviceJoinRejectReason reason,
+  }) async {
+    final selector = _selector;
+    if (selector == null || state.isActionPending || request.isTerminal) {
+      return false;
+    }
+    state = state.copyWith(isActionPending: true, clearError: true);
+    try {
+      await ref
+          .read(deviceManagementServiceProvider)
+          .rejectJoin(
+            selector: selector,
+            joinSessionId: request.joinSessionId,
+            reason: reason,
+          );
+      if (!mounted) return false;
+      state = state.copyWith(clearActiveJoin: true, isActionPending: false);
+      await refreshJoinInbox();
       return true;
     } catch (error) {
       if (!mounted) return false;
@@ -511,15 +666,18 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
   }
 
-  Future<void> cancelActive() async {
+  Future<void> cancelNewDeviceActive() async {
     final progress = state.activeJoin;
-    if (progress == null || state.isActionPending) return;
-    final selector = _selector ?? progress.did;
+    if (progress == null ||
+        progress.side != DeviceJoinSide.newDevice ||
+        state.isActionPending) {
+      return;
+    }
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
       final next = await ref
           .read(deviceManagementServiceProvider)
-          .cancel(selector: selector, progress: progress);
+          .cancelNewDeviceJoin(progress: progress);
       if (!mounted) return;
       state = state.copyWith(
         activeJoin: next,
@@ -563,6 +721,18 @@ DeviceSummary? _findDevice(
   if (registry == null) return null;
   for (final device in registry.devices) {
     if (device.protocolDeviceId == protocolDeviceId) return device;
+  }
+  return null;
+}
+
+DeviceJoinRequestNotice? _findJoinRequest(
+  List<DeviceJoinRequestNotice> requests,
+  String joinSessionId,
+) {
+  for (final request in requests) {
+    if (request.joinSessionId == joinSessionId) {
+      return request;
+    }
   }
   return null;
 }

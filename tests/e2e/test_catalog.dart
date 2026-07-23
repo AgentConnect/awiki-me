@@ -322,34 +322,25 @@ class AppTestCatalog {
         'Handle Recovery acceptance.',
       )
       ..writeln(
-        '- `multi-device-remote-join` is a separate, activation-gated '
-        '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002`, '
-        '`ROOT-TRANSFER-E2E-001`, and `DEVICE-REVOKE-E2E-001`. It runs both '
+        '- `multi-device-remote-join` is a separate, operator-confirmed '
+        '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002` only. It runs both '
         'App-new-device/CLI-admin and App-admin/CLI-new-device directions '
         'with independent native roots, dynamically resolved one-time OTPs, '
         'SAS comparison, pending-session App restart coverage, the production '
-        'CLI foreground contract, exact-device Direct root control, Registry '
-        'readiness/revoke projections, and real macOS user presence where the '
-        'App approves. A checked-in '
-        'implementation is not evidence of a remote pass while the hidden '
-        'rollout, dedicated account allowlist, or operator prerequisites are '
-        'unavailable.',
+        'CLI foreground contract, fixed member authorization, message-driven '
+        'admin discovery, and real macOS user presence where the App approves. '
+        'It does not execute root transfer, revoke, or MLS. A checked-in '
+        'implementation is not evidence of a remote pass while the dedicated '
+        'account allowlist or operator prerequisites are unavailable.',
       )
       ..writeln(
-        '- `multi-device-remote-mls` is a separate activation-gated '
-        '`awiki.info` suite for `MLS-MULTI-DEVICE-E2E-001` and '
-        '`MLS-MULTI-DEVICE-E2E-002`. It uses a real AWiki Me owner and an '
-        'independent CLI endpoint to cover Add/Welcome, future text and '
-        'attachment delivery, and exact-device Remove. Checked-in execution '
-        'logic is not remote pass evidence until rollout and operator gates '
-        'are available.',
-      )
-      ..writeln(
-        '- `DEVICE-JOIN-E2E-003`, '
-        'and `ROOT-TRANSFER-E2E-002` remain planned until `awiki.info` enables '
-        'the matching capabilities and each runner has independent device '
-        'roots, real one-time OTPs, user presence where required, '
-        'scenario-owned oracles, and cleanup. '
+        '- `DEVICE-JOIN-E2E-003`, `ROOT-TRANSFER-E2E-001/002`, '
+        '`DEVICE-REVOKE-E2E-001`, and `MLS-MULTI-DEVICE-E2E-001/002` are '
+        'planned, non-executable boundaries. The old Root/Revoke/MLS Dart '
+        'implementations depended on direct-admin Join and have been deleted. '
+        'Step 3 or a later version must supply accepted contracts, independent '
+        'device roots, real one-time OTPs, user presence where required, '
+        'scenario-owned oracles, cleanup, and explicit suite registration. '
         '`001` covers one pending App restart; standalone cancellation and the '
         'real expiration path remain fail-closed rather than adding a test-only '
         'TTL or time bypass.',

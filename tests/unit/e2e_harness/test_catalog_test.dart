@@ -31,7 +31,6 @@ void main() {
           'smoke',
           'multi-device',
           'multi-device-remote-join',
-          'multi-device-remote-mls',
           'full',
           'direct',
         ]),
@@ -40,64 +39,45 @@ void main() {
       expect(catalog.caseById['DEVICE-JOIN-E2E-002']!.catalogStatus, 'active');
       expect(
         catalog.caseById['ROOT-TRANSFER-E2E-001']!.catalogStatus,
-        'active',
+        'planned',
       );
       expect(
         catalog.caseById['DEVICE-REVOKE-E2E-001']!.catalogStatus,
-        'active',
+        'planned',
       );
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
-        'ROOT-TRANSFER-E2E-001',
-        'DEVICE-REVOKE-E2E-001',
       ]);
       expect(
         catalog.caseById['MLS-MULTI-DEVICE-E2E-001']!.catalogStatus,
-        'active',
+        'planned',
       );
       expect(
         catalog.caseById['MLS-MULTI-DEVICE-E2E-002']!.catalogStatus,
-        'active',
+        'planned',
       );
-      expect(catalog.suiteCaseIds['multi-device-remote-mls'], <String>[
-        'MLS-MULTI-DEVICE-E2E-001',
-        'MLS-MULTI-DEVICE-E2E-002',
-      ]);
+      expect(catalog.suiteCaseIds, isNot(contains('multi-device-remote-mls')));
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );
 
-  test('remote management cases are executable real-product scenarios', () {
+  test('future Root Revoke and MLS cases have one non-executable anchor', () {
     final source = File(
-      'tests/e2e/flutter/app/root_key_transfer_ui_test.dart',
+      'tests/e2e/planned/multi_device_future_cases.md',
     ).readAsStringSync();
 
-    expect(source, contains("part of 'multi_device_join_ui_test.dart';"));
-    expect(source, contains("'ROOT-TRANSFER-E2E-001'"));
-    expect(source, contains("'DEVICE-REVOKE-E2E-001'"));
-    expect(source, contains('LocalAuthentication().isDeviceSupported()'));
-    expect(source, contains('await cli.syncInbox()'));
-    expect(source, contains('messageSyncService!.syncNow'));
-    expect(source, contains("Key('device-revoke-"));
-    expect(source, isNot(contains('plannedRootKeyTransferCaseIds')));
-    expect(source, isNot(contains('FakeRootKeyTransferPort(')));
-  });
-
-  test('remote MLS cases use real App and independent CLI Core roots', () {
-    final source = File(
-      'tests/e2e/flutter/app/mls_multi_device_ui_test.dart',
-    ).readAsStringSync();
-
-    expect(source, contains("part of 'multi_device_join_ui_test.dart';"));
-    expect(source, contains("'MLS-MULTI-DEVICE-E2E-001'"));
-    expect(source, contains("'MLS-MULTI-DEVICE-E2E-002'"));
-    expect(source, contains('_JoiningCli('));
-    expect(source, contains('groupE2eeEnabled: true'));
-    expect(source, contains('groupEncryptionProvider(groupDid).notifier'));
-    expect(source, contains('downloadAttachment('));
-    expect(source, isNot(contains('plannedMlsMultiDeviceCaseIds')));
-    expect(source, isNot(contains('FakeGroupEncryptionPort(')));
+    for (final caseId in <String>[
+      'ROOT-TRANSFER-E2E-001',
+      'ROOT-TRANSFER-E2E-002',
+      'DEVICE-REVOKE-E2E-001',
+      'MLS-MULTI-DEVICE-E2E-001',
+      'MLS-MULTI-DEVICE-E2E-002',
+    ]) {
+      expect(source, contains('`$caseId`'));
+    }
+    expect(source, contains('non-executable catalog anchor'));
+    expect(source, contains('have been deleted'));
   });
 
   test('every active conversation-correctness case has claim mapping', () {

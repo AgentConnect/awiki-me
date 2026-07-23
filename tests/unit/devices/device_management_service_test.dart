@@ -40,24 +40,22 @@ void main() {
   );
 
   test(
-    'approval binds displayed SAS and member role before presence',
+    'approval binds displayed SAS to member-only approval before presence',
     () async {
       final core = _FakeDeviceCore();
       final presence = _FakeUserPresence(result: true);
       final service = _service(core: core, presence: presence);
       final progress = _adminSasProgress();
 
-      final result = await service.approve(
+      final result = await service.approveAsMember(
         selector: progress.did,
         progress: progress,
         displayedSas: '482917',
-        role: DeviceRole.member,
         sasConfirmed: true,
         presenceReason: 'Confirm new device',
       );
 
       expect(result.phase, DeviceJoinPhase.authorized);
-      expect(core.preparedRole, DeviceRole.member);
       expect(core.preparedSasConfirmed, isTrue);
       expect(core.confirmedHandle, 'approval-1');
       expect(core.confirmedPresence, isTrue);
@@ -65,21 +63,22 @@ void main() {
     },
   );
 
-  test('admin is granted only when explicitly supplied', () async {
-    final core = _FakeDeviceCore();
-    final service = _service(core: core);
+  test(
+    'explicit verification start calls the combined Core operation',
+    () async {
+      final core = _FakeDeviceCore();
+      final service = _service(core: core);
 
-    await service.approve(
-      selector: 'did:wba:awiki.info:user:alice:e1_test',
-      progress: _adminSasProgress(),
-      displayedSas: '482917',
-      role: DeviceRole.admin,
-      sasConfirmed: true,
-      presenceReason: 'Confirm new device',
-    );
+      final progress = await service.startVerification(
+        selector: 'did:wba:awiki.info:user:alice:e1_test',
+        joinSessionId: 'join-1',
+        operationId: 'verify-1',
+      );
 
-    expect(core.preparedRole, DeviceRole.admin);
-  });
+      expect(core.startVerificationCalls, 1);
+      expect(progress.side, DeviceJoinSide.admin);
+    },
+  );
 
   test('SAS mismatch fails before preparing or prompting', () async {
     final core = _FakeDeviceCore();
@@ -87,11 +86,10 @@ void main() {
     final service = _service(core: core, presence: presence);
 
     await expectLater(
-      service.approve(
+      service.approveAsMember(
         selector: 'did:wba:awiki.info:user:alice:e1_test',
         progress: _adminSasProgress(),
         displayedSas: '000000',
-        role: DeviceRole.member,
         sasConfirmed: true,
         presenceReason: 'Confirm new device',
       ),
@@ -154,11 +152,10 @@ void main() {
     final service = _service(core: core, presence: presence);
 
     await expectLater(
-      service.approve(
+      service.approveAsMember(
         selector: 'did:wba:awiki.info:user:alice:e1_test',
         progress: _adminSasProgress(),
         displayedSas: '482917',
-        role: DeviceRole.member,
         sasConfirmed: true,
         presenceReason: 'Confirm new device',
       ),
@@ -180,22 +177,20 @@ void main() {
     final completer = Completer<bool>();
     final presence = _FakeUserPresence(completer: completer);
     final service = _service(core: core, presence: presence);
-    final first = service.approve(
+    final first = service.approveAsMember(
       selector: 'did:wba:awiki.info:user:alice:e1_test',
       progress: _adminSasProgress(),
       displayedSas: '482917',
-      role: DeviceRole.member,
       sasConfirmed: true,
       presenceReason: 'Confirm new device',
     );
     await Future<void>.delayed(Duration.zero);
 
     await expectLater(
-      service.approve(
+      service.approveAsMember(
         selector: 'did:wba:awiki.info:user:alice:e1_test',
         progress: _adminSasProgress(),
         displayedSas: '482917',
-        role: DeviceRole.member,
         sasConfirmed: true,
         presenceReason: 'Confirm new device',
       ),
@@ -234,6 +229,76 @@ void main() {
           (error) => error.code,
           'code',
           'invalid_sas_projection',
+        ),
+      ),
+    );
+  });
+
+  test('authorized poll without a device projection fails closed', () async {
+    final core = _FakeDeviceCore()
+      ..pollResult = DeviceJoinProgress(
+        joinSessionId: 'join-1',
+        did: 'did:wba:awiki.info:user:alice:e1_test',
+        protocolDeviceId: 'dev-new',
+        side: DeviceJoinSide.newDevice,
+        phase: DeviceJoinPhase.authorized,
+        remoteState: DeviceJoinRemoteState.consumed,
+        expiresAt: DateTime.utc(2030),
+      );
+
+    await expectLater(
+      _service(core: core).pollNewDeviceJoin(
+        progress: DeviceJoinProgress(
+          joinSessionId: 'join-1',
+          did: 'did:wba:awiki.info:user:alice:e1_test',
+          protocolDeviceId: 'dev-new',
+          side: DeviceJoinSide.newDevice,
+          phase: DeviceJoinPhase.authorized,
+          remoteState: DeviceJoinRemoteState.consumed,
+          expiresAt: DateTime.utc(2030),
+        ),
+      ),
+      throwsA(
+        isA<DeviceManagementException>().having(
+          (error) => error.code,
+          'code',
+          'missing_authorized_device_projection',
+        ),
+      ),
+    );
+  });
+
+  test('restored authorized projection must bind the exact device', () async {
+    final core = _FakeDeviceCore()
+      ..localSessions = <DeviceJoinProgress>[
+        DeviceJoinProgress(
+          joinSessionId: 'join-1',
+          did: 'did:wba:awiki.info:user:alice:e1_test',
+          protocolDeviceId: 'dev-new',
+          side: DeviceJoinSide.newDevice,
+          phase: DeviceJoinPhase.authorized,
+          remoteState: DeviceJoinRemoteState.consumed,
+          expiresAt: DateTime.utc(2030),
+          authorizedDevice: const DeviceSummary(
+            protocolDeviceId: 'dev-other',
+            signingKeyId:
+                'did:wba:awiki.info:user:alice:e1_test#dev-other-sign',
+            e2eeKeyId: 'did:wba:awiki.info:user:alice:e1_test#dev-other-e2ee',
+            status: DeviceStatus.active,
+            role: DeviceRole.member,
+            managementReady: false,
+            isCurrent: true,
+          ),
+        ),
+      ];
+
+    await expectLater(
+      _service(core: core).restoreLocalJoins(),
+      throwsA(
+        isA<DeviceManagementException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_authorized_device_projection',
         ),
       ),
     );
@@ -277,11 +342,12 @@ class _FakeUserPresence implements UserPresencePort {
 
 class _FakeDeviceCore implements DeviceManagementCorePort {
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
+  DeviceJoinProgress? pollResult;
   String? beginHandle;
   String? beginPhone;
   String? beginOtp;
   int prepareCalls = 0;
-  DeviceRole? preparedRole;
+  int startVerificationCalls = 0;
   bool? preparedSasConfirmed;
   String? confirmedHandle;
   bool? confirmedPresence;
@@ -323,22 +389,30 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceJoinProgress> cancelAdminDeviceJoin({
-    required String selector,
-    required String joinSessionId,
-  }) async => _cancelled(DeviceJoinSide.admin);
-
-  @override
   Future<DeviceJoinProgress> cancelNewDeviceJoin(String joinSessionId) async =>
       _cancelled(DeviceJoinSide.newDevice);
 
   @override
-  Future<DeviceJoinProgress> claimDeviceJoin({
+  Future<List<DeviceJoinRequestNotice>> localDeviceJoinRequests(
+    String selector,
+  ) async => const <DeviceJoinRequestNotice>[];
+
+  @override
+  Future<DeviceJoinProgress> localDeviceJoinVerificationProgress({
+    required String selector,
+    required String joinSessionId,
+  }) async => _adminSasProgress();
+
+  @override
+  Future<DeviceJoinProgress> startDeviceJoinVerification({
     required String selector,
     required String joinSessionId,
     required String operationId,
     required int challengeTtlSeconds,
-  }) async => _adminSasProgress();
+  }) async {
+    startVerificationCalls += 1;
+    return _adminSasProgress();
+  }
 
   @override
   Future<DeviceJoinProgress> confirmDeviceJoinApproval({
@@ -393,13 +467,8 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceJoinProgress> pollAdminDeviceJoin({
-    required String selector,
-    required String joinSessionId,
-  }) async => _adminSasProgress();
-
-  @override
   Future<DeviceJoinProgress> pollNewDeviceJoin(String joinSessionId) async =>
+      pollResult ??
       DeviceJoinProgress(
         joinSessionId: joinSessionId,
         did: 'did:wba:awiki.info:user:alice:e1_test',
@@ -415,20 +484,32 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   Future<DeviceJoinApprovalPrompt> prepareDeviceJoinApproval({
     required String selector,
     required String joinSessionId,
-    required DeviceRole role,
     required bool sasConfirmed,
   }) async {
     prepareCalls += 1;
-    preparedRole = role;
     preparedSasConfirmed = sasConfirmed;
     return DeviceJoinApprovalPrompt(
       approvalHandle: 'approval-1',
       joinSessionId: joinSessionId,
-      role: role,
       sas: '482917',
       expiresAt: DateTime.utc(2030),
     );
   }
+
+  @override
+  Future<DeviceJoinProgress> rejectDeviceJoin({
+    required String selector,
+    required String joinSessionId,
+    required DeviceJoinRejectReason reason,
+  }) async => DeviceJoinProgress(
+    joinSessionId: joinSessionId,
+    did: selector,
+    protocolDeviceId: 'dev-new',
+    side: DeviceJoinSide.admin,
+    phase: DeviceJoinPhase.cancelled,
+    remoteState: DeviceJoinRemoteState.rejected,
+    expiresAt: DateTime.utc(2030),
+  );
 
   DeviceJoinProgress _cancelled(DeviceJoinSide side) => DeviceJoinProgress(
     joinSessionId: 'join-1',
@@ -436,7 +517,7 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
     protocolDeviceId: 'dev-new',
     side: side,
     phase: DeviceJoinPhase.cancelled,
-    remoteState: DeviceJoinRemoteState.pending,
+    remoteState: DeviceJoinRemoteState.cancelled,
     expiresAt: DateTime.utc(2030),
   );
 }

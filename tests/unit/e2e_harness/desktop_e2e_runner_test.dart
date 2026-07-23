@@ -139,7 +139,7 @@ void main() {
       ]);
     });
 
-    test('parses activation-gated remote multi-device Join case aliases', () {
+    test('parses operator-confirmed remote member Join case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',
         'multi-device-remote-join',
@@ -156,13 +156,11 @@ void main() {
       expect(hyphen.e2eCase.requiresCliPeer, isTrue);
       expect(
         hyphen.e2eCase.scenario,
-        'multi-device-remote-bidirectional-management',
+        'multi-device-remote-message-driven-member-join',
       );
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
-        'ROOT-TRANSFER-E2E-001',
-        'DEVICE-REVOKE-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 22));
       expect(
@@ -171,32 +169,16 @@ void main() {
       );
     });
 
-    test('parses activation-gated remote multi-device MLS case aliases', () {
-      final hyphen = DesktopE2eOptions.parse(const <String>[
-        '--case',
+    test('rejects retired remote multi-device MLS aliases', () {
+      for (final value in <String>[
         'multi-device-remote-mls',
-        '--dry-run',
-      ]);
-      final underscore = DesktopE2eOptions.parse(const <String>[
-        '--case',
         'remote_multi_device_mls',
-        '--dry-run',
-      ]);
-
-      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteMls);
-      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteMls);
-      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
-      expect(hyphen.e2eCase.scenario, 'multi-device-remote-app-mls');
-      expect(hyphen.e2eCase.caseIds, <String>[
-        'MLS-MULTI-DEVICE-E2E-001',
-        'MLS-MULTI-DEVICE-E2E-002',
-      ]);
-      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 28));
-      expect(
-        hyphen.e2eCase.testFile,
-        'integration_test/multi_device_join_ui_test.dart',
-      );
-      expect(hyphen.e2eCase.runConfigPath, contains('remote-mls'));
+      ]) {
+        expect(
+          () => DesktopE2eOptions.parse(<String>['--case', value, '--dry-run']),
+          throwsA(isA<E2eFailure>()),
+        );
+      }
     });
 
     test('parses direct attachment contacts and inbound cases', () {
@@ -356,7 +338,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, multi-device, multi-device-remote-join, multi-device-remote-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),

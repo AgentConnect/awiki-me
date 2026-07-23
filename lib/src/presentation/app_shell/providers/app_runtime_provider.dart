@@ -88,6 +88,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
   bool _isLoggingOut = false;
+  Future<void>? _joinedMemberActivation;
+  String? _joinedMemberActivationDid;
   Future<void>? _authenticatedRefreshOperation;
   DateTime? _lastAuthenticatedRefreshStartedAt;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
@@ -194,6 +196,50 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .loginWithIdentity(credentialName);
       await activateSession(_legacySessionFromAppSession(session));
     });
+  }
+
+  Future<void> activateJoinedMember(String expectedDid) {
+    final normalizedDid = expectedDid.trim();
+    if (normalizedDid.isEmpty) {
+      return Future<void>.error(StateError('joined_identity_did_missing'));
+    }
+    if (state.activatedDid == normalizedDid &&
+        ref.read(sessionProvider).session?.did == normalizedDid) {
+      return Future<void>.value();
+    }
+    final active = _joinedMemberActivation;
+    if (active != null) {
+      if (_joinedMemberActivationDid != normalizedDid) {
+        return Future<void>.error(
+          StateError('joined_identity_activation_conflict'),
+        );
+      }
+      return active;
+    }
+
+    late final Future<void> operation;
+    operation =
+        (() async {
+          final sessions = ref.read(appSessionServiceProvider);
+          final session = await sessions.loginWithIdentity(normalizedDid);
+          if (session.did.trim() != normalizedDid) {
+            await sessions.logout();
+            throw StateError('joined_identity_did_mismatch');
+          }
+          await activateSession(_legacySessionFromAppSession(session));
+          if (state.activatedDid != normalizedDid ||
+              ref.read(sessionProvider).session?.did != normalizedDid) {
+            throw StateError('joined_identity_activation_incomplete');
+          }
+        })().whenComplete(() {
+          if (identical(_joinedMemberActivation, operation)) {
+            _joinedMemberActivation = null;
+            _joinedMemberActivationDid = null;
+          }
+        });
+    _joinedMemberActivationDid = normalizedDid;
+    _joinedMemberActivation = operation;
+    return operation;
   }
 
   Future<void> refreshLocalCredentials() async {
@@ -519,6 +565,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       'realtime.update',
       fields: <String, Object?>{
         'control': update.agentControlPayload != null,
+        'system_notification': update.systemNotificationChanged,
         'message': update.message != null,
         'conversation': traceConversation != null,
         'conversation_hint': update.conversationHint != null,
@@ -670,6 +717,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   String? _reliableSyncReasonFor(RealtimeUpdate update) {
+    if (update.systemNotificationChanged) {
+      return 'system_notification_changed';
+    }
     if (update.gapDetected) {
       return 'realtime_gap';
     }

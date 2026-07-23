@@ -1370,12 +1370,6 @@ abstract class AppLocalizations {
   /// **'待审批'**
   String get devicesPendingTitle;
 
-  /// No description provided for @devicesLocalJoinsTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'未完成的设备关联'**
-  String get devicesLocalJoinsTitle;
-
   /// No description provided for @devicesEmpty.
   ///
   /// In zh, this message translates to:
@@ -1532,12 +1526,6 @@ abstract class AppLocalizations {
   /// **'查看并验证'**
   String get deviceReviewAction;
 
-  /// No description provided for @deviceResumeAction.
-  ///
-  /// In zh, this message translates to:
-  /// **'继续'**
-  String get deviceResumeAction;
-
   /// No description provided for @deviceJoinEntry.
   ///
   /// In zh, this message translates to:
@@ -1622,17 +1610,53 @@ abstract class AppLocalizations {
   /// **'我已确认两台设备的 6 位验证码一致'**
   String get deviceJoinSasMatches;
 
-  /// No description provided for @deviceJoinAllowAdmin.
+  /// No description provided for @deviceJoinRequestReady.
   ///
   /// In zh, this message translates to:
-  /// **'允许此设备管理其他设备'**
-  String get deviceJoinAllowAdmin;
+  /// **'可以开始验证'**
+  String get deviceJoinRequestReady;
 
-  /// No description provided for @deviceJoinAllowAdminHint.
+  /// No description provided for @deviceJoinStartVerification.
   ///
   /// In zh, this message translates to:
-  /// **'默认关闭。开启后仍需完成根密钥安全导入才能管理设备。'**
-  String get deviceJoinAllowAdminHint;
+  /// **'开始验证'**
+  String get deviceJoinStartVerification;
+
+  /// No description provided for @deviceJoinClaimedByOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'另一台管理设备正在处理此请求'**
+  String get deviceJoinClaimedByOther;
+
+  /// No description provided for @deviceJoinReject.
+  ///
+  /// In zh, this message translates to:
+  /// **'拒绝请求'**
+  String get deviceJoinReject;
+
+  /// No description provided for @deviceJoinRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备请求已拒绝'**
+  String get deviceJoinRejected;
+
+  /// No description provided for @deviceJoinSasMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码不一致'**
+  String get deviceJoinSasMismatch;
+
+  /// No description provided for @deviceJoinFingerprint.
+  ///
+  /// In zh, this message translates to:
+  /// **'密钥指纹：{fingerprint}'**
+  String deviceJoinFingerprint(String fingerprint);
+
+  /// No description provided for @deviceJoinRequestWindow.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起时间：{issuedAt}；过期时间：{expiresAt}'**
+  String deviceJoinRequestWindow(String issuedAt, String expiresAt);
 
   /// No description provided for @deviceJoinApprove.
   ///
@@ -1663,6 +1687,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'设备关联已过期，请重新发起'**
   String get deviceJoinExpired;
+
+  /// No description provided for @deviceJoinActivating.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在激活此设备…'**
+  String get deviceJoinActivating;
+
+  /// No description provided for @deviceJoinActivationRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试设备激活'**
+  String get deviceJoinActivationRetry;
 
   /// No description provided for @deviceJoinUserPresenceReason.
   ///

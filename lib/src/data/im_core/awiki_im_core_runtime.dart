@@ -134,7 +134,6 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       config: _config.toCoreConfig(),
       paths: corePaths,
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
-        multiDeviceJoinEnabled: true,
         multiDeviceRootTransferEnabled: multiDeviceRootTransferEnabled,
         multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,

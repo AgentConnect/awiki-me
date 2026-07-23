@@ -25,12 +25,9 @@ const String _desktopCliPeerPerformanceScenario =
 const String _multiDeviceCapabilityGateScenario =
     'multi-device-capability-gate';
 const String _multiDeviceRemoteJoinScenario =
-    'multi-device-remote-bidirectional-management';
+    'multi-device-remote-message-driven-member-join';
 const String _multiDeviceRemoteJoinRunConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
-const String _multiDeviceRemoteMlsScenario = 'multi-device-remote-app-mls';
-const String _multiDeviceRemoteMlsRunConfigPath =
-    '.e2e/multi-device-remote-mls/current/run_config.json';
 const String _multiDeviceRemoteJoinGateEnv =
     'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _multiDeviceRemotePhoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
@@ -78,12 +75,6 @@ const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
 const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
-  'ROOT-TRANSFER-E2E-001',
-  'DEVICE-REVOKE-E2E-001',
-];
-const List<String> _multiDeviceRemoteMlsCaseIds = <String>[
-  'MLS-MULTI-DEVICE-E2E-001',
-  'MLS-MULTI-DEVICE-E2E-002',
 ];
 const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
@@ -420,7 +411,6 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDevice:
           await _runLocalMultiDeviceCapabilityGate();
         case DesktopE2eCase.multiDeviceRemoteJoin:
-        case DesktopE2eCase.multiDeviceRemoteMls:
           await _runRemoteMultiDeviceJoin();
         default:
           await _runAppCliPeer();
@@ -2600,7 +2590,6 @@ Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case multi-device
   dart run tests/e2e/runner.dart --case multi-device-remote-join
-  dart run tests/e2e/runner.dart --case multi-device-remote-mls
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
   dart run tests/e2e/runner.dart --case restart
@@ -2613,13 +2602,12 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-mls|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
-                               activation-gated real App/CLI Join flows in both
-                               directions plus root-import and revoke management
-                               against awiki.info. The remote MLS case runs App-driven Add/Welcome,
-                               future group delivery, and exact-device Remove.
+                               operator-confirmed real App/CLI message-driven
+                               member Join flow in both directions against
+                               awiki.info.
                                The
                                other cases run real
                                App+CLI peer flows. The
@@ -3625,7 +3613,6 @@ enum DesktopE2eCase {
   smoke(_desktopSmokeCaseIds),
   multiDevice(_multiDeviceCapabilityGateCaseIds),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
-  multiDeviceRemoteMls(_multiDeviceRemoteMlsCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
@@ -3649,8 +3636,6 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDevice =>
         'integration_test/multi_device_capability_gate_test.dart',
       DesktopE2eCase.multiDeviceRemoteJoin =>
-        'integration_test/multi_device_join_ui_test.dart',
-      DesktopE2eCase.multiDeviceRemoteMls =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
@@ -3687,7 +3672,6 @@ enum DesktopE2eCase {
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
-      DesktopE2eCase.multiDeviceRemoteMls => 'multi-device-remote-mls',
       _ => name,
     };
   }
@@ -3704,7 +3688,6 @@ enum DesktopE2eCase {
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
-      DesktopE2eCase.multiDeviceRemoteMls => 'multi-device-remote-mls',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
@@ -3721,7 +3704,6 @@ enum DesktopE2eCase {
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 22),
-      DesktopE2eCase.multiDeviceRemoteMls => const Duration(minutes: 28),
       _ => const Duration(minutes: 5),
     };
   }
@@ -3734,7 +3716,6 @@ enum DesktopE2eCase {
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
-      DesktopE2eCase.multiDeviceRemoteMls => _multiDeviceRemoteMlsScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -3746,7 +3727,6 @@ enum DesktopE2eCase {
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteJoin =>
         _multiDeviceRemoteJoinRunConfigPath,
-      DesktopE2eCase.multiDeviceRemoteMls => _multiDeviceRemoteMlsRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
     };
   }
@@ -3762,10 +3742,6 @@ enum DesktopE2eCase {
       'multi_device_remote_join' ||
       'remote-multi-device-join' ||
       'remote_multi_device_join' => DesktopE2eCase.multiDeviceRemoteJoin,
-      'multi-device-remote-mls' ||
-      'multi_device_remote_mls' ||
-      'remote-multi-device-mls' ||
-      'remote_multi_device_mls' => DesktopE2eCase.multiDeviceRemoteMls,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||
@@ -3823,7 +3799,7 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, multi-device, multi-device-remote-join, multi-device-remote-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',
       ),

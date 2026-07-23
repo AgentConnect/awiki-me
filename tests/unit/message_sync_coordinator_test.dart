@@ -4,6 +4,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -13,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'devices/device_test_support.dart';
 
 void main() {
   test('single-flight coalesces concurrent sync requests', () async {
@@ -186,17 +188,72 @@ void main() {
     await request.timeout(const Duration(seconds: 1));
     await pumpEventQueue();
   });
+
+  test('successful reliable sync refreshes the verified Join inbox', () async {
+    final gateway = FakeAwikiGateway();
+    final sync = FakeMessageSyncService();
+    final devices = FakeDeviceManagementCore()
+      ..registry = const DeviceRegistrySnapshot(
+        did: 'did:test:me',
+        devices: <DeviceSummary>[
+          DeviceSummary(
+            protocolDeviceId: 'admin-current',
+            signingKeyId: 'did:test:me#admin-sign',
+            e2eeKeyId: 'did:test:me#admin-e2ee',
+            status: DeviceStatus.active,
+            role: DeviceRole.admin,
+            managementReady: true,
+            isCurrent: true,
+          ),
+        ],
+      );
+    final container = _container(gateway, sync, devices: devices);
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('system_notification_changed', immediate: true);
+
+    expect(devices.registryCalls, 1);
+    expect(devices.joinRequestCalls, 1);
+  });
+
+  test('failed reliable sync does not refresh the Join inbox', () async {
+    final gateway = FakeAwikiGateway();
+    final devices = FakeDeviceManagementCore();
+    final container = _container(
+      gateway,
+      _FailingMessageSyncService(),
+      devices: devices,
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('system_notification_changed', immediate: true);
+
+    expect(devices.registryCalls, 0);
+    expect(devices.joinRequestCalls, 0);
+    expect(
+      container.read(messageSyncCoordinatorProvider).lastError,
+      isA<StateError>(),
+    );
+  });
 }
 
 ProviderContainer _container(
   FakeAwikiGateway gateway,
   FakeMessageSyncService sync, {
   Duration minInterval = Duration.zero,
+  FakeDeviceManagementCore? devices,
 }) {
   return ProviderContainer(
     overrides: <Override>[
       awikiGatewayProvider.overrideWithValue(gateway),
       notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
+      deviceManagementCorePortProvider.overrideWithValue(
+        devices ?? FakeDeviceManagementCore(),
+      ),
       ...fakeApplicationServiceOverrides(gateway, messageSyncService: sync),
       messageSyncCoordinatorProvider.overrideWith(
         (ref) => MessageSyncCoordinator(
@@ -259,5 +316,16 @@ class _BlockingMessageSyncService extends FakeMessageSyncService {
         snapshotRequired: false,
       ),
     );
+  }
+}
+
+class _FailingMessageSyncService extends FakeMessageSyncService {
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    throw StateError('sync_failed');
   }
 }

@@ -13,16 +13,9 @@ import 'device_labels.dart';
 import 'devices_provider.dart';
 
 class DeviceJoinApprovalSheet extends ConsumerStatefulWidget {
-  const DeviceJoinApprovalSheet({
-    super.key,
-    this.pending,
-    this.restored,
-    this.autoPoll = true,
-  }) : assert(pending != null || restored != null);
+  const DeviceJoinApprovalSheet({super.key, required this.request});
 
-  final PendingDeviceJoinSummary? pending;
-  final DeviceJoinProgress? restored;
-  final bool autoPoll;
+  final DeviceJoinRequestNotice request;
 
   @override
   ConsumerState<DeviceJoinApprovalSheet> createState() =>
@@ -31,47 +24,40 @@ class DeviceJoinApprovalSheet extends ConsumerStatefulWidget {
 
 class _DeviceJoinApprovalSheetState
     extends ConsumerState<DeviceJoinApprovalSheet> {
-  Timer? _pollTimer;
   bool _sasMatches = false;
-  bool _allowAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      final restored = widget.restored;
-      if (restored != null) {
-        ref.read(devicesProvider.notifier).resume(restored);
-        await ref.read(devicesProvider.notifier).pollActive();
-      } else {
-        await ref.read(devicesProvider.notifier).claim(widget.pending!);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(
+          ref.read(devicesProvider.notifier).selectJoinRequest(widget.request),
+        );
       }
     });
-    if (widget.autoPoll) {
-      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-        if (mounted) {
-          unawaited(ref.read(devicesProvider.notifier).pollActive());
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _pollTimer?.cancel();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(devicesProvider);
-    final progress = state.activeJoin;
-    final sas = progress?.sas;
-    final ready =
-        progress?.side == DeviceJoinSide.admin &&
-        progress?.phase == DeviceJoinPhase.responseVerified &&
-        sas != null;
+    final request =
+        _requestForSession(state.joinRequests, widget.request.joinSessionId) ??
+        widget.request;
+    final candidateProgress = state.activeJoin;
+    final progress =
+        candidateProgress?.joinSessionId == request.joinSessionId &&
+            candidateProgress?.side == DeviceJoinSide.admin
+        ? candidateProgress
+        : null;
+    final sas =
+        progress?.phase == DeviceJoinPhase.responseVerified ||
+            progress?.phase == DeviceJoinPhase.approvalPrepared
+        ? progress?.sas
+        : null;
+    final ready = sas != null;
+    final terminal = request.isTerminal || progress?.isTerminal == true;
+
     return CupertinoPageScaffold(
       backgroundColor: context.awikiTheme.background,
       child: AwikiAdaptiveScaffold(
@@ -110,9 +96,7 @@ class _DeviceJoinApprovalSheetState
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Text(
-                    progress == null
-                        ? context.l10n.deviceJoinWaiting
-                        : deviceJoinPhaseLabel(context.l10n, progress),
+                    _requestStatusLabel(context, request, progress),
                     key: const Key('device-approval-phase'),
                     style: TextStyle(
                       color: context.awikiTheme.title,
@@ -122,12 +106,29 @@ class _DeviceJoinApprovalSheetState
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    progress?.protocolDeviceId ??
-                        widget.pending?.protocolDeviceId ??
-                        '',
+                    request.protocolDeviceId,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: context.awikiTheme.secondaryText),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.l10n.deviceJoinFingerprint(
+                      request.candidateKeyFingerprint,
+                    ),
+                    key: const Key('device-approval-fingerprint'),
+                    style: TextStyle(color: context.awikiTheme.secondaryText),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    context.l10n.deviceJoinRequestWindow(
+                      request.issuedAt.toLocal().toString(),
+                      request.expiresAt.toLocal().toString(),
+                    ),
+                    style: TextStyle(
+                      color: context.awikiTheme.secondaryText,
+                      fontSize: 12,
+                    ),
                   ),
                   if (sas != null) ...<Widget>[
                     const SizedBox(height: 24),
@@ -150,7 +151,17 @@ class _DeviceJoinApprovalSheetState
                     ),
                   ],
                   const SizedBox(height: 20),
-                  if (ready) ...<Widget>[
+                  if (terminal)
+                    AppPrimaryButton(
+                      label: context.l10n.commonDone,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    )
+                  else if (request.claimedByOther)
+                    AppSecondaryButton(
+                      label: context.l10n.commonDone,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    )
+                  else if (ready) ...<Widget>[
                     _ApprovalSwitchRow(
                       key: const Key('device-sas-confirmation'),
                       label: context.l10n.deviceJoinSasMatches,
@@ -158,16 +169,6 @@ class _DeviceJoinApprovalSheetState
                       onChanged: state.isActionPending
                           ? null
                           : (value) => setState(() => _sasMatches = value),
-                    ),
-                    const SizedBox(height: 12),
-                    _ApprovalSwitchRow(
-                      key: const Key('device-admin-toggle'),
-                      label: context.l10n.deviceJoinAllowAdmin,
-                      detail: context.l10n.deviceJoinAllowAdminHint,
-                      value: _allowAdmin,
-                      onChanged: state.isActionPending
-                          ? null
-                          : (value) => setState(() => _allowAdmin = value),
                     ),
                     const SizedBox(height: 18),
                     AppPrimaryButton(
@@ -177,31 +178,45 @@ class _DeviceJoinApprovalSheetState
                           ? null
                           : _approve,
                     ),
-                  ] else if (progress?.isTerminal != true)
-                    AppSecondaryButton(
-                      label: context.l10n.deviceJoinRefresh,
-                      onPressed: state.isActionPending
-                          ? null
-                          : () =>
-                                ref.read(devicesProvider.notifier).pollActive(),
-                    ),
-                  if (progress?.isTerminal != true) ...<Widget>[
                     const SizedBox(height: 10),
                     AppDangerButton(
-                      label: context.l10n.deviceJoinCancel,
+                      label: context.l10n.deviceJoinSasMismatch,
+                      onPressed: state.isActionPending
+                          ? null
+                          : () => _reject(DeviceJoinRejectReason.sasMismatch),
+                    ),
+                    const SizedBox(height: 10),
+                    AppSecondaryButton(
+                      label: context.l10n.deviceJoinReject,
+                      onPressed: state.isActionPending
+                          ? null
+                          : () => _reject(DeviceJoinRejectReason.userRejected),
+                    ),
+                  ] else if (progress == null &&
+                      request.canStartVerification) ...<Widget>[
+                    AppPrimaryButton(
+                      label: context.l10n.deviceJoinStartVerification,
+                      semanticsIdentifier: 'multi-device-start-verification',
                       onPressed: state.isActionPending
                           ? null
                           : () => ref
                                 .read(devicesProvider.notifier)
-                                .cancelActive(),
+                                .startVerification(request),
                     ),
-                  ] else ...<Widget>[
                     const SizedBox(height: 10),
-                    AppPrimaryButton(
-                      label: context.l10n.commonDone,
-                      onPressed: () => Navigator.of(context).maybePop(),
+                    AppDangerButton(
+                      label: context.l10n.deviceJoinReject,
+                      onPressed: state.isActionPending
+                          ? null
+                          : () => _reject(DeviceJoinRejectReason.userRejected),
                     ),
-                  ],
+                  ] else
+                    AppDangerButton(
+                      label: context.l10n.deviceJoinReject,
+                      onPressed: state.isActionPending
+                          ? null
+                          : () => _reject(DeviceJoinRejectReason.userRejected),
+                    ),
                 ],
               ),
             ),
@@ -214,18 +229,60 @@ class _DeviceJoinApprovalSheetState
   Future<void> _approve() async {
     final approved = await ref
         .read(devicesProvider.notifier)
-        .approveActive(
-          role: _allowAdmin ? DeviceRole.admin : DeviceRole.member,
+        .approveActiveAsMember(
           sasConfirmed: _sasMatches,
           presenceReason: context.l10n.deviceJoinUserPresenceReason,
         );
     if (approved && mounted) {
-      setState(() {
-        _sasMatches = false;
-        _allowAdmin = false;
-      });
+      setState(() => _sasMatches = false);
     }
   }
+
+  Future<void> _reject(DeviceJoinRejectReason reason) async {
+    final request =
+        _requestForSession(
+          ref.read(devicesProvider).joinRequests,
+          widget.request.joinSessionId,
+        ) ??
+        widget.request;
+    final rejected = await ref
+        .read(devicesProvider.notifier)
+        .rejectJoin(request: request, reason: reason);
+    if (rejected && mounted) {
+      await Navigator.of(context).maybePop();
+    }
+  }
+}
+
+String _requestStatusLabel(
+  BuildContext context,
+  DeviceJoinRequestNotice request,
+  DeviceJoinProgress? progress,
+) {
+  if (request.claimedByOther) {
+    return context.l10n.deviceJoinClaimedByOther;
+  }
+  if (request.state == DeviceJoinRemoteState.rejected) {
+    return context.l10n.deviceJoinRejected;
+  }
+  if (progress != null) {
+    return deviceJoinPhaseLabel(context.l10n, progress);
+  }
+  return request.canStartVerification
+      ? context.l10n.deviceJoinRequestReady
+      : context.l10n.deviceJoinWaiting;
+}
+
+DeviceJoinRequestNotice? _requestForSession(
+  List<DeviceJoinRequestNotice> requests,
+  String joinSessionId,
+) {
+  for (final request in requests) {
+    if (request.joinSessionId == joinSessionId) {
+      return request;
+    }
+  }
+  return null;
 }
 
 class _ApprovalSwitchRow extends StatelessWidget {
@@ -234,11 +291,9 @@ class _ApprovalSwitchRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
-    this.detail,
   });
 
   final String label;
-  final String? detail;
   final bool value;
   final ValueChanged<bool>? onChanged;
 
@@ -248,27 +303,12 @@ class _ApprovalSwitchRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                label,
-                style: TextStyle(
-                  color: context.awikiTheme.title,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              if (detail != null) ...<Widget>[
-                const SizedBox(height: 4),
-                Text(
-                  detail!,
-                  style: TextStyle(
-                    color: context.awikiTheme.secondaryText,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ],
+          child: Text(
+            label,
+            style: TextStyle(
+              color: context.awikiTheme.title,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
         const SizedBox(width: 12),

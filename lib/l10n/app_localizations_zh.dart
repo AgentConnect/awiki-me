@@ -664,9 +664,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get devicesPendingTitle => '待审批';
 
   @override
-  String get devicesLocalJoinsTitle => '未完成的设备关联';
-
-  @override
   String get devicesEmpty => '暂无设备信息';
 
   @override
@@ -748,9 +745,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceReviewAction => '查看并验证';
 
   @override
-  String get deviceResumeAction => '继续';
-
-  @override
   String get deviceJoinEntry => '将此设备加入已有账户';
 
   @override
@@ -793,10 +787,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinSasMatches => '我已确认两台设备的 6 位验证码一致';
 
   @override
-  String get deviceJoinAllowAdmin => '允许此设备管理其他设备';
+  String get deviceJoinRequestReady => '可以开始验证';
 
   @override
-  String get deviceJoinAllowAdminHint => '默认关闭。开启后仍需完成根密钥安全导入才能管理设备。';
+  String get deviceJoinStartVerification => '开始验证';
+
+  @override
+  String get deviceJoinClaimedByOther => '另一台管理设备正在处理此请求';
+
+  @override
+  String get deviceJoinReject => '拒绝请求';
+
+  @override
+  String get deviceJoinRejected => '设备请求已拒绝';
+
+  @override
+  String get deviceJoinSasMismatch => '验证码不一致';
+
+  @override
+  String deviceJoinFingerprint(String fingerprint) {
+    return '密钥指纹：$fingerprint';
+  }
+
+  @override
+  String deviceJoinRequestWindow(String issuedAt, String expiresAt) {
+    return '发起时间：$issuedAt；过期时间：$expiresAt';
+  }
 
   @override
   String get deviceJoinApprove => '确认并授权';
@@ -812,6 +828,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deviceJoinExpired => '设备关联已过期，请重新发起';
+
+  @override
+  String get deviceJoinActivating => '正在激活此设备…';
+
+  @override
+  String get deviceJoinActivationRetry => '重试设备激活';
 
   @override
   String get deviceJoinUserPresenceReason => '确认授权新设备';

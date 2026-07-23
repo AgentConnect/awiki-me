@@ -101,21 +101,20 @@ production `AppBootstrap` 和 native Core，验证默认组合设备管理 adapt
 Join 入口，同时 root transfer、revoke、Direct/Group E2EE 仍由独立门禁关闭。它不发送
 OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS 或 Handle Recovery。
 
-`DEVICE-JOIN-E2E-001/002`、`ROOT-TRANSFER-E2E-001` 和
-`DEVICE-REVOKE-E2E-001` 已由独立的 `multi-device-remote-join` suite 承载；它们不会混入
-本地 capability gate。该 suite 分别覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI
-新设备，以及设备级 Direct 根控制/imported ACK/Registry readiness/revoke。所有方向均使用
-独立 native Core root、动态一次性 OTP、双端 SAS 和场景级 attestation；`001` 还覆盖
-pending Join 的 App 重启恢复且断言不持久化 SAS，App 批准及高风险管理操作另要求真实
-macOS user-presence。当
-`awiki.info` 隐藏 rollout、专用账号 allowlist 或执行环境尚未全部就绪时，这个入口
-不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、adapter、
-UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端 case。
-`MLS-MULTI-DEVICE-E2E-001/002` 已由同样显式激活的
-`multi-device-remote-mls` suite 承载：真实 App owner 与独立 CLI root 覆盖
-Add/Welcome、未来双向群消息、单对象附件和精确设备 Remove。`DEVICE-JOIN-E2E-003`、
-`ROOT-TRANSFER-E2E-002` 仍为 planned；不得把本地
-capability gate、Widget fake 或手工演示记录为远端 E2E pass。
+`DEVICE-JOIN-E2E-001/002` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
+本地 capability gate。该 suite 只覆盖 App 新设备 + CLI 管理设备和 App 管理设备 + CLI
+新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
+双端 SAS 和场景级 attestation；`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化
+SAS，App 批准要求真实 macOS user-presence。专用账号 allowlist 或执行环境尚未全部就绪时，
+这个入口不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、
+adapter、UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端
+case。
+
+`DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-001/002`、
+`DEVICE-REVOKE-E2E-001` 和 `MLS-MULTI-DEVICE-E2E-001/002` 均为 planned、不可执行边界。
+旧 Root/Revoke/MLS Dart 实现依赖 direct-admin Join，已经删除；第三步或后续版本必须重新
+实现并显式注册 suite。不得把 planning 文档、本地 capability gate、Widget fake 或手工演示
+记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
 图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏
@@ -191,8 +190,8 @@ closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
 providers. The remote Join case remains separate and is not included in this
 suite's pass attestation.
 
-Run the activation-gated remote bidirectional App + CLI Join and management
-lifecycle only after the dedicated ali deployment and account have been reviewed:
+Run the operator-confirmed remote bidirectional App + CLI member Join only
+after the dedicated ali deployment and account have been reviewed:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
@@ -202,11 +201,6 @@ AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
   --config <local-awiki-info-config.yaml>
-
-# 使用同一组受审计环境变量，单独执行多设备 MLS 生命周期：
-dart run tests/e2e/runner.dart \
-  --case multi-device-remote-mls \
-  --config <local-awiki-info-config.yaml>
 ```
 
 The local YAML supplies only the reviewed `awiki.info` service endpoints, the
@@ -215,12 +209,11 @@ JSON-argv OTP resolver are environment-only inputs; `otp.code`, a static OTP,
 or a command whose local executable is a shell is never accepted by this suite.
 Every argv item rejects whitespace, newlines, shell metacharacters and
 multi-command strings; a nested `bash`/`sh -c` after `ssh` is also rejected.
-The ali-side services must allow the dedicated phone hash and enable the hidden
-Join, group E2EE, exact-device MLS removal, root-transfer, exact-device Direct,
-and permanent-revoke rollouts. The CLI
-must be built from exactly the configured revision. The macOS operator must
-complete every real LocalAuthentication prompt; the test only counts and
-delegates those prompts and never injects success.
+The ali-side services must allow the dedicated phone hash and support the
+message-driven member Join contract. The CLI must be built from exactly the
+configured revision. The macOS operator must complete every real
+LocalAuthentication prompt; the test only counts and delegates those prompts
+and never injects success.
 
 By default the purpose-bound `/user-service/auth/sms-codes` request remains
 strictly 200-only. For the user-authorized synthetic test number, an explicit
@@ -253,18 +246,17 @@ shell command.
 
 The suite first bootstraps a CLI ready admin and joins a newly generated App
 device through the real onboarding UI and foreground CLI approval contract. It
-then bootstraps an independent App ready admin and approves a separate CLI
-requester through the real Devices UI and exactly one macOS LocalAuthentication
-prompt. Both directions compare the independently derived six-digit SAS without
-recording it, retain the default member role, and require both Registries to
-converge with the new device `active-member` and `management_ready=false`.
-The App-new-device direction also restarts from the same pending Core session
-and rejects persisted SAS. A third isolated lifecycle joins an admin-awaiting-
-root device, distinguishes Direct Init from encrypted root delivery, requires
-the signed imported ACK and Registry-backed readiness, then permanently revokes
-that exact device through visible confirmation. Local roots are deleted after
-the run. Because the
-current public contract has no test-owned remote identity delete operation, the
+then bootstraps an independent App ready admin, receives the CLI request through
+the system-notification projection, starts verification explicitly, and
+approves the requester through the real Devices UI and exactly one macOS
+LocalAuthentication prompt. Both directions compare the independently derived
+six-digit SAS without recording it, authorize only the fixed member role, and
+require both Registries to converge with the new device `active-member` and
+`management_ready=false`. The App-new-device direction also restarts from the
+same pending Core session and rejects persisted SAS. Root transfer, revoke, and
+MLS are not part of this executable suite. Local roots are deleted after the
+run. Because the current public contract has no test-owned remote identity
+delete operation, the
 unique identity/Join side effect is recorded in the runner residual ledger.
 Resolver stdout/stderr, OTPs, tokens, SAS values, DIDs,
 private material, and local secret paths must not enter reports or logs. A

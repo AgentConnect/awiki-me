@@ -2,6 +2,8 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/root_key_transfer_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
@@ -121,53 +123,46 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('device list distinguishes current/admin/member and pending', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore()
-      ..registry = DeviceRegistrySnapshot(
-        did: testDid,
-        devices: const <DeviceSummary>[
-          DeviceSummary(
-            protocolDeviceId: 'phone-current',
-            signingKeyId: '$testDid#phone-sign',
-            e2eeKeyId: '$testDid#phone-e2ee',
-            status: DeviceStatus.active,
-            role: DeviceRole.admin,
-            managementReady: true,
-            isCurrent: true,
-          ),
-          DeviceSummary(
-            protocolDeviceId: 'pc-member',
-            signingKeyId: '$testDid#pc-sign',
-            e2eeKeyId: '$testDid#pc-e2ee',
-            status: DeviceStatus.active,
-            role: DeviceRole.member,
-            managementReady: false,
-            isCurrent: false,
-          ),
-        ],
-        pendingJoins: <PendingDeviceJoinSummary>[
-          PendingDeviceJoinSummary(
-            joinSessionId: 'join-1',
-            protocolDeviceId: 'pc-new',
-            signingKeyId: '$testDid#new-sign',
-            e2eeKeyId: '$testDid#new-e2ee',
-            requestedRole: DeviceRole.member,
-            issuedAt: DateTime.utc(2026, 7, 19),
-            expiresAt: DateTime.utc(2030),
-          ),
-        ],
-      );
+  testWidgets(
+    'device list distinguishes current/admin/member and join notice',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: testDid,
+          devices: <DeviceSummary>[
+            DeviceSummary(
+              protocolDeviceId: 'phone-current',
+              signingKeyId: '$testDid#phone-sign',
+              e2eeKeyId: '$testDid#phone-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+            DeviceSummary(
+              protocolDeviceId: 'pc-member',
+              signingKeyId: '$testDid#pc-sign',
+              e2eeKeyId: '$testDid#pc-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.member,
+              managementReady: false,
+              isCurrent: false,
+            ),
+          ],
+        )
+        ..joinRequests = <DeviceJoinRequestNotice>[
+          _request(protocolDeviceId: 'pc-new'),
+        ];
 
-    await tester.pumpWidget(_app(const DevicesPage(), core));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(_app(const DevicesPage(), core));
+      await tester.pumpAndSettle();
 
-    expect(find.textContaining('phone-current · 当前设备'), findsOneWidget);
-    expect(find.textContaining('管理设备 · 有效 · 可管理其他设备'), findsOneWidget);
-    expect(find.textContaining('普通设备 · 有效'), findsOneWidget);
-    expect(find.text('pc-new'), findsOneWidget);
-  });
+      expect(find.textContaining('phone-current · 当前设备'), findsOneWidget);
+      expect(find.textContaining('管理设备 · 有效 · 可管理其他设备'), findsOneWidget);
+      expect(find.textContaining('普通设备 · 有效'), findsOneWidget);
+      expect(find.text('pc-new'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'ready admin starts root import only after one user-presence prompt',
@@ -414,7 +409,6 @@ void main() {
           ),
           _device(id: 'admin-current', role: DeviceRole.admin, isCurrent: true),
         ],
-        pendingJoins: <PendingDeviceJoinSummary>[_pending()],
       );
     final transfer = FakeRootKeyTransferPort()
       ..summaries = <RootKeyTransferSummary>[
@@ -436,7 +430,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('需要已就绪的管理设备处理'), findsOneWidget);
     expect(
       find.byKey(const Key('root-transfer-admin-current')),
       findsOneWidget,
@@ -529,7 +522,6 @@ void main() {
           ),
           _device(id: 'admin-new', role: DeviceRole.admin),
         ],
-        pendingJoins: <PendingDeviceJoinSummary>[_pending()],
       );
     await tester.pumpWidget(
       _app(const DevicesPage(), core, rootTransferEnabled: true),
@@ -537,32 +529,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('root-transfer-admin-new')), findsNothing);
-    expect(find.text('需要已就绪的管理设备处理'), findsOneWidget);
-    await tester.tap(find.text('device-new'));
-    await tester.pumpAndSettle();
+    expect(find.text('device-new'), findsNothing);
     expect(find.byKey(const Key('device-join-approval-sheet')), findsNothing);
   });
 
-  testWidgets('authorized admin join stays awaiting root before ready', (
-    tester,
-  ) async {
+  testWidgets('authorized member activates the exact DID once', (tester) async {
     final core = FakeDeviceManagementCore()
       ..beginResult = DeviceJoinProgress(
         joinSessionId: 'join-1',
         did: testDid,
-        protocolDeviceId: 'admin-new',
+        protocolDeviceId: 'member-new',
         side: DeviceJoinSide.newDevice,
         phase: DeviceJoinPhase.authorized,
         remoteState: DeviceJoinRemoteState.consumed,
         expiresAt: DateTime.utc(2030),
         authorizedDevice: _device(
-          id: 'admin-new',
-          role: DeviceRole.admin,
+          id: 'member-new',
+          role: DeviceRole.member,
           isCurrent: true,
         ),
       );
+    final gateway = FakeAwikiGateway()
+      ..loginResult = const SessionIdentity(
+        did: testDid,
+        credentialName: 'member-new-local',
+        displayName: 'Alice',
+        handle: 'alice',
+      );
     await tester.pumpWidget(
-      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        core,
+        gateway: gateway,
+        session: null,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -573,32 +573,159 @@ void main() {
     await tester.tap(find.text('开始关联'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const Key('device-join-admin-readiness')),
-      findsOneWidget,
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-page'))),
     );
-    expect(find.text('管理设备等待根密钥'), findsOneWidget);
-    expect(find.text('可管理其他设备'), findsNothing);
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, testDid);
+    expect(container.read(sessionProvider).session?.did, testDid);
+    expect(container.read(appRuntimeProvider).activatedDid, testDid);
+    expect(find.text('管理设备等待根密钥'), findsNothing);
   });
 
-  testWidgets('approval defaults to member and prompts presence exactly once', (
+  testWidgets(
+    'restart rehydrates authorized device projection before activation',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..pollNewResult = _authorizedNewDeviceProgress(
+          authorizedDevice: _device(
+            id: 'member-new',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+        );
+      final gateway = FakeAwikiGateway()
+        ..loginResult = const SessionIdentity(
+          did: testDid,
+          credentialName: 'member-new-local',
+          displayName: 'Alice',
+          handle: 'alice',
+        );
+
+      await tester.pumpWidget(
+        _app(
+          const DeviceJoinPage(autoPoll: false),
+          core,
+          gateway: gateway,
+          session: null,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('device-join-page'))),
+      );
+      expect(core.pollCalls, 1);
+      expect(gateway.loginCalls, 1);
+      expect(gateway.lastLoginCredentialName, testDid);
+      expect(container.read(sessionProvider).session?.did, testDid);
+      expect(container.read(appRuntimeProvider).activatedDid, testDid);
+    },
+  );
+
+  testWidgets(
+    'missing authorized projection fails closed and can retry hydration',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..pollNewResult = _authorizedNewDeviceProgress();
+      final gateway = FakeAwikiGateway()
+        ..loginResult = const SessionIdentity(
+          did: testDid,
+          credentialName: 'member-new-local',
+          displayName: 'Alice',
+          handle: 'alice',
+        );
+
+      await tester.pumpWidget(
+        _app(
+          const DeviceJoinPage(autoPoll: false),
+          core,
+          gateway: gateway,
+          session: null,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(core.pollCalls, 1);
+      expect(gateway.loginCalls, 0);
+      expect(find.text('重试设备激活'), findsOneWidget);
+      expect(find.text('完成'), findsNothing);
+
+      core.pollNewResult = _authorizedNewDeviceProgress(
+        authorizedDevice: _device(
+          id: 'member-new',
+          role: DeviceRole.member,
+          isCurrent: true,
+        ),
+      );
+      await tester.tap(find.text('重试设备激活'));
+      await tester.pumpAndSettle();
+
+      expect(core.pollCalls, 2);
+      expect(gateway.loginCalls, 1);
+    },
+  );
+
+  testWidgets('restart rejects an authorized projection for another device', (
     tester,
   ) async {
-    final core = FakeDeviceManagementCore();
-    final presence = FakeUserPresence();
+    final core = FakeDeviceManagementCore()
+      ..localSessions = <DeviceJoinProgress>[
+        _authorizedNewDeviceProgress(
+          authorizedDevice: _device(
+            id: 'member-other',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+        ),
+      ];
+    final gateway = FakeAwikiGateway()
+      ..loginResult = const SessionIdentity(
+        did: testDid,
+        credentialName: 'member-new-local',
+        displayName: 'Alice',
+        handle: 'alice',
+      );
+
     await tester.pumpWidget(
       _app(
-        DeviceJoinApprovalSheet(pending: _pending(), autoPoll: false),
+        const DeviceJoinPage(autoPoll: false),
         core,
-        presence: presence,
+        gateway: gateway,
+        session: null,
       ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.loginCalls, 0);
+    expect(find.byKey(const Key('device-join-error')), findsOneWidget);
+    expect(find.text('完成'), findsNothing);
+  });
+
+  testWidgets('approval is member-only and prompts presence exactly once', (
+    tester,
+  ) async {
+    final request = _request(
+      state: DeviceJoinRemoteState.responseVerified,
+      claimedByCurrentDevice: true,
+      canStartVerification: false,
+    );
+    final core = FakeDeviceManagementCore()
+      ..registry = _rootTransferRegistry()
+      ..joinRequests = <DeviceJoinRequestNotice>[request]
+      ..verificationProgress = testJoinProgress();
+    final presence = FakeUserPresence();
+    await tester.pumpWidget(
+      _app(DeviceJoinApprovalSheet(request: request), core, presence: presence),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('482917'), findsOneWidget);
     final switches = find.byType(CupertinoSwitch);
-    expect(switches, findsNWidgets(2));
-    expect(tester.widget<CupertinoSwitch>(switches.at(1)).value, isFalse);
+    expect(switches, findsOneWidget);
+    expect(find.byKey(const Key('device-admin-toggle')), findsNothing);
     expect(find.textContaining('二维码'), findsNothing);
     expect(find.textContaining('扫码'), findsNothing);
 
@@ -607,41 +734,151 @@ void main() {
     await tester.tap(find.text('确认并授权'));
     await tester.pumpAndSettle();
 
-    expect(core.lastPreparedRole, DeviceRole.member);
     expect(core.lastPreparedSasConfirmed, isTrue);
     expect(core.lastPresenceConfirmed, isTrue);
     expect(presence.calls, 1);
     expect(find.text('设备已加入'), findsOneWidget);
+    expect(find.text('完成'), findsOneWidget);
+    expect(find.text('确认并授权'), findsNothing);
+    expect(find.text('验证码不一致'), findsNothing);
+    expect(find.text('拒绝设备'), findsNothing);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+    );
+    await container.read(devicesProvider.notifier).refreshJoinInbox();
+    await tester.pumpAndSettle();
+
+    expect(core.localVerificationCalls, 1);
+    expect(find.byKey(const Key('device-approval-error')), findsNothing);
+    expect(find.text('完成'), findsOneWidget);
+    expect(find.text('拒绝设备'), findsNothing);
   });
 
-  testWidgets('admin role requires an explicit second switch', (tester) async {
-    final core = FakeDeviceManagementCore();
+  testWidgets('opening a notice is read-only until verification starts', (
+    tester,
+  ) async {
+    final request = _request();
+    final core = FakeDeviceManagementCore()
+      ..joinRequests = <DeviceJoinRequestNotice>[request];
     await tester.pumpWidget(
-      _app(DeviceJoinApprovalSheet(pending: _pending(), autoPoll: false), core),
+      _app(DeviceJoinApprovalSheet(request: request), core),
     );
     await tester.pumpAndSettle();
 
-    final switches = find.byType(CupertinoSwitch);
-    await tester.tap(switches.first);
-    await tester.tap(switches.at(1));
-    await tester.pump();
-    await tester.tap(find.text('确认并授权'));
+    expect(core.startVerificationCalls, 0);
+    expect(core.localVerificationCalls, 0);
+    expect(find.byKey(const Key('device-approval-sas')), findsNothing);
+
+    await tester.tap(find.text('开始验证'));
     await tester.pumpAndSettle();
 
-    expect(core.lastPreparedRole, DeviceRole.admin);
+    expect(core.startVerificationCalls, 1);
+    expect(core.prepareCalls, 0);
+    expect(core.confirmCalls, 0);
+  });
+
+  testWidgets('a request claimed by another admin stays read-only', (
+    tester,
+  ) async {
+    final request = _request(
+      state: DeviceJoinRemoteState.challengeSent,
+      canStartVerification: false,
+    );
+    final core = FakeDeviceManagementCore();
+    await tester.pumpWidget(
+      _app(DeviceJoinApprovalSheet(request: request), core),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('另一台管理设备正在处理此请求'), findsOneWidget);
+    expect(find.text('开始验证'), findsNothing);
+    expect(find.text('确认并授权'), findsNothing);
+    expect(core.startVerificationCalls, 0);
+    expect(core.localVerificationCalls, 0);
+  });
+
+  testWidgets(
+    'claimed challenge waits locally and response notification restores SAS',
+    (tester) async {
+      final challenge = _request(
+        state: DeviceJoinRemoteState.challengeSent,
+        claimedByCurrentDevice: true,
+        canStartVerification: false,
+      );
+      final core = FakeDeviceManagementCore()
+        ..registry = _rootTransferRegistry()
+        ..joinRequests = <DeviceJoinRequestNotice>[challenge]
+        ..verificationProgress = testJoinProgress();
+      await tester.pumpWidget(
+        _app(DeviceJoinApprovalSheet(request: challenge), core),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+      );
+
+      await container.read(devicesProvider.notifier).loadManagement();
+      await tester.pumpAndSettle();
+
+      expect(core.localVerificationCalls, 0);
+      expect(find.byKey(const Key('device-approval-error')), findsNothing);
+      expect(find.byKey(const Key('device-approval-sas')), findsNothing);
+
+      core.joinRequests = <DeviceJoinRequestNotice>[
+        _request(
+          state: DeviceJoinRemoteState.responseVerified,
+          claimedByCurrentDevice: true,
+          canStartVerification: false,
+        ),
+      ];
+      await container.read(devicesProvider.notifier).refreshJoinInbox();
+      await tester.pumpAndSettle();
+
+      expect(core.localVerificationCalls, 1);
+      expect(find.byKey(const Key('device-approval-error')), findsNothing);
+      expect(find.byKey(const Key('device-approval-sas')), findsOneWidget);
+      expect(find.text('482917'), findsOneWidget);
+    },
+  );
+
+  testWidgets('SAS mismatch rejects without preparing approval', (
+    tester,
+  ) async {
+    final request = _request(
+      state: DeviceJoinRemoteState.responseVerified,
+      claimedByCurrentDevice: true,
+      canStartVerification: false,
+    );
+    final core = FakeDeviceManagementCore()
+      ..verificationProgress = testJoinProgress();
+    await tester.pumpWidget(
+      _app(DeviceJoinApprovalSheet(request: request), core),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('验证码不一致'));
+    await tester.pumpAndSettle();
+
+    expect(core.rejectCalls, 1);
+    expect(core.lastRejectReason, DeviceJoinRejectReason.sasMismatch);
+    expect(core.prepareCalls, 0);
+    expect(core.confirmCalls, 0);
   });
 
   testWidgets('user-presence rejection never authorizes the device', (
     tester,
   ) async {
-    final core = FakeDeviceManagementCore();
+    final request = _request(
+      state: DeviceJoinRemoteState.responseVerified,
+      claimedByCurrentDevice: true,
+      canStartVerification: false,
+    );
+    final core = FakeDeviceManagementCore()
+      ..verificationProgress = testJoinProgress();
     final presence = FakeUserPresence(result: false);
     await tester.pumpWidget(
-      _app(
-        DeviceJoinApprovalSheet(pending: _pending(), autoPoll: false),
-        core,
-        presence: presence,
-      ),
+      _app(DeviceJoinApprovalSheet(request: request), core, presence: presence),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byType(CupertinoSwitch).first);
@@ -663,7 +900,7 @@ void main() {
         testJoinProgress(
           side: DeviceJoinSide.newDevice,
           phase: DeviceJoinPhase.responsePrepared,
-          remoteState: DeviceJoinRemoteState.notObserved,
+          remoteState: DeviceJoinRemoteState.pending,
           sas: null,
         ),
       ];
@@ -791,47 +1028,71 @@ void main() {
     expect(find.textContaining(secret), findsNothing);
   });
 
-  testWidgets('admin restart projection exposes unfinished join', (
-    tester,
-  ) async {
+  testWidgets('admin restart restores verified join notices', (tester) async {
     final core = FakeDeviceManagementCore()
       ..registry = _rootTransferRegistry()
-      ..localSessions = <DeviceJoinProgress>[
-        testJoinProgress(
-          phase: DeviceJoinPhase.challengePrepared,
-          remoteState: DeviceJoinRemoteState.challengeSent,
+      ..joinRequests = <DeviceJoinRequestNotice>[
+        _request(
+          state: DeviceJoinRemoteState.challengeSent,
+          claimedByCurrentDevice: true,
+          canStartVerification: false,
         ),
       ];
     await tester.pumpWidget(_app(const DevicesPage(), core));
     await tester.pumpAndSettle();
 
-    expect(find.text('未完成的设备关联'), findsOneWidget);
+    expect(find.text('待审批'), findsOneWidget);
     expect(find.text('device-new'), findsOneWidget);
-    expect(find.text('继续'), findsOneWidget);
+    expect(core.joinRequestCalls, 1);
   });
 }
 
-PendingDeviceJoinSummary _pending() => PendingDeviceJoinSummary(
+DeviceJoinRequestNotice _request({
+  String protocolDeviceId = 'device-new',
+  DeviceJoinRemoteState state = DeviceJoinRemoteState.pending,
+  bool claimedByCurrentDevice = false,
+  bool canStartVerification = true,
+}) => DeviceJoinRequestNotice(
+  eventId: 'event-1',
   joinSessionId: 'join-1',
-  protocolDeviceId: 'device-new',
-  signingKeyId: '$testDid#new-sign',
-  e2eeKeyId: '$testDid#new-e2ee',
-  requestedRole: DeviceRole.member,
+  did: testDid,
+  protocolDeviceId: protocolDeviceId,
+  candidateKeyFingerprint: 'sha256:abc123',
   issuedAt: DateTime.utc(2026, 7, 19),
   expiresAt: DateTime.utc(2030),
+  state: state,
+  claimedByCurrentDevice: claimedByCurrentDevice,
+  canStartVerification: canStartVerification,
 );
+
+DeviceJoinProgress _authorizedNewDeviceProgress({
+  DeviceSummary? authorizedDevice,
+}) {
+  return DeviceJoinProgress(
+    joinSessionId: 'join-1',
+    did: testDid,
+    protocolDeviceId: 'member-new',
+    side: DeviceJoinSide.newDevice,
+    phase: DeviceJoinPhase.authorized,
+    remoteState: DeviceJoinRemoteState.consumed,
+    expiresAt: DateTime.utc(2030),
+    authorizedDevice: authorizedDevice,
+  );
+}
 
 Widget _app(
   Widget home,
   FakeDeviceManagementCore core, {
   FakeUserPresence? presence,
   FakeRootKeyTransferPort? rootTransfer,
+  FakeAwikiGateway? gateway,
   bool rootTransferEnabled = false,
   bool deviceRevokeEnabled = false,
   SessionIdentity? session = _session,
 }) {
   return buildLocalizedTestApp(
     home: home,
+    gateway: gateway,
     session: session,
     providerOverrides: <Override>[
       multiDeviceRootTransferEnabledProvider.overrideWithValue(

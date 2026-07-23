@@ -1,5 +1,5 @@
-// [INPUT]: Device Registry, joins, secret-free Recovery notices, and admin actions.
-// [OUTPUT]: Ready-admin device UI with explicit server cancel and local-only notice hide.
+// [INPUT]: Authorized Device Registry, Core-verified Join notices, and admin actions.
+// [OUTPUT]: Device list and read-only notification-driven Join review entry.
 // [POS]: Device administration surface; raw control JSON/checkpoints never enter previews or UI.
 
 import 'dart:async';
@@ -48,10 +48,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
     final deviceRevokeEnabled = ref.watch(
       multiDeviceDeviceRevokeEnabledProvider,
     );
-    final resumable = state.localJoins
-        .where((join) => join.side == DeviceJoinSide.admin && !join.isTerminal)
-        .where((_) => canManage)
-        .toList();
+    final joinRequests = state.visibleJoinRequests;
     return CupertinoPageScaffold(
       backgroundColor: context.awikiTheme.background,
       child: AwikiAdaptiveScaffold(
@@ -172,7 +169,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
             const SizedBox(height: 8),
             AppCardSection(
               padding: EdgeInsets.zero,
-              child: registry == null || registry.pendingJoins.isEmpty
+              child: joinRequests.isEmpty
                   ? Padding(
                       padding: const EdgeInsets.all(16),
                       child: Text(context.l10n.devicesPendingEmpty),
@@ -181,47 +178,28 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                       children: <Widget>[
                         for (
                           var index = 0;
-                          index < registry.pendingJoins.length;
+                          index < joinRequests.length;
                           index++
                         ) ...<Widget>[
                           AppListTile(
-                            title:
-                                registry.pendingJoins[index].protocolDeviceId,
-                            subtitle: canManage
-                                ? context.l10n.deviceReviewAction
-                                : context.l10n.deviceManagementActionDisabled,
+                            title: joinRequests[index].protocolDeviceId,
+                            subtitle:
+                                '${joinRequests[index].candidateKeyFingerprint} · '
+                                '${joinRequests[index].claimedByOther
+                                    ? context.l10n.deviceJoinClaimedByOther
+                                    : canManage
+                                    ? context.l10n.deviceReviewAction
+                                    : context.l10n.deviceManagementActionDisabled}',
                             onTap: canManage
-                                ? () =>
-                                      _openPending(registry.pendingJoins[index])
+                                ? () => _openPending(joinRequests[index])
                                 : null,
                           ),
-                          if (index != registry.pendingJoins.length - 1)
+                          if (index != joinRequests.length - 1)
                             const AppSectionDivider(),
                         ],
                       ],
                     ),
             ),
-            if (resumable.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 18),
-              _SectionLabel(context.l10n.devicesLocalJoinsTitle),
-              const SizedBox(height: 8),
-              AppCardSection(
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: <Widget>[
-                    for (var index = 0; index < resumable.length; index++) ...[
-                      AppListTile(
-                        title: resumable[index].protocolDeviceId,
-                        subtitle: context.l10n.deviceResumeAction,
-                        onTap: () => _openRestored(resumable[index]),
-                      ),
-                      if (index != resumable.length - 1)
-                        const AppSectionDivider(),
-                    ],
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -260,20 +238,10 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
         );
   }
 
-  Future<void> _openPending(PendingDeviceJoinSummary pending) async {
+  Future<void> _openPending(DeviceJoinRequestNotice request) async {
     await AppNavigator.push<void>(
       context,
-      (_) => DeviceJoinApprovalSheet(pending: pending),
-    );
-    if (mounted) {
-      await ref.read(devicesProvider.notifier).loadManagement();
-    }
-  }
-
-  Future<void> _openRestored(DeviceJoinProgress restored) async {
-    await AppNavigator.push<void>(
-      context,
-      (_) => DeviceJoinApprovalSheet(restored: restored),
+      (_) => DeviceJoinApprovalSheet(request: request),
     );
     if (mounted) {
       await ref.read(devicesProvider.notifier).loadManagement();

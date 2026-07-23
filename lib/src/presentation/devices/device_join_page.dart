@@ -1,5 +1,5 @@
 // [INPUT]: New-device Join projection, user form input, and secret-free authorized-device summary.
-// [OUTPUT]: OTP/SAS Join UI plus post-authorization admin readiness status.
+// [OUTPUT]: OTP/SAS Join UI plus exact-DID member session activation.
 // [POS]: New-device pairing surface; it never persists OTP, SAS, or root material.
 
 import 'dart:async';
@@ -15,6 +15,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
+import '../app_shell/providers/app_runtime_provider.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
 
@@ -34,18 +35,23 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   Timer? _pollTimer;
   bool _sendingOtp = false;
   bool _otpSendFailed = false;
+  bool _activationPending = false;
+  bool _activationFailed = false;
+  String? _activatedJoinSessionId;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      unawaited(ref.read(devicesProvider.notifier).loadNewDevice());
+      await ref.read(devicesProvider.notifier).loadNewDevice();
+      await _activateAuthorizedMember();
     });
     if (widget.autoPoll) {
-      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
         if (mounted) {
-          unawaited(ref.read(devicesProvider.notifier).pollActive());
+          await ref.read(devicesProvider.notifier).pollNewDeviceActive();
+          await _activateAuthorizedMember();
         }
       });
     }
@@ -199,19 +205,6 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: context.awikiTheme.secondaryText),
           ),
-          if (progress.authorizedDevice?.role == DeviceRole.admin) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              deviceManagementReadinessLabel(
-                context.l10n,
-                progress.authorizedDevice!.managementReady
-                    ? DeviceManagementReadiness.ready
-                    : DeviceManagementReadiness.adminAwaitingRoot,
-              ),
-              key: const Key('device-join-admin-readiness'),
-              style: TextStyle(color: context.awikiTheme.secondaryText),
-            ),
-          ],
           if (sas != null) ...<Widget>[
             const SizedBox(height: 24),
             Text(
@@ -237,26 +230,35 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             AppSecondaryButton(
               label: context.l10n.deviceJoinRefresh,
               semanticsIdentifier: 'multi-device-refresh-join',
-              onPressed: state.isActionPending
-                  ? null
-                  : () => ref.read(devicesProvider.notifier).pollActive(),
+              onPressed: state.isActionPending ? null : _pollNow,
             ),
             const SizedBox(height: 10),
             AppDangerButton(
               label: context.l10n.deviceJoinCancel,
               onPressed: state.isActionPending
                   ? null
-                  : () => ref.read(devicesProvider.notifier).cancelActive(),
+                  : () => ref
+                        .read(devicesProvider.notifier)
+                        .cancelNewDeviceActive(),
             ),
           ] else if (progress.phase != DeviceJoinPhase.authorized)
             AppPrimaryButton(
               label: context.l10n.deviceJoinStart,
               onPressed: () => ref.read(devicesProvider.notifier).clearActive(),
             )
+          else if (_activationFailed)
+            AppPrimaryButton(
+              label: context.l10n.deviceJoinActivationRetry,
+              onPressed: _activationPending ? null : _activateAuthorizedMember,
+            )
           else
             AppPrimaryButton(
-              label: context.l10n.commonDone,
-              onPressed: () => Navigator.of(context).maybePop(),
+              label: _activationPending
+                  ? context.l10n.deviceJoinActivating
+                  : context.l10n.commonDone,
+              onPressed: _activationPending
+                  ? null
+                  : () => Navigator.of(context).maybePop(),
             ),
         ],
       ),
@@ -292,6 +294,59 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           phone: _phoneController.text,
           otp: otp,
         );
+    await _activateAuthorizedMember();
+  }
+
+  Future<void> _pollNow() async {
+    await ref.read(devicesProvider.notifier).pollNewDeviceActive();
+    await _activateAuthorizedMember();
+  }
+
+  Future<void> _activateAuthorizedMember() async {
+    var progress = ref.read(devicesProvider).activeJoin;
+    if (progress == null ||
+        progress.side != DeviceJoinSide.newDevice ||
+        progress.phase != DeviceJoinPhase.authorized ||
+        _activationPending ||
+        _activatedJoinSessionId == progress.joinSessionId) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _activationPending = true;
+        _activationFailed = false;
+      });
+    }
+    try {
+      if (progress.authorizedDevice == null) {
+        await ref.read(devicesProvider.notifier).pollNewDeviceActive();
+        progress = ref.read(devicesProvider).activeJoin;
+      }
+      final authorized = progress?.authorizedDevice;
+      if (progress == null ||
+          progress.side != DeviceJoinSide.newDevice ||
+          progress.phase != DeviceJoinPhase.authorized ||
+          authorized == null ||
+          authorized.protocolDeviceId != progress.protocolDeviceId ||
+          authorized.status != DeviceStatus.active ||
+          authorized.role != DeviceRole.member ||
+          authorized.managementReady ||
+          !authorized.isCurrent) {
+        throw StateError('invalid_authorized_device_projection');
+      }
+      await ref
+          .read(appRuntimeProvider.notifier)
+          .activateJoinedMember(progress.did);
+      _activatedJoinSessionId = progress.joinSessionId;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _activationFailed = true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _activationPending = false);
+      }
+    }
   }
 }
 

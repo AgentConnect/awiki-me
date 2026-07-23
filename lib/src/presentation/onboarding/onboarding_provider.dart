@@ -431,7 +431,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           'Join-required registration did not include Join progress.',
         );
       }
-      ref.read(devicesProvider.notifier).resume(progress);
+      ref.read(devicesProvider.notifier).resumeNewDevice(progress);
       return IdentityRegistrationStatus.joinRequired;
     }
     final session = result.identity;
