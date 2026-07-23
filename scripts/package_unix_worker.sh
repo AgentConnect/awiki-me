@@ -4,6 +4,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SIGNING_LIB="$SCRIPT_DIR/lib/macos_signing.sh"
+DMGBUILD_VERSION="1.6.7"
+MACOS_DMG_BACKGROUND="$ROOT_DIR/installer/macos/dmg-background.png"
+MACOS_DMG_SETTINGS="$ROOT_DIR/installer/macos/dmg_settings.py"
 ANDROID_APP_ID="ai.awiki.awikime"
 ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
 cd "$ROOT_DIR"
@@ -335,9 +338,85 @@ PY
   metadata "$filename"
 }
 
+verify_macos_dmg() {
+  local dmg="$1"
+  local expected_arch="$2"
+
+  (
+    set -euo pipefail
+    local mount_point="$ROOT_DIR/build/package/verify-$TARGET"
+    local mounted="false"
+
+    cleanup_macos_dmg_mount() {
+      if [[ "$mounted" == "true" ]]; then
+        if ! hdiutil detach "$mount_point" >/dev/null 2>&1 &&
+          ! hdiutil detach -force "$mount_point" >/dev/null 2>&1; then
+          return 1
+        fi
+        mounted="false"
+      fi
+      rm -rf "$mount_point"
+    }
+
+    cleanup_macos_dmg_mount_on_exit() {
+      local status=$?
+      trap - EXIT
+      if ! cleanup_macos_dmg_mount; then
+        printf 'failed to detach macOS DMG verification mount: %s\n' \
+          "$mount_point" >&2
+        status=1
+      fi
+      exit "$status"
+    }
+    trap cleanup_macos_dmg_mount_on_exit EXIT
+    trap 'exit 130' HUP INT TERM
+
+    rm -rf "$mount_point"
+    mkdir -p "$mount_point"
+    hdiutil verify "$dmg" >/dev/null
+    hdiutil attach \
+      -readonly \
+      -nobrowse \
+      -noautoopen \
+      -mountpoint "$mount_point" \
+      "$dmg" >/dev/null
+    mounted="true"
+
+    [[ -d "$mount_point/AWikiMe.app" ]] ||
+      fail "macOS DMG is missing AWikiMe.app"
+    [[ -L "$mount_point/Applications" ]] ||
+      fail "macOS DMG is missing the Applications link"
+    [[ "$(readlink "$mount_point/Applications")" == "/Applications" ]] ||
+      fail "macOS DMG Applications link has the wrong target"
+    [[ -s "$mount_point/.DS_Store" ]] ||
+      fail "macOS DMG is missing Finder layout metadata"
+    [[ -f "$mount_point/.background.png" ]] ||
+      fail "macOS DMG is missing the Finder background"
+    cmp -s \
+      "$MACOS_DMG_BACKGROUND" \
+      "$mount_point/.background.png" ||
+      fail "macOS DMG Finder background does not match the source asset"
+    [[ "$(lipo -archs "$mount_point/AWikiMe.app/Contents/MacOS/AWikiMe")" == "$expected_arch" ]] ||
+      fail "mounted macOS app architecture mismatch"
+    codesign --verify --deep --strict --verbose=2 "$mount_point/AWikiMe.app"
+    awiki_verify_macos_app_signature \
+      "$mount_point/AWikiMe.app" \
+      "$AWIKI_MACOS_DEVELOPMENT_TEAM" \
+      ai.awiki.awikime || fail "mounted macOS app signature contract failed"
+  )
+}
+
 build_macos() {
   [[ "$(uname -s)" == "Darwin" ]] || fail "macOS packages require a macOS worker"
   [[ -f "$SIGNING_LIB" ]] || fail "macOS signing helper is missing"
+  [[ -f "$MACOS_DMG_BACKGROUND" ]] || fail "macOS DMG background is missing"
+  [[ -f "$MACOS_DMG_SETTINGS" ]] || fail "macOS DMG settings are missing"
+  local dmgbuild_python="${DMGBUILD_PYTHON:-python3}"
+  command -v "$dmgbuild_python" >/dev/null 2>&1 ||
+    fail "required command not found: $dmgbuild_python"
+  [[ "$("$dmgbuild_python" -c \
+    'from importlib.metadata import version; print(version("dmgbuild"))')" == \
+    "$DMGBUILD_VERSION" ]] || fail "dmgbuild must be $DMGBUILD_VERSION"
   # shellcheck source=scripts/lib/macos_signing.sh
   source "$SIGNING_LIB"
   : "${AWIKI_MACOS_SIGNING_IDENTITY:?AWIKI_MACOS_SIGNING_IDENTITY is required}"
@@ -400,19 +479,23 @@ build_macos() {
     "$app" "$AWIKI_MACOS_DEVELOPMENT_TEAM" ai.awiki.awikime ||
     fail "macOS signature contract failed"
 
-  local stage="$ROOT_DIR/build/package/stage-$TARGET"
-  rm -rf "$stage" "$OUTPUT_DIR/$filename"
-  mkdir -p "$stage"
-  cp -R "$app" "$stage/AWikiMe.app"
-  ln -s /Applications "$stage/Applications"
-  hdiutil create \
-    -volname "AWikiMe $VERSION $arch_label" \
-    -srcfolder "$stage" \
-    -ov \
-    -format UDZO \
-    "$OUTPUT_DIR/$filename" >/dev/null
-  hdiutil imageinfo "$OUTPUT_DIR/$filename" | grep -Fq 'Format: UDZO' ||
+  local dmg_work="$ROOT_DIR/build/package/dmg-$TARGET"
+  local staged_dmg="$dmg_work/$filename"
+  rm -rf "$dmg_work" "$OUTPUT_DIR/$filename"
+  mkdir -p "$dmg_work"
+  "$dmgbuild_python" -m dmgbuild \
+    --settings "$MACOS_DMG_SETTINGS" \
+    --no-hidpi \
+    --detach-retries 5 \
+    -D "application=$app" \
+    -D "background=$MACOS_DMG_BACKGROUND" \
+    "AWikiMe $VERSION $arch_label" \
+    "$staged_dmg"
+  hdiutil imageinfo "$staged_dmg" | grep -Fq 'Format: UDZO' ||
     fail "macOS DMG is not UDZO"
+  verify_macos_dmg "$staged_dmg" "$arch"
+  mv "$staged_dmg" "$OUTPUT_DIR/$filename"
+  rm -rf "$dmg_work"
   metadata "$filename"
 }
 

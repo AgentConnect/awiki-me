@@ -69,6 +69,12 @@ AWIKI_MACOS_DEVELOPMENT_TEAM="ABCDEFGHIJ" \
 scripts/package_app.sh
 ```
 
+独立运行 macOS 平台 worker 时还需要 Python 3.10+ 和 `dmgbuild 1.6.7`。CI 会在临时
+venv 中按 `scripts/requirements-macos-dmg.txt` 安装精确版本并校验所有 wheel 的
+SHA-256；本地可以使用同一 requirements 文件创建 venv，再通过 `DMGBUILD_PYTHON`
+传入该 venv 的 Python。该工具直接生成 Finder 布局元数据，不启动 Finder，也不参与
+APP 编译和代码签名。
+
 只要本次目标包含 macOS，脚本就会在构建之前检查 identity 是否存在。
 用户试用包使用 Flutter Release 模式和 production Keychain channel；Profile 仍属于开发通道，
 不能用来生成用户安装包。

@@ -55,7 +55,9 @@ concurrency:
 env:
   FLUTTER_VERSION: 3.44.0
   RUST_VERSION: 1.88.0
+  PYTHON_VERSION: 3.13.7
   CARGO_NDK_VERSION: 4.1.2
+  DMGBUILD_VERSION: 1.6.7
   PUB_HOSTED_URL: https://pub.dev
   FLUTTER_STORAGE_BASE_URL: https://storage.googleapis.com
 
@@ -325,6 +327,30 @@ jobs:
         run: |
           cargo install cargo-ndk --version "$CARGO_NDK_VERSION" --locked
           test "$(cargo ndk --version)" = "cargo-ndk $CARGO_NDK_VERSION"
+
+      - name: Setup Python 3.13.7 for dmgbuild
+        if: startsWith(matrix.target, 'macos-')
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pinned dmgbuild
+        if: startsWith(matrix.target, 'macos-')
+        shell: bash
+        run: |
+          venv="$RUNNER_TEMP/awiki-dmgbuild"
+          python3 -m venv "$venv"
+          "$venv/bin/python" -m pip install \
+            --disable-pip-version-check \
+            --no-input \
+            --index-url https://pypi.org/simple \
+            --only-binary=:all: \
+            --require-hashes \
+            --requirement awiki-me/scripts/requirements-macos-dmg.txt
+          test "$("$venv/bin/python" -c \
+            'from importlib.metadata import version; print(version("dmgbuild"))')" = \
+            "$DMGBUILD_VERSION"
+          printf 'DMGBUILD_PYTHON=%s\n' "$venv/bin/python" >> "$GITHUB_ENV"
 
       - name: Enable Flutter desktop target
         if: matrix.target != 'android-arm64'
