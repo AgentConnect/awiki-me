@@ -478,35 +478,37 @@ class _FakeIdentities implements IdentityCorePort {
   ];
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async => _session('recovered');
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('email');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('email'),
+  );
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('phone');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('phone'),
+  );
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('open');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('open'),
+  );
 
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {

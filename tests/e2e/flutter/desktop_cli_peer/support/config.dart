@@ -287,15 +287,6 @@ String _normalizeIdentityRef(String value) {
   return normalized;
 }
 
-bool _looksRecoverableForRegister(String output) {
-  final lower = output.toLowerCase();
-  return lower.contains('not found') ||
-      lower.contains('handle_not_found') ||
-      lower.contains('not_registered') ||
-      lower.contains('not registered') ||
-      lower.contains('404');
-}
-
 String _sanitizeDiagnostic(
   String input, {
   Iterable<String> secrets = const [],

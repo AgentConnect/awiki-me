@@ -3,11 +3,14 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/app_session.dart';
 import '../../application/models/daemon_subkey_authorization_revoke_result.dart';
 import '../../application/ports/identity_core_port.dart';
+import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import 'awiki_im_core_mappers.dart';
+import 'awiki_im_core_device_management_adapter.dart';
 import 'awiki_im_core_runtime.dart';
 
-class AwikiImCoreIdentityAdapter implements IdentityCorePort {
+class AwikiImCoreIdentityAdapter
+    implements IdentityCorePort, LegacyIdentityUpgradePort {
   AwikiImCoreIdentityAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -114,7 +117,29 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _runtime.coreInstance();
+    final status = await coreInstance.legacyUpgradeStatus(
+      _selectorFromString(identityIdOrAlias),
+    );
+    return _legacyUpgradeStatus(status);
+  }
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) async {
+    final coreInstance = await _runtime.coreInstance();
+    final status = await coreInstance.upgradeLegacyIdentity(
+      _selectorFromString(identityIdOrAlias),
+    );
+    return _legacyUpgradeStatus(status);
+  }
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -131,15 +156,11 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
       profile: core.InitialProfile(displayName: displayName),
       makeDefault: true,
     );
-    final identity = result.identity ?? result.defaultIdentityChange?.next;
-    if (identity == null) {
-      throw StateError('IM Core registration did not return an identity.');
-    }
-    return _mappers.appSessionFromIdentity(identity);
+    return _registrationResult(coreInstance, result);
   }
 
   @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
@@ -154,15 +175,11 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
       profile: core.InitialProfile(displayName: displayName),
       makeDefault: true,
     );
-    final identity = result.identity ?? result.defaultIdentityChange?.next;
-    if (identity == null) {
-      throw StateError('IM Core registration did not return an identity.');
-    }
-    return _mappers.appSessionFromIdentity(identity);
+    return _registrationResult(coreInstance, result);
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
@@ -175,32 +192,63 @@ class AwikiImCoreIdentityAdapter implements IdentityCorePort {
       profile: core.InitialProfile(displayName: displayName),
       makeDefault: true,
     );
+    return _registrationResult(coreInstance, result);
+  }
+
+  Future<IdentityRegistrationResult> _registrationResult(
+    core.AwikiImCore coreInstance,
+    core.HandleRegistrationResult result,
+  ) async {
+    final normalizedState = result.state
+        .trim()
+        .replaceAll('-', '_')
+        .toLowerCase();
+    if (normalizedState == 'join_required' ||
+        normalizedState == 'joinrequired') {
+      final continuation = result.joinRequired;
+      if (continuation == null) {
+        throw StateError(
+          'IM Core joinRequired registration did not include a continuation.',
+        );
+      }
+      final progress = await coreInstance.beginDeviceJoin(
+        did: continuation.did,
+        operationId:
+            'awiki-me-register-join-${DateTime.now().microsecondsSinceEpoch}',
+        accountVerificationGrant: continuation.accountVerificationGrant,
+      );
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: deviceJoinProgressFromCore(progress),
+      );
+    }
+    if (normalizedState != 'registered') {
+      throw StateError(
+        'IM Core returned unsupported registration state: ${result.state}',
+      );
+    }
     final identity = result.identity ?? result.defaultIdentityChange?.next;
     if (identity == null) {
       throw StateError('IM Core registration did not return an identity.');
     }
-    return _mappers.appSessionFromIdentity(identity);
-  }
-
-  @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    final coreInstance = await _runtime.coreInstance();
-    final result = await coreInstance.recoverHandle(
-      handle: handle,
-      phone: phone,
-      otp: otp,
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _mappers.appSessionFromIdentity(identity),
     );
-    final identity =
-        result.recoveredIdentity ?? await coreInstance.defaultIdentity();
-    if (identity == null) {
-      throw StateError('IM Core recovery did not return an identity.');
-    }
-    return _mappers.appSessionFromIdentity(identity);
   }
+}
+
+LegacyIdentityUpgradeStatus _legacyUpgradeStatus(
+  core.LegacyUpgradeStatus status,
+) {
+  return switch (status) {
+    core.LegacyUpgradeIdle() => const LegacyIdentityUpgradeStatus.idle(),
+    core.LegacyUpgradeRunning() => const LegacyIdentityUpgradeStatus.running(),
+    core.LegacyUpgradeRetryRequired(:final identityId) =>
+      LegacyIdentityUpgradeStatus.retryRequired(identityId: identityId),
+    core.LegacyUpgradeCompleted() =>
+      const LegacyIdentityUpgradeStatus.completed(),
+  };
 }
 
 Future<core.IdentitySummary> _resolveIdentity(

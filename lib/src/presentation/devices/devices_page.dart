@@ -10,10 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../domain/entities/device_management.dart';
-import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
-import '../recovery/handle_recovery_panel.dart';
-import '../recovery/handle_recovery_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
@@ -43,13 +40,8 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(devicesProvider);
-    final recoveryEnabled = ref.watch(handleRecoveryEnabledProvider);
-    final recoveryState = ref.watch(handleRecoveryProvider);
     final registry = state.registry;
     final canManage = state.currentDeviceCanManage;
-    final oldAdminNotices = recoveryEnabled && canManage
-        ? recoveryState.oldAdminNotices
-        : const <OldAdminRecoveryNotice>[];
     final rootTransferEnabled = ref.watch(
       multiDeviceRootTransferEnabledProvider,
     );
@@ -82,9 +74,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               trailing: TopBarActionButton(
                 key: const Key('devices-refresh'),
-                onTap: state.isLoading || recoveryState.isBusy
-                    ? null
-                    : _refresh,
+                onTap: state.isLoading ? null : _refresh,
                 child: const Icon(CupertinoIcons.refresh, size: 20),
               ),
             ),
@@ -111,106 +101,6 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                 ),
               ),
               const SizedBox(height: 12),
-            ],
-            if (recoveryState.error != null && recoveryEnabled) ...<Widget>[
-              AppSurface(
-                color: context.awikiTheme.dangerContainer,
-                child: Text(
-                  handleRecoveryErrorLabel(context, recoveryState.error!),
-                  key: const Key('handle-recovery-admin-error'),
-                  style: TextStyle(color: context.awikiTheme.danger),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (oldAdminNotices.isNotEmpty) ...<Widget>[
-              _SectionLabel(context.l10n.handleRecoveryAdminSectionTitle),
-              const SizedBox(height: 8),
-              AppCardSection(
-                key: const Key('handle-recovery-admin-section'),
-                padding: EdgeInsets.zero,
-                child: Column(
-                  children: <Widget>[
-                    for (
-                      var index = 0;
-                      index < oldAdminNotices.length;
-                      index++
-                    ) ...<Widget>[
-                      AppListTile(
-                        key: Key(
-                          'handle-recovery-notice-${oldAdminNotices[index].eventId}',
-                        ),
-                        title: oldAdminNotices[index].canonicalHandle,
-                        subtitle: <String>[
-                          context.l10n.handleRecoveryAdminSectionSubtitle(
-                            oldAdminNotices[index].canonicalHandle,
-                          ),
-                          context.l10n.handleRecoveryAdminRequestedAt(
-                            _formatRecoveryTime(
-                              oldAdminNotices[index].requestedAt,
-                            ),
-                          ),
-                          context.l10n.handleRecoveryAdminCancellableUntil(
-                            _formatRecoveryTime(
-                              oldAdminNotices[index].cancellableUntil,
-                            ),
-                          ),
-                          context.l10n.handleRecoveryAdminSecurityWarning,
-                        ].join('\n'),
-                        trailing: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            CupertinoButton(
-                              key: Key(
-                                'handle-recovery-cancel-${oldAdminNotices[index].eventId}',
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              onPressed: recoveryState.isBusy
-                                  ? null
-                                  : () => _confirmCancelRecovery(
-                                      oldAdminNotices[index],
-                                    ),
-                              child: Text(
-                                context.l10n.handleRecoveryAdminCancel,
-                                style: TextStyle(
-                                  color: context.awikiTheme.danger,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            CupertinoButton(
-                              key: Key(
-                                'handle-recovery-dismiss-${oldAdminNotices[index].eventId}',
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              onPressed: recoveryState.isBusy
-                                  ? null
-                                  : () => _confirmDismissRecoveryNotice(
-                                      oldAdminNotices[index],
-                                    ),
-                              child: Text(
-                                context.l10n.handleRecoveryAdminDismiss,
-                                style: TextStyle(
-                                  color: context.awikiTheme.secondaryText,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (index != oldAdminNotices.length - 1)
-                        const AppSectionDivider(),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
             ],
             _SectionLabel(context.l10n.devicesAuthorizedTitle),
             const SizedBox(height: 8),
@@ -392,76 +282,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
 
   Future<void> _refresh() async {
     await ref.read(devicesProvider.notifier).loadManagement();
-    if (mounted && ref.read(handleRecoveryEnabledProvider)) {
-      await ref.read(handleRecoveryProvider.notifier).restore();
-    }
   }
-
-  Future<void> _confirmCancelRecovery(OldAdminRecoveryNotice notice) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.handleRecoveryAdminCancelConfirmTitle),
-        content: Text(context.l10n.handleRecoveryAdminCancelConfirmDetail),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            key: const Key('handle-recovery-cancel-confirm'),
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(context.l10n.handleRecoveryAdminCancelConfirmAction),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) {
-      await ref
-          .read(handleRecoveryProvider.notifier)
-          .cancelOldAdminNotice(
-            notice,
-            intentConfirmed: true,
-            presenceReason: context.l10n.handleRecoveryCancelPresenceReason,
-          );
-    }
-  }
-
-  Future<void> _confirmDismissRecoveryNotice(
-    OldAdminRecoveryNotice notice,
-  ) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.handleRecoveryAdminDismissConfirmTitle),
-        content: Text(context.l10n.handleRecoveryAdminDismissConfirmDetail),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            key: const Key('handle-recovery-dismiss-confirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(context.l10n.handleRecoveryAdminDismissConfirmAction),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) {
-      await ref
-          .read(handleRecoveryProvider.notifier)
-          .dismissOldAdminNotice(notice);
-    }
-  }
-}
-
-String _formatRecoveryTime(DateTime value) {
-  final local = value.toLocal();
-  String two(int part) => part.toString().padLeft(2, '0');
-  return '${local.year}-${two(local.month)}-${two(local.day)} '
-      '${two(local.hour)}:${two(local.minute)}';
 }
 
 class _SectionLabel extends StatelessWidget {

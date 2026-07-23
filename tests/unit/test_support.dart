@@ -26,6 +26,7 @@ import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
@@ -41,6 +42,7 @@ import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -639,8 +641,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool includeLocalPathInSentAttachment = true;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
-  HandleRegistrationStatus handleRegistrationStatus =
-      HandleRegistrationStatus.notRegistered;
+  bool handleAlreadyRegistered = false;
+  IdentityRegistrationStatus registrationStatus =
+      IdentityRegistrationStatus.registered;
   String? lastFollowedDidOrHandle;
   String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
@@ -701,12 +704,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
   int checkEmailVerifiedCalls = 0;
-  int lookupHandleRegistrationCalls = 0;
   int validateHandleCalls = 0;
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int registerHandleWithoutContactVerificationCalls = 0;
-  int recoverHandleCalls = 0;
   int resumeGroupRecoveryCalls = 0;
   bool failGroupRecovery = false;
   GroupRebindRecoverySummary groupRecoverySummary =
@@ -1249,31 +1250,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return loginResult!;
   }
 
-  @override
-  Future<SessionIdentity> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    recoverHandleCalls += 1;
-    loginResult = SessionIdentity(
-      did: 'did:wba:awiki.info:$handle:e1_recovered',
-      credentialName: handle,
-      displayName: handle,
-      handle: handle,
-      jwtToken: 'recovered-token',
-    );
-    return loginResult!;
-  }
-
-  @override
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  }) async {
-    lookupHandleRegistrationCalls += 1;
-    return handleRegistrationStatus;
-  }
-
   Future<HandleAvailability> validateHandle({
     required String handle,
     String? domain,
@@ -1281,8 +1257,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     validateHandleCalls += 1;
     final normalizedHandle = handle.trim().toLowerCase();
     final normalizedDomain = domain?.trim().toLowerCase();
-    final registered =
-        handleRegistrationStatus == HandleRegistrationStatus.registered;
+    final registered = handleAlreadyRegistered;
     return HandleAvailability(
       handle: normalizedHandle,
       domain: normalizedDomain,
@@ -3488,37 +3463,45 @@ class FakeOnboardingService implements OnboardingService {
   final FakeAwikiGateway gateway;
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    return _appSessionFromLegacy(
-      await gateway.recoverHandle(phone: phone, otp: otp, handle: handle),
-    );
-  }
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
 
   @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandleWithEmail(
-        email: email,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: _testRegistrationJoinProgress,
+      );
+    }
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _appSessionFromLegacy(
+        await gateway.registerHandleWithEmail(
+          email: email,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
     );
   }
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -3526,37 +3509,65 @@ class FakeOnboardingService implements OnboardingService {
     String? nickName,
     String? profileMarkdown,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandle(
-        phone: phone,
-        otp: otp,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: _testRegistrationJoinProgress,
+      );
+    }
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _appSessionFromLegacy(
+        await gateway.registerHandle(
+          phone: phone,
+          otp: otp,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
     );
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String phone,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandleWithoutContactVerification(
-        phone: phone,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: _testRegistrationJoinProgress,
+      );
+    }
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _appSessionFromLegacy(
+        await gateway.registerHandleWithoutContactVerification(
+          phone: phone,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
     );
   }
 }
+
+final DeviceJoinProgress _testRegistrationJoinProgress = DeviceJoinProgress(
+  joinSessionId: 'registration-join-1',
+  did: 'did:wba:awiki.ai:alice:e1_registration',
+  protocolDeviceId: 'registration-device-1',
+  side: DeviceJoinSide.newDevice,
+  phase: DeviceJoinPhase.pending,
+  remoteState: DeviceJoinRemoteState.pending,
+  expiresAt: DateTime.utc(2030),
+);
 
 class FakeOnboardingSupportService implements OnboardingSupportService {
   const FakeOnboardingSupportService(this.gateway);
@@ -3577,13 +3588,6 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  }) {
-    return gateway.lookupHandleRegistration(handle: handle);
-  }
-
-  @override
   Future<HandleAvailability> validateHandle({
     required String handle,
     String? domain,
@@ -3601,6 +3605,16 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
 
   @override
   Future<void> sendOtp({required String phone}) {
+    return gateway.sendOtp(phone: phone);
+  }
+
+  @override
+  Future<void> sendRegistrationOtp({
+    required String phone,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) {
     return gateway.sendOtp(phone: phone);
   }
 }
@@ -3669,35 +3683,37 @@ class FakeIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async => defaultSession;
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => defaultSession;
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: defaultSession,
+  );
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => defaultSession;
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: defaultSession,
+  );
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => defaultSession;
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: defaultSession,
+  );
 
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async =>

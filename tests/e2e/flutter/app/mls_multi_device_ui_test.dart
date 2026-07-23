@@ -89,12 +89,10 @@ void _registerMlsMultiDeviceTests() {
         anpServiceUrl: config.anpServiceUrl,
         anpServiceDid: config.anpServiceDid,
         agentImEnabled: false,
-        multiDeviceJoinEnabled: true,
         multiDeviceRootTransferEnabled: false,
         multiDeviceDeviceRevokeEnabled: true,
         multiDeviceDirectE2eeEnabled: false,
         multiDeviceGroupE2eeEnabled: true,
-        handleRecoveryEnabled: false,
       );
       bootstrap = await AppBootstrap.create(
         environment: environment,
@@ -108,9 +106,9 @@ void _registerMlsMultiDeviceTests() {
         purpose: _genesisPurpose,
         handle: handle,
       );
-      final AppSession adminSession;
+      final IdentityRegistrationResult registration;
       try {
-        adminSession = await bootstrap.onboardingService!
+        registration = await bootstrap.onboardingService!
             .registerHandleWithPhone(
               phone: account.phone,
               otp: genesisOtp,
@@ -120,6 +118,13 @@ void _registerMlsMultiDeviceTests() {
       } on Object {
         fail(
           'App MLS bootstrap registration failed without exposing remote data.',
+        );
+      }
+      final adminSession = registration.identity;
+      if (registration.status != IdentityRegistrationStatus.registered ||
+          adminSession == null) {
+        fail(
+          'App MLS bootstrap registration unexpectedly required Device Join.',
         );
       }
       if (!adminSession.authenticated) {

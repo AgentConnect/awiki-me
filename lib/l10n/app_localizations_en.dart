@@ -211,10 +211,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This server does not require SMS or email verification. You can create a new identity directly.';
 
   @override
-  String get handleAlreadyRegisteredImportCredential =>
-      'This handle already exists. This server cannot recover it without verification. Import its identity credential or contact the server administrator.';
-
-  @override
   String get registrationMethodUnavailable =>
       'This server does not support the selected registration method. Refresh and try again.';
 
@@ -2679,10 +2675,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Activation email sent. Please check your inbox.';
 
   @override
-  String get emailLoginUnsupportedForRegisteredHandle =>
-      'This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.';
-
-  @override
   String get emailNotActivatedClickLink =>
       'The email is not activated yet. Please click the activation link in the email first.';
 
@@ -2841,177 +2833,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatGroupProfileUpdated => 'Group info updated';
 
   @override
-  String get handleRecoveryTitle => 'Recover AWiki Handle';
-
-  @override
-  String get handleRecoveryWarning =>
-      'This is service-assisted recovery. It cannot recover the original DID private key, and the Handle still points to the old DID until completion.';
-
-  @override
-  String get handleRecoveryCreatesNewDid =>
-      'This device will create a new root key and cryptographic DID.';
-
-  @override
-  String get handleRecoverySignsOutOldDevices =>
-      'All devices of the old DID will be signed out and cannot receive future messages after completion.';
-
-  @override
-  String get handleRecoveryNoHistoryOrGroupInheritance =>
-      'Message-history decryption, Direct security sessions, and group membership are not inherited automatically.';
-
-  @override
-  String get handleRecoveryCoolingTitle => 'Recovery cooling period';
-
-  @override
-  String handleRecoveryCoolingUntil(Object time) {
-    return 'Notifications to old devices and bound channels are in progress. Finalization stays unavailable until notification delivery and cooling both complete. The latest status currently reports $time; refresh status for the authoritative deadline.';
-  }
-
-  @override
-  String get handleRecoveryReadyTitle => 'Independent reconfirmation is ready';
-
-  @override
-  String get handleRecoveryReadyDetail =>
-      'Request a new code. The code or authorization used for the first verification cannot finalize recovery.';
-
-  @override
-  String get handleRecoveryReconfirmationHint =>
-      'Reconfirmation authorizes this device to create a new DID and switch the current Handle to it.';
-
-  @override
-  String get handleRecoveryReconfirmationOtp => 'Reconfirmation code';
-
-  @override
-  String get handleRecoverySendReconfirmationOtp => 'Send a new code';
-
-  @override
-  String get handleRecoveryExplicitConfirmation =>
-      'I understand that a new DID will be created, old devices will be signed out, and history and groups will not be restored automatically.';
-
-  @override
-  String get handleRecoveryFinalize => 'Recover Handle and create new DID';
-
-  @override
-  String get handleRecoveryFinalizePresenceReason =>
-      'Confirm Handle recovery and creation of a new DID';
-
-  @override
-  String get handleRecoveryRefresh => 'Refresh recovery status';
-
-  @override
-  String get handleRecoveryCancelledTitle => 'Recovery cancelled';
-
-  @override
-  String get handleRecoveryCancelledDetail =>
-      'The Handle still points to the old DID. No new identity was created or activated.';
-
-  @override
-  String get handleRecoveryExpiredTitle => 'Recovery expired';
-
-  @override
-  String get handleRecoveryExpiredDetail =>
-      'This recovery did not change the Handle. Verify again to start a new request.';
-
-  @override
-  String get handleRecoveryCompletedTitle => 'Handle recovery completed';
-
-  @override
-  String get handleRecoveryCompletedDetail =>
-      'A new DID is active. Re-establish contact security sessions and rejoin groups with owner approval.';
-
-  @override
-  String get handleRecoveryActivationPendingTitle =>
-      'New DID created; local activation pending';
-
-  @override
-  String get handleRecoveryActivationPendingDetail =>
-      'Remote recovery is complete and cannot be finalized again. Retry loading the locally persisted new identity and initializing E2EE.';
-
-  @override
-  String get handleRecoveryRetryActivation => 'Retry local activation';
-
-  @override
-  String get handleRecoveryActivationFailed =>
-      'The Handle was switched, but local identity or E2EE activation failed. Do not finalize again; retry local activation.';
-
-  @override
-  String get handleRecoveryCompletionAckPendingTitle =>
-      'New DID active; completion status pending';
-
-  @override
-  String get handleRecoveryCompletionAckPendingDetail =>
-      'Identity and E2EE are ready. Retry saving completion status; this will not finalize recovery, switch identity, or initialize E2EE again.';
-
-  @override
-  String get handleRecoveryRetryCompletionAck =>
-      'Retry saving completion status';
-
-  @override
-  String get handleRecoveryUserPresenceRejected =>
-      'System identity confirmation was cancelled or unavailable. No sensitive action was submitted.';
-
-  @override
   String get handleRecoveryUnavailable =>
-      'This version has no safe Handle Recovery adapter. No identity state was changed.';
+      'Handle Recovery is not supported in this version. No identity state was changed.';
 
   @override
-  String get handleRecoveryNotReady =>
-      'Recovery is still cooling down. Refresh the status later.';
-
-  @override
-  String get handleRecoveryConflict =>
-      'Recovery state changed or the Handle no longer points to the expected identity. Refresh and retry.';
-
-  @override
-  String get handleRecoveryAdminSectionTitle => 'Identity recovery alert';
-
-  @override
-  String handleRecoveryAdminSectionSubtitle(Object handle) {
-    return 'Someone requested recovery of $handle with a new DID. Cancel it immediately if this was not you.';
-  }
-
-  @override
-  String handleRecoveryAdminRequestedAt(Object timestamp) {
-    return 'Requested: $timestamp';
-  }
-
-  @override
-  String handleRecoveryAdminCancellableUntil(Object timestamp) {
-    return 'Cancellation deadline: $timestamp';
-  }
-
-  @override
-  String get handleRecoveryAdminSecurityWarning =>
-      'Security warning: hiding this alert does not cancel the recovery request.';
-
-  @override
-  String get handleRecoveryAdminCancel => 'Cancel recovery';
-
-  @override
-  String get handleRecoveryAdminCancelConfirmTitle => 'Cancel Handle recovery?';
-
-  @override
-  String get handleRecoveryAdminCancelConfirmDetail =>
-      'After cancellation, this request cannot complete and the Handle remains bound to the current DID.';
-
-  @override
-  String get handleRecoveryAdminCancelConfirmAction => 'Cancel recovery';
-
-  @override
-  String get handleRecoveryAdminDismiss => 'Hide on this device';
-
-  @override
-  String get handleRecoveryAdminDismissConfirmTitle =>
-      'Hide this alert locally?';
-
-  @override
-  String get handleRecoveryAdminDismissConfirmDetail =>
-      'This only hides the alert on this device. It does not cancel the server-side recovery request.';
-
-  @override
-  String get handleRecoveryAdminDismissConfirmAction => 'Hide locally';
-
-  @override
-  String get handleRecoveryCancelPresenceReason =>
-      'Confirm cancellation of Handle recovery';
+  String get legacyIdentityUpgradeFailed =>
+      'The legacy identity upgrade failed. Please try again.';
 }

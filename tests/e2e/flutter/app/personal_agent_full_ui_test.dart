@@ -592,21 +592,6 @@ Future<AppSession> _prepareRealAppIdentity(
   OnboardingService onboarding,
   _PersonalAgentRealBackendConfig config,
 ) async {
-  final recover = await _tryAppIdentityAction(
-    () => onboarding.recoverHandle(
-      phone: config.otpPhone,
-      otp: config.otpCode,
-      handle: config.appHandle,
-    ),
-  );
-  if (recover.session != null) {
-    return recover.session!;
-  }
-  if (!_looksRecoverableForRegister(recover.errorText)) {
-    throw StateError(
-      'App recover failed: ${_sanitizeDiagnostic(recover.errorText, config)}',
-    );
-  }
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
@@ -624,10 +609,16 @@ Future<AppSession> _prepareRealAppIdentity(
 }
 
 Future<_AppIdentityAttempt> _tryAppIdentityAction(
-  Future<AppSession> Function() action,
+  Future<IdentityRegistrationResult> Function() action,
 ) async {
   try {
-    return _AppIdentityAttempt.session(await action());
+    final result = await action();
+    final session = result.identity;
+    if (result.status == IdentityRegistrationStatus.registered &&
+        session != null) {
+      return _AppIdentityAttempt.session(session);
+    }
+    return _AppIdentityAttempt.error('join_required');
   } on Object catch (error) {
     return _AppIdentityAttempt.error(error.toString());
   }
@@ -1390,15 +1381,6 @@ Future<void> _poll({
   );
 }
 
-bool _looksRecoverableForRegister(String output) {
-  final lower = output.toLowerCase();
-  return lower.contains('not found') ||
-      lower.contains('handle_not_found') ||
-      lower.contains('not_registered') ||
-      lower.contains('not registered') ||
-      lower.contains('404');
-}
-
 String _sanitizeDiagnostic(
   String input,
   _PersonalAgentRealBackendConfig config,
@@ -1914,16 +1896,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
@@ -1933,7 +1906,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -1944,7 +1917,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,

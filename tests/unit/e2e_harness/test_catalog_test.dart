@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(68));
+      expect(catalog.cases, hasLength(65));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -22,8 +22,6 @@ void main() {
           'DEVICE-REVOKE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
-          'HANDLE-RECOVERY-E2E-001',
-          'HANDLE-RECOVERY-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
         ]),
       );
@@ -33,7 +31,6 @@ void main() {
           'smoke',
           'multi-device',
           'multi-device-remote-join',
-          'multi-device-remote-recovery',
           'multi-device-remote-mls',
           'full',
           'direct',
@@ -55,22 +52,6 @@ void main() {
         'ROOT-TRANSFER-E2E-001',
         'DEVICE-REVOKE-E2E-001',
       ]);
-      expect(catalog.suiteCaseIds['multi-device-remote-recovery'], <String>[
-        'HANDLE-RECOVERY-E2E-001',
-        'HANDLE-RECOVERY-E2E-002',
-      ]);
-      expect(
-        catalog.caseById['HANDLE-RECOVERY-E2E-001']!.catalogStatus,
-        'active',
-      );
-      expect(
-        catalog.caseById['HANDLE-RECOVERY-E2E-002']!.catalogStatus,
-        'active',
-      );
-      expect(
-        catalog.caseById['HANDLE-RECOVERY-E2E-003']!.catalogStatus,
-        'planned',
-      );
       expect(
         catalog.caseById['MLS-MULTI-DEVICE-E2E-001']!.catalogStatus,
         'active',

@@ -24,36 +24,13 @@ const _session = SessionIdentity(
 );
 
 void main() {
-  testWidgets('feature off keeps the legacy settings surface unchanged', (
-    tester,
-  ) async {
+  testWidgets('settings exposes device management by default', (tester) async {
     final core = FakeDeviceManagementCore();
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const SettingsPage(),
         session: _session,
         providerOverrides: <Override>[
-          multiDeviceJoinEnabledProvider.overrideWithValue(false),
-          deviceManagementCorePortProvider.overrideWithValue(core),
-        ],
-      ),
-    );
-
-    expect(find.text('设备'), findsNothing);
-    expect(find.text('设备管理'), findsNothing);
-    expect(core.registryCalls, 0);
-  });
-
-  testWidgets('feature on exposes device management from settings', (
-    tester,
-  ) async {
-    final core = FakeDeviceManagementCore();
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const SettingsPage(),
-        session: _session,
-        providerOverrides: <Override>[
-          multiDeviceJoinEnabledProvider.overrideWithValue(true),
           deviceManagementCorePortProvider.overrideWithValue(core),
         ],
       ),
@@ -65,7 +42,7 @@ void main() {
     expect(find.byKey(const Key('devices-page')), findsOneWidget);
   });
 
-  testWidgets('revoke gate exposes devices without enabling Join', (
+  testWidgets('revoke remains an independent device action gate', (
     tester,
   ) async {
     final core = FakeDeviceManagementCore();
@@ -74,7 +51,6 @@ void main() {
         home: const SettingsPage(),
         session: _session,
         providerOverrides: <Override>[
-          multiDeviceJoinEnabledProvider.overrideWithValue(false),
           multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(true),
           deviceManagementCorePortProvider.overrideWithValue(core),
         ],
@@ -86,34 +62,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('devices-page')), findsOneWidget);
     expect(core.registryCalls, 1);
-    expect(core.localSessionCalls, 0);
+    expect(core.localSessionCalls, 1);
   });
 
-  testWidgets('feature off keeps the legacy onboarding surface unchanged', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        providerOverrides: <Override>[
-          multiDeviceJoinEnabledProvider.overrideWithValue(false),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('将此设备加入已有账户'), findsNothing);
-  });
-
-  testWidgets('feature on exposes new-device Join from onboarding', (
-    tester,
-  ) async {
+  testWidgets('onboarding exposes new-device Join by default', (tester) async {
     final core = FakeDeviceManagementCore();
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const OnboardingPage(),
         providerOverrides: <Override>[
-          multiDeviceJoinEnabledProvider.overrideWithValue(true),
           deviceManagementCorePortProvider.overrideWithValue(core),
           directoryApplicationServiceProvider.overrideWithValue(
             FakeJoinDirectory(),
@@ -123,12 +80,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('将此设备加入已有账户'));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('device-join-page')), findsOneWidget);
   });
 
-  testWidgets('feature on exposes new-device Join from macOS onboarding', (
+  testWidgets('macOS onboarding exposes new-device Join by default', (
     tester,
   ) async {
     addTearDown(() {
@@ -142,7 +101,6 @@ void main() {
       buildLocalizedTestApp(
         home: const OnboardingPage(),
         providerOverrides: <Override>[
-          multiDeviceJoinEnabledProvider.overrideWithValue(true),
           deviceManagementCorePortProvider.overrideWithValue(core),
           directoryApplicationServiceProvider.overrideWithValue(
             FakeJoinDirectory(),
@@ -265,7 +223,6 @@ void main() {
           const DevicesPage(),
           core,
           presence: presence,
-          joinEnabled: false,
           deviceRevokeEnabled: true,
         ),
       );
@@ -755,6 +712,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), 'alice');
     await tester.enterText(fields.at(1), '+8613800138000');
     await tester.tap(find.text('发送验证码'));
     await tester.pumpAndSettle();
@@ -868,7 +826,6 @@ Widget _app(
   FakeDeviceManagementCore core, {
   FakeUserPresence? presence,
   FakeRootKeyTransferPort? rootTransfer,
-  bool joinEnabled = true,
   bool rootTransferEnabled = false,
   bool deviceRevokeEnabled = false,
   SessionIdentity? session = _session,
@@ -877,7 +834,6 @@ Widget _app(
     home: home,
     session: session,
     providerOverrides: <Override>[
-      multiDeviceJoinEnabledProvider.overrideWithValue(joinEnabled),
       multiDeviceRootTransferEnabledProvider.overrideWithValue(
         rootTransferEnabled,
       ),

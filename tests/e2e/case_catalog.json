@@ -2239,87 +2239,18 @@
       }
     },
     {
-      "caseId": "HANDLE-RECOVERY-E2E-001",
-      "feature": "AWiki Me Recovery cooling and independent reconfirmation",
-      "layer": "remote_product_ui_security",
-      "preconditions": "A registered Handle, a fresh AWiki Me native Core root, a distinct old ready-admin root, deployed awiki.info Recovery capability, two independently issued real SMS codes, and real macOS LocalAuthentication are available.",
-      "action": "Begin Recovery through the production AWiki Me adapter, observe the authoritative cooling phase without activation, wait the deployed cooling period, request and exchange a second Session-bound OTP, explicitly confirm the risks, finalize through real LocalAuthentication, and activate the replacement identity.",
-      "exactOracles": [
-        "Before finalize the Handle still resolves to the old DID and AWiki Me has no active new identity; after finalize it resolves to a distinct new DID whose sole device is the current active management-ready admin."
-      ],
-      "negativeChecks": [
-        "Immediate OTP recovery, ordinary login/register OTP reuse, purpose/Handle/domain/Session mismatch, reuse of the begin grant, staged SMS-error continuation, hidden cooling, user-presence rejection followed by a sensitive write, activation before finalize, copied local state, or secret/token evidence fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
-      "requiredFor": [
-        "nightly",
-        "release"
-      ],
-      "owner": "awiki-me-identity",
-      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active"
-    },
-    {
-      "caseId": "HANDLE-RECOVERY-E2E-002",
-      "feature": "Old AWiki Me admin cancels Handle Recovery",
-      "layer": "remote_product_ui_security",
-      "preconditions": "An old management-ready AWiki Me admin and an independent CLI requester use distinct native Core roots; the App has durably persisted the matching Recovery-started notice while the session remains cooling.",
-      "action": "Restart the old AWiki Me admin, open Devices, inspect the durable identity Recovery warning, explicitly confirm cancellation through real LocalAuthentication, then attempt requester finalization after the cancellation.",
-      "exactOracles": [
-        "Cancel wins the session CAS, survives an App/requester process boundary, keeps the Handle on the old DID, removes the local warning only after authoritative cancel, and rejects requester finalize without creating or activating a new identity."
-      ],
-      "negativeChecks": [
-        "A normal device cancellation, notification-only dismissal, a non-durable warning, cancellation without explicit intent or successful user presence, concurrent cancel plus successful finalize, copied device state, or a changed Handle mapping fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
-      "requiredFor": [
-        "nightly",
-        "release"
-      ],
-      "owner": "awiki-me-identity",
-      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "active"
-    },
-    {
-      "caseId": "HANDLE-RECOVERY-E2E-003",
-      "feature": "Handle Recovery creates an isolated new DID",
-      "layer": "product_ui",
-      "preconditions": "A ready Recovery session can complete against deployed user-service and message-service cutover handling with isolated old and new device roots.",
-      "action": "Finalize through visible AWiki Me UI, force one AppRuntime/E2EE activation failure after cutover, retry only local activation from the Core-persisted new identity, resolve the Handle, then verify old-device rejection and attempt Direct and group access from the new identity.",
-      "exactOracles": [
-        "The consumed remote Recovery is never finalized twice; local activation is restart-resumable, and the Handle resolves to a different new DID whose first device is a ready admin; old tokens and future delivery fail, Direct is re-established, and group continuity requires explicit owner rebind approval."
-      ],
-      "negativeChecks": [
-        "Same-DID root replacement, copied root/Ratchet/MLS state, automatic group recovery, inherited history decryption, or an old device receiving future messages fails."
-      ],
-      "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_handle_recovery_identity_cleanup",
-      "requiredFor": [
-        "nightly",
-        "release"
-      ],
-      "owner": "awiki-me-identity",
-      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
-      "evidenceType": "case_attestation",
-      "catalogStatus": "planned"
-    },
-    {
       "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
-      "feature": "AWiki Me multi-device capability gate",
+      "feature": "AWiki Me default device entry and independent security gates",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
-      "action": "Open two independent temporary Storage Scopes through production AppBootstrap/native Core, verify the default-off App surface, then enable only Join and open its public onboarding entry without submitting an OTP.",
+      "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and open the public onboarding Join entry without submitting an OTP.",
       "exactOracles": [
-        "The disabled and Join-only launches use distinct real Storage Scope IDs, and both temporary App roots are deleted after native runtime disposal.",
-        "With default configuration every multi-device capability is false, high-risk adapters are absent, and the public Join entry is not rendered.",
-        "With only Join enabled the production device-management adapter exists and the public entry opens the real Handle/phone/OTP Join form, while root transfer, revoke, Direct multi-device, group multi-device, and Recovery remain closed."
+        "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
+        "With default configuration the production device-management adapter and public Join entry exist.",
+        "The public entry opens the real Handle/phone/OTP Join form, while root transfer, revoke, Direct multi-device, and group multi-device remain closed behind independent security gates; Handle Recovery has no executable V1 flow."
       ],
       "negativeChecks": [
-        "A reused/copied Core root, fake provider, backend-dependent oracle, Join entry while disabled, hidden enablement of a high-risk capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
+        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry hidden behind the removed broad gate, hidden enablement of a high-risk capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "test_owned_temporary_scope_delete",

@@ -68,14 +68,8 @@ class AppMessage {
   factory AppMessage.activationEmailSent() =>
       const AppMessage._('activationEmailSent');
 
-  factory AppMessage.emailLoginUnsupportedForRegisteredHandle() =>
-      const AppMessage._('emailLoginUnsupportedForRegisteredHandle');
-
   factory AppMessage.emailNotActivatedClickLink() =>
       const AppMessage._('emailNotActivatedClickLink');
-
-  factory AppMessage.handleAlreadyRegisteredImportCredential() =>
-      const AppMessage._('handleAlreadyRegisteredImportCredential');
 
   factory AppMessage.registrationMethodUnavailable() =>
       const AppMessage._('registrationMethodUnavailable');
@@ -221,18 +215,11 @@ class AppMessage {
     if (raw == 'email_not_activated' || raw == '邮箱尚未激活，请先点击邮件中的激活链接。') {
       return AppMessage.emailNotActivatedClickLink();
     }
-    if (raw == 'email_login_unsupported_for_registered_handle' ||
-        raw == '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。') {
-      return AppMessage.emailLoginUnsupportedForRegisteredHandle();
-    }
-    if (raw == 'handle_already_registered_import_credential') {
-      return AppMessage.handleAlreadyRegisteredImportCredential();
-    }
-    if (raw == 'handle_recovery_unavailable') {
+    if (raw == 'handle_recovery_unavailable' ||
+        raw == 'handle_recovery_unsupported') {
       return AppMessage.handleRecoveryUnavailable();
     }
-    if (raw == 'handle_recovery_unsupported' ||
-        raw == 'registration_method_unavailable') {
+    if (raw == 'registration_method_unavailable') {
       return AppMessage.registrationMethodUnavailable();
     }
     if (raw == 'session_expired' || raw == '登录状态已失效，请重新登录。') {
@@ -391,12 +378,8 @@ class AppMessage {
         return l10n.otpSent;
       case 'activationEmailSent':
         return l10n.activationEmailSent;
-      case 'emailLoginUnsupportedForRegisteredHandle':
-        return l10n.emailLoginUnsupportedForRegisteredHandle;
       case 'emailNotActivatedClickLink':
         return l10n.emailNotActivatedClickLink;
-      case 'handleAlreadyRegisteredImportCredential':
-        return l10n.handleAlreadyRegisteredImportCredential;
       case 'registrationMethodUnavailable':
         return l10n.registrationMethodUnavailable;
       case 'handleRecoveryUnavailable':
@@ -510,10 +493,6 @@ class AppMessage {
         return 'Verification code sent. Please check your messages.';
       case 'activationEmailSent':
         return 'Activation email sent. Please check your inbox.';
-      case 'emailLoginUnsupportedForRegisteredHandle':
-        return 'This handle is already registered. Email currently supports new registration only.';
-      case 'handleAlreadyRegisteredImportCredential':
-        return 'This handle already exists. Import its identity credential or contact the server administrator.';
       case 'registrationMethodUnavailable':
         return 'This server does not support the selected registration method.';
       case 'handleRecoveryUnavailable':

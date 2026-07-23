@@ -1,6 +1,6 @@
 # AWiki Me 多设备加入、设备页与永久撤销
 
-状态：实现完成，默认关闭；Join、根导入与永久撤销已有显式远端 E2E gate
+状态：设备入口默认存在；根导入、永久撤销和 E2EE 仍使用独立安全门禁
 
 整体身份和密码学方案以 Core 仓库中的
 [多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
@@ -9,27 +9,24 @@
 
 ## 1. 产品入口与开关
 
-多设备入口由编译期开关 `AWIKI_MULTI_DEVICE_ENABLED` 控制，默认值为 `false`。
-开关关闭时，设置页和 onboarding 保持原有布局，Core 也以 Join capability 关闭状态打开；
-开关开启时：
+多设备入口不再由 `AWIKI_MULTI_DEVICE_ENABLED` 控制注册协议或产品可见性：
 
 - 已登录用户可从“设置 → 设备”查看当前设备、已授权设备和待审批请求；
 - 未登录的新设备可从 onboarding 选择“将此设备加入已有账户”；
 - V1 只比较两端独立计算的 6 位验证码，不提供二维码或扫码入口。
 
 永久撤销由独立编译期开关 `AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED` 控制，默认同样为
-`false`。它只开放已登录用户的设备页和撤销能力，不会隐式开放新设备 Join；Join 或撤销
-任一开关启用时，设置页均可进入设备页读取权威 Registry。
+`false`。它只开放撤销动作；关闭时仍可进入设备页读取权威 Registry。
 
 设备级 Direct 产品路径由编译期开关 `AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED` 控制，
 默认 `false`。App 只把该值传给 `AwikiImCoreOpenOptions`，不新增 UI；它与 Join、根密钥
-传输、永久撤销、Handle Recovery 和 Group E2EE 开关彼此独立，也不进入跨域协议字段。
+传输、永久撤销和 Group E2EE 开关彼此独立，也不进入跨域协议字段。V1 不提供 Handle
+Recovery 服务或远端流程，只显示明确的不支持提示。
 
 ## 2. App 状态流
 
 ```text
 新设备：Handle + SMS OTP
-  -> 通过公共 Profile RPC 将 Handle 解析为同域 did:wba（不要求本地已选身份）
   -> AWiki 域内 account-verification exchange
   -> token 在 data adapter 内立即交给 Core 消费
   -> Core 创建并持久化 Join
@@ -58,10 +55,28 @@ SMS OTP 只进入发起方法；域内 exchange 返回的 account token 只存�
 日志、错误、持久化或跨域协议。
 
 未登录新设备没有 current Core identity，因此不能复用要求已选身份的 Directory adapter。
-设备管理 data adapter 使用公共 Profile RPC 解析 Handle，并只接受与请求域一致、使用
-`e1_` 标识的 `did:wba`；解析错误统一投影为固定错误码。公共解析本身不构成授权，
-user-service 在创建 Join Session 时仍须权威校验 account-verification grant 绑定的
-Handle/domain 当前映射与提交 DID 完全一致。
+onboarding 注册流程不在发送 OTP 或提交注册前用未认证的 public-profile 查询 Handle，
+也不再根据查询结果分派注册或恢复协议。现有 Join adapter 的 Handle 解析仍属于 Join
+自身的 account-verification 边界，将在后续 Join 专项步骤随 Core 新入口一起收敛；它不能
+被注册流程复用为身份状态探针。
+
+注册 application 边界只接收 Core 的 `registered` / `joinRequired` 两种结果：
+
+- `registered` 携带已持久化身份，App 才激活会话并更新资料；
+- `joinRequired` 不携带身份或秘密材料，App 直接打开同一个设备加入页；
+- 任何未知状态都失败关闭，App 不猜测、不回退到旧 Recovery，也不在本地保存中间密钥。
+
+新注册的 P5 PreKey Bundle 生成和发布仍由 Core 注册事务在本地提交后继续负责。AWiki Me
+不得跳过或替代这段调用链，也不得删除仅为迁移而改名的原 publication helper。Legacy →
+Manifest 升级同样只消费 Core 后续提供的 typed `running` / `retryRequired` 投影；App
+不得因身份进入 VNext 就删除 Legacy key-2/key-3、既有 PreKey、Session、Ratchet 或 MLS
+state，这些历史解密与迁移材料的兼容窗口和清理条件由 Core 明确定义。
+
+AWiki Me 只维护一个当前 access token 会话，不引入 refresh token 或 device token。正常
+请求使用 `Authorization: Bearer`；401 时通过 `AuthSessionCoordinator` singleflight
+触发一次新的 DID-WBA 签名请求获取 access token，并只重放原请求一次。并发请求共享同一
+次续期，第二次 401 直接向上返回。若 V1 部署期保持 User Service JWT signing key 不轮换，
+这只是上线部署约束，不能据此宣称 Message Service 已完整实现基于 `kid` 的多 key 验签。
 
 `admin` 选择只表示用户明确授予管理意图。根密钥导入完成并达到
 `management-ready` 前，UI 不应把设备描述为可管理其他设备；后续

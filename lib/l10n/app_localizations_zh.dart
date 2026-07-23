@@ -203,10 +203,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingNoVerificationHint => '当前服务器不需要短信或邮箱验证码，可直接创建新身份。';
 
   @override
-  String get handleAlreadyRegisteredImportCredential =>
-      '这个 handle 已经存在。当前服务器不支持无验证码恢复，请导入已有身份凭证或联系服务器管理员。';
-
-  @override
   String get registrationMethodUnavailable => '当前服务器不支持所选注册方式，请刷新后重试。';
 
   @override
@@ -2533,10 +2529,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get activationEmailSent => '激活邮件已发送，请查收邮箱。';
 
   @override
-  String get emailLoginUnsupportedForRegisteredHandle =>
-      '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。';
-
-  @override
   String get emailNotActivatedClickLink => '邮箱尚未激活，请先点击邮件中的激活链接。';
 
   @override
@@ -2677,161 +2669,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatGroupProfileUpdated => '群信息已更新';
 
   @override
-  String get handleRecoveryTitle => '恢复 AWiki Handle';
+  String get handleRecoveryUnavailable => '当前版本不支持 Handle 恢复，未对身份做任何更改。';
 
   @override
-  String get handleRecoveryWarning =>
-      '这是服务辅助恢复，不会找回原 DID 私钥。完成前 Handle 仍指向原 DID。';
-
-  @override
-  String get handleRecoveryCreatesNewDid => '本设备将创建全新的根密钥和密码学 DID。';
-
-  @override
-  String get handleRecoverySignsOutOldDevices => '完成后原 DID 的所有设备将退出，不能再接收未来消息。';
-
-  @override
-  String get handleRecoveryNoHistoryOrGroupInheritance =>
-      '历史消息解密能力、Direct 安全会话和群组成员关系不会自动继承。';
-
-  @override
-  String get handleRecoveryCoolingTitle => '恢复冷静期进行中';
-
-  @override
-  String handleRecoveryCoolingUntil(Object time) {
-    return '系统正在通知旧设备和绑定渠道；通知投递及完整冷静期均完成前不能最终恢复。当前最新状态给出的时间为 $time，权威期限以后续刷新结果为准。';
-  }
-
-  @override
-  String get handleRecoveryReadyTitle => '可以进行独立的再次确认';
-
-  @override
-  String get handleRecoveryReadyDetail => '请重新获取验证码。第一次验证使用的验证码或授权不能用于最终恢复。';
-
-  @override
-  String get handleRecoveryReconfirmationHint =>
-      '再次确认将授权本设备创建新 DID，并把当前 Handle 切换到新 DID。';
-
-  @override
-  String get handleRecoveryReconfirmationOtp => '再次确认验证码';
-
-  @override
-  String get handleRecoverySendReconfirmationOtp => '发送新的验证码';
-
-  @override
-  String get handleRecoveryExplicitConfirmation =>
-      '我了解将创建新 DID、原设备退出，并且历史消息和群组不会自动恢复。';
-
-  @override
-  String get handleRecoveryFinalize => '确认恢复 Handle 并创建新 DID';
-
-  @override
-  String get handleRecoveryFinalizePresenceReason => '确认恢复 Handle 并创建新 DID';
-
-  @override
-  String get handleRecoveryRefresh => '刷新恢复状态';
-
-  @override
-  String get handleRecoveryCancelledTitle => '恢复已取消';
-
-  @override
-  String get handleRecoveryCancelledDetail => 'Handle 仍指向原 DID，没有创建或启用新身份。';
-
-  @override
-  String get handleRecoveryExpiredTitle => '恢复已过期';
-
-  @override
-  String get handleRecoveryExpiredDetail => '本次恢复没有更改 Handle，请重新验证后发起。';
-
-  @override
-  String get handleRecoveryCompletedTitle => 'Handle 恢复已完成';
-
-  @override
-  String get handleRecoveryCompletedDetail =>
-      '已创建并启用新 DID。请重新建立联系人安全会话，并按群主确认重新加入群组。';
-
-  @override
-  String get handleRecoveryActivationPendingTitle => '新 DID 已创建，等待本地激活';
-
-  @override
-  String get handleRecoveryActivationPendingDetail =>
-      '远端恢复已经完成，不能再次最终恢复。请重试加载 Core 已持久化的新身份并初始化端到端加密。';
-
-  @override
-  String get handleRecoveryRetryActivation => '重试本地激活';
-
-  @override
-  String get handleRecoveryActivationFailed =>
-      'Handle 已完成切换，但本地身份或端到端加密初始化失败。请勿再次最终恢复，只重试本地激活。';
-
-  @override
-  String get handleRecoveryCompletionAckPendingTitle => '新 DID 已启用，等待保存完成状态';
-
-  @override
-  String get handleRecoveryCompletionAckPendingDetail =>
-      '身份和端到端加密已就绪。请重试保存完成状态；不会再次最终恢复、切换身份或初始化端到端加密。';
-
-  @override
-  String get handleRecoveryRetryCompletionAck => '重试保存完成状态';
-
-  @override
-  String get handleRecoveryUserPresenceRejected => '系统身份确认已取消或不可用，未提交敏感操作。';
-
-  @override
-  String get handleRecoveryUnavailable => '当前版本尚未接入安全的 Handle 恢复流程，未对身份做任何更改。';
-
-  @override
-  String get handleRecoveryNotReady => '恢复仍在冷静期内，请稍后刷新状态。';
-
-  @override
-  String get handleRecoveryConflict => '恢复状态已变化或 Handle 不再指向预期身份，请刷新后重试。';
-
-  @override
-  String get handleRecoveryAdminSectionTitle => '身份恢复警报';
-
-  @override
-  String handleRecoveryAdminSectionSubtitle(Object handle) {
-    return '有人正在申请恢复 $handle 并创建新 DID。若不是你本人操作，请立即取消。';
-  }
-
-  @override
-  String handleRecoveryAdminRequestedAt(Object timestamp) {
-    return '申请时间：$timestamp';
-  }
-
-  @override
-  String handleRecoveryAdminCancellableUntil(Object timestamp) {
-    return '可取消截止时间：$timestamp';
-  }
-
-  @override
-  String get handleRecoveryAdminSecurityWarning => '安全提示：隐藏此警报不会取消服务器上的恢复请求。';
-
-  @override
-  String get handleRecoveryAdminCancel => '取消恢复';
-
-  @override
-  String get handleRecoveryAdminCancelConfirmTitle => '确认取消 Handle 恢复？';
-
-  @override
-  String get handleRecoveryAdminCancelConfirmDetail =>
-      '取消后本次请求不能再完成，Handle 将继续指向当前 DID。';
-
-  @override
-  String get handleRecoveryAdminCancelConfirmAction => '确认取消';
-
-  @override
-  String get handleRecoveryAdminDismiss => '仅在本设备隐藏';
-
-  @override
-  String get handleRecoveryAdminDismissConfirmTitle => '仅在本设备隐藏此警报？';
-
-  @override
-  String get handleRecoveryAdminDismissConfirmDetail =>
-      '此操作只隐藏本设备上的警报，不会取消服务器上的恢复请求。';
-
-  @override
-  String get handleRecoveryAdminDismissConfirmAction => '仅本地隐藏';
-
-  @override
-  String get handleRecoveryCancelPresenceReason => '确认取消 Handle 恢复';
+  String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
 }

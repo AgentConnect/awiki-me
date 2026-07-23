@@ -10,8 +10,11 @@ void main() {
   test('join SMS request stays on the device-management boundary', () async {
     final core = _FakeDeviceCore();
 
-    await _service(core: core).sendJoinSmsOtp(' +8613800138000 ');
+    await _service(
+      core: core,
+    ).sendJoinSmsOtp(handle: ' Alice ', phone: ' +8613800138000 ');
 
+    expect(core.sentOtpHandle, 'alice');
     expect(core.sentOtpPhone, '+8613800138000');
   });
 
@@ -283,12 +286,17 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   String? confirmedHandle;
   bool? confirmedPresence;
   String? sentOtpPhone;
+  String? sentOtpHandle;
   int revokeCalls = 0;
   String? revokedTarget;
   bool? revokedPresence;
 
   @override
-  Future<void> sendJoinSmsOtp(String phone) async {
+  Future<void> sendJoinSmsOtp({
+    required String handle,
+    required String phone,
+  }) async {
+    sentOtpHandle = handle;
     sentOtpPhone = phone;
   }
 

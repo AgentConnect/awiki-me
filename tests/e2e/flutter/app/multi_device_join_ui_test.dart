@@ -14,8 +14,8 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
-import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/data/services/local_auth_user_presence_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -400,9 +400,9 @@ void main() {
         purpose: _genesisPurpose,
         handle: handle,
       );
-      final AppSession adminSession;
+      final IdentityRegistrationResult registration;
       try {
-        adminSession = await bootstrap.onboardingService!
+        registration = await bootstrap.onboardingService!
             .registerHandleWithPhone(
               phone: account.phone,
               otp: genesisOtp,
@@ -411,6 +411,11 @@ void main() {
             );
       } on Object {
         fail('App bootstrap registration failed without exposing remote data.');
+      }
+      final adminSession = registration.identity;
+      if (registration.status != IdentityRegistrationStatus.registered ||
+          adminSession == null) {
+        fail('App bootstrap registration unexpectedly required Device Join.');
       }
       if (!adminSession.authenticated) {
         fail('The App bootstrap identity was not authenticated.');
@@ -1551,12 +1556,10 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(_RemoteJoinRunConfig config) =>
       anpServiceUrl: config.anpServiceUrl,
       anpServiceDid: config.anpServiceDid,
       agentImEnabled: false,
-      multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: false,
       multiDeviceDeviceRevokeEnabled: false,
       multiDeviceDirectE2eeEnabled: false,
       multiDeviceGroupE2eeEnabled: false,
-      handleRecoveryEnabled: false,
     );
 
 Future<String> _requestAndResolveOtp({

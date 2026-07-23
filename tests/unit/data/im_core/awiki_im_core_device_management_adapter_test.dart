@@ -27,7 +27,10 @@ void main() {
           }) async => _coreProgress(),
     );
 
-    await adapter.sendJoinSmsOtp(' +8613800138000 ');
+    await adapter.sendJoinSmsOtp(
+      handle: ' Alice.AWIKI.INFO ',
+      phone: ' +8613800138000 ',
+    );
 
     expect(
       request.url.toString(),
@@ -35,6 +38,9 @@ void main() {
     );
     expect(jsonDecode(request.body), <String, Object?>{
       'phone': '+8613800138000',
+      'purpose': 'awiki.device.join.v1',
+      'target_handle': 'alice',
+      'target_handle_domain': 'awiki.info',
     });
   });
 

@@ -8,10 +8,6 @@ const String primaryTenantDomain = String.fromEnvironment(
   defaultValue: 'awiki.ai',
 );
 const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
-const bool defaultMultiDeviceJoinEnabled = bool.fromEnvironment(
-  'AWIKI_MULTI_DEVICE_ENABLED',
-  defaultValue: false,
-);
 const bool defaultMultiDeviceRootTransferEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_ROOT_TRANSFER_ENABLED',
   defaultValue: false,
@@ -26,10 +22,6 @@ const bool defaultMultiDeviceDirectE2eeEnabled = bool.fromEnvironment(
 );
 const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED',
-  defaultValue: false,
-);
-const bool defaultHandleRecoveryEnabled = bool.fromEnvironment(
-  'AWIKI_HANDLE_RECOVERY_ENABLED',
   defaultValue: false,
 );
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
@@ -51,12 +43,10 @@ class AwikiEnvironmentConfig {
     String? updateManifestUrl,
     String? releasesUrl,
     bool? agentImEnabled,
-    bool? multiDeviceJoinEnabled,
     bool? multiDeviceRootTransferEnabled,
     bool? multiDeviceDeviceRevokeEnabled,
     bool? multiDeviceDirectE2eeEnabled,
     bool? multiDeviceGroupE2eeEnabled,
-    bool? handleRecoveryEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl,
@@ -102,8 +92,6 @@ class AwikiEnvironmentConfig {
           backendBaseUrl: normalizedBase,
           didHost: this.didDomain,
         );
-    this.multiDeviceJoinEnabled =
-        multiDeviceJoinEnabled ?? defaultMultiDeviceJoinEnabled;
     this.multiDeviceRootTransferEnabled =
         multiDeviceRootTransferEnabled ?? defaultMultiDeviceRootTransferEnabled;
     this.multiDeviceDeviceRevokeEnabled =
@@ -112,8 +100,6 @@ class AwikiEnvironmentConfig {
         multiDeviceDirectE2eeEnabled ?? defaultMultiDeviceDirectE2eeEnabled;
     this.multiDeviceGroupE2eeEnabled =
         multiDeviceGroupE2eeEnabled ?? defaultMultiDeviceGroupE2eeEnabled;
-    this.handleRecoveryEnabled =
-        handleRecoveryEnabled ?? defaultHandleRecoveryEnabled;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -131,12 +117,10 @@ class AwikiEnvironmentConfig {
   late final String updateManifestUrl;
   late final String releasesUrl;
   late final bool agentImEnabled;
-  late final bool multiDeviceJoinEnabled;
   late final bool multiDeviceRootTransferEnabled;
   late final bool multiDeviceDeviceRevokeEnabled;
   late final bool multiDeviceDirectE2eeEnabled;
   late final bool multiDeviceGroupE2eeEnabled;
-  late final bool handleRecoveryEnabled;
 }
 
 bool isAgentDaemonTenantRealmAllowed({

@@ -34,7 +34,6 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
-    expect(config.handleRecoveryEnabled, isFalse);
   });
 
   test('bundled realm allowlist enables Agent and Daemon capabilities', () {
@@ -100,12 +99,10 @@ void main() {
       updateManifestUrl: 'https://updates.example.test/app/latest.json',
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
-      multiDeviceJoinEnabled: true,
       multiDeviceRootTransferEnabled: true,
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
-      handleRecoveryEnabled: true,
     );
 
     expect(config.baseUrl, 'https://anpclaw.com');
@@ -122,12 +119,10 @@ void main() {
     );
     expect(config.releasesUrl, 'https://download.example.test/releases');
     expect(config.agentImEnabled, isTrue);
-    expect(config.multiDeviceJoinEnabled, isTrue);
     expect(config.multiDeviceRootTransferEnabled, isTrue);
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
-    expect(config.handleRecoveryEnabled, isTrue);
   });
 
   test('network route config has no local storage locator', () {
@@ -154,10 +149,8 @@ void main() {
     addTearDown(container.dispose);
 
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
-    expect(container.read(multiDeviceJoinEnabledProvider), isFalse);
     expect(container.read(multiDeviceRootTransferEnabledProvider), isFalse);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
-    expect(container.read(handleRecoveryEnabledProvider), isFalse);
   });
 }

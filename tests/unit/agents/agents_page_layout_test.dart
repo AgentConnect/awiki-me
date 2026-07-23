@@ -8,7 +8,6 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
-import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1310,8 +1309,7 @@ void main() {
   );
 
   testWidgets('create Agent dialog blocks unavailable handle', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
+    final gateway = FakeAwikiGateway()..handleAlreadyRegistered = true;
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(

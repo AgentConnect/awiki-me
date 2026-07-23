@@ -60,12 +60,10 @@ void _registerRootKeyTransferAndRevokeTests() {
         anpServiceUrl: config.anpServiceUrl,
         anpServiceDid: config.anpServiceDid,
         agentImEnabled: false,
-        multiDeviceJoinEnabled: true,
         multiDeviceRootTransferEnabled: true,
         multiDeviceDeviceRevokeEnabled: true,
         multiDeviceDirectE2eeEnabled: true,
         multiDeviceGroupE2eeEnabled: false,
-        handleRecoveryEnabled: false,
       );
       bootstrap = await AppBootstrap.create(
         environment: environment,
@@ -79,9 +77,9 @@ void _registerRootKeyTransferAndRevokeTests() {
         purpose: _genesisPurpose,
         handle: handle,
       );
-      final AppSession adminSession;
+      final IdentityRegistrationResult registration;
       try {
-        adminSession = await bootstrap.onboardingService!
+        registration = await bootstrap.onboardingService!
             .registerHandleWithPhone(
               phone: account.phone,
               otp: genesisOtp,
@@ -90,6 +88,11 @@ void _registerRootKeyTransferAndRevokeTests() {
             );
       } on Object {
         fail('App bootstrap registration failed without exposing remote data.');
+      }
+      final adminSession = registration.identity;
+      if (registration.status != IdentityRegistrationStatus.registered ||
+          adminSession == null) {
+        fail('App bootstrap registration unexpectedly required Device Join.');
       }
       if (!adminSession.authenticated) {
         fail('The App bootstrap identity was not authenticated.');

@@ -3,8 +3,10 @@ import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,11 +20,12 @@ void main() {
       final profiles = _FakeProfiles();
       final service = ImCoreOnboardingService(
         identities: identities,
+        legacyUpgrades: identities,
         sessions: sessions,
         profiles: profiles,
       );
 
-      final session = await service.registerHandleWithPhone(
+      final result = await service.registerHandleWithPhone(
         phone: '13800138000',
         otp: ' 123 456 ',
         handle: ' Alice ',
@@ -30,7 +33,8 @@ void main() {
         profileMarkdown: '# Alice',
       );
 
-      expect(session.identityId, 'phone-id');
+      expect(result.status, IdentityRegistrationStatus.registered);
+      expect(result.identity?.identityId, 'phone-id');
       expect(identities.lastPhone, '+8613800138000');
       expect(identities.lastOtp, '123456');
       expect(identities.lastHandle, 'alice');
@@ -39,31 +43,31 @@ void main() {
     },
   );
 
-  test(
-    'recoverHandle activates recovered identity without profile patch',
-    () async {
-      final identities = _FakeIdentities();
-      final sessions = _FakeSessions();
-      final profiles = _FakeProfiles();
-      final service = ImCoreOnboardingService(
-        identities: identities,
-        sessions: sessions,
-        profiles: profiles,
-      );
+  test('joinRequired does not activate identity or patch profile', () async {
+    final identities = _FakeIdentities()
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired;
+    final sessions = _FakeSessions();
+    final profiles = _FakeProfiles();
+    final service = ImCoreOnboardingService(
+      identities: identities,
+      legacyUpgrades: identities,
+      sessions: sessions,
+      profiles: profiles,
+    );
 
-      final session = await service.recoverHandle(
-        phone: '+8613800138000',
-        otp: '000000',
-        handle: 'alice',
-      );
+    final result = await service.registerHandleWithPhone(
+      phone: '+8613800138000',
+      otp: '000000',
+      handle: 'alice',
+      profileMarkdown: '# Alice',
+    );
 
-      expect(session.identityId, 'recovered-id');
-      expect(sessions.activated.map((item) => item.identityId), [
-        'recovered-id',
-      ]);
-      expect(profiles.patches, isEmpty);
-    },
-  );
+    expect(result.status, IdentityRegistrationStatus.joinRequired);
+    expect(result.identity, isNull);
+    expect(result.joinProgress?.joinSessionId, 'join-1');
+    expect(sessions.activated, isEmpty);
+    expect(profiles.patches, isEmpty);
+  });
 
   test(
     'registerHandleWithoutContactVerification validates phone and patches markdown',
@@ -73,18 +77,20 @@ void main() {
       final profiles = _FakeProfiles();
       final service = ImCoreOnboardingService(
         identities: identities,
+        legacyUpgrades: identities,
         sessions: sessions,
         profiles: profiles,
       );
 
-      final session = await service.registerHandleWithoutContactVerification(
+      final result = await service.registerHandleWithoutContactVerification(
         phone: '13800138000',
         handle: ' OpenAlice ',
         nickName: 'Open Alice',
         profileMarkdown: '# Open Alice',
       );
 
-      expect(session.identityId, 'open-id');
+      expect(result.status, IdentityRegistrationStatus.registered);
+      expect(result.identity?.identityId, 'open-id');
       expect(identities.lastHandle, 'openalice');
       expect(sessions.activated.map((item) => item.identityId), ['open-id']);
       expect(profiles.patches.single.profileMarkdown, '# Open Alice');
@@ -102,10 +108,22 @@ AppSession _session(String id, {String handle = 'alice'}) {
   );
 }
 
-class _FakeIdentities implements IdentityCorePort {
+class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   String? lastPhone;
   String? lastOtp;
   String? lastHandle;
+  IdentityRegistrationStatus registrationStatus =
+      IdentityRegistrationStatus.registered;
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.idle();
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
 
   @override
   Future<AppSession?> defaultIdentity() async => null;
@@ -114,27 +132,20 @@ class _FakeIdentities implements IdentityCorePort {
   Future<List<AppSession>> listLocalIdentities() async => const <AppSession>[];
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    lastPhone = phone;
-    lastOtp = otp;
-    lastHandle = handle;
-    return _session('recovered-id', handle: handle);
-  }
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('email-id', handle: handle);
+  }) async => IdentityRegistrationResult(
+    status: registrationStatus,
+    identity: registrationStatus == IdentityRegistrationStatus.registered
+        ? _session('email-id', handle: handle)
+        : null,
+  );
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -144,17 +155,31 @@ class _FakeIdentities implements IdentityCorePort {
     lastPhone = phone;
     lastOtp = otp;
     lastHandle = handle;
-    return _session('phone-id', handle: handle);
+    return IdentityRegistrationResult(
+      status: registrationStatus,
+      identity: registrationStatus == IdentityRegistrationStatus.registered
+          ? _session('phone-id', handle: handle)
+          : null,
+      joinProgress:
+          registrationStatus == IdentityRegistrationStatus.joinRequired
+          ? _joinProgress
+          : null,
+    );
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
   }) async {
     lastHandle = handle;
-    return _session('open-id', handle: handle);
+    return IdentityRegistrationResult(
+      status: registrationStatus,
+      identity: registrationStatus == IdentityRegistrationStatus.registered
+          ? _session('open-id', handle: handle)
+          : null,
+    );
   }
 
   @override
@@ -186,6 +211,16 @@ class _FakeIdentities implements IdentityCorePort {
     throw UnsupportedError('unsupported');
   }
 }
+
+final DeviceJoinProgress _joinProgress = DeviceJoinProgress(
+  joinSessionId: 'join-1',
+  did: 'did:wba:awiki.ai:alice:e1_join',
+  protocolDeviceId: 'device-1',
+  side: DeviceJoinSide.newDevice,
+  phase: DeviceJoinPhase.pending,
+  remoteState: DeviceJoinRemoteState.pending,
+  expiresAt: DateTime.utc(2030),
+);
 
 class _FakeSessions implements AppSessionService {
   final List<AppSession> activated = <AppSession>[];

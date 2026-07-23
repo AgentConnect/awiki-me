@@ -119,14 +119,23 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   final AwikiImCoreRevokeDevice _revokeDevice;
 
   @override
-  Future<void> sendJoinSmsOtp(String phone) async {
+  Future<void> sendJoinSmsOtp({
+    required String handle,
+    required String phone,
+  }) async {
+    final target = _handleTarget(handle, targetHandleDomain);
     http.Response response;
     try {
       response = await _httpClient
           .post(
             Uri.parse(userServiceUrl).resolve(smsCodePath),
             headers: const <String, String>{'Content-Type': 'application/json'},
-            body: jsonEncode(<String, Object?>{'phone': phone.trim()}),
+            body: jsonEncode(<String, Object?>{
+              'phone': phone.trim(),
+              'purpose': 'awiki.device.join.v1',
+              'target_handle': target.handle,
+              'target_handle_domain': target.domain,
+            }),
           )
           .timeout(_timeout);
     } on Object {

@@ -1333,16 +1333,7 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
@@ -1352,7 +1343,7 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -1363,7 +1354,7 @@ class _IdentityCoreStub implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,

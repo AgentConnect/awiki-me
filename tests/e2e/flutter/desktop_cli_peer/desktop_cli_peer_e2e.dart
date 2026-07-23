@@ -23,6 +23,7 @@ import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -562,23 +563,6 @@ Future<AppSession> _prepareAppIdentity(
   OnboardingService onboarding,
   _DesktopCliPeerSmokeConfig config,
 ) async {
-  final recover = await _tryAppIdentityAction(
-    () => onboarding.recoverHandle(
-      phone: config.otpPhone,
-      otp: config.otpCode,
-      handle: config.appHandle,
-    ),
-  );
-  if (recover.session != null) {
-    return recover.session!;
-  }
-  if (!_looksRecoverableForRegister(recover.errorText)) {
-    throw StateError(
-      'App recover failed and did not look like a missing-handle error: '
-      '${_sanitizeDiagnostic(recover.errorText, secrets: config.secrets)}',
-    );
-  }
-
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
@@ -845,10 +829,16 @@ class _PerformanceDatasetPrepareResult {
 }
 
 Future<_AppIdentityAttempt> _tryAppIdentityAction(
-  Future<AppSession> Function() action,
+  Future<IdentityRegistrationResult> Function() action,
 ) async {
   try {
-    return _AppIdentityAttempt.session(await action());
+    final result = await action();
+    final session = result.identity;
+    if (result.status == IdentityRegistrationStatus.registered &&
+        session != null) {
+      return _AppIdentityAttempt.session(session);
+    }
+    return _AppIdentityAttempt.error('join_required');
   } on Object catch (error) {
     return _AppIdentityAttempt.error(error.toString());
   }

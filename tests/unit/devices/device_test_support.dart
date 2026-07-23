@@ -56,7 +56,10 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   bool? lastRevokePresenceConfirmed;
 
   @override
-  Future<void> sendJoinSmsOtp(String phone) async {
+  Future<void> sendJoinSmsOtp({
+    required String handle,
+    required String phone,
+  }) async {
     sendOtpCalls += 1;
   }
 

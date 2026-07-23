@@ -41,6 +41,28 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
+  Future<void> sendRegistrationOtp({
+    required String phone,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) {
+    final normalizedHandle = _normalizeHandle(handle);
+    final normalizedDomain = _normalizeDomain(domain);
+    final canonicalFullHandle = '$normalizedHandle.$normalizedDomain';
+    if (fullHandle != canonicalFullHandle) {
+      throw ArgumentError('full_handle_not_canonical');
+    }
+    return _users.sendRegistrationOtp(
+      phone: _normalizePhone(phone),
+      purpose: AwikiOnboardingUtilityClient.registrationOtpPurpose,
+      handle: normalizedHandle,
+      domain: normalizedDomain,
+      fullHandle: canonicalFullHandle,
+    );
+  }
+
+  @override
   Future<void> sendEmailVerification({
     required String email,
     required String handle,
@@ -62,29 +84,6 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
       email: email.trim().toLowerCase(),
       handle: _normalizeHandle(handle),
     );
-  }
-
-  @override
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  }) async {
-    final normalizedHandle = _normalizeHandle(handle);
-    try {
-      final result = await _users.getPublicProfile(
-        didOrHandle: normalizedHandle,
-      );
-      final did = result['did']?.toString() ?? '';
-      if (did.isEmpty) {
-        throw StateError('Handle lookup response did not include a DID.');
-      }
-      _ensureE1Did(did);
-      return HandleRegistrationStatus.registered;
-    } on AwikiOnboardingUtilityError catch (error) {
-      if (_isHandleNotFoundError(error)) {
-        return HandleRegistrationStatus.notRegistered;
-      }
-      rethrow;
-    }
   }
 
   @override
@@ -111,6 +110,17 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
       message: result['message']?.toString(),
     );
   }
+}
+
+String _normalizeDomain(String domain) {
+  final normalized = domain.trim().toLowerCase().replaceFirst(
+    RegExp(r'\.$'),
+    '',
+  );
+  if (normalized.isEmpty || !normalized.contains('.')) {
+    throw ArgumentError('did_domain_invalid');
+  }
+  return normalized;
 }
 
 String _normalizePhone(String phone) {
@@ -140,26 +150,4 @@ String _normalizeHandle(
     throw ArgumentError('handle_invalid_pattern');
   }
   return normalized;
-}
-
-bool _isHandleNotFoundError(AwikiOnboardingUtilityError error) {
-  if (_machineCode(error.data) == 'handle_not_found') {
-    return true;
-  }
-  return _machineCode(error.message) == 'handle_not_found';
-}
-
-String _machineCode(Object? value) {
-  if (value is Map) {
-    return _machineCode(value['code']);
-  }
-  return value?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
-}
-
-bool _isE1Did(String did) => did.trim().split(':').last.startsWith('e1_');
-
-void _ensureE1Did(String did) {
-  if (!_isE1Did(did)) {
-    throw StateError('Only e1 DID identities are supported.');
-  }
 }

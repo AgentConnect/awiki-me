@@ -96,9 +96,9 @@ flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_tes
   tests/unit/devices/devices_ui_test.dart
 ```
 
-`--case multi-device` 目前是可执行的本地 capability-gate E2E：它使用两个独立临时
-Storage Scope、production `AppBootstrap` 和 native Core，验证默认关闭时不组合高风险
-adapter/入口，以及只开启 Join 时公共 onboarding 入口只能打开真实 OTP 表单。它不发送
+`--case multi-device` 目前是可执行的本地设备入口 E2E：它使用独立临时 Storage Scope、
+production `AppBootstrap` 和 native Core，验证默认组合设备管理 adapter 和 onboarding
+Join 入口，同时 root transfer、revoke、Direct/Group E2EE 仍由独立门禁关闭。它不发送
 OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS 或 Handle Recovery。
 
 `DEVICE-JOIN-E2E-001/002`、`ROOT-TRANSFER-E2E-001` 和
@@ -109,16 +109,12 @@ OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS �
 pending Join 的 App 重启恢复且断言不持久化 SAS，App 批准及高风险管理操作另要求真实
 macOS user-presence。当
 `awiki.info` 隐藏 rollout、专用账号 allowlist 或执行环境尚未全部就绪时，这个入口
-不得声称远端通过。`HANDLE-RECOVERY-E2E-001/002` 由独立的
-`multi-device-remote-recovery` suite 承载：它要求两个专用账号、隔离 native Core roots、
-真实短信成功、至少 3600 秒权威冷静期、独立二次 OTP 和真实 macOS LocalAuthentication；
-staged SMS error 不构成该产品 gate。当前执行策略保留 Recovery 单元测试和取消等短流程；
-完整冷静期、最终确认及新 DID 切换记录为 `manual-verification-pending / not-run`、非 PASS，
-由后续人工验证。该项只阻塞 Recovery 发布声明，不阻塞其他多设备开发与测试。
+不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、adapter、
+UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端 case。
 `MLS-MULTI-DEVICE-E2E-001/002` 已由同样显式激活的
 `multi-device-remote-mls` suite 承载：真实 App owner 与独立 CLI root 覆盖
 Add/Welcome、未来双向群消息、单对象附件和精确设备 Remove。`DEVICE-JOIN-E2E-003`、
-`ROOT-TRANSFER-E2E-002` 和 `HANDLE-RECOVERY-E2E-003` 仍为 planned；不得把本地
+`ROOT-TRANSFER-E2E-002` 仍为 planned；不得把本地
 capability gate、Widget fake 或手工演示记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
@@ -187,11 +183,13 @@ dart run tests/e2e/runner.dart --case multi-device \
   --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
 ```
 
-This suite launches the real production bootstrap/native Core twice with
-independent temporary Storage Scopes and deletes both roots after the run. It
-checks default-off and Join-only App composition without using a backend, OTP,
-CLI peer, copied secret state, or fake providers. The remote Join case remains
-separate and is not included in this suite's pass attestation.
+This suite launches the real production bootstrap/native Core with an
+independent temporary Storage Scope and deletes that root after the run. It
+checks the default device-management composition and public Join entry while
+the independent root-transfer, revoke, Direct, and Group security gates remain
+closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
+providers. The remote Join case remains separate and is not included in this
+suite's pass attestation.
 
 Run the activation-gated remote bidirectional App + CLI Join and management
 lifecycle only after the dedicated ali deployment and account have been reviewed:
@@ -273,33 +271,6 @@ private material, and local secret paths must not enter reports or logs. A
 checked-in implementation or `prepare-only` result is not remote pass evidence;
 while rollout or account prerequisites are unavailable, the suite fails closed
 before claiming success.
-
-Run the remote Handle Recovery slice separately. It deliberately rejects
-`AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`: both dedicated phones
-must receive a product-successful SMS request, while the reviewed resolver only
-returns the matching one-time code to the local test process.
-
-```bash
-AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<cancel-case-phone> \
-AWIKI_MULTI_DEVICE_E2E_PEER_PHONE=<cooling-case-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv>' \
-AWIKI_MULTI_DEVICE_E2E_MAX_COOLING_SECONDS=3900 \
-dart run tests/e2e/runner.dart \
-  --case multi-device-remote-recovery \
-  --config <local-awiki-info-config.yaml>
-```
-
-The cancellation case proves that a Core-persisted old-admin notice survives
-an App restart before one real LocalAuthentication cancel and that requester
-finalize remains rejected. The completion case observes at least 3600 seconds
-of authoritative cooling, uses an independent Session-bound second OTP, and
-requires a distinct replacement DID whose only device is a ready admin. Test
-output and attestation contain fixed phase/count/boolean evidence only. The
-completion case is currently an operator-owned manual acceptance item and is
-reported as `not-run` (not pass); unit tests and the cancellation/short path
-remain routine gates, and this manual item does not block other multi-device
-development.
 
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
-import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -32,9 +31,6 @@ class SettingsPage extends ConsumerWidget {
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final personalAgentEnabled = ref.watch(agentImEnabledProvider);
-    final multiDeviceEnabled =
-        ref.watch(multiDeviceJoinEnabledProvider) ||
-        ref.watch(multiDeviceDeviceRevokeEnabledProvider);
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
@@ -60,7 +56,7 @@ class SettingsPage extends ConsumerWidget {
               trailing: embedded ? const SizedBox(width: 40, height: 40) : null,
             ),
             const SizedBox(height: 16),
-            if (multiDeviceEnabled && session != null) ...<Widget>[
+            if (session != null) ...<Widget>[
               AppCardSection(
                 padding: EdgeInsets.zero,
                 child: AppListTile(

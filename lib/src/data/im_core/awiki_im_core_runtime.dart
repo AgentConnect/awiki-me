@@ -40,11 +40,9 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     required AwikiImCorePathLayout paths,
     required StorageScopeId scopeId,
     required AwikiImCoreVaultSecretProvider vaultSecretProvider,
-    this.multiDeviceJoinEnabled = false,
     this.multiDeviceRootTransferEnabled = false,
     this.multiDeviceDeviceRevokeEnabled = false,
     this.multiDeviceDirectE2eeEnabled = false,
-    this.multiDeviceHandleRecoveryEnabled = false,
     this.multiDeviceGroupE2eeEnabled = false,
     AwikiImCoreOpen? openCore,
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
@@ -64,11 +62,9 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final AwikiImCorePathLayout _paths;
   final StorageScopeId _scopeId;
   final AwikiImCoreVaultSecretProvider _vaultSecretProvider;
-  final bool multiDeviceJoinEnabled;
   final bool multiDeviceRootTransferEnabled;
   final bool multiDeviceDeviceRevokeEnabled;
   final bool multiDeviceDirectE2eeEnabled;
-  final bool multiDeviceHandleRecoveryEnabled;
   final bool multiDeviceGroupE2eeEnabled;
   final AwikiImCoreOpen _openCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
@@ -138,11 +134,10 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
       config: _config.toCoreConfig(),
       paths: corePaths,
       openOptions: core.AwikiImCoreOpenOptions.vaultRequired(
-        multiDeviceJoinEnabled: multiDeviceJoinEnabled,
+        multiDeviceJoinEnabled: true,
         multiDeviceRootTransferEnabled: multiDeviceRootTransferEnabled,
         multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,
-        multiDeviceHandleRecoveryEnabled: multiDeviceHandleRecoveryEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,
         identitySecretVault: core.ImCoreSecretVaultOptions(
           rootKey: vaultSecrets.rootKey,

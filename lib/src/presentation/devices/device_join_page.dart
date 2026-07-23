@@ -265,13 +265,16 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
 
   Future<void> _sendOtp() async {
     final phone = _phoneController.text.trim();
-    if (phone.isEmpty) return;
+    final handle = _handleController.text.trim();
+    if (phone.isEmpty || handle.isEmpty) return;
     setState(() {
       _sendingOtp = true;
       _otpSendFailed = false;
     });
     try {
-      await ref.read(deviceManagementServiceProvider).sendJoinSmsOtp(phone);
+      await ref
+          .read(deviceManagementServiceProvider)
+          .sendJoinSmsOtp(handle: handle, phone: phone);
     } catch (_) {
       if (mounted) setState(() => _otpSendFailed = true);
     } finally {

@@ -12,6 +12,7 @@ import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -206,21 +207,6 @@ Future<AppSession> _prepareRealAppIdentity(
   OnboardingService onboarding,
   _ClaudeCodeAgentRealBackendConfig config,
 ) async {
-  final recover = await _tryAppIdentityAction(
-    () => onboarding.recoverHandle(
-      phone: config.otpPhone,
-      otp: config.otpCode,
-      handle: config.appHandle,
-    ),
-  );
-  if (recover.session != null) {
-    return recover.session!;
-  }
-  if (!_looksRecoverableForRegister(recover.errorText)) {
-    throw StateError(
-      'App recover failed: ${_sanitizeDiagnostic(recover.errorText, config)}',
-    );
-  }
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
@@ -238,10 +224,16 @@ Future<AppSession> _prepareRealAppIdentity(
 }
 
 Future<_AppIdentityAttempt> _tryAppIdentityAction(
-  Future<AppSession> Function() action,
+  Future<IdentityRegistrationResult> Function() action,
 ) async {
   try {
-    return _AppIdentityAttempt.session(await action());
+    final result = await action();
+    final session = result.identity;
+    if (result.status == IdentityRegistrationStatus.registered &&
+        session != null) {
+      return _AppIdentityAttempt.session(session);
+    }
+    return _AppIdentityAttempt.error('join_required');
   } on Object catch (error) {
     return _AppIdentityAttempt.error(error.toString());
   }
@@ -846,15 +838,6 @@ String _defaultClaudeCodeExpectedReply(String runId) {
 
 String _defaultClaudeCodePrompt(String runId) {
   return 'Reply exactly ${_defaultClaudeCodeExpectedReply(runId)} and nothing else';
-}
-
-bool _looksRecoverableForRegister(String output) {
-  final lower = output.toLowerCase();
-  return lower.contains('not found') ||
-      lower.contains('handle_not_found') ||
-      lower.contains('not_registered') ||
-      lower.contains('not registered') ||
-      lower.contains('404');
 }
 
 String _sanitizeDiagnostic(

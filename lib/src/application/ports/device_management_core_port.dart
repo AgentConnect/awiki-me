@@ -10,7 +10,7 @@ import '../../domain/entities/device_management.dart';
 /// Permanent revoke accepts only an identity selector, opaque target device ID,
 /// and Host user-presence result; versions, hashes and proofs stay below Core.
 abstract interface class DeviceManagementCorePort {
-  Future<void> sendJoinSmsOtp(String phone);
+  Future<void> sendJoinSmsOtp({required String handle, required String phone});
 
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions();
 

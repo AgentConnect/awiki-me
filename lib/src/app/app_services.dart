@@ -16,7 +16,6 @@ import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
 import '../application/device_management_service.dart';
 import '../application/group_application_service.dart';
-import '../application/handle_recovery_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
 import '../application/onboarding_service.dart';
@@ -26,7 +25,6 @@ import '../application/ports/agent_inventory_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
-import '../application/ports/handle_recovery_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
 import '../application/ports/root_key_transfer_port.dart';
 import '../application/ports/user_presence_port.dart';
@@ -90,10 +88,6 @@ final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
   ),
 );
 
-final multiDeviceJoinEnabledProvider = Provider<bool>(
-  (ref) => ref.watch(awikiEnvironmentConfigProvider).multiDeviceJoinEnabled,
-);
-
 final multiDeviceRootTransferEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceRootTransferEnabled,
@@ -126,22 +120,6 @@ final rootKeyTransferServiceProvider = Provider<RootKeyTransferService>(
   (ref) => RootKeyTransferService(
     transfer: ref.watch(rootKeyTransferPortProvider),
     userPresence: ref.watch(userPresencePortProvider),
-  ),
-);
-
-final handleRecoveryEnabledProvider = Provider<bool>(
-  (ref) => ref.watch(awikiEnvironmentConfigProvider).handleRecoveryEnabled,
-);
-
-final handleRecoveryPortProvider = Provider<HandleRecoveryPort>(
-  (ref) => throw StateError('handle_recovery_unavailable'),
-);
-
-final handleRecoveryServiceProvider = Provider<HandleRecoveryService>(
-  (ref) => HandleRecoveryService(
-    recovery: ref.watch(handleRecoveryPortProvider),
-    userPresence: ref.watch(userPresencePortProvider),
-    sessions: ref.watch(appSessionServiceProvider),
   ),
 );
 

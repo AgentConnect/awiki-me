@@ -24,7 +24,6 @@ Run E2E through the repository-level runner:
 dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case multi-device
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
-dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
@@ -152,18 +151,6 @@ before resolver execution. It does not prove SMS delivery or change product
 behavior. See
 [../../../docs/testing.md](../../../docs/testing.md) for the environment
 contract and command.
-
-`--case multi-device-remote-recovery` is the activation-gated
-`HANDLE-RECOVERY-E2E-001/002` product-security slice. One scenario restarts a
-real old-admin App after Core durably consumes `recovery-started`, then cancels
-through one real macOS LocalAuthentication prompt and proves requester
-finalize remains rejected. The other uses independent old/requester App roots,
-observes the deployed cooling period for at least 3600 seconds, exchanges a
-second Session-bound OTP, finalizes through real LocalAuthentication, and
-requires a distinct replacement DID with one ready admin. It requires two
-distinct dedicated phones and successful product SMS delivery; the synthetic
-staged-SMS-error path is deliberately rejected for this gate. Reports contain
-only fixed phase/count/boolean evidence.
 
 `--case multi-device-remote-mls` reuses that fail-closed remote contract but
 attests only `MLS-MULTI-DEVICE-E2E-001/002`. A real AWiki Me owner creates the

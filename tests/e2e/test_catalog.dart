@@ -315,9 +315,9 @@ class AppTestCatalog {
         'through application services; it is not required UI acceptance.',
       )
       ..writeln(
-        '- `multi-device` is currently a no-service capability-gate E2E only. '
-        'It opens two independent production AppBootstrap/native Core scopes, '
-        'checks default-off composition, and opens the Join-only public form. '
+        '- `multi-device` is currently a no-service device-entry E2E only. '
+        'It opens an isolated production AppBootstrap/native Core scope, '
+        'checks the default device-management composition, and opens the public Join form. '
         'It does not claim OTP, SAS, approval, root import, revoke, MLS, or '
         'Handle Recovery acceptance.',
       )
@@ -336,14 +336,6 @@ class AppTestCatalog {
         'unavailable.',
       )
       ..writeln(
-        '- `multi-device-remote-recovery` is a separate, activation-gated '
-        '`awiki.info` suite for `HANDLE-RECOVERY-E2E-001/002`. It uses two '
-        'distinct dedicated accounts and independent native Core roots, '
-        'requires successful product SMS delivery, waits the deployed '
-        'cooling period, and delegates cancel/finalize to real macOS user '
-        'presence. Staged SMS-error continuation is rejected.',
-      )
-      ..writeln(
         '- `multi-device-remote-mls` is a separate activation-gated '
         '`awiki.info` suite for `MLS-MULTI-DEVICE-E2E-001` and '
         '`MLS-MULTI-DEVICE-E2E-002`. It uses a real AWiki Me owner and an '
@@ -354,8 +346,7 @@ class AppTestCatalog {
       )
       ..writeln(
         '- `DEVICE-JOIN-E2E-003`, '
-        '`ROOT-TRANSFER-E2E-002`, and '
-        '`HANDLE-RECOVERY-E2E-003` remain planned until `awiki.info` enables '
+        'and `ROOT-TRANSFER-E2E-002` remain planned until `awiki.info` enables '
         'the matching capabilities and each runner has independent device '
         'roots, real one-time OTPs, user presence where required, '
         'scenario-owned oracles, and cleanup. '
