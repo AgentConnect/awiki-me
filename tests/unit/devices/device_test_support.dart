@@ -40,8 +40,15 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   DeviceJoinProgress? rejectResult;
   DeviceJoinProgress? cancelResult;
   Object? registryError;
+  Future<DeviceRegistrySnapshot> Function(String selector)? registryLoader;
   Object? pollError;
   Object? revokeError;
+  Future<DeviceRevokeResult> Function({
+    required String selector,
+    required String targetDeviceId,
+    required bool userPresenceConfirmed,
+  })?
+  revokeLoader;
   int registryCalls = 0;
   int localSessionCalls = 0;
   int sendOtpCalls = 0;
@@ -156,6 +163,8 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   Future<DeviceRegistrySnapshot> identityDeviceRegistry(String selector) async {
     registryCalls += 1;
     if (registryError != null) throw registryError!;
+    final loader = registryLoader;
+    if (loader != null) return loader(selector);
     return registry;
   }
 
@@ -174,6 +183,14 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     revokeCalls += 1;
     lastRevokedDeviceId = targetDeviceId;
     lastRevokePresenceConfirmed = userPresenceConfirmed;
+    final loader = revokeLoader;
+    if (loader != null) {
+      return loader(
+        selector: selector,
+        targetDeviceId: targetDeviceId,
+        userPresenceConfirmed: userPresenceConfirmed,
+      );
+    }
     if (revokeError != null) throw revokeError!;
     registry = DeviceRegistrySnapshot(
       did: registry.did,

@@ -6,6 +6,7 @@ import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
+import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
@@ -570,11 +571,17 @@ class _FakeGroups implements GroupApplicationService {
   Future<void> leaveGroup(String groupDid) async {}
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   }) async {
-    return const <GroupMemberSummary>[];
+    return GroupCollectionPage<GroupMemberSummary>(
+      items: const <GroupMemberSummary>[],
+      hasMore: false,
+      pageGroupDid: groupDid,
+      groupStateVersion: '1',
+    );
   }
 
   @override
@@ -585,8 +592,13 @@ class _FakeGroups implements GroupApplicationService {
   }) async => const <ChatMessage>[];
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) async =>
-      <GroupSummary>[_group()];
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) async => GroupCollectionPage<GroupSummary>(
+    items: <GroupSummary>[_group()],
+    hasMore: false,
+  );
 
   @override
   Future<GroupSummary> removeMember({

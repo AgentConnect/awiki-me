@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/ports/group_core_port.dart';
+import '../../application/models/group_collection_page.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
@@ -97,22 +98,37 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
   }
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) async {
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) async {
     final result = await _runtime.withCurrentClient(
-      (client) => client.groups.listGroups(limit: limit),
+      (client) => client.groups.listGroups(limit: limit, cursor: cursor),
     );
-    return result.groups.map(_mappers.groupFromCoreSummary).toList();
+    return GroupCollectionPage<GroupSummary>(
+      items: result.groups.map(_mappers.groupFromCoreSummary).toList(),
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
+    );
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   }) async {
     final result = await _runtime.withCurrentClient(
-      (client) => client.groups.listMembers(groupDid, limit: limit),
+      (client) =>
+          client.groups.listMembers(groupDid, limit: limit, cursor: cursor),
     );
-    return result.members.map(_mappers.groupMemberFromCore).toList();
+    return GroupCollectionPage<GroupMemberSummary>(
+      items: result.members.map(_mappers.groupMemberFromCore).toList(),
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
+      pageGroupDid: result.pageGroupDid,
+      groupStateVersion: result.groupStateVersion,
+    );
   }
 
   @override

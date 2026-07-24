@@ -766,6 +766,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceRevokeAction => 'Revoke';
 
   @override
+  String get deviceRevokeSubmitting => 'Revoking device…';
+
+  @override
+  String get deviceRevokeConfirmingAction => 'Confirm again';
+
+  @override
+  String get deviceRevokeSucceeded => 'Device revoked.';
+
+  @override
+  String get deviceRevokeSucceededGroupsSyncing =>
+      'Device revoked. Affected groups are synchronizing their security state.';
+
+  @override
+  String get deviceRevokeOutcomeUnknown =>
+      'The revocation result is not confirmed yet. Refresh the device list.';
+
+  @override
+  String get deviceRevokeRejected =>
+      'The device could not be revoked. Try again later.';
+
+  @override
   String get deviceRevokeConfirmTitle => 'Revoke this device?';
 
   @override
@@ -1269,18 +1290,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupRecoveryRetry => 'Retry group recovery';
 
   @override
-  String get groupEncryptionPreparingTitle => 'Joining group encryption';
+  String get groupEncryptionPreparingTitle => 'Synchronizing group encryption';
 
   @override
   String get groupEncryptionPreparingDetail =>
-      'This device is synchronizing group encryption and will not claim readiness until it completes.';
+      'This group is synchronizing its security state. Sending is paused until it completes.';
 
   @override
   String get groupEncryptionNeedsRetryTitle => 'Group encryption needs retry';
 
   @override
   String get groupEncryptionNeedsRetryDetail =>
-      'This device has not completed group encryption synchronization. Retry the repair.';
+      'Retry the repair on a management device that holds the current group security state.';
 
   @override
   String get groupEncryptionReadyTitle => 'Group encryption ready';

@@ -84,6 +84,15 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               const SizedBox(height: 12),
             ],
+            if (state.revokeNotice != null) ...<Widget>[
+              AppSurface(
+                child: Text(
+                  _deviceRevokeNoticeLabel(context, state.revokeNotice!),
+                  key: const Key('device-revoke-notice'),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             _SectionLabel(context.l10n.devicesAuthorizedTitle),
             const SizedBox(height: 8),
             AppCardSection(
@@ -109,7 +118,12 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
                             canRevoke: state.canRevokeDevice(
                               registry.devices[index],
                             ),
-                            isActionPending: state.isActionPending,
+                            isSubmitting:
+                                state.revokeSubmittingDeviceId ==
+                                registry.devices[index].protocolDeviceId,
+                            isConfirming:
+                                state.revokeConfirmingDeviceId ==
+                                registry.devices[index].protocolDeviceId,
                             onRevoke: () =>
                                 _confirmDeviceRevoke(registry.devices[index]),
                           ),
@@ -215,6 +229,12 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   }
 
   Future<void> _refresh() async {
+    final state = ref.read(devicesProvider);
+    if (state.revokeSubmittingDeviceId != null ||
+        state.revokeConfirmingDeviceId != null) {
+      await ref.read(devicesProvider.notifier).refreshRegistryOnly();
+      return;
+    }
     await ref.read(devicesProvider.notifier).loadManagement();
   }
 }
@@ -243,7 +263,8 @@ class _DeviceTile extends StatelessWidget {
     required this.readiness,
     required this.revokeEnabled,
     required this.canRevoke,
-    required this.isActionPending,
+    required this.isSubmitting,
+    required this.isConfirming,
     required this.onRevoke,
   });
 
@@ -251,7 +272,8 @@ class _DeviceTile extends StatelessWidget {
   final DeviceManagementReadiness? readiness;
   final bool revokeEnabled;
   final bool canRevoke;
-  final bool isActionPending;
+  final bool isSubmitting;
+  final bool isConfirming;
   final VoidCallback onRevoke;
 
   @override
@@ -281,11 +303,22 @@ class _DeviceTile extends StatelessWidget {
                       horizontal: 8,
                       vertical: 6,
                     ),
-                    onPressed: isActionPending ? null : onRevoke,
-                    child: Text(
-                      context.l10n.deviceRevokeAction,
-                      style: TextStyle(color: context.awikiTheme.danger),
-                    ),
+                    onPressed: isSubmitting ? null : onRevoke,
+                    child: isSubmitting
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              const CupertinoActivityIndicator(radius: 8),
+                              const SizedBox(width: 6),
+                              Text(context.l10n.deviceRevokeSubmitting),
+                            ],
+                          )
+                        : Text(
+                            isConfirming
+                                ? context.l10n.deviceRevokeConfirmingAction
+                                : context.l10n.deviceRevokeAction,
+                            style: TextStyle(color: context.awikiTheme.danger),
+                          ),
                   ),
               ],
             )
@@ -298,3 +331,14 @@ class _DeviceTile extends StatelessWidget {
     );
   }
 }
+
+String _deviceRevokeNoticeLabel(
+  BuildContext context,
+  DeviceRevokeNotice notice,
+) => switch (notice) {
+  DeviceRevokeNotice.revoked => context.l10n.deviceRevokeSucceeded,
+  DeviceRevokeNotice.revokedGroupsSyncing =>
+    context.l10n.deviceRevokeSucceededGroupsSyncing,
+  DeviceRevokeNotice.outcomeUnknown => context.l10n.deviceRevokeOutcomeUnknown,
+  DeviceRevokeNotice.rejected => context.l10n.deviceRevokeRejected,
+};

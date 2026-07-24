@@ -4,6 +4,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:http/http.dart' as http;
 
 import '../../application/ports/device_management_core_port.dart';
+import '../../application/models/device_revoke_outcome.dart';
 import '../../domain/entities/device_management.dart';
 import '../services/awiki_onboarding_utility_client.dart';
 import 'awiki_im_core_runtime.dart';
@@ -216,11 +217,23 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     required String targetDeviceId,
     required bool userPresenceConfirmed,
   }) async {
-    final result = await _revokeDevice(
-      selector: _identitySelector(selector),
-      targetDeviceId: targetDeviceId.trim(),
-      userPresenceConfirmed: userPresenceConfirmed,
-    );
+    late core.DeviceRevokeResult result;
+    try {
+      result = await _revokeDevice(
+        selector: _identitySelector(selector),
+        targetDeviceId: targetDeviceId.trim(),
+        userPresenceConfirmed: userPresenceConfirmed,
+      );
+    } on core.AwikiImCoreException catch (error) {
+      throw DeviceRevokeException(switch (error.deviceRevokeOutcomeCategory) {
+        core.DeviceRevokeOutcomeCategory.cancelledBeforeSubmit =>
+          DeviceRevokeOutcomeCategory.cancelledBeforeSubmit,
+        core.DeviceRevokeOutcomeCategory.rejectedBeforeCommit =>
+          DeviceRevokeOutcomeCategory.rejectedBeforeCommit,
+        core.DeviceRevokeOutcomeCategory.outcomeUnknown ||
+        null => DeviceRevokeOutcomeCategory.outcomeUnknown,
+      }, code: error.serviceCode ?? error.code);
+    }
     return DeviceRevokeResult(
       did: result.did,
       targetDeviceId: result.targetDeviceId,

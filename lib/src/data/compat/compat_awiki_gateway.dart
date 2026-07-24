@@ -176,11 +176,12 @@ class CompatAwikiGateway implements AwikiGateway {
   Future<GroupSummary> getGroup(String groupId) => _groups.getGroup(groupId);
 
   @override
-  Future<List<GroupSummary>> listGroups() => _groups.listGroups();
+  Future<List<GroupSummary>> listGroups() async =>
+      (await _groups.listGroups()).items;
 
   @override
-  Future<List<GroupMemberSummary>> listGroupMembers(String groupId) {
-    return _groups.listMembers(groupId);
+  Future<List<GroupMemberSummary>> listGroupMembers(String groupId) async {
+    return (await _groups.listMembers(groupId)).items;
   }
 
   @override

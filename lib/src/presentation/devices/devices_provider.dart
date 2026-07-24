@@ -7,13 +7,23 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 
 import '../../app/app_services.dart';
 import '../../application/device_management_service.dart';
+import '../../application/models/device_revoke_outcome.dart';
 import '../../application/ports/root_key_transfer_port.dart';
 import '../../application/root_key_transfer_service.dart';
 import '../../domain/entities/device_management.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../app_shell/providers/app_lifecycle_provider.dart';
+
+enum DeviceRevokeNotice {
+  revoked,
+  revokedGroupsSyncing,
+  outcomeUnknown,
+  rejected,
+}
 
 enum DeviceManagementErrorKind {
   unavailable,
@@ -34,6 +44,10 @@ class DevicesState {
     this.activeJoin,
     this.isLoading = false,
     this.isActionPending = false,
+    this.revokeSubmittingDeviceId,
+    this.revokeConfirmingDeviceId,
+    this.revokeRetryAllowedDeviceId,
+    this.revokeNotice,
     this.rootTransfer = const RootKeyTransferUiState(),
     this.error,
   });
@@ -44,6 +58,10 @@ class DevicesState {
   final DeviceJoinProgress? activeJoin;
   final bool isLoading;
   final bool isActionPending;
+  final String? revokeSubmittingDeviceId;
+  final String? revokeConfirmingDeviceId;
+  final String? revokeRetryAllowedDeviceId;
+  final DeviceRevokeNotice? revokeNotice;
   final RootKeyTransferUiState rootTransfer;
   final DeviceManagementErrorKind? error;
 
@@ -65,31 +83,63 @@ class DevicesState {
     return DeviceManagementReadiness.adminAwaitingRoot;
   }
 
-  bool canRevokeDevice(DeviceSummary device) =>
-      currentDeviceCanManage &&
-      !device.isCurrent &&
-      device.status == DeviceStatus.active;
+  bool canRevokeDevice(DeviceSummary device) {
+    final ordinarilyAllowed =
+        currentDeviceCanManage &&
+        !device.isCurrent &&
+        device.status == DeviceStatus.active;
+    if (!ordinarilyAllowed) return false;
+    final submitting = revokeSubmittingDeviceId;
+    if (submitting != null) {
+      return submitting == device.protocolDeviceId;
+    }
+    final confirming = revokeConfirmingDeviceId;
+    if (confirming == null) return true;
+    return confirming == device.protocolDeviceId &&
+        revokeRetryAllowedDeviceId == device.protocolDeviceId;
+  }
 
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
+    bool clearRegistry = false,
     List<DeviceJoinRequestNotice>? joinRequests,
     List<DeviceJoinProgress>? localJoins,
     DeviceJoinProgress? activeJoin,
     bool clearActiveJoin = false,
     bool? isLoading,
     bool? isActionPending,
+    String? revokeSubmittingDeviceId,
+    bool clearRevokeSubmitting = false,
+    String? revokeConfirmingDeviceId,
+    bool clearRevokeConfirming = false,
+    String? revokeRetryAllowedDeviceId,
+    bool clearRevokeRetryAllowed = false,
+    DeviceRevokeNotice? revokeNotice,
+    bool clearRevokeNotice = false,
     RootKeyTransferUiState? rootTransfer,
     bool clearRootTransfer = false,
     DeviceManagementErrorKind? error,
     bool clearError = false,
   }) {
     return DevicesState(
-      registry: registry ?? this.registry,
+      registry: clearRegistry ? null : (registry ?? this.registry),
       joinRequests: joinRequests ?? this.joinRequests,
       localJoins: localJoins ?? this.localJoins,
       activeJoin: clearActiveJoin ? null : (activeJoin ?? this.activeJoin),
       isLoading: isLoading ?? this.isLoading,
       isActionPending: isActionPending ?? this.isActionPending,
+      revokeSubmittingDeviceId: clearRevokeSubmitting
+          ? null
+          : (revokeSubmittingDeviceId ?? this.revokeSubmittingDeviceId),
+      revokeConfirmingDeviceId: clearRevokeConfirming
+          ? null
+          : (revokeConfirmingDeviceId ?? this.revokeConfirmingDeviceId),
+      revokeRetryAllowedDeviceId: clearRevokeRetryAllowed
+          ? null
+          : (revokeRetryAllowedDeviceId ?? this.revokeRetryAllowedDeviceId),
+      revokeNotice: clearRevokeNotice
+          ? null
+          : (revokeNotice ?? this.revokeNotice),
       rootTransfer: clearRootTransfer
           ? const RootKeyTransferUiState()
           : (rootTransfer ?? this.rootTransfer),
@@ -99,10 +149,32 @@ class DevicesState {
 }
 
 class DevicesController extends StateNotifier<DevicesState> {
-  DevicesController(this.ref) : super(const DevicesState());
+  DevicesController(this.ref) : super(const DevicesState()) {
+    _sessionKey = _currentSessionKey();
+    _sessionSubscription = ref.listen<SessionState>(
+      sessionProvider,
+      _handleSessionChanged,
+    );
+    _lifecycleSubscription = ref.listen<AppLifecycleState>(
+      appLifecycleProvider,
+      _handleLifecycleChanged,
+    );
+  }
 
   final Ref ref;
   int _generation = 0;
+  int _sessionEpoch = 0;
+  int _registryReadGeneration = 0;
+  int _lastAppliedRegistryReadGeneration = 0;
+  int _revokeOperationGeneration = 0;
+  int? _revokeClosedOperationGeneration;
+  int _revokePostRpcRegistryGenerationFloor = 0;
+  String? _revokeOperationTargetDeviceId;
+  DeviceRevokeOutcomeCategory? _revokeClosedOutcomeCategory;
+  bool _revokeRpcCompleted = false;
+  late String _sessionKey;
+  late final ProviderSubscription<SessionState> _sessionSubscription;
+  late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   String? _selectedAdminJoinSessionId;
 
   bool get _deviceRevokeEnabled =>
@@ -113,6 +185,46 @@ class DevicesController extends StateNotifier<DevicesState> {
     return did == null || did.isEmpty ? null : did;
   }
 
+  String _currentSessionKey() {
+    final session = ref.read(sessionProvider).session;
+    return '${session?.did ?? ''}\u0000${session?.credentialName ?? ''}';
+  }
+
+  void _handleSessionChanged(SessionState? previous, SessionState next) {
+    final nextKey =
+        '${next.session?.did ?? ''}\u0000${next.session?.credentialName ?? ''}';
+    if (nextKey == _sessionKey) return;
+    _sessionKey = nextKey;
+    _sessionEpoch += 1;
+    _generation += 1;
+    _registryReadGeneration += 1;
+    _lastAppliedRegistryReadGeneration = 0;
+    _revokeOperationGeneration += 1;
+    _revokeClosedOperationGeneration = null;
+    _revokePostRpcRegistryGenerationFloor = 0;
+    _revokeOperationTargetDeviceId = null;
+    _revokeClosedOutcomeCategory = null;
+    _revokeRpcCompleted = false;
+    state = const DevicesState();
+  }
+
+  void _handleLifecycleChanged(
+    AppLifecycleState? previous,
+    AppLifecycleState next,
+  ) {
+    if (next == AppLifecycleState.resumed &&
+        (state.registry != null || state.revokeConfirmingDeviceId != null)) {
+      unawaited(refreshRegistryOnly());
+    }
+  }
+
+  @override
+  void dispose() {
+    _sessionSubscription.close();
+    _lifecycleSubscription.close();
+    super.dispose();
+  }
+
   Future<void> loadManagement() async {
     final selector = _selector;
     if (selector == null) {
@@ -120,16 +232,24 @@ class DevicesController extends StateNotifier<DevicesState> {
       return;
     }
     final generation = ++_generation;
+    final registryReadGeneration = ++_registryReadGeneration;
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final service = ref.read(deviceManagementServiceProvider);
       final registry = await service.loadRegistry(selector);
+      if (registry.did != selector) {
+        throw StateError('device_registry_binding_mismatch');
+      }
       final results = await Future.wait<Object>(<Future<Object>>[
         service.restoreLocalJoins(),
         if (registry.currentDevice?.canManageDevices == true)
           service.restoreAdminJoinRequests(selector),
       ]);
-      if (!mounted || generation != _generation) return;
+      if (!mounted ||
+          generation != _generation ||
+          registryReadGeneration != _registryReadGeneration) {
+        return;
+      }
       var resultIndex = 0;
       final localJoins = (results[resultIndex++] as List<DeviceJoinProgress>)
           .where((session) => session.side == DeviceJoinSide.newDevice)
@@ -137,15 +257,38 @@ class DevicesController extends StateNotifier<DevicesState> {
       final joinRequests = registry.currentDevice?.canManageDevices == true
           ? results[resultIndex++] as List<DeviceJoinRequestNotice>
           : const <DeviceJoinRequestNotice>[];
+      final securityFactsChanged =
+          _registrySecurityFingerprint(state.registry) !=
+          _registrySecurityFingerprint(registry);
       state = DevicesState(
         registry: registry,
         joinRequests: joinRequests,
         localJoins: localJoins,
         activeJoin: state.activeJoin,
         rootTransfer: state.rootTransfer,
+        revokeSubmittingDeviceId: state.revokeSubmittingDeviceId,
+        revokeConfirmingDeviceId: state.revokeConfirmingDeviceId,
+        revokeRetryAllowedDeviceId: state.revokeRetryAllowedDeviceId,
+        revokeNotice: state.revokeNotice,
+      );
+      _lastAppliedRegistryReadGeneration = registryReadGeneration;
+      if (securityFactsChanged) {
+        ref.read(deviceSecurityFactsRevisionProvider.notifier).bump();
+      }
+      _reduceRevokeConfirmation(
+        registry: registry,
+        registryReadGeneration: registryReadGeneration,
       );
     } catch (error) {
-      if (!mounted || generation != _generation) return;
+      if (!mounted ||
+          generation != _generation ||
+          registryReadGeneration != _registryReadGeneration) {
+        return;
+      }
+      _reduceRevokeConfirmation(
+        refreshFailed: true,
+        registryReadGeneration: registryReadGeneration,
+      );
       state = state.copyWith(
         isLoading: false,
         error: _classifyDeviceError(error),
@@ -671,32 +814,286 @@ class DevicesController extends StateNotifier<DevicesState> {
     );
     if (!_deviceRevokeEnabled ||
         selector == null ||
-        state.isActionPending ||
+        state.revokeSubmittingDeviceId != null ||
         authoritativeTarget == null ||
         !state.canRevokeDevice(authoritativeTarget)) {
       return false;
     }
 
-    state = state.copyWith(isActionPending: true, clearError: true);
+    final targetDeviceId = authoritativeTarget.protocolDeviceId;
+    final sessionEpoch = _sessionEpoch;
+    final operationGeneration = ++_revokeOperationGeneration;
+    _revokeOperationTargetDeviceId = targetDeviceId;
+    _revokeClosedOperationGeneration = null;
+    _revokeClosedOutcomeCategory = null;
+    _revokeRpcCompleted = false;
+    _revokePostRpcRegistryGenerationFloor = 0;
+    state = state.copyWith(
+      revokeSubmittingDeviceId: targetDeviceId,
+      clearRevokeConfirming: true,
+      clearRevokeRetryAllowed: true,
+      clearRevokeNotice: true,
+      clearError: true,
+    );
+    DeviceRevokeOutcomeCategory? closedOutcomeCategory;
+    var freshTargetConfirmedActive = false;
+    var freshRegistryLoaded = false;
     try {
       await ref
           .read(deviceManagementServiceProvider)
           .revoke(
             selector: selector,
-            targetDeviceId: authoritativeTarget.protocolDeviceId,
+            targetDeviceId: targetDeviceId,
             presenceReason: presenceReason,
           );
-      if (!mounted) return false;
-      await loadManagement();
-      return true;
-    } catch (error) {
-      if (!mounted) return false;
-      state = state.copyWith(
-        isActionPending: false,
-        error: _classifyDeviceError(error),
-      );
+    } on DeviceRevokeException catch (error) {
+      closedOutcomeCategory = error.category;
+    } catch (_) {
+      closedOutcomeCategory = DeviceRevokeOutcomeCategory.outcomeUnknown;
+    }
+    if (!mounted ||
+        sessionEpoch != _sessionEpoch ||
+        operationGeneration != _revokeOperationGeneration) {
       return false;
     }
+    _revokeClosedOperationGeneration = operationGeneration;
+    _revokeClosedOutcomeCategory = closedOutcomeCategory;
+    _revokeRpcCompleted = true;
+    _revokePostRpcRegistryGenerationFloor = _registryReadGeneration + 1;
+    try {
+      final applied = await _loadFreshRegistry(selector, sessionEpoch);
+      if (!mounted ||
+          sessionEpoch != _sessionEpoch ||
+          operationGeneration != _revokeOperationGeneration) {
+        return false;
+      }
+      freshRegistryLoaded = true;
+      final registry = applied.registry;
+      final freshTarget = _findDevice(registry, targetDeviceId);
+      if (freshTarget?.status == DeviceStatus.revoked) {
+        _finishRevokeOperation(operationGeneration);
+        state = state.copyWith(
+          clearRevokeSubmitting: true,
+          clearRevokeConfirming: true,
+          clearRevokeRetryAllowed: true,
+          revokeNotice: DeviceRevokeNotice.revokedGroupsSyncing,
+          clearError: true,
+        );
+        return true;
+      }
+      if (freshTarget?.status == DeviceStatus.active &&
+          (closedOutcomeCategory ==
+                  DeviceRevokeOutcomeCategory.cancelledBeforeSubmit ||
+              closedOutcomeCategory ==
+                  DeviceRevokeOutcomeCategory.rejectedBeforeCommit)) {
+        _finishRevokeOperation(operationGeneration);
+        state = state.copyWith(
+          clearRevokeSubmitting: true,
+          clearRevokeConfirming: true,
+          clearRevokeRetryAllowed: true,
+          revokeNotice:
+              closedOutcomeCategory ==
+                  DeviceRevokeOutcomeCategory.cancelledBeforeSubmit
+              ? null
+              : DeviceRevokeNotice.rejected,
+          clearRevokeNotice:
+              closedOutcomeCategory ==
+              DeviceRevokeOutcomeCategory.cancelledBeforeSubmit,
+        );
+        return false;
+      }
+      freshTargetConfirmedActive = freshTarget?.status == DeviceStatus.active;
+    } on _StaleDeviceRegistryRead {
+      if (!mounted ||
+          sessionEpoch != _sessionEpoch ||
+          operationGeneration != _revokeOperationGeneration) {
+        return false;
+      }
+      final latestRegistryIsPostRpc =
+          _lastAppliedRegistryReadGeneration >=
+          _revokePostRpcRegistryGenerationFloor;
+      state = state.copyWith(
+        clearRevokeSubmitting: true,
+        revokeConfirmingDeviceId: targetDeviceId,
+        clearRevokeRetryAllowed: true,
+        revokeNotice: DeviceRevokeNotice.outcomeUnknown,
+        clearError: true,
+      );
+      if (latestRegistryIsPostRpc) {
+        _reduceRevokeConfirmation(
+          registry: state.registry,
+          registryReadGeneration: _lastAppliedRegistryReadGeneration,
+        );
+      }
+      return latestRegistryIsPostRpc &&
+          _findDevice(state.registry, targetDeviceId)?.status ==
+              DeviceStatus.revoked;
+    } catch (_) {
+      // A failed refresh leaves the destructive outcome unknown.
+    }
+    if (!mounted ||
+        sessionEpoch != _sessionEpoch ||
+        operationGeneration != _revokeOperationGeneration) {
+      return false;
+    }
+    state = state.copyWith(
+      clearRegistry: !freshRegistryLoaded,
+      clearRevokeSubmitting: true,
+      revokeConfirmingDeviceId: targetDeviceId,
+      revokeRetryAllowedDeviceId: freshTargetConfirmedActive
+          ? targetDeviceId
+          : null,
+      clearRevokeRetryAllowed: !freshTargetConfirmedActive,
+      revokeNotice: DeviceRevokeNotice.outcomeUnknown,
+      clearError: true,
+    );
+    return false;
+  }
+
+  Future<void> refreshRegistryOnly() async {
+    final selector = _selector;
+    if (selector == null) return;
+    final sessionEpoch = _sessionEpoch;
+    try {
+      final applied = await _loadFreshRegistry(selector, sessionEpoch);
+      if (!mounted || sessionEpoch != _sessionEpoch) return;
+      _reduceRevokeConfirmation(
+        registry: applied.registry,
+        registryReadGeneration: applied.registryReadGeneration,
+      );
+    } on _StaleDeviceRegistryRead {
+      return;
+    } catch (_) {
+      if (!mounted || sessionEpoch != _sessionEpoch) return;
+      _reduceRevokeConfirmation(
+        refreshFailed: true,
+        registryReadGeneration: _registryReadGeneration,
+      );
+    }
+  }
+
+  void _reduceRevokeConfirmation({
+    DeviceRegistrySnapshot? registry,
+    bool refreshFailed = false,
+    required int registryReadGeneration,
+  }) {
+    final confirming =
+        state.revokeConfirmingDeviceId ?? _revokeOperationTargetDeviceId;
+    if (confirming == null || !_revokeRpcCompleted) return;
+    if (_revokeClosedOperationGeneration != _revokeOperationGeneration) {
+      return;
+    }
+    if (registryReadGeneration < _revokePostRpcRegistryGenerationFloor) {
+      return;
+    }
+    if (refreshFailed) {
+      state = state.copyWith(
+        clearRegistry: true,
+        clearRevokeSubmitting: true,
+        revokeConfirmingDeviceId: confirming,
+        clearRevokeRetryAllowed: true,
+        revokeNotice: DeviceRevokeNotice.outcomeUnknown,
+      );
+      return;
+    }
+    final target = _findDevice(registry, confirming);
+    if (target?.status == DeviceStatus.revoked) {
+      _finishRevokeOperation(_revokeOperationGeneration);
+      state = state.copyWith(
+        clearRevokeSubmitting: true,
+        clearRevokeConfirming: true,
+        clearRevokeRetryAllowed: true,
+        revokeNotice: DeviceRevokeNotice.revokedGroupsSyncing,
+        clearError: true,
+      );
+      return;
+    }
+    if (target?.status == DeviceStatus.active) {
+      final closedOutcomeCategory = _revokeClosedOutcomeCategory;
+      if (closedOutcomeCategory ==
+              DeviceRevokeOutcomeCategory.cancelledBeforeSubmit ||
+          closedOutcomeCategory ==
+              DeviceRevokeOutcomeCategory.rejectedBeforeCommit) {
+        _finishRevokeOperation(_revokeOperationGeneration);
+        state = state.copyWith(
+          clearRevokeSubmitting: true,
+          clearRevokeConfirming: true,
+          clearRevokeRetryAllowed: true,
+          revokeNotice:
+              closedOutcomeCategory ==
+                  DeviceRevokeOutcomeCategory.cancelledBeforeSubmit
+              ? null
+              : DeviceRevokeNotice.rejected,
+          clearRevokeNotice:
+              closedOutcomeCategory ==
+              DeviceRevokeOutcomeCategory.cancelledBeforeSubmit,
+        );
+        return;
+      }
+      state = state.copyWith(
+        clearRevokeSubmitting: true,
+        revokeConfirmingDeviceId: confirming,
+        revokeRetryAllowedDeviceId: confirming,
+        revokeNotice: DeviceRevokeNotice.outcomeUnknown,
+      );
+      return;
+    }
+    state = state.copyWith(
+      clearRevokeSubmitting: true,
+      revokeConfirmingDeviceId: confirming,
+      clearRevokeRetryAllowed: true,
+      revokeNotice: DeviceRevokeNotice.outcomeUnknown,
+    );
+  }
+
+  Future<_AppliedDeviceRegistry> _loadFreshRegistry(
+    String selector,
+    int sessionEpoch,
+  ) async {
+    final registryReadGeneration = ++_registryReadGeneration;
+    late final DeviceRegistrySnapshot registry;
+    try {
+      registry = await ref
+          .read(deviceManagementServiceProvider)
+          .loadRegistry(selector);
+    } catch (error, stackTrace) {
+      if (!mounted ||
+          sessionEpoch != _sessionEpoch ||
+          registryReadGeneration != _registryReadGeneration) {
+        throw const _StaleDeviceRegistryRead();
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    if (!mounted ||
+        sessionEpoch != _sessionEpoch ||
+        registryReadGeneration != _registryReadGeneration) {
+      throw const _StaleDeviceRegistryRead();
+    }
+    if (registry.did != selector) {
+      throw StateError('device_registry_binding_mismatch');
+    }
+    final securityFactsChanged =
+        _registrySecurityFingerprint(state.registry) !=
+        _registrySecurityFingerprint(registry);
+    state = state.copyWith(registry: registry, isLoading: false);
+    _lastAppliedRegistryReadGeneration = registryReadGeneration;
+    if (securityFactsChanged) {
+      ref.read(deviceSecurityFactsRevisionProvider.notifier).bump();
+    }
+    return _AppliedDeviceRegistry(
+      registry: registry,
+      registryReadGeneration: registryReadGeneration,
+    );
+  }
+
+  void _finishRevokeOperation(int operationGeneration) {
+    if (operationGeneration != _revokeOperationGeneration) return;
+    _revokeOperationGeneration += 1;
+    _revokeClosedOperationGeneration = null;
+    _revokeOperationTargetDeviceId = null;
+    _revokeClosedOutcomeCategory = null;
+    _revokeRpcCompleted = false;
+    _revokePostRpcRegistryGenerationFloor = 0;
   }
 
   Future<void> cancelNewDeviceActive() async {
@@ -742,9 +1139,54 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 }
 
+class DeviceSecurityFactsRevisionController extends StateNotifier<int> {
+  DeviceSecurityFactsRevisionController() : super(0);
+
+  void bump() => state += 1;
+}
+
+final deviceSecurityFactsRevisionProvider =
+    StateNotifierProvider<DeviceSecurityFactsRevisionController, int>(
+      (ref) => DeviceSecurityFactsRevisionController(),
+    );
+
 final devicesProvider = StateNotifierProvider<DevicesController, DevicesState>(
   (ref) => DevicesController(ref),
 );
+
+class _StaleDeviceRegistryRead implements Exception {
+  const _StaleDeviceRegistryRead();
+}
+
+class _AppliedDeviceRegistry {
+  const _AppliedDeviceRegistry({
+    required this.registry,
+    required this.registryReadGeneration,
+  });
+
+  final DeviceRegistrySnapshot registry;
+  final int registryReadGeneration;
+}
+
+String _registrySecurityFingerprint(DeviceRegistrySnapshot? registry) {
+  if (registry == null) return '';
+  final deviceFacts =
+      registry.devices
+          .map(
+            (device) => <String>[
+              device.protocolDeviceId,
+              device.signingKeyId,
+              device.e2eeKeyId,
+              device.status.name,
+              device.role.name,
+              '${device.managementReady}',
+              '${device.isCurrent}',
+            ].join('\u0001'),
+          )
+          .toList()
+        ..sort();
+  return '${registry.did}\u0002${deviceFacts.join('\u0003')}';
+}
 
 List<DeviceJoinProgress> _replaceJoin(
   List<DeviceJoinProgress> sessions,

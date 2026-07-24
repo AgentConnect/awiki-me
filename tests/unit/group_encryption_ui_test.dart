@@ -56,7 +56,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('正在加入群加密'), findsOneWidget);
+    expect(find.text('正在同步群加密'), findsOneWidget);
     expect(find.textContaining('Leaf'), findsNothing);
     expect(find.textContaining('私钥'), findsNothing);
     expect(
@@ -99,7 +99,7 @@ void main() {
     await tester.tap(find.byKey(const Key('group-encryption-retry-button')));
     await tester.pump();
 
-    expect(find.text('正在加入群加密'), findsOneWidget);
+    expect(find.text('正在同步群加密'), findsOneWidget);
     expect(find.text('群加密已就绪'), findsNothing);
 
     retryGate.complete(_status(GroupEncryptionReadiness.ready));

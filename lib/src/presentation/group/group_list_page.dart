@@ -179,6 +179,30 @@ class GroupListPage extends ConsumerWidget {
                   ),
                 ),
               ),
+            if (state.groupsHasMore)
+              Center(
+                child: CupertinoButton(
+                  key: const Key('group-list-load-more'),
+                  onPressed: state.isLoadingMoreGroups
+                      ? null
+                      : () async {
+                          try {
+                            await ref
+                                .read(groupProvider.notifier)
+                                .loadMoreGroups();
+                          } catch (error) {
+                            if (context.mounted) {
+                              ref
+                                  .read(uiFeedbackProvider.notifier)
+                                  .showError(AppMessage.fromError(error));
+                            }
+                          }
+                        },
+                  child: state.isLoadingMoreGroups
+                      ? const CupertinoActivityIndicator()
+                      : Text(context.l10n.commonLoadMore),
+                ),
+              ),
           ],
         ),
         if (state.isLoading)
@@ -409,6 +433,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
     _requestGroup(_group.groupId);
     _requestMembers(_group.groupId);
     final members = ref.watch(groupMembersProvider(_group.groupId));
+    final memberPage = ref.watch(groupProvider).memberPages[_group.groupId];
     final currentDid = ref.watch(sessionProvider).session?.did;
     final canManageMembers = canManageGroupMembers(_group);
     final theme = context.awikiTheme;
@@ -579,6 +604,33 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                                 ),
                               )
                               .toList(),
+                        ),
+                      if (memberPage?.hasMore == true)
+                        Align(
+                          alignment: Alignment.center,
+                          child: CupertinoButton(
+                            key: const Key('group-members-load-more'),
+                            onPressed: memberPage!.isLoadingMore
+                                ? null
+                                : () async {
+                                    try {
+                                      await ref
+                                          .read(groupProvider.notifier)
+                                          .loadMoreGroupMembers(_group.groupId);
+                                    } catch (error) {
+                                      if (context.mounted) {
+                                        ref
+                                            .read(uiFeedbackProvider.notifier)
+                                            .showError(
+                                              AppMessage.fromError(error),
+                                            );
+                                      }
+                                    }
+                                  },
+                            child: memberPage.isLoadingMore
+                                ? const CupertinoActivityIndicator()
+                                : Text(context.l10n.commonLoadMore),
+                          ),
                         ),
                     ],
                   ),

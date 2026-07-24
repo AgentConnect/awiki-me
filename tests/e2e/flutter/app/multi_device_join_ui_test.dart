@@ -13,6 +13,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/data/services/local_auth_user_presence_port.dart';
@@ -27,6 +28,9 @@ import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dar
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_encryption_provider.dart';
+import 'package:awiki_me/src/presentation/group/group_list_page.dart';
+import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
@@ -42,6 +46,9 @@ import '../../remote_multi_device_join_contract.dart';
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
+const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
+const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';
+const String _mlsRevokeCaseId = 'MLS-MULTI-DEVICE-E2E-002';
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
@@ -320,7 +327,10 @@ void main() {
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
           config,
-          enableRootTransfer: _invocationExpects(_rootTransferCaseId),
+          enableRootTransfer:
+              _invocationExpects(_rootTransferCaseId) ||
+              _invocationExpects(_deviceRevokeCaseId),
+          enableStep4: _invocationExpects(_deviceRevokeCaseId),
         ),
         appStateRoot: config.appStateRoot,
       );
@@ -577,7 +587,8 @@ void main() {
           ],
         );
       }
-      if (_invocationExpects(_rootTransferCaseId)) {
+      if (_invocationExpects(_rootTransferCaseId) ||
+          _invocationExpects(_deviceRevokeCaseId)) {
         if (bootstrap.rootKeyTransferPort == null) {
           fail('The real App bootstrap did not compose root transfer.');
         }
@@ -592,13 +603,292 @@ void main() {
           recipientDeviceId: started.protocolDeviceId,
         );
       }
+      if (_invocationExpects(_deviceRevokeCaseId)) {
+        await _verifyStep4RevokeAndMls(
+          tester: tester,
+          container: container,
+          bootstrap: bootstrap,
+          cli: cli,
+          presence: presence,
+          did: adminSession.did,
+          currentDeviceId: bootstrapAdminDeviceId,
+          targetDeviceId: started.protocolDeviceId,
+        );
+      }
     },
     skip:
         !Platform.isMacOS ||
         !_RemoteJoinRunConfig.exists() ||
         (!_invocationExpects(_adminApprovalCaseId) &&
-            !_invocationExpects(_rootTransferCaseId)),
-    timeout: const Timeout(Duration(minutes: 14)),
+            !_invocationExpects(_rootTransferCaseId) &&
+            !_invocationExpects(_deviceRevokeCaseId)),
+    timeout: Timeout(
+      _invocationExpects(_deviceRevokeCaseId)
+          ? const Duration(minutes: 30)
+          : const Duration(minutes: 14),
+    ),
+  );
+}
+
+Future<void> _verifyStep4RevokeAndMls({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required AppBootstrap bootstrap,
+  required _JoinCli cli,
+  required _CountingRealUserPresencePort presence,
+  required String did,
+  required String currentDeviceId,
+  required String targetDeviceId,
+}) async {
+  if (find.byType(DeviceJoinApprovalSheet).evaluate().isNotEmpty) {
+    Navigator.of(tester.element(find.byType(DeviceJoinApprovalSheet))).pop();
+    await tester.pumpAndSettle();
+  }
+  final groups = container.read(groupApplicationServiceProvider);
+  final nonce = _nonce(8);
+  final group = await groups.createGroup(
+    name: 'Step4 revoke $nonce',
+    slug: 'step4-$nonce',
+    description: 'Step4 exact-device convergence',
+    goal: 'Verify revoke convergence',
+    rules: 'E2E only',
+  );
+  final pageGroup = await groups.createGroup(
+    name: 'Step4 page $nonce',
+    slug: 'step4-page-$nonce',
+    description: 'Step4 cursor projection',
+    goal: 'Verify pagination',
+    rules: 'E2E only',
+  );
+  final groupController = container.read(groupProvider.notifier);
+  await groupController.refresh(limit: 1);
+  final firstPageState = container.read(groupProvider);
+  if (!firstPageState.groupsHasMore ||
+      firstPageState.groupsNextCursor == null ||
+      firstPageState.groups.length != 1) {
+    fail('The real App group provider did not expose an explicit first page.');
+  }
+  final retainedFirstGroupId = firstPageState.groups.single.groupId;
+  await groupController.loadMoreGroups(limit: 1);
+  final secondPageState = container.read(groupProvider);
+  final groupIds = secondPageState.groups
+      .map((item) => item.groupId)
+      .toList(growable: false);
+  if (groupIds.length != 2 ||
+      groupIds.toSet().length != groupIds.length ||
+      groupIds.where((id) => id == retainedFirstGroupId).length != 1 ||
+      !groupIds.contains(group.groupId) ||
+      !groupIds.contains(pageGroup.groupId)) {
+    fail(
+      'Explicit App provider load-more lost, duplicated, or reused a group.',
+    );
+  }
+  await groupController.loadGroupMembers(group.groupId, limit: 1);
+  final memberPage = container.read(groupProvider).memberPages[group.groupId];
+  if (memberPage?.pageGroupDid != group.groupId ||
+      memberPage?.groupStateVersion?.trim().isEmpty != false) {
+    fail('The App member page was not bound to its group and state version.');
+  }
+  await E2eCaseAttestationWriter.markPassed(
+    _step4PaginationCaseId,
+    phases: const <String>[
+      'real_group_first_page_has_opaque_cursor',
+      'explicit_next_cursor_loaded',
+      'stable_group_projection_retained',
+    ],
+  );
+
+  final registryBeforeRepair = await bootstrap.deviceManagementCorePort!
+      .identityDeviceRegistry(did);
+  final currentReadyAdmin = registryBeforeRepair.devices
+      .where(
+        (device) =>
+            device.protocolDeviceId == currentDeviceId &&
+            device.isCurrent &&
+            device.role == DeviceRole.admin &&
+            device.managementReady &&
+            device.status == DeviceStatus.active,
+      )
+      .toList(growable: false);
+  final targetReadyAdmin = registryBeforeRepair.devices
+      .where(
+        (device) =>
+            device.protocolDeviceId == targetDeviceId &&
+            !device.isCurrent &&
+            device.role == DeviceRole.admin &&
+            device.managementReady &&
+            device.status == DeviceStatus.active,
+      )
+      .toList(growable: false);
+  if (registryBeforeRepair.devices.length != 2 ||
+      currentReadyAdmin.length != 1 ||
+      targetReadyAdmin.length != 1) {
+    fail('Fresh Registry did not bind the two exact ready device principals.');
+  }
+
+  final secure = container.read(groupEncryptionCorePortProvider);
+  var appReady = await secure.retry(group.groupId);
+  final appReadyDeadline = DateTime.now().add(const Duration(seconds: 45));
+  while (!appReady.canSendSecure && DateTime.now().isBefore(appReadyDeadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+    appReady = await secure.retry(group.groupId);
+  }
+  if (!appReady.canSendSecure) {
+    fail('The App controller did not reconcile the CLI Manifest device.');
+  }
+  final twoLeafEvidence = await cli.repairGroupUntilReady(group.groupId);
+  if (twoLeafEvidence.repairGroup != group.groupId ||
+      twoLeafEvidence.repairState.toLowerCase() != 'ready' ||
+      twoLeafEvidence.remainingDevices != 0 ||
+      twoLeafEvidence.statusGroup != group.groupId ||
+      twoLeafEvidence.statusState.toLowerCase() != 'ready' ||
+      !twoLeafEvidence.canSendSecure ||
+      !twoLeafEvidence.hasLocalState ||
+      !twoLeafEvidence.hasActiveMembership) {
+    fail('CLI public repair/status did not prove its exact ready device leaf.');
+  }
+  final appStatusBeforeRevoke = await secure.status(group.groupId);
+  if (appStatusBeforeRevoke.groupDid != group.groupId ||
+      !appStatusBeforeRevoke.canSendSecure) {
+    fail('App public status did not prove its exact ready device leaf.');
+  }
+
+  if (find.byType(DevicesPage).evaluate().isEmpty) {
+    await _openDevicesPage(tester);
+  }
+  await _tapOne(
+    tester,
+    find.byKey(Key('device-revoke-$targetDeviceId')),
+    failure: 'The exact non-current device did not expose revoke.',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        find
+            .byKey(const Key('device-revoke-confirm-dialog'))
+            .evaluate()
+            .length ==
+        1,
+    failure: 'The destructive revoke confirmation was not rendered.',
+  );
+  final presenceBefore = presence.calls;
+  await _tapOne(
+    tester,
+    find.byKey(const Key('device-revoke-confirm-action')),
+    failure: 'The destructive revoke confirmation was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      DeviceSummary? target;
+      for (final device
+          in container.read(devicesProvider).registry?.devices ??
+              const <DeviceSummary>[]) {
+        if (device.protocolDeviceId == targetDeviceId) {
+          target = device;
+          break;
+        }
+      }
+      return target?.status == DeviceStatus.revoked;
+    },
+    timeout: const Duration(minutes: 2),
+    failure: 'Fresh Registry did not project the exact target revoked.',
+  );
+  if (presence.calls != presenceBefore + 1) {
+    fail('Device revoke did not consume exactly one fresh user presence.');
+  }
+  final registry = container.read(devicesProvider).registry!;
+  final current = registry.devices
+      .where((device) => device.protocolDeviceId == currentDeviceId)
+      .single;
+  if (!current.canManageDevices) {
+    fail('The surviving current ready admin was not retained.');
+  }
+  await E2eCaseAttestationWriter.markPassed(
+    _deviceRevokeCaseId,
+    phases: const <String>[
+      'destructive_confirmation_visible',
+      'single_fresh_user_presence_confirmed',
+      'registry_projected_target_revoked',
+      'current_ready_admin_retained',
+    ],
+  );
+
+  var status = await secure.status(group.groupId);
+  final maintenanceDeadline = DateTime.now().add(const Duration(seconds: 45));
+  while (status.canSendSecure && DateTime.now().isBefore(maintenanceDeadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+    status = await secure.status(group.groupId);
+  }
+  if (status.canSendSecure) {
+    fail('The group reported ready before revoke convergence repair.');
+  }
+  container.read(groupProvider.notifier).upsertGroup(group);
+  unawaited(
+    Navigator.of(tester.element(find.byType(DevicesPage))).push<void>(
+      CupertinoPageRoute<void>(
+        builder: (_) => GroupDetailPage(initialGroup: group),
+      ),
+    ),
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const Key('group-encryption-retry-button'))
+        .evaluate()
+        .isNotEmpty,
+    failure: 'The current controller group did not expose explicit repair.',
+  );
+  await _tapOne(
+    tester,
+    find.byKey(const Key('group-encryption-retry-button')),
+    failure: 'The explicit group repair action was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        container
+            .read(groupEncryptionProvider(group.groupId))
+            .status
+            ?.canSendSecure ==
+        true,
+    timeout: const Duration(seconds: 45),
+    failure:
+        'The surviving App did not become ready after exact Remove repair.',
+  );
+  status =
+      container.read(groupEncryptionProvider(group.groupId)).status ?? status;
+  if (!status.canSendSecure) {
+    fail('The surviving App did not become ready after exact Remove repair.');
+  }
+  final members = await groups.listMembers(group.groupId);
+  if (members.items.where((member) => member.did == did).length != 1) {
+    fail('Exact-device revoke changed DID-level business membership.');
+  }
+  final futureContent = 'step4 future secure ${_nonce(8)}';
+  final futureMessage = await container
+      .read(messagingServiceProvider)
+      .sendText(
+        thread: AppThreadRef.group(group.groupId),
+        content: futureContent,
+      );
+  final futureMessageId = futureMessage.remoteId?.trim();
+  if (futureMessageId == null || futureMessageId.isEmpty) {
+    fail('The surviving App did not send a future secure group application.');
+  }
+  await cli.requireRevokedGroupReadRejected(
+    groupDid: group.groupId,
+    futureMessageId: futureMessageId,
+    futureContent: futureContent,
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _mlsRevokeCaseId,
+    phases: const <String>[
+      'exact_device_revoked_with_remove_commit',
+      'app_ready_only_after_remove_convergence',
+      'revoked_endpoint_rejected_future_group_data',
+      'surviving_app_leaf_and_business_member_retained',
+    ],
   );
 }
 
@@ -786,16 +1076,18 @@ Future<void> _verifyRootTransferCompletion({
     }
   }
 
-  await E2eCaseAttestationWriter.markPassed(
-    _rootTransferCaseId,
-    phases: const <String>[
-      'member_not_ready_before_completion',
-      'safe_summary_single_presence',
-      'sender_accepted_terminal',
-      'receiver_completion_ready',
-      'root_p5_not_projected',
-    ],
-  );
+  if (_invocationExpects(_rootTransferCaseId)) {
+    await E2eCaseAttestationWriter.markPassed(
+      _rootTransferCaseId,
+      phases: const <String>[
+        'member_not_ready_before_completion',
+        'safe_summary_single_presence',
+        'sender_accepted_terminal',
+        'receiver_completion_ready',
+        'root_p5_not_projected',
+      ],
+    );
+  }
 }
 
 bool _invocationExpects(String caseId) {
@@ -1338,6 +1630,170 @@ class _JoinCli {
     fail('The CLI Registry did not converge to $expected devices.');
   }
 
+  Future<void> requireRevokedGroupReadRejected({
+    required String groupDid,
+    required String futureMessageId,
+    required String futureContent,
+  }) async {
+    final ProcessResult result;
+    try {
+      result = await Process.run(
+        config.cliBin,
+        <String>[
+          '--format',
+          'json',
+          'group',
+          'messages',
+          '--group',
+          groupDid,
+          '--limit',
+          '20',
+        ],
+        environment: _environment(),
+        includeParentEnvironment: false,
+        runInShell: false,
+      ).timeout(_remoteTimeout);
+    } on Object {
+      fail('The revoked CLI group read did not complete safely.');
+    }
+    final stdout = result.stdout.toString();
+    final stderr = result.stderr.toString();
+    if (result.exitCode == 0) {
+      fail('The revoked CLI retained authorized access to the target group.');
+    }
+    if (stdout.contains(futureMessageId) ||
+        stdout.contains(futureContent) ||
+        stderr.contains(futureMessageId) ||
+        stderr.contains(futureContent)) {
+      fail('The revoked CLI received the future target-group message.');
+    }
+    Object? decoded;
+    try {
+      decoded = jsonDecode(stderr);
+    } on Object {
+      fail('The revoked CLI returned no structured authorization rejection.');
+    }
+    if (decoded is! Map || decoded['ok'] != false) {
+      fail('The revoked CLI returned no failed public group-read result.');
+    }
+    final error = decoded['error'];
+    if (error is! Map) {
+      fail('The revoked CLI group read omitted its public error.');
+    }
+    final code = error['code']?.toString();
+    if (code != 'auth_required' &&
+        code != 'identity_required' &&
+        code != 'permission_denied') {
+      fail('The revoked CLI group read was not rejected by authorization.');
+    }
+  }
+
+  Future<_CliGroupSecureEvidence> repairGroupUntilReady(String groupDid) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    var repairGroup = '';
+    var repairState = '';
+    var remainingDevices = 0;
+    var statusGroup = '';
+    var statusState = '';
+    while (DateTime.now().isBefore(deadline)) {
+      final inbox = _data(
+        await _run(const <String>[
+          '--format',
+          'json',
+          'msg',
+          'inbox',
+          '--scope',
+          'direct',
+          '--limit',
+          '20',
+        ]),
+        action: null,
+      );
+      if (inbox['messages'] is! List) {
+        fail('CLI did not expose its ordinary Inbox projection.');
+      }
+      final repaired = _data(
+        await _run(<String>[
+          '--format',
+          'json',
+          'group',
+          'secure',
+          'repair',
+          '--group',
+          groupDid,
+        ]),
+        action: null,
+      )['repair'];
+      if (repaired is! Map) {
+        fail('CLI group repair returned no public repair projection.');
+      }
+      final repair = _stringMap(repaired);
+      repairGroup = _required(repair, 'group');
+      repairState = _required(repair, 'state');
+      final remaining = int.tryParse(
+        repair['remaining_devices']?.toString() ?? '',
+      );
+      if (remaining == null) {
+        fail('CLI group repair omitted its convergence count.');
+      }
+      remainingDevices = remaining;
+      final statusRaw = _data(
+        await _run(<String>[
+          '--format',
+          'json',
+          'group',
+          'secure',
+          'status',
+          '--group',
+          groupDid,
+        ]),
+        action: null,
+      )['status'];
+      if (statusRaw is! Map) {
+        fail('CLI group status returned no public status projection.');
+      }
+      final status = _stringMap(statusRaw);
+      statusGroup = _required(status, 'group');
+      statusState = _required(status, 'state');
+      final localRaw = status['local_readiness'];
+      if (localRaw is! Map) {
+        fail('CLI group status omitted local readiness.');
+      }
+      final local = _stringMap(localRaw);
+      final evidence = _CliGroupSecureEvidence(
+        repairGroup: repairGroup,
+        repairState: repairState,
+        remainingDevices: remainingDevices,
+        statusGroup: statusGroup,
+        statusState: statusState,
+        canSendSecure: status['can_send_secure'] == true,
+        hasLocalState: local['has_local_state'] == true,
+        hasActiveMembership: local['has_active_membership'] == true,
+      );
+      if (evidence.repairGroup == groupDid &&
+          evidence.repairState.toLowerCase() == 'ready' &&
+          evidence.remainingDevices == 0 &&
+          evidence.statusGroup == groupDid &&
+          evidence.statusState.toLowerCase() == 'ready' &&
+          evidence.canSendSecure &&
+          evidence.hasLocalState &&
+          evidence.hasActiveMembership) {
+        return evidence;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    return _CliGroupSecureEvidence(
+      repairGroup: repairGroup,
+      repairState: repairState,
+      remainingDevices: remainingDevices,
+      statusGroup: statusGroup,
+      statusState: statusState,
+      canSendSecure: false,
+      hasLocalState: false,
+      hasActiveMembership: false,
+    );
+  }
+
   Future<void> requireRootlessCurrentMember({
     required String expectedDid,
     required String expectedDeviceId,
@@ -1563,6 +2019,28 @@ class _AuthorizedDevice {
       );
 }
 
+class _CliGroupSecureEvidence {
+  const _CliGroupSecureEvidence({
+    required this.repairGroup,
+    required this.repairState,
+    required this.remainingDevices,
+    required this.statusGroup,
+    required this.statusState,
+    required this.canSendSecure,
+    required this.hasLocalState,
+    required this.hasActiveMembership,
+  });
+
+  final String repairGroup;
+  final String repairState;
+  final int remainingDevices;
+  final String statusGroup;
+  final String statusState;
+  final bool canSendSecure;
+  final bool hasLocalState;
+  final bool hasActiveMembership;
+}
+
 class _CountingRealUserPresencePort implements UserPresencePort {
   final LocalAuthUserPresencePort _delegate = LocalAuthUserPresencePort();
   int calls = 0;
@@ -1581,6 +2059,7 @@ class _CountingRealUserPresencePort implements UserPresencePort {
 AwikiEnvironmentConfig _joinOnlyEnvironment(
   _RemoteJoinRunConfig config, {
   bool enableRootTransfer = false,
+  bool enableStep4 = false,
 }) => AwikiEnvironmentConfig(
   baseUrl: config.baseUrl,
   userServiceUrl: config.userServiceUrl,
@@ -1590,9 +2069,9 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   anpServiceUrl: config.anpServiceUrl,
   anpServiceDid: config.anpServiceDid,
   agentImEnabled: false,
-  multiDeviceDeviceRevokeEnabled: false,
+  multiDeviceDeviceRevokeEnabled: enableStep4,
   multiDeviceDirectE2eeEnabled: enableRootTransfer,
-  multiDeviceGroupE2eeEnabled: false,
+  multiDeviceGroupE2eeEnabled: enableStep4,
 );
 
 Future<void> _openNewDeviceJoin(WidgetTester tester) async {

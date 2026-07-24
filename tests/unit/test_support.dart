@@ -10,6 +10,7 @@ import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revo
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
@@ -3387,16 +3388,28 @@ class FakeGroupApplicationService implements GroupApplicationService {
   }
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) {
-    return gateway.listGroups();
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) async {
+    return GroupCollectionPage<GroupSummary>(
+      items: await gateway.listGroups(),
+      hasMore: false,
+    );
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
-  }) {
-    return gateway.listGroupMembers(groupDid);
+    String? cursor,
+  }) async {
+    return GroupCollectionPage<GroupMemberSummary>(
+      items: await gateway.listGroupMembers(groupDid),
+      hasMore: false,
+      pageGroupDid: groupDid,
+      groupStateVersion: '1',
+    );
   }
 
   @override

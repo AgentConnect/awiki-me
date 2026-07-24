@@ -169,6 +169,25 @@ void main() {
       );
     });
 
+    test('parses focused Step4 revoke MLS case', () {
+      final options = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'step4-revoke-mls',
+        '--dry-run',
+      ]);
+
+      expect(options.e2eCase, DesktopE2eCase.step4RevokeMls);
+      expect(options.e2eCase.caseIds, <String>[
+        'STEP4-GROUP-PAGINATION-E2E-001',
+        'DEVICE-REVOKE-E2E-001',
+        'MLS-MULTI-DEVICE-E2E-002',
+      ]);
+      expect(
+        options.e2eCase.testFile,
+        'integration_test/multi_device_join_ui_test.dart',
+      );
+    });
+
     test('rejects retired remote multi-device MLS aliases', () {
       for (final value in <String>[
         'multi-device-remote-mls',
@@ -338,7 +357,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, multi-device-remote-join, step4-revoke-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),

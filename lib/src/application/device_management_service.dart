@@ -1,4 +1,5 @@
 import '../domain/entities/device_management.dart';
+import 'models/device_revoke_outcome.dart';
 import 'ports/device_management_core_port.dart';
 import 'ports/user_presence_port.dart';
 
@@ -84,14 +85,17 @@ class DeviceManagementService {
         reason: _required(presenceReason, 'presenceReason'),
       );
       if (!confirmed) {
-        throw const DeviceManagementException('user_presence_denied');
+        throw const DeviceRevokeException(
+          DeviceRevokeOutcomeCategory.cancelledBeforeSubmit,
+          code: 'user_presence_denied',
+        );
       }
       final result = await _core.revokeDevice(
         selector: normalizedSelector,
         targetDeviceId: normalizedTarget,
         userPresenceConfirmed: true,
       );
-      if (result.did.trim().isEmpty ||
+      if (result.did != normalizedSelector ||
           result.targetDeviceId != normalizedTarget ||
           result.status != DeviceRevokeStatus.revoked) {
         throw const DeviceManagementException('invalid_revoke_result');

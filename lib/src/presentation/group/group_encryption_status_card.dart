@@ -2,6 +2,8 @@
 // [OUTPUT]: Minimal preparing/retry/ready UI with one explicit retry action.
 // [POS]: Group detail projection; never displays MLS Leaf identifiers or private state.
 
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +13,7 @@ import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'group_encryption_provider.dart';
+import '../devices/devices_provider.dart';
 
 class GroupEncryptionStatusCard extends ConsumerStatefulWidget {
   const GroupEncryptionStatusCard({super.key, required this.groupDid});
@@ -52,6 +55,14 @@ class _GroupEncryptionStatusCardState
     if (!ref.watch(multiDeviceGroupE2eeEnabledProvider)) {
       return const SizedBox.shrink();
     }
+    ref.listen<int>(deviceSecurityFactsRevisionProvider, (previous, next) {
+      if (previous == null || previous == next) return;
+      unawaited(
+        ref
+            .read(groupEncryptionProvider(widget.groupDid).notifier)
+            .load(force: true),
+      );
+    });
     final view = ref.watch(groupEncryptionProvider(widget.groupDid));
     final status = view.status;
     final readiness = status?.readiness ?? GroupEncryptionReadiness.preparing;

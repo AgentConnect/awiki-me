@@ -730,6 +730,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceRevokeAction => '撤销';
 
   @override
+  String get deviceRevokeSubmitting => '正在撤销设备…';
+
+  @override
+  String get deviceRevokeConfirmingAction => '再次确认';
+
+  @override
+  String get deviceRevokeSucceeded => '设备已撤销。';
+
+  @override
+  String get deviceRevokeSucceededGroupsSyncing => '设备已撤销，受影响的群正在同步安全状态。';
+
+  @override
+  String get deviceRevokeOutcomeUnknown => '撤销结果暂未确认，请刷新设备列表。';
+
+  @override
+  String get deviceRevokeRejected => '未能撤销设备，请稍后重试。';
+
+  @override
   String get deviceRevokeConfirmTitle => '撤销此设备？';
 
   @override
@@ -1203,16 +1221,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupRecoveryRetry => '重试群身份恢复';
 
   @override
-  String get groupEncryptionPreparingTitle => '正在加入群加密';
+  String get groupEncryptionPreparingTitle => '正在同步群加密';
 
   @override
-  String get groupEncryptionPreparingDetail => '此设备正在同步群加密状态，完成前不会声明已就绪。';
+  String get groupEncryptionPreparingDetail => '此群正在同步安全状态，完成前暂停发送。';
 
   @override
   String get groupEncryptionNeedsRetryTitle => '群加密需要重试';
 
   @override
-  String get groupEncryptionNeedsRetryDetail => '此设备尚未完成群加密同步，请重试修复。';
+  String get groupEncryptionNeedsRetryDetail => '请在持有当前群安全状态的管理设备上重试修复。';
 
   @override
   String get groupEncryptionReadyTitle => '群加密已就绪';

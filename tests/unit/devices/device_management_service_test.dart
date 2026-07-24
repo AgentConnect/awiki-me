@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/application/device_management_service.dart';
+import 'package:awiki_me/src/application/models/device_revoke_outcome.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
@@ -135,11 +136,13 @@ void main() {
         presenceReason: 'Confirm revocation',
       ),
       throwsA(
-        isA<DeviceManagementException>().having(
-          (error) => error.code,
-          'code',
-          'user_presence_denied',
-        ),
+        isA<DeviceRevokeException>()
+            .having(
+              (error) => error.category,
+              'category',
+              DeviceRevokeOutcomeCategory.cancelledBeforeSubmit,
+            )
+            .having((error) => error.code, 'code', 'user_presence_denied'),
       ),
     );
     expect(presence.calls, 1);

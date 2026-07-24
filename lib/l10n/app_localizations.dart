@@ -1494,6 +1494,42 @@ abstract class AppLocalizations {
   /// **'撤销'**
   String get deviceRevokeAction;
 
+  /// No description provided for @deviceRevokeSubmitting.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在撤销设备…'**
+  String get deviceRevokeSubmitting;
+
+  /// No description provided for @deviceRevokeConfirmingAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'再次确认'**
+  String get deviceRevokeConfirmingAction;
+
+  /// No description provided for @deviceRevokeSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已撤销。'**
+  String get deviceRevokeSucceeded;
+
+  /// No description provided for @deviceRevokeSucceededGroupsSyncing.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备已撤销，受影响的群正在同步安全状态。'**
+  String get deviceRevokeSucceededGroupsSyncing;
+
+  /// No description provided for @deviceRevokeOutcomeUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销结果暂未确认，请刷新设备列表。'**
+  String get deviceRevokeOutcomeUnknown;
+
+  /// No description provided for @deviceRevokeRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'未能撤销设备，请稍后重试。'**
+  String get deviceRevokeRejected;
+
   /// No description provided for @deviceRevokeConfirmTitle.
   ///
   /// In zh, this message translates to:
@@ -2367,13 +2403,13 @@ abstract class AppLocalizations {
   /// No description provided for @groupEncryptionPreparingTitle.
   ///
   /// In zh, this message translates to:
-  /// **'正在加入群加密'**
+  /// **'正在同步群加密'**
   String get groupEncryptionPreparingTitle;
 
   /// No description provided for @groupEncryptionPreparingDetail.
   ///
   /// In zh, this message translates to:
-  /// **'此设备正在同步群加密状态，完成前不会声明已就绪。'**
+  /// **'此群正在同步安全状态，完成前暂停发送。'**
   String get groupEncryptionPreparingDetail;
 
   /// No description provided for @groupEncryptionNeedsRetryTitle.
@@ -2385,7 +2421,7 @@ abstract class AppLocalizations {
   /// No description provided for @groupEncryptionNeedsRetryDetail.
   ///
   /// In zh, this message translates to:
-  /// **'此设备尚未完成群加密同步，请重试修复。'**
+  /// **'请在持有当前群安全状态的管理设备上重试修复。'**
   String get groupEncryptionNeedsRetryDetail;
 
   /// No description provided for @groupEncryptionReadyTitle.

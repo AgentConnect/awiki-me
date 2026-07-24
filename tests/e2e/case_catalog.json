@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-24.root-transfer-full-v1",
+  "sourceRevision": "2026-07-24.step4-revoke-mls-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2074,6 +2074,29 @@
       "catalogStatus": "planned"
     },
     {
+      "caseId": "STEP4-GROUP-PAGINATION-E2E-001",
+      "feature": "AWiki Me explicit group inventory pagination",
+      "layer": "remote_product_ui_security",
+      "preconditions": "A real isolated awiki.info App identity owns at least two groups and uses the production IM Core group adapter.",
+      "action": "Read the first group page with limit one, retain its opaque cursor, and explicitly request the next page.",
+      "exactOracles": [
+        "The first page has one item, has_more and a non-empty opaque cursor; the explicit next request returns a distinct stable group projection."
+      ],
+      "negativeChecks": [
+        "Offset pagination, cursor parsing, automatic unbounded collection, duplicate items, or fake service data fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
       "caseId": "DEVICE-REVOKE-E2E-001",
       "feature": "AWiki Me permanent device revoke",
       "layer": "remote_product_ui_security",
@@ -2086,15 +2109,15 @@
         "Self revoke, revoking the final ready admin, cancellation, missing or repeated user presence, button-only success, an active target after refresh, or internal proof/version/key material in UI or evidence fails."
       ],
       "environment": "awiki_info_remote",
-      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
       "requiredFor": [
         "optional_nightly",
         "release"
       ],
       "owner": "awiki-me-identity",
-      "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned",
+      "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
           "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
@@ -2204,9 +2227,9 @@
         "release"
       ],
       "owner": "awiki-me-groups",
-      "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
       "evidenceType": "case_attestation",
-      "catalogStatus": "planned",
+      "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
           "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit",

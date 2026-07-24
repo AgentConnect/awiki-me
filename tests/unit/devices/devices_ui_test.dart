@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/models/device_revoke_outcome.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
@@ -245,6 +248,274 @@ void main() {
     expect(find.byKey(const Key('device-revoke-member-target')), findsNothing);
     expect(core.revokeCalls, 0);
   });
+
+  testWidgets(
+    'a full Registry read completed before revoke RPC cannot classify outcome',
+    (tester) async {
+      final revokeRpc = Completer<DeviceRevokeResult>();
+      final core = FakeDeviceManagementCore()
+        ..registry = _revokeRegistry()
+        ..revokeLoader =
+            ({
+              required selector,
+              required targetDeviceId,
+              required userPresenceConfirmed,
+            }) => revokeRpc.future;
+      await tester.pumpWidget(
+        _app(const DevicesPage(), core, deviceRevokeEnabled: true),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      final controller = container.read(devicesProvider.notifier);
+      final revokeFuture = controller.revokeDevice(
+        target: _revokeTarget(container),
+        presenceReason: 'Confirm focused revoke',
+      );
+      await tester.pump();
+
+      await controller.loadManagement();
+      var state = container.read(devicesProvider);
+      expect(state.revokeSubmittingDeviceId, 'member-target');
+      expect(state.revokeConfirmingDeviceId, isNull);
+      expect(state.revokeRetryAllowedDeviceId, isNull);
+
+      revokeRpc.completeError(StateError('revoke outcome unknown'));
+      await revokeFuture;
+      state = container.read(devicesProvider);
+      expect(state.revokeSubmittingDeviceId, isNull);
+      expect(state.revokeConfirmingDeviceId, 'member-target');
+      expect(state.revokeRetryAllowedDeviceId, 'member-target');
+    },
+  );
+
+  testWidgets(
+    'stale revoke read reuses cancellation when newer active read applies',
+    (tester) async {
+      final revokeRpc = Completer<DeviceRevokeResult>();
+      final revokeRead = Completer<DeviceRegistrySnapshot>();
+      final newerRead = Completer<DeviceRegistrySnapshot>();
+      final revokeReadStarted = Completer<void>();
+      var reads = 0;
+      final core = FakeDeviceManagementCore()
+        ..registry = _revokeRegistry()
+        ..revokeLoader =
+            ({
+              required selector,
+              required targetDeviceId,
+              required userPresenceConfirmed,
+            }) => revokeRpc.future;
+      await tester.pumpWidget(
+        _app(const DevicesPage(), core, deviceRevokeEnabled: true),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      final controller = container.read(devicesProvider.notifier);
+      final revokeFuture = controller.revokeDevice(
+        target: _revokeTarget(container),
+        presenceReason: 'Confirm focused revoke',
+      );
+      await tester.pump();
+      core.registryLoader = (_) {
+        reads += 1;
+        if (reads == 1) {
+          revokeReadStarted.complete();
+          return revokeRead.future;
+        }
+        return newerRead.future;
+      };
+
+      revokeRpc.completeError(
+        const DeviceRevokeException(
+          DeviceRevokeOutcomeCategory.cancelledBeforeSubmit,
+        ),
+      );
+      await revokeReadStarted.future;
+      final newerRefresh = controller.refreshRegistryOnly();
+      await tester.pump();
+      revokeRead.complete(_revokeRegistry());
+      await revokeFuture;
+
+      var state = container.read(devicesProvider);
+      expect(state.revokeSubmittingDeviceId, isNull);
+      expect(state.revokeConfirmingDeviceId, 'member-target');
+      expect(state.revokeRetryAllowedDeviceId, isNull);
+
+      newerRead.complete(_revokeRegistry());
+      await newerRefresh;
+      state = container.read(devicesProvider);
+      expect(state.revokeConfirmingDeviceId, isNull);
+      expect(state.revokeRetryAllowedDeviceId, isNull);
+      expect(state.revokeNotice, isNull);
+    },
+  );
+
+  testWidgets(
+    'post-RPC Registry failure cannot accept a pre-RPC revoked snapshot',
+    (tester) async {
+      final revokeRpc = Completer<DeviceRevokeResult>();
+      final core = FakeDeviceManagementCore()
+        ..registry = _revokeRegistry()
+        ..revokeLoader =
+            ({
+              required selector,
+              required targetDeviceId,
+              required userPresenceConfirmed,
+            }) => revokeRpc.future;
+      await tester.pumpWidget(
+        _app(const DevicesPage(), core, deviceRevokeEnabled: true),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      final controller = container.read(devicesProvider.notifier);
+      final revokeFuture = controller.revokeDevice(
+        target: _revokeTarget(container),
+        presenceReason: 'Confirm focused revoke',
+      );
+      await tester.pump();
+
+      core.registry = _revokedRegistry();
+      await controller.loadManagement();
+      expect(
+        container.read(devicesProvider).revokeSubmittingDeviceId,
+        'member-target',
+      );
+      core.registryLoader = (_) => Future<DeviceRegistrySnapshot>.error(
+        StateError('post-RPC Registry unavailable'),
+      );
+
+      revokeRpc.completeError(StateError('revoke outcome unknown'));
+      expect(await revokeFuture, isFalse);
+      final state = container.read(devicesProvider);
+      expect(state.registry, isNull);
+      expect(state.revokeSubmittingDeviceId, isNull);
+      expect(state.revokeConfirmingDeviceId, 'member-target');
+      expect(state.revokeRetryAllowedDeviceId, isNull);
+      expect(state.revokeNotice, DeviceRevokeNotice.outcomeUnknown);
+    },
+  );
+
+  testWidgets(
+    'stale full Registry failure cannot clear a newer confirming result',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = _revokeRegistry()
+        ..revokeError = StateError('revoke outcome unknown');
+      await tester.pumpWidget(
+        _app(const DevicesPage(), core, deviceRevokeEnabled: true),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      await _enterUnknownRevoke(container);
+
+      final stale = Completer<DeviceRegistrySnapshot>();
+      final newer = Completer<DeviceRegistrySnapshot>();
+      var reads = 0;
+      core.registryLoader = (_) {
+        reads += 1;
+        return reads == 1 ? stale.future : newer.future;
+      };
+      final staleLoad = container
+          .read(devicesProvider.notifier)
+          .loadManagement();
+      await tester.pump();
+      final newerRefresh = container
+          .read(devicesProvider.notifier)
+          .refreshRegistryOnly();
+      await tester.pump();
+      newer.complete(_revokeRegistry());
+      await newerRefresh;
+      stale.completeError(StateError('stale full refresh failed'));
+      await staleLoad;
+
+      final state = container.read(devicesProvider);
+      expect(state.registry, isNotNull);
+      expect(
+        state.registry?.devices
+            .singleWhere((device) => device.protocolDeviceId == 'member-target')
+            .status,
+        DeviceStatus.active,
+      );
+      expect(state.revokeConfirmingDeviceId, 'member-target');
+      expect(state.revokeRetryAllowedDeviceId, 'member-target');
+    },
+  );
+
+  testWidgets(
+    'stale read-only Registry failure cannot clear a newer confirming result',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = _revokeRegistry()
+        ..revokeError = StateError('revoke outcome unknown');
+      await tester.pumpWidget(
+        _app(const DevicesPage(), core, deviceRevokeEnabled: true),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      await _enterUnknownRevoke(container);
+
+      final stale = Completer<DeviceRegistrySnapshot>();
+      final newer = Completer<DeviceRegistrySnapshot>();
+      var reads = 0;
+      core.registryLoader = (_) {
+        reads += 1;
+        return reads == 1 ? stale.future : newer.future;
+      };
+      final staleRefresh = container
+          .read(devicesProvider.notifier)
+          .refreshRegistryOnly();
+      await tester.pump();
+      final newerRefresh = container
+          .read(devicesProvider.notifier)
+          .refreshRegistryOnly();
+      await tester.pump();
+      newer.complete(_revokeRegistry());
+      await newerRefresh;
+      stale.completeError(StateError('stale read-only refresh failed'));
+      await staleRefresh;
+
+      final state = container.read(devicesProvider);
+      expect(state.registry, isNotNull);
+      expect(state.revokeConfirmingDeviceId, 'member-target');
+      expect(state.revokeRetryAllowedDeviceId, 'member-target');
+    },
+  );
+
+  testWidgets(
+    'current read-only Registry failure hides the old active projection',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = _revokeRegistry()
+        ..revokeError = StateError('revoke outcome unknown');
+      await tester.pumpWidget(
+        _app(const DevicesPage(), core, deviceRevokeEnabled: true),
+      );
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('devices-page'))),
+      );
+      await _enterUnknownRevoke(container);
+
+      core.registryLoader = (_) => Future<DeviceRegistrySnapshot>.error(
+        StateError('current refresh failed'),
+      );
+      await container.read(devicesProvider.notifier).refreshRegistryOnly();
+
+      final state = container.read(devicesProvider);
+      expect(state.registry, isNull);
+      expect(state.revokeConfirmingDeviceId, 'member-target');
+      expect(state.revokeRetryAllowedDeviceId, isNull);
+    },
+  );
 
   testWidgets('authorized member activates the exact DID once', (tester) async {
     final core = FakeDeviceManagementCore()
@@ -1089,6 +1360,7 @@ DeviceRegistrySnapshot _rootTransferRegistry({bool recipientReady = false}) {
 DeviceSummary _device({
   required String id,
   required DeviceRole role,
+  DeviceStatus status = DeviceStatus.active,
   bool managementReady = false,
   bool isCurrent = false,
 }) {
@@ -1096,9 +1368,57 @@ DeviceSummary _device({
     protocolDeviceId: id,
     signingKeyId: '$testDid#$id-sign',
     e2eeKeyId: '$testDid#$id-e2ee',
-    status: DeviceStatus.active,
+    status: status,
     role: role,
     managementReady: managementReady,
     isCurrent: isCurrent,
   );
 }
+
+DeviceRegistrySnapshot _revokeRegistry() => DeviceRegistrySnapshot(
+  did: testDid,
+  devices: <DeviceSummary>[
+    _device(
+      id: 'admin-current',
+      role: DeviceRole.admin,
+      managementReady: true,
+      isCurrent: true,
+    ),
+    _device(id: 'member-target', role: DeviceRole.member),
+  ],
+);
+
+DeviceRegistrySnapshot _revokedRegistry() => DeviceRegistrySnapshot(
+  did: testDid,
+  devices: <DeviceSummary>[
+    _device(
+      id: 'admin-current',
+      role: DeviceRole.admin,
+      managementReady: true,
+      isCurrent: true,
+    ),
+    _device(
+      id: 'member-target',
+      role: DeviceRole.member,
+      status: DeviceStatus.revoked,
+    ),
+  ],
+);
+
+Future<void> _enterUnknownRevoke(ProviderContainer container) async {
+  await container
+      .read(devicesProvider.notifier)
+      .revokeDevice(
+        target: _revokeTarget(container),
+        presenceReason: 'Confirm focused revoke',
+      );
+  final state = container.read(devicesProvider);
+  expect(state.revokeConfirmingDeviceId, 'member-target');
+  expect(state.revokeRetryAllowedDeviceId, 'member-target');
+}
+
+DeviceSummary _revokeTarget(ProviderContainer container) => container
+    .read(devicesProvider)
+    .registry!
+    .devices
+    .singleWhere((device) => device.protocolDeviceId == 'member-target');

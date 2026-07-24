@@ -77,6 +77,11 @@ const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
 ];
+const List<String> _step4RevokeMlsCaseIds = <String>[
+  'STEP4-GROUP-PAGINATION-E2E-001',
+  'DEVICE-REVOKE-E2E-001',
+  'MLS-MULTI-DEVICE-E2E-002',
+];
 const List<String> _desktopCliPeerGroupCaseIds = <String>[
   'AUTH-E2E-001',
   'GROUP-CANON-E2E-001',
@@ -413,7 +418,8 @@ class DesktopE2eRunner {
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
-      if (options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin) {
+      if (options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin ||
+          options.e2eCase == DesktopE2eCase.step4RevokeMls) {
         multiDeviceCliAdminWorkspaceDir.createSync(recursive: true);
         multiDeviceCliAdminHomeDir.createSync(recursive: true);
         multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
@@ -437,6 +443,8 @@ class DesktopE2eRunner {
         case DesktopE2eCase.multiDevice:
           await _runLocalMultiDeviceCapabilityGate();
         case DesktopE2eCase.multiDeviceRemoteJoin:
+          await _runRemoteMultiDeviceJoin();
+        case DesktopE2eCase.step4RevokeMls:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.full:
           await _runFull();
@@ -2654,6 +2662,7 @@ Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case multi-device
   dart run tests/e2e/runner.dart --case multi-device-remote-join
+  dart run tests/e2e/runner.dart --case step4-revoke-mls
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
   dart run tests/e2e/runner.dart --case restart
@@ -2666,7 +2675,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                operator-confirmed real App/CLI message-driven
@@ -3680,6 +3689,7 @@ enum DesktopE2eCase {
   smoke(_desktopSmokeCaseIds),
   multiDevice(_multiDeviceCapabilityGateCaseIds),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
+  step4RevokeMls(_step4RevokeMlsCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
   direct(_desktopCliPeerDirectCaseIds),
@@ -3703,6 +3713,8 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDevice =>
         'integration_test/multi_device_capability_gate_test.dart',
       DesktopE2eCase.multiDeviceRemoteJoin =>
+        'integration_test/multi_device_join_ui_test.dart',
+      DesktopE2eCase.step4RevokeMls =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.full =>
         'integration_test/desktop_cli_peer_smoke_test.dart',
@@ -3739,6 +3751,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
+      DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       _ => name,
     };
   }
@@ -3755,6 +3768,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
+      DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
@@ -3771,6 +3785,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 22),
+      DesktopE2eCase.step4RevokeMls => const Duration(minutes: 25),
       _ => const Duration(minutes: 5),
     };
   }
@@ -3783,6 +3798,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
+      DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinScenario,
       _ => _desktopCliPeerScenario,
     };
   }
@@ -3794,6 +3810,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteJoin =>
         _multiDeviceRemoteJoinRunConfigPath,
+      DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
     };
   }
@@ -3809,6 +3826,7 @@ enum DesktopE2eCase {
       'multi_device_remote_join' ||
       'remote-multi-device-join' ||
       'remote_multi_device_join' => DesktopE2eCase.multiDeviceRemoteJoin,
+      'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
       'full' => DesktopE2eCase.full,
       'performance' ||
       'perf' ||
@@ -3866,7 +3884,7 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, multi-device, multi-device-remote-join, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'Use smoke, multi-device, multi-device-remote-join, step4-revoke-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',
       ),

@@ -2,6 +2,7 @@ import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
+import '../models/group_collection_page.dart';
 
 abstract interface class GroupCorePort {
   Future<GroupSummary> createGroup({
@@ -23,11 +24,15 @@ abstract interface class GroupCorePort {
 
   Future<GroupSummary> getGroup(String groupDid);
 
-  Future<List<GroupSummary>> listGroups({int limit = 100});
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  });
 
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   });
 
   Future<List<ChatMessage>> listMessages(

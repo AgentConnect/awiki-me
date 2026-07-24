@@ -78,6 +78,7 @@ GroupEncryptionStatus mapCoreGroupEncryptionStatus(
         readiness == GroupEncryptionReadiness.ready && value.canSendSecure,
     retryable:
         readiness == GroupEncryptionReadiness.needsRetry &&
+        value.state != core.GroupSecureState.missingLocalState &&
         (value.problem?.retryable ?? true),
   );
 }

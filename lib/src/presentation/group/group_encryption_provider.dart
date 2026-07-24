@@ -42,12 +42,12 @@ class GroupEncryptionController
 
   bool get _enabled => ref.read(multiDeviceGroupE2eeEnabledProvider);
 
-  Future<void> load() async {
-    if (!_enabled || state.isLoading || state.isRetrying) {
+  Future<void> load({bool force = false}) async {
+    if (!_enabled || (!force && (state.isLoading || state.isRetrying))) {
       return;
     }
     final generation = ++_generation;
-    state = state.copyWith(isLoading: true);
+    state = GroupEncryptionViewState(status: state.status, isLoading: true);
     try {
       final status = await ref
           .read(groupEncryptionCorePortProvider)

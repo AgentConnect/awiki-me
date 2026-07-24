@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(65));
+      expect(catalog.cases, hasLength(66));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -20,6 +20,7 @@ void main() {
           'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
           'DEVICE-REVOKE-E2E-001',
+          'STEP4-GROUP-PAGINATION-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
@@ -31,6 +32,7 @@ void main() {
           'smoke',
           'multi-device',
           'multi-device-remote-join',
+          'step4-revoke-mls',
           'full',
           'direct',
         ]),
@@ -43,20 +45,25 @@ void main() {
       );
       expect(
         catalog.caseById['DEVICE-REVOKE-E2E-001']!.catalogStatus,
-        'planned',
+        'active',
       );
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
       ]);
       expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
+      expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[
+        'STEP4-GROUP-PAGINATION-E2E-001',
+        'DEVICE-REVOKE-E2E-001',
+        'MLS-MULTI-DEVICE-E2E-002',
+      ]);
       expect(
         catalog.caseById['MLS-MULTI-DEVICE-E2E-001']!.catalogStatus,
         'planned',
       );
       expect(
         catalog.caseById['MLS-MULTI-DEVICE-E2E-002']!.catalogStatus,
-        'planned',
+        'active',
       );
       expect(catalog.suiteCaseIds, isNot(contains('multi-device-remote-mls')));
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
@@ -70,9 +77,7 @@ void main() {
 
     for (final caseId in <String>[
       'ROOT-TRANSFER-E2E-002',
-      'DEVICE-REVOKE-E2E-001',
       'MLS-MULTI-DEVICE-E2E-001',
-      'MLS-MULTI-DEVICE-E2E-002',
     ]) {
       expect(source, contains('`$caseId`'));
     }
