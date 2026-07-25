@@ -7,6 +7,7 @@ import android.os.Build
 import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import ai.awiki.awikime.push.RemotePushEventBridge
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -43,6 +44,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        RemotePushEventBridge.attach(this, flutterEngine.dartExecutor.binaryMessenger)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DOCUMENT_CHANNEL)
             .setMethodCallHandler { call: MethodCall, result: MethodChannel.Result ->
@@ -86,6 +89,11 @@ class MainActivity : FlutterFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        RemotePushEventBridge.detach()
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     private fun handleSaveZipFile(call: MethodCall, result: MethodChannel.Result) {

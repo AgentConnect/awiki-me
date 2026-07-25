@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,9 @@ import '../data/storage/scope_secret_repository_factory.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
 import '../data/im_core/storage_scope_im_core_validator.dart';
+import '../data/push/remote_push_client_factory.dart';
+import '../domain/entities/remote_push_event.dart';
+import '../domain/services/remote_push_client.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/responsive_layout.dart';
 import 'app_locale.dart';
@@ -20,17 +24,26 @@ import 'awiki_me_app.dart';
 import 'bootstrap.dart';
 
 class TenantAwareAwikiMeApp extends StatefulWidget {
-  const TenantAwareAwikiMeApp({super.key, this.appStateRoot});
+  const TenantAwareAwikiMeApp({
+    super.key,
+    this.appStateRoot,
+    this.remotePushClient,
+  });
 
   final String? appStateRoot;
+  final RemotePushClient? remotePushClient;
 
   @override
   State<TenantAwareAwikiMeApp> createState() => _TenantAwareAwikiMeAppState();
 }
 
 class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
+    with WidgetsBindingObserver
     implements AppTenantActions {
   late final AppTenantStore _store;
+  late final RemotePushClient _remotePushClient;
+  StreamSubscription<RemotePushEvent>? _remotePushEvents;
+  Future<void>? _remotePushInitialization;
   Future<_TenantRuntime>? _runtimeFuture;
   _TenantRuntime? _runtime;
   int _runtimeGeneration = 0;
@@ -39,6 +52,10 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _remotePushClient = widget.remotePushClient ?? buildRemotePushClient();
+    _remotePushEvents = _remotePushClient.events.listen(_onRemotePushEvent);
+    _startRemotePushInitialization();
     final scopeSecrets = buildScopeSecretRepository(
       appStateRoot: widget.appStateRoot,
     );
@@ -54,8 +71,60 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_remotePushEvents?.cancel());
+    unawaited(_remotePushClient.dispose());
     unawaited(_runtime?.bootstrap.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _remotePushClient.registration == null) {
+      _startRemotePushInitialization();
+    }
+  }
+
+  void _startRemotePushInitialization() {
+    if (_remotePushClient.registration != null ||
+        _remotePushInitialization != null) {
+      return;
+    }
+    final initialization = _initializeRemotePush();
+    _remotePushInitialization = initialization;
+    unawaited(
+      initialization.whenComplete(() {
+        if (identical(_remotePushInitialization, initialization)) {
+          _remotePushInitialization = null;
+        }
+      }),
+    );
+  }
+
+  Future<void> _initializeRemotePush() async {
+    if (!mounted) return;
+    try {
+      final registration = await _remotePushClient.initialize();
+      if (registration != null && kDebugMode) {
+        final deviceId = registration.providerDeviceId;
+        final suffix = deviceId.length <= 6
+            ? deviceId
+            : deviceId.substring(deviceId.length - 6);
+        debugPrint(
+          '[awiki_me][remote-push] provider=${registration.provider} '
+          'device_id_suffix=$suffix',
+        );
+      }
+    } catch (error) {
+      debugPrint('[awiki_me][remote-push][error] $error');
+    }
+  }
+
+  void _onRemotePushEvent(RemotePushEvent event) {
+    if (kDebugMode) {
+      debugPrint('[awiki_me][remote-push] event=${event.kind.wireName}');
+    }
   }
 
   Future<_TenantRuntime> _loadRuntime(int generation) async {

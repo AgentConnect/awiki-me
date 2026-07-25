@@ -24,6 +24,14 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>AWikiEmasAppKey</key>
+	<string>$(AWIKI_EMAS_APP_KEY)</string>
+	<key>AWikiEmasAppSecret</key>
+	<string>$(AWIKI_EMAS_APP_SECRET)</string>
+	<key>AWikiEmasEnabled</key>
+	<string>$(AWIKI_EMAS_ENABLED)</string>
+	<key>AWikiEmasLogDeviceId</key>
+	<string>$(AWIKI_EMAS_LOG_DEVICE_ID)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
@@ -57,6 +65,10 @@
 	<string>Use Face ID to confirm security-sensitive device management actions.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

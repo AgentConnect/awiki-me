@@ -1434,6 +1434,236 @@ void _showInstallCommand(
   );
 }
 
+Future<void> _showSkillOnboardingDialog(BuildContext context, WidgetRef ref) {
+  return AppNavigator.showDialog<void>(
+    context,
+    (context) => _SkillOnboardingDialog(
+      onClose: () => Navigator.of(context).pop(),
+      onRegenerate: () => ref.read(skillOnboardingProvider.notifier).generate(),
+    ),
+  );
+}
+
+class _SkillOnboardingDialog extends ConsumerWidget {
+  const _SkillOnboardingDialog({
+    required this.onClose,
+    required this.onRegenerate,
+  });
+
+  final VoidCallback onClose;
+  final VoidCallback onRegenerate;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final responsive = context.awikiResponsive;
+    final state = ref.watch(skillOnboardingProvider);
+    final instruction = state.instruction;
+    return AppDialogScaffold(
+      maxWidth: 560,
+      maxHeightFraction: 0.84,
+      horizontalPadding: 16,
+      verticalPadding: 20,
+      borderRadius: BorderRadius.circular(responsive.radius(16)),
+      padding: EdgeInsets.all(responsive.spacing(20)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AppDialogHeader(
+            title: context.l10n.agentSkillInstallTitle,
+            onClose: onClose,
+            leading: Container(
+              width: responsive.displayScaled(34),
+              height: responsive.displayScaled(34),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(responsive.radius(8)),
+              ),
+              child: Icon(
+                CupertinoIcons.command,
+                color: const Color(0xFF0B65F8),
+                size: responsive.iconMd,
+              ),
+            ),
+          ),
+          SizedBox(height: responsive.spacing(16)),
+          if (state.isLoading)
+            const Center(child: CupertinoActivityIndicator())
+          else if (instruction == null)
+            Text(
+              context.l10n.agentSkillExpired,
+              key: const Key('agent-skill-expired'),
+              style: TextStyle(
+                color: AwikiMeColors.danger,
+                fontSize: responsive.bodySm,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _SkillGrantLine(
+                      label: context.l10n.agentSkillControllerHandle,
+                      value: instruction.controllerHandle,
+                    ),
+                    SizedBox(height: responsive.spacing(8)),
+                    _SkillGrantLine(
+                      label: context.l10n.agentSkillAgentHandle,
+                      value: instruction.agentHandle,
+                    ),
+                    SizedBox(height: responsive.spacing(8)),
+                    _TokenExpiryRow(
+                      isExpired: instruction.isExpired(DateTime.now()),
+                      expiresAt: instruction.expiresAt.toLocal(),
+                    ),
+                    SizedBox(height: responsive.spacing(12)),
+                    Text(
+                      context.l10n.agentSkillSecretNotice,
+                      style: TextStyle(
+                        color: const Color(0xFF66728A),
+                        fontSize: responsive.metaSm,
+                        height: 1.35,
+                      ),
+                    ),
+                    SizedBox(height: responsive.spacing(10)),
+                    _SkillPromptText(instruction: instruction),
+                  ],
+                ),
+              ),
+            ),
+          SizedBox(height: responsive.spacing(14)),
+          CupertinoButton(
+            key: const Key('agent-skill-regenerate-button'),
+            onPressed: state.isLoading ? null : onRegenerate,
+            padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
+            child: Text(context.l10n.agentSkillRegenerate),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkillGrantLine extends StatelessWidget {
+  const _SkillGrantLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: responsive.displayScaled(126),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: const Color(0xFF25324A),
+              fontSize: responsive.bodySm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SkillPromptText extends StatelessWidget {
+  const _SkillPromptText({required this.instruction});
+
+  final SkillOnboardingInstruction instruction;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Container(
+      padding: EdgeInsets.all(responsive.spacing(12)),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(responsive.radius(8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: responsive.displayScaled(130),
+              maxHeight: responsive.displayScaled(210),
+            ),
+            child: SingleChildScrollView(
+              child: SelectionArea(
+                child: Text(
+                  instruction.prompt,
+                  key: const Key('agent-skill-instruction-text'),
+                  style: TextStyle(
+                    color: const Color(0xFFE5E7EB),
+                    fontSize: responsive.metaSm,
+                    fontFamily: 'monospace',
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: responsive.spacing(10)),
+          CupertinoButton.filled(
+            key: const Key('agent-skill-copy-button'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: instruction.prompt));
+              if (context.mounted) {
+                AwikiMeToast.show(context, context.l10n.commonCopied);
+              }
+            },
+            padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                const Icon(CupertinoIcons.doc_on_doc),
+                SizedBox(width: responsive.spacing(8)),
+                Flexible(child: Text(context.l10n.agentSkillCopyInstruction)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _skillOnboardingErrorText(
+  BuildContext context,
+  SkillOnboardingError error,
+) {
+  return switch (error) {
+    SkillOnboardingError.loginRequired => context.l10n.agentErrorLoginRequired,
+    SkillOnboardingError.handleRequired =>
+      context.l10n.agentErrorHandleUnavailable,
+    SkillOnboardingError.unsupportedTenant =>
+      context.l10n.agentSkillUnsupportedTenant,
+    SkillOnboardingError.invalidResponse =>
+      context.l10n.agentSkillInvalidResponse,
+    SkillOnboardingError.requestFailed => context.l10n.agentSkillRequestFailed,
+  };
+}
+
 class _InstallCommandDialog extends StatefulWidget {
   const _InstallCommandDialog({required this.command, required this.onClose});
 

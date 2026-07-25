@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-24.step4-revoke-mls-v1",
+  "sourceRevision": "2026-07-25.step4-revoke-mls-emas-push-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -124,10 +124,12 @@
       "timeoutMinutes": 45,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -179,10 +181,12 @@
       "timeoutMinutes": 10,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -208,10 +212,12 @@
       "timeoutMinutes": 14,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "groups",
@@ -239,10 +245,12 @@
       "timeoutMinutes": 12,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "attachments",
@@ -266,10 +274,12 @@
       "timeoutMinutes": 10,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "relationships",
@@ -296,10 +306,12 @@
       "timeoutMinutes": 10,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -320,10 +332,12 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -346,10 +360,12 @@
       "timeoutMinutes": 18,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -373,10 +389,12 @@
       "timeoutMinutes": 35,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -407,10 +425,12 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "personal_agent_bindings",
@@ -432,10 +452,12 @@
       "timeoutMinutes": 15,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "runtime_agents",
@@ -458,10 +480,12 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "runtime_agents",
