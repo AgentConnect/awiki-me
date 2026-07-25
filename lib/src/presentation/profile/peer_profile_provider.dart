@@ -183,7 +183,38 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     try {
       await ref.read(friendsProvider.notifier).unfollow(did);
       if (_isActionOperationCurrent(operation)) {
-        state = state.copyWith(relationship: 'none');
+        state = state.copyWith(
+          relationship: state.relationship == 'friend' ? 'follower' : 'none',
+        );
+      }
+    } catch (error) {
+      if (!isSessionEpochChangedError(error)) {
+        rethrow;
+      }
+    } finally {
+      if (_isActionOperationCurrent(operation)) {
+        state = state.copyWith(isActionBusy: false);
+      }
+    }
+  }
+
+  Future<void> follow() async {
+    final operation = _PeerProfileOperation(
+      epoch: _ownerEpoch,
+      generation: ++_actionGeneration,
+    );
+    if (!_isActionOperationCurrent(operation)) {
+      return;
+    }
+    state = state.copyWith(isActionBusy: true);
+    try {
+      await ref.read(friendsProvider.notifier).follow(did);
+      if (_isActionOperationCurrent(operation)) {
+        state = state.copyWith(
+          relationship: state.relationship == 'follower'
+              ? 'friend'
+              : 'following',
+        );
       }
     } catch (error) {
       if (!isSessionEpochChangedError(error)) {

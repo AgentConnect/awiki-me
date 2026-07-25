@@ -4,28 +4,52 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
-    show ColorScheme, Theme, ThemeData, ThemeExtension;
+    show ColorScheme, TextTheme, Theme, ThemeData, ThemeExtension;
 
 class AwikiMePalette {
-  static const Color amber = Color(0xFFFFAA00);
-  static const Color amberDeep = Color(0xFF825500);
-  static const Color actionBlue = Color(0xFF0B65F8);
-  static const Color actionBlueDeep = Color(0xFF0752F0);
-  static const Color actionBlueSoft = Color(0xFFEAF2FF);
-  static const Color actionBlueBorder = Color(0xFFDDE5F0);
-  static const Color actionInk = Color(0xFF17213A);
-  static const Color actionMuted = Color(0xFF66728A);
-  static const Color ivory = Color(0xFFFAF9FE);
+  // The neutral light palette is derived from the approved HTML prototypes.
+  static const Color canvas = Color(0xFFFAF9F7);
+  static const Color content = Color(0xFFFFFFFF);
+  static const Color inkNeutral = Color(0xFF2D2B26);
+  static const Color mutedNeutral = Color(0xFF6B6963);
+  static const Color hairline = Color(0xFFE8E7E4);
+  static const Color brandAccent = Color(0xFF0081D3);
+  static const Color brandAccentPressed = Color(0xFF006EBA);
+  static const Color brandAccentSoft = Color(0xFFE0F0FA);
+  static const Color badgeBlue = Color(0xFF1A8FCF);
+  static const Color successGreen = Color(0xFF03A14A);
+  static const Color warningGold = Color(0xFFDA950B);
+  static const Color dangerRed = Color(0xFFD73431);
+  static const Color unreadRed = Color(0xFFFA5152);
+  static const Color navigationSurface = Color(0xFFEEEDE9);
+  static const Color navigationBorder = Color(0xFFDDDCD9);
+  static const Color chatSurface = Color(0xFFFAFAFA);
+  static const Color messageIncoming = Color(0xFFEEEEF0);
+  static const Color messageOutgoing = Color(0xFFB6E4FF);
+  static const Color onMessageOutgoing = Color(0xFF0F304A);
+  static const Color messagePreview = Color(0xFF9F9FA6);
+
+  // Legacy names resolve to the same semantic palette so screens still being
+  // migrated cannot silently reintroduce the previous blue-gray theme.
+  static const Color amber = warningGold;
+  static const Color amberDeep = Color(0xFF805400);
+  static const Color actionBlue = brandAccent;
+  static const Color actionBlueDeep = brandAccentPressed;
+  static const Color actionBlueSoft = brandAccentSoft;
+  static const Color actionBlueBorder = hairline;
+  static const Color actionInk = inkNeutral;
+  static const Color actionMuted = mutedNeutral;
+  static const Color ivory = canvas;
   static const Color white = Color(0xFFFFFFFF);
-  static const Color mist = Color(0xFFF4F3F8);
-  static const Color cloud = Color(0xFFEEEDF3);
-  static const Color line = Color(0xFFF0EDF5);
-  static const Color ink = Color(0xFF1A1C1C);
-  static const Color body = Color(0xFF111827);
-  static const Color slate = Color(0xFF6B7280);
-  static const Color fog = Color(0xFFA9A9A9);
-  static const Color success = Color(0xFF31CE96);
-  static const Color error = Color(0xFFEF4444);
+  static const Color mist = Color(0xFFF4F4F3);
+  static const Color cloud = messageIncoming;
+  static const Color line = hairline;
+  static const Color ink = inkNeutral;
+  static const Color body = inkNeutral;
+  static const Color slate = mutedNeutral;
+  static const Color fog = messagePreview;
+  static const Color success = successGreen;
+  static const Color error = dangerRed;
   static const Color alert = Color(0xFFFF7B61);
   static const Color warningContainer = Color(0xFFFFF4D6);
   static const Color errorContainer = Color(0xFFFFEBEB);
@@ -33,39 +57,63 @@ class AwikiMePalette {
 }
 
 class AwikiMeColors {
-  static const Color background = AwikiMePalette.ivory;
-  static const Color surface = AwikiMePalette.white;
-  static const Color subtleSurface = AwikiMePalette.mist;
-  static const Color mutedSurface = AwikiMePalette.cloud;
-  static const Color border = AwikiMePalette.line;
-  static const Color primary = AwikiMePalette.actionBlue;
-  static const Color primaryDark = AwikiMePalette.actionBlue;
-  static const Color title = AwikiMePalette.ink;
-  static const Color body = AwikiMePalette.body;
-  static const Color secondaryText = AwikiMePalette.slate;
-  static const Color tertiaryText = AwikiMePalette.fog;
-  static const Color online = AwikiMePalette.success;
-  static const Color danger = AwikiMePalette.error;
+  static const Color background = AwikiMePalette.canvas;
+  static const Color surface = AwikiMePalette.content;
+  static const Color subtleSurface = Color(0xFFF4F4F3);
+  static const Color mutedSurface = AwikiMePalette.messageIncoming;
+  static const Color border = AwikiMePalette.hairline;
+  static const Color primary = AwikiMePalette.brandAccent;
+  static const Color primaryDark = AwikiMePalette.brandAccentPressed;
+  static const Color title = AwikiMePalette.inkNeutral;
+  static const Color body = AwikiMePalette.inkNeutral;
+  static const Color secondaryText = AwikiMePalette.mutedNeutral;
+  static const Color tertiaryText = AwikiMePalette.messagePreview;
+  static const Color online = AwikiMePalette.successGreen;
+  static const Color danger = AwikiMePalette.dangerRed;
   static const Color alert = AwikiMePalette.alert;
 }
 
 class AwikiMeInsets {
+  static const double xxs = 2;
   static const double xs = 4;
+  static const double compact = 6;
   static const double sm = 8;
   static const double md = 12;
   static const double lg = 16;
   static const double xl = 20;
   static const double xxl = 24;
+  static const double xxxl = 32;
+  static const double display = 40;
 
   static const EdgeInsets page = EdgeInsets.symmetric(horizontal: xxl);
   static const EdgeInsets card = EdgeInsets.all(lg);
+  static const EdgeInsets compactPage = EdgeInsets.symmetric(horizontal: md);
+  static const EdgeInsets expandedPage = EdgeInsets.symmetric(horizontal: lg);
+  static const EdgeInsets compactCard = EdgeInsets.all(md);
+  static const EdgeInsets expandedCard = EdgeInsets.all(lg);
 }
 
 class AwikiMeRadii {
+  static const double xs = 4;
+  static const double control = 10;
   static const double sm = 12;
+  static const double messageCompact = 13;
+  static const double overlay = 14;
   static const double md = 16;
   static const double lg = 20;
   static const double pill = 999;
+}
+
+class AwikiMeMotion {
+  static const Duration instant = Duration(milliseconds: 50);
+  static const Duration fast = Duration(milliseconds: 120);
+  static const Duration standard = Duration(milliseconds: 150);
+  static const Duration feedback = Duration(milliseconds: 180);
+  static const Duration sheet = Duration(milliseconds: 300);
+  static const Duration splash = Duration(milliseconds: 2800);
+
+  static const Curve emphasized = Curves.easeOutCubic;
+  static const Curve sheetCurve = Cubic(0.32, 0.72, 0.35, 1);
 }
 
 class AwikiMeShadows {
@@ -78,10 +126,12 @@ class AwikiMeShadows {
   ];
 }
 
+enum AwikiMeTypographyMode { compact, expanded }
+
 @immutable
-class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
-  const AwikiMeThemeTokens({
-    required this.colorScheme,
+class AwikiMeTypographyTokens {
+  const AwikiMeTypographyTokens({
+    required this.displayTitle,
     required this.sectionTitle,
     required this.navTitle,
     required this.cardTitle,
@@ -90,17 +140,16 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
     required this.listTitle,
     required this.listSubtitle,
     required this.listMeta,
+    required this.body,
     required this.messageBody,
     required this.inputText,
     required this.fieldLabel,
     required this.buttonLabel,
     required this.pillLabel,
     required this.markdownBody,
-    required this.cardShadow,
-    required this.overlayShadow,
   });
 
-  final ColorScheme colorScheme;
+  final TextStyle displayTitle;
   final TextStyle sectionTitle;
   final TextStyle navTitle;
   final TextStyle cardTitle;
@@ -109,37 +158,35 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   final TextStyle listTitle;
   final TextStyle listSubtitle;
   final TextStyle listMeta;
+  final TextStyle body;
   final TextStyle messageBody;
   final TextStyle inputText;
   final TextStyle fieldLabel;
   final TextStyle buttonLabel;
   final TextStyle pillLabel;
   final TextStyle markdownBody;
-  final List<BoxShadow> cardShadow;
-  final List<BoxShadow> overlayShadow;
 
-  Color get background => colorScheme.surfaceContainerLowest;
-  Color get surface => colorScheme.surface;
-  Color get subtleSurface => colorScheme.surfaceContainerLow;
-  Color get mutedSurface => colorScheme.surfaceContainerHighest;
-  Color get border => colorScheme.outlineVariant;
-  Color get primary => colorScheme.primary;
-  Color get primaryForeground => colorScheme.onPrimary;
-  Color get primaryDark => colorScheme.primaryContainer;
-  Color get title => colorScheme.onSurface;
-  Color get body => colorScheme.onSurface;
-  Color get secondaryText => colorScheme.onSurfaceVariant;
-  Color get tertiaryText => colorScheme.outline;
-  Color get success => AwikiMePalette.success;
-  Color get danger => colorScheme.error;
-  Color get alert => AwikiMePalette.alert;
-  Color get warningContainer => AwikiMePalette.warningContainer;
-  Color get dangerContainer => AwikiMePalette.errorContainer;
-  Color get infoAccent => AwikiMePalette.infoBlue;
+  Iterable<TextStyle> get styles => <TextStyle>[
+    displayTitle,
+    sectionTitle,
+    navTitle,
+    cardTitle,
+    cardSubtitle,
+    meta,
+    listTitle,
+    listSubtitle,
+    listMeta,
+    body,
+    messageBody,
+    inputText,
+    fieldLabel,
+    buttonLabel,
+    pillLabel,
+    markdownBody,
+  ];
 
-  @override
-  AwikiMeThemeTokens copyWith({
-    ColorScheme? colorScheme,
+  AwikiMeTypographyTokens copyWith({
+    TextStyle? displayTitle,
     TextStyle? sectionTitle,
     TextStyle? navTitle,
     TextStyle? cardTitle,
@@ -148,17 +195,16 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
     TextStyle? listTitle,
     TextStyle? listSubtitle,
     TextStyle? listMeta,
+    TextStyle? body,
     TextStyle? messageBody,
     TextStyle? inputText,
     TextStyle? fieldLabel,
     TextStyle? buttonLabel,
     TextStyle? pillLabel,
     TextStyle? markdownBody,
-    List<BoxShadow>? cardShadow,
-    List<BoxShadow>? overlayShadow,
   }) {
-    return AwikiMeThemeTokens(
-      colorScheme: colorScheme ?? this.colorScheme,
+    return AwikiMeTypographyTokens(
+      displayTitle: displayTitle ?? this.displayTitle,
       sectionTitle: sectionTitle ?? this.sectionTitle,
       navTitle: navTitle ?? this.navTitle,
       cardTitle: cardTitle ?? this.cardTitle,
@@ -167,12 +213,241 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
       listTitle: listTitle ?? this.listTitle,
       listSubtitle: listSubtitle ?? this.listSubtitle,
       listMeta: listMeta ?? this.listMeta,
+      body: body ?? this.body,
       messageBody: messageBody ?? this.messageBody,
       inputText: inputText ?? this.inputText,
       fieldLabel: fieldLabel ?? this.fieldLabel,
       buttonLabel: buttonLabel ?? this.buttonLabel,
       pillLabel: pillLabel ?? this.pillLabel,
       markdownBody: markdownBody ?? this.markdownBody,
+    );
+  }
+
+  AwikiMeTypographyTokens withFont({
+    required String fontFamily,
+    required List<String> fontFamilyFallback,
+  }) {
+    TextStyle apply(TextStyle style) => style.copyWith(
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFamilyFallback,
+      letterSpacing: 0,
+    );
+
+    return AwikiMeTypographyTokens(
+      displayTitle: apply(displayTitle),
+      sectionTitle: apply(sectionTitle),
+      navTitle: apply(navTitle),
+      cardTitle: apply(cardTitle),
+      cardSubtitle: apply(cardSubtitle),
+      meta: apply(meta),
+      listTitle: apply(listTitle),
+      listSubtitle: apply(listSubtitle),
+      listMeta: apply(listMeta),
+      body: apply(body),
+      messageBody: apply(messageBody),
+      inputText: apply(inputText),
+      fieldLabel: apply(fieldLabel),
+      buttonLabel: apply(buttonLabel),
+      pillLabel: apply(pillLabel),
+      markdownBody: apply(markdownBody),
+    );
+  }
+
+  static AwikiMeTypographyTokens lerp(
+    AwikiMeTypographyTokens a,
+    AwikiMeTypographyTokens b,
+    double t,
+  ) {
+    TextStyle blend(TextStyle left, TextStyle right) =>
+        TextStyle.lerp(left, right, t)!;
+
+    return AwikiMeTypographyTokens(
+      displayTitle: blend(a.displayTitle, b.displayTitle),
+      sectionTitle: blend(a.sectionTitle, b.sectionTitle),
+      navTitle: blend(a.navTitle, b.navTitle),
+      cardTitle: blend(a.cardTitle, b.cardTitle),
+      cardSubtitle: blend(a.cardSubtitle, b.cardSubtitle),
+      meta: blend(a.meta, b.meta),
+      listTitle: blend(a.listTitle, b.listTitle),
+      listSubtitle: blend(a.listSubtitle, b.listSubtitle),
+      listMeta: blend(a.listMeta, b.listMeta),
+      body: blend(a.body, b.body),
+      messageBody: blend(a.messageBody, b.messageBody),
+      inputText: blend(a.inputText, b.inputText),
+      fieldLabel: blend(a.fieldLabel, b.fieldLabel),
+      buttonLabel: blend(a.buttonLabel, b.buttonLabel),
+      pillLabel: blend(a.pillLabel, b.pillLabel),
+      markdownBody: blend(a.markdownBody, b.markdownBody),
+    );
+  }
+}
+
+@immutable
+class AwikiMeSemanticColors {
+  const AwikiMeSemanticColors({
+    required this.canvas,
+    required this.surface,
+    required this.subtleSurface,
+    required this.mutedSurface,
+    required this.navigationSurface,
+    required this.navigationBorder,
+    required this.chatSurface,
+    required this.border,
+    required this.primary,
+    required this.primaryPressed,
+    required this.primarySoft,
+    required this.title,
+    required this.body,
+    required this.secondaryText,
+    required this.tertiaryText,
+    required this.success,
+    required this.warning,
+    required this.danger,
+    required this.unread,
+    required this.incomingMessage,
+    required this.outgoingMessage,
+    required this.onOutgoingMessage,
+  });
+
+  final Color canvas;
+  final Color surface;
+  final Color subtleSurface;
+  final Color mutedSurface;
+  final Color navigationSurface;
+  final Color navigationBorder;
+  final Color chatSurface;
+  final Color border;
+  final Color primary;
+  final Color primaryPressed;
+  final Color primarySoft;
+  final Color title;
+  final Color body;
+  final Color secondaryText;
+  final Color tertiaryText;
+  final Color success;
+  final Color warning;
+  final Color danger;
+  final Color unread;
+  final Color incomingMessage;
+  final Color outgoingMessage;
+  final Color onOutgoingMessage;
+
+  static AwikiMeSemanticColors lerp(
+    AwikiMeSemanticColors a,
+    AwikiMeSemanticColors b,
+    double t,
+  ) {
+    Color blend(Color left, Color right) => Color.lerp(left, right, t)!;
+
+    return AwikiMeSemanticColors(
+      canvas: blend(a.canvas, b.canvas),
+      surface: blend(a.surface, b.surface),
+      subtleSurface: blend(a.subtleSurface, b.subtleSurface),
+      mutedSurface: blend(a.mutedSurface, b.mutedSurface),
+      navigationSurface: blend(a.navigationSurface, b.navigationSurface),
+      navigationBorder: blend(a.navigationBorder, b.navigationBorder),
+      chatSurface: blend(a.chatSurface, b.chatSurface),
+      border: blend(a.border, b.border),
+      primary: blend(a.primary, b.primary),
+      primaryPressed: blend(a.primaryPressed, b.primaryPressed),
+      primarySoft: blend(a.primarySoft, b.primarySoft),
+      title: blend(a.title, b.title),
+      body: blend(a.body, b.body),
+      secondaryText: blend(a.secondaryText, b.secondaryText),
+      tertiaryText: blend(a.tertiaryText, b.tertiaryText),
+      success: blend(a.success, b.success),
+      warning: blend(a.warning, b.warning),
+      danger: blend(a.danger, b.danger),
+      unread: blend(a.unread, b.unread),
+      incomingMessage: blend(a.incomingMessage, b.incomingMessage),
+      outgoingMessage: blend(a.outgoingMessage, b.outgoingMessage),
+      onOutgoingMessage: blend(a.onOutgoingMessage, b.onOutgoingMessage),
+    );
+  }
+}
+
+@immutable
+class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
+  const AwikiMeThemeTokens({
+    required this.colorScheme,
+    required this.semanticColors,
+    required this.compactTypography,
+    required this.expandedTypography,
+    required this.cardShadow,
+    required this.overlayShadow,
+  });
+
+  final ColorScheme colorScheme;
+  final AwikiMeSemanticColors semanticColors;
+  final AwikiMeTypographyTokens compactTypography;
+  final AwikiMeTypographyTokens expandedTypography;
+  final List<BoxShadow> cardShadow;
+  final List<BoxShadow> overlayShadow;
+
+  AwikiMeTypographyTokens typographyFor(AwikiMeTypographyMode mode) =>
+      mode == AwikiMeTypographyMode.compact
+      ? compactTypography
+      : expandedTypography;
+
+  // Existing callers retain the expanded type ramp until their layout picks a
+  // density explicitly.
+  TextStyle get sectionTitle => expandedTypography.sectionTitle;
+  TextStyle get navTitle => expandedTypography.navTitle;
+  TextStyle get cardTitle => expandedTypography.cardTitle;
+  TextStyle get cardSubtitle => expandedTypography.cardSubtitle;
+  TextStyle get meta => expandedTypography.meta;
+  TextStyle get listTitle => expandedTypography.listTitle;
+  TextStyle get listSubtitle => expandedTypography.listSubtitle;
+  TextStyle get listMeta => expandedTypography.listMeta;
+  TextStyle get messageBody => expandedTypography.messageBody;
+  TextStyle get inputText => expandedTypography.inputText;
+  TextStyle get fieldLabel => expandedTypography.fieldLabel;
+  TextStyle get buttonLabel => expandedTypography.buttonLabel;
+  TextStyle get pillLabel => expandedTypography.pillLabel;
+  TextStyle get markdownBody => expandedTypography.markdownBody;
+
+  Color get background => semanticColors.canvas;
+  Color get surface => semanticColors.surface;
+  Color get subtleSurface => semanticColors.subtleSurface;
+  Color get mutedSurface => semanticColors.mutedSurface;
+  Color get navigationSurface => semanticColors.navigationSurface;
+  Color get navigationBorder => semanticColors.navigationBorder;
+  Color get chatSurface => semanticColors.chatSurface;
+  Color get border => semanticColors.border;
+  Color get primary => semanticColors.primary;
+  Color get primaryForeground => colorScheme.onPrimary;
+  Color get primaryDark => semanticColors.primaryPressed;
+  Color get primarySoft => semanticColors.primarySoft;
+  Color get title => semanticColors.title;
+  Color get body => semanticColors.body;
+  Color get secondaryText => semanticColors.secondaryText;
+  Color get tertiaryText => semanticColors.tertiaryText;
+  Color get success => semanticColors.success;
+  Color get warning => semanticColors.warning;
+  Color get danger => semanticColors.danger;
+  Color get unread => semanticColors.unread;
+  Color get incomingMessage => semanticColors.incomingMessage;
+  Color get outgoingMessage => semanticColors.outgoingMessage;
+  Color get onOutgoingMessage => semanticColors.onOutgoingMessage;
+  Color get alert => AwikiMePalette.alert;
+  Color get warningContainer => AwikiMePalette.warningContainer;
+  Color get dangerContainer => AwikiMePalette.errorContainer;
+  Color get infoAccent => AwikiMePalette.infoBlue;
+
+  @override
+  AwikiMeThemeTokens copyWith({
+    ColorScheme? colorScheme,
+    AwikiMeSemanticColors? semanticColors,
+    AwikiMeTypographyTokens? compactTypography,
+    AwikiMeTypographyTokens? expandedTypography,
+    List<BoxShadow>? cardShadow,
+    List<BoxShadow>? overlayShadow,
+  }) {
+    return AwikiMeThemeTokens(
+      colorScheme: colorScheme ?? this.colorScheme,
+      semanticColors: semanticColors ?? this.semanticColors,
+      compactTypography: compactTypography ?? this.compactTypography,
+      expandedTypography: expandedTypography ?? this.expandedTypography,
       cardShadow: cardShadow ?? this.cardShadow,
       overlayShadow: overlayShadow ?? this.overlayShadow,
     );
@@ -188,20 +463,21 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
     }
     return AwikiMeThemeTokens(
       colorScheme: ColorScheme.lerp(colorScheme, other.colorScheme, t),
-      sectionTitle: TextStyle.lerp(sectionTitle, other.sectionTitle, t)!,
-      navTitle: TextStyle.lerp(navTitle, other.navTitle, t)!,
-      cardTitle: TextStyle.lerp(cardTitle, other.cardTitle, t)!,
-      cardSubtitle: TextStyle.lerp(cardSubtitle, other.cardSubtitle, t)!,
-      meta: TextStyle.lerp(meta, other.meta, t)!,
-      listTitle: TextStyle.lerp(listTitle, other.listTitle, t)!,
-      listSubtitle: TextStyle.lerp(listSubtitle, other.listSubtitle, t)!,
-      listMeta: TextStyle.lerp(listMeta, other.listMeta, t)!,
-      messageBody: TextStyle.lerp(messageBody, other.messageBody, t)!,
-      inputText: TextStyle.lerp(inputText, other.inputText, t)!,
-      fieldLabel: TextStyle.lerp(fieldLabel, other.fieldLabel, t)!,
-      buttonLabel: TextStyle.lerp(buttonLabel, other.buttonLabel, t)!,
-      pillLabel: TextStyle.lerp(pillLabel, other.pillLabel, t)!,
-      markdownBody: TextStyle.lerp(markdownBody, other.markdownBody, t)!,
+      semanticColors: AwikiMeSemanticColors.lerp(
+        semanticColors,
+        other.semanticColors,
+        t,
+      ),
+      compactTypography: AwikiMeTypographyTokens.lerp(
+        compactTypography,
+        other.compactTypography,
+        t,
+      ),
+      expandedTypography: AwikiMeTypographyTokens.lerp(
+        expandedTypography,
+        other.expandedTypography,
+        t,
+      ),
       cardShadow: t < 0.5 ? cardShadow : other.cardShadow,
       overlayShadow: t < 0.5 ? overlayShadow : other.overlayShadow,
     );
@@ -234,123 +510,296 @@ class AwikiMeTheme {
 
   static const ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.light,
-    primary: AwikiMePalette.actionBlue,
-    onPrimary: AwikiMePalette.white,
-    secondary: AwikiMePalette.infoBlue,
-    onSecondary: AwikiMePalette.white,
-    error: AwikiMePalette.error,
-    onError: AwikiMePalette.white,
-    surface: AwikiMePalette.white,
-    onSurface: AwikiMePalette.ink,
-    surfaceContainerHighest: AwikiMePalette.cloud,
-    onSurfaceVariant: AwikiMePalette.slate,
-    outline: AwikiMePalette.fog,
-    outlineVariant: AwikiMePalette.line,
-    primaryContainer: AwikiMePalette.actionBlue,
-    onPrimaryContainer: AwikiMePalette.white,
-    secondaryContainer: Color(0xFFDCEBFF),
-    onSecondaryContainer: AwikiMePalette.infoBlue,
+    primary: AwikiMePalette.brandAccent,
+    onPrimary: AwikiMePalette.content,
+    secondary: AwikiMePalette.badgeBlue,
+    onSecondary: AwikiMePalette.content,
+    error: AwikiMePalette.dangerRed,
+    onError: AwikiMePalette.content,
+    surface: AwikiMePalette.content,
+    onSurface: AwikiMePalette.inkNeutral,
+    surfaceContainerHighest: AwikiMePalette.messageIncoming,
+    onSurfaceVariant: AwikiMePalette.mutedNeutral,
+    outline: AwikiMePalette.messagePreview,
+    outlineVariant: AwikiMePalette.hairline,
+    primaryContainer: AwikiMePalette.brandAccentSoft,
+    onPrimaryContainer: AwikiMePalette.brandAccent,
+    secondaryContainer: Color(0xFFDFF1FA),
+    onSecondaryContainer: AwikiMePalette.badgeBlue,
     errorContainer: AwikiMePalette.errorContainer,
-    onErrorContainer: AwikiMePalette.error,
-    surfaceContainerLow: AwikiMePalette.mist,
-    surfaceContainerLowest: AwikiMePalette.ivory,
-    tertiary: AwikiMePalette.success,
-    onTertiary: AwikiMePalette.white,
-    tertiaryContainer: Color(0xFFD8F8E8),
-    onTertiaryContainer: Color(0xFF059669),
-    inverseSurface: AwikiMePalette.ink,
-    onInverseSurface: AwikiMePalette.white,
-    inversePrimary: AwikiMePalette.actionBlue,
+    onErrorContainer: AwikiMePalette.dangerRed,
+    surfaceContainerLow: Color(0xFFF4F4F3),
+    surfaceContainerLowest: AwikiMePalette.canvas,
+    tertiary: AwikiMePalette.successGreen,
+    onTertiary: AwikiMePalette.content,
+    tertiaryContainer: Color(0xFFDCF1E2),
+    onTertiaryContainer: AwikiMePalette.successGreen,
+    inverseSurface: AwikiMePalette.inkNeutral,
+    onInverseSurface: AwikiMePalette.content,
+    inversePrimary: AwikiMePalette.brandAccent,
     shadow: Color(0x1A000000),
     scrim: Color(0x52000000),
-    surfaceTint: AwikiMePalette.actionBlue,
+    surfaceTint: Color(0x00000000),
   );
+
+  static const AwikiMeSemanticColors _semanticColors = AwikiMeSemanticColors(
+    canvas: AwikiMePalette.canvas,
+    surface: AwikiMePalette.content,
+    subtleSurface: Color(0xFFF4F4F3),
+    mutedSurface: AwikiMePalette.messageIncoming,
+    navigationSurface: AwikiMePalette.navigationSurface,
+    navigationBorder: AwikiMePalette.navigationBorder,
+    chatSurface: AwikiMePalette.chatSurface,
+    border: AwikiMePalette.hairline,
+    primary: AwikiMePalette.brandAccent,
+    primaryPressed: AwikiMePalette.brandAccentPressed,
+    primarySoft: AwikiMePalette.brandAccentSoft,
+    title: AwikiMePalette.inkNeutral,
+    body: AwikiMePalette.inkNeutral,
+    secondaryText: AwikiMePalette.mutedNeutral,
+    tertiaryText: AwikiMePalette.messagePreview,
+    success: AwikiMePalette.successGreen,
+    warning: AwikiMePalette.warningGold,
+    danger: AwikiMePalette.dangerRed,
+    unread: AwikiMePalette.unreadRed,
+    incomingMessage: AwikiMePalette.messageIncoming,
+    outgoingMessage: AwikiMePalette.messageOutgoing,
+    onOutgoingMessage: AwikiMePalette.onMessageOutgoing,
+  );
+
+  static const AwikiMeTypographyTokens _compactTypography =
+      AwikiMeTypographyTokens(
+        displayTitle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        sectionTitle: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        navTitle: TextStyle(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        cardTitle: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        cardSubtitle: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.mutedNeutral,
+          height: 1.4,
+          letterSpacing: 0,
+        ),
+        meta: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.messagePreview,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        listTitle: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        listSubtitle: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.messagePreview,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        listMeta: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.mutedNeutral,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        body: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.45,
+          letterSpacing: 0,
+        ),
+        messageBody: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.45,
+          letterSpacing: 0,
+        ),
+        inputText: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        fieldLabel: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w500,
+          color: AwikiMePalette.mutedNeutral,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        buttonLabel: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        pillLabel: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        markdownBody: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.5,
+          letterSpacing: 0,
+        ),
+      );
+
+  static const AwikiMeTypographyTokens _expandedTypography =
+      AwikiMeTypographyTokens(
+        displayTitle: TextStyle(
+          fontSize: 30,
+          fontWeight: FontWeight.w700,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.15,
+          letterSpacing: 0,
+        ),
+        sectionTitle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        navTitle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        cardTitle: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        cardSubtitle: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.mutedNeutral,
+          height: 1.4,
+          letterSpacing: 0,
+        ),
+        meta: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.messagePreview,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        listTitle: TextStyle(
+          fontSize: 15.5,
+          fontWeight: FontWeight.w500,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        listSubtitle: TextStyle(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.messagePreview,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        listMeta: TextStyle(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.mutedNeutral,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        body: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.45,
+          letterSpacing: 0,
+        ),
+        messageBody: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.45,
+          letterSpacing: 0,
+        ),
+        inputText: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.3,
+          letterSpacing: 0,
+        ),
+        fieldLabel: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w500,
+          color: AwikiMePalette.mutedNeutral,
+          height: 1.25,
+          letterSpacing: 0,
+        ),
+        buttonLabel: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        pillLabel: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+          letterSpacing: 0,
+        ),
+        markdownBody: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: AwikiMePalette.inkNeutral,
+          height: 1.5,
+          letterSpacing: 0,
+        ),
+      );
 
   static const AwikiMeThemeTokens _baseTokens = AwikiMeThemeTokens(
     colorScheme: colorScheme,
-    sectionTitle: TextStyle(
-      fontSize: 20,
-      fontWeight: FontWeight.w500,
-      color: AwikiMePalette.ink,
-      letterSpacing: 0,
-    ),
-    navTitle: TextStyle(
-      fontSize: 20,
-      fontWeight: FontWeight.w500,
-      color: AwikiMePalette.ink,
-      letterSpacing: 0,
-    ),
-    cardTitle: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.body,
-      letterSpacing: 0,
-    ),
-    cardSubtitle: TextStyle(
-      fontSize: 14,
-      color: AwikiMePalette.slate,
-      height: 1.35,
-      letterSpacing: 0,
-    ),
-    meta: TextStyle(fontSize: 12, color: AwikiMePalette.fog, letterSpacing: 0),
-    listTitle: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.ink,
-      height: 1.25,
-      letterSpacing: 0,
-    ),
-    listSubtitle: TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.slate,
-      height: 1.3,
-      letterSpacing: 0,
-    ),
-    listMeta: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.slate,
-      height: 1.2,
-      letterSpacing: 0,
-    ),
-    messageBody: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.ink,
-      height: 1.45,
-      letterSpacing: 0,
-    ),
-    inputText: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.ink,
-      height: 1.25,
-      letterSpacing: 0,
-    ),
-    fieldLabel: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w500,
-      color: AwikiMePalette.slate,
-      letterSpacing: 0,
-    ),
-    buttonLabel: TextStyle(
-      fontSize: 15,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0,
-    ),
-    pillLabel: TextStyle(
-      fontSize: 11.5,
-      fontWeight: FontWeight.w500,
-      letterSpacing: 0,
-    ),
-    markdownBody: TextStyle(
-      fontSize: 15,
-      fontWeight: FontWeight.w400,
-      color: AwikiMePalette.body,
-      height: 1.5,
-      letterSpacing: 0,
-    ),
+    semanticColors: _semanticColors,
+    compactTypography: _compactTypography,
+    expandedTypography: _expandedTypography,
     cardShadow: AwikiMeShadows.card,
     overlayShadow: AwikiMeShadows.overlay,
   );
@@ -361,15 +810,22 @@ class AwikiMeTheme {
   static AwikiMePlatformTheme _buildForPlatform(TargetPlatform platform) {
     final isWindows = platform == TargetPlatform.windows;
     final platformTokens = isWindows ? _windowsTokens() : _baseTokens;
+    final baseMaterialTheme = ThemeData(
+      useMaterial3: true,
+      platform: platform,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
+      fontFamily: isWindows ? windowsFontFamily : null,
+      fontFamilyFallback: isWindows ? windowsFontFamilyFallback : null,
+      extensions: <ThemeExtension<dynamic>>[platformTokens],
+    );
     return AwikiMePlatformTheme(
-      materialTheme: ThemeData(
-        useMaterial3: true,
-        platform: platform,
-        colorScheme: colorScheme,
-        scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
-        fontFamily: isWindows ? windowsFontFamily : null,
-        fontFamilyFallback: isWindows ? windowsFontFamilyFallback : null,
-        extensions: <ThemeExtension<dynamic>>[platformTokens],
+      materialTheme: baseMaterialTheme.copyWith(
+        textTheme: _materialTextThemeFor(baseMaterialTheme.textTheme, platform),
+        primaryTextTheme: _materialTextThemeFor(
+          baseMaterialTheme.primaryTextTheme,
+          platform,
+        ),
       ),
       cupertinoTheme: CupertinoThemeData(
         brightness: Brightness.light,
@@ -391,26 +847,52 @@ class AwikiMeTheme {
   static AwikiMeThemeTokens get tokens => current.tokens;
 
   static AwikiMeThemeTokens _windowsTokens() {
-    TextStyle withWindowsFont(TextStyle style) => style.copyWith(
-      fontFamily: windowsFontFamily,
-      fontFamilyFallback: windowsFontFamilyFallback,
-    );
-
     return _baseTokens.copyWith(
-      sectionTitle: withWindowsFont(_baseTokens.sectionTitle),
-      navTitle: withWindowsFont(_baseTokens.navTitle),
-      cardTitle: withWindowsFont(_baseTokens.cardTitle),
-      cardSubtitle: withWindowsFont(_baseTokens.cardSubtitle),
-      meta: withWindowsFont(_baseTokens.meta),
-      listTitle: withWindowsFont(_baseTokens.listTitle),
-      listSubtitle: withWindowsFont(_baseTokens.listSubtitle),
-      listMeta: withWindowsFont(_baseTokens.listMeta),
-      messageBody: withWindowsFont(_baseTokens.messageBody),
-      inputText: withWindowsFont(_baseTokens.inputText),
-      fieldLabel: withWindowsFont(_baseTokens.fieldLabel),
-      buttonLabel: withWindowsFont(_baseTokens.buttonLabel),
-      pillLabel: withWindowsFont(_baseTokens.pillLabel),
-      markdownBody: withWindowsFont(_baseTokens.markdownBody),
+      compactTypography: _baseTokens.compactTypography.withFont(
+        fontFamily: windowsFontFamily,
+        fontFamilyFallback: windowsFontFamilyFallback,
+      ),
+      expandedTypography: _baseTokens.expandedTypography.withFont(
+        fontFamily: windowsFontFamily,
+        fontFamilyFallback: windowsFontFamilyFallback,
+      ),
+    );
+  }
+
+  static TextTheme _materialTextThemeFor(
+    TextTheme base,
+    TargetPlatform platform,
+  ) {
+    TextStyle? normalize(TextStyle? style) {
+      if (style == null) {
+        return null;
+      }
+      if (platform == TargetPlatform.windows) {
+        return style.copyWith(
+          fontFamily: windowsFontFamily,
+          fontFamilyFallback: windowsFontFamilyFallback,
+          letterSpacing: 0,
+        );
+      }
+      return style.copyWith(letterSpacing: 0);
+    }
+
+    return base.copyWith(
+      displayLarge: normalize(base.displayLarge),
+      displayMedium: normalize(base.displayMedium),
+      displaySmall: normalize(base.displaySmall),
+      headlineLarge: normalize(base.headlineLarge),
+      headlineMedium: normalize(base.headlineMedium),
+      headlineSmall: normalize(base.headlineSmall),
+      titleLarge: normalize(base.titleLarge),
+      titleMedium: normalize(base.titleMedium),
+      titleSmall: normalize(base.titleSmall),
+      bodyLarge: normalize(base.bodyLarge),
+      bodyMedium: normalize(base.bodyMedium),
+      bodySmall: normalize(base.bodySmall),
+      labelLarge: normalize(base.labelLarge),
+      labelMedium: normalize(base.labelMedium),
+      labelSmall: normalize(base.labelSmall),
     );
   }
 
@@ -418,30 +900,32 @@ class AwikiMeTheme {
     TargetPlatform platform,
   ) {
     const base = CupertinoTextThemeData(
-      primaryColor: AwikiMePalette.actionBlue,
-      textStyle: TextStyle(color: AwikiMePalette.ink, fontSize: 15),
+      primaryColor: AwikiMePalette.brandAccent,
+      textStyle: TextStyle(
+        color: AwikiMePalette.inkNeutral,
+        fontSize: 15,
+        letterSpacing: 0,
+      ),
     );
-    if (platform != TargetPlatform.windows) {
-      return base;
-    }
-
-    TextStyle withWindowsFont(TextStyle style) => style.copyWith(
-      fontFamily: windowsFontFamily,
-      fontFamilyFallback: windowsFontFamilyFallback,
-      letterSpacing: 0,
-    );
+    TextStyle normalize(TextStyle style) => platform == TargetPlatform.windows
+        ? style.copyWith(
+            fontFamily: windowsFontFamily,
+            fontFamilyFallback: windowsFontFamilyFallback,
+            letterSpacing: 0,
+          )
+        : style.copyWith(letterSpacing: 0);
 
     return CupertinoTextThemeData(
       primaryColor: colorScheme.primary,
-      textStyle: withWindowsFont(base.textStyle),
-      actionTextStyle: withWindowsFont(base.actionTextStyle),
-      actionSmallTextStyle: withWindowsFont(base.actionSmallTextStyle),
-      tabLabelTextStyle: withWindowsFont(base.tabLabelTextStyle),
-      navTitleTextStyle: withWindowsFont(base.navTitleTextStyle),
-      navLargeTitleTextStyle: withWindowsFont(base.navLargeTitleTextStyle),
-      navActionTextStyle: withWindowsFont(base.navActionTextStyle),
-      pickerTextStyle: withWindowsFont(base.pickerTextStyle),
-      dateTimePickerTextStyle: withWindowsFont(base.dateTimePickerTextStyle),
+      textStyle: normalize(base.textStyle),
+      actionTextStyle: normalize(base.actionTextStyle),
+      actionSmallTextStyle: normalize(base.actionSmallTextStyle),
+      tabLabelTextStyle: normalize(base.tabLabelTextStyle),
+      navTitleTextStyle: normalize(base.navTitleTextStyle),
+      navLargeTitleTextStyle: normalize(base.navLargeTitleTextStyle),
+      navActionTextStyle: normalize(base.navActionTextStyle),
+      pickerTextStyle: normalize(base.pickerTextStyle),
+      dateTimePickerTextStyle: normalize(base.dateTimePickerTextStyle),
     );
   }
 }
@@ -469,6 +953,17 @@ class AwikiMeDecorations {
 }
 
 class AwikiMeTextStyles {
+  static AwikiMeTypographyTokens get compact =>
+      AwikiMeTheme.tokens.compactTypography;
+
+  static AwikiMeTypographyTokens get expanded =>
+      AwikiMeTheme.tokens.expandedTypography;
+
+  static AwikiMeTypographyTokens forMode(AwikiMeTypographyMode mode) =>
+      AwikiMeTheme.tokens.typographyFor(mode);
+
+  static TextStyle get displayTitle => expanded.displayTitle;
+
   static TextStyle get sectionTitle => AwikiMeTheme.tokens.sectionTitle;
 
   static TextStyle get navTitle => AwikiMeTheme.tokens.navTitle;
@@ -484,6 +979,8 @@ class AwikiMeTextStyles {
   static TextStyle get listSubtitle => AwikiMeTheme.tokens.listSubtitle;
 
   static TextStyle get listMeta => AwikiMeTheme.tokens.listMeta;
+
+  static TextStyle get body => expanded.body;
 
   static TextStyle get messageBody => AwikiMeTheme.tokens.messageBody;
 

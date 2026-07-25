@@ -48,6 +48,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonRetry => '重试';
 
   @override
+  String get commonRefresh => '刷新';
+
+  @override
   String get commonClose => '关闭';
 
   @override
@@ -590,7 +593,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conversationBackToChat => '返回会话';
 
   @override
-  String get friendsTitle => '朋友';
+  String get friendsTitle => '联系人';
 
   @override
   String get friendsGroups => '群组';

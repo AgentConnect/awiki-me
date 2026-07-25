@@ -45,24 +45,25 @@ class _ChatHeader extends StatelessWidget {
         conversation.isGroup && onAddGroupMemberTap != null;
     if (macStyle) {
       return Container(
-        height: responsive.displayScaled(64),
+        key: const Key('chat-header'),
+        height: responsive.displayScaled(52),
         padding: EdgeInsets.fromLTRB(
-          responsive.displayScaled(22),
+          responsive.displayScaled(14),
           0,
-          responsive.displayScaled(18),
+          responsive.displayScaled(12),
           0,
         ),
-        decoration: const BoxDecoration(
-          color: CupertinoColors.white,
-          border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
+        decoration: BoxDecoration(
+          color: theme.chatSurface,
+          border: Border(
+            bottom: BorderSide(color: theme.border.withValues(alpha: 0.55)),
+          ),
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final showSecurityPill = width >= 620;
-            final avatarSize = responsive.displayScaled(
-              width >= 360 ? 40.0 : 36.0,
-            );
+            final avatarSize = responsive.displayScaled(30);
 
             return Row(
               children: <Widget>[
@@ -77,7 +78,7 @@ class _ChatHeader extends StatelessWidget {
                     avatarUri: conversation.avatarUri,
                   ),
                 ),
-                SizedBox(width: responsive.displayScaled(10)),
+                SizedBox(width: responsive.displayScaled(8)),
                 Expanded(
                   child: _MacHeaderIdentityText(
                     compactName: compactName,
@@ -102,113 +103,76 @@ class _ChatHeader extends StatelessWidget {
         ),
       );
     }
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        embedded
-            ? responsive.spacing(24)
-            : responsive.tabContentHorizontalPadding,
-        responsive.spacing(embedded ? 18 : 8),
-        embedded
-            ? responsive.spacing(24)
-            : responsive.tabContentHorizontalPadding,
-        responsive.spacing(12),
+    return Container(
+      key: const Key('chat-header'),
+      height: responsive.displayScaled(52),
+      padding: EdgeInsets.symmetric(horizontal: responsive.spacing(8)),
+      decoration: BoxDecoration(
+        color: theme.chatSurface,
+        border: Border(
+          bottom: BorderSide(color: theme.border.withValues(alpha: 0.55)),
+        ),
       ),
       child: Row(
         children: <Widget>[
           SizedBox(
-            width: responsive.scaled(40),
+            width: responsive.displayScaled(44),
             child: TopBarActionButton(
               onTap: onBack,
               semanticsIdentifier: 'e2e-chat-back-button',
               semanticsLabel: context.l10n.commonBack,
               child: Padding(
                 padding: EdgeInsets.all(responsive.spacing(8)),
-                child: AwikiAssetIcon(
-                  assetName: 'assets/icons/icon_left.svg',
-                  color: theme.primaryDark,
+                child: Icon(
+                  CupertinoIcons.chevron_left,
+                  color: theme.title,
                   size: responsive.iconMd,
                 ),
               ),
             ),
           ),
-          SizedBox(width: responsive.spacing(4)),
-          _ChatHeaderIdentityTapTarget(
-            key: const Key('chat-peer-info-avatar-button'),
-            semanticLabel: openInfoLabel,
-            semanticsIdentifier: 'chat-peer-info-avatar-button',
-            onTap: onPeerInfoTap,
-            child: AvatarBadge(
-              seed: compactName,
-              size: responsive.avatarSizeMd,
-              avatarUri: conversation.avatarUri,
-            ),
-          ),
-          SizedBox(width: responsive.spacing(12)),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Flexible(
-                      child: _ChatHeaderIdentityTapTarget(
-                        semanticLabel: openInfoLabel,
-                        onTap: onPeerInfoTap,
-                        child: Text(
-                          compactName,
-                          key: const Key('chat-header-title'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: responsive.titleLg,
-                            fontWeight: FontWeight.w500,
-                            color: theme.title,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (agentBadgeLabel != null) ...<Widget>[
-                      SizedBox(width: responsive.spacing(8)),
-                      _ChatAgentPill(
-                        label: agentBadgeLabel,
-                        muted: isDeletedAgentConversation,
-                      ),
-                    ],
-                  ],
-                ),
-                SizedBox(height: responsive.spacing(2)),
-                Row(
-                  children: <Widget>[
-                    Container(
-                      width: responsive.scaled(8),
-                      height: responsive.scaled(8),
-                      decoration: BoxDecoration(
-                        color: theme.success,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    SizedBox(width: responsive.spacing(6)),
-                    Text(
-                      'ONLINE',
+            child: _ChatHeaderIdentityTapTarget(
+              key: const Key('chat-peer-info-avatar-button'),
+              semanticLabel: openInfoLabel,
+              semanticsIdentifier: 'chat-peer-info-avatar-button',
+              onTap: onPeerInfoTap,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      compactName,
+                      key: const Key('chat-header-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w500,
-                        letterSpacing: 1,
-                        color: theme.primaryDark,
+                        fontSize: responsive.displayScaled(16),
+                        fontWeight: FontWeight.w600,
+                        color: theme.title,
                       ),
                     ),
+                  ),
+                  if (agentBadgeLabel != null) ...<Widget>[
+                    SizedBox(width: responsive.spacing(6)),
+                    _ChatAgentPill(
+                      label: agentBadgeLabel,
+                      muted: isDeletedAgentConversation,
+                    ),
                   ],
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          if (showAddGroupMemberButton) ...<Widget>[
-            SizedBox(width: responsive.spacing(10)),
-            _ChatHeaderAddGroupMemberButton(
-              onTap: isAddGroupMemberLoading ? null : onAddGroupMemberTap,
-              isLoading: isAddGroupMemberLoading,
-            ),
-          ],
+          SizedBox(
+            width: responsive.displayScaled(44),
+            child: showAddGroupMemberButton
+                ? _ChatHeaderAddGroupMemberButton(
+                    onTap: isAddGroupMemberLoading ? null : onAddGroupMemberTap,
+                    isLoading: isAddGroupMemberLoading,
+                  )
+                : null,
+          ),
         ],
       ),
     );
@@ -308,9 +272,9 @@ class _MacHeaderIdentityText extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: const Color(0xFF101B32),
-                fontSize: responsive.displayScaled(17),
-                fontWeight: FontWeight.w500,
+                color: context.awikiTheme.title,
+                fontSize: responsive.displayScaled(14.5),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -320,11 +284,11 @@ class _MacHeaderIdentityText extends StatelessWidget {
           _MacChatPill(
             label: agentBadgeLabel!,
             color: isDeletedAgentConversation
-                ? const Color(0xFFF1F3F7)
-                : const Color(0xFFEAF2FF),
+                ? AwikiMePalette.mist
+                : AwikiMePalette.brandAccentSoft,
             textColor: isDeletedAgentConversation
-                ? const Color(0xFF66728A)
-                : const Color(0xFF0B65F8),
+                ? AwikiMePalette.mutedNeutral
+                : AwikiMePalette.brandAccent,
           ),
         ],
         if (showSecurityPill) ...<Widget>[
@@ -332,7 +296,7 @@ class _MacHeaderIdentityText extends StatelessWidget {
           _MacChatPill(
             label: context.l10n.chatSafeCollaboration,
             color: const Color(0xFFE6F8EE),
-            textColor: const Color(0xFF10A85A),
+            textColor: AwikiMePalette.successGreen,
           ),
         ],
       ],

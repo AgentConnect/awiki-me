@@ -915,13 +915,17 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFDFF),
+        color: AwikiMePalette.content,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(CupertinoIcons.search, color: Color(0xFF34415C), size: 20),
+          const Icon(
+            CupertinoIcons.search,
+            color: AwikiMePalette.mutedNeutral,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: e2eSemantics(
@@ -941,9 +945,12 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
                 },
                 decoration: null,
                 padding: EdgeInsets.zero,
-                style: const TextStyle(color: Color(0xFF17213A), fontSize: 14),
+                style: const TextStyle(
+                  color: AwikiMePalette.inkNeutral,
+                  fontSize: 14,
+                ),
                 placeholderStyle: const TextStyle(
-                  color: Color(0xFF8A96AA),
+                  color: AwikiMePalette.messagePreview,
                   fontSize: 14,
                 ),
               ),
@@ -957,13 +964,13 @@ class _InviteSearchInputState extends State<_InviteSearchInput> {
               tooltip: context.l10n.identityClearInput,
               onPressed: widget.controller.clear,
               size: 28,
-              backgroundColor: const Color(0xFFEAF0F7),
-              activeBackgroundColor: const Color(0xFFDDE8F6),
+              backgroundColor: AwikiMePalette.cloud,
+              activeBackgroundColor: AwikiMePalette.cloud,
               borderColor: CupertinoColors.transparent,
               borderRadius: BorderRadius.circular(999),
               child: const Icon(
                 CupertinoIcons.xmark,
-                color: Color(0xFF66728A),
+                color: AwikiMePalette.mutedNeutral,
                 size: 15,
               ),
             ),
@@ -1017,13 +1024,13 @@ class _SelectedInviteStrip extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFEAF2FF),
+          color: AwikiMePalette.brandAccentSoft,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           context.l10n.groupInviteSelectHint,
           style: const TextStyle(
-            color: Color(0xFF0B65F8),
+            color: AwikiMePalette.brandAccent,
             fontSize: 12,
             height: 1.35,
           ),
@@ -1060,9 +1067,9 @@ class _SelectedInviteChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F7FC),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1072,7 +1079,7 @@ class _SelectedInviteChip extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: Color(0xFF17213A),
+              color: AwikiMePalette.inkNeutral,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -1086,7 +1093,7 @@ class _SelectedInviteChip extends StatelessWidget {
               child: Icon(
                 CupertinoIcons.xmark_circle_fill,
                 size: 16,
-                color: Color(0xFF8A96AA),
+                color: AwikiMePalette.messagePreview,
               ),
             ),
           ),
@@ -1120,9 +1127,9 @@ class _InviteCandidateList extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFFFBFDFF),
+          color: AwikiMePalette.content,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFDDE5F0)),
+          border: Border.all(color: AwikiMePalette.hairline),
         ),
         child: Text(
           query.isEmpty
@@ -1135,9 +1142,9 @@ class _InviteCandidateList extends StatelessWidget {
     }
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFDFF),
+        color: AwikiMePalette.content,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: CupertinoScrollbar(
         controller: controller,
@@ -1150,7 +1157,7 @@ class _InviteCandidateList extends StatelessWidget {
             child: SizedBox(
               height: 1,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: Color(0xFFE6EDF5)),
+                decoration: BoxDecoration(color: AwikiMePalette.hairline),
               ),
             ),
           ),
@@ -1213,7 +1220,9 @@ class _InviteCandidateTile extends StatelessWidget {
           horizontal: responsive.spacing(12),
           vertical: responsive.spacing(10),
         ),
-        color: selected ? const Color(0xFFEAF2FF) : CupertinoColors.transparent,
+        color: selected
+            ? AwikiMePalette.brandAccentSoft
+            : CupertinoColors.transparent,
         child: Opacity(
           opacity: isDisabled ? 0.58 : 1,
           child: Row(
@@ -1236,7 +1245,7 @@ class _InviteCandidateTile extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: Color(0xFF101B32),
+                              color: AwikiMePalette.inkNeutral,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1252,7 +1261,7 @@ class _InviteCandidateTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF66728A),
+                        color: AwikiMePalette.mutedNeutral,
                         fontSize: 12,
                       ),
                     ),
@@ -1292,7 +1301,9 @@ class _IdentityKindBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: isAgent ? const Color(0xFFEAF2FF) : const Color(0xFFE6F8EE),
+        color: isAgent
+            ? AwikiMePalette.brandAccentSoft
+            : const Color(0xFFE6F8EE),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -1300,7 +1311,9 @@ class _IdentityKindBadge extends StatelessWidget {
             ? context.l10n.identityTypeAgent
             : context.l10n.identityTypeUser,
         style: TextStyle(
-          color: isAgent ? const Color(0xFF0B65F8) : const Color(0xFF0F8A4B),
+          color: isAgent
+              ? AwikiMePalette.brandAccent
+              : AwikiMePalette.successGreen,
           fontSize: 11,
           fontWeight: FontWeight.w600,
           height: 1,
@@ -1321,13 +1334,15 @@ class _SourceBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: muted ? const Color(0xFFF1F3F6) : const Color(0xFFFFF4D6),
+        color: muted ? AwikiMePalette.mist : const Color(0xFFFFF4D6),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: muted ? const Color(0xFF8A96AA) : const Color(0xFF7A4E00),
+          color: muted
+              ? AwikiMePalette.messagePreview
+              : const Color(0xFF7A4E00),
           fontSize: 11,
           fontWeight: FontWeight.w600,
           height: 1,
@@ -1346,10 +1361,10 @@ class _SelectionMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = disabled
-        ? const Color(0xFFD4DAE4)
+        ? AwikiMePalette.hairline
         : selected
-        ? const Color(0xFF0B65F8)
-        : const Color(0xFFB9C2D0);
+        ? AwikiMePalette.brandAccent
+        : AwikiMePalette.messagePreview;
     return AnimatedContainer(
       key: const Key('group-invite-selection-mark'),
       duration: const Duration(milliseconds: 140),

@@ -3,12 +3,15 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
+import 'package:awiki_me/src/presentation/shared/sidebar_workspace.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -67,6 +70,165 @@ void main() {
     expect(find.byType(FriendsPage), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
     expect(find.byType(FriendsWorkspacePage), findsOneWidget);
+  });
+
+  testWidgets('桌面联系人默认在右侧展示共享完整目录', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway()
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:alice-directory',
+          displayName: 'Directory Alice',
+          relationship: 'following',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:alice-directory',
+                    displayName: 'Directory Alice',
+                    relationship: 'following',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RelationshipDirectoryPage), findsOneWidget);
+    expect(
+      find.byKey(const Key('relationship-directory-tabs')),
+      findsOneWidget,
+    );
+    expect(find.text('Directory Alice'), findsNWidgets(2));
+    expect(find.text('取消关注'), findsOneWidget);
+    expect(find.byType(AwikiWorkspaceEmptyDetail), findsNothing);
+  });
+
+  testWidgets('窄屏联系人同页切换完整关注和粉丝列表', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway()
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:compact-following',
+          displayName: 'Compact Following',
+          relationship: 'following',
+        ),
+      ]
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:compact-follower',
+          displayName: 'Compact Follower',
+          relationship: 'follower',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const FriendsPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('friends-groups-row')), findsOneWidget);
+    expect(
+      find.byKey(const Key('relationship-directory-tabs')),
+      findsOneWidget,
+    );
+    expect(find.text('Compact Following'), findsOneWidget);
+    expect(find.text('Compact Follower'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('relationship-tab-followers')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Compact Following'), findsNothing);
+    expect(find.text('Compact Follower'), findsOneWidget);
+    expect(find.text('关注'), findsOneWidget);
+  });
+
+  testWidgets('联系人资料跨 compact 和 expanded 断点保持详情与目录分段', (tester) async {
+    const followerDid = 'did:test:responsive-follower';
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway()
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:responsive-following',
+          displayName: 'Responsive Following',
+          relationship: 'following',
+        ),
+      ]
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: followerDid,
+          displayName: 'Responsive Follower',
+          relationship: 'follower',
+        ),
+      ]
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        followerDid: UserProfile(
+          did: followerDid,
+          displayName: 'Responsive Follower',
+          bio: 'Responsive profile',
+          tags: <String>[],
+          profileMarkdown: '',
+        ),
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsWorkspacePage(),
+        gateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('relationship-tab-followers')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('contact-row:$followerDid')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('Responsive profile'), findsOneWidget);
+
+    tester.view.physicalSize = const Size(1280, 900);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AwikiPaneLayout), findsOneWidget);
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('Responsive profile'), findsOneWidget);
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    Navigator.of(tester.element(find.byType(PeerProfilePage))).pop();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PeerProfilePage), findsNothing);
+    expect(find.text('Responsive Follower'), findsOneWidget);
+    expect(find.text('Responsive Following'), findsNothing);
   });
 
   testWidgets('联系人页分区展示群组、我关注的和关注我的预览', (tester) async {
@@ -250,6 +412,41 @@ void main() {
     expect(find.text('关注'), findsNothing);
   });
 
+  testWidgets('完整关注我的列表保留已经互关的联系人', (tester) async {
+    const mutual = RelationshipSummary(
+      did: 'did:test:mutual-full-list',
+      displayName: 'Mutual Full List',
+      relationship: 'friend',
+    );
+    final gateway = FakeAwikiGateway()
+      ..followers = const <RelationshipSummary>[mutual]
+      ..following = const <RelationshipSummary>[mutual];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const RelationshipListPage(
+          type: FriendsRelationshipListType.followers,
+        ),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                followers: <RelationshipSummary>[mutual],
+                following: <RelationshipSummary>[mutual],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mutual Full List'), findsOneWidget);
+    expect(find.text('取消关注'), findsOneWidget);
+  });
+
   testWidgets('联系人预览区分加载失败与真实空列表并支持重试', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -271,7 +468,53 @@ void main() {
     expect(find.text('重试'), findsOneWidget);
   });
 
-  testWidgets('点击我关注的联系人会打开被点击对象的直聊', (tester) async {
+  testWidgets('窄屏联系人进入全屏真实资料子页', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    const did = 'did:test:compact-alice';
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        did: UserProfile(
+          did: did,
+          displayName: 'Compact Alice',
+          bio: 'Compact profile',
+          tags: <String>[],
+          profileMarkdown: '',
+        ),
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: did,
+                    displayName: 'Compact Alice',
+                    relationship: 'following',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('contact-row:$did')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('Compact profile'), findsOneWidget);
+  });
+
+  testWidgets('点击联系人先展示真实资料并可从资料发起直聊', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(1280, 900));
 
@@ -309,7 +552,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const FriendsPage(),
+        home: const FriendsWorkspacePage(),
         gateway: gateway,
         session: session,
         profile: const UserProfile(
@@ -347,13 +590,17 @@ void main() {
     await tester.tap(find.byKey(const Key('contact-row:did:test:alice')));
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(FriendsPage)),
-    );
-    final selected = selectedConversationSummary(container);
-    expect(selected?.targetDid, 'did:test:alice');
-    expect(selected?.displayName, 'Alice');
-    expect(selected?.conversationId, 'dm:peer-scope:v1:alice');
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('个人资料'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('peer-profile-send-message')));
+    await tester.pumpAndSettle();
+
+    final conversation = tester
+        .widget<ChatView>(find.byType(ChatView))
+        .conversation;
+    expect(conversation.targetDid, 'did:test:alice');
+    expect(conversation.displayName, 'Alice');
+    expect(conversation.conversationId, 'dm:peer-scope:v1:alice');
   });
 
   testWidgets('macOS 点击我关注的在右侧展示完整联系人列表并可取消关注', (tester) async {

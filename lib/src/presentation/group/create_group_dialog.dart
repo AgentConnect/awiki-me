@@ -19,12 +19,7 @@ import '../app_shell/providers/session_provider.dart';
 import 'group_chat_navigation.dart';
 import 'group_provider.dart';
 
-Future<void> showCreateGroupDialog(
-  BuildContext context,
-  WidgetRef ref, {
-  bool closeCurrentRouteOnDesktop = false,
-  bool replaceCurrentRouteOnPhone = false,
-}) async {
+Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) async {
   final group = await AppNavigator.showDialog<GroupSummary>(
     context,
     (_) => const CreateGroupDialog(),
@@ -32,13 +27,7 @@ Future<void> showCreateGroupDialog(
   if (group == null || !context.mounted) {
     return;
   }
-  await openGroupChat(
-    context,
-    ref,
-    group,
-    closeCurrentRouteOnDesktop: closeCurrentRouteOnDesktop,
-    replaceCurrentRouteOnPhone: replaceCurrentRouteOnPhone,
-  );
+  await openGroupChat(context, ref, group);
 }
 
 class CreateGroupDialog extends ConsumerStatefulWidget {
@@ -241,12 +230,12 @@ class _GroupNameInput extends StatelessWidget {
               vertical: responsive.spacing(12),
             ),
             decoration: BoxDecoration(
-              color: enabled ? const Color(0xFFFBFDFF) : theme.subtleSurface,
+              color: enabled ? AwikiMePalette.content : theme.subtleSurface,
               borderRadius: BorderRadius.circular(responsive.radius(12)),
               border: Border.all(
                 color: focusNode.hasFocus
                     ? theme.primary.withValues(alpha: 0.56)
-                    : const Color(0xFFDDE5F0),
+                    : AwikiMePalette.hairline,
                 width: focusNode.hasFocus ? 1.2 : 1,
               ),
             ),

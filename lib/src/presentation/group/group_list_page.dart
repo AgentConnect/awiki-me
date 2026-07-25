@@ -53,7 +53,7 @@ class GroupListPage extends ConsumerWidget {
             AwikiMeTopBar(
               title: context.l10n.groupListTitle,
               padding: EdgeInsets.zero,
-              trailingWidth: 108,
+              trailingWidth: 156,
               leading: embedded
                   ? const SizedBox.shrink()
                   : TopBarActionButton(
@@ -79,12 +79,7 @@ class GroupListPage extends ConsumerWidget {
                   TopBarActionButton(
                     key: const Key('group-list-create-button'),
                     semanticsLabel: context.l10n.quickActionCreateGroup,
-                    onTap: () => showCreateGroupDialog(
-                      context,
-                      ref,
-                      closeCurrentRouteOnDesktop: !embedded,
-                      replaceCurrentRouteOnPhone: !embedded,
-                    ),
+                    onTap: () => showCreateGroupDialog(context, ref),
                     child: Icon(
                       CupertinoIcons.person_3_fill,
                       color: theme.primary,
@@ -152,12 +147,7 @@ class GroupListPage extends ConsumerWidget {
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _GroupCard(
                     group: group,
-                    onTap: () => openGroupChat(
-                      context,
-                      ref,
-                      group,
-                      closeCurrentRouteOnDesktop: !embedded,
-                    ),
+                    onTap: () => openGroupChat(context, ref, group),
                     onOpenDetail: () async {
                       await ref
                           .read(groupProvider.notifier)
@@ -242,12 +232,7 @@ class GroupListPage extends ConsumerWidget {
                   if (!context.mounted) {
                     return;
                   }
-                  await openGroupChat(
-                    context,
-                    ref,
-                    group,
-                    closeCurrentRouteOnDesktop: true,
-                  );
+                  await openGroupChat(context, ref, group);
                 } catch (error) {
                   ref
                       .read(uiFeedbackProvider.notifier)
@@ -285,10 +270,10 @@ class _GroupRecoveryStatusBand extends StatelessWidget {
         ? context.l10n.groupRecoveryPending(summary.pending)
         : context.l10n.groupRecoveryCompleted;
     final accent = summary.hasBlocked
-        ? const Color(0xFFB42318)
+        ? AwikiMePalette.dangerRed
         : summary.hasPending
         ? const Color(0xFF8A5A00)
-        : const Color(0xFF067647);
+        : AwikiMePalette.successGreen;
     return Container(
       key: const Key('group-recovery-status-band'),
       width: double.infinity,
@@ -735,11 +720,11 @@ class _GroupDetailIconButton extends StatelessWidget {
       isLoading: isLoading,
       size: responsive.scaled(34),
       backgroundColor: theme.surface,
-      borderColor: const Color(0xFFDDE5F0),
+      borderColor: AwikiMePalette.hairline,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Icon(
         icon,
-        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
+        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
         size: responsive.iconSm,
       ),
     );
@@ -879,7 +864,7 @@ class GroupMemberRow extends ConsumerWidget {
             tooltip: context.l10n.groupRemoveMember,
             size: responsive.scaled(32),
             backgroundColor: theme.subtleSurface,
-            borderColor: const Color(0xFFDDE5F0),
+            borderColor: AwikiMePalette.hairline,
             borderRadius: BorderRadius.circular(responsive.radius(8)),
             child: Icon(
               CupertinoIcons.minus_circle,

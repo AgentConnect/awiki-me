@@ -400,7 +400,7 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: CupertinoPageScaffold(
-        backgroundColor: AwikiMePalette.ivory,
+        backgroundColor: AwikiMePalette.canvas,
         child: AwikiAdaptiveScaffold(
           maxWidth: 420,
           child: Padding(
@@ -523,7 +523,7 @@ class _TenantBootstrapLoadingApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: appTheme.cupertinoTheme,
       home: CupertinoPageScaffold(
-        backgroundColor: AwikiMePalette.ivory,
+        backgroundColor: AwikiMePalette.canvas,
         child: AwikiAdaptiveScaffold(
           maxWidth: 320,
           child: Column(

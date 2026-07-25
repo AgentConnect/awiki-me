@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/navigation_provider.dart';
+import '../friends/friends_navigation_provider.dart';
 import '../group/create_group_dialog.dart';
-import '../group/group_list_page.dart';
 import 'identity_flow.dart';
 import 'widgets/app_widgets.dart';
 
@@ -34,8 +35,12 @@ Future<void> showCommonQuickActionsMenu(
         AppDropMenuItem(
           label: l10n.quickActionJoinGroup,
           icon: CupertinoIcons.link,
-          onTap: () =>
-              AppNavigator.push(rootContext, (_) => const GroupListPage()),
+          onTap: () {
+            ref.read(friendsWorkspaceNavigationProvider.notifier).showGroups();
+            ref
+                .read(shellDestinationProvider.notifier)
+                .select(ShellDestination.contacts);
+          },
         ),
         if (includeFollowContact)
           AppDropMenuItem(

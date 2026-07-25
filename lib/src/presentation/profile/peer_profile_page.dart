@@ -24,9 +24,16 @@ import 'peer_display_profile_provider.dart';
 import 'peer_profile_provider.dart';
 
 class PeerProfilePage extends ConsumerWidget {
-  const PeerProfilePage({super.key, required this.did});
+  const PeerProfilePage({
+    super.key,
+    required this.did,
+    this.embedded = false,
+    this.onBack,
+  });
 
   final String did;
+  final bool embedded;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -84,14 +91,17 @@ class PeerProfilePage extends ConsumerWidget {
                       AwikiMeTopBar(
                         title: context.l10n.peerProfileTitle,
                         padding: EdgeInsets.zero,
-                        leading: TopBarActionButton(
-                          onTap: () => Navigator.of(context).pop(),
-                          child: AwikiAssetIcon(
-                            assetName: 'assets/icons/icon_left.svg',
-                            color: theme.primaryDark,
-                            size: 22,
-                          ),
-                        ),
+                        leading: embedded && onBack == null
+                            ? const SizedBox.shrink()
+                            : TopBarActionButton(
+                                onTap:
+                                    onBack ?? () => Navigator.of(context).pop(),
+                                child: AwikiAssetIcon(
+                                  assetName: 'assets/icons/icon_left.svg',
+                                  color: theme.primaryDark,
+                                  size: 22,
+                                ),
+                              ),
                       ),
                       const SizedBox(height: 16),
                       AppCardSection(
@@ -234,6 +244,7 @@ class PeerProfilePage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       AppPrimaryButton(
+                        key: const Key('peer-profile-send-message'),
                         label: context.l10n.peerProfileSendMessage,
                         onPressed: () async {
                           await openDirectConversationForProfile(
@@ -241,7 +252,7 @@ class PeerProfilePage extends ConsumerWidget {
                             ref,
                             profile,
                           );
-                          if (context.mounted) {
+                          if (!embedded && context.mounted) {
                             Navigator.of(context).pop();
                           }
                         },
@@ -254,6 +265,15 @@ class PeerProfilePage extends ConsumerWidget {
                           onPressed: () => ref
                               .read(peerProfileProvider(did).notifier)
                               .unfollow(),
+                        ),
+                      ] else ...<Widget>[
+                        const SizedBox(height: 10),
+                        AppSecondaryButton(
+                          key: const Key('peer-profile-follow'),
+                          label: context.l10n.friendsFollow,
+                          onPressed: () => ref
+                              .read(peerProfileProvider(did).notifier)
+                              .follow(),
                         ),
                       ],
                       const SizedBox(height: 10),

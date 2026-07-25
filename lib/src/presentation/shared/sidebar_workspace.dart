@@ -19,7 +19,9 @@ class AwikiSidebarWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AwikiPaneLayout(
-      listPaneWidth: 340,
+      listPaneWidth: 272,
+      minListPaneWidth: 240,
+      minDetailPaneWidth: 360,
       listPane: DecoratedBox(
         decoration: BoxDecoration(color: context.awikiTheme.background),
         child: Column(

@@ -51,7 +51,6 @@ class MainFlutterWindow: NSWindow {
 
   private enum TrafficLightLayout {
     // Keep this aligned with the Flutter macOS rail width in app_shell.dart.
-    static let railWidth: CGFloat = 72
     static let minimumRailWidth: CGFloat = 56
     static let minimumLeading: CGFloat = 6
     static let preferredLeading: CGFloat = 8
@@ -59,11 +58,13 @@ class MainFlutterWindow: NSWindow {
     static let preferredGap: CGFloat = 8
   }
 
-  private var trafficLightRailWidth: CGFloat = TrafficLightLayout.railWidth
+  private var trafficLightRailWidth: CGFloat?
+  private var defaultTrafficLightXOrigins: [CGFloat]?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
+    captureDefaultTrafficLightOrigins()
     configureChrome()
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
@@ -86,6 +87,12 @@ class MainFlutterWindow: NSWindow {
   }
 
   private func configureChrome() {
+    backgroundColor = NSColor(
+      srgbRed: 250.0 / 255.0,
+      green: 249.0 / 255.0,
+      blue: 247.0 / 255.0,
+      alpha: 1.0
+    )
     titleVisibility = .hidden
     titlebarAppearsTransparent = true
     styleMask.insert(.fullSizeContentView)
@@ -129,6 +136,13 @@ class MainFlutterWindow: NSWindow {
     }
 
     let buttons = [closeButton, minimizeButton, zoomButton]
+    guard let trafficLightRailWidth else {
+      if defaultTrafficLightXOrigins == nil {
+        captureDefaultTrafficLightOrigins()
+      }
+      restoreDefaultTrafficLightOrigins(buttons: buttons)
+      return
+    }
     let contentWidth = contentView?.bounds.width ?? frame.width
     let railWidth = min(
       max(TrafficLightLayout.minimumRailWidth, trafficLightRailWidth),
@@ -157,6 +171,33 @@ class MainFlutterWindow: NSWindow {
     }
   }
 
+  private func captureDefaultTrafficLightOrigins() {
+    guard
+      let closeButton = standardWindowButton(.closeButton),
+      let minimizeButton = standardWindowButton(.miniaturizeButton),
+      let zoomButton = standardWindowButton(.zoomButton)
+    else {
+      return
+    }
+    defaultTrafficLightXOrigins = [
+      closeButton.frame.origin.x,
+      minimizeButton.frame.origin.x,
+      zoomButton.frame.origin.x,
+    ]
+  }
+
+  private func restoreDefaultTrafficLightOrigins(buttons: [NSButton]) {
+    guard
+      let origins = defaultTrafficLightXOrigins,
+      origins.count == buttons.count
+    else {
+      return
+    }
+    for (button, x) in zip(buttons, origins) {
+      button.setFrameOrigin(NSPoint(x: x, y: button.frame.origin.y))
+    }
+  }
+
   private func registerWindowChromeChannel(flutterViewController: FlutterViewController) {
     let channel = FlutterMethodChannel(
       name: "ai.awiki.awikime/window_chrome",
@@ -167,6 +208,10 @@ class MainFlutterWindow: NSWindow {
       switch call.method {
       case "setTrafficLightRailWidth":
         self.setTrafficLightRailWidth(arguments: call.arguments, result: result)
+      case "resetTrafficLightRailWidth":
+        self.trafficLightRailWidth = nil
+        self.scheduleTrafficLightLayout()
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }

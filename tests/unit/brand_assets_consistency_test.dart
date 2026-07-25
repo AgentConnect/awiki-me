@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as image;
@@ -8,13 +9,29 @@ import 'package:yaml/yaml.dart';
 const _canonicalLogoPath = 'assets/branding/awiki-me-logo.png';
 
 void main() {
+  test('semantic icon registry only references declared local SVG assets', () {
+    final pubspec =
+        loadYaml(File('pubspec.yaml').readAsStringSync()) as YamlMap;
+    final flutter = pubspec['flutter'] as YamlMap;
+    final declaredAssets = (flutter['assets'] as YamlList).cast<String>();
+    expect(declaredAssets, contains('assets/icons/'));
+
+    for (final assetName in AwikiMeIconRegistry.assetNames) {
+      final file = File(assetName);
+      expect(file.existsSync(), isTrue, reason: '$assetName must exist');
+      final source = file.readAsStringSync();
+      expect(source, contains('<svg'), reason: assetName);
+      expect(source, contains('viewBox='), reason: assetName);
+    }
+  });
+
   test('native splash and launcher configs use the canonical logo', () {
     final splash =
         loadYaml(File('flutter_native_splash.yaml').readAsStringSync())
             as YamlMap;
     final splashConfig = splash['flutter_native_splash'] as YamlMap;
     expect(splashConfig['image'], _canonicalLogoPath);
-    expect((splashConfig['android_12'] as YamlMap)['color'], '#FAF9FE');
+    expect((splashConfig['android_12'] as YamlMap)['color'], '#FAF9F7');
     expect(splashConfig['android'], isTrue);
     expect(splashConfig['ios'], isTrue);
     expect(splashConfig['web'], isFalse);
@@ -80,7 +97,7 @@ void main() {
       final pixel = background!.getPixel(0, 0);
       expect(pixel.r.toInt(), 0xFA, reason: path);
       expect(pixel.g.toInt(), 0xF9, reason: path);
-      expect(pixel.b.toInt(), 0xFE, reason: path);
+      expect(pixel.b.toInt(), 0xF7, reason: path);
       expect(pixel.a.toInt(), 0xFF, reason: path);
     }
 
@@ -93,7 +110,7 @@ void main() {
         File(path).readAsStringSync(),
         contains(
           '<item name="android:windowSplashScreenBackground">'
-          '#FAF9FE</item>',
+          '#FAF9F7</item>',
         ),
         reason: '$path must match the generated Android 12 splash config',
       );

@@ -48,6 +48,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonRetry => 'Retry';
 
   @override
+  String get commonRefresh => 'Refresh';
+
+  @override
   String get commonClose => 'Close';
 
   @override
@@ -620,7 +623,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get conversationBackToChat => 'Back to chat';
 
   @override
-  String get friendsTitle => 'Friends';
+  String get friendsTitle => 'Contacts';
 
   @override
   String get friendsGroups => 'Groups';

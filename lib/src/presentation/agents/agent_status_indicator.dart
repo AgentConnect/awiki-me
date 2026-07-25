@@ -59,20 +59,31 @@ class AgentStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
     final color = agentVisualStatusColor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(9),
+        vertical: responsive.spacing(4),
+      ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(99),
       ),
-      child: Text(
-        localizeAgentVisualStatus(context.l10n, status),
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _SolidDot(color: color, size: responsive.displayScaled(6)),
+          SizedBox(width: responsive.spacing(5)),
+          Text(
+            localizeAgentVisualStatus(context.l10n, status),
+            style: TextStyle(
+              color: color,
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -110,6 +121,6 @@ Color agentVisualStatusColor(AgentVisualStatus status) {
     AgentVisualStatusKind.failed => AwikiMeColors.danger,
     AgentVisualStatusKind.offline ||
     AgentVisualStatusKind.disabled ||
-    AgentVisualStatusKind.unknown => const Color(0xFF66728A),
+    AgentVisualStatusKind.unknown => AwikiMePalette.mutedNeutral,
   };
 }

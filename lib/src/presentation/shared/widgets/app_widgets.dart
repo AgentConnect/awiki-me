@@ -301,7 +301,10 @@ class TopBarActionButton extends StatelessWidget {
       pressedScale: 0.94,
       borderRadius:
           borderRadius ?? BorderRadius.circular(responsive.radius(10)),
-      child: child,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: Center(child: child),
+      ),
     );
   }
 }
@@ -790,50 +793,63 @@ class AppDropMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final compact = responsive.isCompact;
+    final radius = responsive.radius(compact ? 14 : 8);
     return SafeArea(
       child: Align(
-        alignment: Alignment.bottomCenter,
+        alignment: compact ? Alignment.bottomCenter : Alignment.center,
         child: Padding(
-          padding: responsive.scaledInsets(const EdgeInsets.all(16)),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.surface,
-              borderRadius: BorderRadius.circular(responsive.radius(24)),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x14000000),
-                  blurRadius: 30,
-                  offset: Offset(0, 10),
-                ),
-              ],
+          padding: responsive.scaledInsets(EdgeInsets.all(compact ? 12 : 20)),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: compact ? double.infinity : 340,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (title != null && title!.trim().isNotEmpty) ...<Widget>[
-                  Padding(
-                    padding: responsive.scaledInsets(
-                      const EdgeInsets.fromLTRB(24, 18, 24, 14),
-                    ),
-                    child: Text(
-                      title!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: responsive.metaSm,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.2,
-                        color: theme.secondaryText,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(radius),
+                boxShadow: theme.overlayShadow,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(radius),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (title != null && title!.trim().isNotEmpty) ...<Widget>[
+                      Padding(
+                        padding: responsive.scaledInsets(
+                          EdgeInsets.fromLTRB(
+                            compact ? 20 : 14,
+                            compact ? 16 : 12,
+                            compact ? 20 : 14,
+                            compact ? 12 : 10,
+                          ),
+                        ),
+                        child: Text(
+                          title!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: responsive.metaSm,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                            color: theme.secondaryText,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  Container(height: 1, color: theme.border),
-                ],
-                for (var index = 0; index < items.length; index++) ...<Widget>[
-                  _AppDropMenuButton(item: items[index]),
-                  if (index != items.length - 1)
-                    Container(height: 1, color: theme.border),
-                ],
-              ],
+                      Container(height: 1, color: theme.border),
+                    ],
+                    for (
+                      var index = 0;
+                      index < items.length;
+                      index++
+                    ) ...<Widget>[
+                      _AppDropMenuButton(item: items[index]),
+                      if (index != items.length - 1)
+                        Container(height: 1, color: theme.border),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -869,7 +885,7 @@ class _AppDropMenuButton extends StatelessWidget {
       semanticsIdentifier: item.semanticsIdentifier,
       borderRadius: BorderRadius.zero,
       child: SizedBox(
-        height: responsive.isPhone ? 68 : responsive.scaled(56),
+        height: responsive.isCompact ? 56 : responsive.displayScaled(42),
         child: Center(
           child: item.icon == null
               ? Text(
@@ -1064,20 +1080,8 @@ class AppPrimaryButton extends StatelessWidget {
           vertical: responsive.spacing(10),
         ),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: <Color>[
-              AwikiMePalette.actionBlue,
-              AwikiMePalette.actionBlueDeep,
-            ],
-          ),
+          color: theme.primary,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x240B65F8),
-              blurRadius: 20,
-              offset: Offset(0, 8),
-            ),
-          ],
         ),
         child: Center(
           child: Text(

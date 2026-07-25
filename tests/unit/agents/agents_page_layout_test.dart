@@ -11,6 +11,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
@@ -34,7 +35,7 @@ void main() {
 
     expect(find.text('智能体'), findsWidgets);
     expect(find.text('代理 1'), findsWidgets);
-    expect(find.text('刷新状态'), findsNothing);
+    expect(find.text('刷新状态'), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.refresh), findsWidgets);
     expect(find.text('创建 Agent'), findsOneWidget);
     expect(find.text('升级'), findsNothing);
@@ -398,15 +399,35 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.byKey(const Key('agents-compact-layout')), findsOneWidget);
+      expect(find.byKey(const Key('agents-compact-list')), findsOneWidget);
+      expect(
+        find.byKey(const Key('agents-compact-list-header')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('agents-compact-detail')), findsNothing);
+      expect(find.byKey(const Key('agents-expanded-layout')), findsNothing);
       expect(find.text('创建 Agent'), findsNothing);
       expect(find.text('Hermes'), findsOneWidget);
 
       await tester.tap(find.text('代理 1').first);
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('agents-compact-list')), findsNothing);
+      expect(find.byKey(const Key('agents-compact-detail')), findsOneWidget);
+      expect(
+        find.byKey(const Key('agents-compact-back-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header')),
+        findsNothing,
+      );
       expect(find.text('创建 Agent'), findsOneWidget);
 
-      await tester.tap(find.byIcon(CupertinoIcons.chevron_left));
+      await tester.tap(find.byKey(const Key('agents-compact-back-button')));
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('agents-compact-list')), findsOneWidget);
+      expect(find.byKey(const Key('agents-compact-detail')), findsNothing);
       expect(find.text('创建 Agent'), findsNothing);
       expect(find.text('Hermes'), findsOneWidget);
 
@@ -478,9 +499,53 @@ void main() {
       final context = tester.element(find.byType(AgentsWorkspacePage));
       final container = ProviderScope.containerOf(context);
       expect(container.read(agentsProvider).selectedAgentDid, isNull);
+      expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
+      expect(find.byKey(const Key('agents-compact-layout')), findsNothing);
+      expect(
+        tester
+            .getSize(find.byKey(const Key('agents-expanded-list-pane')))
+            .width,
+        272,
+      );
+      expect(
+        find.byKey(const Key('agents-persistent-detail-header')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('agents-expanded-detail-pane')),
+        findsOneWidget,
+      );
       expect(find.text('创建 Agent'), findsOneWidget);
     },
   );
+
+  testWidgets('minimum expanded workspace keeps agent actions in bounds', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(720, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
+    expect(
+      find.byKey(const Key('agents-persistent-detail-header')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'unrelated pending agent action does not disable daemon actions',
@@ -629,13 +694,10 @@ void main() {
 
     await tester.tap(find.text('打开聊天'));
     await tester.pumpAndSettle();
-    final context = tester.element(find.byType(AgentsWorkspacePage));
-    final container = ProviderScope.containerOf(context);
-    final selected = selectedConversationSummary(container);
-    expect(selected?.targetDid, 'did:agent:runtime');
-    expect(selected?.targetPeer, 'awiki-agent-hermes.awiki.ai');
-    expect(selected?.conversationId, 'dm:peer-scope:v1:hermes-runtime');
-    expect(selected?.targetPeer, 'awiki-agent-hermes.awiki.ai');
+    final opened = tester.widget<ChatView>(find.byType(ChatView)).conversation;
+    expect(opened.targetDid, 'did:agent:runtime');
+    expect(opened.targetPeer, 'awiki-agent-hermes.awiki.ai');
+    expect(opened.conversationId, 'dm:peer-scope:v1:hermes-runtime');
 
     expect(find.text('重置 Session'), findsNothing);
     expect(find.text('重试 Run'), findsNothing);
@@ -1031,7 +1093,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(control.lastInvocationPolicyAgentDid, isNull);
 
-    await tester.tap(find.byKey(const Key('agent-access-mode-toggle')));
+    await tester.tap(find.byKey(const Key('agent-access-blacklist-mode')));
     await tester.pumpAndSettle();
     expect(control.lastInvocationPolicyAgentDid, 'did:agent:runtime');
     expect(
@@ -1896,11 +1958,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(CupertinoIcons.plus_circle_fill));
+    await tester.tap(find.byKey(const Key('agents-install-daemon-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('到宿主机安装代理'), findsOneWidget);
-    expect(find.textContaining('支持的 Agent 类型：Hermes'), findsOneWidget);
+    expect(find.text('到宿主机安装代理'), findsWidgets);
+    expect(find.textContaining('支持的 Agent 类型：Hermes'), findsWidgets);
     expect(find.byIcon(CupertinoIcons.xmark), findsOneWidget);
     expect(find.byKey(const Key('agent-install-copy-button')), findsOneWidget);
     expect(find.text('重新生成命令'), findsNothing);
@@ -1951,7 +2013,8 @@ void main() {
 
     await tester.tap(find.byIcon(CupertinoIcons.xmark));
     await tester.pumpAndSettle();
-    expect(find.text('到宿主机安装代理'), findsNothing);
+    expect(find.byKey(const Key('agent-install-command-text')), findsNothing);
+    expect(find.text('到宿主机安装代理'), findsNWidgets(2));
   });
 
   testWidgets(
@@ -1996,7 +2059,7 @@ void main() {
 
       expect(control.lastRefreshedDaemonDid, 'did:agent:daemon');
       expect(find.text('刷新中'), findsNothing);
-      expect(find.text('刷新状态'), findsNothing);
+      expect(find.text('刷新状态'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();

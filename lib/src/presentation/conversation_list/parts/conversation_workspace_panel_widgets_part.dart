@@ -22,7 +22,7 @@ class _MacPanelShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
+      decoration: const BoxDecoration(color: AwikiMePalette.mist),
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -31,7 +31,9 @@ class _MacPanelShell extends StatelessWidget {
               height: 60,
               padding: const EdgeInsets.fromLTRB(18, 0, 12, 0),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
+                border: Border(
+                  bottom: BorderSide(color: AwikiMePalette.hairline),
+                ),
               ),
               child: Row(
                 children: <Widget>[
@@ -53,7 +55,7 @@ class _MacPanelShell extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: Color(0xFF101B32),
+                        color: AwikiMePalette.inkNeutral,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
@@ -103,11 +105,11 @@ class _MacPanelIconButton extends StatelessWidget {
       tooltip: semanticLabel,
       size: responsive.displayScaled(32),
       backgroundColor: CupertinoColors.white,
-      borderColor: const Color(0xFFDDE5F0),
+      borderColor: AwikiMePalette.hairline,
       borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
       child: Icon(
         icon,
-        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
+        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
         size: responsive.displayScaled(16),
       ),
     );

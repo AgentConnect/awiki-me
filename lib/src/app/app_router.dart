@@ -3,26 +3,27 @@ import 'package:flutter/material.dart' show DialogRoute;
 import 'package:flutter/services.dart';
 
 import '../presentation/shared/awiki_me_design.dart';
+import '../presentation/shared/responsive_layout.dart';
 
 class AppNavigator {
   const AppNavigator._();
 
   static const SystemUiOverlayStyle _defaultOverlayStyle = SystemUiOverlayStyle(
-    statusBarColor: AwikiMePalette.ivory,
+    statusBarColor: AwikiMePalette.canvas,
     statusBarIconBrightness: Brightness.dark,
     statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: AwikiMePalette.ivory,
+    systemNavigationBarColor: AwikiMePalette.canvas,
     systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: AwikiMePalette.ivory,
+    systemNavigationBarDividerColor: AwikiMePalette.canvas,
   );
 
   static const SystemUiOverlayStyle _sheetOverlayStyle = SystemUiOverlayStyle(
-    statusBarColor: Color(0xFFD8D7DC),
+    statusBarColor: AwikiMePalette.navigationSurface,
     statusBarIconBrightness: Brightness.dark,
     statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFFD8D7DC),
+    systemNavigationBarColor: AwikiMePalette.navigationSurface,
     systemNavigationBarIconBrightness: Brightness.dark,
-    systemNavigationBarDividerColor: Color(0xFFD8D7DC),
+    systemNavigationBarDividerColor: AwikiMePalette.navigationBorder,
   );
 
   static Future<T?> push<T>(BuildContext context, WidgetBuilder builder) {
@@ -33,9 +34,10 @@ class AppNavigator {
 
   static Future<T?> pushWithoutAnimation<T>(
     BuildContext context,
-    WidgetBuilder builder,
-  ) {
-    return Navigator.of(context).push<T>(
+    WidgetBuilder builder, {
+    bool rootNavigator = false,
+  }) {
+    return Navigator.of(context, rootNavigator: rootNavigator).push<T>(
       PageRouteBuilder<T>(
         pageBuilder: (context, _, __) => builder(context),
         transitionDuration: Duration.zero,
@@ -57,7 +59,24 @@ class AppNavigator {
     BuildContext context,
     WidgetBuilder builder, {
     bool barrierDismissible = true,
-  }) {
+  }) async {
+    if (context.awikiResponsive.isCompact) {
+      SystemChrome.setSystemUIOverlayStyle(_sheetOverlayStyle);
+      try {
+        return await showCupertinoModalPopup<T>(
+          context: context,
+          barrierColor: const Color(0x57000000),
+          barrierDismissible: barrierDismissible,
+          semanticsDismissible: true,
+          useRootNavigator: true,
+          requestFocus: true,
+          builder: (dialogContext) =>
+              _AppDialogKeyboardDismissScope(child: builder(dialogContext)),
+        );
+      } finally {
+        SystemChrome.setSystemUIOverlayStyle(_defaultOverlayStyle);
+      }
+    }
     return Navigator.of(context, rootNavigator: true).push<T>(
       DialogRoute<T>(
         context: context,
@@ -73,10 +92,16 @@ class AppNavigator {
     BuildContext context,
     WidgetBuilder builder,
   ) async {
+    if (context.awikiResponsive.isExpanded) {
+      return showDialog<T>(context, builder);
+    }
     SystemChrome.setSystemUIOverlayStyle(_sheetOverlayStyle);
     try {
       return await showCupertinoModalPopup<T>(
         context: context,
+        barrierColor: const Color(0x57000000),
+        semanticsDismissible: true,
+        requestFocus: true,
         builder: builder,
       );
     } finally {

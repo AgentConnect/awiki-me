@@ -24,6 +24,7 @@ import '../shared/app_dialog.dart';
 import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
@@ -137,6 +138,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
     final state = ref.watch(agentsProvider);
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final selected = _agentSelectionForLayout(
       state,
@@ -163,6 +165,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final detail = _AgentDetailPane(
       state: state,
       selected: selected,
+      showPersistentHeader: responsive.supportsTwoPane,
       pendingAgentDids: pendingAgentDids,
       onRefresh: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
@@ -173,6 +176,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
         agent,
         state.runtimesFor(agent.agentDid),
       ),
+      onInstallDaemon: () =>
+          ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
       onOpenChat: (agent) => _openRuntimeChat(context, ref, agent),
       onRename: (agent) => _showRenameAgentDialog(context, ref, agent),
       onUpgrade: (agent) => _confirmUpgradeDaemon(context, ref, agent),
@@ -196,12 +201,22 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
     if (responsive.supportsTwoPane) {
       return DecoratedBox(
-        decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+        key: const Key('agents-expanded-layout'),
+        decoration: BoxDecoration(color: theme.background),
         child: Row(
           children: <Widget>[
-            SizedBox(width: responsive.displayScaled(348), child: list),
-            Container(width: 1, color: const Color(0xFFE5EAF2)),
-            Expanded(child: detail),
+            SizedBox(
+              key: const Key('agents-expanded-list-pane'),
+              width: 272,
+              child: list,
+            ),
+            Container(width: 1, color: theme.border),
+            Expanded(
+              child: KeyedSubtree(
+                key: const Key('agents-expanded-detail-pane'),
+                child: detail,
+              ),
+            ),
           ],
         ),
       );
@@ -209,23 +224,58 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     final hasCompactDetailSelection =
         state.selectedAgentDid != null && selected != null;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+      key: const Key('agents-compact-layout'),
+      decoration: BoxDecoration(color: theme.background),
       child: !hasCompactDetailSelection
-          ? list
-          : Column(
-              children: <Widget>[
-                CupertinoNavigationBar(
-                  middle: Text(context.l10n.agentPageTitle),
-                  leading: TopBarActionButton(
-                    onTap: () =>
-                        ref.read(agentsProvider.notifier).clearSelection(),
-                    semanticsLabel: context.l10n.commonBack,
-                    tooltip: context.l10n.commonBack,
-                    child: const Icon(CupertinoIcons.chevron_left),
+          ? KeyedSubtree(key: const Key('agents-compact-list'), child: list)
+          : SafeArea(
+              bottom: false,
+              child: Column(
+                key: const Key('agents-compact-detail'),
+                children: <Widget>[
+                  AwikiMeTopBar(
+                    title: localizeAgentTitle(context.l10n, selected),
+                    leadingWidth: 52,
+                    trailingWidth: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    leading: TopBarActionButton(
+                      key: const Key('agents-compact-back-button'),
+                      onTap: () =>
+                          ref.read(agentsProvider.notifier).clearSelection(),
+                      semanticsLabel: context.l10n.commonBack,
+                      tooltip: context.l10n.commonBack,
+                      child: Icon(
+                        CupertinoIcons.chevron_left,
+                        size: responsive.iconMd,
+                        color: theme.secondaryText,
+                      ),
+                    ),
+                    trailing: selected.isDaemon
+                        ? TopBarActionButton(
+                            key: const Key('agents-compact-refresh-button'),
+                            onTap: state.isStatusQueryPending(selected.agentDid)
+                                ? null
+                                : () => ref
+                                      .read(agentsProvider.notifier)
+                                      .refreshDaemonStatus(selected.agentDid),
+                            semanticsLabel: context.l10n.agentRefreshStatus,
+                            tooltip: context.l10n.agentRefreshStatus,
+                            child: state.isStatusQueryPending(selected.agentDid)
+                                ? CupertinoActivityIndicator(
+                                    radius: responsive.displayScaled(7),
+                                  )
+                                : Icon(
+                                    CupertinoIcons.refresh,
+                                    size: responsive.iconMd,
+                                    color: theme.secondaryText,
+                                  ),
+                          )
+                        : const SizedBox.shrink(),
                   ),
-                ),
-                Expanded(child: detail),
-              ],
+                  Container(height: 1, color: theme.border),
+                  Expanded(child: detail),
+                ],
+              ),
             ),
     );
   }
@@ -256,8 +306,14 @@ class _AgentsTenantUnsupportedView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+    final theme = context.awikiTheme;
+    final type = theme.typographyFor(
+      responsive.isCompact
+          ? AwikiMeTypographyMode.compact
+          : AwikiMeTypographyMode.expanded,
+    );
+    return ColoredBox(
+      color: theme.background,
       child: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -269,43 +325,22 @@ class _AgentsTenantUnsupportedView extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Container(
-                    width: responsive.displayScaled(52),
-                    height: responsive.displayScaled(52),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEAF2FF),
-                      borderRadius: BorderRadius.circular(
-                        responsive.radius(14),
-                      ),
-                      border: Border.all(color: const Color(0xFFD7E5FF)),
-                    ),
-                    child: Icon(
-                      CupertinoIcons.sparkles,
-                      color: const Color(0xFF0B65F8),
-                      size: responsive.iconLg,
-                    ),
+                  Icon(
+                    CupertinoIcons.square_stack_3d_up,
+                    color: theme.tertiaryText,
+                    size: responsive.displayScaled(32),
                   ),
                   SizedBox(height: responsive.spacing(16)),
                   Text(
                     context.l10n.agentTenantUnsupportedTitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: const Color(0xFF101B32),
-                      fontSize: responsive.titleXl,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
-                    ),
+                    style: type.sectionTitle.copyWith(color: theme.title),
                   ),
                   SizedBox(height: responsive.spacing(8)),
                   Text(
                     context.l10n.agentTenantUnsupportedSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: const Color(0xFF66728A),
-                      fontSize: responsive.bodyMd,
-                      height: 1.45,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: type.body.copyWith(color: theme.secondaryText),
                   ),
                 ],
               ),

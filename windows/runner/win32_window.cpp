@@ -27,9 +27,9 @@ namespace {
 #define DWMWA_TEXT_COLOR 36
 #endif
 
-constexpr COLORREF kLightCaptionColor = RGB(250, 249, 254);
-constexpr COLORREF kLightCaptionTextColor = RGB(26, 28, 28);
-constexpr COLORREF kLightBorderColor = RGB(221, 229, 240);
+constexpr COLORREF kLightCaptionColor = RGB(250, 249, 247);
+constexpr COLORREF kLightCaptionTextColor = RGB(45, 43, 38);
+constexpr COLORREF kLightBorderColor = RGB(232, 231, 228);
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;

@@ -1,6 +1,8 @@
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
+import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
+import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets('桌面我的页面使用 272px 摘要栏和完整资料详情', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    const profile = UserProfile(
+      did: 'did:test:workspace-profile',
+      nickName: 'Alice',
+      bio: 'Workspace bio',
+      tags: <String>['awiki'],
+      handle: 'alice',
+      profileMarkdown: '# Alice\n\nWorkspace profile body',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ProfileWorkspacePage(),
+        gateway: FakeAwikiGateway()..myProfile = profile,
+        profile: profile,
+        homepageMarkdownLoader: (_) async => null,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pane = tester.widget<AwikiPaneLayout>(find.byType(AwikiPaneLayout));
+    expect(pane.listPaneWidth, 272);
+    expect(find.byKey(const Key('profile-sidebar-summary')), findsOneWidget);
+    expect(find.text('Workspace profile body'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.pencil), findsOneWidget);
+  });
+
   testWidgets('个人资料页点击编辑后可提交昵称简介和标签', (tester) async {
     final gateway = FakeAwikiGateway();
     const profile = UserProfile(

@@ -194,7 +194,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    color: Color(0xFF101B32),
+                                    color: AwikiMePalette.inkNeutral,
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
                                   ),
@@ -217,7 +217,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: Color(0xFF66728A),
+                                color: AwikiMePalette.mutedNeutral,
                                 fontSize: 12,
                                 height: 1.25,
                               ),
@@ -231,7 +231,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: Color(0xFF8A96AA),
+                                color: AwikiMePalette.messagePreview,
                                 fontSize: 11.5,
                                 height: 1.25,
                               ),
@@ -253,7 +253,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                                 'peer-info-dialog-copy-did-button',
                               ),
                               textStyle: const TextStyle(
-                                color: Color(0xFF66728A),
+                                color: AwikiMePalette.mutedNeutral,
                                 fontSize: 12,
                                 height: 1.25,
                               ),
@@ -346,7 +346,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                       styleSheet: _chatMarkdownStyleSheet(
                         context,
                         const TextStyle(
-                          color: Color(0xFF17213A),
+                          color: AwikiMePalette.inkNeutral,
                           fontSize: 13,
                           height: 1.45,
                         ),
@@ -416,7 +416,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
 
   Widget _profilePlaceholder(PeerProfileState state) {
     const textStyle = TextStyle(
-      color: Color(0xFF66728A),
+      color: AwikiMePalette.mutedNeutral,
       fontSize: 13,
       height: 1.35,
     );
@@ -535,7 +535,7 @@ class _PeerInfoHeader extends StatelessWidget {
       height: responsive.displayScaled(58),
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFFE5EAF2))),
+          border: Border(bottom: BorderSide(color: AwikiMePalette.hairline)),
         ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
@@ -572,12 +572,12 @@ class _AgentRenameIconButton extends StatelessWidget {
         semanticLabel: context.l10n.chatPeerInfoRenameAgent,
         tooltip: context.l10n.chatPeerInfoRenameAgentTooltip,
         size: responsive.displayScaled(30),
-        backgroundColor: const Color(0xFFF5F7FB),
-        borderColor: const Color(0xFFE4E9F2),
+        backgroundColor: AwikiMePalette.mist,
+        borderColor: AwikiMePalette.hairline,
         borderRadius: BorderRadius.circular(responsive.radius(9)),
         child: Icon(
           CupertinoIcons.pencil,
-          color: const Color(0xFF66728A),
+          color: AwikiMePalette.mutedNeutral,
           size: responsive.iconSm,
         ),
       ),
@@ -597,9 +597,9 @@ class _PeerInfoSection extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,7 +607,7 @@ class _PeerInfoSection extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              color: Color(0xFF101B32),
+              color: AwikiMePalette.inkNeutral,
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -701,7 +701,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        color: Color(0xFF101B32),
+                                        color: AwikiMePalette.inkNeutral,
                                         fontSize: 20,
                                         fontWeight: FontWeight.w700,
                                       ),
@@ -712,7 +712,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                           ? context.l10n.groupNoDescription
                                           : _group.description,
                                       style: const TextStyle(
-                                        color: Color(0xFF66728A),
+                                        color: AwikiMePalette.mutedNeutral,
                                         fontSize: 13,
                                         height: 1.35,
                                       ),
@@ -753,7 +753,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                               'group-info-dialog-copy-did-button',
                             ),
                             textStyle: const TextStyle(
-                              color: Color(0xFF66728A),
+                              color: AwikiMePalette.mutedNeutral,
                               fontSize: 12,
                               height: 1.25,
                             ),
@@ -979,11 +979,11 @@ class _GroupInfoIconButton extends StatelessWidget {
       isLoading: isLoading,
       size: responsive.scaled(34),
       backgroundColor: theme.surface,
-      borderColor: const Color(0xFFDDE5F0),
+      borderColor: AwikiMePalette.hairline,
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       child: Icon(
         icon,
-        color: enabled ? const Color(0xFF34415C) : theme.tertiaryText,
+        color: enabled ? AwikiMePalette.mutedNeutral : theme.tertiaryText,
         size: responsive.iconSm,
       ),
     );
@@ -1040,7 +1040,7 @@ class _ChatAgentPill extends StatelessWidget {
         vertical: responsive.displayScaled(3),
       ),
       decoration: BoxDecoration(
-        color: muted ? const Color(0xFFF1F3F7) : const Color(0xFFEAF2FF),
+        color: muted ? AwikiMePalette.mist : AwikiMePalette.brandAccentSoft,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -1048,7 +1048,9 @@ class _ChatAgentPill extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: muted ? const Color(0xFF66728A) : const Color(0xFF0B65F8),
+          color: muted
+              ? AwikiMePalette.mutedNeutral
+              : AwikiMePalette.brandAccent,
           fontSize: responsive.displayScaled(10.5),
           fontWeight: FontWeight.w600,
           height: 1,
@@ -1084,7 +1086,7 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
         ? context.l10n.followContactAlreadyFollowing
         : context.l10n.friendsFollow;
     final foreground = widget.isFollowing
-        ? const Color(0xFF34415C)
+        ? AwikiMePalette.mutedNeutral
         : theme.primaryForeground;
     final background = widget.isFollowing
         ? CupertinoColors.white
@@ -1134,14 +1136,14 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
           color: background,
           borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
           border: Border.all(
-            color: widget.isFollowing ? const Color(0xFFDDE5F0) : theme.primary,
+            color: widget.isFollowing ? AwikiMePalette.hairline : theme.primary,
           ),
         ),
         child: _isBusy
             ? CupertinoActivityIndicator(
                 key: const Key('chat-relationship-action-progress'),
                 radius: responsive.displayScaled(7),
-                color: widget.isFollowing ? const Color(0xFF34415C) : null,
+                color: widget.isFollowing ? AwikiMePalette.mutedNeutral : null,
               )
             : Text(
                 label,

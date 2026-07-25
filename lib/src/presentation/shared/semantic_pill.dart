@@ -44,28 +44,28 @@ class SemanticPill extends StatelessWidget {
 _SemanticPillColors _colorsForTone(SemanticPillTone tone) {
   return switch (tone) {
     SemanticPillTone.identity => const _SemanticPillColors(
-      background: Color(0xFFEAF2FF),
-      foreground: Color(0xFF0B65F8),
+      background: AwikiMePalette.brandAccentSoft,
+      foreground: AwikiMePalette.brandAccent,
     ),
     SemanticPillTone.runtime => const _SemanticPillColors(
-      background: Color(0xFFF2EBFF),
-      foreground: Color(0xFF6D35D3),
+      background: Color(0xFFE4F3FA),
+      foreground: AwikiMePalette.badgeBlue,
     ),
     SemanticPillTone.relationship => const _SemanticPillColors(
       background: Color(0xFFE6F8EE),
-      foreground: Color(0xFF10A85A),
+      foreground: AwikiMePalette.successGreen,
     ),
     SemanticPillTone.status => const _SemanticPillColors(
       background: Color(0xFFFFF4D6),
-      foreground: Color(0xFF825500),
+      foreground: AwikiMePalette.warningGold,
     ),
     SemanticPillTone.metadata => const _SemanticPillColors(
-      background: Color(0xFFFFF0E8),
-      foreground: Color(0xFFC4552B),
+      background: AwikiMeColors.subtleSurface,
+      foreground: AwikiMePalette.mutedNeutral,
     ),
     SemanticPillTone.muted => const _SemanticPillColors(
-      background: Color(0xFFF1F3F7),
-      foreground: Color(0xFF66728A),
+      background: AwikiMePalette.messageIncoming,
+      foreground: AwikiMePalette.mutedNeutral,
     ),
   };
 }

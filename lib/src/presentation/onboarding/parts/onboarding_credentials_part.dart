@@ -4,73 +4,79 @@ class _LocalCredentialsCard extends StatelessWidget {
   const _LocalCredentialsCard({
     required this.credentials,
     required this.onLogin,
+    this.embedded = false,
   });
 
   final List<SessionIdentity> credentials;
   final Future<void> Function(String credentialName) onLogin;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final content = credentials.isEmpty
+        ? SizedBox(
+            height: responsive.scaled(120),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Container(
+                    width: responsive.scaled(44),
+                    height: responsive.scaled(44),
+                    decoration: BoxDecoration(
+                      color: theme.surface,
+                      borderRadius: BorderRadius.circular(
+                        responsive.radius(22),
+                      ),
+                    ),
+                    child: Center(
+                      child: AwikiAssetIcon(
+                        assetName: 'assets/icons/icon_keyoff.svg',
+                        color: theme.tertiaryText,
+                        size: responsive.iconMd,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(12)),
+                  Text(
+                    context.l10n.onboardingMissingLocalCredential,
+                    textAlign: TextAlign.center,
+                    style: AwikiMeTextStyles.cardSubtitle.copyWith(
+                      fontSize: responsive.bodySm,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : Column(
+            children: credentials
+                .map(
+                  (item) => Padding(
+                    padding: EdgeInsets.only(
+                      bottom: item == credentials.last
+                          ? 0
+                          : responsive.spacing(10),
+                    ),
+                    child: _CredentialCardTile(
+                      identity: item,
+                      onTap: () => onLogin(item.credentialName),
+                    ),
+                  ),
+                )
+                .toList(),
+          );
+    if (embedded) {
+      return content;
+    }
     return AppCardSection(
       color: theme.subtleSurface,
       padding: responsive.scaledInsets(
         const EdgeInsets.fromLTRB(14, 14, 14, 14),
       ),
-      child: credentials.isEmpty
-          ? SizedBox(
-              height: responsive.scaled(120),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Container(
-                      width: responsive.scaled(44),
-                      height: responsive.scaled(44),
-                      decoration: BoxDecoration(
-                        color: theme.surface,
-                        borderRadius: BorderRadius.circular(
-                          responsive.radius(22),
-                        ),
-                      ),
-                      child: Center(
-                        child: AwikiAssetIcon(
-                          assetName: 'assets/icons/icon_keyoff.svg',
-                          color: theme.tertiaryText,
-                          size: responsive.iconMd,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: responsive.spacing(12)),
-                    Text(
-                      context.l10n.onboardingMissingLocalCredential,
-                      textAlign: TextAlign.center,
-                      style: AwikiMeTextStyles.cardSubtitle.copyWith(
-                        fontSize: responsive.bodySm,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : Column(
-              children: credentials
-                  .map(
-                    (item) => Padding(
-                      padding: EdgeInsets.only(
-                        bottom: item == credentials.last
-                            ? 0
-                            : responsive.spacing(10),
-                      ),
-                      child: _CredentialCardTile(
-                        identity: item,
-                        onTap: () => onLogin(item.credentialName),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+      child: content,
     );
   }
 }
@@ -148,37 +154,33 @@ class _CredentialCardTile extends StatelessWidget {
 
 class _LoginToolRow extends StatelessWidget {
   const _LoginToolRow({
-    required this.importLabel,
     required this.refreshLabel,
-    required this.onImport,
     required this.onRefresh,
+    this.embedded = false,
   });
 
-  final String importLabel;
   final String refreshLabel;
-  final VoidCallback? onImport;
   final VoidCallback? onRefresh;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
-    return AppCardSection(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: <Widget>[
-          _LoginToolButton(
-            label: importLabel,
-            assetName: 'assets/icons/icon_key.svg',
-            onPressed: onImport,
-          ),
-          const AppSectionDivider(),
-          _LoginToolButton(
-            label: refreshLabel,
-            assetName: 'assets/icons/icon_reload.svg',
-            onPressed: onRefresh,
-          ),
-        ],
-      ),
+    final content = _LoginToolButton(
+      label: refreshLabel,
+      assetName: 'assets/icons/icon_reload.svg',
+      onPressed: onRefresh,
     );
+    if (embedded) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.symmetric(
+            horizontal: BorderSide(color: context.awikiTheme.border),
+          ),
+        ),
+        child: content,
+      );
+    }
+    return AppCardSection(padding: EdgeInsets.zero, child: content);
   }
 }
 

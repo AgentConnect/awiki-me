@@ -2,7 +2,6 @@
 
 import 'dart:async';
 
-import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
@@ -32,6 +31,7 @@ import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -270,7 +270,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('项目群'), findsOneWidget);
-    expect(find.text('未读 2'), findsOneWidget);
+    final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
+    expect(unreadBadge, findsOneWidget);
+    expect(
+      find.descendant(of: unreadBadge, matching: find.text('2')),
+      findsOneWidget,
+    );
+    expect(find.text('未读 2'), findsNothing);
     expect(find.text('@我'), findsOneWidget);
   });
 
@@ -337,10 +343,12 @@ void main() {
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1600, 960));
+    tester.view.physicalSize = const Size(1600, 960);
+    tester.view.devicePixelRatio = 1;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2137,17 +2145,13 @@ void main() {
       Key('conversation-row:${conversation.conversationId}'),
     );
     expect(conversationRow, findsOneWidget);
-    final unreadTag = find.descendant(
+    final unreadBadge = find.descendant(
       of: conversationRow,
-      matching: find.byKey(const Key('conversation-preview-tag-unread')),
+      matching: find.byKey(const Key('conversation-row-unread-badge')),
     );
-    expect(unreadTag, findsOneWidget);
-    final l10n = AppLocalizations.of(tester.element(unreadTag));
+    expect(unreadBadge, findsOneWidget);
     expect(
-      find.descendant(
-        of: unreadTag,
-        matching: find.text(l10n.conversationsUnreadTag('3')),
-      ),
+      find.descendant(of: unreadBadge, matching: find.text('3')),
       findsOneWidget,
     );
 
@@ -2155,9 +2159,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('任务视图即将接入'), findsOneWidget);
 
+    await tester.tap(find.text('工作台'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('工作台模块即将接入'), findsOneWidget);
+
     await tester.tap(find.text('联系人'));
     await tester.pumpAndSettle();
-    expect(find.text('朋友'), findsOneWidget);
+    expect(find.text('联系人'), findsWidgets);
 
     await tester.tap(find.byKey(const Key('mac-me-rail-avatar')));
     await tester.pumpAndSettle();
@@ -2173,8 +2181,8 @@ void main() {
     final settingsPaneSize = tester.getSize(
       find.byKey(const Key('mac-settings-list-pane')),
     );
-    expect(settingsPaneSize.width, closeTo(420, 0.1));
-    expect(settingsPaneSize.width, lessThan(1280 - 72));
+    expect(settingsPaneSize.width, closeTo(272, 0.1));
+    expect(settingsPaneSize.width, lessThan(1280 - 64));
 
     await tester.tap(find.text('消息'));
     await tester.pumpAndSettle();
@@ -2285,7 +2293,7 @@ void main() {
     ];
     for (final iconData in inactiveIcons) {
       final icon = tester.widget<Icon>(find.byIcon(iconData));
-      expect(icon.color, const Color(0xFF7A879C));
+      expect(icon.color, AwikiMePalette.mutedNeutral);
       expect(icon.weight, 400);
     }
     expect(find.byIcon(CupertinoIcons.person_2_fill), findsNothing);
@@ -2296,7 +2304,7 @@ void main() {
     final activeMessageIcon = tester.widget<Icon>(
       find.byIcon(CupertinoIcons.chat_bubble_2_fill),
     );
-    expect(activeMessageIcon.color, const Color(0xFF0B65F8));
+    expect(activeMessageIcon.color, AwikiMePalette.brandAccent);
     expect(activeMessageIcon.weight, 700);
 
     await tester.tap(find.text('联系人'));
@@ -2308,9 +2316,9 @@ void main() {
     final activeContactsIcon = tester.widget<Icon>(
       find.byIcon(CupertinoIcons.person_2_fill),
     );
-    expect(inactiveMessageIcon.color, const Color(0xFF7A879C));
+    expect(inactiveMessageIcon.color, AwikiMePalette.mutedNeutral);
     expect(inactiveMessageIcon.weight, 400);
-    expect(activeContactsIcon.color, const Color(0xFF0B65F8));
+    expect(activeContactsIcon.color, AwikiMePalette.brandAccent);
     expect(activeContactsIcon.weight, 700);
 
     debugDefaultTargetPlatformOverride = null;
@@ -2388,11 +2396,11 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const Key('mac-desktop-rail-slot'))).width,
-      greaterThan(72),
+      closeTo(64 * 1.12, 0.1),
     );
     expect(
       tester.getSize(find.byKey(const Key('mac-conversation-list-pane'))).width,
-      greaterThan(340),
+      closeTo(272 * 1.12, 0.1),
     );
 
     debugDefaultTargetPlatformOverride = null;
@@ -2503,13 +2511,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('12'), findsNothing);
-    expect(find.text('2'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mac-messages-unread-badge')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('macOS 主窗口压缩高度和宽度时不会出现布局溢出', (tester) async {
+  testWidgets('macOS 主窗口按可用尺寸切换布局且不溢出', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'me.json',
@@ -2530,16 +2544,20 @@ void main() {
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    tester.view.devicePixelRatio = 1;
 
     for (final size in <Size>[
       const Size(1280, 600),
       const Size(960, 560),
       const Size(720, 520),
     ]) {
-      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      tester.view.physicalSize = size;
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const AppShell(),
@@ -2556,7 +2574,19 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('最近会话'), findsOneWidget);
+      expect(MediaQuery.sizeOf(tester.element(find.byType(AppShell))), size);
+      final expectsExpanded = size.width >= 720 && size.height >= 600;
+      expect(
+        find.byKey(const Key('mac-desktop-rail-slot')),
+        expectsExpanded ? findsOneWidget : findsNothing,
+      );
+      expect(
+        find.text('最近会话'),
+        expectsExpanded ? findsOneWidget : findsNothing,
+      );
+      if (!expectsExpanded) {
+        expect(find.text('消息'), findsWidgets);
+      }
       await tester.tap(find.text('Marcus Chen').first);
       await tester.pumpAndSettle();
       expect(find.byType(ChatView), findsOneWidget);
@@ -2564,7 +2594,93 @@ void main() {
     }
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('会话详情跨 compact 和 expanded 断点保持选中项与输入草稿', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+    );
+    await tester.pumpAndSettle();
+    final chatInput = find.descendant(
+      of: find.byType(ChatView),
+      matching: find.byType(CupertinoTextField),
+    );
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.text('智能体'), findsNothing);
+    await tester.enterText(chatInput, '跨断点草稿');
+    await tester.pump();
+
+    tester.view.physicalSize = const Size(1280, 800);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mac-desktop-rail-slot')), findsOneWidget);
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(
+      tester.widget<CupertinoTextField>(chatInput).controller!.text,
+      '跨断点草稿',
+    );
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('mac-desktop-rail-slot')), findsNothing);
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(find.text('智能体'), findsNothing);
+    expect(
+      tester.widget<CupertinoTextField>(chatInput).controller!.text,
+      '跨断点草稿',
+    );
+
+    await tester.tap(find.byIcon(CupertinoIcons.chevron_left).first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsNothing);
+    expect(find.text('智能体'), findsOneWidget);
+    expect(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+      findsOneWidget,
+    );
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
   });
 
   testWidgets('macOS 最近会话列表分栏可以拖动调整宽度', (tester) async {
@@ -2656,6 +2772,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('搜索会话'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
+      32,
+    );
     expect(find.text('搜索会话或 Agent'), findsNothing);
     expect(find.text('Marcus Chen'), findsOneWidget);
     expect(find.text('融资协作群'), findsOneWidget);
@@ -2752,6 +2872,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
+      36,
+    );
     expect(find.text('Marcus Chen'), findsOneWidget);
     expect(find.text('融资协作群'), findsOneWidget);
     expect(find.text('Ops Bot'), findsOneWidget);
@@ -2774,7 +2898,7 @@ void main() {
     expect(find.text('换个关键词试试'), findsOneWidget);
   });
 
-  testWidgets('手机主导航显示中文文字标签并保持切换功能', (tester) async {
+  testWidgets('手机三入口与设置资料在跨断点时共享同一导航状态', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'me.json',
@@ -2818,7 +2942,8 @@ void main() {
     expect(find.text('消息'), findsWidgets);
     expect(find.text('智能体'), findsOneWidget);
     expect(find.text('联系人'), findsOneWidget);
-    expect(find.text('我'), findsOneWidget);
+    expect(find.text('我'), findsNothing);
+    expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
     expect(find.text('Agents'), findsNothing);
     final messagesTab = find.ancestor(
       of: find.text('消息').last,
@@ -2839,13 +2964,11 @@ void main() {
     final messageTabSize = tester.getSize(find.text('消息').last);
     final agentsTabSize = tester.getSize(find.text('智能体'));
     final contactsTabSize = tester.getSize(find.text('联系人'));
-    final meTabSize = tester.getSize(find.text('我'));
     expect(messageTabSize.height, greaterThan(0));
     expect(agentsTabSize.height, greaterThan(0));
     expect(contactsTabSize.height, greaterThan(0));
-    expect(meTabSize.height, greaterThan(0));
     final bottomNavHeight = tester.getSize(navRow).height;
-    expect(bottomNavHeight, closeTo(52, 0.1));
+    expect(bottomNavHeight, closeTo(56, 0.1));
     final navRowCenterY = tester.getCenter(navRow).dy;
     final messageLabelCenterY = tester.getCenter(find.text('消息').last).dy;
     expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
@@ -2861,9 +2984,9 @@ void main() {
         .evaluate()
         .map((element) => (element.widget as Text).data)
         .whereType<String>()
-        .where((label) => <String>{'消息', '智能体', '联系人', '我'}.contains(label))
+        .where((label) => <String>{'消息', '智能体', '联系人'}.contains(label))
         .toList();
-    expect(navLabels, ['消息', '智能体', '联系人', '我']);
+    expect(navLabels, ['消息', '智能体', '联系人']);
 
     await tester.tap(find.text('智能体'));
     await tester.pumpAndSettle();
@@ -2872,11 +2995,42 @@ void main() {
 
     await tester.tap(find.text('联系人'));
     await tester.pumpAndSettle();
-    expect(find.text('朋友'), findsWidgets);
+    expect(find.text('联系人'), findsWidgets);
 
-    await tester.tap(find.text('我'));
+    await tester.tap(find.text('消息').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('设置'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-profile-row')), findsOneWidget);
+    expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('settings-profile-row')));
     await tester.pumpAndSettle();
     expect(find.text('Product lead'), findsOneWidget);
+    expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+
+    tester.view.physicalSize = const Size(1280, 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('profile-sidebar-summary')), findsOneWidget);
+    expect(find.byKey(const Key('profile-back-button')), findsNothing);
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('profile-back-button')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('profile-back-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('settings-tenant-row')), findsOneWidget);
+
+    tester.view.physicalSize = const Size(1280, 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mac-settings-list-pane')), findsOneWidget);
+
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings-back-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
+    expect(find.text('消息'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -2916,7 +3070,7 @@ void main() {
     expect(find.text('Messages'), findsWidgets);
     expect(find.text('Agents'), findsOneWidget);
     expect(find.text('Contacts'), findsOneWidget);
-    expect(find.text('Me'), findsOneWidget);
+    expect(find.text('Me'), findsNothing);
     expect(find.text('智能体'), findsNothing);
 
     await tester.tap(find.text('Agents'));
@@ -2925,7 +3079,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('手机消息列表右侧元信息只展示时间和智能体状态，未读展示在预览前缀', (tester) async {
+  testWidgets('手机消息列表在头像展示未读并在标题行展示时间', (tester) async {
     const session = SessionIdentity(
       did: 'did:human:me',
       credentialName: 'me.json',
@@ -2960,8 +3114,12 @@ void main() {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[richConversation];
     final control = FakeAgentControlService()..agents = <AgentSummary>[agent];
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 780);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -2980,8 +3138,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mobile Runtime Agent'), findsOneWidget);
-    expect(find.text('999+'), findsNothing);
-    expect(find.text('未读 120'), findsOneWidget);
+    expect(find.text('99+'), findsOneWidget);
+    expect(find.text('未读 120'), findsNothing);
     expect(find.byType(AgentStatusDot), findsOneWidget);
     final rowRect = tester.getRect(
       find.ancestor(
@@ -2992,15 +3150,15 @@ void main() {
     final metaRect = tester.getRect(
       find.byKey(const Key('conversation-row-right-meta')),
     );
-    expect(
-      find.byKey(const Key('conversation-row-unread-badge')),
-      findsNothing,
-    );
-    final unreadTagRect = tester.getRect(find.text('未读 120'));
+    expect(rowRect.height, closeTo(68, 0.1));
+    final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
+    expect(unreadBadge, findsOneWidget);
+    final unreadBadgeRect = tester.getRect(unreadBadge);
     final timeRect = tester.getRect(find.text('12-31'));
     expect(metaRect.right, lessThanOrEqualTo(rowRect.right));
     expect(timeRect.right, lessThanOrEqualTo(rowRect.right - 2));
-    expect(unreadTagRect.left, greaterThanOrEqualTo(rowRect.left));
+    expect(unreadBadgeRect.left, greaterThanOrEqualTo(rowRect.left));
+    expect(unreadBadgeRect.right, lessThanOrEqualTo(rowRect.right));
     expect(tester.takeException(), isNull);
   });
 

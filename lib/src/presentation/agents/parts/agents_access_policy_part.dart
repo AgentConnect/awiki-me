@@ -164,58 +164,39 @@ class _AgentAccessPolicyPanelState extends State<_AgentAccessPolicyPanel> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final type = theme.typographyFor(
+      responsive.isCompact
+          ? AwikiMeTypographyMode.compact
+          : AwikiMeTypographyMode.expanded,
+    );
     final saving = widget.isSaving || _savingLocally;
     return Container(
       padding: EdgeInsets.all(responsive.spacing(16)),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0F0B1220),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(12)),
+        border: Border.all(color: theme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: responsive.displayScaled(34),
-                height: responsive.displayScaled(34),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F5FF),
-                  borderRadius: BorderRadius.circular(responsive.radius(9)),
-                ),
-                child: Icon(
-                  CupertinoIcons.lock_shield,
-                  color: const Color(0xFF0B65F8),
-                  size: responsive.iconMd,
-                ),
-              ),
-              SizedBox(width: responsive.spacing(10)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       context.l10n.agentAccessTitle,
-                      style: TextStyle(
-                        color: const Color(0xFF101B32),
-                        fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: type.cardTitle.copyWith(color: theme.title),
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
                       context.l10n.agentAccessSubtitle,
-                      style: TextStyle(
-                        color: const Color(0xFF66728A),
-                        fontSize: responsive.metaSm,
+                      style: type.cardSubtitle.copyWith(
+                        color: theme.secondaryText,
                       ),
                     ),
                   ],
@@ -347,90 +328,102 @@ class _AccessModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final blacklistActive = activeMode == AgentInvocationPolicyMode.blacklist;
     final enabled = onChanged != null;
-    const whitelistColor = Color(0xFF0B65F8);
-    const blacklistColor = Color(0xFFB42318);
-    final accentColor = blacklistActive ? blacklistColor : whitelistColor;
-    final nextMode = blacklistActive
-        ? AgentInvocationPolicyMode.whitelist
-        : AgentInvocationPolicyMode.blacklist;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          context.l10n.agentAccessWhitelist,
+    return Container(
+      key: const Key('agent-access-mode-toggle'),
+      padding: EdgeInsets.all(responsive.displayScaled(2)),
+      decoration: BoxDecoration(
+        color: theme.subtleSurface,
+        borderRadius: BorderRadius.circular(responsive.radius(10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          _AccessModeSegment(
+            key: const Key('agent-access-whitelist-mode'),
+            label: context.l10n.agentAccessWhitelist,
+            selected: !blacklistActive,
+            color: theme.primary,
+            onPressed: enabled
+                ? () => onChanged!(AgentInvocationPolicyMode.whitelist)
+                : null,
+            semanticLabel: !blacklistActive
+                ? context.l10n.agentAccessCurrentWhitelist
+                : context.l10n.agentAccessSwitchToWhitelist,
+          ),
+          _AccessModeSegment(
+            key: const Key('agent-access-blacklist-mode'),
+            label: context.l10n.agentAccessBlacklist,
+            selected: blacklistActive,
+            color: theme.danger,
+            onPressed: enabled
+                ? () => onChanged!(AgentInvocationPolicyMode.blacklist)
+                : null,
+            semanticLabel: blacklistActive
+                ? context.l10n.agentAccessCurrentBlacklist
+                : context.l10n.agentAccessSwitchToBlacklist,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccessModeSegment extends StatelessWidget {
+  const _AccessModeSegment({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onPressed,
+    required this.semanticLabel,
+  });
+
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback? onPressed;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return AppPressable(
+      onTap: onPressed,
+      enabled: onPressed != null,
+      selected: selected,
+      semanticLabel: semanticLabel,
+      tooltip: semanticLabel,
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      child: AnimatedContainer(
+        duration: AwikiMeMotion.fast,
+        curve: AwikiMeMotion.emphasized,
+        constraints: BoxConstraints(
+          minHeight: responsive.displayScaled(responsive.isCompact ? 32 : 28),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(11),
+          vertical: responsive.spacing(5),
+        ),
+        decoration: BoxDecoration(
+          color: selected ? theme.surface : CupertinoColors.transparent,
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: selected ? Border.all(color: theme.border) : null,
+        ),
+        child: Text(
+          label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: !blacklistActive ? whitelistColor : const Color(0xFF8A96AA),
+            color: selected ? color : theme.secondaryText,
             fontSize: responsive.metaSm,
-            fontWeight: !blacklistActive ? FontWeight.w700 : FontWeight.w600,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        SizedBox(width: responsive.spacing(6)),
-        AppPressable(
-          key: const Key('agent-access-mode-toggle'),
-          onTap: enabled ? () => onChanged!(nextMode) : null,
-          enabled: enabled,
-          semanticLabel: blacklistActive
-              ? context.l10n.agentAccessSwitchToWhitelist
-              : context.l10n.agentAccessSwitchToBlacklist,
-          tooltip: blacklistActive
-              ? context.l10n.agentAccessCurrentBlacklist
-              : context.l10n.agentAccessCurrentWhitelist,
-          borderRadius: BorderRadius.circular(99),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOutCubic,
-            width: responsive.displayScaled(46),
-            height: responsive.displayScaled(24),
-            padding: EdgeInsets.all(responsive.displayScaled(3)),
-            decoration: BoxDecoration(
-              color: enabled ? accentColor : const Color(0xFFD9E1EC),
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(
-                color: enabled
-                    ? accentColor.withValues(alpha: 0.35)
-                    : const Color(0xFFC7D0DE),
-              ),
-            ),
-            child: AnimatedAlign(
-              duration: const Duration(milliseconds: 140),
-              curve: Curves.easeOutCubic,
-              alignment: blacklistActive
-                  ? Alignment.centerRight
-                  : Alignment.centerLeft,
-              child: Container(
-                width: responsive.displayScaled(18),
-                height: responsive.displayScaled(18),
-                decoration: const BoxDecoration(
-                  color: CupertinoColors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x260B1220),
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: responsive.spacing(6)),
-        Text(
-          context.l10n.agentAccessBlacklist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: blacklistActive ? blacklistColor : const Color(0xFF8A96AA),
-            fontSize: responsive.metaSm,
-            fontWeight: blacklistActive ? FontWeight.w700 : FontWeight.w600,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -465,136 +458,120 @@ class _AccessPolicyModule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final accentColor = switch (mode) {
-      AgentInvocationPolicyMode.whitelist => const Color(0xFF0B65F8),
-      AgentInvocationPolicyMode.blacklist => const Color(0xFFB42318),
+      AgentInvocationPolicyMode.whitelist => theme.primary,
+      AgentInvocationPolicyMode.blacklist => theme.danger,
     };
-    final activeBackground = switch (mode) {
-      AgentInvocationPolicyMode.whitelist => const Color(0xFFF7FAFF),
-      AgentInvocationPolicyMode.blacklist => const Color(0xFFFFF8F7),
-    };
-    final activeBorder = switch (mode) {
-      AgentInvocationPolicyMode.whitelist => const Color(0xFFBFD5FF),
-      AgentInvocationPolicyMode.blacklist => const Color(0xFFF3B8B4),
-    };
-    final statusColor = active ? accentColor : const Color(0xFF6F7C91);
-    final textColor = active
-        ? const Color(0xFF40506B)
-        : const Color(0xFF7D8899);
-    final fieldFill = enabled ? CupertinoColors.white : const Color(0xFFEFF3F8);
-    final fieldBorder = enabled
-        ? const Color(0xFFDDE5F1)
-        : const Color(0xFFD4DCE9);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      padding: EdgeInsets.all(responsive.spacing(12)),
-      decoration: BoxDecoration(
-        color: active ? activeBackground : const Color(0xFFF0F3F8),
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(
-          color: active ? activeBorder : const Color(0xFFD5DDE9),
+    final statusColor = active ? accentColor : theme.secondaryText;
+    final fieldFill = enabled ? theme.surface : theme.subtleSurface;
+    return AnimatedOpacity(
+      duration: AwikiMeMotion.fast,
+      opacity: active ? 1 : 0.55,
+      child: AnimatedContainer(
+        duration: AwikiMeMotion.fast,
+        padding: EdgeInsets.all(responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: theme.background,
+          borderRadius: BorderRadius.circular(responsive.radius(12)),
+          border: Border.all(color: theme.border),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: responsive.metaSm,
-                    fontWeight: FontWeight.w700,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: active ? theme.title : theme.secondaryText,
+                      fontSize: responsive.bodySm,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: responsive.spacing(7),
-                  vertical: responsive.spacing(3),
-                ),
-                decoration: BoxDecoration(
-                  color: active
-                      ? statusColor.withValues(alpha: 0.12)
-                      : const Color(0xFFE0E6F0),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  active
-                      ? context.l10n.agentAccessEnabled
-                      : context.l10n.agentAccessDisabled,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: responsive.metaSm,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: responsive.spacing(10)),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: CupertinoTextField(
-                  key: fieldKey,
-                  controller: controller,
-                  enabled: enabled,
-                  placeholder: context.l10n.agentAccessHandlePlaceholder,
+                Container(
                   padding: EdgeInsets.symmetric(
-                    horizontal: responsive.spacing(11),
-                    vertical: responsive.spacing(9),
+                    horizontal: responsive.spacing(7),
+                    vertical: responsive.spacing(3),
                   ),
                   decoration: BoxDecoration(
-                    color: fieldFill,
-                    borderRadius: BorderRadius.circular(responsive.radius(8)),
-                    border: Border.all(color: fieldBorder),
+                    color: statusColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(99),
                   ),
-                  style: TextStyle(
-                    color: enabled
-                        ? const Color(0xFF101B32)
-                        : const Color(0xFF7D8899),
-                    fontSize: responsive.bodySm,
-                    height: 1.2,
+                  child: Text(
+                    active
+                        ? context.l10n.agentAccessEnabled
+                        : context.l10n.agentAccessDisabled,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: responsive.metaSm,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  placeholderStyle: TextStyle(
-                    color: enabled
-                        ? const Color(0xFF98A4B8)
-                        : const Color(0xFFADB7C7),
-                    fontSize: responsive.bodySm,
+                ),
+              ],
+            ),
+            SizedBox(height: responsive.spacing(10)),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: CupertinoTextField(
+                    key: fieldKey,
+                    controller: controller,
+                    enabled: enabled,
+                    placeholder: context.l10n.agentAccessHandlePlaceholder,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsive.spacing(10),
+                      vertical: responsive.spacing(8),
+                    ),
+                    decoration: BoxDecoration(
+                      color: fieldFill,
+                      borderRadius: BorderRadius.circular(responsive.radius(9)),
+                      border: Border.all(color: theme.border),
+                    ),
+                    style: TextStyle(
+                      color: enabled ? theme.body : theme.secondaryText,
+                      fontSize: responsive.bodySm,
+                      height: 1.2,
+                      fontFamily: 'monospace',
+                    ),
+                    placeholderStyle: TextStyle(
+                      color: theme.tertiaryText,
+                      fontSize: responsive.bodySm,
+                    ),
+                    onSubmitted: enabled ? (_) => onSubmitted() : null,
                   ),
-                  onSubmitted: enabled ? (_) => onSubmitted() : null,
+                ),
+                SizedBox(width: responsive.spacing(8)),
+                _AccessAddButton(
+                  key: addKey,
+                  enabled: enabled,
+                  onPressed: onSubmitted,
+                ),
+              ],
+            ),
+            if (errorText != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(6)),
+              Text(
+                _accessHandleErrorText(context, errorText!),
+                style: TextStyle(
+                  color: theme.danger,
+                  fontSize: responsive.metaSm,
                 ),
               ),
-              SizedBox(width: responsive.spacing(8)),
-              _AccessAddButton(
-                key: addKey,
-                enabled: enabled,
-                onPressed: onSubmitted,
-              ),
             ],
-          ),
-          if (errorText != null) ...<Widget>[
-            SizedBox(height: responsive.spacing(6)),
-            Text(
-              _accessHandleErrorText(context, errorText!),
-              style: TextStyle(
-                color: AwikiMeColors.danger,
-                fontSize: responsive.metaSm,
-              ),
+            SizedBox(height: responsive.spacing(10)),
+            _AccessHandleList(
+              mode: mode,
+              handles: handles,
+              active: active,
+              enabled: enabled,
+              onRemove: onRemove,
             ),
           ],
-          SizedBox(height: responsive.spacing(10)),
-          _AccessHandleList(
-            mode: mode,
-            handles: handles,
-            active: active,
-            enabled: enabled,
-            onRemove: onRemove,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -613,23 +590,25 @@ class _AccessAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final size = responsive.displayScaled(responsive.isCompact ? 38 : 32);
     return AppPressable(
       onTap: enabled ? onPressed : null,
       enabled: enabled,
       semanticLabel: context.l10n.agentAccessAddHandle,
       tooltip: context.l10n.agentAccessAddHandle,
-      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      borderRadius: BorderRadius.circular(responsive.radius(9)),
       child: Container(
-        width: responsive.displayScaled(42),
-        height: responsive.displayScaled(38),
+        width: size,
+        height: size,
         decoration: BoxDecoration(
-          color: enabled ? const Color(0xFF0B65F8) : const Color(0xFFE8EDF5),
-          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          color: enabled ? theme.primary : theme.mutedSurface,
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
         ),
         alignment: Alignment.center,
         child: Icon(
           CupertinoIcons.plus,
-          color: enabled ? CupertinoColors.white : const Color(0xFF8A96AA),
+          color: enabled ? theme.primaryForeground : theme.tertiaryText,
           size: responsive.iconSm,
         ),
       ),
@@ -655,6 +634,7 @@ class _AccessHandleList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     if (handles.isEmpty) {
       return Container(
         width: double.infinity,
@@ -662,16 +642,14 @@ class _AccessHandleList extends StatelessWidget {
         alignment: Alignment.centerLeft,
         padding: EdgeInsets.symmetric(horizontal: responsive.spacing(10)),
         decoration: BoxDecoration(
-          color: active ? const Color(0xFFF5F8FC) : const Color(0xFFE7ECF4),
-          borderRadius: BorderRadius.circular(responsive.radius(8)),
-          border: Border.all(
-            color: active ? const Color(0xFFE4EAF3) : const Color(0xFFD3DCE8),
-          ),
+          color: theme.surface,
+          borderRadius: BorderRadius.circular(responsive.radius(9)),
+          border: Border.all(color: theme.border),
         ),
         child: Text(
           context.l10n.agentAccessNoHandles,
           style: TextStyle(
-            color: active ? const Color(0xFF8A96AA) : const Color(0xFF9CA7B8),
+            color: theme.tertiaryText,
             fontSize: responsive.metaSm,
           ),
         ),
@@ -711,6 +689,7 @@ class _AccessHandleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return Container(
       constraints: BoxConstraints(minHeight: responsive.displayScaled(36)),
       padding: EdgeInsets.only(
@@ -718,11 +697,9 @@ class _AccessHandleRow extends StatelessWidget {
         right: responsive.spacing(4),
       ),
       decoration: BoxDecoration(
-        color: active ? CupertinoColors.white : const Color(0xFFE8EDF5),
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(
-          color: active ? const Color(0xFFE4EAF3) : const Color(0xFFD2DAE7),
-        ),
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(9)),
+        border: Border.all(color: theme.border),
       ),
       child: Row(
         children: <Widget>[
@@ -732,11 +709,10 @@ class _AccessHandleRow extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: active
-                    ? const Color(0xFF17233A)
-                    : const Color(0xFF7D8899),
+                color: active ? theme.body : theme.secondaryText,
                 fontSize: responsive.bodySm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'monospace',
               ),
             ),
           ),
@@ -748,9 +724,7 @@ class _AccessHandleRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(responsive.radius(7)),
             child: Icon(
               CupertinoIcons.xmark,
-              color: enabled
-                  ? const Color(0xFF68758D)
-                  : const Color(0xFFADB7C7),
+              color: enabled ? theme.secondaryText : theme.tertiaryText,
               size: responsive.displayScaled(13),
             ),
           ),
@@ -775,6 +749,12 @@ class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final type = theme.typographyFor(
+      responsive.isCompact
+          ? AwikiMeTypographyMode.compact
+          : AwikiMeTypographyMode.expanded,
+    );
     final agent = widget.agent;
     final essentialRows = _essentialDiagnosticRows(context.l10n, agent);
     final moreRows = _expandedDiagnosticRows(context.l10n, agent);
@@ -784,56 +764,30 @@ class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(16)),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(10)),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0F0B1220),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(12)),
+        border: Border.all(color: theme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
             children: <Widget>[
-              Container(
-                width: responsive.displayScaled(34),
-                height: responsive.displayScaled(34),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0F5FF),
-                  borderRadius: BorderRadius.circular(responsive.radius(9)),
-                ),
-                child: Icon(
-                  CupertinoIcons.info_circle,
-                  color: const Color(0xFF0B65F8),
-                  size: responsive.iconMd,
-                ),
-              ),
-              SizedBox(width: responsive.spacing(10)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
                       context.l10n.agentDiagnosticsTitle,
-                      style: TextStyle(
-                        color: const Color(0xFF101B32),
-                        fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: type.cardTitle.copyWith(color: theme.title),
                     ),
                     SizedBox(height: responsive.spacing(2)),
                     Text(
                       agent.isDaemon
                           ? context.l10n.agentDiagnosticsDaemonSubtitle
                           : context.l10n.agentDiagnosticsAgentSubtitle,
-                      style: TextStyle(
-                        color: const Color(0xFF66728A),
-                        fontSize: responsive.metaSm,
+                      style: type.cardSubtitle.copyWith(
+                        color: theme.secondaryText,
                       ),
                     ),
                   ],
@@ -868,27 +822,49 @@ class _DiagnosticInfoPanelState extends State<_DiagnosticInfoPanel> {
 
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.primary = false,
     this.danger = false,
+    this.isLoading = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
+  final bool primary;
   final bool danger;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final foreground = danger
+        ? theme.danger
+        : primary
+        ? theme.primaryForeground
+        : theme.body;
+    final background = danger
+        ? CupertinoColors.transparent
+        : primary
+        ? theme.primary
+        : theme.surface;
+    final borderColor = danger
+        ? CupertinoColors.transparent
+        : primary
+        ? theme.primary
+        : theme.border;
     return AppPressable(
-      onTap: onPressed,
+      onTap: isLoading ? null : onPressed,
       semanticLabel: label,
       tooltip: label,
-      enabled: onPressed != null,
+      enabled: onPressed != null && !isLoading,
       scaleOnPress: true,
       pressedScale: 0.98,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
       builder: (context, state, child) {
         return AnimatedOpacity(
           opacity: state.enabled
@@ -904,26 +880,31 @@ class _ActionButton extends StatelessWidget {
         );
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        constraints: BoxConstraints(
+          minHeight: responsive.displayScaled(responsive.isCompact ? 38 : 32),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: responsive.spacing(12),
+          vertical: responsive.spacing(7),
+        ),
         decoration: BoxDecoration(
-          color: danger ? const Color(0xFFFFEBEB) : const Color(0xFFEAF2FF),
-          borderRadius: BorderRadius.circular(8),
+          color: background,
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(
-              icon,
-              size: 17,
-              color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-            ),
-            const SizedBox(width: 6),
+            if (isLoading)
+              CupertinoActivityIndicator(radius: responsive.displayScaled(7))
+            else
+              Icon(icon, size: responsive.iconSm, color: foreground),
+            SizedBox(width: responsive.spacing(6)),
             Text(
               label,
-              style: TextStyle(
-                color: danger ? AwikiMeColors.danger : const Color(0xFF0B65F8),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+              style: theme.buttonLabel.copyWith(
+                color: foreground,
+                fontSize: responsive.bodySm,
               ),
             ),
           ],
@@ -986,13 +967,14 @@ class _DiagnosticRows extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return Column(
       children: <Widget>[
         for (var index = 0; index < rows.length; index++) ...<Widget>[
           if (index > 0)
             Padding(
               padding: EdgeInsets.symmetric(vertical: responsive.spacing(4)),
-              child: Container(height: 1, color: const Color(0xFFEFF3F8)),
+              child: Container(height: 1, color: theme.border),
             ),
           _DiagnosticInfoRow(row: rows[index], compact: compact),
         ],
@@ -1010,6 +992,7 @@ class _DiagnosticInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return Padding(
       padding: EdgeInsets.symmetric(
         vertical: responsive.spacing(compact ? 3 : 5),
@@ -1018,15 +1001,15 @@ class _DiagnosticInfoRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           SizedBox(
-            width: responsive.displayScaled(compact ? 96 : 112),
+            width: responsive.displayScaled(compact ? 88 : 96),
             child: Text(
               row.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: theme.secondaryText,
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -1037,10 +1020,11 @@ class _DiagnosticInfoRow extends StatelessWidget {
               maxLines: row.isLong ? 3 : 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: const Color(0xFF18243A),
+                color: theme.body,
                 fontSize: compact ? responsive.metaSm : responsive.bodySm,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
                 height: 1.28,
+                fontFamily: row.copyable ? 'monospace' : null,
               ),
             ),
           ),
@@ -1062,6 +1046,7 @@ class _DiagnosticNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
@@ -1069,9 +1054,9 @@ class _DiagnosticNotice extends StatelessWidget {
         vertical: responsive.spacing(10),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF6EA),
+        color: theme.warningContainer,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFF6D7A8)),
+        border: Border.all(color: theme.warning.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1080,7 +1065,7 @@ class _DiagnosticNotice extends StatelessWidget {
             padding: EdgeInsets.only(top: responsive.spacing(1)),
             child: Icon(
               CupertinoIcons.exclamationmark_triangle,
-              color: const Color(0xFFB26900),
+              color: theme.warning,
               size: responsive.iconSm,
             ),
           ),
@@ -1089,7 +1074,7 @@ class _DiagnosticNotice extends StatelessWidget {
             child: Text(
               text,
               style: TextStyle(
-                color: const Color(0xFF6F4B16),
+                color: theme.body,
                 fontSize: responsive.bodySm,
                 height: 1.35,
               ),
@@ -1113,6 +1098,7 @@ class _DiagnosticMoreButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return AppPressable(
       onTap: onPressed,
       semanticLabel: expanded
@@ -1128,9 +1114,9 @@ class _DiagnosticMoreButton extends StatelessWidget {
           vertical: responsive.spacing(8),
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFFF6F8FC),
+          color: theme.subtleSurface,
           borderRadius: BorderRadius.circular(responsive.radius(8)),
-          border: Border.all(color: const Color(0xFFE5EAF2)),
+          border: Border.all(color: theme.border),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1140,7 +1126,7 @@ class _DiagnosticMoreButton extends StatelessWidget {
                   ? context.l10n.agentDiagnosticsCollapse
                   : context.l10n.agentDiagnosticsShowMore,
               style: TextStyle(
-                color: const Color(0xFF40506B),
+                color: theme.body,
                 fontSize: responsive.metaSm,
                 fontWeight: FontWeight.w700,
               ),
@@ -1150,7 +1136,7 @@ class _DiagnosticMoreButton extends StatelessWidget {
               expanded
                   ? CupertinoIcons.chevron_up
                   : CupertinoIcons.chevron_down,
-              color: const Color(0xFF66728A),
+              color: theme.secondaryText,
               size: responsive.iconSm * 0.78,
             ),
           ],
@@ -1336,6 +1322,7 @@ class _InlineCopyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return SelectionContainer.disabled(
       child: AppIconButton(
         onPressed: () async {
@@ -1348,11 +1335,10 @@ class _InlineCopyButton extends StatelessWidget {
         tooltip: context.l10n.commonCopy,
         size: responsive.displayScaled(28),
         padding: EdgeInsets.all(responsive.spacing(5)),
-        backgroundColor: CupertinoColors.white,
         borderRadius: BorderRadius.circular(responsive.radius(7)),
         child: Icon(
           CupertinoIcons.doc_on_doc,
-          color: const Color(0xFF44506A),
+          color: theme.secondaryText,
           size: responsive.iconSm,
         ),
       ),
@@ -1366,12 +1352,10 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Text(
       text,
-      style: const TextStyle(
-        color: Color(0xFF101B32),
-        fontWeight: FontWeight.w700,
-      ),
+      style: TextStyle(color: theme.title, fontWeight: FontWeight.w600),
     );
   }
 }
@@ -1412,7 +1396,7 @@ Color _runStatusColor(String status) {
     case 'running':
       return AwikiMeColors.alert;
     default:
-      return const Color(0xFF66728A);
+      return AwikiMePalette.mutedNeutral;
   }
 }
 

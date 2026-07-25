@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
@@ -17,6 +18,37 @@ void main() {
     credentialName: 'me.json',
     displayName: 'Me',
   );
+
+  testWidgets('未关注的公开资料可执行真实关注并更新关系状态', (tester) async {
+    const did = 'did:test:peer-to-follow';
+    const profile = UserProfile(
+      did: did,
+      displayName: 'Peer To Follow',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+    );
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = const <String, UserProfile>{did: profile};
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const PeerProfilePage(did: did),
+        gateway: gateway,
+        session: testSession,
+        homepageMarkdownLoader: (_) async => null,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('peer-profile-follow')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, did);
+    expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
+    expect(find.text('取消关注'), findsOneWidget);
+  });
 
   testWidgets('私聊资料页以 handle 为主并紧凑显示 DID，复制保留全值', (tester) async {
     const longDid =
@@ -163,8 +195,8 @@ void main() {
     await tester.tap(find.text('发消息'));
     await tester.pumpAndSettle();
 
-    final selected = selectedConversationSummary(container);
-    expect(selected?.conversationId, 'dm:peer-scope:v1:alice');
+    final opened = tester.widget<ChatView>(find.byType(ChatView)).conversation;
+    expect(opened.conversationId, 'dm:peer-scope:v1:alice');
     final rows = container.read(conversationListProvider).conversations;
     expect(rows, hasLength(1));
     expect(rows.single.conversationId, 'dm:peer-scope:v1:alice');

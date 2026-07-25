@@ -250,12 +250,12 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
     final appTheme = AwikiMeTheme.current;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: AwikiMePalette.ivory,
+        statusBarColor: AwikiMePalette.canvas,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
-        systemNavigationBarColor: AwikiMePalette.ivory,
+        systemNavigationBarColor: AwikiMePalette.canvas,
         systemNavigationBarIconBrightness: Brightness.dark,
-        systemNavigationBarDividerColor: AwikiMePalette.ivory,
+        systemNavigationBarDividerColor: AwikiMePalette.canvas,
       ),
       child: CupertinoApp(
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,

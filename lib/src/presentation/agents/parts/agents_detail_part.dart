@@ -4,9 +4,11 @@ class _AgentDetailPane extends StatelessWidget {
   const _AgentDetailPane({
     required this.state,
     required this.selected,
+    required this.showPersistentHeader,
     required this.pendingAgentDids,
     required this.onRefresh,
     required this.onCreateRuntime,
+    required this.onInstallDaemon,
     required this.onOpenChat,
     required this.onRename,
     required this.onUpgrade,
@@ -22,9 +24,11 @@ class _AgentDetailPane extends StatelessWidget {
 
   final AgentsState state;
   final AgentSummary? selected;
+  final bool showPersistentHeader;
   final Set<String> pendingAgentDids;
   final ValueChanged<AgentSummary> onRefresh;
   final ValueChanged<AgentSummary> onCreateRuntime;
+  final VoidCallback onInstallDaemon;
   final ValueChanged<AgentSummary> onOpenChat;
   final ValueChanged<AgentSummary> onRename;
   final ValueChanged<AgentSummary> onUpgrade;
@@ -42,8 +46,9 @@ class _AgentDetailPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final agent = selected;
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     if (agent == null) {
-      return Center(child: Text(context.l10n.agentSelectOne));
+      return const _AgentDetailEmptyState();
     }
     final isRefreshing =
         agent.isDaemon && state.isStatusQueryPending(agent.agentDid);
@@ -96,200 +101,419 @@ class _AgentDetailPane extends StatelessWidget {
         !agent.isDaemon ||
         (!state.statusQueryErrors.containsKey(agent.agentDid) &&
             (agent.daemonEffectiveStatus?.isActionable ?? true));
-    return SafeArea(
-      bottom: false,
-      child: SelectionArea(
-        child: ListView(
-          padding: EdgeInsets.all(responsive.spacing(24)),
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 2,
-                    style: TextStyle(
-                      color: const Color(0xFF101B32),
-                      fontSize: responsive.titleXl,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                AgentStatusPill(status: visualStatus),
-              ],
+    final actions = <Widget>[
+      if (agent.isDaemon && showPersistentHeader)
+        _ActionButton(
+          key: const Key('agent-action-refresh'),
+          icon: CupertinoIcons.refresh,
+          label: context.l10n.agentRefreshStatus,
+          isLoading: isRefreshing,
+          onPressed: isRefreshing ? null : () => onRefresh(agent),
+        ),
+      if (agent.isDaemon)
+        _ActionButton(
+          key: const Key('agent-action-create-runtime'),
+          icon: CupertinoIcons.plus,
+          label: context.l10n.agentCreateRuntime,
+          onPressed:
+              isCreatingRuntime || !daemonCanCreateRuntime || daemonCanUpgrade
+              ? null
+              : () => onCreateRuntime(agent),
+        ),
+      if (agent.isRuntime)
+        _ActionButton(
+          key: const Key('agent-action-open-chat'),
+          icon: CupertinoIcons.chat_bubble_2,
+          label: context.l10n.agentOpenChat,
+          primary: true,
+          onPressed: () => onOpenChat(agent),
+        ),
+      _ActionButton(
+        key: const Key('agent-action-rename'),
+        icon: CupertinoIcons.pencil,
+        label: context.l10n.agentRename,
+        onPressed: isRenaming ? null : () => onRename(agent),
+      ),
+      if (daemonCanUpgrade)
+        _ActionButton(
+          key: const Key('agent-action-upgrade'),
+          icon: CupertinoIcons.arrow_up_circle,
+          label: isUpgrading
+              ? context.l10n.agentUpgrading
+              : context.l10n.agentUpgrade,
+          onPressed: isUpgradeSending || isUpgrading
+              ? null
+              : () => onUpgrade(agent),
+        ),
+      if (isUpgrading)
+        _ActionButton(
+          key: const Key('agent-action-cancel-upgrade'),
+          icon: CupertinoIcons.xmark_circle,
+          label: isCancelling
+              ? context.l10n.agentCancelling
+              : context.l10n.agentCancelUpgrade,
+          danger: true,
+          onPressed: isCancelling ? null : () => onCancelUpgrade(agent),
+        ),
+      _ActionButton(
+        key: const Key('agent-action-delete'),
+        icon: CupertinoIcons.trash,
+        label: isDeleting
+            ? context.l10n.agentDeleting
+            : _agentDeleteButtonLabel(context, agent, deleteAction),
+        danger: true,
+        onPressed:
+            isDeleteSending ||
+                isDeleting ||
+                deleteAction == AgentDeleteAction.unavailable
+            ? null
+            : () => onDelete(agent),
+      ),
+    ];
+    final body = ListView(
+      key: ValueKey<String>('agent-detail-scroll-${agent.agentDid}'),
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(responsive.isCompact ? 14 : 22),
+        responsive.spacing(responsive.isCompact ? 14 : 20),
+        responsive.spacing(responsive.isCompact ? 14 : 22),
+        responsive.spacing(responsive.isCompact ? 34 : 24),
+      ),
+      children: <Widget>[
+        if (!showPersistentHeader) ...<Widget>[
+          _AgentDetailIdentity(
+            title: title,
+            agent: agent,
+            runtimeDisplay: runtimeDisplay,
+            visualStatus: visualStatus,
+            prominent: true,
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          SelectionContainer.disabled(
+            child: Wrap(
+              spacing: responsive.spacing(8),
+              runSpacing: responsive.spacing(8),
+              children: actions,
             ),
-            SizedBox(height: responsive.spacing(14)),
-            SelectionContainer.disabled(
-              child: Wrap(
-                spacing: responsive.spacing(8),
-                runSpacing: responsive.spacing(8),
-                children: <Widget>[
-                  SemanticPill(
-                    label: agent.isDaemon
-                        ? 'Daemon'
-                        : context.l10n.identityTypeAgent,
-                    tone: SemanticPillTone.identity,
-                  ),
-                  if (runtimeDisplay != null)
-                    SemanticPill(
-                      label: runtimeDisplay.label,
-                      tone: SemanticPillTone.runtime,
-                    ),
-                ],
-              ),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+        ],
+        if (isDeleting) ...<Widget>[
+          const _AgentDeletingNotice(),
+          SizedBox(height: responsive.spacing(10)),
+        ],
+        if (state.error != null) ...<Widget>[
+          _AgentErrorBanner(message: state.error!),
+          SizedBox(height: responsive.spacing(10)),
+        ],
+        if (statusQueryError != null) ...<Widget>[
+          _AgentErrorBanner(message: statusQueryError),
+          SizedBox(height: responsive.spacing(10)),
+        ],
+        if (upgradeError != null) ...<Widget>[
+          _AgentErrorBanner(message: upgradeError),
+          SizedBox(height: responsive.spacing(10)),
+        ],
+        if (isUpgrading && upgradeProgress != null) ...<Widget>[
+          _DaemonUpgradeProgressPanel(
+            progress: upgradeProgress,
+            isCancelling: isCancelling,
+            onCancel: isCancelling ? null : () => onCancelUpgrade(agent),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+        ],
+        if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
+          _SectionTitle(context.l10n.agentRecentRuns),
+          SizedBox(height: responsive.spacing(8)),
+          _RunStatusPanel(run: agent.recentRuns.first),
+          SizedBox(height: responsive.spacing(14)),
+        ],
+        if (agent.isRuntime) ...<Widget>[
+          _AgentAccessPolicyPanel(
+            key: ValueKey<String>('access-policy-${agent.agentDid}'),
+            policy:
+                state.invocationPolicies[agent.agentDid] ??
+                const AgentInvocationPolicy(),
+            isLoading: state.loadingInvocationPolicies.contains(agent.agentDid),
+            isSaving: state.savingInvocationPolicies.contains(agent.agentDid),
+            errorText: state.invocationPolicyErrors[agent.agentDid],
+            onUpdate: (policy) =>
+                onSaveInvocationPolicy(agent.agentDid, policy),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+        ],
+        _DiagnosticInfoPanel(
+          key: ValueKey<String>('diagnostic-${agent.agentDid}'),
+          agent: agent,
+        ),
+        if (agent.isDaemon) ...<Widget>[
+          SizedBox(height: responsive.spacing(14)),
+          _InstallDaemonPanel(
+            isLoading: state.isActionPending(AgentActionKeys.installCommand),
+            onPressed: onInstallDaemon,
+          ),
+        ],
+        if (_shouldShowMessageAgentSettingsPanel() &&
+            agent.isDaemon) ...<Widget>[
+          SizedBox(height: responsive.spacing(14)),
+          _MessageAgentSettingsPanel(
+            daemon: agent,
+            messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
+            enabled: messageAgentEnabled,
+            isEnablePending: state.isActionPending(
+              AgentActionKeys.bootstrapMessageAgent(agent.agentDid),
+            ),
+            isManagementPending:
+                state.isActionPending(
+                  AgentActionKeys.pauseMessageAgent(agent.agentDid),
+                ) ||
+                state.isActionPending(
+                  AgentActionKeys.deleteMessageAgent(agent.agentDid),
+                ) ||
+                state.isActionPending(
+                  AgentActionKeys.revokeMessageAgent(agent.agentDid),
+                ),
+            onEnable: () => onBootstrapMessageAgent(agent),
+            onPause: () => onPauseMessageAgent(agent),
+            onDelete: () => onDeleteMessageAgent(agent),
+            onRevoke: () => onRevokeMessageAgentAuthorization(agent),
+          ),
+        ],
+      ],
+    );
+    return ColoredBox(
+      color: theme.background,
+      child: SafeArea(
+        top: showPersistentHeader,
+        bottom: false,
+        child: SelectionArea(
+          child: Column(
+            children: <Widget>[
+              if (showPersistentHeader)
+                _AgentPersistentDetailHeader(
+                  title: title,
+                  agent: agent,
+                  runtimeDisplay: runtimeDisplay,
+                  visualStatus: visualStatus,
+                  actions: actions,
+                ),
+              Expanded(child: body),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentDetailEmptyState extends StatelessWidget {
+  const _AgentDetailEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return ColoredBox(
+      color: theme.background,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              CupertinoIcons.square_stack_3d_up,
+              color: theme.tertiaryText,
+              size: responsive.displayScaled(30),
             ),
             SizedBox(height: responsive.spacing(10)),
-            SelectionContainer.disabled(
-              child: Wrap(
-                spacing: responsive.spacing(8),
-                runSpacing: responsive.spacing(8),
-                children: <Widget>[
-                  if (agent.isDaemon)
-                    _DaemonRefreshIconButton(
-                      isLoading: isRefreshing,
-                      size: responsive.displayScaled(34),
-                      onPressed: isRefreshing ? null : () => onRefresh(agent),
-                    ),
-                  if (agent.isDaemon)
-                    _ActionButton(
-                      icon: CupertinoIcons.sparkles,
-                      label: context.l10n.agentCreateRuntime,
-                      onPressed:
-                          isCreatingRuntime ||
-                              !daemonCanCreateRuntime ||
-                              daemonCanUpgrade
-                          ? null
-                          : () => onCreateRuntime(agent),
-                    ),
-                  if (agent.isRuntime)
-                    _ActionButton(
-                      icon: CupertinoIcons.chat_bubble_2,
-                      label: context.l10n.agentOpenChat,
-                      onPressed: () => onOpenChat(agent),
-                    ),
-                  _ActionButton(
-                    icon: CupertinoIcons.pencil,
-                    label: context.l10n.agentRename,
-                    onPressed: isRenaming ? null : () => onRename(agent),
-                  ),
-                  if (daemonCanUpgrade)
-                    _ActionButton(
-                      icon: CupertinoIcons.arrow_up_circle,
-                      label: isUpgrading
-                          ? context.l10n.agentUpgrading
-                          : context.l10n.agentUpgrade,
-                      onPressed: isUpgradeSending || isUpgrading
-                          ? null
-                          : () => onUpgrade(agent),
-                    ),
-                  if (isUpgrading)
-                    _ActionButton(
-                      icon: CupertinoIcons.xmark_circle,
-                      label: isCancelling
-                          ? context.l10n.agentCancelling
-                          : context.l10n.agentCancelUpgrade,
-                      danger: true,
-                      onPressed: isCancelling
-                          ? null
-                          : () => onCancelUpgrade(agent),
-                    ),
-                  _ActionButton(
-                    icon: CupertinoIcons.trash,
-                    label: isDeleting
-                        ? context.l10n.agentDeleting
-                        : _agentDeleteButtonLabel(context, agent, deleteAction),
-                    danger: true,
-                    onPressed:
-                        isDeleteSending ||
-                            isDeleting ||
-                            deleteAction == AgentDeleteAction.unavailable
-                        ? null
-                        : () => onDelete(agent),
-                  ),
-                ],
+            Text(
+              context.l10n.agentSelectOne,
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: responsive.bodySm,
               ),
-            ),
-            if (isDeleting) ...<Widget>[
-              SizedBox(height: responsive.spacing(10)),
-              const _AgentDeletingNotice(),
-            ],
-            if (state.error != null) ...<Widget>[
-              SizedBox(height: responsive.spacing(10)),
-              _AgentErrorBanner(message: state.error!),
-            ],
-            if (statusQueryError != null) ...<Widget>[
-              SizedBox(height: responsive.spacing(10)),
-              _AgentErrorBanner(message: statusQueryError),
-            ],
-            if (upgradeError != null) ...<Widget>[
-              SizedBox(height: responsive.spacing(10)),
-              _AgentErrorBanner(message: upgradeError),
-            ],
-            if (isUpgrading && upgradeProgress != null) ...<Widget>[
-              SizedBox(height: responsive.spacing(12)),
-              _DaemonUpgradeProgressPanel(
-                progress: upgradeProgress,
-                isCancelling: isCancelling,
-                onCancel: isCancelling ? null : () => onCancelUpgrade(agent),
-              ),
-            ],
-            SizedBox(height: responsive.spacing(18)),
-            if (agent.isRuntime && agent.recentRuns.isNotEmpty) ...<Widget>[
-              _SectionTitle(context.l10n.agentRecentRuns),
-              SizedBox(height: responsive.spacing(8)),
-              _RunStatusPanel(run: agent.recentRuns.first),
-              SizedBox(height: responsive.spacing(18)),
-            ],
-            if (agent.isRuntime) ...<Widget>[
-              _AgentAccessPolicyPanel(
-                key: ValueKey<String>('access-policy-${agent.agentDid}'),
-                policy:
-                    state.invocationPolicies[agent.agentDid] ??
-                    const AgentInvocationPolicy(),
-                isLoading: state.loadingInvocationPolicies.contains(
-                  agent.agentDid,
-                ),
-                isSaving: state.savingInvocationPolicies.contains(
-                  agent.agentDid,
-                ),
-                errorText: state.invocationPolicyErrors[agent.agentDid],
-                onUpdate: (policy) =>
-                    onSaveInvocationPolicy(agent.agentDid, policy),
-              ),
-              SizedBox(height: responsive.spacing(18)),
-            ],
-            if (_shouldShowMessageAgentSettingsPanel() &&
-                agent.isDaemon) ...<Widget>[
-              _MessageAgentSettingsPanel(
-                daemon: agent,
-                messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
-                enabled: messageAgentEnabled,
-                isEnablePending: state.isActionPending(
-                  AgentActionKeys.bootstrapMessageAgent(agent.agentDid),
-                ),
-                isManagementPending:
-                    state.isActionPending(
-                      AgentActionKeys.pauseMessageAgent(agent.agentDid),
-                    ) ||
-                    state.isActionPending(
-                      AgentActionKeys.deleteMessageAgent(agent.agentDid),
-                    ) ||
-                    state.isActionPending(
-                      AgentActionKeys.revokeMessageAgent(agent.agentDid),
-                    ),
-                onEnable: () => onBootstrapMessageAgent(agent),
-                onPause: () => onPauseMessageAgent(agent),
-                onDelete: () => onDeleteMessageAgent(agent),
-                onRevoke: () => onRevokeMessageAgentAuthorization(agent),
-              ),
-              SizedBox(height: responsive.spacing(18)),
-            ],
-            _DiagnosticInfoPanel(
-              key: ValueKey<String>('diagnostic-${agent.agentDid}'),
-              agent: agent,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AgentPersistentDetailHeader extends StatelessWidget {
+  const _AgentPersistentDetailHeader({
+    required this.title,
+    required this.agent,
+    required this.runtimeDisplay,
+    required this.visualStatus,
+    required this.actions,
+  });
+
+  final String title;
+  final AgentSummary agent;
+  final AgentRuntimeDisplay? runtimeDisplay;
+  final AgentVisualStatus visualStatus;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Container(
+      key: const Key('agents-persistent-detail-header'),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(20),
+        vertical: responsive.spacing(10),
+      ),
+      decoration: BoxDecoration(
+        color: theme.surface,
+        border: Border(bottom: BorderSide(color: theme.border)),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stackActions = constraints.maxWidth < 720;
+          final identity = _AgentDetailIdentity(
+            title: title,
+            agent: agent,
+            runtimeDisplay: runtimeDisplay,
+            visualStatus: visualStatus,
+          );
+          final actionWrap = SelectionContainer.disabled(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: responsive.spacing(6),
+              runSpacing: responsive.spacing(6),
+              children: actions,
+            ),
+          );
+          if (stackActions) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                identity,
+                SizedBox(height: responsive.spacing(8)),
+                actionWrap,
+              ],
+            );
+          }
+          return Row(
+            children: <Widget>[
+              Expanded(child: identity),
+              SizedBox(width: responsive.spacing(14)),
+              Flexible(child: actionWrap),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _AgentDetailIdentity extends StatelessWidget {
+  const _AgentDetailIdentity({
+    required this.title,
+    required this.agent,
+    required this.runtimeDisplay,
+    required this.visualStatus,
+    this.prominent = false,
+  });
+
+  final String title;
+  final AgentSummary agent;
+  final AgentRuntimeDisplay? runtimeDisplay;
+  final AgentVisualStatus visualStatus;
+  final bool prominent;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: responsive.spacing(8),
+      runSpacing: responsive.spacing(7),
+      children: <Widget>[
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: responsive.displayScaled(prominent ? 260 : 230),
+          ),
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: theme.title,
+              fontSize: responsive.displayScaled(prominent ? 16 : 14.5),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        AgentStatusPill(status: visualStatus),
+        SelectionContainer.disabled(
+          child: SemanticPill(
+            label: agent.isDaemon ? 'Daemon' : context.l10n.identityTypeAgent,
+            tone: agent.isDaemon
+                ? SemanticPillTone.muted
+                : SemanticPillTone.identity,
+          ),
+        ),
+        if (runtimeDisplay != null)
+          SelectionContainer.disabled(
+            child: SemanticPill(
+              label: runtimeDisplay!.label,
+              tone: SemanticPillTone.runtime,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _InstallDaemonPanel extends StatelessWidget {
+  const _InstallDaemonPanel({required this.isLoading, required this.onPressed});
+
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final type = theme.typographyFor(
+      responsive.isCompact
+          ? AwikiMeTypographyMode.compact
+          : AwikiMeTypographyMode.expanded,
+    );
+    return Container(
+      key: const Key('agent-install-another-daemon-panel'),
+      width: double.infinity,
+      padding: EdgeInsets.all(responsive.spacing(16)),
+      decoration: BoxDecoration(
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(12)),
+        border: Border.all(color: theme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            context.l10n.agentInstallTitle,
+            style: type.cardTitle.copyWith(color: theme.title),
+          ),
+          SizedBox(height: responsive.spacing(4)),
+          Text(
+            context.l10n.agentInstallSupportedTypes,
+            style: type.cardSubtitle.copyWith(color: theme.secondaryText),
+          ),
+          SizedBox(height: responsive.spacing(12)),
+          SelectionContainer.disabled(
+            child: _ActionButton(
+              key: const Key('agent-install-another-daemon-button'),
+              icon: CupertinoIcons.arrow_down_circle,
+              label: context.l10n.agentInstallTitle,
+              onPressed: isLoading ? null : onPressed,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -320,6 +544,7 @@ class _AgentDeletingNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
@@ -327,9 +552,9 @@ class _AgentDeletingNotice extends StatelessWidget {
         vertical: responsive.spacing(10),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F7FF),
+        color: theme.primarySoft,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFDCE8FF)),
+        border: Border.all(color: theme.border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -340,7 +565,7 @@ class _AgentDeletingNotice extends StatelessWidget {
             child: Text(
               context.l10n.agentDeletingNotice,
               style: TextStyle(
-                color: const Color(0xFF31527A),
+                color: theme.body,
                 fontSize: responsive.bodySm,
                 height: 1.35,
                 fontWeight: FontWeight.w500,
@@ -394,7 +619,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: CupertinoColors.white,
         borderRadius: BorderRadius.circular(responsive.radius(10)),
-        border: Border.all(color: const Color(0xFFE4EAF3)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,7 +635,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                 ),
                 child: Icon(
                   CupertinoIcons.bubble_left_bubble_right,
-                  color: const Color(0xFF1B7A43),
+                  color: AwikiMePalette.successGreen,
                   size: responsive.iconMd,
                 ),
               ),
@@ -422,7 +647,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                     Text(
                       context.l10n.messageAgentTitle,
                       style: TextStyle(
-                        color: const Color(0xFF101B32),
+                        color: AwikiMePalette.inkNeutral,
                         fontSize: responsive.bodyMd,
                         fontWeight: FontWeight.w700,
                       ),
@@ -435,7 +660,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                             )
                           : context.l10n.messageAgentExperimentDisabled,
                       style: TextStyle(
-                        color: const Color(0xFF66728A),
+                        color: AwikiMePalette.mutedNeutral,
                         fontSize: responsive.metaSm,
                       ),
                     ),
@@ -538,6 +763,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final percent = progress.percent?.clamp(0, 100);
     final progressValue = percent == null ? null : percent / 100;
     final details = <String>[
@@ -557,9 +783,9 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(14)),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(12)),
+        border: Border.all(color: theme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -572,7 +798,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                 child: Text(
                   localizeDaemonUpgradeProgress(context.l10n, progress),
                   style: TextStyle(
-                    color: const Color(0xFF101B32),
+                    color: theme.title,
                     fontSize: responsive.bodySm,
                     fontWeight: FontWeight.w700,
                   ),
@@ -582,7 +808,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                 Text(
                   '${percent.round()}%',
                   style: TextStyle(
-                    color: const Color(0xFF0B65F8),
+                    color: theme.primary,
                     fontSize: responsive.metaSm,
                     fontWeight: FontWeight.w700,
                   ),
@@ -597,8 +823,8 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                   horizontal: responsive.spacing(10),
                   vertical: responsive.spacing(5),
                 ),
-                color: const Color(0xFFFEEEF0),
-                disabledColor: const Color(0xFFF2F4F8),
+                color: theme.dangerContainer,
+                disabledColor: theme.subtleSurface,
                 borderRadius: BorderRadius.circular(responsive.radius(7)),
                 onPressed: onCancel,
                 child: Text(
@@ -606,9 +832,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                       ? context.l10n.agentCancelling
                       : context.l10n.commonCancel,
                   style: TextStyle(
-                    color: isCancelling
-                        ? const Color(0xFF8A96AA)
-                        : AwikiMeColors.danger,
+                    color: isCancelling ? theme.tertiaryText : theme.danger,
                     fontSize: responsive.metaSm,
                     fontWeight: FontWeight.w700,
                   ),
@@ -623,7 +847,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
             Text(
               details.join(' · '),
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: theme.secondaryText,
                 fontSize: responsive.metaSm,
               ),
             ),
@@ -635,7 +859,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: theme.secondaryText,
                 fontSize: responsive.metaSm,
               ),
             ),
@@ -654,7 +878,9 @@ class _MessageAgentStatePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? const Color(0xFF1B7A43) : const Color(0xFF66728A);
+    final color = active
+        ? AwikiMePalette.successGreen
+        : AwikiMePalette.mutedNeutral;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -681,16 +907,17 @@ class _DaemonUpgradeProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(responsive.radius(99)),
       child: Container(
         height: responsive.displayScaled(7),
-        color: const Color(0xFFEAF2FF),
+        color: theme.primarySoft,
         alignment: Alignment.centerLeft,
         child: FractionallySizedBox(
           widthFactor: value?.clamp(0.06, 1) ?? 0.18,
           heightFactor: 1,
-          child: Container(color: const Color(0xFF0B65F8)),
+          child: Container(color: theme.primary),
         ),
       ),
     );
@@ -718,7 +945,7 @@ class _MessageAgentFactGrid extends StatelessWidget {
                   Text(
                     row.label,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.metaSm,
                       fontWeight: FontWeight.w600,
                     ),
@@ -729,7 +956,7 @@ class _MessageAgentFactGrid extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF101B32),
+                      color: AwikiMePalette.inkNeutral,
                       fontSize: responsive.bodySm,
                       fontWeight: FontWeight.w600,
                     ),
@@ -754,16 +981,16 @@ class _MessageAgentPermissionSummary extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F9FD),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE8EDF5)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Text(
         enabled
             ? context.l10n.messageAgentPermissionSummaryEnabled
             : context.l10n.messageAgentPermissionSummaryDisabled,
         style: TextStyle(
-          color: const Color(0xFF344056),
+          color: AwikiMePalette.mutedNeutral,
           fontSize: responsive.bodySm,
           height: 1.35,
         ),
@@ -819,13 +1046,14 @@ class _RunStatusPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final updatedAt = run.updatedAt ?? run.startedAt;
     return Container(
       padding: EdgeInsets.all(responsive.spacing(14)),
       decoration: BoxDecoration(
-        color: CupertinoColors.white,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(12)),
+        border: Border.all(color: theme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -836,10 +1064,10 @@ class _RunStatusPanel extends StatelessWidget {
                 child: Text(
                   run.runId,
                   maxLines: 1,
-                  style: const TextStyle(
-                    color: Color(0xFF101B32),
+                  style: TextStyle(
+                    color: theme.title,
                     fontFamily: 'monospace',
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -851,7 +1079,7 @@ class _RunStatusPanel extends StatelessWidget {
             Text(
               updatedAt.toLocal().toString(),
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: theme.secondaryText,
                 fontSize: responsive.metaSm,
               ),
             ),
@@ -862,7 +1090,7 @@ class _RunStatusPanel extends StatelessWidget {
               _runProgressLabel(context, progress),
               maxLines: 2,
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: theme.secondaryText,
                 fontSize: responsive.metaSm,
               ),
             ),
@@ -878,7 +1106,7 @@ class _RunStatusPanel extends StatelessWidget {
               ].join(' · '),
               maxLines: 2,
               style: TextStyle(
-                color: AwikiMeColors.danger,
+                color: theme.danger,
                 fontSize: responsive.metaSm,
               ),
             ),

@@ -28,7 +28,7 @@ class _MacAgentDetailPanel extends ConsumerWidget {
         Text(
           context.l10n.conversationInfoTitle,
           style: const TextStyle(
-            color: Color(0xFF101B32),
+            color: AwikiMePalette.inkNeutral,
             fontSize: 16,
             fontWeight: FontWeight.w400,
           ),
@@ -41,14 +41,14 @@ class _MacAgentDetailPanel extends ConsumerWidget {
           children: <Widget>[
             const Icon(
               CupertinoIcons.checkmark_shield_fill,
-              color: Color(0xFF17BF63),
+              color: AwikiMePalette.successGreen,
               size: 16,
             ),
             const SizedBox(width: 6),
             Text(
               context.l10n.conversationIdentityVerified,
               style: const TextStyle(
-                color: Color(0xFF17BF63),
+                color: AwikiMePalette.successGreen,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -105,21 +105,21 @@ class _MacAgentDetailPanel extends ConsumerWidget {
             value: context.l10n.conversationUnreadMessagesValue(
               conversation.unreadCount,
             ),
-            color: const Color(0xFF0B65F8),
+            color: AwikiMePalette.brandAccent,
           ),
           _MacStatusLine(
             label: context.l10n.conversationLatestPreviewLabel,
             value: conversation.lastMessagePreview.trim().isEmpty
                 ? context.l10n.conversationsNoMessagePreview
                 : conversation.lastMessagePreview.trim(),
-            color: const Color(0xFF66728A),
+            color: AwikiMePalette.mutedNeutral,
             indicatorKey: const Key('mac-conversation-preview-status-dot'),
             valueKey: const Key('mac-conversation-preview-status-value'),
           ),
           _MacStatusLine(
             label: context.l10n.conversationConnectionStatusLabel,
             value: context.l10n.conversationConnectionEstablished,
-            color: const Color(0xFF17BF63),
+            color: AwikiMePalette.successGreen,
           ),
         ],
       ),
@@ -139,7 +139,7 @@ class _MacAgentDetailPanel extends ConsumerWidget {
       );
     }
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
+      decoration: const BoxDecoration(color: AwikiMePalette.mist),
       child: SafeArea(
         bottom: false,
         child: ListView(
@@ -170,7 +170,7 @@ class _MacDetailRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: Color(0xFF34415C),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -184,7 +184,7 @@ class _MacDetailRow extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF17213A),
+                    color: AwikiMePalette.inkNeutral,
                     fontSize: 12,
                     height: 1.35,
                   ),
@@ -209,7 +209,7 @@ class _MacDetailCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: CupertinoColors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,7 +217,7 @@ class _MacDetailCard extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              color: Color(0xFF17213A),
+              color: AwikiMePalette.inkNeutral,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
@@ -242,13 +242,13 @@ class _MacAbilityGridItem extends StatelessWidget {
       width: 96,
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFDFF),
+        color: AwikiMePalette.content,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE5EAF2)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         children: <Widget>[
-          Icon(icon, size: 15, color: const Color(0xFF34415C)),
+          Icon(icon, size: 15, color: AwikiMePalette.mutedNeutral),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
@@ -256,7 +256,7 @@ class _MacAbilityGridItem extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Color(0xFF34415C),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: 10.5,
                 fontWeight: FontWeight.w500,
               ),
@@ -297,7 +297,7 @@ class _MacStatusLine extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Color(0xFF66728A),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -321,7 +321,7 @@ class _MacStatusLine extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.left,
               style: const TextStyle(
-                color: Color(0xFF17213A),
+                color: AwikiMePalette.inkNeutral,
                 fontSize: 12,
                 height: 1.35,
                 fontWeight: FontWeight.w500,

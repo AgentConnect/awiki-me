@@ -1,5 +1,112 @@
 part of '../onboarding_page.dart';
 
+class _CompactOnboardingCard extends StatelessWidget {
+  const _CompactOnboardingCard({
+    required this.entryMode,
+    required this.onModeChanged,
+    required this.child,
+  });
+
+  final String entryMode;
+  final ValueChanged<String> onModeChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Container(
+      key: const Key('onboarding-compact-auth-card'),
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(20),
+        responsive.spacing(20),
+        responsive.spacing(20),
+        responsive.spacing(22),
+      ),
+      decoration: BoxDecoration(
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(responsive.radius(16)),
+        border: Border.all(color: theme.border),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0D17213A),
+            blurRadius: 24,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const _CompactOnboardingBrand(),
+          SizedBox(height: responsive.spacing(20)),
+          _SegmentedPill(
+            value: entryMode,
+            options: <String, String>{
+              'register': context.l10n.onboardingRegister,
+              'login': context.l10n.onboardingLogin,
+            },
+            onChanged: onModeChanged,
+          ),
+          SizedBox(height: responsive.spacing(22)),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactOnboardingBrand extends StatelessWidget {
+  const _CompactOnboardingBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Row(
+      key: const Key('onboarding-compact-brand'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Container(
+          width: responsive.scaled(44),
+          height: responsive.scaled(44),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: CupertinoColors.white,
+            borderRadius: BorderRadius.circular(responsive.radius(10)),
+            border: Border.all(color: theme.border),
+          ),
+          child: Image.asset(
+            'assets/branding/awiki-me-logo.png',
+            key: const Key('onboarding-compact-logo'),
+            width: responsive.scaled(34),
+            height: responsive.scaled(34),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Text(
+              'AW',
+              style: TextStyle(
+                color: AwikiMePalette.actionBlue,
+                fontSize: responsive.titleLg,
+                fontWeight: FontWeight.w600,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: responsive.spacing(12)),
+        Text(
+          'AWiki',
+          style: TextStyle(
+            color: theme.title,
+            fontSize: responsive.titleXl,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SegmentedPill extends StatelessWidget {
   const _SegmentedPill({
     required this.value,
@@ -235,11 +342,11 @@ class _CompactSegmentOption extends StatelessWidget {
           color: selected ? CupertinoColors.white : CupertinoColors.transparent,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
           boxShadow: selected
-              ? const <BoxShadow>[
+              ? <BoxShadow>[
                   BoxShadow(
-                    color: Color(0x100B65F8),
+                    color: CupertinoColors.black.withValues(alpha: 0.06),
                     blurRadius: 10,
-                    offset: Offset(0, 4),
+                    offset: const Offset(0, 4),
                   ),
                 ]
               : null,

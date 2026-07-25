@@ -67,7 +67,10 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(find.text('登录或注册'), findsWidgets);
-    if (defaultTargetPlatform == TargetPlatform.macOS) {
+    if (find
+        .byKey(const Key('onboarding-mac-auth-method-tabs'))
+        .evaluate()
+        .isNotEmpty) {
       expect(
         find.byKey(const Key('onboarding-mac-auth-method-tabs')),
         findsOneWidget,
@@ -79,7 +82,11 @@ void main() {
         findsOneWidget,
       );
     } else {
-      expect(find.text('切换身份'), findsWidgets);
+      expect(
+        find.byKey(const Key('onboarding-compact-auth-card')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('onboarding-entry-tabs')), findsOneWidget);
     }
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
@@ -228,8 +235,7 @@ void main() {
             isGroup: false,
             targetDid: 'did:test:smoke-peer:previous',
             targetPeer: 'smoke-peer.awiki.ai',
-            peerPersonaId:
-                'test-persona:dm:peer-scope:v1:smoke-peer',
+            peerPersonaId: 'test-persona:dm:peer-scope:v1:smoke-peer',
           ),
         ];
         await container.read(conversationListProvider.notifier).refresh();
@@ -307,7 +313,8 @@ void main() {
       expect(find.byType(SettingsPage), findsOneWidget);
       expect(find.text('设置'), findsWidgets);
       expect(find.text('语言'), findsOneWidget);
-      expect(find.text('导出身份凭证'), findsOneWidget);
+      expect(find.text('导出身份凭证'), findsNothing);
+      expect(find.text('检查更新'), findsOneWidget);
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);

@@ -28,11 +28,15 @@ class ProfilePage extends ConsumerStatefulWidget {
     this.homepageMarkdownLoader,
     this.embedded = false,
     this.bottomInset = 120,
+    this.showTitle = true,
+    this.onBack,
   });
 
   final Future<String?> Function(String url)? homepageMarkdownLoader;
   final bool embedded;
   final double bottomInset;
+  final bool showTitle;
+  final VoidCallback? onBack;
 
   @override
   ConsumerState<ProfilePage> createState() => _ProfilePageState();
@@ -52,7 +56,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ),
     ];
     if (overrides.isNotEmpty) {
-      return ProviderScope(overrides: overrides, child: const ProfilePage());
+      return ProviderScope(
+        overrides: overrides,
+        child: ProfilePage(
+          embedded: widget.embedded,
+          bottomInset: widget.bottomInset,
+          showTitle: widget.showTitle,
+          onBack: widget.onBack,
+        ),
+      );
     }
     final state = ref.watch(profileProvider);
     final profile = state.profile;
@@ -73,132 +85,164 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final responsive = context.awikiResponsive;
     final friendsState = ref.watch(friendsProvider);
 
-    final content = AwikiMeShellTabPage(
-      title: context.l10n.profileMeTitle,
-      child: SelectionArea(
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            responsive.tabContentHorizontalPadding,
-            responsive.spacing(26),
-            responsive.tabContentHorizontalPadding,
-            widget.embedded ? widget.bottomInset : 120,
-          ),
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                AvatarBadge(
-                  seed: handleLabel,
-                  size: responsive.isPhone ? 54 : 44,
-                  avatarUri: profile.avatarUri,
-                ),
-                SizedBox(width: responsive.spacing(16)),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: responsive.spacing(8)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                handleLabel,
-                                key: const Key('profile-handle-value'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: responsive.isPhone ? 24 : 21,
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.title,
-                                ),
+    final profileBody = SelectionArea(
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          responsive.tabContentHorizontalPadding,
+          responsive.spacing(26),
+          responsive.tabContentHorizontalPadding,
+          widget.embedded ? widget.bottomInset : 120,
+        ),
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              AvatarBadge(
+                seed: handleLabel,
+                size: responsive.isPhone ? 54 : 44,
+                avatarUri: profile.avatarUri,
+              ),
+              SizedBox(width: responsive.spacing(16)),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(top: responsive.spacing(8)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              handleLabel,
+                              key: const Key('profile-handle-value'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: responsive.isPhone ? 24 : 21,
+                                fontWeight: FontWeight.w700,
+                                color: theme.title,
                               ),
                             ),
-                            SizedBox(width: responsive.spacing(8)),
-                            SelectionContainer.disabled(
-                              child: TopBarActionButton(
-                                onTap: state.isSaving
-                                    ? null
-                                    : () => _showEditProfileDialog(
-                                        context,
-                                        profile,
-                                      ),
-                                child: Icon(
-                                  CupertinoIcons.pencil,
-                                  size: responsive.iconMd,
-                                  color: theme.primaryDark,
-                                ),
+                          ),
+                          SizedBox(width: responsive.spacing(8)),
+                          SelectionContainer.disabled(
+                            child: TopBarActionButton(
+                              onTap: state.isSaving
+                                  ? null
+                                  : () => _showEditProfileDialog(
+                                      context,
+                                      profile,
+                                    ),
+                              child: Icon(
+                                CupertinoIcons.pencil,
+                                size: responsive.iconMd,
+                                color: theme.primaryDark,
                               ),
-                            ),
-                          ],
-                        ),
-                        if (secondaryName.isNotEmpty) ...<Widget>[
-                          SizedBox(height: responsive.spacing(3)),
-                          Text(
-                            secondaryName,
-                            key: const Key('profile-display-name'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: responsive.bodyMd,
-                              fontWeight: FontWeight.w500,
-                              color: theme.body,
                             ),
                           ),
                         ],
-                        SizedBox(height: responsive.spacing(6)),
-                        CopyableDidLine(
-                          value: profile.did,
-                          displayValue: DidDisplayFormatter.compactDidPath(
-                            profile.did,
+                      ),
+                      if (secondaryName.isNotEmpty) ...<Widget>[
+                        SizedBox(height: responsive.spacing(3)),
+                        Text(
+                          secondaryName,
+                          key: const Key('profile-display-name'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: responsive.bodyMd,
+                            fontWeight: FontWeight.w500,
+                            color: theme.body,
                           ),
-                          maxLines: 2,
-                          copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
-                          copiedMessage: context.l10n.chatPeerInfoDidCopied,
-                          textKey: const Key('profile-did-value'),
-                          buttonKey: const Key('profile-copy-did-button'),
-                          textStyle: TextStyle(
-                            fontSize: responsive.bodySm,
-                            height: 1.35,
-                            color: theme.tertiaryText,
-                          ),
-                          buttonSize: responsive.displayScaled(30),
-                          iconSize: responsive.displayScaled(14),
                         ),
                       ],
-                    ),
+                      SizedBox(height: responsive.spacing(6)),
+                      CopyableDidLine(
+                        value: profile.did,
+                        displayValue: DidDisplayFormatter.compactDidPath(
+                          profile.did,
+                        ),
+                        maxLines: 2,
+                        copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                        copiedMessage: context.l10n.chatPeerInfoDidCopied,
+                        textKey: const Key('profile-did-value'),
+                        buttonKey: const Key('profile-copy-did-button'),
+                        textStyle: TextStyle(
+                          fontSize: responsive.bodySm,
+                          height: 1.35,
+                          color: theme.tertiaryText,
+                        ),
+                        buttonSize: responsive.displayScaled(30),
+                        iconSize: responsive.displayScaled(14),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-            SizedBox(height: responsive.spacing(28)),
-            _ProfileRelationshipBar(
-              homepageUrl: homepageUrl,
-              followersCount: friendsState.followers.length,
-              followingCount: friendsState.following.length,
-              onHomepageTap: homepageUrl.isEmpty
-                  ? null
-                  : () async {
-                      await _openHomepage(homepageUrl);
-                    },
-            ),
-            SizedBox(height: responsive.spacing(48)),
-            _ProfileContentSection(
-              content: profileContent,
-              emptyText: context.l10n.profileEmpty,
-              tags: profile.tags,
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          SizedBox(height: responsive.spacing(28)),
+          _ProfileRelationshipBar(
+            homepageUrl: homepageUrl,
+            followersCount: friendsState.followers.length,
+            followingCount: friendsState.following.length,
+            onHomepageTap: homepageUrl.isEmpty
+                ? null
+                : () async {
+                    await _openHomepage(homepageUrl);
+                  },
+          ),
+          SizedBox(height: responsive.spacing(48)),
+          _ProfileContentSection(
+            content: profileContent,
+            emptyText: context.l10n.profileEmpty,
+            tags: profile.tags,
+          ),
+        ],
       ),
     );
+    final content = widget.showTitle
+        ? widget.onBack == null
+              ? AwikiMeShellTabPage(
+                  title: context.l10n.profileMeTitle,
+                  child: profileBody,
+                )
+              : Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: responsive.scaledInsets(
+                        responsive.tabInnerPadding.copyWith(bottom: 8),
+                      ),
+                      child: AwikiMeTopBar(
+                        title: context.l10n.profileMeTitle,
+                        padding: EdgeInsets.zero,
+                        leading: TopBarActionButton(
+                          key: const Key('profile-back-button'),
+                          onTap: widget.onBack,
+                          semanticsLabel: context.l10n.commonBack,
+                          tooltip: context.l10n.commonBack,
+                          child: Icon(
+                            CupertinoIcons.chevron_left,
+                            size: responsive.iconMd,
+                            color: theme.secondaryText,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(child: profileBody),
+                  ],
+                )
+        : profileBody;
     if (widget.embedded) {
       return content;
     }
     if (responsive.supportsTwoPane) {
       return AwikiAdaptiveScaffold(maxWidth: 900, child: content);
     }
-    return content;
+    return CupertinoPageScaffold(
+      backgroundColor: theme.background,
+      child: SafeArea(bottom: false, child: content),
+    );
   }
 
   void _syncHomepage(UserProfile profile) {

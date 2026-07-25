@@ -2,18 +2,16 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
-import 'package:awiki_me/src/presentation/agents/agent_inbox_provider.dart';
-import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart' show Key, RepaintBoundary, Size, SizedBox;
@@ -26,16 +24,36 @@ import '../support/fake_app_bootstrap.dart';
 
 const _captureBoundaryKey = Key('ui-visual-verification-boundary');
 const _screenshotsDir = 'docs/ui-optimization-plan/screenshots';
+const _visualScreenshotFiles = <String>{
+  '01-compact-onboarding.png',
+  '02-expanded-onboarding.png',
+  '03-compact-messages.png',
+  '04-compact-chat.png',
+  '05-expanded-messages-chat.png',
+  '06-compact-agents-list.png',
+  '07-compact-agent-detail.png',
+  '08-expanded-agents.png',
+  '09-compact-contacts.png',
+  '10-compact-profile.png',
+  '11-compact-settings.png',
+  '12-expanded-contacts.png',
+  '13-expanded-profile.png',
+  '14-expanded-settings.png',
+  '15-compact-quick-actions.png',
+};
+const _compactSize = Size(393, 852);
+const _expandedSize = Size(1440, 900);
+const _sessionDid = 'did:test:me';
 const _session = SessionIdentity(
-  did: 'did:test:me',
+  did: _sessionDid,
   credentialName: 'default',
-  handle: 'ui-reviewer',
+  handle: 'ui-reviewer.awiki.ai',
   displayName: 'UI Reviewer',
   jwtToken: 'test-jwt',
 );
 const _daemonDid = 'did:test:daemon:local';
 const _runtimeDid = 'did:test:agent:hermes-ui';
-const _codexRuntimeDid = 'did:test:agent:codex-ui';
+const _humanDid = 'did:test:person:alice';
 
 class _StaticConversationListController extends ConversationListController {
   _StaticConversationListController(
@@ -46,137 +64,307 @@ class _StaticConversationListController extends ConversationListController {
   }
 
   @override
-  Future<void> refresh() async {
-    // Screenshots use deterministic seeded conversations.
+  Future<void> refresh() async {}
+
+  @override
+  Future<void> refreshFastLocal() async {}
+}
+
+class _StaticFriendsController extends FriendsController {
+  _StaticFriendsController(super.ref, FriendsState initialState) {
+    state = initialState;
   }
+
+  @override
+  Future<void> refresh() async {}
 }
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('UI optimization visual verification screenshots', (
-    tester,
-  ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1600, 960));
+  setUpAll(_cleanScreenshots);
+
+  testWidgets('capture compact and expanded onboarding', (tester) async {
     try {
-      await _cleanScreenshots();
-
-      final onboardingHarness = createFakeAwikiMeAppHarness();
-      await tester.pumpWidget(
-        RepaintBoundary(
-          key: _captureBoundaryKey,
-          child: AwikiMeApp(
-            bootstrap: onboardingHarness.bootstrap,
-            providerOverrides: onboardingHarness.providerOverrides,
-          ),
-        ),
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.iOS,
       );
-      await tester.pumpAndSettle();
-      expect(find.text('登录或注册'), findsWidgets);
-      await _captureScreenshot(tester, '01-onboarding-login');
-
-      final visualHarness = _createVisualHarness();
-      await _resetApp(tester);
-      await _pumpVisualApp(tester, visualHarness);
-      await tester.tap(find.text('Hermes UI').first);
-      await tester.pumpAndSettle();
-      expect(find.text('会话信息'), findsNothing);
-      expect(find.text('product-brief.pdf'), findsOneWidget);
-      await _captureScreenshot(tester, '02-chat-default-info-closed');
-
+      await _pumpOnboarding(tester);
       expect(
-        find.byKey(const Key('chat-conversation-info-button')),
-        findsNothing,
-      );
-      expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);
-      expect(find.text('身份卡'), findsNothing);
-
-      await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-      await tester.pumpAndSettle();
-      expect(find.text('智能体信息'), findsOneWidget);
-      expect(find.text('Hermes'), findsOneWidget);
-      expect(
-        find.byKey(const Key('peer-info-dialog-did-value')),
+        find.byKey(const Key('onboarding-compact-auth-card')),
         findsOneWidget,
       );
-      await _captureScreenshot(tester, '03-agent-info-popup');
+      await _captureScreenshot(tester, '01-compact-onboarding');
 
-      await tester.tap(find.text('Agent 收件箱').last);
-      await tester.pump();
-      final appContainer = _appContainer(tester);
-      appContainer
-          .read(agentInboxProvider.notifier)
-          .applyControlPayload(_inboxPayload());
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('peer-info-agent-inbox')), findsOneWidget);
-      expect(find.textContaining('最新：'), findsWidgets);
-      await tester.ensureVisible(find.text('bob.anpclaw.com').first);
-      await tester.pumpAndSettle();
-      await _captureScreenshot(tester, '04-agent-inbox-list');
-
-      await tester.tap(find.text('bob.anpclaw.com').first);
-      await tester.pump();
-      appContainer
-          .read(agentInboxProvider.notifier)
-          .applyControlPayload(_threadPayload());
-      await tester.pumpAndSettle();
-      expect(find.text('加载更早消息'), findsOneWidget);
-      await tester.ensureVisible(find.text('加载更早消息'));
-      await tester.pumpAndSettle();
-      await _captureScreenshot(tester, '05-agent-inbox-thread');
-
-      final agentsHarness = _createVisualHarness();
-      await _resetApp(tester);
-      await _pumpVisualApp(tester, agentsHarness);
-      _appContainer(tester).read(shellTabProvider.notifier).setTab(1);
-      await tester.pumpAndSettle();
-      expect(find.text('Codex UI'), findsOneWidget);
-      expect(find.text('Codex · 需要配置'), findsOneWidget);
-      expect(find.textContaining('需要配置'), findsWidgets);
-      await tester.tap(find.text('创建 Agent').first);
-      await tester.pumpAndSettle();
-      expect(find.text('Agent 类型'), findsOneWidget);
-      expect(find.text('Hermes'), findsWidgets);
-      expect(find.text('Codex'), findsOneWidget);
-      expect(find.text('Claude Code'), findsOneWidget);
-      await tester.tap(find.text('Codex'));
-      await tester.pumpAndSettle();
-      expect(find.text('工作目录策略'), findsNothing);
-      expect(find.text('宿主机全权限'), findsNothing);
-      expect(find.text('按会话目录'), findsNothing);
-      await _captureScreenshot(tester, '06-agent-create-agent-type');
+      await _prepareEnvironment(
+        tester,
+        size: _expandedSize,
+        platform: TargetPlatform.macOS,
+      );
+      await _pumpOnboarding(tester);
+      expect(
+        find.byKey(const Key('onboarding-expanded-layout')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '02-expanded-onboarding');
     } finally {
-      debugDefaultTargetPlatformOverride = null;
-      await tester.binding.setSurfaceSize(null);
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('capture compact and expanded messages and chat', (tester) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.iOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      expect(
+        find.byKey(const Key('conversation-row:dm:peer-scope:v1:hermes-ui')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '03-compact-messages');
+
+      await tester.tap(
+        find.byKey(const Key('conversation-row:dm:peer-scope:v1:hermes-ui')),
+      );
+      await _pumpVisualFrames(tester);
+      expect(
+        find.byKey(const Key('chat-peer-info-avatar-button')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '04-compact-chat');
+
+      await _prepareEnvironment(
+        tester,
+        size: _expandedSize,
+        platform: TargetPlatform.macOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(
+        find.byKey(const Key('conversation-row:dm:peer-scope:v1:hermes-ui')),
+      );
+      await _pumpVisualFrames(tester);
+      expect(find.text('product-brief.pdf'), findsOneWidget);
+      await _captureScreenshot(tester, '05-expanded-messages-chat');
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('capture compact and expanded agents', (tester) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.iOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(find.bySemanticsLabel('智能体'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('agents-compact-list')), findsOneWidget);
+      await _captureScreenshot(tester, '06-compact-agents-list');
+
+      await tester.tap(find.text('Hermes UI').first);
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('agents-compact-detail')), findsOneWidget);
+      await _captureScreenshot(tester, '07-compact-agent-detail');
+
+      await _prepareEnvironment(
+        tester,
+        size: _expandedSize,
+        platform: TargetPlatform.macOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(find.bySemanticsLabel('智能体'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
+      await _captureScreenshot(tester, '08-expanded-agents');
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('capture contacts, profile, and settings', (tester) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.iOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(find.bySemanticsLabel('联系人'));
+      await _pumpVisualFrames(tester);
+      expect(find.text('Alice Chen'), findsWidgets);
+      await _captureScreenshot(tester, '09-compact-contacts');
+
+      await tester.tap(find.bySemanticsLabel('消息'));
+      await _pumpVisualFrames(tester);
+      await tester.tap(find.bySemanticsLabel('设置'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('settings-profile-row')), findsOneWidget);
+      expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+      await tester.tap(find.byKey(const Key('settings-profile-row')));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('profile-handle-value')), findsOneWidget);
+      expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+      await _captureScreenshot(tester, '10-compact-profile');
+
+      await tester.tap(find.byKey(const Key('profile-back-button')));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('settings-tenant-row')), findsOneWidget);
+      await _captureScreenshot(tester, '11-compact-settings');
+
+      await _prepareEnvironment(
+        tester,
+        size: _expandedSize,
+        platform: TargetPlatform.macOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(find.bySemanticsLabel('联系人'));
+      await _pumpVisualFrames(tester);
+      await _captureScreenshot(tester, '12-expanded-contacts');
+
+      await tester.tap(find.bySemanticsLabel('我'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('profile-sidebar-summary')), findsOneWidget);
+      await _captureScreenshot(tester, '13-expanded-profile');
+
+      await tester.tap(find.bySemanticsLabel('设置'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('mac-settings-list-pane')), findsOneWidget);
+      await _captureScreenshot(tester, '14-expanded-settings');
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('capture compact adaptive quick-actions menu', (tester) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.iOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(find.bySemanticsLabel('更多操作'));
+      await _pumpVisualFrames(tester);
+      expect(find.text('发起新消息'), findsOneWidget);
+      await _captureScreenshot(tester, '15-compact-quick-actions');
+    } finally {
+      await _resetEnvironment(tester);
     }
   });
 }
 
-Future<void> _resetApp(WidgetTester tester) async {
+Future<void> _prepareEnvironment(
+  WidgetTester tester, {
+  required Size size,
+  required TargetPlatform platform,
+}) async {
   await tester.pumpWidget(const SizedBox.shrink());
-  await tester.pumpAndSettle();
+  await _pumpVisualFrames(tester);
+  debugDefaultTargetPlatformOverride = platform;
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+}
+
+Future<void> _resetEnvironment(WidgetTester tester) async {
+  debugDefaultTargetPlatformOverride = null;
+  await tester.pumpWidget(const SizedBox.shrink());
+  await _pumpVisualFrames(tester);
+  tester.view.resetPhysicalSize();
+  tester.view.resetDevicePixelRatio();
+}
+
+Future<void> _pumpOnboarding(WidgetTester tester) async {
+  final harness = createFakeAwikiMeAppHarness();
+  await tester.pumpWidget(
+    RepaintBoundary(
+      key: _captureBoundaryKey,
+      child: AwikiMeApp(
+        bootstrap: harness.bootstrap,
+        providerOverrides: harness.providerOverrides,
+      ),
+    ),
+  );
+  await _pumpVisualFrames(tester);
 }
 
 FakeAwikiMeAppHarness _createVisualHarness() {
-  final conversation = _visualConversation();
-  final harness = createFakeAwikiMeAppHarness(session: _session);
+  final conversations = _visualConversations();
+  final history = _visualHistory();
+  const profile = UserProfile(
+    did: _sessionDid,
+    displayName: 'UI Reviewer',
+    bio: '连接人、智能体与可信协作网络。',
+    tags: <String>['产品', '协作'],
+    profileMarkdown: '# UI Reviewer\n\n关注可靠、清晰、可维护的协作体验。',
+    handle: 'ui-reviewer.awiki.ai',
+    fullHandle: 'ui-reviewer.awiki.ai',
+  );
+  final harness = createFakeAwikiMeAppHarness(
+    session: _session,
+    profile: profile,
+  );
+  const alice = UserProfile(
+    did: _humanDid,
+    displayName: 'Alice Chen',
+    bio: '负责产品设计与用户研究。',
+    tags: <String>['设计', '研究'],
+    profileMarkdown: '## Alice Chen\n\n产品设计与用户研究。',
+    handle: 'alice.awiki.ai',
+    fullHandle: 'alice.awiki.ai',
+  );
   harness.gateway
-    ..conversations = <ConversationSummary>[conversation]
-    ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
-      _runtimeDid: _visualHistory(),
+    ..conversations = conversations
+    ..dmHistoryByPeerDid = <String, List<ChatMessage>>{_runtimeDid: history}
+    ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+      _runtimeDid: history,
     }
+    ..following = const <RelationshipSummary>[
+      RelationshipSummary(
+        did: _humanDid,
+        displayName: 'Alice Chen',
+        relationship: 'following',
+        handle: 'alice.awiki.ai',
+      ),
+      RelationshipSummary(
+        did: _runtimeDid,
+        displayName: 'Hermes UI',
+        relationship: 'following',
+        handle: 'hermes-ui',
+      ),
+    ]
+    ..followers = const <RelationshipSummary>[
+      RelationshipSummary(
+        did: 'did:test:person:bob',
+        displayName: 'Bob Li',
+        relationship: 'follower',
+        handle: 'bob.awiki.ai',
+      ),
+    ]
     ..publicProfilesByQuery = <String, UserProfile>{
+      _humanDid: alice,
+      'alice.awiki.ai': alice,
       _runtimeDid: const UserProfile(
         did: _runtimeDid,
-        nickName: 'Hermes UI',
-        bio: 'Runtime Agent info popup visual check.',
+        displayName: 'Hermes UI',
+        bio: 'Runtime Agent for visual verification.',
         tags: <String>['Agent'],
         profileMarkdown:
-            '# Hermes UI\n\nRuntime Agent info popup visual check.\n\n- 支持身份卡复制\n- 支持 Agent 收件箱',
+            '# Hermes UI\n\nRuntime Agent for visual verification.',
         handle: 'hermes-ui',
       ),
     };
+
+  final messaging =
+      harness.bootstrap.messagingService as test_support.FakeMessagingService;
+  messaging.conversationTimelineById['dm:peer-scope:v1:hermes-ui'] = history;
+
   final control =
       harness.bootstrap.agentControlService!
           as test_support.FakeAgentControlService;
@@ -200,7 +388,7 @@ FakeAwikiMeAppHarness _createVisualHarness() {
       latest: AgentLatestStatus(status: 'ready'),
     ),
     AgentSummary(
-      agentDid: _codexRuntimeDid,
+      agentDid: 'did:test:agent:codex-ui',
       kind: AgentKind.runtime,
       daemonAgentDid: _daemonDid,
       runtime: 'codex',
@@ -216,52 +404,119 @@ FakeAwikiMeAppHarness _createVisualHarness() {
       ),
     ),
   ];
-  return harness;
+  return FakeAwikiMeAppHarness(
+    bootstrap: harness.bootstrap,
+    gateway: harness.gateway,
+    realtimeGateway: harness.realtimeGateway,
+    notificationFacade: harness.notificationFacade,
+    providerOverrides: <Override>[
+      ...harness.providerOverrides,
+      conversationListProvider.overrideWith(
+        (ref) => _StaticConversationListController(ref, conversations),
+      ),
+      friendsProvider.overrideWith(
+        (ref) => _StaticFriendsController(
+          ref,
+          const FriendsState(
+            following: <RelationshipSummary>[
+              RelationshipSummary(
+                did: _humanDid,
+                displayName: 'Alice Chen',
+                relationship: 'following',
+                handle: 'alice.awiki.ai',
+              ),
+              RelationshipSummary(
+                did: _runtimeDid,
+                displayName: 'Hermes UI',
+                relationship: 'following',
+                handle: 'hermes-ui',
+              ),
+            ],
+            followers: <RelationshipSummary>[
+              RelationshipSummary(
+                did: 'did:test:person:bob',
+                displayName: 'Bob Li',
+                relationship: 'follower',
+                handle: 'bob.awiki.ai',
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
-ConversationSummary _visualConversation() {
-  return ConversationSummary(
-    threadId: 'dm:$_runtimeDid',
-    conversationId: 'dm:$_runtimeDid',
-    displayName: 'Hermes UI',
-    lastMessagePreview: 'latest runtime reply',
-    lastMessageAt: DateTime(2026, 6, 15, 10, 30),
-    unreadCount: 0,
-    isGroup: false,
-    targetDid: _runtimeDid,
-  );
+List<ConversationSummary> _visualConversations() {
+  return <ConversationSummary>[
+    ConversationSummary(
+      threadId: 'dm:peer-scope:v1:hermes-ui',
+      conversationId: 'dm:peer-scope:v1:hermes-ui',
+      displayName: 'Hermes UI',
+      lastMessagePreview: '产品概要已经整理完成，可以继续讨论。',
+      lastMessageAt: DateTime(2026, 7, 25, 10, 30),
+      unreadCount: 7,
+      unreadMentionCount: 1,
+      firstUnreadMentionMessageId: 'agent-message-1',
+      isGroup: false,
+      targetDid: _runtimeDid,
+      targetPeer: 'hermes-ui',
+    ),
+    ConversationSummary(
+      threadId: 'dm:peer-scope:v1:alice',
+      conversationId: 'dm:peer-scope:v1:alice',
+      displayName: 'Alice Chen',
+      lastMessagePreview: '明天下午一起确认交互稿。',
+      lastMessageAt: DateTime(2026, 7, 25, 9, 12),
+      unreadCount: 2,
+      isGroup: false,
+      targetDid: _humanDid,
+      targetPeer: 'alice.awiki.ai',
+    ),
+    ConversationSummary(
+      threadId: 'group:did:test:group:product',
+      conversationId: 'group:did:test:group:product',
+      displayName: '产品协作群',
+      lastMessagePreview: 'Bob: 新版本体验问题已汇总。',
+      lastMessageAt: DateTime(2026, 7, 24, 19, 45),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:group:product',
+      canonicalGroupDid: 'did:test:group:product',
+    ),
+  ];
 }
 
 List<ChatMessage> _visualHistory() {
   return <ChatMessage>[
     ChatMessage(
       localId: 'human-message-1',
-      threadId: 'dm:$_runtimeDid',
+      threadId: 'dm:peer-scope:v1:hermes-ui',
       senderDid: _session.did,
       senderName: _session.displayName,
       content: '请帮我看一下这份产品概要。',
-      createdAt: DateTime(2026, 6, 15, 10, 25),
+      createdAt: DateTime(2026, 7, 25, 10, 25),
       isMine: true,
       sendState: MessageSendState.sent,
     ),
     ChatMessage(
       localId: 'agent-message-1',
-      threadId: 'dm:$_runtimeDid',
+      threadId: 'dm:peer-scope:v1:hermes-ui',
       senderDid: _runtimeDid,
       senderName: 'Hermes UI',
-      content: 'latest runtime reply',
-      createdAt: DateTime(2026, 6, 15, 10, 30),
+      content: '已经看完。信息层级清楚，建议把关键风险放到第一屏。',
+      createdAt: DateTime(2026, 7, 25, 10, 30),
       isMine: false,
       sendState: MessageSendState.sent,
     ),
     ChatMessage(
       localId: 'agent-attachment-1',
-      threadId: 'dm:$_runtimeDid',
+      threadId: 'dm:peer-scope:v1:hermes-ui',
       senderDid: _runtimeDid,
       senderName: 'Hermes UI',
       content: '',
       originalType: 'attachment',
-      createdAt: DateTime(2026, 6, 15, 10, 32),
+      createdAt: DateTime(2026, 7, 25, 10, 32),
       isMine: false,
       sendState: MessageSendState.sent,
       attachment: const ChatAttachment(
@@ -269,7 +524,7 @@ List<ChatMessage> _visualHistory() {
         filename: 'product-brief.pdf',
         mimeType: 'application/pdf',
         sizeBytes: 248320,
-        caption: '这里是可用本机应用查看的附件。',
+        caption: '整理后的产品概要。',
         objectUri: 'awiki://attachments/product-brief.pdf',
       ),
     ),
@@ -280,120 +535,16 @@ Future<void> _pumpVisualApp(
   WidgetTester tester,
   FakeAwikiMeAppHarness harness,
 ) async {
-  final conversation = _visualConversation();
   await tester.pumpWidget(
     RepaintBoundary(
       key: _captureBoundaryKey,
       child: AwikiMeApp(
         bootstrap: harness.bootstrap,
-        providerOverrides: <Override>[
-          ...harness.providerOverrides,
-          conversationListProvider.overrideWith(
-            (ref) => _StaticConversationListController(
-              ref,
-              <ConversationSummary>[conversation],
-            ),
-          ),
-        ],
+        providerOverrides: harness.providerOverrides,
       ),
     ),
   );
-  await tester.pumpAndSettle();
-}
-
-ProviderContainer _appContainer(WidgetTester tester) {
-  return ProviderScope.containerOf(tester.element(find.byType(AppShell)));
-}
-
-Map<String, Object?> _inboxPayload() {
-  return <String, Object?>{
-    'schema': AgentControlPayloads.statusSchema,
-    'status_scope': 'runtime_inbox',
-    'daemon_agent_did': _daemonDid,
-    'runtime_agent_did': _runtimeDid,
-    'request_id': 'cmd_runtime_inbox_test',
-    'state': 'succeeded',
-    'result': <String, Object?>{
-      'items': <Object?>[
-        <String, Object?>{
-          'thread_id': 'dm:peer-scope:v1:bob',
-          'kind': 'direct',
-          'title': 'bob.anpclaw.com',
-          'peer_did': 'did:human:bob',
-          'peer_handle': 'bob.anpclaw.com',
-          'peer_user_id': 'user-bob',
-          'last_message_preview': 'Can you summarize the roadmap?',
-          'last_message_at_ms': DateTime(
-            2026,
-            6,
-            15,
-            10,
-            35,
-          ).millisecondsSinceEpoch,
-          'unread_count': 2,
-          'has_attachments': false,
-          'last_content_type': 'text',
-        },
-        <String, Object?>{
-          'thread_id': 'group:did:group:team',
-          'kind': 'group',
-          'title': '项目群',
-          'group_did': 'did:group:team',
-          'last_message_preview': 'report.pdf',
-          'last_message_at_ms': DateTime(
-            2026,
-            6,
-            15,
-            10,
-            20,
-          ).millisecondsSinceEpoch,
-          'unread_count': 0,
-          'has_attachments': true,
-          'last_content_type': 'attachment',
-        },
-      ],
-      'next_cursor': 'older-inbox-20',
-      'fetched_at_ms': DateTime(2026, 6, 15, 10, 36).millisecondsSinceEpoch,
-    },
-  };
-}
-
-Map<String, Object?> _threadPayload() {
-  return <String, Object?>{
-    'schema': AgentControlPayloads.statusSchema,
-    'status_scope': 'runtime_inbox_thread',
-    'daemon_agent_did': _daemonDid,
-    'runtime_agent_did': _runtimeDid,
-    'request_id': 'cmd_runtime_inbox_thread_test',
-    'state': 'succeeded',
-    'result': <String, Object?>{
-      'thread_id': 'dm:peer-scope:v1:bob',
-      'kind': 'direct',
-      'title': 'bob.anpclaw.com',
-      'messages': <Object?>[
-        <String, Object?>{
-          'message_id': 'msg-bob-1',
-          'sender_did': 'did:human:bob',
-          'sender_handle': 'bob.anpclaw.com',
-          'direction': 'incoming',
-          'content_type': 'text',
-          'text': 'Can you summarize the roadmap?',
-          'sent_at_ms': DateTime(2026, 6, 15, 10, 34).millisecondsSinceEpoch,
-        },
-        <String, Object?>{
-          'message_id': 'msg-agent-1',
-          'sender_did': _runtimeDid,
-          'sender_handle': 'hermes-ui',
-          'direction': 'outgoing',
-          'content_type': 'text',
-          'text': 'I will review the roadmap and reply with the top risks.',
-          'sent_at_ms': DateTime(2026, 6, 15, 10, 35).millisecondsSinceEpoch,
-        },
-      ],
-      'next_cursor': 'older-thread-20',
-      'fetched_at_ms': DateTime(2026, 6, 15, 10, 36).millisecondsSinceEpoch,
-    },
-  };
+  await _pumpVisualFrames(tester);
 }
 
 Future<void> _cleanScreenshots() async {
@@ -404,7 +555,7 @@ Future<void> _cleanScreenshots() async {
   }
   await for (final entity in directory.list()) {
     final name = entity.uri.pathSegments.last;
-    if (entity is File && RegExp(r'^\d\d-.*\.png$').hasMatch(name)) {
+    if (entity is File && _visualScreenshotFiles.contains(name)) {
       await entity.delete();
     }
   }
@@ -417,7 +568,14 @@ Future<void> _captureScreenshot(WidgetTester tester, String name) async {
   );
   final image = await boundary.toImage(pixelRatio: 1);
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-  final bytes = byteData!.buffer.asUint8List();
-  await File('$_screenshotsDir/$name.png').writeAsBytes(bytes, flush: true);
+  await File(
+    '$_screenshotsDir/$name.png',
+  ).writeAsBytes(byteData!.buffer.asUint8List(), flush: true);
   image.dispose();
+}
+
+Future<void> _pumpVisualFrames(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 120));
+  await tester.pump(const Duration(milliseconds: 360));
 }

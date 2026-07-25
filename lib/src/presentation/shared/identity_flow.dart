@@ -23,6 +23,7 @@ import '../conversation_list/conversation_provider.dart';
 import '../friends/friends_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'app_dialog.dart';
+import 'awiki_me_design.dart';
 import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
@@ -343,14 +344,22 @@ Future<void> openDirectConversationForDid(
     return;
   }
 
-  if (context.awikiResponsive.supportsTwoPane) {
-    ref
-        .read(selectedConversationProvider.notifier)
-        .selectConversation(conversation);
-    ref.read(shellTabProvider.notifier).setTab(0);
+  if (!AwikiShellNavigationScope.isPresent(context)) {
+    await AppNavigator.push(
+      context,
+      (_) => ChatPage(conversation: conversation),
+    );
     return;
   }
-  await AppNavigator.push(context, (_) => ChatPage(conversation: conversation));
+
+  ref
+      .read(selectedConversationProvider.notifier)
+      .selectConversation(conversation);
+  ref.read(shellDestinationProvider.notifier).select(ShellDestination.messages);
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.popUntil((route) => route.isFirst);
+  }
 }
 
 Future<_ResolvedDirectPeer> _resolveDirectPeer(
@@ -807,17 +816,18 @@ class _IdentitySearchInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFDFF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.border),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(CupertinoIcons.search, color: Color(0xFF34415C), size: 20),
+          Icon(CupertinoIcons.search, color: theme.secondaryText, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: e2eSemantics(
@@ -837,9 +847,9 @@ class _IdentitySearchInput extends StatelessWidget {
                 },
                 decoration: null,
                 padding: EdgeInsets.zero,
-                style: const TextStyle(color: Color(0xFF17213A), fontSize: 14),
-                placeholderStyle: const TextStyle(
-                  color: Color(0xFF8A96AA),
+                style: TextStyle(color: theme.body, fontSize: 14),
+                placeholderStyle: TextStyle(
+                  color: theme.tertiaryText,
                   fontSize: 14,
                 ),
               ),
@@ -864,6 +874,7 @@ class _IdentityPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     final displayName = DidDisplayFormatter.identityLookupTitle(profile);
     final secondaryHandle = DidDisplayFormatter.identityLookupSecondaryHandle(
       profile,
@@ -873,9 +884,9 @@ class _IdentityPreviewCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFDFF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -897,8 +908,8 @@ class _IdentityPreviewCard extends StatelessWidget {
                       key: const Key('identity-preview-display-name'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF101B32),
+                      style: TextStyle(
+                        color: theme.title,
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
@@ -910,8 +921,8 @@ class _IdentityPreviewCard extends StatelessWidget {
                         key: const Key('identity-preview-handle-value'),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF66728A),
+                        style: TextStyle(
+                          color: theme.secondaryText,
                           fontSize: 12,
                         ),
                       ),
@@ -997,13 +1008,13 @@ class _IdentityStatusPill extends StatelessWidget {
           const Icon(
             CupertinoIcons.checkmark_shield_fill,
             size: 13,
-            color: Color(0xFF10A85A),
+            color: AwikiMePalette.successGreen,
           ),
           const SizedBox(width: 4),
           Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF10A85A),
+              color: AwikiMePalette.successGreen,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
@@ -1032,7 +1043,7 @@ class _IdentityMetaLine extends StatelessWidget {
             child: Text(
               '$label:',
               style: const TextStyle(
-                color: Color(0xFF34415C),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
@@ -1044,7 +1055,7 @@ class _IdentityMetaLine extends StatelessWidget {
               maxLines: label == 'DID' ? 2 : 3,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: Color(0xFF17213A),
+                color: AwikiMePalette.inkNeutral,
                 fontSize: 12,
                 height: 1.35,
               ),
@@ -1071,13 +1082,13 @@ class _InlineNotice extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF2FF),
+        color: AwikiMePalette.brandAccentSoft,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
         style: const TextStyle(
-          color: Color(0xFF0B65F8),
+          color: AwikiMePalette.brandAccent,
           fontSize: 12,
           height: 1.35,
         ),

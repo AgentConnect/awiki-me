@@ -97,6 +97,52 @@ void main() {
       'did:test:owner-b',
     );
   });
+
+  test('A 到 B 后旧 follow 不能修改新详情 provider', () async {
+    final profiles = _ImmediateProfileService();
+    final relationships = _RelationshipService(blockFollow: true);
+    final container = _container(
+      profiles: profiles,
+      relationships: relationships,
+    );
+    addTearDown(container.dispose);
+    final sessions = container.read(sessionProvider.notifier);
+    final oldController = container.read(
+      peerProfileProvider(_peerDid).notifier,
+    );
+    await _pumpUntil(
+      () => !container.read(peerProfileProvider(_peerDid)).isLoading,
+    );
+
+    final staleAction = oldController.follow();
+    await relationships.followStarted.future;
+
+    sessions.clear();
+    container.read(peerDisplayProfileProvider.notifier).clear();
+    container.invalidate(peerProfileProvider);
+    sessions.setSession(
+      _session(ownerDid: 'did:test:owner-b', credentialName: 'owner-b'),
+    );
+    final currentController = container.read(
+      peerProfileProvider(_peerDid).notifier,
+    );
+    expect(identical(currentController, oldController), isFalse);
+    await _pumpUntil(
+      () => !container.read(peerProfileProvider(_peerDid)).isLoading,
+    );
+
+    relationships.completeFollow();
+    await staleAction;
+
+    final currentState = container.read(peerProfileProvider(_peerDid));
+    expect(currentState.profile?.displayName, 'Peer current');
+    expect(currentState.relationship, 'following');
+    expect(currentState.isActionBusy, isFalse);
+    expect(
+      container.read(peerDisplayProfileProvider).ownerDid,
+      'did:test:owner-b',
+    );
+  });
 }
 
 ProviderContainer _container({
@@ -184,11 +230,14 @@ class _ImmediateProfileService implements ProfileApplicationService {
 }
 
 class _RelationshipService implements RelationshipApplicationService {
-  _RelationshipService({this.blockUnfollow = false});
+  _RelationshipService({this.blockUnfollow = false, this.blockFollow = false});
 
   final bool blockUnfollow;
+  final bool blockFollow;
   final Completer<void> unfollowStarted = Completer<void>();
   final Completer<void> _unfollowResult = Completer<void>();
+  final Completer<void> followStarted = Completer<void>();
+  final Completer<void> _followResult = Completer<void>();
   int statusCalls = 0;
 
   @override
@@ -216,7 +265,18 @@ class _RelationshipService implements RelationshipApplicationService {
   }
 
   @override
-  Future<void> follow(String peer) async {}
+  Future<void> follow(String peer) {
+    if (!followStarted.isCompleted) {
+      followStarted.complete();
+    }
+    return blockFollow ? _followResult.future : Future<void>.value();
+  }
+
+  void completeFollow() {
+    if (!_followResult.isCompleted) {
+      _followResult.complete();
+    }
+  }
 
   @override
   Future<CoreRelationshipPage> listFollowers({

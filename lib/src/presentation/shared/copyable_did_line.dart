@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
+import 'awiki_me_design.dart';
 import 'awiki_me_feedback.dart';
 import 'widgets/app_widgets.dart';
 
@@ -36,6 +37,7 @@ class CopyableDidLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -47,11 +49,7 @@ class CopyableDidLine extends StatelessWidget {
             maxLines: maxLines,
             style:
                 textStyle ??
-                const TextStyle(
-                  color: Color(0xFF17213A),
-                  fontSize: 12,
-                  height: 1.35,
-                ),
+                TextStyle(color: theme.body, fontSize: 12, height: 1.35),
           ),
         ),
         SizedBox(width: gap),
@@ -67,10 +65,10 @@ class CopyableDidLine extends StatelessWidget {
           semanticLabel: copySemanticLabel,
           tooltip: copySemanticLabel,
           size: buttonSize,
-          backgroundColor: CupertinoColors.white,
-          borderColor: const Color(0xFFDDE5F0),
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
           borderRadius: BorderRadius.circular(8),
-          child: Icon(icon, color: const Color(0xFF34415C), size: iconSize),
+          child: Icon(icon, color: theme.secondaryText, size: iconSize),
         ),
       ],
     );

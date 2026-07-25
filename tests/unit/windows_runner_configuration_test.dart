@@ -155,9 +155,9 @@ void main() {
     expect(window, contains('DWMWA_CAPTION_COLOR'));
     expect(window, contains('DWMWA_TEXT_COLOR'));
     expect(window, contains('DWMWA_BORDER_COLOR'));
-    expect(window, contains('kLightCaptionColor = RGB(250, 249, 254)'));
-    expect(window, contains('kLightCaptionTextColor = RGB(26, 28, 28)'));
-    expect(window, contains('kLightBorderColor = RGB(221, 229, 240)'));
+    expect(window, contains('kLightCaptionColor = RGB(250, 249, 247)'));
+    expect(window, contains('kLightCaptionTextColor = RGB(45, 43, 38)'));
+    expect(window, contains('kLightBorderColor = RGB(232, 231, 228)'));
     expect(window, contains('case WM_THEMECHANGED:'));
     expect(window, isNot(contains('AppsUseLightTheme')));
   });

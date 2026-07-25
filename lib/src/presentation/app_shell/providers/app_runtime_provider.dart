@@ -850,7 +850,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (!_isNotificationEpochCurrent(epoch)) {
       return;
     }
-    ref.read(shellTabProvider.notifier).setTab(0);
+    ref
+        .read(shellDestinationProvider.notifier)
+        .select(ShellDestination.messages);
     ref.read(selectedConversationProvider.notifier).clearSelection();
     final target = activation.target;
     if (epoch == null ||

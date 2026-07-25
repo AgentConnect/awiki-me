@@ -15,12 +15,12 @@ class AppOrientationController {
 
   final PreferredOrientationsSetter _setPreferredOrientations;
 
-  AwikiBreakpoint breakpointForWidth(double width) {
-    return AwikiBreakpoints.fromWidth(width);
+  AwikiBreakpoint breakpointFor(Size size) {
+    return AwikiBreakpoints.fromSize(size);
   }
 
   bool shouldLockPortrait({
-    required double width,
+    required Size size,
     required TargetPlatform platform,
   }) {
     if (kIsWeb) {
@@ -31,14 +31,14 @@ class AppOrientationController {
     if (!isMobilePlatform) {
       return false;
     }
-    return breakpointForWidth(width) == AwikiBreakpoint.phone;
+    return breakpointFor(size) == AwikiBreakpoint.compact;
   }
 
   Future<void> apply({
-    required double width,
+    required Size size,
     required TargetPlatform platform,
   }) async {
-    if (shouldLockPortrait(width: width, platform: platform)) {
+    if (shouldLockPortrait(size: size, platform: platform)) {
       await _setPreferredOrientations(const <DeviceOrientation>[
         DeviceOrientation.portraitUp,
       ]);
@@ -60,7 +60,7 @@ class AppOrientationScope extends StatefulWidget {
 
 class _AppOrientationScopeState extends State<AppOrientationScope> {
   late final AppOrientationController _controller;
-  double? _lastWidth;
+  Size? _lastSize;
   TargetPlatform? _lastPlatform;
 
   @override
@@ -71,13 +71,13 @@ class _AppOrientationScopeState extends State<AppOrientationScope> {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
     final platform = defaultTargetPlatform;
-    if (_lastWidth != width || _lastPlatform != platform) {
-      _lastWidth = width;
+    if (_lastSize != size || _lastPlatform != platform) {
+      _lastSize = size;
       _lastPlatform = platform;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _controller.apply(width: width, platform: platform);
+        _controller.apply(size: size, platform: platform);
       });
     }
     return widget.child;

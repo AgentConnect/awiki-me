@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 
 import '../../l10n/l10n.dart';
@@ -47,9 +49,15 @@ class AppDialogScaffold extends StatelessWidget {
         verticalPadding * 2 -
         viewInsets.top -
         viewInsets.bottom;
+    final effectiveHeightFraction = responsive.isCompact
+        ? math.max(maxHeightFraction, 0.94)
+        : maxHeightFraction;
     final maxDialogHeight =
         availableHeight.clamp(0.0, mediaSize.height).toDouble() *
-        maxHeightFraction;
+        effectiveHeightFraction;
+    final effectiveBorderRadius =
+        borderRadius ??
+        BorderRadius.circular(responsive.radius(responsive.isCompact ? 14 : 8));
     return SafeArea(
       minimum: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
@@ -60,7 +68,10 @@ class AppDialogScaffold extends StatelessWidget {
           top: viewInsets.top,
           bottom: viewInsets.bottom,
         ),
-        child: Center(
+        child: Align(
+          alignment: responsive.isCompact
+              ? Alignment.bottomCenter
+              : Alignment.center,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxDialogWidth,
@@ -69,15 +80,11 @@ class AppDialogScaffold extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: surfaceColor ?? theme.surface,
-                borderRadius:
-                    borderRadius ??
-                    BorderRadius.circular(responsive.radius(16)),
+                borderRadius: effectiveBorderRadius,
                 boxShadow: theme.overlayShadow,
               ),
               child: ClipRRect(
-                borderRadius:
-                    borderRadius ??
-                    BorderRadius.circular(responsive.radius(16)),
+                borderRadius: effectiveBorderRadius,
                 clipBehavior: clipBehavior,
                 child: Padding(
                   padding: padding ?? EdgeInsets.zero,
@@ -163,9 +170,9 @@ class AppDialogHeader extends StatelessWidget {
           onPressed: isCloseEnabled ? onClose : null,
           semanticLabel: effectiveCloseLabel,
           tooltip: effectiveCloseLabel,
-          size: responsive.displayScaled(32),
-          backgroundColor: const Color(0xFFF5F7FB),
-          borderColor: const Color(0xFFE4E9F2),
+          size: responsive.displayScaled(responsive.isCompact ? 44 : 32),
+          backgroundColor: theme.subtleSurface,
+          borderColor: theme.border,
           borderRadius: BorderRadius.circular(responsive.radius(10)),
           child: Icon(
             CupertinoIcons.xmark,

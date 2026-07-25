@@ -144,7 +144,7 @@ class ChatPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     return CupertinoPageScaffold(
-      backgroundColor: theme.background,
+      backgroundColor: theme.chatSurface,
       child: ChatView(
         key: ValueKey('chat-view:${conversation.conversationId}'),
         conversation: conversation,
@@ -169,9 +169,9 @@ class _AttachmentDropOverlay extends StatelessWidget {
     return IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0x330B65F8),
+          color: AwikiMePalette.brandAccent.withValues(alpha: 0.20),
           border: Border.all(
-            color: const Color(0xFF0B65F8),
+            color: AwikiMePalette.brandAccent,
             width: macStyle ? 1.4 : 1.8,
           ),
           borderRadius: BorderRadius.circular(radius),
@@ -192,11 +192,11 @@ class _AttachmentDropOverlay extends StatelessWidget {
               borderRadius: BorderRadius.circular(
                 macStyle ? responsive.displayScaled(14) : responsive.radius(18),
               ),
-              boxShadow: const <BoxShadow>[
+              boxShadow: <BoxShadow>[
                 BoxShadow(
-                  color: Color(0x240B1F3A),
+                  color: CupertinoColors.black.withValues(alpha: 0.14),
                   blurRadius: 28,
-                  offset: Offset(0, 10),
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
@@ -205,7 +205,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
               children: <Widget>[
                 Icon(
                   CupertinoIcons.paperclip,
-                  color: const Color(0xFF0B65F8),
+                  color: AwikiMePalette.brandAccent,
                   size: macStyle
                       ? responsive.displayScaled(20)
                       : responsive.iconMd,
@@ -218,7 +218,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
                 Text(
                   context.l10n.chatAddAttachment,
                   style: TextStyle(
-                    color: const Color(0xFF17213A),
+                    color: AwikiMePalette.inkNeutral,
                     fontWeight: FontWeight.w700,
                     fontSize: macStyle
                         ? responsive.displayScaled(14)
@@ -845,6 +845,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   Widget build(BuildContext context) {
     final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final macStyle = widget.macStyle && responsive.usesDesktopLayout;
     final messageListBottomInset = macStyle
         ? responsive.displayScaled(_macChatMessageListBottomInset)
@@ -992,18 +993,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                         controller: scrollController,
                         padding: EdgeInsets.fromLTRB(
                           macStyle
-                              ? responsive.displayScaled(28)
-                              : (widget.embedded
-                                    ? responsive.spacing(32)
-                                    : responsive.tabContentHorizontalPadding),
+                              ? responsive.displayScaled(16)
+                              : responsive.spacing(14),
                           macStyle
-                              ? responsive.displayScaled(20)
-                              : responsive.spacing(24),
+                              ? responsive.displayScaled(14)
+                              : responsive.spacing(16),
                           macStyle
-                              ? responsive.displayScaled(28)
-                              : (widget.embedded
-                                    ? responsive.spacing(32)
-                                    : responsive.tabContentHorizontalPadding),
+                              ? responsive.displayScaled(16)
+                              : responsive.spacing(14),
                           messageListBottomInset,
                         ),
                         itemCount: timelineEntries.length,
@@ -1255,11 +1252,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
                       onTap: () => _scheduleScrollToBottom(animated: true),
                     ),
                   if (deferRealtimeTailFirstPaint)
-                    const Positioned.fill(
+                    Positioned.fill(
                       child: ColoredBox(
-                        key: Key('chat-local-history-hydrating-mask'),
-                        color: CupertinoColors.white,
-                        child: Center(child: CupertinoActivityIndicator()),
+                        key: const Key('chat-local-history-hydrating-mask'),
+                        color: theme.chatSurface,
+                        child: const Center(
+                          child: CupertinoActivityIndicator(),
+                        ),
                       ),
                     ),
                 ],
@@ -1297,13 +1296,11 @@ class _ChatViewState extends ConsumerState<ChatView> {
       enabled: canAcceptExternalAttachment,
       macStyle: macStyle,
     );
-    if (macStyle) {
-      return DecoratedBox(
-        decoration: const BoxDecoration(color: CupertinoColors.white),
-        child: pageWithDropTarget,
-      );
-    }
-    return AwikiMeWidgets.pageBackground(child: pageWithDropTarget);
+    return DecoratedBox(
+      key: const Key('chat-surface'),
+      decoration: BoxDecoration(color: theme.chatSurface),
+      child: pageWithDropTarget,
+    );
   }
 
   Widget _buildAttachmentDropTarget(
@@ -2784,19 +2781,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
       return 0;
     }
     final defaultSpacing = macStyle
-        ? responsive.displayScaled(16)
-        : responsive.spacing(24);
+        ? responsive.displayScaled(6)
+        : responsive.spacing(6);
     if (hasAgentProcessing) {
-      return macStyle ? responsive.displayScaled(18) : responsive.spacing(24);
+      return macStyle ? responsive.displayScaled(10) : responsive.spacing(10);
     }
     if (nextHasAgentProcessing &&
         next != null &&
         current.isMine == next.isMine &&
         !_shouldShowDivider(current, next)) {
-      return macStyle ? responsive.displayScaled(8) : responsive.spacing(10);
+      return macStyle ? responsive.displayScaled(4) : responsive.spacing(4);
     }
     if (_shouldTightenBeforeSenderLabel(current, next)) {
-      return macStyle ? responsive.displayScaled(6) : responsive.spacing(8);
+      return macStyle ? responsive.displayScaled(4) : responsive.spacing(4);
     }
     return defaultSpacing;
   }

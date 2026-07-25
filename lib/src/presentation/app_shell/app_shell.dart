@@ -12,6 +12,8 @@ import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../agents/agents_page.dart';
+import '../agents/agents_provider.dart';
+import '../friends/friends_navigation_provider.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
 import '../profile/profile_workspace_page.dart';
@@ -25,13 +27,13 @@ import '../shared/widgets/app_widgets.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
 import 'providers/navigation_provider.dart';
+import 'providers/selected_conversation_provider.dart';
 import 'providers/session_provider.dart';
 
-const int _desktopSettingsTabIndex = 6;
-const _desktopRailActiveColor = Color(0xFF0B65F8);
-const _desktopRailInactiveColor = Color(0xFF7A879C);
-const _desktopRailActiveBackground = Color(0xFFEAF2FF);
-const double _desktopRailWidth = 72;
+const _desktopRailActiveColor = AwikiMePalette.brandAccent;
+const _desktopRailInactiveColor = AwikiMePalette.mutedNeutral;
+const _desktopRailActiveBackground = AwikiMePalette.brandAccentSoft;
+const double _desktopRailWidth = 64;
 const double _desktopRailMinWidth = 56;
 const MethodChannel _macWindowChromeChannel = MethodChannel(
   'ai.awiki.awikime/window_chrome',
@@ -56,6 +58,8 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   int? _lastFeedbackId;
+  final Set<ShellDestination> _retainedDestinations = <ShellDestination>{};
+  String? _retainedSessionDid;
 
   @override
   void initState() {
@@ -104,7 +108,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           orElse: () => RealtimeConnectionStatus.idle,
         );
     final responsive = context.awikiResponsive;
-    final tabIndex = ref.watch(shellTabProvider);
+    final selectedDestination = ref.watch(shellDestinationProvider);
+    final navigationController = ref.read(shellDestinationProvider.notifier);
     final unreadCount = ref.watch(
       conversationListProvider.select((state) => state.unreadCount),
     );
@@ -118,68 +123,105 @@ class _AppShellState extends ConsumerState<AppShell> {
       );
     }
 
+    final expanded = responsive.usesDesktopLayout;
+    final destination = navigationController.resolvedFor(expanded);
+    if (destination != selectedDestination) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ref.read(shellDestinationProvider.notifier).reconcileFor(expanded);
+      });
+    }
+
+    final sessionDid = session.session?.did.trim();
+    if (_retainedSessionDid != sessionDid) {
+      _retainedSessionDid = sessionDid;
+      _retainedDestinations.clear();
+    }
+    _retainedDestinations.add(destination);
+
     final bottomNav = _BottomNavBar(
-      currentIndex: tabIndex,
+      currentDestination: destination,
       unreadCount: unreadCount,
-      onTap: (index) {
-        ref.read(shellTabProvider.notifier).setTab(index);
-      },
-    );
-    final embeddedBottomNav = _BottomNavBar(
-      currentIndex: tabIndex,
-      unreadCount: unreadCount,
-      embedded: true,
-      onTap: (index) {
-        ref.read(shellTabProvider.notifier).setTab(index);
+      onTap: (next) {
+        ref.read(shellDestinationProvider.notifier).select(next);
       },
     );
 
-    final page = _buildCurrentPage(tabIndex, responsive, embeddedBottomNav);
-    final showsGlobalBottomNav = responsive.isPhone;
-    final content = responsive.usesDesktopLayout
+    final retainedPage = _RetainedDestinationHost(
+      activeDestination: destination,
+      retainedDestinations: _retainedDestinations,
+      pageBuilder: _buildDestinationPage,
+    );
+    final page = !expanded && _isCompactSecondaryDestination(destination)
+        ? PopScope<void>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, _) {
+              if (!didPop) {
+                ref.read(shellDestinationProvider.notifier).backFromSecondary();
+              }
+            },
+            child: retainedPage,
+          )
+        : retainedPage;
+    final compactDetailVisible =
+        !expanded &&
+        switch (destination) {
+          ShellDestination.messages =>
+            ref.watch(selectedConversationProvider) != null,
+          ShellDestination.agents => ref.watch(
+            agentsProvider.select((state) => state.selectedAgentDid != null),
+          ),
+          ShellDestination.contacts => ref.watch(
+            friendsWorkspaceNavigationProvider.select(
+              (state) => state.showsCompactDetail,
+            ),
+          ),
+          ShellDestination.profile || ShellDestination.settings => true,
+          _ => false,
+        };
+    final content = expanded
         ? _DesktopShell(
-            currentIndex: tabIndex,
+            currentDestination: destination,
             unreadCount: unreadCount,
             session: session.session,
-            onTap: (index) {
-              ref.read(shellTabProvider.notifier).setTab(index);
-            },
-            onOpenSettings: () {
-              ref
-                  .read(shellTabProvider.notifier)
-                  .setTab(_desktopSettingsTabIndex);
+            onTap: (next) {
+              ref.read(shellDestinationProvider.notifier).select(next);
             },
             child: page,
           )
         : Column(
             children: <Widget>[
               Expanded(child: page),
-              if (showsGlobalBottomNav) bottomNav,
+              if (!compactDetailVisible) bottomNav,
             ],
           );
 
-    return Stack(
-      children: <Widget>[
-        e2eSemantics(
-          identifier: 'e2e-authenticated',
-          child: AwikiMeWidgets.pageBackground(
-            child: SafeArea(bottom: false, child: content),
+    return AwikiShellNavigationScope(
+      child: Stack(
+        children: <Widget>[
+          e2eSemantics(
+            identifier: 'e2e-authenticated',
+            child: AwikiMeWidgets.pageBackground(
+              child: SafeArea(bottom: false, child: content),
+            ),
           ),
-        ),
-        if (runtime.isBusy)
-          AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
-        if (_shouldShowRealtimeToast(realtimeStatus))
-          AwikiMePersistentToast(
-            message: _realtimeToastMessage(context, realtimeStatus),
-            danger:
-                realtimeStatus == RealtimeConnectionStatus.disconnected ||
-                realtimeStatus == RealtimeConnectionStatus.failed,
-            showSpinner:
-                realtimeStatus == RealtimeConnectionStatus.connecting ||
-                realtimeStatus == RealtimeConnectionStatus.reconnecting,
-            bottom: responsive.isPhone ? 96 : 32,
-          ),
-      ],
+          if (runtime.isBusy)
+            AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
+          if (_shouldShowRealtimeToast(realtimeStatus))
+            AwikiMePersistentToast(
+              message: _realtimeToastMessage(context, realtimeStatus),
+              danger:
+                  realtimeStatus == RealtimeConnectionStatus.disconnected ||
+                  realtimeStatus == RealtimeConnectionStatus.failed,
+              showSpinner:
+                  realtimeStatus == RealtimeConnectionStatus.connecting ||
+                  realtimeStatus == RealtimeConnectionStatus.reconnecting,
+              bottom: responsive.isPhone ? 96 : 32,
+            ),
+        ],
+      ),
     );
   }
 
@@ -206,71 +248,110 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
-  Widget _buildCurrentPage(
-    int tabIndex,
-    AwikiResponsiveInfo responsive,
-    Widget embeddedBottomNav,
-  ) {
-    final desktopFooter =
-        responsive.supportsTwoPane && !responsive.usesDesktopLayout
-        ? embeddedBottomNav
-        : null;
-    if (responsive.usesDesktopLayout) {
-      switch (tabIndex) {
-        case 0:
-          return const ConversationWorkspacePage();
-        case 1:
-          return const AgentsWorkspacePage();
-        case 2:
-          return const FriendsWorkspacePage();
-        case 3:
-          return _DesktopPlaceholderPage(
-            title: context.l10n.shellTasksPlaceholderTitle,
-            subtitle: context.l10n.shellTasksPlaceholderSubtitle,
-            icon: CupertinoIcons.checkmark_square,
-          );
-        case 4:
-          return _DesktopPlaceholderPage(
-            title: context.l10n.shellWorkspacePlaceholderTitle,
-            subtitle: context.l10n.shellWorkspacePlaceholderSubtitle,
-            icon: CupertinoIcons.square_grid_2x2,
-          );
-        case 5:
-          return const ProfileWorkspacePage();
-        case _desktopSettingsTabIndex:
-          return const _DesktopEmbeddedSettingsPage();
-      }
-      return const ConversationWorkspacePage();
-    }
-    switch (tabIndex) {
-      case 0:
-        return ConversationWorkspacePage(listFooter: desktopFooter);
-      case 1:
-        return AgentsWorkspacePage(listFooter: desktopFooter);
-      case 2:
-        return FriendsWorkspacePage(listFooter: desktopFooter);
-      case 3:
-        return ProfileWorkspacePage(listFooter: desktopFooter);
-    }
-    return ConversationWorkspacePage(listFooter: desktopFooter);
+  Widget _buildDestinationPage(ShellDestination destination) {
+    final expanded = context.awikiResponsive.usesDesktopLayout;
+    final navigationController = ref.read(shellDestinationProvider.notifier);
+    return switch (destination) {
+      ShellDestination.messages => const ConversationWorkspacePage(),
+      ShellDestination.agents => const AgentsWorkspacePage(),
+      ShellDestination.contacts => const FriendsWorkspacePage(),
+      ShellDestination.profile => ProfileWorkspacePage(
+        onCompactBack: navigationController.backFromSecondary,
+      ),
+      ShellDestination.tasks => _DesktopPlaceholderPage(
+        title: context.l10n.shellTasksPlaceholderTitle,
+        subtitle: context.l10n.shellTasksPlaceholderSubtitle,
+        icon: CupertinoIcons.checkmark_square,
+      ),
+      ShellDestination.workbench => _DesktopPlaceholderPage(
+        title: context.l10n.shellWorkspacePlaceholderTitle,
+        subtitle: context.l10n.shellWorkspacePlaceholderSubtitle,
+        icon: CupertinoIcons.square_grid_2x2,
+      ),
+      ShellDestination.settings =>
+        expanded
+            ? const _DesktopEmbeddedSettingsPage()
+            : SettingsPage(
+                onBack: navigationController.backFromSecondary,
+                onProfileTap: () =>
+                    navigationController.select(ShellDestination.profile),
+              ),
+    };
+  }
+}
+
+bool _isCompactSecondaryDestination(ShellDestination destination) {
+  return destination == ShellDestination.profile ||
+      destination == ShellDestination.settings;
+}
+
+typedef _ShellPageBuilder = Widget Function(ShellDestination destination);
+
+class _RetainedDestinationHost extends StatelessWidget {
+  const _RetainedDestinationHost({
+    required this.activeDestination,
+    required this.retainedDestinations,
+    required this.pageBuilder,
+  });
+
+  final ShellDestination activeDestination;
+  final Set<ShellDestination> retainedDestinations;
+  final _ShellPageBuilder pageBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        for (final destination in retainedDestinations)
+          _RetainedDestinationPage(
+            key: ValueKey<ShellDestination>(destination),
+            active: destination == activeDestination,
+            child: pageBuilder(destination),
+          ),
+      ],
+    );
+  }
+}
+
+class _RetainedDestinationPage extends StatelessWidget {
+  const _RetainedDestinationPage({
+    super.key,
+    required this.active,
+    required this.child,
+  });
+
+  final bool active;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Offstage(
+      offstage: !active,
+      child: TickerMode(
+        enabled: active,
+        child: ExcludeSemantics(
+          excluding: !active,
+          child: IgnorePointer(ignoring: !active, child: child),
+        ),
+      ),
+    );
   }
 }
 
 class _DesktopShell extends StatelessWidget {
   const _DesktopShell({
-    required this.currentIndex,
+    required this.currentDestination,
     required this.unreadCount,
     required this.session,
     required this.onTap,
-    required this.onOpenSettings,
     required this.child,
   });
 
-  final int currentIndex;
+  final ShellDestination currentDestination;
   final int unreadCount;
   final SessionIdentity? session;
-  final ValueChanged<int> onTap;
-  final VoidCallback onOpenSettings;
+  final ValueChanged<ShellDestination> onTap;
   final Widget child;
 
   @override
@@ -286,14 +367,13 @@ class _DesktopShell extends StatelessWidget {
           key: const Key('mac-desktop-rail-slot'),
           width: railWidth,
           child: _DesktopRail(
-            currentIndex: currentIndex,
+            currentDestination: currentDestination,
             unreadCount: unreadCount,
             session: session,
             onTap: onTap,
-            onOpenSettings: onOpenSettings,
           ),
         ),
-        Container(width: 1, color: const Color(0xFFE5EAF2)),
+        Container(width: 1, color: context.awikiTheme.border),
         Expanded(child: child),
       ],
     );
@@ -331,6 +411,14 @@ class _MacWindowChromeSyncState extends State<_MacWindowChromeSync> {
     }
   }
 
+  @override
+  void dispose() {
+    _macWindowChromeChannel
+        .invokeMethod<void>('resetTrafficLightRailWidth')
+        .catchError((Object _) {});
+    super.dispose();
+  }
+
   void _scheduleSync() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -358,24 +446,22 @@ class _MacWindowChromeSyncState extends State<_MacWindowChromeSync> {
 
 class _DesktopRail extends StatelessWidget {
   const _DesktopRail({
-    required this.currentIndex,
+    required this.currentDestination,
     required this.unreadCount,
     required this.session,
     required this.onTap,
-    required this.onOpenSettings,
   });
 
-  final int currentIndex;
+  final ShellDestination currentDestination;
   final int unreadCount;
   final SessionIdentity? session;
-  final ValueChanged<int> onTap;
-  final VoidCallback onOpenSettings;
+  final ValueChanged<ShellDestination> onTap;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFF8FBFF)),
+      decoration: const BoxDecoration(color: AwikiMePalette.navigationSurface),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxHeight < 760;
@@ -388,8 +474,8 @@ class _DesktopRail extends StatelessWidget {
                 key: const Key('mac-me-rail-avatar'),
                 seed: avatar.seed,
                 labelOverride: avatar.labelOverride,
-                selected: currentIndex == 5,
-                onTap: () => onTap(5),
+                selected: currentDestination == ShellDestination.profile,
+                onTap: () => onTap(ShellDestination.profile),
               ),
               SizedBox(height: responsive.displayScaled(compact ? 22 : 28)),
               Expanded(
@@ -402,20 +488,21 @@ class _DesktopRail extends StatelessWidget {
                         inactiveIcon: CupertinoIcons.chat_bubble_2,
                         label: context.l10n.shellNavMessages,
                         semanticsIdentifier: 'e2e-messages-tab',
-                        selected: currentIndex == 0,
+                        selected:
+                            currentDestination == ShellDestination.messages,
                         badge: _formatUnreadBadge(unreadCount),
                         compact: compact,
-                        onTap: () => onTap(0),
+                        onTap: () => onTap(ShellDestination.messages),
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
                         activeIcon: CupertinoIcons.sparkles,
                         inactiveIcon: CupertinoIcons.sparkles,
                         label: context.l10n.shellNavAgents,
-                        selected: currentIndex == 1,
+                        selected: currentDestination == ShellDestination.agents,
                         compact: compact,
                         semanticsIdentifier: 'e2e-agents-tab',
-                        onTap: () => onTap(1),
+                        onTap: () => onTap(ShellDestination.agents),
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
@@ -423,43 +510,44 @@ class _DesktopRail extends StatelessWidget {
                         inactiveIcon: CupertinoIcons.person_2,
                         label: context.l10n.shellNavContacts,
                         semanticsIdentifier: 'e2e-contacts-tab',
-                        selected: currentIndex == 2,
+                        selected:
+                            currentDestination == ShellDestination.contacts,
                         compact: compact,
-                        onTap: () => onTap(2),
+                        onTap: () => onTap(ShellDestination.contacts),
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
                         activeIcon: CupertinoIcons.checkmark_square_fill,
                         inactiveIcon: CupertinoIcons.checkmark_square,
                         label: context.l10n.shellNavTasks,
-                        selected: currentIndex == 3,
+                        selected: currentDestination == ShellDestination.tasks,
                         compact: compact,
-                        onTap: () => onTap(3),
+                        onTap: () => onTap(ShellDestination.tasks),
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
                         activeIcon: CupertinoIcons.square_grid_2x2_fill,
                         inactiveIcon: CupertinoIcons.square_grid_2x2,
                         label: context.l10n.shellNavWorkspace,
-                        selected: currentIndex == 4,
+                        selected:
+                            currentDestination == ShellDestination.workbench,
                         compact: compact,
-                        onTap: () => onTap(4),
-                      ),
-                      SizedBox(height: gap),
-                      _DesktopRailItem(
-                        activeIcon: CupertinoIcons.gear_alt_fill,
-                        inactiveIcon: CupertinoIcons.gear_alt,
-                        label: context.l10n.shellNavSettings,
-                        semanticsIdentifier: 'e2e-settings-tab',
-                        selected: currentIndex == _desktopSettingsTabIndex,
-                        compact: compact,
-                        onTap: onOpenSettings,
+                        onTap: () => onTap(ShellDestination.workbench),
                       ),
                     ],
                   ),
                 ),
               ),
-              SizedBox(height: responsive.displayScaled(compact ? 12 : 18)),
+              _DesktopRailItem(
+                activeIcon: CupertinoIcons.gear_alt_fill,
+                inactiveIcon: CupertinoIcons.gear_alt,
+                label: context.l10n.shellNavSettings,
+                semanticsIdentifier: 'e2e-settings-tab',
+                selected: currentDestination == ShellDestination.settings,
+                compact: compact,
+                onTap: () => onTap(ShellDestination.settings),
+              ),
+              SizedBox(height: responsive.displayScaled(compact ? 10 : 14)),
             ],
           );
         },
@@ -491,22 +579,22 @@ class _DesktopEmbeddedSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final settingsPaneWidth = responsive.displayScaled(420);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        SizedBox(
-          key: const Key('mac-settings-list-pane'),
-          width: settingsPaneWidth,
-          child: const DecoratedBox(
-            decoration: BoxDecoration(color: Color(0xFFF8FAFD)),
-            child: SettingsPage(embedded: true),
-          ),
+    final theme = context.awikiTheme;
+    return AwikiPaneLayout(
+      listPaneWidth: 272,
+      minListPaneWidth: 240,
+      minDetailPaneWidth: 360,
+      listPane: SizedBox(
+        key: const Key('mac-settings-list-pane'),
+        child: DecoratedBox(
+          decoration: BoxDecoration(color: theme.background),
+          child: const SettingsPage(embedded: true),
         ),
-        Container(width: 1, color: const Color(0xFFE5EAF2)),
-        const Expanded(child: AwikiWorkspaceEmptyDetail()),
-      ],
+      ),
+      detailPane: DecoratedBox(
+        decoration: BoxDecoration(color: theme.surface),
+        child: const AwikiWorkspaceEmptyDetail(),
+      ),
     );
   }
 }
@@ -551,10 +639,10 @@ class _DesktopRailItem extends StatelessWidget {
       scaleOnPress: true,
       builder: (context, state, child) {
         final overlay = state.pressed
-            ? const Color(0x1A0B65F8)
+            ? _desktopRailActiveColor.withValues(alpha: 0.10)
             : state.hovered || state.focused
-            ? const Color(0x100B65F8)
-            : const Color(0x00FFFFFF);
+            ? _desktopRailActiveColor.withValues(alpha: 0.06)
+            : CupertinoColors.transparent;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOutCubic,
@@ -565,93 +653,97 @@ class _DesktopRailItem extends StatelessWidget {
           child: child,
         );
       },
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              width: width,
-              height: height,
-              padding: EdgeInsets.symmetric(
-                vertical: responsive.displayScaled(compact ? 6 : 8),
-              ),
-              decoration: BoxDecoration(
-                color: selected
-                    ? _desktopRailActiveBackground
-                    : const Color(0x00FFFFFF),
-                borderRadius: BorderRadius.circular(
-                  responsive.displayScaled(10),
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: width,
+                height: height,
+                padding: EdgeInsets.symmetric(
+                  vertical: responsive.displayScaled(compact ? 6 : 8),
                 ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  SizedBox(
-                    width: responsive.displayScaled(30),
-                    height: responsive.displayScaled(24),
-                    child: Center(
-                      child: Icon(
-                        icon,
-                        color: foreground,
-                        size: responsive.displayScaled(20),
-                        weight: selected ? 700 : 400,
-                      ),
-                    ),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? _desktopRailActiveBackground
+                      : const Color(0x00FFFFFF),
+                  borderRadius: BorderRadius.circular(
+                    responsive.displayScaled(10),
                   ),
-                  SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
-                  SizedBox(
-                    width: width - responsive.displayScaled(6),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        softWrap: false,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    SizedBox(
+                      width: responsive.displayScaled(30),
+                      height: responsive.displayScaled(24),
+                      child: Center(
+                        child: Icon(
+                          icon,
                           color: foreground,
-                          fontSize: responsive.displayScaled(10.5),
-                          fontWeight: selected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
-                          height: 1,
+                          size: responsive.displayScaled(20),
+                          weight: selected ? 700 : 400,
                         ),
                       ),
                     ),
-                  ),
-                ],
+                    SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
+                    SizedBox(
+                      width: width - responsive.displayScaled(6),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          softWrap: false,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: responsive.displayScaled(10.5),
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            height: 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            if (badge != null)
-              Positioned(
-                right: responsive.displayScaled(5),
-                top: responsive.displayScaled(4),
-                child: Container(
-                  key: const Key('mac-messages-unread-badge'),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: responsive.displayScaled(5),
-                    vertical: responsive.displayScaled(2),
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF3B30),
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: const Color(0xFFF8FBFF)),
-                  ),
-                  child: Text(
-                    badge!,
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontSize: responsive.displayScaled(9),
-                      fontWeight: FontWeight.w600,
-                      height: 1,
+              if (badge != null)
+                Positioned(
+                  right: responsive.displayScaled(5),
+                  top: responsive.displayScaled(4),
+                  child: Container(
+                    key: const Key('mac-messages-unread-badge'),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsive.displayScaled(5),
+                      vertical: responsive.displayScaled(2),
+                    ),
+                    decoration: BoxDecoration(
+                      color: AwikiMePalette.unreadRed,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(
+                        color: AwikiMePalette.navigationSurface,
+                      ),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: TextStyle(
+                        color: CupertinoColors.white,
+                        fontSize: responsive.displayScaled(9),
+                        fontWeight: FontWeight.w600,
+                        height: 1,
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -683,21 +775,27 @@ class _DesktopRailAvatar extends StatelessWidget {
       scaleOnPress: true,
       pressedScale: 0.96,
       borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
-      child: Container(
-        width: responsive.displayScaled(38),
-        height: responsive.displayScaled(38),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFDDEBFF) : const Color(0xFFEAF2FF),
-          borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
-          border: Border.all(
-            color: selected ? const Color(0xFF0B65F8) : const Color(0x00FFFFFF),
+      child: ExcludeSemantics(
+        child: Container(
+          width: responsive.displayScaled(38),
+          height: responsive.displayScaled(38),
+          decoration: BoxDecoration(
+            color: selected
+                ? AwikiMePalette.brandAccentSoft
+                : AwikiMePalette.content,
+            borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
+            border: Border.all(
+              color: selected
+                  ? AwikiMePalette.brandAccent
+                  : AwikiMePalette.hairline,
+            ),
           ),
-        ),
-        child: Center(
-          child: AvatarBadge(
-            seed: seed,
-            size: responsive.displayScaled(34),
-            labelOverride: labelOverride,
+          child: Center(
+            child: AvatarBadge(
+              seed: seed,
+              size: responsive.displayScaled(34),
+              labelOverride: labelOverride,
+            ),
           ),
         ),
       ),
@@ -719,42 +817,37 @@ class _DesktopPlaceholderPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFFBFDFF)),
+      decoration: BoxDecoration(color: theme.surface),
       child: Center(
-        child: Container(
+        child: ConstrainedBox(
           key: const Key('mac-desktop-placeholder-card'),
-          constraints: BoxConstraints(maxWidth: responsive.displayScaled(420)),
-          padding: EdgeInsets.all(responsive.displayScaled(28)),
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.displayScaled(18)),
-            border: Border.all(color: const Color(0xFFE5EAF2)),
-          ),
+          constraints: BoxConstraints(maxWidth: responsive.displayScaled(360)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Icon(
                 icon,
-                color: const Color(0xFF0B65F8),
-                size: responsive.displayScaled(44),
+                color: theme.secondaryText,
+                size: responsive.displayScaled(36),
               ),
-              SizedBox(height: responsive.displayScaled(18)),
+              SizedBox(height: responsive.displayScaled(14)),
               Text(
                 title,
                 style: TextStyle(
-                  color: const Color(0xFF101B32),
-                  fontSize: responsive.displayScaled(22),
+                  color: theme.title,
+                  fontSize: responsive.displayScaled(18),
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              SizedBox(height: responsive.displayScaled(10)),
+              SizedBox(height: responsive.displayScaled(8)),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: const Color(0xFF66728A),
-                  fontSize: responsive.displayScaled(14),
+                  color: theme.secondaryText,
+                  fontSize: responsive.displayScaled(13),
                   height: 1.45,
                 ),
               ),
@@ -768,123 +861,63 @@ class _DesktopPlaceholderPage extends StatelessWidget {
 
 class _BottomNavBar extends StatelessWidget {
   const _BottomNavBar({
-    required this.currentIndex,
+    required this.currentDestination,
     required this.unreadCount,
     required this.onTap,
-    this.embedded = false,
   });
 
-  final int currentIndex;
+  final ShellDestination currentDestination;
   final int unreadCount;
-  final ValueChanged<int> onTap;
-  final bool embedded;
+  final ValueChanged<ShellDestination> onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    final showLabels = responsive.isPhone && !embedded;
-    final horizontalPadding = embedded ? 0.0 : responsive.spacing(24);
-    final bottomPadding = embedded
-        ? 0.0
-        : (bottomInset > 0 ? responsive.spacing(8) : 16.0);
-    final navHeight = showLabels
-        ? responsive.scaled(58)
-        : responsive.navBarHeight;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          horizontalPadding,
-          embedded ? 0 : responsive.spacing(8),
-          horizontalPadding,
-          bottomPadding,
-        ),
-        child: Center(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final navWidth = constraints.maxWidth.isFinite
-                  ? constraints.maxWidth.clamp(
-                      0.0,
-                      responsive.isPhone ? responsive.scaled(356.0) : 260.0,
-                    )
-                  : (responsive.isPhone ? responsive.scaled(356.0) : 260.0);
-              return Container(
-                width: navWidth,
-                height: navHeight,
-                padding: EdgeInsets.symmetric(
-                  horizontal: showLabels
-                      ? responsive.spacing(9)
-                      : responsive.spacing(18),
-                  vertical: showLabels
-                      ? responsive.spacing(3)
-                      : responsive.spacing(8),
+    return DecoratedBox(
+      key: const Key('compact-bottom-navigation'),
+      decoration: BoxDecoration(
+        color: AwikiMePalette.navigationSurface,
+        border: Border(top: BorderSide(color: theme.border)),
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: _BottomNavItem(
+                  label: context.l10n.shellNavMessages,
+                  semanticsIdentifier: 'e2e-messages-tab',
+                  activeIcon: CupertinoIcons.chat_bubble_2_fill,
+                  inactiveIcon: CupertinoIcons.chat_bubble_2,
+                  active: currentDestination == ShellDestination.messages,
+                  badge: _formatUnreadBadge(unreadCount),
+                  onTap: () => onTap(ShellDestination.messages),
                 ),
-                decoration: BoxDecoration(
-                  color: theme.surface,
-                  borderRadius: BorderRadius.circular(
-                    embedded ? responsive.radius(14) : responsive.radius(14),
-                  ),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x10000000),
-                      blurRadius: 28,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
+              ),
+              Expanded(
+                child: _BottomNavItem(
+                  label: context.l10n.shellNavAgents,
+                  semanticsIdentifier: 'e2e-agents-tab',
+                  activeIcon: CupertinoIcons.sparkles,
+                  inactiveIcon: CupertinoIcons.sparkles,
+                  active: currentDestination == ShellDestination.agents,
+                  onTap: () => onTap(ShellDestination.agents),
                 ),
-                child: Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: _BottomNavItem(
-                        label: context.l10n.shellNavMessages,
-                        semanticsIdentifier: 'e2e-messages-tab',
-                        activeIcon: CupertinoIcons.chat_bubble_2_fill,
-                        inactiveIcon: CupertinoIcons.chat_bubble_2,
-                        active: currentIndex == 0,
-                        showLabel: showLabels,
-                        badge: _formatUnreadBadge(unreadCount),
-                        onTap: () => onTap(0),
-                      ),
-                    ),
-                    Expanded(
-                      child: _BottomNavItem(
-                        label: context.l10n.shellNavAgents,
-                        semanticsIdentifier: 'e2e-agents-tab',
-                        activeIcon: CupertinoIcons.sparkles,
-                        inactiveIcon: CupertinoIcons.sparkles,
-                        active: currentIndex == 1,
-                        showLabel: showLabels,
-                        onTap: () => onTap(1),
-                      ),
-                    ),
-                    Expanded(
-                      child: _BottomNavItem(
-                        label: context.l10n.shellNavContacts,
-                        semanticsIdentifier: 'e2e-friends-tab',
-                        activeIcon: CupertinoIcons.person_2_fill,
-                        inactiveIcon: CupertinoIcons.person_2,
-                        active: currentIndex == 2,
-                        showLabel: showLabels,
-                        onTap: () => onTap(2),
-                      ),
-                    ),
-                    Expanded(
-                      child: _BottomNavItem(
-                        label: context.l10n.shellNavMe,
-                        semanticsIdentifier: 'e2e-profile-tab',
-                        activeIcon: CupertinoIcons.person_fill,
-                        inactiveIcon: CupertinoIcons.person,
-                        active: currentIndex == 3,
-                        showLabel: showLabels,
-                        onTap: () => onTap(3),
-                      ),
-                    ),
-                  ],
+              ),
+              Expanded(
+                child: _BottomNavItem(
+                  label: context.l10n.shellNavContacts,
+                  semanticsIdentifier: 'e2e-contacts-tab',
+                  activeIcon: CupertinoIcons.person_2_fill,
+                  inactiveIcon: CupertinoIcons.person_2,
+                  active: currentDestination == ShellDestination.contacts,
+                  onTap: () => onTap(ShellDestination.contacts),
                 ),
-              );
-            },
+              ),
+            ],
           ),
         ),
       ),
@@ -899,7 +932,6 @@ class _BottomNavItem extends StatelessWidget {
     required this.activeIcon,
     required this.inactiveIcon,
     required this.active,
-    required this.showLabel,
     required this.onTap,
     this.badge,
   });
@@ -909,22 +941,18 @@ class _BottomNavItem extends StatelessWidget {
   final IconData activeIcon;
   final IconData inactiveIcon;
   final bool active;
-  final bool showLabel;
   final VoidCallback onTap;
   final String? badge;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final iconSize = showLabel ? responsive.scaled(26) : responsive.iconLg;
-    final tapSize = responsive.isPhone
-        ? responsive.compactControlHeight + responsive.spacing(6)
-        : 44.0;
-    final labelFontSize = responsive.scaled(11.25);
-    final iconSlotSize = showLabel ? responsive.scaled(34) : tapSize;
+    final iconSize = responsive.scaled(23);
+    final labelFontSize = responsive.scaled(10.5);
+    final iconSlotSize = responsive.scaled(32);
     final foreground = active
-        ? AwikiMePalette.actionBlue
-        : AwikiMePalette.actionMuted;
+        ? AwikiMePalette.brandAccent
+        : AwikiMePalette.mutedNeutral;
     Widget buildNavIcon() {
       final icon = Icon(
         active ? activeIcon : inactiveIcon,
@@ -942,8 +970,8 @@ class _BottomNavItem extends StatelessWidget {
             icon,
             if (badgeLabel != null)
               Positioned(
-                top: showLabel ? responsive.scaled(1) : responsive.scaled(3),
-                right: showLabel ? responsive.scaled(-5) : responsive.scaled(3),
+                top: 0,
+                right: responsive.scaled(-4),
                 child: _NavUnreadBadge(label: badgeLabel),
               ),
           ],
@@ -957,56 +985,43 @@ class _BottomNavItem extends StatelessWidget {
       semanticsIdentifier: semanticsIdentifier,
       selected: active,
       scaleOnPress: true,
-      pressedScale: responsive.isPhone ? 0.96 : 0.98,
-      borderRadius: BorderRadius.circular(
-        showLabel ? responsive.radius(8) : 10,
-      ),
+      pressedScale: 0.96,
+      borderRadius: BorderRadius.circular(responsive.radius(10)),
       child: ExcludeSemantics(
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
           curve: Curves.easeOut,
-          width: showLabel ? double.infinity : tapSize,
-          height: showLabel ? double.infinity : tapSize,
-          padding: showLabel
-              ? EdgeInsets.fromLTRB(
-                  responsive.spacing(4),
-                  responsive.spacing(1),
-                  responsive.spacing(4),
-                  responsive.spacing(5),
-                )
-              : EdgeInsets.zero,
-          decoration: BoxDecoration(
-            color: active && showLabel
-                ? AwikiMePalette.actionBlueSoft
-                : const Color(0x00FFFFFF),
-            borderRadius: BorderRadius.circular(
-              showLabel ? responsive.radius(8) : 0,
-            ),
+          width: double.infinity,
+          height: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            responsive.spacing(4),
+            0,
+            responsive.spacing(4),
+            responsive.spacing(2),
           ),
-          child: showLabel
-              ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    buildNavIcon(),
-                    SizedBox(height: responsive.scaled(1)),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        softWrap: false,
-                        style: TextStyle(
-                          color: foreground,
-                          fontSize: labelFontSize,
-                          fontWeight: FontWeight.w700,
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : Center(child: buildNavIcon()),
+          color: CupertinoColors.transparent,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              buildNavIcon(),
+              SizedBox(height: responsive.scaled(1)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: labelFontSize,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1032,9 +1047,8 @@ class _NavUnreadBadge extends StatelessWidget {
         vertical: responsive.scaled(1.5),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFE5484D),
+        color: AwikiMePalette.unreadRed,
         borderRadius: BorderRadius.circular(AwikiMeRadii.pill),
-        border: Border.all(color: CupertinoColors.white, width: 1.5),
       ),
       alignment: Alignment.center,
       child: Text(

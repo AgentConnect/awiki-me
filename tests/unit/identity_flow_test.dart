@@ -92,7 +92,7 @@ void main() {
     expect(find.byType(ChatView), findsOneWidget);
     expect(find.text('CGW Agent'), findsWidgets);
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(ConversationWorkspacePage)),
+      tester.element(find.byType(ChatView)),
     );
     final conversation = tester
         .widget<ChatView>(find.byType(ChatView))
@@ -191,7 +191,7 @@ void main() {
     );
   });
 
-  testWidgets('联系人裸 handle 入口通过 DID 解析后只打开 canonical 单聊', (tester) async {
+  testWidgets('联系人详情通过 DID 解析后只打开 canonical 单聊', (tester) async {
     final gateway = FakeAwikiGateway()
       ..following = const <RelationshipSummary>[
         RelationshipSummary(
@@ -203,9 +203,10 @@ void main() {
       ]
       ..publicProfilesByQuery = <String, UserProfile>{
         'did:test:peer': peerProfile,
+        'cgw.awiki.ai': peerProfile,
       }
       ..directoryConversationIdsByQuery = <String, String>{
-        'did:test:peer': 'dm:peer-scope:v1:canonical-peer',
+        'cgw.awiki.ai': 'dm:peer-scope:v1:canonical-peer',
       };
 
     await tester.pumpWidget(
@@ -231,10 +232,13 @@ void main() {
     );
     await tester.tap(contactRow);
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('peer-profile-send-message')), findsOneWidget);
 
-    final opened = selectedConversationSummary(container);
-    expect(opened, isNotNull);
-    expect(opened!.conversationId, 'dm:peer-scope:v1:canonical-peer');
+    await tester.tap(find.byKey(const Key('peer-profile-send-message')));
+    await tester.pumpAndSettle();
+
+    final opened = tester.widget<ChatView>(find.byType(ChatView)).conversation;
+    expect(opened.conversationId, 'dm:peer-scope:v1:canonical-peer');
     expect(opened.threadId, 'dm:peer-scope:v1:canonical-peer');
     expect(opened.targetDid, 'did:test:peer');
     expect(opened.targetPeer, 'cgw.awiki.ai');
@@ -254,6 +258,7 @@ void main() {
         ),
       ]
       ..publicProfilesByQuery = <String, UserProfile>{
+        'did:test:peer': peerProfile,
         'cgw.awiki.ai': peerProfile,
       };
 
@@ -275,6 +280,10 @@ void main() {
     final contactRow = find.byKey(const Key('contact-row:did:test:peer'));
     expect(contactRow, findsOneWidget);
     await tester.tap(contactRow);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('peer-profile-send-message')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('peer-profile-send-message')));
     await tester.pumpAndSettle();
 
     expect(find.byType(ChatView), findsNothing);
@@ -322,6 +331,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('contact-row:did:test:pure-peer')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('peer-profile-send-message')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('peer-profile-send-message')));
     await tester.pumpAndSettle();
 
     expect(container.read(selectedConversationProvider), isNull);

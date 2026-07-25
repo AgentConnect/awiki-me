@@ -13,6 +13,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
+import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show SelectionArea;
@@ -20,6 +21,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+
+void _setTestViewSize(WidgetTester tester, Size size) {
+  tester.view.devicePixelRatio = 1;
+  tester.view.physicalSize = size;
+  addTearDown(() => _resetTestViewSize(tester));
+}
+
+void _resetTestViewSize(WidgetTester tester) {
+  tester.view.resetPhysicalSize();
+  tester.view.resetDevicePixelRatio();
+}
 
 void main() {
   testWidgets('macOS 桌面登录页使用新稿左右分栏和单层认证入口', (tester) async {
@@ -35,16 +47,21 @@ void main() {
       ];
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      _resetTestViewSize(tester);
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    _setTestViewSize(tester, const Size(1440, 900));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
     await tester.pumpAndSettle();
 
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(container.read(onboardingProvider).entryMode, 'login');
+    expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
     expect(
@@ -59,10 +76,10 @@ void main() {
     );
     expect(
       find.byKey(const Key('onboarding-mac-local-credential-section')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('+86'), findsOneWidget);
+    expect(find.text('+86'), findsNothing);
     expect(find.text('安全可靠'), findsOneWidget);
     expect(find.text('高效协作'), findsOneWidget);
     expect(find.text('权限可控'), findsOneWidget);
@@ -86,22 +103,23 @@ void main() {
     expect(languageRect.left, lessThan(tenantRect.left));
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    _resetTestViewSize(tester);
   });
 
   testWidgets('Windows 宽屏进入共享桌面 onboarding 而不是移动端 fallback', (tester) async {
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      _resetTestViewSize(tester);
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    _setTestViewSize(tester, const Size(1280, 800));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
     expect(
@@ -112,16 +130,62 @@ void main() {
     expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    _resetTestViewSize(tester);
+  });
+
+  testWidgets('Windows 有本地凭证时默认进入身份选择并可一键登录', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:windows',
+      credentialName: 'windows-default',
+      displayName: 'Windows Alice',
+      handle: 'windows-alice',
+      jwtToken: 'token-windows',
+    );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[session]
+      ..loginResult = session
+      ..myProfile = const UserProfile(
+        did: 'did:test:windows',
+        nickName: 'Windows Alice',
+        bio: '',
+        profileMarkdown: '',
+        tags: <String>[],
+      );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      _resetTestViewSize(tester);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    _setTestViewSize(tester, const Size(1280, 800));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(container.read(onboardingProvider).entryMode, 'login');
+    expect(find.text('Windows Alice'), findsOneWidget);
+
+    await tester.tap(find.text('Windows Alice'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.loginCalls, 1);
+    expect(gateway.lastLoginCredentialName, 'windows-default');
+
+    debugDefaultTargetPlatformOverride = null;
+    _resetTestViewSize(tester);
   });
 
   testWidgets('macOS 单层认证入口可切换邮箱、身份凭证和手机号', (tester) async {
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      _resetTestViewSize(tester);
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1120, 820));
+    _setTestViewSize(tester, const Size(1120, 820));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
@@ -143,7 +207,8 @@ void main() {
     await tester.tap(find.byKey(const Key('onboarding-mac-credential-mode')));
     await tester.pumpAndSettle();
     expect(container.read(onboardingProvider).entryMode, 'login');
-    expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(find.text('导入身份凭证'), findsNothing);
+    expect(find.text('重新识别本地凭证'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('auth-mode-phone')));
     await tester.pumpAndSettle();
@@ -152,10 +217,10 @@ void main() {
     expect(find.text('发送验证码'), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    _resetTestViewSize(tester);
   });
 
-  testWidgets('macOS 手机号入口下的本机身份卡可直接登录', (tester) async {
+  testWidgets('macOS 本机身份默认展示并可直接登录', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
@@ -175,10 +240,10 @@ void main() {
       );
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      _resetTestViewSize(tester);
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    _setTestViewSize(tester, const Size(1440, 900));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -188,11 +253,12 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
-    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(container.read(onboardingProvider).entryMode, 'login');
     expect(
       find.byKey(const Key('onboarding-mac-local-credential-section')),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(find.text('Alice'), findsOneWidget);
 
     final tileRect = tester.getRect(find.text('Alice'));
     await tester.tapAt(Offset(tileRect.left + 20, tileRect.center.dy));
@@ -202,7 +268,7 @@ void main() {
     expect(gateway.lastLoginCredentialName, 'default');
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    _resetTestViewSize(tester);
   });
 
   testWidgets('无本地凭证时默认进入登录或注册 tab', (tester) async {
@@ -221,6 +287,9 @@ void main() {
   });
 
   testWidgets('无本地凭证时仍可手动切换到切换身份 tab', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
@@ -229,7 +298,8 @@ void main() {
     await tester.tap(find.text('切换身份'));
     await tester.pumpAndSettle();
 
-    expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(find.text('导入身份凭证'), findsNothing);
+    expect(find.text('重新识别本地凭证'), findsOneWidget);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
@@ -255,12 +325,73 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(find.text('导入身份凭证'), findsNothing);
+    expect(find.text('重新识别本地凭证'), findsOneWidget);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
     expect(container.read(onboardingProvider).entryMode, 'login');
+  });
+
+  testWidgets('Android 和 iOS 有本地凭证时同样默认进入身份选择', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:test:mobile',
+          credentialName: 'mobile-default',
+          displayName: 'Mobile Alice',
+          handle: 'mobile-alice',
+          jwtToken: 'token-mobile',
+        ),
+      ];
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    for (final platform in <TargetPlatform>[
+      TargetPlatform.android,
+      TargetPlatform.iOS,
+    ]) {
+      debugDefaultTargetPlatformOverride = platform;
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(container.read(onboardingProvider).entryMode, 'login');
+      expect(find.text('Mobile Alice'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('紧凑布局把小型品牌和真实认证流程收进同一张卡片', (tester) async {
+    _setTestViewSize(tester, const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('onboarding-compact-auth-card')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('onboarding-compact-brand')), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-compact-logo')), findsOneWidget);
+    expect(find.byKey(const Key('onboarding-mac-auth-card')), findsNothing);
+    expect(find.text('发送验证码'), findsOneWidget);
+
+    final logoSize = tester.getSize(
+      find.byKey(const Key('onboarding-compact-logo')),
+    );
+    expect(logoSize.width, lessThanOrEqualTo(40));
+    expect(logoSize.height, lessThanOrEqualTo(40));
   });
 
   testWidgets('退出登录后立即保留本地凭证并进入切换身份 tab', (tester) async {
@@ -295,7 +426,8 @@ void main() {
     expect(container.read(appRuntimeProvider).isBusy, isFalse);
     expect(container.read(onboardingProvider).entryMode, 'login');
     expect(find.text('Alice'), findsOneWidget);
-    expect(find.text('导入身份凭证'), findsOneWidget);
+    expect(find.text('导入身份凭证'), findsNothing);
+    expect(find.text('重新识别本地凭证'), findsOneWidget);
     expect(gateway.logoutCalls, 1);
     expect(container.read(onboardingProvider).entryMode, 'login');
   });
@@ -348,10 +480,10 @@ void main() {
     final gateway = FakeAwikiGateway();
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      _resetTestViewSize(tester);
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    _setTestViewSize(tester, const Size(1440, 900));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -373,12 +505,12 @@ void main() {
     expect(gateway.lastEmailVerificationHandle, 'alice');
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    _resetTestViewSize(tester);
   });
 
   testWidgets('移动端邮箱激活检查按钮使用整行宽度避免换行', (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
@@ -396,6 +528,9 @@ void main() {
   });
 
   testWidgets('入口 tab 按登录或注册、切换身份的顺序展示', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
@@ -440,6 +575,9 @@ void main() {
 
   testWidgets('登录页可从底部工具栏切换语言', (tester) async {
     final localePreferenceService = FakeLocalePreferenceService();
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const OnboardingPage(),
@@ -493,6 +631,7 @@ void main() {
 
     await tester.tap(find.byTooltip('管理租户'));
     await tester.pumpAndSettle();
+    expect(find.byType(TenantManagementDialog), findsOneWidget);
     await tester.tap(find.byKey(const Key('tenant-management-create-button')));
     await tester.pumpAndSettle();
 
@@ -579,7 +718,7 @@ void main() {
     expect(find.textContaining('runtime bootstrap failed'), findsOneWidget);
   });
 
-  testWidgets('切换身份 tab 展示导入身份凭证并提示暂未实现', (tester) async {
+  testWidgets('身份登录只展示真实可用的本地凭证刷新入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
@@ -596,18 +735,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('导入身份凭证'), findsOneWidget);
-
-    await tester.tap(find.text('导入身份凭证'));
-    await tester.pump();
-
+    expect(find.text('导入身份凭证'), findsNothing);
+    expect(find.text('重新识别本地凭证'), findsOneWidget);
     expect(gateway.importCalls, 0);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.danger, isFalse);
-    expect(feedback?.message.id, 'featureNotImplemented');
   });
 
   testWidgets('切换身份 tab 点击已保存凭证卡片空白区域也能登录', (tester) async {
@@ -642,27 +772,34 @@ void main() {
     expect(gateway.lastLoginCredentialName, 'default');
   });
 
-  testWidgets('桌面宽度下登录页使用居中窄列布局', (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(1280, 900));
+  testWidgets('展开宽度下登录页使用品牌与认证双栏布局', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(1280, 900));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
     await tester.pump();
 
-    final listRect = tester.getRect(find.byType(ListView).first);
-    expect(listRect.width, lessThanOrEqualTo(420));
+    expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
+    final heroRect = tester.getRect(
+      find.byKey(const Key('onboarding-mac-hero-title')),
+    );
+    final cardRect = tester.getRect(
+      find.byKey(const Key('onboarding-mac-auth-card')),
+    );
+    expect(heroRect.right, lessThan(cardRect.left));
+    expect(cardRect.width, lessThanOrEqualTo(540));
   });
 
   testWidgets('macOS 窄窗口下单层认证入口保持单行并隐藏品牌列', (tester) async {
     final gateway = FakeAwikiGateway();
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
-      tester.binding.setSurfaceSize(null);
+      _resetTestViewSize(tester);
     });
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    await tester.binding.setSurfaceSize(const Size(820, 780));
+    _setTestViewSize(tester, const Size(820, 780));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -671,6 +808,10 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsNothing);
+    expect(
+      find.byKey(const Key('onboarding-desktop-compact-brand')),
+      findsOneWidget,
+    );
 
     final phoneRect = tester.getRect(find.byKey(const Key('auth-mode-phone')));
     final emailRect = tester.getRect(find.byKey(const Key('auth-mode-email')));
@@ -689,19 +830,21 @@ void main() {
     expect(emailRect.center.dy, moreOrLessEquals(credentialRect.center.dy));
 
     debugDefaultTargetPlatformOverride = null;
-    await tester.binding.setSurfaceSize(null);
+    _resetTestViewSize(tester);
   });
 
   testWidgets('登录或注册表单使用紧凑 tab 和右对齐动作按钮', (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
     await tester.pump();
 
-    final listRect = tester.getRect(find.byType(ListView).first);
+    final cardRect = tester.getRect(
+      find.byKey(const Key('onboarding-compact-auth-card')),
+    );
     final entryTabsRect = tester.getRect(
       find.byKey(const Key('onboarding-entry-tabs')),
     );
@@ -717,10 +860,11 @@ void main() {
       ),
     );
 
-    expect(entryTabsRect.width, lessThan(listRect.width));
-    expect(authTabsRect.width, lessThan(listRect.width));
-    expect(nextRect.width, lessThan(listRect.width * 0.5));
-    expect(nextRect.right, moreOrLessEquals(listRect.right, epsilon: 1));
+    expect(entryTabsRect.width, lessThan(cardRect.width));
+    expect(authTabsRect.width, lessThan(cardRect.width));
+    expect(nextRect.width, lessThan(cardRect.width * 0.5));
+    expect(nextRect.right, lessThan(cardRect.right));
+    expect(cardRect.right - nextRect.right, moreOrLessEquals(20, epsilon: 1));
   });
 
   testWidgets('邮箱注册发送激活邮件后进入重新发送倒计时', (tester) async {
@@ -964,6 +1108,8 @@ void main() {
       '13800138000',
     );
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.ensureVisible(find.text('完成'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
 
@@ -988,6 +1134,8 @@ void main() {
       '13800138000',
     );
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.ensureVisible(find.text('完成'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('完成'));
     await tester.pump();
 

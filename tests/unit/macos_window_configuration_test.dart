@@ -52,6 +52,30 @@ void main() {
     expect(source, contains('window.makeKeyAndOrderFront(nil)'));
   });
 
+  test(
+    'macOS traffic lights follow the expanded rail and reset in compact',
+    () {
+      final nativeWindow = File(
+        'macos/Runner/MainFlutterWindow.swift',
+      ).readAsStringSync();
+      final appShell = File(
+        'lib/src/presentation/app_shell/app_shell.dart',
+      ).readAsStringSync();
+
+      expect(nativeWindow, contains('case "setTrafficLightRailWidth":'));
+      expect(nativeWindow, contains('case "resetTrafficLightRailWidth":'));
+      expect(nativeWindow, contains('captureDefaultTrafficLightOrigins()'));
+      expect(nativeWindow, contains('restoreDefaultTrafficLightOrigins'));
+      expect(nativeWindow, contains('srgbRed: 250.0 / 255.0'));
+      expect(nativeWindow, contains('green: 249.0 / 255.0'));
+      expect(nativeWindow, contains('blue: 247.0 / 255.0'));
+      expect(
+        appShell,
+        contains("invokeMethod<void>('resetTrafficLightRailWidth')"),
+      );
+    },
+  );
+
   test('Debug App defaults to portable ad-hoc signing with local override', () {
     final source = File(
       'macos/Runner.xcodeproj/project.pbxproj',

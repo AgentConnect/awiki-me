@@ -69,7 +69,7 @@ void main() {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await tester.pump();
 
-      expect(find.text('Switch identity'), findsWidgets);
+      expect(find.text('Identity credentials'), findsWidgets);
       expect(find.text('Log in or register'), findsWidgets);
     });
 
@@ -84,7 +84,7 @@ void main() {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await tester.pump();
 
-      expect(find.text('切换身份'), findsWidgets);
+      expect(find.text('身份凭证'), findsWidgets);
       expect(find.text('登录或注册'), findsWidgets);
     });
 
@@ -106,7 +106,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Switch identity'), findsWidgets);
+      expect(find.text('Identity credentials'), findsWidgets);
       expect(find.text('Log in or register'), findsWidgets);
     });
 

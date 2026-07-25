@@ -8,15 +8,23 @@ class _DateDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return Center(
-      child: AppSurface(
-        margin: EdgeInsets.only(bottom: responsive.spacing(24)),
-        padding: responsive.scaledInsets(
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    final theme = context.awikiTheme;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        0,
+        responsive.displayScaled(12),
+        0,
+        responsive.displayScaled(6),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: theme.secondaryText,
+            fontSize: responsive.displayScaled(11),
+            fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+          ),
         ),
-        color: context.awikiTheme.subtleSurface,
-        radius: AwikiMeRadii.pill,
-        child: Text(label, style: AwikiMeTextStyles.meta),
       ),
     );
   }
@@ -37,13 +45,13 @@ class _AgentProcessingIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final bubbleColor = macStyle
-        ? const Color(0xFFF8FAFD)
-        : theme.subtleSurface;
+    final bubbleColor = macStyle ? AwikiMePalette.mist : theme.subtleSurface;
     final borderColor = macStyle
-        ? const Color(0xFFDDE5F0)
+        ? AwikiMePalette.hairline
         : theme.border.withValues(alpha: 0.72);
-    final textColor = macStyle ? const Color(0xFF66728A) : theme.secondaryText;
+    final textColor = macStyle
+        ? AwikiMePalette.mutedNeutral
+        : theme.secondaryText;
     return Semantics(
       liveRegion: true,
       label: label,
@@ -163,14 +171,14 @@ class _MessageAgentProcessingStatus extends StatelessWidget {
     final theme = context.awikiTheme;
     final foreground = overdue
         ? (macStyle ? const Color(0xFF9A5A00) : const Color(0xFF936300))
-        : (macStyle ? const Color(0xFF64718A) : theme.secondaryText);
+        : (macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText);
     final background = overdue
         ? const Color(0xFFFFF5DC)
-        : (macStyle ? const Color(0xFFF6F8FC) : theme.subtleSurface);
+        : (macStyle ? AwikiMePalette.mist : theme.subtleSurface);
     final border = overdue
         ? const Color(0xFFE9D49D)
         : (macStyle
-              ? const Color(0xFFE0E7F1)
+              ? AwikiMePalette.hairline
               : theme.border.withValues(alpha: 0.68));
     final iconSize = macStyle
         ? responsive.displayScaled(12.5)
@@ -294,16 +302,8 @@ class _GroupSystemEventNotice extends ConsumerWidget {
       groupEventActorName: actorName,
       groupEventSubjectName: subjectName,
     );
-    final foreground = macStyle ? const Color(0xFF5F6E84) : theme.secondaryText;
-    final background = macStyle
-        ? const Color(0xFFF6F8FC)
-        : theme.subtleSurface.withValues(alpha: 0.92);
-    final border = macStyle
-        ? const Color(0xFFE0E7F1)
-        : theme.border.withValues(alpha: 0.72);
-    final iconSize = macStyle
-        ? responsive.displayScaled(12)
-        : responsive.scaled(12);
+    final foreground = theme.secondaryText;
+    final background = theme.subtleSurface;
     return Semantics(
       liveRegion: true,
       label: text,
@@ -325,43 +325,22 @@ class _GroupSystemEventNotice extends ConsumerWidget {
             ),
             decoration: BoxDecoration(
               color: background,
-              borderRadius: BorderRadius.circular(
-                macStyle ? responsive.displayScaled(999) : 999,
-              ),
-              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(999),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Icon(
-                  CupertinoIcons.person_2_fill,
-                  size: iconSize,
-                  color: foreground.withValues(alpha: 0.82),
-                ),
-                SizedBox(
-                  width: macStyle
-                      ? responsive.displayScaled(6)
-                      : responsive.spacing(6),
-                ),
-                Flexible(
-                  child: Text(
-                    text,
-                    key: Key('chat-group-system-event:${message.localId}'),
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: macStyle
-                          ? responsive.displayScaled(11.5)
-                          : responsive.metaSm,
-                      fontWeight: FontWeight.w500,
-                      height: 1.25,
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              text,
+              key: Key('chat-group-system-event:${message.localId}'),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: macStyle
+                    ? responsive.displayScaled(12)
+                    : responsive.metaSm,
+                fontWeight: FontWeight.w400,
+                height: 1.25,
+              ),
             ),
           ),
         ),
@@ -428,7 +407,7 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
         : isAttention
         ? const Color(0xFFEAD49A)
         : (macStyle
-              ? const Color(0xFFDDE5F0)
+              ? AwikiMePalette.hairline
               : theme.border.withValues(alpha: 0.76));
     final width = macStyle
         ? responsive.displayScaled(420)
@@ -481,7 +460,7 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: macStyle
-                              ? const Color(0xFF17213A)
+                              ? AwikiMePalette.inkNeutral
                               : theme.title,
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
@@ -505,7 +484,7 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: macStyle
-                          ? const Color(0xFF66728A)
+                          ? AwikiMePalette.mutedNeutral
                           : theme.secondaryText,
                       fontSize: macStyle
                           ? responsive.displayScaled(12)
@@ -533,7 +512,7 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: macStyle
-                          ? const Color(0xFFF7F9FC)
+                          ? AwikiMePalette.mist
                           : theme.surface.withValues(alpha: 0.72),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -542,7 +521,9 @@ class _MessageAgentRecoveryCard extends StatelessWidget {
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: macStyle ? const Color(0xFF17213A) : theme.title,
+                        color: macStyle
+                            ? AwikiMePalette.inkNeutral
+                            : theme.title,
                         fontSize: macStyle
                             ? responsive.displayScaled(12.5)
                             : responsive.bodySm,
@@ -877,7 +858,7 @@ class _NewMessagesButton extends StatelessWidget {
               ? responsive.displayScaled(7)
               : responsive.spacing(7),
         ),
-        color: const Color(0xFF0B65F8),
+        color: AwikiMePalette.brandAccent,
         borderRadius: BorderRadius.circular(999),
         onPressed: onTap,
         child: Text(
@@ -890,6 +871,54 @@ class _NewMessagesButton extends StatelessWidget {
             fontWeight: FontWeight.w600,
             letterSpacing: 0,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageAvatar extends StatelessWidget {
+  const _MessageAvatar({
+    required this.messageId,
+    required this.label,
+    required this.isMine,
+    required this.size,
+    this.avatarUri,
+  });
+
+  final String messageId;
+  final String label;
+  final bool isMine;
+  final double size;
+  final String? avatarUri;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isMine) {
+      return KeyedSubtree(
+        key: Key('chat-message-avatar:$messageId:peer'),
+        child: AvatarBadge(seed: label, size: size, avatarUri: avatarUri),
+      );
+    }
+    final normalized = label.trim();
+    final avatarLabel = normalized.isEmpty
+        ? '?'
+        : normalized.substring(0, 1).toUpperCase();
+    return Container(
+      key: Key('chat-message-avatar:$messageId:mine'),
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: context.awikiTheme.primary,
+        borderRadius: BorderRadius.circular(size / 2),
+      ),
+      child: Text(
+        avatarLabel,
+        style: TextStyle(
+          color: context.awikiTheme.surface,
+          fontSize: size / 2.6,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -961,7 +990,7 @@ class _MessageBubble extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: macStyle ? const Color(0xFF66728A) : theme.secondaryText,
+          color: macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText,
           fontSize: macStyle
               ? responsive.displayScaled(11.5)
               : responsive.metaSm,
@@ -970,25 +999,6 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  double _senderLabelOffset(BuildContext context, {required bool macStyle}) {
-    final responsive = context.awikiResponsive;
-    final fontSize = macStyle
-        ? responsive.displayScaled(11.5)
-        : responsive.metaSm;
-    final bottom = macStyle
-        ? responsive.displayScaled(5)
-        : responsive.spacing(5);
-    return fontSize * 1.2 + bottom;
-  }
-
-  double _senderContentTopInset(
-    BuildContext context, {
-    required bool macStyle,
-  }) {
-    final responsive = context.awikiResponsive;
-    return macStyle ? responsive.displayScaled(10) : responsive.spacing(10);
   }
 
   Widget _withSendingIndicator(
@@ -1013,8 +1023,14 @@ class _MessageBubble extends StatelessWidget {
 
   Widget _buildMacBubble(BuildContext context, bool isMine) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final attachment = message.attachment;
+    final isBareImage =
+        attachment != null &&
+        _isInlineImageAttachment(attachment) &&
+        (attachment.caption?.trim().isEmpty ?? true);
     final textStyle = TextStyle(
-      color: const Color(0xFF17213A),
+      color: isMine ? theme.onOutgoingMessage : theme.title,
       fontSize: responsive.displayScaled(14),
       height: 1.45,
     );
@@ -1044,21 +1060,43 @@ class _MessageBubble extends StatelessWidget {
           isMine: isMine,
           macStyle: true,
           child: Container(
+            key: Key('chat-message-bubble:${message.localId}'),
             constraints: BoxConstraints(
               maxWidth: responsive.displayScaled(420),
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(14),
-              vertical: responsive.displayScaled(10),
-            ),
+            padding: isBareImage
+                ? EdgeInsets.zero
+                : EdgeInsets.symmetric(
+                    horizontal: responsive.displayScaled(13),
+                    vertical: responsive.displayScaled(9),
+                  ),
             decoration: BoxDecoration(
-              color: isMine ? const Color(0xFFEAF2FF) : CupertinoColors.white,
-              borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
-              border: Border.all(
-                color: isMine
-                    ? const Color(0xFFEAF2FF)
-                    : const Color(0xFFDDE5F0),
+              color: isBareImage
+                  ? CupertinoColors.transparent
+                  : attachment != null
+                  ? theme.surface
+                  : isMine
+                  ? theme.outgoingMessage
+                  : theme.incomingMessage,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(
+                  responsive.displayScaled(isMine ? 13 : 4),
+                ),
+                topRight: Radius.circular(
+                  responsive.displayScaled(isMine ? 4 : 13),
+                ),
+                bottomLeft: Radius.circular(responsive.displayScaled(13)),
+                bottomRight: Radius.circular(responsive.displayScaled(13)),
               ),
+              boxShadow: attachment != null && !isBareImage
+                  ? const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x0D000000),
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
             ),
             child: SelectionArea(child: child),
           ),
@@ -1073,7 +1111,7 @@ class _MessageBubble extends StatelessWidget {
                   context.l10n.chatSendFailed,
                   style: TextStyle(
                     fontSize: responsive.displayScaled(12),
-                    color: const Color(0xFFFF3B30),
+                    color: AwikiMePalette.dangerRed,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1088,7 +1126,7 @@ class _MessageBubble extends StatelessWidget {
                     context.l10n.commonRetry,
                     style: TextStyle(
                       fontSize: responsive.displayScaled(12),
-                      color: const Color(0xFF0B65F8),
+                      color: AwikiMePalette.brandAccent,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1104,37 +1142,184 @@ class _MessageBubble extends StatelessWidget {
         mainAxisAlignment: isMine
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
           if (!isMine) ...<Widget>[
-            Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderLabelOffset(context, macStyle: true)
-                    : 0,
+            _withPeerInfoTap(
+              context: context,
+              borderRadius: responsive.displayScaled(15),
+              child: _MessageAvatar(
+                messageId: message.localId,
+                label: senderLabel,
+                avatarUri: senderAvatarUri,
+                isMine: false,
+                size: responsive.displayScaled(30),
               ),
-              child: _withPeerInfoTap(
-                context: context,
-                borderRadius: responsive.displayScaled(17),
-                child: AvatarBadge(
-                  seed: senderLabel,
-                  size: responsive.displayScaled(34),
-                  avatarUri: senderAvatarUri,
+            ),
+            SizedBox(width: responsive.displayScaled(8)),
+          ],
+          Flexible(child: bubble),
+          if (isMine) ...<Widget>[
+            SizedBox(width: responsive.displayScaled(8)),
+            _MessageAvatar(
+              messageId: message.localId,
+              label: senderLabel,
+              isMine: true,
+              size: responsive.displayScaled(30),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactBubble(BuildContext context, bool isMine) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final attachment = message.attachment;
+    final isBareImage =
+        attachment != null &&
+        _isInlineImageAttachment(attachment) &&
+        (attachment.caption?.trim().isEmpty ?? true);
+    final textStyle = TextStyle(
+      color: isMine ? theme.onOutgoingMessage : theme.title,
+      fontSize: responsive.displayScaled(15),
+      height: 1.45,
+    );
+    final content = attachment == null
+        ? _MessageTextContent(
+            text: message.content,
+            mentions: message.mentions,
+            payloadJson: message.payloadJson,
+            style: textStyle,
+            renderMarkdown: !isMine,
+          )
+        : _AttachmentContent(
+            message: message,
+            macStyle: false,
+            onDownload: onDownload,
+            onResolveImagePreview: onResolveImagePreview,
+            isDownloading: isDownloading,
+          );
+    final bubble = Column(
+      crossAxisAlignment: isMine
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: <Widget>[
+        if (showSenderLabel) _buildSenderLabel(context, macStyle: false),
+        _withSendingIndicator(
+          context,
+          isMine: isMine,
+          macStyle: false,
+          child: Container(
+            key: Key('chat-message-bubble:${message.localId}'),
+            constraints: BoxConstraints(
+              maxWidth: responsive.displayScaled(300),
+            ),
+            padding: isBareImage
+                ? EdgeInsets.zero
+                : EdgeInsets.symmetric(
+                    horizontal: responsive.displayScaled(13),
+                    vertical: responsive.displayScaled(9),
+                  ),
+            decoration: BoxDecoration(
+              color: isBareImage
+                  ? CupertinoColors.transparent
+                  : attachment != null
+                  ? theme.surface
+                  : isMine
+                  ? theme.outgoingMessage
+                  : theme.incomingMessage,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(
+                  responsive.displayScaled(isMine ? 16 : 4),
+                ),
+                topRight: Radius.circular(
+                  responsive.displayScaled(isMine ? 4 : 16),
+                ),
+                bottomLeft: Radius.circular(responsive.displayScaled(16)),
+                bottomRight: Radius.circular(responsive.displayScaled(16)),
+              ),
+              boxShadow: attachment != null && !isBareImage
+                  ? const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x0D000000),
+                        blurRadius: 2,
+                        offset: Offset(0, 1),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: SelectionArea(child: content),
+          ),
+        ),
+        if (message.sendState == MessageSendState.failed) ...<Widget>[
+          SizedBox(height: responsive.spacing(6)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SelectionArea(
+                child: Text(
+                  context.l10n.chatSendFailed,
+                  style: TextStyle(
+                    fontSize: responsive.metaSm,
+                    color: theme.danger,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-            SizedBox(width: responsive.displayScaled(10)),
-          ],
-          Flexible(
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderContentTopInset(context, macStyle: true)
-                    : 0,
-              ),
-              child: bubble,
-            ),
+              if (onRetry != null) ...<Widget>[
+                SizedBox(width: responsive.spacing(10)),
+                AppPressableText(
+                  key: Key('chat-retry-message:${message.localId}'),
+                  onTap: onRetry,
+                  semanticLabel: context.l10n.chatRetrySend,
+                  child: Text(
+                    context.l10n.commonRetry,
+                    style: TextStyle(
+                      fontSize: responsive.metaSm,
+                      color: theme.primaryDark,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
+        ],
+      ],
+    );
+    return _withE2eMessageSemantics(
+      child: Row(
+        mainAxisAlignment: isMine
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          if (!isMine) ...<Widget>[
+            _withPeerInfoTap(
+              context: context,
+              borderRadius: responsive.displayScaled(16),
+              child: _MessageAvatar(
+                messageId: message.localId,
+                label: senderLabel,
+                avatarUri: senderAvatarUri,
+                isMine: false,
+                size: responsive.displayScaled(32),
+              ),
+            ),
+            SizedBox(width: responsive.spacing(8)),
+          ],
+          Flexible(child: bubble),
+          if (isMine) ...<Widget>[
+            SizedBox(width: responsive.spacing(8)),
+            _MessageAvatar(
+              messageId: message.localId,
+              label: senderLabel,
+              isMine: true,
+              size: responsive.displayScaled(32),
+            ),
+          ],
         ],
       ),
     );
@@ -1143,144 +1328,10 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final textStyle = TextStyle(
-      color: theme.title,
-      fontSize: responsive.bodyMd,
-      height: responsive.isPhone ? 1.5 : 1.4,
-    );
     if (macStyle) {
       return _buildMacBubble(context, isMine);
     }
-    return _withE2eMessageSemantics(
-      child: Row(
-        mainAxisAlignment: isMine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (!isMine) ...<Widget>[
-            Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderLabelOffset(context, macStyle: false)
-                    : 0,
-              ),
-              child: _withPeerInfoTap(
-                context: context,
-                borderRadius: responsive.scaled(14),
-                child: AvatarBadge(
-                  seed: senderLabel,
-                  size: responsive.scaled(28),
-                  avatarUri: senderAvatarUri,
-                ),
-              ),
-            ),
-            SizedBox(width: responsive.spacing(12)),
-          ],
-          Flexible(
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: showSenderLabel
-                    ? _senderContentTopInset(context, macStyle: false)
-                    : 0,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: responsive.isLarge ? 500 : 640,
-                ),
-                child: Column(
-                  crossAxisAlignment: isMine
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  children: <Widget>[
-                    if (showSenderLabel)
-                      _buildSenderLabel(context, macStyle: false),
-                    _withSendingIndicator(
-                      context,
-                      isMine: isMine,
-                      macStyle: false,
-                      child: Container(
-                        padding: responsive.scaledInsets(
-                          const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 16,
-                          ),
-                        ),
-                        decoration: BoxDecoration(
-                          color: isMine
-                              ? AwikiMePalette.actionBlueSoft
-                              : theme.subtleSurface,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(isMine ? 22 : 6),
-                            topRight: Radius.circular(isMine ? 6 : 22),
-                            bottomLeft: const Radius.circular(22),
-                            bottomRight: const Radius.circular(22),
-                          ),
-                        ),
-                        child: SelectionArea(
-                          child: message.attachment == null
-                              ? _MessageTextContent(
-                                  text: message.content,
-                                  mentions: message.mentions,
-                                  payloadJson: message.payloadJson,
-                                  style: textStyle,
-                                  renderMarkdown: !isMine,
-                                )
-                              : _AttachmentContent(
-                                  message: message,
-                                  macStyle: false,
-                                  onDownload: onDownload,
-                                  onResolveImagePreview: onResolveImagePreview,
-                                  isDownloading: isDownloading,
-                                ),
-                        ),
-                      ),
-                    ),
-                    if (message.sendState ==
-                        MessageSendState.failed) ...<Widget>[
-                      SizedBox(height: responsive.spacing(8)),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          SelectionArea(
-                            child: Text(
-                              context.l10n.chatSendFailed,
-                              style: TextStyle(
-                                fontSize: responsive.metaSm,
-                                color: theme.danger,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          if (onRetry != null) ...<Widget>[
-                            SizedBox(width: responsive.spacing(10)),
-                            AppPressableText(
-                              key: Key('chat-retry-message:${message.localId}'),
-                              onTap: onRetry,
-                              semanticLabel: context.l10n.chatRetrySend,
-                              child: Text(
-                                context.l10n.commonRetry,
-                                style: TextStyle(
-                                  fontSize: responsive.metaSm,
-                                  color: theme.primaryDark,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return _buildCompactBubble(context, isMine);
   }
 }
 
@@ -1383,7 +1434,9 @@ class _SendingMessageIndicator extends StatelessWidget {
         child: Center(
           child: CupertinoActivityIndicator(
             radius: radius,
-            color: macStyle ? const Color(0xFF8A96AA) : theme.tertiaryText,
+            color: macStyle
+                ? AwikiMePalette.messagePreview
+                : theme.tertiaryText,
           ),
         ),
       ),
@@ -1484,19 +1537,17 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final theme = context.awikiTheme;
     final caption = attachment.caption?.trim();
     final titleStyle = TextStyle(
-      color: widget.macStyle ? const Color(0xFF17213A) : theme.title,
-      fontSize: widget.macStyle
-          ? responsive.displayScaled(13.5)
-          : responsive.bodyMd,
-      fontWeight: FontWeight.w500,
+      color: widget.macStyle ? AwikiMePalette.inkNeutral : theme.title,
+      fontSize: responsive.displayScaled(13),
+      fontWeight: FontWeight.w600,
       height: 1.25,
     );
     final metaStyle = TextStyle(
-      color: widget.macStyle ? const Color(0xFF66728A) : theme.secondaryText,
-      fontSize: widget.macStyle
-          ? responsive.displayScaled(12)
-          : responsive.metaSm,
-      fontWeight: FontWeight.w500,
+      color: widget.macStyle
+          ? AwikiMePalette.mutedNeutral
+          : theme.secondaryText,
+      fontSize: responsive.displayScaled(11),
+      fontWeight: FontWeight.w400,
       height: 1.25,
     );
     return ConstrainedBox(
@@ -1504,12 +1555,12 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
       constraints: BoxConstraints(
         minWidth: _previewHandle == null
             ? (widget.macStyle
-                  ? responsive.displayScaled(220)
-                  : responsive.scaled(210))
+                  ? responsive.displayScaled(280)
+                  : responsive.displayScaled(240))
             : 0,
         maxWidth: widget.macStyle
             ? responsive.displayScaled(360)
-            : responsive.scaled(420),
+            : responsive.displayScaled(300),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1521,7 +1572,9 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
               mentions: message.mentions,
               payloadJson: message.payloadJson,
               style: TextStyle(
-                color: widget.macStyle ? const Color(0xFF17213A) : theme.title,
+                color: widget.macStyle
+                    ? AwikiMePalette.inkNeutral
+                    : theme.title,
                 fontSize: widget.macStyle
                     ? responsive.displayScaled(14)
                     : responsive.bodyMd,
@@ -1658,10 +1711,10 @@ class _InlineImageEnvelope extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final preferredMaxExtent = macStyle
         ? responsive.displayScaled(320)
-        : responsive.scaled(360);
+        : responsive.displayScaled(300);
     final radius = macStyle
-        ? responsive.displayScaled(9)
-        : responsive.radius(12);
+        ? responsive.displayScaled(12)
+        : responsive.displayScaled(14);
     final intrinsicAspectRatio = dimensions == null
         ? _inlineImageFallbackAspectRatio
         : dimensions!.pixelWidth / dimensions!.pixelHeight;
@@ -1706,7 +1759,7 @@ class _InlineImageEnvelope extends StatelessWidget {
           height: size.height,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(radius),
-            child: ColoredBox(color: const Color(0xFFF1F4F8), child: child),
+            child: ColoredBox(color: AwikiMePalette.mist, child: child),
           ),
         );
       },
@@ -1789,7 +1842,7 @@ class _InlineImageFileFallback extends StatelessWidget {
                 child: Icon(
                   CupertinoIcons.doc_fill,
                   color: macStyle
-                      ? const Color(0xFF0B65F8)
+                      ? AwikiMePalette.brandAccent
                       : context.awikiTheme.primary,
                   size: macStyle
                       ? responsive.displayScaled(20)
@@ -1927,18 +1980,18 @@ class _AttachmentFileCard extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: macStyle
-                ? const Color(0xFFEAF2FF)
+                ? AwikiMePalette.brandAccentSoft
                 : theme.surface.withValues(alpha: 0.72),
             borderRadius: BorderRadius.circular(
               macStyle ? responsive.displayScaled(8) : 10,
             ),
             border: Border.all(
-              color: macStyle ? const Color(0xFFDDE5F0) : theme.border,
+              color: macStyle ? AwikiMePalette.hairline : theme.border,
             ),
           ),
           child: Icon(
             CupertinoIcons.doc_fill,
-            color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
+            color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
             size: macStyle ? responsive.displayScaled(20) : responsive.iconSm,
           ),
         ),
@@ -2352,7 +2405,7 @@ class _AttachmentCaptionDivider extends StatelessWidget {
         key: const Key('chat-attachment-caption-divider'),
         decoration: BoxDecoration(
           color: macStyle
-              ? const Color(0xFFC3CDDB).withValues(alpha: 0.95)
+              ? AwikiMePalette.messagePreview.withValues(alpha: 0.95)
               : theme.secondaryText.withValues(alpha: 0.24),
           borderRadius: BorderRadius.circular(1),
         ),
@@ -2390,13 +2443,13 @@ class _AttachmentActionButton extends StatelessWidget {
       isLoading: isLoading,
       size: size,
       backgroundColor: macStyle ? CupertinoColors.white : theme.surface,
-      borderColor: macStyle ? const Color(0xFFDDE5F0) : theme.border,
+      borderColor: macStyle ? AwikiMePalette.hairline : theme.border,
       borderRadius: BorderRadius.circular(
         macStyle ? responsive.displayScaled(8) : 10,
       ),
       child: Icon(
         CupertinoIcons.eye,
-        color: macStyle ? const Color(0xFF0B65F8) : theme.primary,
+        color: macStyle ? AwikiMePalette.brandAccent : theme.primary,
         size: macStyle ? responsive.displayScaled(17) : responsive.iconSm,
       ),
     );

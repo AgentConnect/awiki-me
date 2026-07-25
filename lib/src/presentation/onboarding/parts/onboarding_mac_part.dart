@@ -9,7 +9,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.emailController,
     required this.handleController,
     required this.onLogin,
-    required this.onImport,
     required this.onRefresh,
     required this.onModeChanged,
     required this.onAuthModeChanged,
@@ -31,7 +30,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
-  final VoidCallback? onImport;
   final VoidCallback? onRefresh;
   final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
@@ -47,133 +45,123 @@ class _MacOnboardingScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF7FAFF),
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[Color(0xFFF8FBFF), Color(0xFFFFFFFF)],
-          ),
-        ),
-        child: Stack(
-          children: <Widget>[
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(painter: _MacOnboardingBackgroundPainter()),
-              ),
-            ),
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final useCompactLayout = constraints.maxWidth < 1080;
-                  final footerReserve = useCompactLayout ? 104.0 : 122.0;
-                  final cardMaxHeight = constraints.maxHeight - footerReserve;
-                  final authCard = _MacAuthCard(
-                    maxHeight: cardMaxHeight < 420 ? 420 : cardMaxHeight,
-                    onboarding: onboarding,
-                    credentials: credentials,
-                    phoneController: phoneController,
-                    otpController: otpController,
-                    emailController: emailController,
-                    handleController: handleController,
-                    onLogin: onLogin,
-                    onImport: onImport,
-                    onRefresh: onRefresh,
-                    onModeChanged: onModeChanged,
-                    onAuthModeChanged: onAuthModeChanged,
-                    onRequestOtp: onRequestOtp,
-                    onRequestEmailActivation: onRequestEmailActivation,
-                    onCheckEmailActivation: onCheckEmailActivation,
-                    onRegisterStepChanged: onRegisterStepChanged,
-                    onSubmitRegister: onSubmitRegister,
-                  );
-                  return SafeArea(
-                    minimum: const EdgeInsets.only(bottom: 88),
-                    child: Padding(
-                      padding: useCompactLayout
-                          ? const EdgeInsets.fromLTRB(28, 24, 28, 12)
-                          : const EdgeInsets.fromLTRB(72, 34, 82, 18),
-                      child: useCompactLayout
-                          ? Center(child: authCard)
-                          : Row(
-                              children: <Widget>[
-                                const Expanded(
-                                  flex: 8,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: _MacOnboardingHero(),
-                                  ),
-                                ),
-                                const SizedBox(width: 64),
-                                Expanded(
-                                  flex: 10,
-                                  child: Align(
-                                    alignment: Alignment.center,
-                                    child: authCard,
-                                  ),
-                                ),
-                              ],
-                            ),
+      backgroundColor: theme.background,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final useCompactLayout = constraints.maxWidth < 1080;
+          final footerReserve = useCompactLayout ? 104.0 : 62.0;
+          final cardMaxHeight = constraints.maxHeight - footerReserve;
+          final authCard = _MacAuthCard(
+            maxHeight: cardMaxHeight < 420 ? 420 : cardMaxHeight,
+            framed: useCompactLayout,
+            showCompactBrand: useCompactLayout,
+            onboarding: onboarding,
+            credentials: credentials,
+            phoneController: phoneController,
+            otpController: otpController,
+            emailController: emailController,
+            handleController: handleController,
+            onLogin: onLogin,
+            onRefresh: onRefresh,
+            onModeChanged: onModeChanged,
+            onAuthModeChanged: onAuthModeChanged,
+            onRequestOtp: onRequestOtp,
+            onRequestEmailActivation: onRequestEmailActivation,
+            onCheckEmailActivation: onCheckEmailActivation,
+            onRegisterStepChanged: onRegisterStepChanged,
+            onSubmitRegister: onSubmitRegister,
+          );
+          if (useCompactLayout) {
+            return DecoratedBox(
+              decoration: BoxDecoration(color: theme.background),
+              child: Stack(
+                children: <Widget>[
+                  Positioned.fill(
+                    child: SafeArea(
+                      minimum: const EdgeInsets.only(bottom: 82),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 12),
+                        child: Center(
+                          key: const Key('onboarding-desktop-compact-layout'),
+                          child: authCard,
+                        ),
+                      ),
                     ),
-                  );
-                },
+                  ),
+                  Positioned(
+                    left: 28,
+                    right: 28,
+                    bottom: 18,
+                    child: SafeArea(
+                      top: false,
+                      minimum: EdgeInsets.zero,
+                      child: _MacOnboardingFooter(
+                        compact: true,
+                        tenant: activeTenant,
+                        localeMode: localeMode,
+                        onLanguagePressed: onLanguagePressed,
+                        onTenantPressed: onTenantPressed,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            Positioned(
-              left: 28,
-              right: 28,
-              bottom: 18,
-              child: SafeArea(
-                top: false,
-                minimum: EdgeInsets.zero,
-                child: _MacOnboardingFooter(
-                  tenant: activeTenant,
-                  localeMode: localeMode,
-                  onLanguagePressed: onLanguagePressed,
-                  onTenantPressed: onTenantPressed,
+            );
+          }
+          return Row(
+            key: const Key('onboarding-expanded-layout'),
+            children: <Widget>[
+              Expanded(
+                flex: 11,
+                child: ColoredBox(
+                  color: theme.background,
+                  child: const SafeArea(
+                    minimum: EdgeInsets.fromLTRB(64, 48, 56, 40),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _MacOnboardingHero(),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+              Container(width: 1, color: theme.border),
+              Expanded(
+                flex: 10,
+                child: ColoredBox(
+                  color: theme.surface,
+                  child: SafeArea(
+                    left: false,
+                    child: Column(
+                      children: <Widget>[
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(52, 36, 52, 24),
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: authCard,
+                            ),
+                          ),
+                        ),
+                        _MacOnboardingFooter(
+                          compact: false,
+                          tenant: activeTenant,
+                          localeMode: localeMode,
+                          onLanguagePressed: onLanguagePressed,
+                          onTenantPressed: onTenantPressed,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
-}
-
-class _MacOnboardingBackgroundPainter extends CustomPainter {
-  const _MacOnboardingBackgroundPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0x0D0B65F8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    final origin = Offset(size.width * 0.62, size.height * 0.44);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: origin,
-        width: size.width * 1.08,
-        height: size.height * 1.32,
-      ),
-      paint,
-    );
-    paint.color = const Color(0x080B65F8);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: origin,
-        width: size.width * 1.32,
-        height: size.height * 1.56,
-      ),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _MacOnboardingHero extends StatelessWidget {
@@ -181,8 +169,8 @@ class _MacOnboardingHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const blue = Color(0xFF0B65F8);
-    const ink = Color(0xFF101B32);
+    const blue = AwikiMePalette.brandAccent;
+    const ink = AwikiMePalette.inkNeutral;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 430),
       child: Column(
@@ -197,10 +185,10 @@ class _MacOnboardingHero extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: CupertinoColors.white,
                   borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: const Color(0xFFE6EDF8)),
+                  border: Border.all(color: AwikiMePalette.hairline),
                   boxShadow: const <BoxShadow>[
                     BoxShadow(
-                      color: Color(0x140B65F8),
+                      color: Color(0x140081D3),
                       blurRadius: 22,
                       offset: Offset(0, 10),
                     ),
@@ -231,7 +219,7 @@ class _MacOnboardingHero extends StatelessWidget {
                   color: ink,
                   fontSize: 36,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: -0.4,
+                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -253,14 +241,14 @@ class _MacOnboardingHero extends StatelessWidget {
               fontSize: 31,
               height: 1.22,
               fontWeight: FontWeight.w600,
-              letterSpacing: -0.25,
+              letterSpacing: 0,
             ),
           ),
           const SizedBox(height: 13),
           Text(
             context.l10n.onboardingMacSubtitle,
             style: const TextStyle(
-              color: Color(0xFF64708A),
+              color: AwikiMePalette.mutedNeutral,
               fontSize: 15,
               height: 1.55,
               fontWeight: FontWeight.w500,
@@ -284,8 +272,6 @@ class _MacOnboardingHero extends StatelessWidget {
             title: context.l10n.onboardingMacFeatureControlTitle,
             subtitle: context.l10n.onboardingMacFeatureControlSubtitle,
           ),
-          const SizedBox(height: 40),
-          const _MacDotGrid(),
         ],
       ),
     );
@@ -309,13 +295,14 @@ class _MacFeatureItem extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Container(
-          width: 44,
-          height: 44,
+          width: 32,
+          height: 32,
           decoration: BoxDecoration(
-            color: const Color(0xFFEFF5FF),
-            borderRadius: BorderRadius.circular(22),
+            color: AwikiMePalette.brandAccentSoft,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AwikiMePalette.hairline),
           ),
-          child: Icon(icon, color: const Color(0xFF0B65F8), size: 22),
+          child: Icon(icon, color: AwikiMePalette.brandAccent, size: 16),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -325,7 +312,7 @@ class _MacFeatureItem extends StatelessWidget {
               Text(
                 title,
                 style: const TextStyle(
-                  color: Color(0xFF17213A),
+                  color: AwikiMePalette.inkNeutral,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -334,7 +321,7 @@ class _MacFeatureItem extends StatelessWidget {
               Text(
                 subtitle,
                 style: const TextStyle(
-                  color: Color(0xFF7B879D),
+                  color: AwikiMePalette.mutedNeutral,
                   fontSize: 12,
                   height: 1.35,
                 ),
@@ -347,36 +334,11 @@ class _MacFeatureItem extends StatelessWidget {
   }
 }
 
-class _MacDotGrid extends StatelessWidget {
-  const _MacDotGrid();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 116,
-      height: 54,
-      child: Wrap(
-        spacing: 13,
-        runSpacing: 10,
-        children: List<Widget>.generate(
-          30,
-          (_) => Container(
-            width: 3,
-            height: 3,
-            decoration: BoxDecoration(
-              color: const Color(0xFFBFD1EA),
-              borderRadius: BorderRadius.circular(99),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _MacAuthCard extends StatelessWidget {
   const _MacAuthCard({
     required this.maxHeight,
+    required this.framed,
+    required this.showCompactBrand,
     required this.onboarding,
     required this.credentials,
     required this.phoneController,
@@ -384,7 +346,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.emailController,
     required this.handleController,
     required this.onLogin,
-    required this.onImport,
     required this.onRefresh,
     required this.onModeChanged,
     required this.onAuthModeChanged,
@@ -396,6 +357,8 @@ class _MacAuthCard extends StatelessWidget {
   });
 
   final double maxHeight;
+  final bool framed;
+  final bool showCompactBrand;
   final OnboardingState onboarding;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
@@ -403,7 +366,6 @@ class _MacAuthCard extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
-  final VoidCallback? onImport;
   final VoidCallback? onRefresh;
   final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
@@ -416,39 +378,41 @@ class _MacAuthCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final usingCredential = onboarding.entryMode == 'login';
+    final theme = context.awikiTheme;
+    final radius = framed ? 8.0 : 0.0;
     return Container(
       key: const Key('onboarding-mac-auth-card'),
       constraints: BoxConstraints(maxWidth: 540, maxHeight: maxHeight),
       decoration: BoxDecoration(
-        color: CupertinoColors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x120B1F3A),
-            blurRadius: 38,
-            offset: Offset(0, 18),
-          ),
-        ],
+        color: theme.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: framed ? Border.all(color: theme.border) : null,
+        boxShadow: framed ? theme.cardShadow : null,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(radius),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(34, 28, 34, 30),
+          padding: framed
+              ? const EdgeInsets.fromLTRB(34, 28, 34, 30)
+              : EdgeInsets.zero,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
+              if (showCompactBrand) ...<Widget>[
+                const _MacCompactBrand(),
+                const SizedBox(height: 20),
+              ],
               Text(
                 usingCredential
                     ? context.l10n.onboardingLogin
                     : context.l10n.onboardingRegister,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF101B32),
-                  fontSize: 25,
+                textAlign: framed ? TextAlign.center : TextAlign.left,
+                style: TextStyle(
+                  color: theme.title,
+                  fontSize: framed ? 25 : 20,
                   height: 1.2,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                  letterSpacing: 0,
                 ),
               ),
               const SizedBox(height: 9),
@@ -456,9 +420,9 @@ class _MacAuthCard extends StatelessWidget {
                 usingCredential
                     ? context.l10n.onboardingCredentialsField
                     : context.l10n.onboardingLoginRegisterHint,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Color(0xFF66728A),
+                textAlign: framed ? TextAlign.center : TextAlign.left,
+                style: TextStyle(
+                  color: theme.secondaryText,
                   fontSize: 13,
                   height: 1.45,
                   fontWeight: FontWeight.w500,
@@ -480,7 +444,6 @@ class _MacAuthCard extends StatelessWidget {
                         key: const ValueKey<String>('mac-login-form'),
                         credentials: credentials,
                         onLogin: onLogin,
-                        onImport: onImport,
                         onRefresh: onRefresh,
                       )
                     : _MacRegisterForm(
@@ -514,6 +477,53 @@ class _MacAuthCard extends StatelessWidget {
   }
 }
 
+class _MacCompactBrand extends StatelessWidget {
+  const _MacCompactBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      key: const Key('onboarding-desktop-compact-brand'),
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        Container(
+          width: 42,
+          height: 42,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: CupertinoColors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AwikiMePalette.hairline),
+          ),
+          child: Image.asset(
+            'assets/branding/awiki-me-logo.png',
+            width: 32,
+            height: 32,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Text(
+              'AW',
+              style: TextStyle(
+                color: AwikiMePalette.brandAccent,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Text(
+          'AWiki',
+          style: TextStyle(
+            color: AwikiMePalette.inkNeutral,
+            fontSize: 19,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MacAuthMethodSelector extends StatelessWidget {
   const _MacAuthMethodSelector({
     required this.onboarding,
@@ -534,9 +544,9 @@ class _MacAuthMethodSelector extends StatelessWidget {
       height: 48,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
+        color: AwikiMeColors.subtleSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFDDE5F0)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         children: <Widget>[
@@ -610,13 +620,13 @@ class _MacAuthMethodButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(9),
           border: Border.all(
             color: selected
-                ? const Color(0xFF7EAAFF)
+                ? AwikiMePalette.brandAccent
                 : CupertinoColors.transparent,
           ),
           boxShadow: selected
               ? const <BoxShadow>[
                   BoxShadow(
-                    color: Color(0x140B65F8),
+                    color: Color(0x140081D3),
                     blurRadius: 10,
                     offset: Offset(0, 3),
                   ),
@@ -630,8 +640,8 @@ class _MacAuthMethodButton extends StatelessWidget {
               icon,
               size: 17,
               color: selected
-                  ? const Color(0xFF0B65F8)
-                  : const Color(0xFF66728A),
+                  ? AwikiMePalette.brandAccent
+                  : AwikiMePalette.mutedNeutral,
             ),
             const SizedBox(width: 7),
             Flexible(
@@ -642,8 +652,8 @@ class _MacAuthMethodButton extends StatelessWidget {
                   maxLines: 1,
                   style: TextStyle(
                     color: selected
-                        ? const Color(0xFF0B65F8)
-                        : const Color(0xFF39445D),
+                        ? AwikiMePalette.brandAccent
+                        : AwikiMePalette.inkNeutral,
                     fontSize: 14,
                     height: 1,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
@@ -663,13 +673,11 @@ class _MacLoginForm extends StatelessWidget {
     super.key,
     required this.credentials,
     required this.onLogin,
-    required this.onImport,
     required this.onRefresh,
   });
 
   final List<SessionIdentity> credentials;
   final Future<void> Function(String credentialName) onLogin;
-  final VoidCallback? onImport;
   final VoidCallback? onRefresh;
 
   @override
@@ -679,24 +687,10 @@ class _MacLoginForm extends StatelessWidget {
       children: <Widget>[
         _MacCredentialPicker(credentials: credentials, onLogin: onLogin),
         const SizedBox(height: 14),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: _MacSecondaryAction(
-                label: context.l10n.onboardingImportCredential,
-                icon: CupertinoIcons.square_arrow_down,
-                onPressed: onImport,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _MacSecondaryAction(
-                label: context.l10n.onboardingRefreshCredentials,
-                icon: CupertinoIcons.arrow_clockwise,
-                onPressed: onRefresh,
-              ),
-            ),
-          ],
+        _MacSecondaryAction(
+          label: context.l10n.onboardingRefreshCredentials,
+          icon: CupertinoIcons.arrow_clockwise,
+          onPressed: onRefresh,
         ),
       ],
     );
@@ -725,7 +719,7 @@ class _MacLocalIdentityShortcut extends StatelessWidget {
               child: Text(
                 context.l10n.onboardingLogin,
                 style: const TextStyle(
-                  color: Color(0xFF7B879D),
+                  color: AwikiMePalette.mutedNeutral,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -755,7 +749,7 @@ class _MacDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(height: 1, color: const Color(0xFFE1E7F0));
+    return Container(height: 1, color: AwikiMePalette.hairline);
   }
 }
 
@@ -782,7 +776,7 @@ class _MacCredentialPicker extends StatelessWidget {
               children: <Widget>[
                 const Icon(
                   CupertinoIcons.person_crop_circle_badge_exclam,
-                  color: Color(0xFF7B879D),
+                  color: AwikiMePalette.mutedNeutral,
                   size: 20,
                 ),
                 const SizedBox(width: 10),
@@ -790,7 +784,7 @@ class _MacCredentialPicker extends StatelessWidget {
                   child: Text(
                     context.l10n.onboardingNoLocalCredentialSaved,
                     style: const TextStyle(
-                      color: Color(0xFF7B879D),
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -855,7 +849,7 @@ class _MacCredentialTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF17213A),
+                      color: AwikiMePalette.inkNeutral,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -866,7 +860,7 @@ class _MacCredentialTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: Color(0xFF7B879D),
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: 12,
                     ),
                   ),
@@ -876,7 +870,7 @@ class _MacCredentialTile extends StatelessWidget {
             Text(
               context.l10n.onboardingLogin,
               style: const TextStyle(
-                color: Color(0xFF0B65F8),
+                color: AwikiMePalette.brandAccent,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -884,7 +878,7 @@ class _MacCredentialTile extends StatelessWidget {
             const SizedBox(width: 7),
             const Icon(
               CupertinoIcons.chevron_right,
-              color: Color(0xFF8EA0B8),
+              color: AwikiMePalette.messagePreview,
               size: 15,
             ),
           ],
@@ -1112,7 +1106,7 @@ class _MacAuthHint extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: Color(0xFF66728A),
+        color: AwikiMePalette.mutedNeutral,
         fontSize: 12,
         height: 1.4,
         fontWeight: FontWeight.w500,
@@ -1156,10 +1150,10 @@ class _MacOutlinedField extends StatelessWidget {
               if (prefix != null) ...<Widget>[
                 prefix!,
                 const SizedBox(width: 12),
-                Container(width: 1, height: 25, color: const Color(0xFFE1E7F0)),
+                Container(width: 1, height: 25, color: AwikiMePalette.hairline),
                 const SizedBox(width: 12),
               ] else if (icon != null) ...<Widget>[
-                Icon(icon, size: 18, color: const Color(0xFF66728A)),
+                Icon(icon, size: 18, color: AwikiMePalette.mutedNeutral),
                 const SizedBox(width: 11),
               ],
               Expanded(
@@ -1171,12 +1165,12 @@ class _MacOutlinedField extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   textAlignVertical: TextAlignVertical.center,
                   style: const TextStyle(
-                    color: Color(0xFF17213A),
+                    color: AwikiMePalette.inkNeutral,
                     fontSize: 14,
                     height: 1.2,
                   ),
                   placeholderStyle: const TextStyle(
-                    color: Color(0xFF8795AA),
+                    color: AwikiMePalette.messagePreview,
                     fontSize: 14,
                     height: 1.2,
                   ),
@@ -1184,7 +1178,7 @@ class _MacOutlinedField extends StatelessWidget {
               ),
               if (suffix != null) ...<Widget>[
                 const SizedBox(width: 10),
-                Container(width: 1, height: 25, color: const Color(0xFFE1E7F0)),
+                Container(width: 1, height: 25, color: AwikiMePalette.hairline),
                 const SizedBox(width: 10),
                 suffix!,
               ],
@@ -1204,7 +1198,7 @@ class _MacPhonePrefix extends StatelessWidget {
     return const Text(
       '+86',
       style: TextStyle(
-        color: Color(0xFF39445D),
+        color: AwikiMePalette.inkNeutral,
         fontSize: 14,
         fontWeight: FontWeight.w500,
       ),
@@ -1222,7 +1216,7 @@ class _MacFieldLabel extends StatelessWidget {
     return Text(
       label,
       style: const TextStyle(
-        color: Color(0xFF27334A),
+        color: AwikiMePalette.inkNeutral,
         fontSize: 13,
         fontWeight: FontWeight.w600,
       ),
@@ -1263,7 +1257,7 @@ class _MacInlineAction extends StatelessWidget {
             label,
             maxLines: 1,
             style: const TextStyle(
-              color: Color(0xFF0B65F8),
+              color: AwikiMePalette.brandAccent,
               fontSize: 13,
               fontWeight: FontWeight.w600,
               height: 1,
@@ -1303,13 +1297,11 @@ class _MacPrimaryAction extends StatelessWidget {
       child: Container(
         height: 48,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: <Color>[Color(0xFF0B65F8), Color(0xFF0752F0)],
-          ),
+          color: AwikiMePalette.brandAccent,
           borderRadius: BorderRadius.circular(9),
           boxShadow: const <BoxShadow>[
             BoxShadow(
-              color: Color(0x220B65F8),
+              color: Color(0x220081D3),
               blurRadius: 16,
               offset: Offset(0, 7),
             ),
@@ -1372,13 +1364,13 @@ class _MacSecondaryAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: CupertinoColors.white,
           borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: const Color(0xFFD5DFEC)),
+          border: Border.all(color: AwikiMePalette.hairline),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             if (icon != null) ...<Widget>[
-              Icon(icon, color: const Color(0xFF39445D), size: 17),
+              Icon(icon, color: AwikiMePalette.inkNeutral, size: 17),
               const SizedBox(width: 7),
             ],
             Flexible(
@@ -1388,7 +1380,7 @@ class _MacSecondaryAction extends StatelessWidget {
                   label,
                   maxLines: 1,
                   style: const TextStyle(
-                    color: Color(0xFF27334A),
+                    color: AwikiMePalette.inkNeutral,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     height: 1,
@@ -1407,18 +1399,20 @@ BoxDecoration _macFieldDecoration() {
   return BoxDecoration(
     color: CupertinoColors.white,
     borderRadius: BorderRadius.circular(10),
-    border: Border.all(color: const Color(0xFFD5DFEC)),
+    border: Border.all(color: AwikiMePalette.hairline),
   );
 }
 
 class _MacOnboardingFooter extends StatelessWidget {
   const _MacOnboardingFooter({
+    required this.compact,
     required this.tenant,
     required this.localeMode,
     required this.onLanguagePressed,
     required this.onTenantPressed,
   });
 
+  final bool compact;
   final AppTenantProfile tenant;
   final AppLocaleMode localeMode;
   final VoidCallback onLanguagePressed;
@@ -1426,13 +1420,16 @@ class _MacOnboardingFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     return Container(
-      height: 62,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+      height: compact ? 62 : 58,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 22 : 20),
       decoration: BoxDecoration(
-        color: CupertinoColors.white.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE1E8F2)),
+        color: compact ? theme.surface.withValues(alpha: 0.96) : theme.surface,
+        borderRadius: BorderRadius.circular(compact ? 8 : 0),
+        border: compact
+            ? Border.all(color: theme.border)
+            : Border(top: BorderSide(color: theme.border)),
       ),
       child: Row(
         children: <Widget>[
@@ -1486,7 +1483,7 @@ class _MacFooterButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, color: const Color(0xFF66728A), size: 18),
+              Icon(icon, color: AwikiMePalette.mutedNeutral, size: 18),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
@@ -1494,7 +1491,7 @@ class _MacFooterButton extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Color(0xFF536078),
+                    color: AwikiMePalette.mutedNeutral,
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1503,7 +1500,7 @@ class _MacFooterButton extends StatelessWidget {
               const SizedBox(width: 7),
               const Icon(
                 CupertinoIcons.chevron_down,
-                color: Color(0xFF8A98AD),
+                color: AwikiMePalette.messagePreview,
                 size: 12,
               ),
             ],

@@ -533,12 +533,17 @@ void main() {
       container
           .read(selectedConversationProvider.notifier)
           .selectConversation(staleSelectedConversation());
-      container.read(shellTabProvider.notifier).setTab(3);
+      container
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.profile);
 
       notificationFacade.emitActivation(const NotificationActivation.invalid());
       await pumpEventQueue();
 
-      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
       expect(container.read(selectedConversationProvider), isNull);
       expect(desktopShell.showWindowCalls, 1);
     });
@@ -560,7 +565,10 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
       expect(container.read(selectedConversationProvider), isNull);
       expect(desktopShell.showWindowCalls, 1);
     });
@@ -570,7 +578,9 @@ void main() {
       container
           .read(selectedConversationProvider.notifier)
           .selectConversation(staleSelectedConversation());
-      container.read(shellTabProvider.notifier).setTab(3);
+      container
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.tasks);
 
       notificationFacade.emitActivation(
         NotificationActivation.valid(
@@ -585,7 +595,10 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
       expect(container.read(selectedConversationProvider), isNull);
       expect(desktopShell.showWindowCalls, 1);
       expect(gateway.fetchLocalDmHistoryCalls, 0);
@@ -618,7 +631,10 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
       expect(
         container.read(selectedConversationProvider),
         conversation.conversationId,
@@ -717,7 +733,10 @@ void main() {
       await pumpEventQueue();
 
       expect(desktopShell.showWindowCalls, 1);
-      expect(container.read(shellTabProvider), 0);
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
       expect(
         container.read(selectedConversationProvider),
         conversation.conversationId,

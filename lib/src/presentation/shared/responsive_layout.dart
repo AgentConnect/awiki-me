@@ -6,68 +6,90 @@ import 'package:flutter/foundation.dart';
 import 'awiki_me_design.dart';
 import 'display_scale.dart';
 
-enum AwikiBreakpoint { phone, large }
+enum AwikiBreakpoint { compact, expanded }
 
 class AwikiResponsiveInfo {
   const AwikiResponsiveInfo({
-    required this.width,
+    required this.size,
     required this.breakpoint,
     this.displayScale = AwikiDisplayScale.normal,
   });
 
-  factory AwikiResponsiveInfo.fromWidth(
-    double width, {
+  factory AwikiResponsiveInfo.fromSize(
+    Size size, {
     double displayScale = AwikiDisplayScale.normal,
   }) {
     return AwikiResponsiveInfo(
-      width: width,
-      breakpoint: AwikiBreakpoints.fromWidth(width),
+      size: size,
+      breakpoint: AwikiBreakpoints.fromSize(size),
       displayScale: AwikiDisplayScale.normalize(displayScale),
     );
   }
 
-  final double width;
+  /// Width-only compatibility factory. A width-only caller is treated as
+  /// having enough height, so only the 720 px boundary applies.
+  factory AwikiResponsiveInfo.fromWidth(
+    double width, {
+    double displayScale = AwikiDisplayScale.normal,
+  }) {
+    return AwikiResponsiveInfo.fromSize(
+      Size(width, AwikiBreakpoints.expandedMinHeight),
+      displayScale: AwikiDisplayScale.normalize(displayScale),
+    );
+  }
+
+  final Size size;
   final AwikiBreakpoint breakpoint;
   final double displayScale;
 
-  bool get isPhone => breakpoint == AwikiBreakpoint.phone;
+  double get width => size.width;
 
-  bool get isLarge => breakpoint == AwikiBreakpoint.large;
+  double get height => size.height;
 
-  bool get isPad => isLarge;
+  bool get isCompact => breakpoint == AwikiBreakpoint.compact;
 
-  bool get isDesktop => isLarge;
+  bool get isExpanded => breakpoint == AwikiBreakpoint.expanded;
 
-  bool get supportsTwoPane => !isPhone;
+  /// Compatibility name for callers that have not migrated to compact yet.
+  bool get isPhone => isCompact;
 
-  bool get usesDesktopLayout =>
-      supportsTwoPane &&
-      (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows);
+  /// Compatibility name for callers that have not migrated to expanded yet.
+  bool get isLarge => isExpanded;
+
+  bool get isPad => isExpanded;
+
+  bool get isDesktop => isExpanded;
+
+  bool get supportsTwoPane => isExpanded;
+
+  /// Compatibility name for the shared expanded layout.
+  ///
+  /// Layout semantics no longer depend on the target platform.
+  bool get usesDesktopLayout => isExpanded;
 
   bool get isMacDesktop =>
-      usesDesktopLayout && defaultTargetPlatform == TargetPlatform.macOS;
+      isExpanded && defaultTargetPlatform == TargetPlatform.macOS;
 
   double get uiScale {
     final baseScale = switch (breakpoint) {
-      AwikiBreakpoint.phone => 1.0,
-      AwikiBreakpoint.large => 0.72,
+      AwikiBreakpoint.compact => 1.0,
+      AwikiBreakpoint.expanded => 0.72,
     };
     return baseScale * displayScale;
   }
 
   double get spacingScale {
     final baseScale = switch (breakpoint) {
-      AwikiBreakpoint.phone => 1.0,
-      AwikiBreakpoint.large => 0.74,
+      AwikiBreakpoint.compact => 1.0,
+      AwikiBreakpoint.expanded => 0.74,
     };
     return baseScale * displayScale;
   }
 
   double get radiusScale {
     final baseScale = switch (breakpoint) {
-      AwikiBreakpoint.phone => 1.0,
-      AwikiBreakpoint.large => 0.78,
+      AwikiBreakpoint.compact => 1.0,
+      AwikiBreakpoint.expanded => 0.78,
     };
     return baseScale * displayScale;
   }
@@ -76,108 +98,108 @@ class AwikiResponsiveInfo {
 
   double get controlHeight {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 50 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 36 * displayScale;
     }
   }
 
   double get compactControlHeight {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 42 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 32 * displayScale;
     }
   }
 
   double get navBarHeight {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 60 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 44 * displayScale;
     }
   }
 
   double get avatarSizeMd {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 44 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 36 * displayScale;
     }
   }
 
   double get titleLg {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 19 * _fontScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 16 * _fontScale;
     }
   }
 
   double get titleXl {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 20 * _fontScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 17 * _fontScale;
     }
   }
 
   double get bodyMd {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 16 * _fontScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 14 * _fontScale;
     }
   }
 
   double get bodySm {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 14 * _fontScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 12.5 * _fontScale;
     }
   }
 
   double get metaSm {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 12 * _fontScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 11.5 * _fontScale;
     }
   }
 
   double get iconSm {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 18 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 15 * displayScale;
     }
   }
 
   double get iconMd {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 23 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 19 * displayScale;
     }
   }
 
   double get iconLg {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 26 * displayScale;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 21 * displayScale;
     }
   }
@@ -201,45 +223,45 @@ class AwikiResponsiveInfo {
 
   double get contentMaxWidth {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return double.infinity;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 1120;
     }
   }
 
   double get formMaxWidth {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return double.infinity;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 420;
     }
   }
 
   EdgeInsets get pagePadding {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return const EdgeInsets.symmetric(horizontal: 16);
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return const EdgeInsets.symmetric(horizontal: 32);
     }
   }
 
   EdgeInsets get tabInnerPadding {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return const EdgeInsets.fromLTRB(22, 0, 22, 0);
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return const EdgeInsets.fromLTRB(18, 18, 18, 0);
     }
   }
 
   double get tabContentHorizontalPadding {
     switch (breakpoint) {
-      case AwikiBreakpoint.phone:
+      case AwikiBreakpoint.compact:
         return 16;
-      case AwikiBreakpoint.large:
+      case AwikiBreakpoint.expanded:
         return 16 * spacingScale;
     }
   }
@@ -248,19 +270,29 @@ class AwikiResponsiveInfo {
 class AwikiBreakpoints {
   const AwikiBreakpoints._();
 
+  static const double expandedMinWidth = 720;
+  static const double expandedMinHeight = 600;
+
+  /// Compatibility boundary for existing width-only callers.
   static const double phoneMaxWidth = 719;
-  static AwikiBreakpoint fromWidth(double width) {
-    if (width < 720) {
-      return AwikiBreakpoint.phone;
+
+  static AwikiBreakpoint fromSize(Size size) {
+    if (size.width < expandedMinWidth || size.height < expandedMinHeight) {
+      return AwikiBreakpoint.compact;
     }
-    return AwikiBreakpoint.large;
+    return AwikiBreakpoint.expanded;
+  }
+
+  /// Compatibility entry point for callers that do not have a height.
+  static AwikiBreakpoint fromWidth(double width) {
+    return fromSize(Size(width, expandedMinHeight));
   }
 }
 
 extension AwikiResponsiveContextX on BuildContext {
   AwikiResponsiveInfo get awikiResponsive {
-    return AwikiResponsiveInfo.fromWidth(
-      MediaQuery.sizeOf(this).width,
+    return AwikiResponsiveInfo.fromSize(
+      MediaQuery.sizeOf(this),
       displayScale: AwikiDisplayScaleScope.of(this),
     );
   }
@@ -313,10 +345,10 @@ class AwikiPaneLayout extends StatefulWidget {
     super.key,
     required this.listPane,
     required this.detailPane,
-    this.listPaneWidth = 340,
+    this.listPaneWidth = 272,
     this.gap = 0,
-    this.minListPaneWidth = 280,
-    this.minDetailPaneWidth = 320,
+    this.minListPaneWidth = 240,
+    this.minDetailPaneWidth = 360,
     this.enableResize = true,
   });
 
@@ -334,21 +366,19 @@ class AwikiPaneLayout extends StatefulWidget {
 
 class _AwikiPaneLayoutState extends State<AwikiPaneLayout> {
   static const double _dividerHitWidth = 12;
-  static double? _sharedListPaneWidth;
 
   late double _listPaneWidth;
 
   @override
   void initState() {
     super.initState();
-    _listPaneWidth = _sharedListPaneWidth ?? widget.listPaneWidth;
+    _listPaneWidth = widget.listPaneWidth;
   }
 
   @override
   void didUpdateWidget(covariant AwikiPaneLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_sharedListPaneWidth == null &&
-        oldWidget.listPaneWidth != widget.listPaneWidth) {
+    if (oldWidget.listPaneWidth != widget.listPaneWidth) {
       _listPaneWidth = widget.listPaneWidth;
     }
   }
@@ -376,7 +406,6 @@ class _AwikiPaneLayoutState extends State<AwikiPaneLayout> {
             }
             setState(() {
               _listPaneWidth = resolvedListPaneWidth;
-              _sharedListPaneWidth = resolvedListPaneWidth;
             });
           });
         }
@@ -394,7 +423,6 @@ class _AwikiPaneLayoutState extends State<AwikiPaneLayout> {
                     setState(() {
                       _listPaneWidth = (_listPaneWidth + details.delta.dx)
                           .clamp(widget.minListPaneWidth, maxListPaneWidth);
-                      _sharedListPaneWidth = _listPaneWidth;
                     });
                   },
                   child: SizedBox(

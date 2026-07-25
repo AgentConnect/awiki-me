@@ -491,7 +491,7 @@ class _AgentTypeSelector extends StatelessWidget {
         Text(
           context.l10n.agentCreateType,
           style: TextStyle(
-            color: const Color(0xFF66728A),
+            color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.metaSm,
             fontWeight: FontWeight.w600,
           ),
@@ -548,7 +548,9 @@ class _RuntimeKindTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final enabled = status.enabled;
-    final accent = enabled ? const Color(0xFF0B65F8) : const Color(0xFF8A96AA);
+    final accent = enabled
+        ? AwikiMePalette.brandAccent
+        : AwikiMePalette.messagePreview;
     return AppPressable(
       onTap: enabled ? onTap : null,
       enabled: enabled,
@@ -557,10 +559,14 @@ class _RuntimeKindTile extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(responsive.spacing(12)),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFD),
+          color: selected
+              ? AwikiMePalette.brandAccentSoft
+              : AwikiMePalette.mist,
           borderRadius: BorderRadius.circular(responsive.radius(10)),
           border: Border.all(
-            color: selected ? const Color(0xFFB8C8E4) : const Color(0xFFDDE5F1),
+            color: selected
+                ? AwikiMePalette.brandAccent
+                : AwikiMePalette.hairline,
           ),
         ),
         child: Row(
@@ -593,8 +599,8 @@ class _RuntimeKindTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: enabled
-                                ? const Color(0xFF17213A)
-                                : const Color(0xFF66728A),
+                                ? AwikiMePalette.inkNeutral
+                                : AwikiMePalette.mutedNeutral,
                             fontSize: responsive.bodyMd,
                             fontWeight: FontWeight.w700,
                           ),
@@ -606,7 +612,7 @@ class _RuntimeKindTile extends StatelessWidget {
                           status.reasonLabel ??
                               context.l10n.agentStatusDisabled,
                           style: TextStyle(
-                            color: const Color(0xFF8A96AA),
+                            color: AwikiMePalette.messagePreview,
                             fontSize: responsive.metaSm,
                             fontWeight: FontWeight.w700,
                           ),
@@ -620,7 +626,7 @@ class _RuntimeKindTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.metaSm,
                       height: 1.25,
                     ),
@@ -755,9 +761,9 @@ class _RuntimePermissionSummary extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(responsive.radius(10)),
-        border: Border.all(color: const Color(0xFFDDE5F1)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -772,7 +778,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
             ),
             child: Icon(
               CupertinoIcons.command,
-              color: const Color(0xFF0B65F8),
+              color: AwikiMePalette.brandAccent,
               size: responsive.iconSm,
             ),
           ),
@@ -784,7 +790,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
                 Text(
                   context.l10n.agentCreateHostAccessTitle,
                   style: TextStyle(
-                    color: const Color(0xFF17213A),
+                    color: AwikiMePalette.inkNeutral,
                     fontSize: responsive.bodyMd,
                     fontWeight: FontWeight.w700,
                   ),
@@ -793,7 +799,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
                 Text(
                   context.l10n.agentCreateHostAccessDescription,
                   style: TextStyle(
-                    color: const Color(0xFF66728A),
+                    color: AwikiMePalette.mutedNeutral,
                     fontSize: responsive.metaSm,
                     height: 1.25,
                   ),
@@ -868,7 +874,7 @@ class _RuntimeOptionSelector extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            color: const Color(0xFF66728A),
+            color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.metaSm,
             fontWeight: FontWeight.w600,
           ),
@@ -917,10 +923,14 @@ class _RuntimeOptionTile extends StatelessWidget {
           vertical: responsive.spacing(9),
         ),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : const Color(0xFFF8FAFD),
+          color: selected
+              ? AwikiMePalette.brandAccentSoft
+              : AwikiMePalette.mist,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
           border: Border.all(
-            color: selected ? const Color(0xFFB8C8E4) : const Color(0xFFDDE5F1),
+            color: selected
+                ? AwikiMePalette.brandAccent
+                : AwikiMePalette.hairline,
           ),
         ),
         child: Row(
@@ -930,8 +940,8 @@ class _RuntimeOptionTile extends StatelessWidget {
                   ? CupertinoIcons.largecircle_fill_circle
                   : CupertinoIcons.circle,
               color: selected
-                  ? const Color(0xFF0B65F8)
-                  : const Color(0xFF98A4B8),
+                  ? AwikiMePalette.brandAccent
+                  : AwikiMePalette.messagePreview,
               size: responsive.iconSm,
             ),
             SizedBox(width: responsive.spacing(9)),
@@ -944,7 +954,7 @@ class _RuntimeOptionTile extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF17213A),
+                      color: AwikiMePalette.inkNeutral,
                       fontSize: responsive.bodySm,
                       fontWeight: FontWeight.w700,
                     ),
@@ -955,7 +965,7 @@ class _RuntimeOptionTile extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.metaSm,
                       height: 1.25,
                     ),
@@ -1003,7 +1013,7 @@ class _AgentDialogField extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: const Color(0xFF66728A),
+            color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.metaSm,
             fontWeight: FontWeight.w600,
           ),
@@ -1020,7 +1030,7 @@ class _AgentDialogField extends StatelessWidget {
                   padding: EdgeInsets.only(left: responsive.spacing(10)),
                   child: DefaultTextStyle(
                     style: TextStyle(
-                      color: const Color(0xFF66728A),
+                      color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.bodyMd,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1032,20 +1042,20 @@ class _AgentDialogField extends StatelessWidget {
             vertical: responsive.spacing(11),
           ),
           decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFD),
+            color: AwikiMePalette.mist,
             borderRadius: BorderRadius.circular(responsive.radius(9)),
             border: Border.all(
               color: hasError
-                  ? const Color(0xFFE14E4E)
-                  : const Color(0xFFDDE5F1),
+                  ? AwikiMePalette.dangerRed
+                  : AwikiMePalette.hairline,
             ),
           ),
           style: TextStyle(
-            color: const Color(0xFF101B32),
+            color: AwikiMePalette.inkNeutral,
             fontSize: responsive.bodyMd,
           ),
           placeholderStyle: TextStyle(
-            color: const Color(0xFF98A4B8),
+            color: AwikiMePalette.messagePreview,
             fontSize: responsive.bodyMd,
           ),
           textInputAction: textInputAction,
@@ -1056,7 +1066,7 @@ class _AgentDialogField extends StatelessWidget {
           Text(
             errorText!,
             style: TextStyle(
-              color: const Color(0xFFE14E4E),
+              color: AwikiMePalette.dangerRed,
               fontSize: responsive.metaSm,
               fontWeight: FontWeight.w600,
             ),
@@ -1109,7 +1119,7 @@ class _HandlePreview extends StatelessWidget {
         vertical: responsive.spacing(9),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F7FC),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
       ),
       child: Column(
@@ -1121,8 +1131,8 @@ class _HandlePreview extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: isValid
-                  ? const Color(0xFF22304A)
-                  : const Color(0xFF66728A),
+                  ? AwikiMePalette.inkNeutral
+                  : AwikiMePalette.mutedNeutral,
               fontSize: responsive.metaSm,
               fontWeight: FontWeight.w600,
             ),
@@ -1178,18 +1188,18 @@ Color _handlePreviewColor({
   required String? fallbackMessage,
 }) {
   if (!isValid || isChecking) {
-    return const Color(0xFF66728A);
+    return AwikiMePalette.mutedNeutral;
   }
   if (availability?.available == true) {
-    return const Color(0xFF1B7F4B);
+    return AwikiMePalette.successGreen;
   }
   if (availability?.available == false) {
-    return const Color(0xFFE14E4E);
+    return AwikiMePalette.dangerRed;
   }
   if (fallbackMessage != null) {
-    return const Color(0xFF66728A);
+    return AwikiMePalette.mutedNeutral;
   }
-  return const Color(0xFF66728A);
+  return AwikiMePalette.mutedNeutral;
 }
 
 class _DialogSecondaryButton extends StatelessWidget {
@@ -1209,15 +1219,15 @@ class _DialogSecondaryButton extends StatelessWidget {
       child: Container(
         constraints: BoxConstraints(minHeight: responsive.controlHeight),
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F7FB),
+          color: AwikiMePalette.mist,
           borderRadius: BorderRadius.circular(responsive.radius(9)),
-          border: Border.all(color: const Color(0xFFE1E7F0)),
+          border: Border.all(color: AwikiMePalette.hairline),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
-            color: const Color(0xFF4B5870),
+            color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.bodyMd,
             fontWeight: FontWeight.w700,
           ),
@@ -1473,12 +1483,12 @@ class _InstallCommandDialogState extends State<_InstallCommandDialog> {
               width: responsive.displayScaled(34),
               height: responsive.displayScaled(34),
               decoration: BoxDecoration(
-                color: const Color(0xFFEAF2FF),
+                color: AwikiMePalette.brandAccentSoft,
                 borderRadius: BorderRadius.circular(responsive.radius(8)),
               ),
               child: Icon(
                 CupertinoIcons.desktopcomputer,
-                color: const Color(0xFF0B65F8),
+                color: AwikiMePalette.brandAccent,
                 size: responsive.iconMd,
               ),
             ),
@@ -1641,16 +1651,16 @@ class _SupportedAgentTypeHint extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(12)),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FAFF),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(responsive.radius(9)),
-        border: Border.all(color: const Color(0xFFE2EAF6)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Icon(
             CupertinoIcons.sparkles,
-            color: const Color(0xFF0B65F8),
+            color: AwikiMePalette.brandAccent,
             size: responsive.iconSm,
           ),
           SizedBox(width: responsive.spacing(8)),
@@ -1658,7 +1668,7 @@ class _SupportedAgentTypeHint extends StatelessWidget {
             child: Text(
               context.l10n.agentInstallSupportedTypes,
               style: const TextStyle(
-                color: Color(0xFF4B5870),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
                 height: 1.35,
                 fontWeight: FontWeight.w500,
@@ -1683,10 +1693,10 @@ class _TokenExpiryRow extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(responsive.spacing(10)),
       decoration: BoxDecoration(
-        color: isExpired ? const Color(0xFFFFF3F3) : const Color(0xFFF7FAFF),
+        color: isExpired ? const Color(0xFFFFF3F3) : AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(responsive.radius(8)),
         border: Border.all(
-          color: isExpired ? const Color(0xFFFFD2D2) : const Color(0xFFE2EAF6),
+          color: isExpired ? const Color(0xFFFFD2D2) : AwikiMePalette.hairline,
         ),
       ),
       child: Row(
@@ -1695,7 +1705,9 @@ class _TokenExpiryRow extends StatelessWidget {
             isExpired
                 ? CupertinoIcons.exclamationmark_circle_fill
                 : CupertinoIcons.clock_fill,
-            color: isExpired ? AwikiMeColors.danger : const Color(0xFF66728A),
+            color: isExpired
+                ? AwikiMeColors.danger
+                : AwikiMePalette.mutedNeutral,
             size: responsive.iconSm,
           ),
           SizedBox(width: responsive.spacing(8)),
@@ -1709,7 +1721,7 @@ class _TokenExpiryRow extends StatelessWidget {
               style: TextStyle(
                 color: isExpired
                     ? AwikiMeColors.danger
-                    : const Color(0xFF4B5870),
+                    : AwikiMePalette.mutedNeutral,
                 fontSize: responsive.metaSm,
                 fontWeight: FontWeight.w600,
               ),

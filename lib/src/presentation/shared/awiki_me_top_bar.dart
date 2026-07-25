@@ -11,8 +11,8 @@ class AwikiMeTopBar extends StatelessWidget {
     required this.title,
     required this.leading,
     this.trailing,
-    this.leadingWidth = 30,
-    this.trailingWidth = 30,
+    this.leadingWidth = 44,
+    this.trailingWidth = 44,
     this.padding = const EdgeInsets.only(bottom: 18),
     this.titleColor,
     this.titleFontSize,
@@ -32,32 +32,55 @@ class AwikiMeTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final titleInset = leadingWidth > trailingWidth
+        ? leadingWidth
+        : trailingWidth;
     return Padding(
       padding: padding,
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            width: leadingWidth,
-            height: responsive.iconLg,
-            child: Center(child: leading),
-          ),
-          Expanded(
-            child: Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AwikiMeTextStyles.navTitle.copyWith(
-                color: titleColor,
-                fontSize: titleFontSize ?? responsive.titleXl,
-                fontWeight: titleFontWeight,
+      child: SizedBox(
+        height: responsive.isPhone ? 52 : 44,
+        child: Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            Positioned.fill(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: titleInset + 8),
+                child: Center(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: AwikiMeTextStyles.navTitle.copyWith(
+                      color: titleColor,
+                      fontSize: titleFontSize ?? responsive.titleXl,
+                      fontWeight: titleFontWeight,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-          SizedBox(
-            width: trailingWidth,
-            height: responsive.iconLg,
-            child: Center(child: trailing ?? const SizedBox.shrink()),
-          ),
-        ],
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: leadingWidth,
+                height: 44,
+                child: Align(alignment: Alignment.centerLeft, child: leading),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                width: trailingWidth,
+                height: 44,
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: trailing ?? const SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -78,8 +101,8 @@ class AwikiMeShellTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    const titleColor = Color(0xFF2B3340);
-    const actionColor = Color(0xFF5F6875);
+    const titleColor = AwikiMePalette.inkNeutral;
+    const actionColor = AwikiMePalette.mutedNeutral;
     return AwikiMeTopBar(
       title: title,
       padding: EdgeInsets.zero,

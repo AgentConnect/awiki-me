@@ -1,28 +1,58 @@
-import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('large 语义尺寸小于 phone', () {
-    final phone = AwikiResponsiveInfo.fromWidth(390);
-    final large = AwikiResponsiveInfo.fromWidth(1280);
+  test('expanded 语义尺寸小于 compact', () {
+    final compact = AwikiResponsiveInfo.fromSize(const Size(390, 844));
+    final expanded = AwikiResponsiveInfo.fromSize(const Size(1280, 800));
 
-    expect(large.uiScale, lessThan(phone.uiScale));
-    expect(large.controlHeight, lessThan(phone.controlHeight));
-    expect(large.compactControlHeight, lessThan(phone.compactControlHeight));
-    expect(large.navBarHeight, lessThan(phone.navBarHeight));
-    expect(large.avatarSizeMd, lessThan(phone.avatarSizeMd));
-    expect(large.titleLg, lessThan(phone.titleLg));
-    expect(large.bodyMd, lessThan(phone.bodyMd));
-    expect(large.metaSm, lessThan(phone.metaSm));
+    expect(expanded.uiScale, lessThan(compact.uiScale));
+    expect(expanded.controlHeight, lessThan(compact.controlHeight));
+    expect(
+      expanded.compactControlHeight,
+      lessThan(compact.compactControlHeight),
+    );
+    expect(expanded.navBarHeight, lessThan(compact.navBarHeight));
+    expect(expanded.avatarSizeMd, lessThan(compact.avatarSizeMd));
+    expect(expanded.titleLg, lessThan(compact.titleLg));
+    expect(expanded.bodyMd, lessThan(compact.bodyMd));
+    expect(expanded.metaSm, lessThan(compact.metaSm));
+  });
+
+  test('compact 和 expanded 精确遵守宽高边界', () {
+    expect(
+      AwikiResponsiveInfo.fromSize(const Size(719, 600)).breakpoint,
+      AwikiBreakpoint.compact,
+    );
+    expect(
+      AwikiResponsiveInfo.fromSize(const Size(720, 599)).breakpoint,
+      AwikiBreakpoint.compact,
+    );
+    expect(
+      AwikiResponsiveInfo.fromSize(const Size(719, 599)).breakpoint,
+      AwikiBreakpoint.compact,
+    );
+    expect(
+      AwikiResponsiveInfo.fromSize(const Size(720, 600)).breakpoint,
+      AwikiBreakpoint.expanded,
+    );
+  });
+
+  test('width-only 兼容入口按足够高度处理', () {
+    expect(AwikiResponsiveInfo.fromWidth(719).isCompact, isTrue);
+    expect(AwikiResponsiveInfo.fromWidth(720).isExpanded, isTrue);
   });
 
   test('显示缩放会同步影响语义尺寸', () {
-    final normal = AwikiResponsiveInfo.fromWidth(390);
-    final larger = AwikiResponsiveInfo.fromWidth(390, displayScale: 1.12);
+    final normal = AwikiResponsiveInfo.fromSize(const Size(390, 844));
+    final larger = AwikiResponsiveInfo.fromSize(
+      const Size(390, 844),
+      displayScale: 1.12,
+    );
 
     expect(larger.displayScale, 1.12);
     expect(larger.controlHeight, greaterThan(normal.controlHeight));
@@ -34,30 +64,55 @@ void main() {
   });
 
   test('显示缩放范围会被限制', () {
-    final small = AwikiResponsiveInfo.fromWidth(390, displayScale: 0.1);
-    final large = AwikiResponsiveInfo.fromWidth(390, displayScale: 2);
+    final small = AwikiResponsiveInfo.fromSize(
+      const Size(390, 844),
+      displayScale: 0.1,
+    );
+    final large = AwikiResponsiveInfo.fromSize(
+      const Size(390, 844),
+      displayScale: 2,
+    );
 
     expect(small.displayScale, AwikiDisplayScale.min);
     expect(large.displayScale, AwikiDisplayScale.max);
   });
 
-  test('宽屏原生桌面布局只覆盖 macOS 和 Windows', () {
+  test('expanded 布局语义在所有平台一致', () {
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final responsive = AwikiResponsiveInfo.fromWidth(1280);
+    final responsive = AwikiResponsiveInfo.fromSize(const Size(1280, 800));
 
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    expect(responsive.usesDesktopLayout, isTrue);
-    expect(responsive.isMacDesktop, isTrue);
+    for (final platform in TargetPlatform.values) {
+      debugDefaultTargetPlatformOverride = platform;
+      expect(responsive.isExpanded, isTrue, reason: '$platform');
+      expect(responsive.supportsTwoPane, isTrue, reason: '$platform');
+      expect(responsive.usesDesktopLayout, isTrue, reason: '$platform');
+      expect(
+        responsive.isMacDesktop,
+        platform == TargetPlatform.macOS,
+        reason: '$platform',
+      );
+    }
+  });
 
-    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
-    expect(responsive.usesDesktopLayout, isTrue);
-    expect(responsive.isMacDesktop, isFalse);
+  testWidgets('BuildContext 同时使用 MediaQuery 宽度和高度', (tester) async {
+    AwikiResponsiveInfo? responsive;
 
-    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-    expect(responsive.usesDesktopLayout, isFalse);
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(900, 599)),
+          child: Builder(
+            builder: (context) {
+              responsive = context.awikiResponsive;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      ),
+    );
 
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    expect(responsive.usesDesktopLayout, isFalse);
+    expect(responsive?.size, const Size(900, 599));
+    expect(responsive?.isCompact, isTrue);
   });
 
   testWidgets('AwikiPaneLayout 支持拖动调整左栏宽度', (tester) async {
@@ -92,5 +147,63 @@ void main() {
     final after = tester.getSize(find.byKey(const Key('left-pane'))).width;
 
     expect(after, greaterThan(before));
+  });
+
+  testWidgets('多个 AwikiPaneLayout 各自保存列表栏宽度', (tester) async {
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) {
+            return CupertinoPageScaffold(
+              backgroundColor: context.awikiTheme.background,
+              child: const Column(
+                children: <Widget>[
+                  Expanded(
+                    child: AwikiPaneLayout(
+                      listPane: ColoredBox(
+                        key: Key('first-left-pane'),
+                        color: Color(0xFFFFFFFF),
+                      ),
+                      detailPane: ColoredBox(color: Color(0xFFEEEEEE)),
+                    ),
+                  ),
+                  Expanded(
+                    child: AwikiPaneLayout(
+                      listPane: ColoredBox(
+                        key: Key('second-left-pane'),
+                        color: Color(0xFFFFFFFF),
+                      ),
+                      detailPane: ColoredBox(color: Color(0xFFEEEEEE)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final firstBefore = tester
+        .getSize(find.byKey(const Key('first-left-pane')))
+        .width;
+    final secondBefore = tester
+        .getSize(find.byKey(const Key('second-left-pane')))
+        .width;
+    await tester.drag(
+      find.byKey(const Key('awiki-pane-divider')).first,
+      const Offset(80, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const Key('first-left-pane'))).width,
+      greaterThan(firstBefore),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('second-left-pane'))).width,
+      secondBefore,
+    );
   });
 }

@@ -176,6 +176,12 @@ abstract class AppLocalizations {
   /// **'重试'**
   String get commonRetry;
 
+  /// No description provided for @commonRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新'**
+  String get commonRefresh;
+
   /// No description provided for @commonClose.
   ///
   /// In zh, this message translates to:
@@ -1223,7 +1229,7 @@ abstract class AppLocalizations {
   /// No description provided for @friendsTitle.
   ///
   /// In zh, this message translates to:
-  /// **'朋友'**
+  /// **'联系人'**
   String get friendsTitle;
 
   /// No description provided for @friendsGroups.

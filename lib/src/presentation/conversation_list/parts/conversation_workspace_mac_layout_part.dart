@@ -16,61 +16,26 @@ class _MacConversationWorkspace extends StatelessWidget {
     final responsive = context.awikiResponsive;
     return DecoratedBox(
       decoration: const BoxDecoration(color: CupertinoColors.white),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final availableWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth
-              : 1200.0;
-
-          return AwikiPaneLayout(
-            listPaneWidth: responsive.displayScaled(
-              _listPaneWidth(availableWidth),
-            ),
-            minListPaneWidth: responsive.displayScaled(
-              _minListPaneWidth(availableWidth),
-            ),
-            minDetailPaneWidth: responsive.displayScaled(
-              _minDetailPaneWidth(availableWidth),
-            ),
-            listPane: SizedBox(
-              key: const Key('mac-conversation-list-pane'),
-              child: ConversationListPage(
-                embedded: true,
-                macStyle: true,
-                selectedConversationId: selectedConversation?.conversationId,
-                bottomInset: 18,
-                onConversationSelected: onConversationSelected,
-              ),
-            ),
-            detailPane: _MacConversationDetailArea(
-              selectedConversation: selectedConversation,
-              onClearSelection: onClearSelection,
-            ),
-          );
-        },
+      child: AwikiPaneLayout(
+        listPaneWidth: responsive.displayScaled(272),
+        minListPaneWidth: responsive.displayScaled(240),
+        minDetailPaneWidth: responsive.displayScaled(360),
+        listPane: SizedBox(
+          key: const Key('mac-conversation-list-pane'),
+          child: ConversationListPage(
+            embedded: true,
+            macStyle: true,
+            selectedConversationId: selectedConversation?.conversationId,
+            bottomInset: 18,
+            onConversationSelected: onConversationSelected,
+          ),
+        ),
+        detailPane: _MacConversationDetailArea(
+          selectedConversation: selectedConversation,
+          onClearSelection: onClearSelection,
+        ),
       ),
     );
-  }
-
-  double _listPaneWidth(double availableWidth) {
-    if (availableWidth < 560) {
-      return 220;
-    }
-    if (availableWidth < 760) {
-      return 260;
-    }
-    if (availableWidth < 980) {
-      return 300;
-    }
-    return 340;
-  }
-
-  double _minListPaneWidth(double availableWidth) {
-    return availableWidth < 700 ? 220 : 240;
-  }
-
-  double _minDetailPaneWidth(double availableWidth) {
-    return availableWidth < 760 ? 320 : 360;
   }
 }
 
@@ -261,7 +226,7 @@ class _MacSidePanelDivider extends StatelessWidget {
             child: SizedBox(
               width: 1,
               child: DecoratedBox(
-                decoration: BoxDecoration(color: Color(0xFFE5EAF2)),
+                decoration: BoxDecoration(color: AwikiMePalette.hairline),
               ),
             ),
           ),

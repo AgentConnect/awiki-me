@@ -78,9 +78,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
     final errorText =
         _submittedError ?? _softValidateAgentDisplayName(context, value);
     final canSubmit = _validateAgentDisplayName(context, value) == null;
-    final fieldBorderColor = errorText == null
-        ? const Color(0xFFE4E9F2)
-        : const Color(0xFFD84A4A);
+    final fieldBorderColor = errorText == null ? theme.border : theme.danger;
     return AppDialogScaffold(
       maxWidth: 420,
       maxHeightFraction: 0.9,
@@ -121,7 +119,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
               vertical: responsive.spacing(11),
             ),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFD),
+              color: theme.subtleSurface,
               borderRadius: BorderRadius.circular(responsive.radius(9)),
               border: Border.all(color: fieldBorderColor),
             ),
@@ -151,7 +149,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
                     errorText,
                     key: const ValueKey<String>('agent-rename-error'),
                     style: TextStyle(
-                      color: const Color(0xFFD84A4A),
+                      color: theme.danger,
                       fontSize: responsive.metaSm,
                       height: 1.3,
                     ),

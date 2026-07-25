@@ -8,15 +8,12 @@ import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
-import '../shared/responsive_layout.dart';
 
 Future<void> openGroupChat(
   BuildContext context,
   WidgetRef ref,
-  GroupSummary group, {
-  bool closeCurrentRouteOnDesktop = false,
-  bool replaceCurrentRouteOnPhone = false,
-}) async {
+  GroupSummary group,
+) async {
   final conversation = await ref
       .read(conversationListProvider.notifier)
       .commitConversationId(group.conversationId);
@@ -25,29 +22,20 @@ Future<void> openGroupChat(
     return;
   }
 
-  if (context.awikiResponsive.supportsTwoPane) {
-    ref
-        .read(selectedConversationProvider.notifier)
-        .selectConversation(conversation);
-    ref.read(shellTabProvider.notifier).setTab(0);
-    final navigator = Navigator.of(context);
-    if (closeCurrentRouteOnDesktop && navigator.canPop()) {
-      navigator.popUntil((route) => route.isFirst);
-    } else if (closeCurrentRouteOnDesktop) {
-      await AppNavigator.pushReplacement<void, void>(
-        context,
-        (_) => ChatPage(conversation: conversation),
-      );
-    }
-    return;
-  }
-
-  if (replaceCurrentRouteOnPhone) {
-    await AppNavigator.pushReplacement<void, void>(
+  if (!AwikiShellNavigationScope.isPresent(context)) {
+    await AppNavigator.push(
       context,
       (_) => ChatPage(conversation: conversation),
     );
     return;
   }
-  await AppNavigator.push(context, (_) => ChatPage(conversation: conversation));
+
+  ref
+      .read(selectedConversationProvider.notifier)
+      .selectConversation(conversation);
+  ref.read(shellDestinationProvider.notifier).select(ShellDestination.messages);
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.popUntil((route) => route.isFirst);
+  }
 }

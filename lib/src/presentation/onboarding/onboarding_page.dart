@@ -1,24 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/tenant/app_tenant.dart';
-import '../../data/tenant/app_tenant_store.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
-import '../shared/app_dialog.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'onboarding_provider.dart';
 
@@ -115,10 +112,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!runtime.isInitialized && credentials.isEmpty) {
       return;
     }
-    if (context.awikiResponsive.usesDesktopLayout) {
-      ref.read(onboardingProvider.notifier).setEntryMode('register');
-      return;
-    }
     ref
         .read(onboardingProvider.notifier)
         .setEntryModeFromLocalCredentials(credentials);
@@ -138,11 +131,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final automaticEntryMode = responsive.usesDesktopLayout
-        ? 'register'
-        : credentials.isEmpty
-        ? 'register'
-        : 'login';
+    final automaticEntryMode = credentials.isEmpty ? 'register' : 'login';
     if (_autoEntryModeEnabled && onboarding.entryMode != automaticEntryMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -159,7 +148,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         emailController: emailController,
         handleController: handleController,
         onLogin: runtime.loginWithLocalCredential,
-        onImport: runtime.importCredentialArchive,
         onRefresh: runtime.refreshLocalCredentials,
         onModeChanged: _setEntryModeManually,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
@@ -180,84 +168,46 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       backgroundColor: theme.background,
       child: AwikiAdaptiveScaffold(
         alignment: responsive.isPhone ? Alignment.topCenter : Alignment.center,
-        maxWidth: responsive.formMaxWidth,
         includeBottomSafeArea: true,
+        maxWidth: 440,
         padding: EdgeInsets.fromLTRB(
-          responsive.isPhone ? 24 : 0,
-          responsive.isPhone ? 40 : 32,
-          responsive.isPhone ? 24 : 0,
-          24,
+          responsive.spacing(18),
+          responsive.spacing(20),
+          responsive.spacing(18),
+          responsive.spacing(20),
         ),
         child: ListView(
           controller: _mobileScrollController,
           children: <Widget>[
-            SizedBox(height: responsive.spacing(responsive.isPhone ? 20 : 8)),
-            Center(
-              child: Container(
-                width: responsive.scaled(126),
-                height: responsive.scaled(126),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(
-                    responsive.radius(responsive.isPhone ? 28 : 24),
-                  ),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x160B65F8),
-                      blurRadius: 28,
-                      offset: Offset(0, 12),
-                    ),
-                  ],
-                ),
-                child: Image.asset(
-                  'assets/branding/awiki-me-logo.png',
-                  width: responsive.scaled(92),
-                  height: responsive.scaled(92),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Text(
-                    '@_',
-                    style: TextStyle(
-                      fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
-                      fontWeight: FontWeight.w600,
-                      color: AwikiMePalette.actionBlue,
-                      height: 1,
-                    ),
-                  ),
-                ),
+            _CompactOnboardingCard(
+              entryMode: onboarding.entryMode,
+              onModeChanged: _setEntryModeManually,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: onboarding.entryMode == 'login'
+                    ? <Widget>[
+                        _LocalCredentialsCard(
+                          credentials: credentials,
+                          onLogin: runtime.loginWithLocalCredential,
+                          embedded: true,
+                        ),
+                        SizedBox(height: responsive.spacing(14)),
+                        _LoginToolRow(
+                          refreshLabel:
+                              context.l10n.onboardingRefreshCredentials,
+                          onRefresh: runtime.refreshLocalCredentials,
+                          embedded: true,
+                        ),
+                      ]
+                    : _buildMobileRegisterWidgets(
+                        context: context,
+                        onboarding: onboarding,
+                        responsive: responsive,
+                        theme: theme,
+                      ),
               ),
             ),
-            SizedBox(height: responsive.spacing(responsive.isPhone ? 34 : 30)),
-            _SegmentedPill(
-              value: onboarding.entryMode,
-              options: <String, String>{
-                'register': context.l10n.onboardingRegister,
-                'login': context.l10n.onboardingLogin,
-              },
-              onChanged: _setEntryModeManually,
-            ),
-            SizedBox(height: responsive.spacing(24)),
-            if (onboarding.entryMode == 'login') ...<Widget>[
-              _LocalCredentialsCard(
-                credentials: credentials,
-                onLogin: runtime.loginWithLocalCredential,
-              ),
-              SizedBox(height: responsive.spacing(16)),
-              _LoginToolRow(
-                importLabel: context.l10n.onboardingImportCredential,
-                refreshLabel: context.l10n.onboardingRefreshCredentials,
-                onImport: runtime.importCredentialArchive,
-                onRefresh: runtime.refreshLocalCredentials,
-              ),
-            ] else ...<Widget>[
-              ..._buildMobileRegisterWidgets(
-                context: context,
-                onboarding: onboarding,
-                responsive: responsive,
-                theme: theme,
-              ),
-            ],
-            SizedBox(height: responsive.spacing(56)),
+            SizedBox(height: responsive.spacing(20)),
             Align(
               alignment: Alignment.centerRight,
               child: _OnboardingUtilityBar(
@@ -517,11 +467,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   }
 
   Future<void> _showTenantManagementDialog() async {
-    await showCupertinoDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (_) => const _TenantManagementDialog(),
-    );
+    await showTenantManagementDialog(context);
   }
 
   Future<void> _submitRegister(BuildContext context) async {

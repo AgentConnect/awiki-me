@@ -29,14 +29,40 @@ class ConversationWorkspacePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
-    if (!responsive.supportsTwoPane) {
-      return const ConversationListPage();
-    }
-
     final selectedConversation = _selectedConversation(
       ref.watch(selectedConversationProvider),
       ref.watch(conversationListProvider).conversations,
     );
+    if (!responsive.supportsTwoPane) {
+      return Navigator(
+        pages: <Page<void>>[
+          CupertinoPage<void>(
+            key: const ValueKey<String>('conversation-directory'),
+            child: ConversationListPage(
+              selectedConversationId: selectedConversation?.conversationId,
+              onConversationSelected: (conversation) async {
+                ref
+                    .read(selectedConversationProvider.notifier)
+                    .selectConversation(conversation);
+              },
+            ),
+          ),
+          if (selectedConversation != null)
+            CupertinoPage<void>(
+              key: ValueKey<String>(
+                'conversation-chat:${selectedConversation.conversationId}',
+              ),
+              child: ChatPage(conversation: selectedConversation),
+            ),
+        ],
+        onDidRemovePage: (page) {
+          if (page.key != const ValueKey<String>('conversation-directory')) {
+            ref.read(selectedConversationProvider.notifier).clearSelection();
+          }
+        },
+      );
+    }
+
     if (responsive.usesDesktopLayout) {
       return _MacConversationWorkspace(
         selectedConversation: selectedConversation,

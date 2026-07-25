@@ -16,6 +16,7 @@ import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/peer_agent_identity.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/navigation_provider.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../agents/agents_provider.dart';
@@ -128,10 +129,19 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
       title: context.l10n.conversationsTitle,
       onSettingsTap: responsive.usesDesktopLayout
           ? null
-          : () => AppNavigator.pushWithoutAnimation(
-              context,
-              (_) => const SettingsPage(),
-            ),
+          : () {
+              if (AwikiShellNavigationScope.isPresent(context)) {
+                ref
+                    .read(shellDestinationProvider.notifier)
+                    .select(ShellDestination.settings);
+                return;
+              }
+              AppNavigator.pushWithoutAnimation(
+                context,
+                (_) => const SettingsPage(),
+                rootNavigator: true,
+              );
+            },
       onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
       child: _ConversationRefreshView(
         conversations: state.conversations,
@@ -257,6 +267,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
   Widget build(BuildContext context) {
     final buildWatch = Stopwatch()..start();
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final visibleConversations = _filterConversations(context);
     final hasQuery = _query.trim().isNotEmpty;
     buildWatch.stop();
@@ -272,16 +283,16 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
       level: AwikiPerformanceLogLevel.verbose,
     );
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFF8FAFD)),
+      decoration: BoxDecoration(color: theme.background),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Padding(
             padding: EdgeInsets.fromLTRB(
-              responsive.displayScaled(20),
-              responsive.displayScaled(22),
-              responsive.displayScaled(20),
               responsive.displayScaled(12),
+              responsive.displayScaled(10),
+              responsive.displayScaled(12),
+              responsive.displayScaled(4),
             ),
             child: Row(
               children: <Widget>[
@@ -289,9 +300,9 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                   child: Text(
                     context.l10n.conversationsRecentTitle,
                     style: TextStyle(
-                      color: const Color(0xFF101B32),
-                      fontSize: responsive.displayScaled(16),
-                      fontWeight: FontWeight.w400,
+                      color: theme.title,
+                      fontSize: responsive.displayScaled(15),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -301,7 +312,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                   icon: CupertinoIcons.ellipsis,
                   onTap: widget.onShowActions,
                 ),
-                SizedBox(width: responsive.displayScaled(10)),
+                SizedBox(width: responsive.displayScaled(4)),
                 _MacListIconButton(
                   key: const Key('start-conversation-button'),
                   semanticLabel: context.l10n.quickActionStartConversation,
@@ -313,48 +324,51 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
           ),
           Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(20),
+              horizontal: responsive.displayScaled(12),
             ),
-            child: CupertinoSearchTextField(
-              key: const Key('conversation-search-field'),
-              placeholder: context.l10n.conversationsSearchPlaceholder,
-              onChanged: (value) {
-                setState(() {
-                  _query = value;
-                });
-              },
-              style: TextStyle(
-                fontSize: responsive.displayScaled(13),
-                color: const Color(0xFF17213A),
-              ),
-              placeholderStyle: TextStyle(
-                fontSize: responsive.displayScaled(13),
-                color: const Color(0xFF8A96AA),
-              ),
-              prefixIcon: Icon(
-                CupertinoIcons.search,
-                color: const Color(0xFF34415C),
-                size: responsive.displayScaled(18),
-              ),
-              suffixIcon: Icon(
-                CupertinoIcons.xmark_circle_fill,
-                color: const Color(0xFFB3BDCD),
-                size: responsive.displayScaled(16),
-              ),
-              decoration: BoxDecoration(
-                color: CupertinoColors.white,
-                borderRadius: BorderRadius.circular(
-                  responsive.displayScaled(9),
+            child: SizedBox(
+              height: responsive.displayScaled(32),
+              child: CupertinoSearchTextField(
+                key: const Key('conversation-search-field'),
+                placeholder: context.l10n.conversationsSearchPlaceholder,
+                onChanged: (value) {
+                  setState(() {
+                    _query = value;
+                  });
+                },
+                style: TextStyle(
+                  fontSize: responsive.displayScaled(13),
+                  color: theme.title,
                 ),
-                border: Border.all(color: const Color(0xFFDDE5F0)),
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: responsive.displayScaled(10),
-                vertical: responsive.displayScaled(9),
+                placeholderStyle: TextStyle(
+                  fontSize: responsive.displayScaled(13),
+                  color: theme.tertiaryText,
+                ),
+                prefixIcon: Icon(
+                  CupertinoIcons.search,
+                  color: theme.secondaryText,
+                  size: responsive.displayScaled(15),
+                ),
+                suffixIcon: Icon(
+                  CupertinoIcons.xmark_circle_fill,
+                  color: theme.tertiaryText,
+                  size: responsive.displayScaled(14),
+                ),
+                decoration: BoxDecoration(
+                  color: theme.surface,
+                  borderRadius: BorderRadius.circular(
+                    responsive.displayScaled(8),
+                  ),
+                  border: Border.all(color: theme.border),
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: responsive.displayScaled(10),
+                  vertical: responsive.displayScaled(6),
+                ),
               ),
             ),
           ),
-          SizedBox(height: responsive.displayScaled(12)),
+          SizedBox(height: responsive.displayScaled(8)),
           Expanded(
             child: CustomScrollView(
               slivers: <Widget>[
@@ -388,9 +402,9 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                 else
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
-                      responsive.displayScaled(12),
-                      0,
-                      responsive.displayScaled(12),
+                      responsive.displayScaled(6),
+                      responsive.displayScaled(2),
+                      responsive.displayScaled(6),
                       responsive.displayScaled(widget.bottomInset),
                     ),
                     sliver: SliverList.builder(
@@ -425,6 +439,7 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                             item,
                           ),
                           preview: preview,
+                          unreadCount: item.unreadCount,
                           timeLabel: item.lastMessagePreview.trim().isEmpty
                               ? ''
                               : DateTimeFormatter.conversationTime(
@@ -645,7 +660,6 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final responsive = context.awikiResponsive;
     return CustomScrollView(
       slivers: <Widget>[
         CupertinoSliverRefreshControl(onRefresh: onRefresh),
@@ -683,10 +697,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
           )
         else
           SliverPadding(
-            padding: EdgeInsets.only(
-              top: responsive.spacing(6),
-              bottom: bottomInset,
-            ),
+            padding: EdgeInsets.only(bottom: bottomInset),
             sliver: SliverList.builder(
               itemCount: visibleConversations.length,
               itemBuilder: (_, index) {
@@ -716,6 +727,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   ),
                   avatarUri: _conversationPresentationAvatarUri(ref, item),
                   preview: preview,
+                  unreadCount: item.unreadCount,
                   timeLabel: item.lastMessagePreview.trim().isEmpty
                       ? ''
                       : DateTimeFormatter.conversationTime(item.lastMessageAt),
@@ -752,46 +764,44 @@ class _CompactConversationSearchField extends StatelessWidget {
     final theme = context.awikiTheme;
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        responsive.tabContentHorizontalPadding,
-        responsive.spacing(6),
-        responsive.tabContentHorizontalPadding,
+        responsive.spacing(12),
         responsive.spacing(8),
+        responsive.spacing(12),
+        responsive.spacing(10),
       ),
-      child: CupertinoSearchTextField(
-        key: const Key('conversation-search-field'),
-        controller: controller,
-        placeholder: context.l10n.conversationsSearchPlaceholder,
-        onChanged: onChanged,
-        style: TextStyle(fontSize: responsive.bodySm, color: theme.title),
-        placeholderStyle: TextStyle(
-          fontSize: responsive.bodySm,
-          color: theme.tertiaryText,
-        ),
-        prefixIcon: Icon(
-          CupertinoIcons.search,
-          color: theme.secondaryText,
-          size: responsive.iconSm,
-        ),
-        suffixIcon: Icon(
-          CupertinoIcons.xmark_circle_fill,
-          color: theme.tertiaryText,
-          size: responsive.iconSm,
-        ),
-        decoration: BoxDecoration(
-          color: theme.surface,
-          borderRadius: BorderRadius.circular(responsive.radius(12)),
-          border: Border.all(color: theme.border),
-          boxShadow: const <BoxShadow>[
-            BoxShadow(
-              color: Color(0x08000000),
-              blurRadius: 14,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: responsive.spacing(11),
-          vertical: responsive.spacing(10),
+      child: SizedBox(
+        height: responsive.displayScaled(36),
+        child: CupertinoSearchTextField(
+          key: const Key('conversation-search-field'),
+          controller: controller,
+          placeholder: context.l10n.conversationsSearchPlaceholder,
+          onChanged: onChanged,
+          style: TextStyle(
+            fontSize: responsive.displayScaled(15),
+            color: theme.title,
+          ),
+          placeholderStyle: TextStyle(
+            fontSize: responsive.displayScaled(15),
+            color: theme.tertiaryText,
+          ),
+          prefixIcon: Icon(
+            CupertinoIcons.search,
+            color: theme.secondaryText,
+            size: responsive.iconSm,
+          ),
+          suffixIcon: Icon(
+            CupertinoIcons.xmark_circle_fill,
+            color: theme.tertiaryText,
+            size: responsive.iconSm,
+          ),
+          decoration: BoxDecoration(
+            color: theme.subtleSurface,
+            borderRadius: BorderRadius.circular(responsive.radius(10)),
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(10),
+            vertical: responsive.spacing(7),
+          ),
         ),
       ),
     );
@@ -813,18 +823,19 @@ class _MacListIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     return AppIconButton(
       onPressed: onTap,
       semanticLabel: semanticLabel,
       tooltip: semanticLabel,
-      size: responsive.displayScaled(32),
-      backgroundColor: CupertinoColors.white,
-      borderColor: const Color(0xFFE5EAF2),
-      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
+      size: responsive.displayScaled(24),
+      backgroundColor: theme.surface,
+      borderColor: theme.border,
+      borderRadius: BorderRadius.circular(999),
       child: Icon(
         icon,
-        color: const Color(0xFF34415C),
-        size: responsive.displayScaled(19),
+        color: theme.secondaryText,
+        size: responsive.displayScaled(13),
       ),
     );
   }
@@ -837,6 +848,7 @@ class _MacConversationRow extends StatelessWidget {
     required this.title,
     required this.avatarUri,
     required this.preview,
+    required this.unreadCount,
     required this.timeLabel,
     required this.isDeletedAgentConversation,
     required this.classification,
@@ -850,6 +862,7 @@ class _MacConversationRow extends StatelessWidget {
   final String title;
   final String? avatarUri;
   final _ConversationPreviewPresentation preview;
+  final int unreadCount;
   final String timeLabel;
   final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
@@ -861,6 +874,7 @@ class _MacConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final badgeLabel = localizeConversationCompactBadge(
       context.l10n,
       classification,
@@ -868,111 +882,108 @@ class _MacConversationRow extends StatelessWidget {
     return _ConversationContextMenuRegion(
       onDelete: onDelete,
       child: Padding(
-        padding: EdgeInsets.only(bottom: responsive.displayScaled(6)),
+        padding: EdgeInsets.only(bottom: responsive.displayScaled(2)),
         child: AppPressableTile(
           onTap: onTap,
           selected: isSelected,
           semanticLabel: title,
           borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
-          backgroundColor: CupertinoColors.white,
-          selectedBackgroundColor: const Color(0xFFE8F0FF),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFFCFE0FF)
-                : const Color(0x00FFFFFF),
+          backgroundColor: CupertinoColors.transparent,
+          selectedBackgroundColor: theme.surface,
+          border: Border.all(color: CupertinoColors.transparent),
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.displayScaled(10),
+            vertical: responsive.displayScaled(9),
           ),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            padding: EdgeInsets.all(responsive.displayScaled(10)),
-            child: Row(
-              children: <Widget>[
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    AvatarBadge(
-                      seed: title,
-                      size: responsive.displayScaled(42),
-                      avatarUri: avatarUri,
+          child: Row(
+            children: <Widget>[
+              Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  AvatarBadge(
+                    seed: title,
+                    size: responsive.displayScaled(38),
+                    avatarUri: avatarUri,
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: responsive.displayScaled(-5),
+                      top: responsive.displayScaled(-5),
+                      child: _ConversationUnreadBadge(count: unreadCount),
                     ),
-                    if (badgeLabel != null)
-                      Positioned(
-                        right: responsive.displayScaled(-2),
-                        bottom: responsive.displayScaled(-2),
-                        child: _ConversationPeerBadge(
-                          label: badgeLabel,
-                          isGroup: classification.isGroup,
-                          muted: isDeletedAgentConversation,
-                          compact: true,
-                          borderColor: CupertinoColors.white,
-                        ),
+                  if (agentStatus != null)
+                    Positioned(
+                      right: responsive.displayScaled(-1),
+                      bottom: responsive.displayScaled(-1),
+                      child: AgentStatusDot(
+                        status: agentStatus!,
+                        size: responsive.displayScaled(8),
                       ),
+                    ),
+                ],
+              ),
+              SizedBox(width: responsive.displayScaled(10)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: KeyedSubtree(
+                            key: Key('conversation-row-title:$conversationId'),
+                            child: _ConversationTitleStatusLine(
+                              title: title,
+                              isDeletedAgentConversation:
+                                  isDeletedAgentConversation,
+                              compact: true,
+                              titleStyle: TextStyle(
+                                color: theme.title,
+                                fontSize: responsive.displayScaled(13.5),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (badgeLabel != null) ...<Widget>[
+                          SizedBox(width: responsive.displayScaled(4)),
+                          _ConversationPeerBadge(
+                            label: badgeLabel,
+                            isGroup: classification.isGroup,
+                            muted: isDeletedAgentConversation,
+                            compact: true,
+                          ),
+                        ],
+                        SizedBox(width: responsive.displayScaled(6)),
+                        KeyedSubtree(
+                          key: const Key('conversation-row-right-meta'),
+                          child: Text(
+                            timeLabel,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: theme.tertiaryText,
+                              fontSize: responsive.displayScaled(11),
+                              fontFeatures: const <FontFeature>[
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: responsive.displayScaled(1)),
+                    KeyedSubtree(
+                      key: Key('conversation-row-preview:$conversationId'),
+                      child: _ConversationPreviewLine(
+                        presentation: preview,
+                        compact: true,
+                        emptyText: context.l10n.conversationsNoMessagePreview,
+                      ),
+                    ),
                   ],
                 ),
-                SizedBox(width: responsive.displayScaled(10)),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: KeyedSubtree(
-                              key: Key(
-                                'conversation-row-title:$conversationId',
-                              ),
-                              child: _ConversationTitleStatusLine(
-                                title: title,
-                                isDeletedAgentConversation:
-                                    isDeletedAgentConversation,
-                                compact: true,
-                                titleStyle: TextStyle(
-                                  color: const Color(0xFF17213A),
-                                  fontSize: responsive.displayScaled(13.5),
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: responsive.displayScaled(5)),
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: KeyedSubtree(
-                              key: Key(
-                                'conversation-row-preview:$conversationId',
-                              ),
-                              child: _ConversationPreviewLine(
-                                presentation: preview,
-                                compact: true,
-                                emptyText:
-                                    context.l10n.conversationsNoMessagePreview,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (agentStatus != null) ...<Widget>[
-                  SizedBox(width: responsive.displayScaled(7)),
-                  AgentStatusDot(
-                    status: agentStatus!,
-                    size: responsive.displayScaled(8),
-                  ),
-                ],
-                SizedBox(width: responsive.displayScaled(8)),
-                Text(
-                  timeLabel,
-                  style: TextStyle(
-                    color: const Color(0xFF66728A),
-                    fontSize: responsive.displayScaled(10.5),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -999,7 +1010,7 @@ class _MacConversationEmptyState extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: const Color(0xFF7B879D),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: responsive.displayScaled(14),
               ),
             ),
@@ -1009,7 +1020,7 @@ class _MacConversationEmptyState extends StatelessWidget {
                 subtitle!,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: const Color(0xFF9AA5B8),
+                  color: AwikiMePalette.messagePreview,
                   fontSize: responsive.displayScaled(12),
                 ),
               ),
@@ -1028,6 +1039,7 @@ class _ConversationRow extends StatelessWidget {
     required this.title,
     required this.avatarUri,
     required this.preview,
+    required this.unreadCount,
     required this.timeLabel,
     required this.isDeletedAgentConversation,
     required this.classification,
@@ -1041,6 +1053,7 @@ class _ConversationRow extends StatelessWidget {
   final String title;
   final String? avatarUri;
   final _ConversationPreviewPresentation preview;
+  final int unreadCount;
   final String timeLabel;
   final bool isDeletedAgentConversation;
   final ConversationPeerClassification classification;
@@ -1057,22 +1070,21 @@ class _ConversationRow extends StatelessWidget {
       context.l10n,
       classification,
     );
-    return Padding(
+    return AppPressableTile(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      selected: isSelected,
+      semanticLabel: title,
+      borderRadius: BorderRadius.zero,
+      backgroundColor: theme.surface,
+      selectedBackgroundColor: theme.subtleSurface,
+      border: Border(bottom: BorderSide(color: theme.border)),
       padding: EdgeInsets.symmetric(
-        horizontal: responsive.tabContentHorizontalPadding,
+        horizontal: responsive.spacing(14),
+        vertical: responsive.spacing(11.5),
       ),
-      child: AppPressableTile(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        selected: isSelected,
-        semanticLabel: title,
-        borderRadius: BorderRadius.circular(responsive.radius(18)),
-        backgroundColor: CupertinoColors.transparent,
-        selectedBackgroundColor: theme.subtleSurface,
-        border: Border(bottom: BorderSide(color: theme.border)),
-        padding: responsive.scaledInsets(
-          const EdgeInsets.fromLTRB(10, 14, 14, 14),
-        ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: responsive.displayScaled(44)),
         child: Row(
           children: <Widget>[
             Stack(
@@ -1080,25 +1092,30 @@ class _ConversationRow extends StatelessWidget {
               children: <Widget>[
                 AvatarBadge(
                   seed: title,
-                  size: responsive.avatarSizeMd,
+                  size: responsive.displayScaled(44),
                   avatarUri: avatarUri,
                 ),
-                if (badgeLabel != null)
+                if (unreadCount > 0)
                   Positioned(
-                    right: responsive.displayScaled(-2),
-                    bottom: responsive.displayScaled(-2),
-                    child: _ConversationPeerBadge(
-                      label: badgeLabel,
-                      isGroup: classification.isGroup,
-                      compact: true,
-                      borderColor: CupertinoColors.white,
+                    right: responsive.displayScaled(-5),
+                    top: responsive.displayScaled(-5),
+                    child: _ConversationUnreadBadge(count: unreadCount),
+                  ),
+                if (agentStatus != null)
+                  Positioned(
+                    right: responsive.displayScaled(-1),
+                    bottom: responsive.displayScaled(-1),
+                    child: AgentStatusDot(
+                      status: agentStatus!,
+                      size: responsive.displayScaled(9),
                     ),
                   ),
               ],
             ),
-            SizedBox(width: responsive.spacing(14)),
+            SizedBox(width: responsive.spacing(12)),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Row(
@@ -1112,74 +1129,53 @@ class _ConversationRow extends StatelessWidget {
                                 isDeletedAgentConversation,
                             compact: false,
                             titleStyle: TextStyle(
-                              fontSize: responsive.bodyMd,
-                              fontWeight: FontWeight.w400,
+                              fontSize: responsive.displayScaled(15.5),
+                              fontWeight: FontWeight.w500,
                               color: theme.title,
+                              height: 1.25,
                             ),
+                          ),
+                        ),
+                      ),
+                      if (badgeLabel != null) ...<Widget>[
+                        SizedBox(width: responsive.spacing(5)),
+                        _ConversationPeerBadge(
+                          label: badgeLabel,
+                          isGroup: classification.isGroup,
+                          muted: isDeletedAgentConversation,
+                          compact: true,
+                        ),
+                      ],
+                      SizedBox(width: responsive.spacing(8)),
+                      KeyedSubtree(
+                        key: const Key('conversation-row-right-meta'),
+                        child: Text(
+                          timeLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: theme.tertiaryText,
+                            fontSize: responsive.displayScaled(11.5),
+                            fontFeatures: const <FontFeature>[
+                              FontFeature.tabularFigures(),
+                            ],
                           ),
                         ),
                       ),
                     ],
                   ),
-                  SizedBox(height: responsive.spacing(4)),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: KeyedSubtree(
-                          key: Key('conversation-row-preview:$conversationId'),
-                          child: _ConversationPreviewLine(
-                            presentation: preview,
-                            compact: false,
-                            emptyText:
-                                context.l10n.conversationsNoMessagePreview,
-                          ),
-                        ),
-                      ),
-                    ],
+                  SizedBox(height: responsive.spacing(2)),
+                  KeyedSubtree(
+                    key: Key('conversation-row-preview:$conversationId'),
+                    child: _ConversationPreviewLine(
+                      presentation: preview,
+                      compact: false,
+                      emptyText: context.l10n.conversationsNoMessagePreview,
+                    ),
                   ),
                 ],
-              ),
-            ),
-            SizedBox(width: responsive.spacing(8)),
-            Padding(
-              key: const Key('conversation-row-right-meta'),
-              padding: EdgeInsets.only(right: responsive.scaled(2)),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minWidth: responsive.scaled(58),
-                  maxWidth: responsive.scaled(90),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(
-                      timeLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      softWrap: false,
-                      textAlign: TextAlign.right,
-                      style: AwikiMeTextStyles.meta.copyWith(
-                        fontSize: responsive.metaSm,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    if (agentStatus != null) ...<Widget>[
-                      SizedBox(height: responsive.spacing(7)),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: <Widget>[
-                          if (agentStatus != null)
-                            AgentStatusDot(
-                              status: agentStatus!,
-                              size: responsive.scaled(8),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
               ),
             ),
           ],
@@ -1433,16 +1429,6 @@ _ConversationPreviewPresentation _conversationPreviewPresentation(
         );
   final draft = _draftForConversation(conversation, drafts);
   final tags = <_ConversationPreviewTag>[];
-  if (conversation.unreadCount > 0) {
-    tags.add(
-      _ConversationPreviewTag(
-        text: l10n.conversationsUnreadTag(
-          _conversationCountLabel(conversation.unreadCount),
-        ),
-        tone: _ConversationPreviewTagTone.unread,
-      ),
-    );
-  }
   if (conversation.hasUnreadMention) {
     tags.add(
       _ConversationPreviewTag(
@@ -1508,8 +1494,6 @@ ChatComposerDraft _draftForConversation(
   return drafts[conversation.conversationId] ?? const ChatComposerDraft();
 }
 
-String _conversationCountLabel(int count) => count > 999 ? '999+' : '$count';
-
 class _ConversationPreviewPresentation {
   const _ConversationPreviewPresentation({
     required this.text,
@@ -1520,7 +1504,7 @@ class _ConversationPreviewPresentation {
   final List<_ConversationPreviewTag> tags;
 }
 
-enum _ConversationPreviewTagTone { unread, mention, draft }
+enum _ConversationPreviewTagTone { mention, draft }
 
 class _ConversationPreviewTag {
   const _ConversationPreviewTag({required this.text, required this.tone});
@@ -1561,11 +1545,11 @@ class _ConversationPreviewLine extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: compact ? const Color(0xFF66728A) : theme.secondaryText,
+              color: theme.tertiaryText,
               fontSize: compact
-                  ? responsive.displayScaled(11.5)
-                  : responsive.bodySm,
-              height: compact ? 1.25 : 1.2,
+                  ? responsive.displayScaled(12.5)
+                  : responsive.displayScaled(13.5),
+              height: 1.25,
             ),
           ),
         ),
@@ -1619,18 +1603,58 @@ class _ConversationPreviewTagBadge extends StatelessWidget {
   }
 }
 
+class _ConversationUnreadBadge extends StatelessWidget {
+  const _ConversationUnreadBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      key: const Key('conversation-row-unread-badge'),
+      constraints: BoxConstraints(
+        minWidth: responsive.displayScaled(18),
+        minHeight: responsive.displayScaled(18),
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.displayScaled(label.length > 2 ? 4 : 5),
+      ),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: context.awikiTheme.unread,
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x24000000),
+            blurRadius: 2,
+            offset: Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: TextStyle(
+          color: context.awikiTheme.surface,
+          fontSize: responsive.displayScaled(10.5),
+          fontWeight: FontWeight.w600,
+          height: 1,
+          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
 ({Color background, Color border, Color foreground})
 _conversationPreviewTagPalette(_ConversationPreviewTagTone tone) {
   return switch (tone) {
-    _ConversationPreviewTagTone.unread => (
-      background: const Color(0xFFEAF2FF),
-      border: const Color(0xFFCFE0FF),
-      foreground: const Color(0xFF0B65F8),
-    ),
     _ConversationPreviewTagTone.mention => (
       background: const Color(0xFFFFECEB),
       border: const Color(0xFFFFD6D3),
-      foreground: const Color(0xFFC22A22),
+      foreground: AwikiMePalette.dangerRed,
     ),
     _ConversationPreviewTagTone.draft => (
       background: const Color(0xFFFFF4E5),
@@ -1682,28 +1706,26 @@ class _ConversationPeerBadge extends StatelessWidget {
     required this.isGroup,
     this.muted = false,
     this.compact = false,
-    this.borderColor,
   });
 
   final String label;
   final bool isGroup;
   final bool muted;
   final bool compact;
-  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final background = muted
-        ? const Color(0xFFF1F3F7)
+        ? AwikiMePalette.mist
         : isGroup
         ? const Color(0xFFEFE4FF)
-        : const Color(0xFFEAF2FF);
+        : AwikiMePalette.brandAccentSoft;
     final foreground = muted
-        ? const Color(0xFF66728A)
+        ? AwikiMePalette.mutedNeutral
         : isGroup
         ? const Color(0xFF7C3AED)
-        : const Color(0xFF0B65F8);
+        : AwikiMePalette.brandAccent;
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: responsive.displayScaled(compact ? 5 : 7),
@@ -1714,7 +1736,6 @@ class _ConversationPeerBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(
           responsive.displayScaled(compact ? 5 : 999),
         ),
-        border: borderColor == null ? null : Border.all(color: borderColor!),
       ),
       child: Text(
         label,
@@ -1746,16 +1767,16 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
         vertical: responsive.displayScaled(compact ? 2 : 3),
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F3F7),
+        color: AwikiMePalette.mist,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE1E7F0)),
+        border: Border.all(color: AwikiMePalette.hairline),
       ),
       child: Text(
         context.l10n.conversationsDeletedAgentBadge,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: const Color(0xFF66728A),
+          color: AwikiMePalette.mutedNeutral,
           fontSize: responsive.displayScaled(compact ? 10 : 10.5),
           fontWeight: FontWeight.w600,
           height: 1,
@@ -1784,7 +1805,7 @@ class _ConversationLoadErrorState extends StatelessWidget {
               key: const Key('conversation-list-load-error'),
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: const Color(0xFF66728A),
+                color: AwikiMePalette.mutedNeutral,
                 fontSize: responsive.displayScaled(13),
               ),
             ),
