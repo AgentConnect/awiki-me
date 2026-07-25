@@ -54,7 +54,7 @@ const String _runConfigPath =
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _phoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
 const String _otpCommandEnv = 'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
-const String _genesisPurpose = 'awiki.device.genesis.v1';
+const String _registrationPurpose = 'awiki.identity.register.v1';
 const String _joinPurpose = 'awiki.device.join.v1';
 const Duration _remoteTimeout = Duration(seconds: 30);
 
@@ -99,7 +99,7 @@ void main() {
         client: httpClient,
         config: config,
         account: account,
-        purpose: _genesisPurpose,
+        purpose: _registrationPurpose,
         handle: handle,
       );
       final did = await cli.registerReadyAdmin(
@@ -339,7 +339,7 @@ void main() {
         client: httpClient,
         config: config,
         account: account,
-        purpose: _genesisPurpose,
+        purpose: _registrationPurpose,
         handle: handle,
       );
       final IdentityRegistrationResult registration;
