@@ -430,7 +430,8 @@ class _DesktopAppRobot {
       );
       final members = await container
           .read(groupApplicationServiceProvider)
-          .listMembers(groupDid, limit: 100);
+          .listMembers(groupDid, limit: 100)
+          .then((page) => page.items);
       final session = container.read(sessionProvider).session;
       final candidates = ChatMentionCandidate.forGroupMembers(
         members,
@@ -1099,6 +1100,7 @@ class _DesktopAppRobot {
   );
 
   Future<ConversationSummary> createGroup(String name) async {
+    final appContainer = container;
     await navigateToContacts();
     await pumpUntilFinder(
       find.byKey(const Key('friends-groups-row')),
@@ -1124,14 +1126,53 @@ class _DesktopAppRobot {
       find.byKey(const Key('create-group-name-input')),
       name,
     );
+    final feedbackBefore = appContainer.read(uiFeedbackProvider)?.id;
     await tapOne(
       find.byKey(const Key('create-group-submit-button')),
       description: 'create group submit button',
     );
-    await pumpUntilFinder(
-      find.bySemanticsIdentifier('e2e-chat-input'),
+    await pumpUntilObservation(
       description: 'new group chat composer',
       timeout: const Duration(seconds: 90),
+      observe: () {
+        final composers = find
+            .bySemanticsIdentifier('e2e-chat-input')
+            .evaluate()
+            .length;
+        if (composers == 1) {
+          return const E2eObservation.pass();
+        }
+        if (composers > 1) {
+          return const E2eObservation.fatal(
+            'group_create_composer_not_exact_one',
+          );
+        }
+        final feedback = appContainer.read(uiFeedbackProvider);
+        if (feedback != null &&
+            feedback.danger &&
+            feedback.id != feedbackBefore) {
+          final detail = (feedback.detail ?? feedback.message.detail ?? '')
+              .toLowerCase();
+          final coreCode = RegExp(
+            r'awikiimcoreexception\(([a-z0-9_]+)\)',
+          ).firstMatch(detail)?.group(1);
+          final detailKind = detail.contains('database is locked')
+              ? 'database_locked'
+              : detail.contains('constraint failed')
+              ? 'constraint'
+              : detail.contains('localstateunavailable') ||
+                    detail.contains('local state')
+              ? 'local_state'
+              : detail.contains('identityvault') ||
+                    detail.contains('identity vault')
+              ? 'identity_vault'
+              : coreCode ?? (detail.isEmpty ? 'no_detail' : 'other');
+          return E2eObservation.fatal(
+            'group_create_feedback_${feedback.message.id}_$detailKind',
+          );
+        }
+        return const E2eObservation.pending('group_create_composer_pending');
+      },
     );
     final selected = selectedConversation;
     if (!selected.isGroup || (selected.groupId?.trim().isEmpty ?? true)) {

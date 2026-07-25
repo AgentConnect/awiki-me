@@ -16,6 +16,7 @@ import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
@@ -377,6 +378,7 @@ void runPersonalAgentRealBackendE2e() {
 
         final session = await _prepareRealAppIdentity(
           bootstrap.onboardingService!,
+          bootstrap.onboardingSupportService!,
           config,
         );
         await ProviderScope.containerOf(tester.element(find.byType(AppShell)))
@@ -590,8 +592,15 @@ AppBootstrap _copyBootstrapForPersonalAgentUiTest(
 
 Future<AppSession> _prepareRealAppIdentity(
   OnboardingService onboarding,
+  OnboardingSupportService onboardingSupport,
   _PersonalAgentRealBackendConfig config,
 ) async {
+  await onboardingSupport.sendRegistrationOtp(
+    phone: config.otpPhone,
+    handle: config.appHandle,
+    domain: config.environment.didDomain,
+    fullHandle: '${config.appHandle}.${config.environment.didDomain}',
+  );
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,

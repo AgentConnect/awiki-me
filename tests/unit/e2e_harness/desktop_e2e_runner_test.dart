@@ -1376,13 +1376,13 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ <redacted> --format json id recover --handle cli-from-file --phone <redacted> --otp <redacted>',
+          r'$ <redacted> --format json id register --handle cli-from-file --phone <redacted> --otp <redacted>',
         ),
       );
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -1629,7 +1629,8 @@ cliPeer:
           'check file: <redacted>',
           r'$ <redacted> --format json init',
           r'$ <redacted> --format json config show',
-          r'$ <redacted> --format json id recover --handle e2e-cli --phone <redacted> --otp <redacted>',
+          r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted>',
+          r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted> --otp <redacted>',
           r'$ <redacted> --format json id current',
           r'$ <redacted> --format json id status',
           r'$ <redacted> --format json msg inbox --limit 1',
@@ -1638,7 +1639,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_smoke_test.dart -d linux',
+          r'$ xvfb-run -a flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d linux',
         ),
       );
       expect(log, contains('would write Flutter E2E run config: <redacted>'));
@@ -2799,7 +2800,7 @@ performance:
       expect(
         log,
         contains(
-          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> integration_test/desktop_cli_peer_smoke_test.dart -d macos',
+          r'$ flutter test --dart-define=AWIKI_E2E=true --dart-define=AWIKI_E2E_APP_STATE_ROOT=<redacted> --dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true integration_test/desktop_cli_peer_smoke_test.dart -d macos',
         ),
       );
       expect(log, isNot(contains(r'$ xvfb-run')));
@@ -3179,7 +3180,7 @@ performance:
 class _FailingFlutterCommandRunner extends DesktopCommandRunner {
   _FailingFlutterCommandRunner({required super.root})
     : super(
-        dryRun: false,
+        dryRun: true,
         redactor: DesktopSecretRedactor(const <String>[
           'test-phone-secret',
           'test-otp-secret',

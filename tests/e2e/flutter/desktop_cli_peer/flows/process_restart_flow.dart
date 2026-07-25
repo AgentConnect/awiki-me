@@ -27,6 +27,7 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     });
     final session = await _prepareAppIdentity(
       bootstrap.onboardingService!,
+      bootstrap.onboardingSupportService!,
       config,
     );
     await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));

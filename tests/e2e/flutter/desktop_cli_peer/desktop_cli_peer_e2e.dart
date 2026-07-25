@@ -23,6 +23,7 @@ import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
@@ -193,7 +194,11 @@ void runDesktopCliPeerE2e({
       appCreateWatch.stop();
       final preparedSession = selectedCase.runsPerformance
           ? null
-          : await _prepareAppIdentity(bootstrap.onboardingService!, config);
+          : await _prepareAppIdentity(
+              bootstrap.onboardingService!,
+              bootstrap.onboardingSupportService!,
+              config,
+            );
       final countingConversations = config.e2eCase.runsPerformance
           ? _CountingConversationService(bootstrap.conversationService!)
           : null;
@@ -561,8 +566,15 @@ Future<void> _attestPassedCases(Map<String, List<String>> cases) async {
 
 Future<AppSession> _prepareAppIdentity(
   OnboardingService onboarding,
+  OnboardingSupportService onboardingSupport,
   _DesktopCliPeerSmokeConfig config,
 ) async {
+  await onboardingSupport.sendRegistrationOtp(
+    phone: config.otpPhone,
+    handle: config.appHandle,
+    domain: config.environment.didDomain,
+    fullHandle: '${config.appHandle}.${config.environment.didDomain}',
+  );
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
@@ -611,6 +623,7 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
   try {
     final session = await _prepareAppIdentity(
       bootstrap.onboardingService!,
+      bootstrap.onboardingSupportService!,
       config,
     );
     final datasetWatch = Stopwatch()..start();

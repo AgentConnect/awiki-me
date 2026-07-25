@@ -745,6 +745,12 @@ class DesktopE2eRunner {
     await _timed('Preparing CLI workspace', _prepareCliWorkspace);
     await _timed('Preparing CLI identity', _prepareCliIdentity);
     await _timed('Checking CLI ready state', _checkCliReady);
+    if (peerConfig.e2eCase != DesktopE2eCase.performance) {
+      await _timed(
+        'Waiting for App registration OTP window',
+        _waitForAppRegistrationOtpWindow,
+      );
+    }
     if (peerConfig.e2eCase == DesktopE2eCase.performance) {
       await _timed(
         'Preparing performance App identity',
@@ -759,6 +765,7 @@ class DesktopE2eRunner {
     }
     await _writeFlutterRunConfig(peerConfig);
     await _timed('Flutter App + CLI peer flow', _planFlutterDesktopSmoke);
+    await _timed('Checking App identity ready state', _checkAppIdentityReady);
     if (!options.dryRun && peerConfig.e2eCase == DesktopE2eCase.performance) {
       _productTimingReport = _readProductTimingReport();
       _performanceBudgetResult = DesktopPerformanceBudgetResult.evaluate(
@@ -893,11 +900,21 @@ class DesktopE2eRunner {
 
   Future<void> _prepareCliIdentity() async {
     final peerConfig = _requireConfig();
-    final recover = await _cli(<String>[
+    await _cli(<String>[
       '--format',
       'json',
       'id',
-      'recover',
+      'register',
+      '--handle',
+      peerConfig.cliHandle,
+      '--phone',
+      peerConfig.otpPhone,
+    ]);
+    final register = await _cli(<String>[
+      '--format',
+      'json',
+      'id',
+      'register',
       '--handle',
       peerConfig.cliHandle,
       '--phone',
@@ -905,30 +922,12 @@ class DesktopE2eRunner {
       '--otp',
       peerConfig.otpCode,
     ], allowFailure: true);
-    if (recover.exitCode != 0 && !options.dryRun) {
-      if (!_looksRecoverableForRegister(recover.output)) {
-        throw E2eFailure(
-          'CLI peer recover failed and did not look like a missing-handle error: '
-          '${redactor.redact(recover.output)}',
-        );
-      }
-      final register = await _cli(<String>[
-        '--format',
-        'json',
-        'id',
-        'register',
-        '--handle',
-        peerConfig.cliHandle,
-        '--phone',
-        peerConfig.otpPhone,
-        '--otp',
-        peerConfig.otpCode,
-      ], allowFailure: true);
-      if (register.exitCode != 0) {
-        throw E2eFailure(
-          'CLI peer register failed: ${redactor.redact(register.output)}',
-        );
-      }
+    if (register.exitCode != 0 && !options.dryRun) {
+      throw E2eFailure(
+        'CLI peer register failed: ${redactor.redact(register.output)}',
+      );
+    }
+    if (!options.dryRun) {
       _resourceSideEffectsPossible = true;
     }
 
@@ -944,6 +943,15 @@ class DesktopE2eRunner {
       ]);
       _resourceSideEffectsPossible = true;
     }
+  }
+
+  Future<void> _waitForAppRegistrationOtpWindow() async {
+    if (options.dryRun || commands.dryRun) {
+      return;
+    }
+    // CLI and App use the same dedicated E2E phone. The remote registration
+    // endpoint rate-limits OTP sends per phone for 60 seconds.
+    await Future<void>.delayed(const Duration(seconds: 61));
   }
 
   Future<void> _checkCliReady() async {
@@ -992,6 +1000,32 @@ class DesktopE2eRunner {
       '--handle',
       peerConfig.cliHandle,
     ]);
+    final currentDid = _cliDidFromJson(current.output, current: true);
+    final cliDid = _cliDidFromJson(cliResolved.output);
+    final cliMatches = currentDid == cliDid;
+    _identityPreflight = <String, Object?>{
+      'status': cliMatches ? 'cli_ready' : 'failed',
+      'cliHandleMatchesCurrent': cliMatches,
+      'appHandleResolvable': false,
+      'identitiesDistinct': false,
+      'containsRawDids': false,
+    };
+    if (!cliMatches) {
+      throw E2eFailure('CLI peer identity mismatch.');
+    }
+  }
+
+  Future<void> _checkAppIdentityReady() async {
+    final peerConfig = _requireConfig();
+    if (options.dryRun || commands.dryRun) {
+      return;
+    }
+    final current = await _cli(const <String>[
+      '--format',
+      'json',
+      'id',
+      'current',
+    ]);
     final appResolved = await _cli(<String>[
       '--format',
       'json',
@@ -1001,20 +1035,15 @@ class DesktopE2eRunner {
       peerConfig.appHandle,
     ]);
     final currentDid = _cliDidFromJson(current.output, current: true);
-    final cliDid = _cliDidFromJson(cliResolved.output);
     final appDid = _cliDidFromJson(appResolved.output);
-    final cliMatches = currentDid == cliDid;
     final identitiesDistinct = currentDid != appDid;
     _identityPreflight = <String, Object?>{
-      'status': cliMatches && identitiesDistinct ? 'passed' : 'failed',
-      'cliHandleMatchesCurrent': cliMatches,
+      ..._identityPreflight,
+      'status': identitiesDistinct ? 'passed' : 'failed',
       'appHandleResolvable': true,
       'identitiesDistinct': identitiesDistinct,
       'containsRawDids': false,
     };
-    if (!cliMatches) {
-      throw E2eFailure('CLI peer identity mismatch.');
-    }
     if (!identitiesDistinct) {
       throw E2eFailure('App and CLI peer identities must be distinct.');
     }
@@ -1128,6 +1157,7 @@ class DesktopE2eRunner {
       'test',
       '--dart-define=AWIKI_E2E=true',
       '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+      ..._multiDeviceProductDartDefines(peerConfig.e2eCase),
       if (peerConfig.e2eCase == DesktopE2eCase.personalAgent) ...<String>[
         '--plain-name',
         'Personal Agent full UI drives real backend daemon and recovery',
@@ -1289,6 +1319,9 @@ class DesktopE2eRunner {
         'LANG': locale,
         'LC_ALL': locale,
         ...flutterBuildIsolation.environment,
+        if (config?.e2eCase == DesktopE2eCase.full) ...const <String, String>{
+          'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
+        },
       };
       if (platform == DesktopE2ePlatform.linux) {
         await commands.run(
@@ -1329,6 +1362,10 @@ class DesktopE2eRunner {
     final environment = <String, String>{
       'HOME': homeDir.path,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': workspaceDir.path,
+      if (_requireConfig().e2eCase ==
+          DesktopE2eCase.full) ...const <String, String>{
+        'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
+      },
     };
     for (final name in const <String>[
       'PATH',
@@ -1358,6 +1395,15 @@ class DesktopE2eRunner {
       throw E2eFailure('App + CLI peer config is not initialized.');
     }
     return peerConfig;
+  }
+
+  List<String> _multiDeviceProductDartDefines(DesktopE2eCase e2eCase) {
+    if (e2eCase != DesktopE2eCase.full) {
+      return const <String>[];
+    }
+    return const <String>[
+      '--dart-define=AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED=true',
+    ];
   }
 
   String get _timingsPath => '${reportDir.path}/timings.json';
