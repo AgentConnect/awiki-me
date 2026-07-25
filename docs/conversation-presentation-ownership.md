@@ -16,8 +16,8 @@
 4. `awiki-me` presentation 层只消费 `ChatMessage`、`ConversationSummary`、`RealtimeUpdate` 等 App domain model，不直接消费 SDK DTO。
 5. `ChatMessage.hasRenderableContent` 是普通聊天 timeline 是否展示消息气泡的核心 gate。
 6. `ConversationListProvider` 只发布 recents、unread 和 badge 状态；base row 来自 core conversation read model，App 只叠加 product overlay 和短生命周期 read presentation waterline。发布状态是一次替换的 `entitiesById + orderedIds + loadState + version`，不允许 Map、排序和 patch version 分帧更新。
-7. `ChatThreadsProvider` / `ChatThreadsController` 只拥有当前 `conversationId` 的 UI window，不拥有消息归属、read watermark、send correctness 或 realtime correctness。
-8. `ChatPage` 只渲染当前 selected conversation，并可对可见会话发出 read intent；它不得因为 conversation summary 变化反向拉取 history。
+7. `ChatThreadsProvider` / `ChatThreadsController` 只拥有当前 `conversationId` 的 UI window 和短生命周期 read intent drain，不拥有消息归属、durable read watermark、send correctness 或 realtime correctness。
+8. `ChatPage` 只渲染当前 selected conversation 并声明可见性；持久 read intent 由 `ChatThreadsController` 根据可见状态建立，不能依赖 Widget 的一次性 post-frame 回调。`ChatPage` 不得因为 conversation summary 变化反向拉取 history。
 
 App list/detail/read/send/realtime 主链路必须通过 `ConversationIdentity.conversationId` / `AppConversationReadRef` 消费 core projection。`ThreadRef`、alias、targetPeer/targetDid、visibility key 只允许作为 legacy adapter、migration fallback 或 diagnostic input，不再作为消息归属、read correctness、send correctness 或 realtime correctness 的机制。
 
@@ -93,7 +93,7 @@ Rust im-core
 | recents read presentation waterline | `ConversationListController` presentation memory | refresh / fast-local / patch / repair / visible message watermark / read ack | 发布 recents 前统一投影：latest message watermark 只前进，read watermark 只前进；summary-only 更新不能清 unread；read watermark 覆盖的旧 unread 不能重新出现；旧的 0 unread 不能清掉更新消息；可见状态只在严格 canonical conversation 内推进 |
 | Agent display / lifecycle projection | `awiki-me` application service | `AgentInventoryPort` / agent control projection | `ImCoreConversationService._applyAgentLifecycleProjection` |
 | group display name / avatar | `awiki-me` group application/provider | group summary refresh | Widget 按相同 canonical `conversationId` 组合；不得回写 `ConversationSummary` |
-| 可见会话 read ack | `ChatPage` 可见性 + `ChatThreadsProvider` mark-read intent | `ChatView` 挂载、当前可见 summary 更新、用户回到底部 | 调用 `markConversationRead(AppConversationReadRef, watermark)`；普通 summary ack 的 watermark 来自当前线程中被本次 conversation summary 覆盖的最新 renderable message；用户已在底部或明确强制的 visible ack 可使用当前线程最新已渲染消息 watermark |
+| 可见会话 read ack | `ChatThreadsController` 可见状态 + 单调串行 read-intent drain | `ChatView` 声明挂载/隐藏、当前可见 summary/timeline 更新、用户回到底部 | 可见且有未读时立即建立 intent；history/lifecycle 未就绪只延后 drain，不丢 intent。每个 canonical conversation 同时最多一个 `markConversationRead(AppConversationReadRef, watermark)`；新消息水位与在途提交合并并只前进。普通 summary ack 使用被该 summary 覆盖的最新 renderable message；用户已在底部或明确强制时可使用线程最新已渲染消息 |
 
 ## 5. API 与 DTO 约束
 
@@ -235,7 +235,7 @@ release/0710 的 legacy DID/thread/Handle alias 只允许由 Core upgrade、alia
 
 0710 迁移保留下来的 `active + legacy_unresolved` registry row 仍可进入最近会话，以保全历史入口；App 必须保留其 resolution state，并继续只按非空 `conversationId` 建索引，不得根据相同 DID、Handle 或显示名合并。`blocked_conflict` 不进入普通列表，resolved Direct/Group 缺少 Persona/Group canonical identity 时同样 fail closed。新入站 unresolved backlog 仍由 Core 隔离，不属于这一兼容显示规则。
 
-打开会话后，text/payload/attachment 首发、重试和 read/sync 都传入同一 canonical `AppConversationReadRef`；Core 用 directory 解析时写入的 owner-scoped Direct route 寻址 current DID。App 不得把 peer-scope 会话降级为 `dm:<targetDid>` write alias。`ChatThreadsController` 只从 canonical `conversationId` timeline、conversation timeline patch 或 committed projection repair 中获得更新消息。列表 preview 的 authoritative base 仍来自 `im-core` conversation summary projection；legacy alias、remote history best-effort page 或 realtime hint 都不能成为第二套 preview 真相。`ConversationListProvider` 是 recents state 的唯一发布边界，snapshot、fast-local、patch reset/upsert/remove/reorder、repair 和 read ack 都必须在发布前应用同一套 read presentation waterline；Profile/Group 展示信息在 Widget/View Provider 中组合，不回写 base summary。这个 waterline 只接受 latest message watermark 前进或 read watermark 前进；summary-only 更新不能提前清 unread，read watermark 覆盖的迟到 unread 不能重新出现，旧的 0 unread 不能清掉更新消息。真正的 read state 必须通过带 message watermark 的 `markConversationRead(AppConversationReadRef, watermark)` 提交。
+打开会话后，text/payload/attachment 首发、重试和 read/sync 都传入同一 canonical `AppConversationReadRef`；Core 用 directory 解析时写入的 owner-scoped Direct route 寻址 current DID。App 不得把 peer-scope 会话降级为 `dm:<targetDid>` write alias。`ChatThreadsController` 只从 canonical `conversationId` timeline、conversation timeline patch 或 committed projection repair 中获得更新消息。列表 preview 的 authoritative base 仍来自 `im-core` conversation summary projection；legacy alias、remote history best-effort page 或 realtime hint 都不能成为第二套 preview 真相。`ConversationListProvider` 是 recents state 的唯一发布边界，snapshot、fast-local、patch reset/upsert/remove/reorder、repair 和 read ack 都必须在发布前应用同一套 read presentation waterline；Profile/Group 展示信息在 Widget/View Provider 中组合，不回写 base summary。这个 waterline 只接受 latest message watermark 前进或 read watermark 前进；summary-only 更新不能提前清 unread，read watermark 覆盖的迟到 unread 不能重新出现，旧的 0 unread 不能清掉更新消息。真正的 read state 必须通过带 message watermark 的 `markConversationRead(AppConversationReadRef, watermark)` 提交，并以 Core 返回的 `effectiveWatermark` 确认本地提交；`pendingRemoteAck` 表示 Core 已完成 local-first 提交，不能被 App 误判为本地失败。
 
 Conversation patch stream 必须串行应用；`reset` / `upsert` 在发布新会话行前先完成同一 owner/runtime scope 的本地 Persona Profile 读取，使会话列表和聊天页头的首个内容帧直接使用已缓存昵称。缓存读取失败时保留已有 Profile 并按统一 resolver 回退 Handle/DID，但不能为等待远端 Profile 阻塞 patch，也不能先发布 Handle 再用本地昵称覆盖。聊天页头即使暂时缺少 current DID，也必须能以 `peerPersonaId` 读取同一份 Profile 投影。
 
@@ -244,8 +244,8 @@ Conversation patch stream 必须串行应用；`reset` / `upsert` 在发布新�
 Chat presentation 是单向的：
 
 - `ConversationListProvider` 负责 recents / unread / badge 状态，base row 来自 core conversation read model，App 只叠加 product overlay 和 read presentation waterline。
-- `ChatThreadsProvider` / `ChatThreadsController` 负责 conversation timeline window、merge、sort、repair 和 read ack 调度，主 key 是 `ConversationSummary.conversationId` / `AppConversationReadRef`。
-- `ChatPage` 渲染 selected conversation；它可以确认当前会话可见并触发 read ack，但不得因 summary 更新主动补拉 history。
+- `ChatThreadsProvider` / `ChatThreadsController` 负责 conversation timeline window、merge、sort、repair，以及按 canonical conversation 串行合并 read intent，主 key 是 `ConversationSummary.conversationId` / `AppConversationReadRef`。
+- `ChatPage` 渲染 selected conversation并声明可见/隐藏状态；它可以在用户回到底部或新消息进入可见窗口时推进 intent，但持久 intent 的建立不能依赖 Widget 延迟回调，也不得因 summary 更新主动补拉 history。
 
 打开会话的 first-paint 路径：
 
@@ -324,6 +324,15 @@ presentation waterline 清零的 snapshot 组合。导航传入的旧
 `ConversationSummary(unreadCount: 0)` 不能阻止对最新可见消息 sequence 的 Core
 watermark 上报；本地 badge 清零也不能替代持久 read ack。
 
+read intent 是可见状态的 level-triggered orchestration，不是 Widget 的 edge event：
+
+1. `markConversationVisible` 必须在同一个 Controller 调用中先记录 canonical 可见状态，再为已有未读建立 pending intent。
+2. lifecycle 非前台、timeline 正在水合或当前尚无 renderable watermark 时保留 intent；history、patch、resume 或可见 timeline 前进后继续 drain，不使用定时重试。
+3. 每个 display thread 同时只能有一个 Core read commit；在途期间到达的更高 watermark 按 `threadSeq -> readAt -> messageId` 单调合并，前一个完成后再提交更高水位，禁止并发和回退。
+4. `ConversationService.markConversationRead` 必须保留 Core 的结构化结果。只有 `effectiveWatermark` 覆盖 target 后，App 才把该 intent 记为本地已提交；`remoteAcknowledged=false + pendingRemoteAck=true` 仍是 local-first 成功，由 Core 负责后续远端补偿。
+5. Core 异常或不完整结果保留 intent，等待下一次真实 lifecycle/history/patch 触发；不得在 UI 层强制清 durable unread、启动忙重试或把 presentation unread `0` 当成提交完成。
+6. 会话隐藏会移除尚未开始的 visible intent；已进入 Core 的调用可以按 local-first 合约完成，但不能为隐藏会话继续产生更高水位。
+
 `ConversationListState` 是 normalized store：`entitiesById` 只以 required canonical
 `conversationId` 为 key，`orderedIds` 只保存展示顺序，`version` 与
 reset/upsert/remove/reorder 在同一次 state assignment 中前进。空数据必须与
@@ -364,12 +373,13 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 - `tests/unit/chat_mention_send_test.dart`：验证有 valid mentions 时发送 payload，无 mentions 时继续走普通 sendText。
 - `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入，以及冷加载合并和连续 query 只使用一次群成员请求。
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
-- `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径。
+- `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
 - `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。
+- `tests/e2e/flutter/desktop_cli_peer/flows/group_message_flow.dart`：群消息流程必须覆盖 CLI 入站后总未读 `baseline -> baseline + 1`、App 重启后 group row 仍为未读、打开群聊后 Core read watermark 提交并使 conversation unread 与总未读共同收敛回 baseline。
 - `tests/e2e/flutter/desktop_cli_peer/flows/contact_flow.dart`：`CONTACT-MSG-E2E-001` 通过可见联系人行打开 Direct，验证一次发送只对应一个 canonical message/Core summary/UI row/Product overlay，并覆盖 restart 和 unread `+1 -> 0` 闭环。
 - `tests/e2e/flutter/desktop_cli_peer/flows/attachment_flow.dart`：App -> CLI 附件发送使用 `AppConversationReadRef.fromConversationId(conversation.conversationId)` / SDK conversation attachment API，不再通过 legacy target/thread API 决定发送归属。
 - `tests/e2e/flutter/desktop_cli_peer/support/polling.dart`：`_waitForAppConversationLatestInTimeline` 要求 messaging 实现 `ConversationTimelineMessagingService`，使用 `AppConversationReadRef.fromConversationId(conversation.conversationId)` 调用 `loadConversationTimeline`，并验证 `lastMessageSnapshot` id 也属于同一 timeline。

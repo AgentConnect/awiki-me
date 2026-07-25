@@ -699,6 +699,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int markConversationReadCalls = 0;
   String? lastMarkConversationReadConversationId;
   AppThreadReadWatermark? lastMarkConversationReadWatermark;
+  final List<AppThreadReadWatermark?> markConversationReadWatermarks =
+      <AppThreadReadWatermark?>[];
+  Completer<void>? markConversationReadCompleter;
+  AppConversationReadCommitResult? markConversationReadResult;
   int listConversationsCalls = 0;
   int listGroupMembersCalls = 0;
   int loadServerInfoCalls = 0;
@@ -1186,6 +1190,11 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     markConversationReadCalls += 1;
     lastMarkConversationReadConversationId = conversationId;
     lastMarkConversationReadWatermark = watermark;
+    markConversationReadWatermarks.add(watermark);
+    final completer = markConversationReadCompleter;
+    if (completer != null) {
+      await completer.future;
+    }
   }
 
   @override
@@ -1715,14 +1724,16 @@ class FakeConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
-  }) {
-    return gateway.markConversationRead(
+  }) async {
+    await gateway.markConversationRead(
       conversation.conversationId,
       watermark: watermark,
     );
+    return gateway.markConversationReadResult ??
+        AppConversationReadCommitResult.acknowledged(watermark);
   }
 
   @override

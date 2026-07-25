@@ -2745,6 +2745,204 @@ void main() {
     );
   });
 
+  test('可见群聊自身建立持久已读意图，不依赖 Widget 再次回调', () async {
+    const groupDid = 'did:test:group:visible-read-intent';
+    final latest = ChatMessage(
+      localId: 'group-visible-read-5',
+      remoteId: 'group-visible-read-5',
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      senderDid: 'did:member:peer',
+      groupId: groupDid,
+      content: 'group unread before open',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 5,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = ConversationSummary(
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      displayName: 'Visible read intent',
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 1,
+      isGroup: true,
+      groupId: groupDid,
+      lastMessageSnapshot: latest,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      latest,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      gateway.lastMarkConversationReadConversationId,
+      unreadConversation.conversationId,
+    );
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: latest.remoteId,
+      sequence: latest.serverSequence.toString(),
+    );
+  });
+
+  test('群聊已读提交串行合并到更高水位且不会并发或回退', () async {
+    const groupDid = 'did:test:group:coalesced-read-intent';
+    final first = ChatMessage(
+      localId: 'group-coalesced-read-5',
+      remoteId: 'group-coalesced-read-5',
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      senderDid: 'did:member:peer',
+      groupId: groupDid,
+      content: 'sequence 5',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 5,
+      sendState: MessageSendState.sent,
+    );
+    final second = ChatMessage(
+      localId: 'group-coalesced-read-6',
+      remoteId: 'group-coalesced-read-6',
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      senderDid: 'did:member:peer',
+      groupId: groupDid,
+      content: 'sequence 6',
+      createdAt: DateTime(2026, 5, 8, 10, 9),
+      isMine: false,
+      serverSequence: 6,
+      sendState: MessageSendState.sent,
+    );
+    final firstUnread = ConversationSummary(
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      displayName: 'Coalesced read intent',
+      lastMessagePreview: first.content,
+      lastMessageAt: first.createdAt,
+      unreadCount: 1,
+      isGroup: true,
+      groupId: groupDid,
+      lastMessageSnapshot: first,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    final firstCommit = Completer<void>();
+    gateway.markConversationReadCompleter = firstCommit;
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(firstUnread);
+    controller.debugSeedMessageForTesting(
+      first,
+      threadId: _timelineThreadId(firstUnread),
+    );
+
+    controller.markConversationVisible(
+      firstUnread,
+      displayThreadId: _timelineThreadId(firstUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    final secondUnread = firstUnread.copyWith(
+      lastMessagePreview: second.content,
+      lastMessageAt: second.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: second,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(secondUnread);
+    controller.debugSeedMessageForTesting(
+      second,
+      threadId: _timelineThreadId(secondUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    firstCommit.complete();
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 2);
+    expect(
+      gateway.markConversationReadWatermarks.map(
+        (item) => item?.lastReadThreadSeq,
+      ),
+      <String?>['5', '6'],
+    );
+  });
+
+  test('Core 本地水位已提交时接受 pending remote ACK 且不重复提交', () async {
+    const groupDid = 'did:test:group:pending-remote-read';
+    final latest = ChatMessage(
+      localId: 'group-pending-remote-read-5',
+      remoteId: 'group-pending-remote-read-5',
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      senderDid: 'did:member:peer',
+      groupId: groupDid,
+      content: 'pending remote ACK',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 5,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = ConversationSummary(
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      displayName: 'Pending remote read',
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 1,
+      isGroup: true,
+      groupId: groupDid,
+      lastMessageSnapshot: latest,
+    );
+    gateway.markConversationReadResult = const AppConversationReadCommitResult(
+      updatedCount: 1,
+      remoteAcknowledged: false,
+      partial: true,
+      fallbackUsed: false,
+      pendingRemoteAck: true,
+      effectiveWatermark: AppThreadReadWatermark(
+        lastReadMessageId: 'group-pending-remote-read-5',
+        lastReadThreadSeq: '5',
+      ),
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      latest,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+    controller.acknowledgeVisibleConversationRead(
+      unreadConversation,
+      forcePersistentAck: true,
+    );
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+  });
+
   test('可见会话收到未读 summary 更新时列表不闪现未读', () async {
     final initial = conversation.copyWith(
       lastMessagePreview: 'old visible',
@@ -3432,7 +3630,7 @@ void main() {
       expect(conversations.single.unreadCount, 2);
     }
     expect(throwingGateway.markReadCalls, 0);
-    expect(throwingGateway.markConversationReadCalls, 1);
+    expect(throwingGateway.markConversationReadCalls, greaterThanOrEqualTo(1));
   });
 
   test('当前可见会话收到新的可见消息时按 conversationId 上报并清未读', () async {

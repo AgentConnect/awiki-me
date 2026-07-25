@@ -760,7 +760,7 @@ class _CountingConversationService implements ConversationService {
   }
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) {

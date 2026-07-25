@@ -323,7 +323,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _isProgrammaticScroll = false;
   bool _scrollToBottomScheduled = false;
   int _scrollRequestToken = 0;
-  int _visibleReadAckToken = 0;
+  int _conversationVisibilityToken = 0;
   int _composerFocusRequestId = 0;
   bool _pendingScrollAnimated = false;
   int _pendingScrollSettleFrames = 1;
@@ -358,7 +358,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   @override
   void dispose() {
-    _visibleReadAckToken += 1;
+    _conversationVisibilityToken += 1;
     _cancelPendingScrollRequests();
     _markConversationHidden(
       widget.conversation,
@@ -380,7 +380,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
       widget.conversation,
     )) {
       _composerFocusRequestId += 1;
-      _visibleReadAckToken += 1;
+      _conversationVisibilityToken += 1;
       _markConversationHidden(
         oldWidget.conversation,
         displayThreadId: _displayThreadId,
@@ -407,10 +407,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       displayThreadId:
           displayThreadId ?? _timelineDisplayThreadId(conversation),
     );
-    _scheduleAcknowledgeVisibleConversationRead(
-      conversation,
-      reason: 'visible',
-    );
   }
 
   void _markConversationHidden(
@@ -428,10 +424,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ConversationSummary conversation, {
     required String displayThreadId,
   }) {
-    final token = _visibleReadAckToken;
+    final token = _conversationVisibilityToken;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted ||
-          token != _visibleReadAckToken ||
+          token != _conversationVisibilityToken ||
           displayThreadId != _displayThreadId ||
           !_sameCanonicalConversation(
             conversation,
@@ -454,26 +450,6 @@ class _ChatViewState extends ConsumerState<ChatView> {
       reason: reason,
       forcePersistentAck: forcePersistentAck,
     );
-  }
-
-  void _scheduleAcknowledgeVisibleConversationRead(
-    ConversationSummary conversation, {
-    String reason = 'visible',
-  }) {
-    final token = ++_visibleReadAckToken;
-    final displayThreadId = _displayThreadId;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          token != _visibleReadAckToken ||
-          displayThreadId != _displayThreadId ||
-          !_sameCanonicalConversation(
-            conversation,
-            _currentConversationSnapshot(),
-          )) {
-        return;
-      }
-      _acknowledgeVisibleConversationRead(conversation, reason: reason);
-    });
   }
 
   void _acknowledgeCurrentVisibleConversationRead({
@@ -1516,7 +1492,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (previous == null) {
       if (next.messages.isNotEmpty) {
         _scheduleScrollToBottom(settleFrames: 2);
-        _scheduleAcknowledgeVisibleConversationRead(
+        _acknowledgeVisibleConversationRead(
           conversation,
           reason: 'visible_thread_initial',
         );

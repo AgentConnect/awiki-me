@@ -3242,10 +3242,10 @@ class _SlowEnrichConversationService implements ConversationService {
   }) async {}
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
-  }) async {}
+  }) async => AppConversationReadCommitResult.acknowledged(watermark);
 
   @override
   Future<ConversationSummary?> normalizeConversationForRecents({
@@ -3401,10 +3401,10 @@ class _StaticConversationService implements ConversationService {
   }) async {}
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
-  }) async {}
+  }) async => AppConversationReadCommitResult.acknowledged(watermark);
 
   @override
   Future<ConversationSummary?> normalizeConversationForRecents({

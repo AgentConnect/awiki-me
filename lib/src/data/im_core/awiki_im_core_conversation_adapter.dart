@@ -339,11 +339,11 @@ class AwikiImCoreConversationAdapter
   }
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) async {
-    await _runtime.withCurrentClient((client) async {
+    return _runtime.withCurrentClient((client) async {
       final totalWatch = Stopwatch()..start();
       _imCoreConversationTrace(
         'mark_conversation_read.start',
@@ -391,6 +391,15 @@ class AwikiImCoreConversationAdapter
             'elapsed_ms': totalWatch.elapsedMilliseconds,
           },
         );
+        return AppConversationReadCommitResult(
+          updatedCount: result.updatedCount,
+          remoteAcknowledged: result.remoteAcknowledged,
+          partial: result.partial,
+          fallbackUsed: result.fallbackUsed,
+          pendingRemoteAck: result.pendingRemoteAck,
+          effectiveWatermark: _appReadWatermark(result.effectiveWatermark),
+          warnings: List<String>.unmodifiable(result.warnings),
+        );
       } catch (error) {
         totalWatch.stop();
         _imCoreConversationTrace(
@@ -414,6 +423,17 @@ core.ReadWatermark? _coreReadWatermark(AppThreadReadWatermark? watermark) {
     return null;
   }
   return core.ReadWatermark(
+    lastReadMessageId: _nonEmptyText(watermark.lastReadMessageId),
+    lastReadThreadSeq: _nonEmptyText(watermark.lastReadThreadSeq),
+    readAt: watermark.readAt,
+  );
+}
+
+AppThreadReadWatermark? _appReadWatermark(core.ReadWatermark? watermark) {
+  if (watermark == null) {
+    return null;
+  }
+  return AppThreadReadWatermark(
     lastReadMessageId: _nonEmptyText(watermark.lastReadMessageId),
     lastReadThreadSeq: _nonEmptyText(watermark.lastReadThreadSeq),
     readAt: watermark.readAt,
