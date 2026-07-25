@@ -6,6 +6,7 @@ import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
+import '../app_shell/providers/session_provider.dart';
 import 'profile_markdown.dart';
 
 typedef HomepageMarkdownLoader = Future<String?> Function(String url);
@@ -79,21 +80,34 @@ class ProfileController extends StateNotifier<ProfileState> {
   ProfileController(this.ref) : super(const ProfileState());
 
   final Ref ref;
+  int _stateGeneration = 0;
 
   Future<void> refresh() async {
+    final generation = _stateGeneration;
+    final epoch = ref.read(sessionProvider).activeEpoch;
     state = state.copyWith(isLoading: true);
     final profile = await ref
         .read(profileApplicationServiceProvider)
         .loadMyProfile();
+    if (!_isOperationCurrent(generation, epoch)) {
+      return;
+    }
     state = _profileStateAfterRefresh(profile, isLoading: false);
   }
 
   Future<void> refreshWithHomepage(String url) async {
+    final generation = _stateGeneration;
+    final epoch = ref.read(sessionProvider).activeEpoch;
     await refresh();
+    if (!_isOperationCurrent(generation, epoch)) {
+      return;
+    }
     await loadHomepageMarkdown(url);
   }
 
   Future<void> loadHomepageMarkdown(String url) async {
+    final generation = _stateGeneration;
+    final epoch = ref.read(sessionProvider).activeEpoch;
     final homepageUrl = url.trim();
     if (state.profile == null || homepageUrl.isEmpty) {
       return;
@@ -105,6 +119,9 @@ class ProfileController extends StateNotifier<ProfileState> {
       return;
     }
     if (markdown == null) {
+      return;
+    }
+    if (!_isOperationCurrent(generation, epoch)) {
       return;
     }
     final normalizedMarkdown = markdown.trim();
@@ -125,16 +142,28 @@ class ProfileController extends StateNotifier<ProfileState> {
   }
 
   Future<void> updateProfile(ProfilePatch patch) async {
+    final generation = _stateGeneration;
+    final epoch = ref.read(sessionProvider).activeEpoch;
     state = state.copyWith(isSaving: true);
     final profile = await ref
         .read(profileApplicationServiceProvider)
         .updateProfile(patch);
+    if (!_isOperationCurrent(generation, epoch)) {
+      return;
+    }
     state = _profileStateAfterRefresh(profile, isSaving: false);
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
   }
 
   void clear() {
-    state = state.copyWith(clearProfile: true, clearHomepageMarkdown: true);
+    _stateGeneration += 1;
+    state = const ProfileState();
+  }
+
+  bool _isOperationCurrent(int generation, SessionEpoch? epoch) {
+    return mounted &&
+        generation == _stateGeneration &&
+        ref.read(sessionProvider).activeEpoch == epoch;
   }
 
   ProfileState _profileStateAfterRefresh(

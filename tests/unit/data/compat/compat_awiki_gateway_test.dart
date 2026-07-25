@@ -140,7 +140,11 @@ RealtimeUpdate _update() {
     isMine: false,
     sendState: MessageSendState.sent,
   );
-  return RealtimeUpdate(message: message, conversationHint: _conversation());
+  return RealtimeUpdate(
+    ownerDid: 'did:wba:awiki.ai:user:alice:e1_owner',
+    message: message,
+    conversationHint: _conversation(),
+  );
 }
 
 ConversationSummary _conversation() {
@@ -169,16 +173,34 @@ ChatMessage _message(String content) {
   );
 }
 
-class _FakeSessions implements AppSessionService {
+class _FakeSessions
+    with AppSessionTransitionGuard
+    implements AppSessionService {
   _FakeSessions(this.session);
 
   final AppSession? session;
 
   @override
-  Future<AppSession> activateIdentity(AppSession identity) async => identity;
+  Future<AppSession> activateIdentity(
+    AppSession identity, {
+    AppSessionTransition? transition,
+    Future<void> Function(AppSession session)? initializeIdentitySession,
+  }) async {
+    final requestedTransition = transition ?? beginSessionTransition();
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
+    await initializeIdentitySession?.call(identity);
+    markSessionTransitionCommitted(requestedTransition);
+    return identity;
+  }
 
   @override
   Future<AppSession?> currentSession() async => session;
+
+  @override
+  Future<AppSessionLease?> currentSessionLease() async =>
+      sessionLeaseFor(session);
 
   @override
   Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
@@ -186,7 +208,10 @@ class _FakeSessions implements AppSessionService {
   ];
 
   @override
-  Future<AppSession> loginWithIdentity(String identityIdOrAlias) {
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) {
     throw UnsupportedError('unsupported');
   }
 

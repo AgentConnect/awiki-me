@@ -7,6 +7,7 @@ import '../../app/app_services.dart';
 import '../../domain/entities/peer_display_profile.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/services/peer_display_name_resolver.dart';
+import '../app_shell/providers/session_provider.dart';
 
 class PeerDisplayProfileState {
   const PeerDisplayProfileState({
@@ -53,6 +54,18 @@ class PeerDisplayProfileState {
   }
 }
 
+final class _PeerDisplayOwnerOperation {
+  const _PeerDisplayOwnerOperation({
+    required this.ownerDid,
+    required this.epoch,
+    required this.generation,
+  });
+
+  final String ownerDid;
+  final SessionEpoch? epoch;
+  final int generation;
+}
+
 class PeerDisplayProfileController
     extends StateNotifier<PeerDisplayProfileState> {
   PeerDisplayProfileController(this.ref)
@@ -61,18 +74,38 @@ class PeerDisplayProfileController
   final Ref ref;
   final Map<String, Future<void>> _remoteLoads = <String, Future<void>>{};
   final Set<String> _completedRemoteLoads = <String>{};
+  int _stateGeneration = 0;
 
   Future<void> loadCached({
     required String ownerDid,
     required Iterable<String> dids,
     Map<String, String> peerPersonaIdsByDid = const <String, String>{},
+    SessionEpoch? expectedEpoch,
   }) async {
     final normalizedOwner = ownerDid.trim();
     if (normalizedOwner.isEmpty) {
       clear();
       return;
     }
-    _selectOwner(normalizedOwner);
+    final operation = _beginOwnerOperation(
+      normalizedOwner,
+      expectedEpoch: expectedEpoch,
+    );
+    if (operation == null) {
+      return;
+    }
+    await _loadCached(
+      operation: operation,
+      dids: dids,
+      peerPersonaIdsByDid: peerPersonaIdsByDid,
+    );
+  }
+
+  Future<void> _loadCached({
+    required _PeerDisplayOwnerOperation operation,
+    required Iterable<String> dids,
+    required Map<String, String> peerPersonaIdsByDid,
+  }) async {
     _registerPersonaRoutes(peerPersonaIdsByDid);
     final missing = dids
         .map((did) => did.trim())
@@ -91,7 +124,7 @@ class PeerDisplayProfileController
       // not prevent conversations or relationship lists from rendering.
       return;
     }
-    if (state.ownerDid != normalizedOwner) {
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
     _merge(
@@ -104,13 +137,25 @@ class PeerDisplayProfileController
     required String ownerDid,
     required UserProfile profile,
     String? peerPersonaId,
+    SessionEpoch? expectedEpoch,
   }) {
     final normalizedOwner = ownerDid.trim();
     final did = profile.did.trim();
     if (normalizedOwner.isEmpty || did.isEmpty) {
       return;
     }
-    _selectOwner(normalizedOwner);
+    final operation = _beginOwnerOperation(
+      normalizedOwner,
+      expectedEpoch: expectedEpoch,
+    );
+    if (operation == null) {
+      return;
+    }
+    _mergeRemoteProfile(profile, peerPersonaId: peerPersonaId);
+  }
+
+  void _mergeRemoteProfile(UserProfile profile, {String? peerPersonaId}) {
+    final did = profile.did.trim();
     final rawDisplayName = profile.displayName.trim();
     final compactDid = PeerDisplayNameResolver.compactDid(did);
     final nickname =
@@ -142,35 +187,40 @@ class PeerDisplayProfileController
     if (normalizedOwner.isEmpty || requested.isEmpty) {
       return;
     }
-    await loadCached(ownerDid: normalizedOwner, dids: requested);
-    if (state.ownerDid != normalizedOwner) {
+    final operation = _beginOwnerOperation(normalizedOwner);
+    if (operation == null) {
+      return;
+    }
+    await _loadCached(
+      operation: operation,
+      dids: requested,
+      peerPersonaIdsByDid: const <String, String>{},
+    );
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
     final missing = requested
         .where((did) {
-          final key = '$normalizedOwner\u0000$did';
+          final key = _remoteLoadKey(operation, did);
           return !_completedRemoteLoads.contains(key) &&
               _needsRemoteProfileRefresh(state.forDid(did), did);
         })
         .toList(growable: false);
     await Future.wait<void>(
       missing.map((did) {
-        final key = '$normalizedOwner\u0000$did';
-        return _remoteLoads.putIfAbsent(
-          key,
-          () => _loadRemoteProfile(
-            ownerDid: normalizedOwner,
-            did: did,
-            timeout: timeout,
-            loadKey: key,
-          ),
+        final key = _remoteLoadKey(operation, did);
+        return _remoteLoad(
+          operation: operation,
+          did: did,
+          timeout: timeout,
+          loadKey: key,
         );
       }),
     );
   }
 
   Future<void> _loadRemoteProfile({
-    required String ownerDid,
+    required _PeerDisplayOwnerOperation operation,
     required String did,
     required Duration timeout,
     required String loadKey,
@@ -180,22 +230,48 @@ class PeerDisplayProfileController
           .read(profileApplicationServiceProvider)
           .loadPublicProfile(did)
           .timeout(timeout);
-      if (state.ownerDid != ownerDid) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
-      updateFromRemote(ownerDid: ownerDid, profile: profile);
+      _mergeRemoteProfile(profile);
       _completedRemoteLoads.add(loadKey);
     } catch (error) {
       debugPrint(
         '[awiki_me][profile_projection] remote_profile_refresh_failed '
         'did=$did error=${error.runtimeType}',
       );
-    } finally {
-      _remoteLoads.remove(loadKey);
     }
   }
 
+  Future<void> _remoteLoad({
+    required _PeerDisplayOwnerOperation operation,
+    required String did,
+    required Duration timeout,
+    required String loadKey,
+  }) {
+    final existing = _remoteLoads[loadKey];
+    if (existing != null) {
+      return existing;
+    }
+    late final Future<void> load;
+    load =
+        _loadRemoteProfile(
+          operation: operation,
+          did: did,
+          timeout: timeout,
+          loadKey: loadKey,
+        ).whenComplete(() {
+          if (identical(_remoteLoads[loadKey], load)) {
+            _remoteLoads.remove(loadKey);
+          }
+        });
+    _remoteLoads[loadKey] = load;
+    return load;
+  }
+
   void clear() {
+    _stateGeneration += 1;
+    _remoteLoads.clear();
     _completedRemoteLoads.clear();
     state = const PeerDisplayProfileState();
   }
@@ -203,8 +279,14 @@ class PeerDisplayProfileController
   void registerLocalNotes({
     required String ownerDid,
     required Map<String, String> localNotesByPersonaId,
+    SessionEpoch? expectedEpoch,
   }) {
-    if (state.ownerDid != ownerDid.trim()) {
+    final normalizedOwner = ownerDid.trim();
+    final operation = _beginOwnerOperation(
+      normalizedOwner,
+      expectedEpoch: expectedEpoch,
+    );
+    if (operation == null || state.ownerDid != normalizedOwner) {
       return;
     }
     if (localNotesByPersonaId.isEmpty) {
@@ -236,8 +318,45 @@ class PeerDisplayProfileController
     if (state.ownerDid == ownerDid) {
       return;
     }
+    _stateGeneration += 1;
+    _remoteLoads.clear();
     _completedRemoteLoads.clear();
     state = PeerDisplayProfileState(ownerDid: ownerDid);
+  }
+
+  _PeerDisplayOwnerOperation? _beginOwnerOperation(
+    String ownerDid, {
+    SessionEpoch? expectedEpoch,
+  }) {
+    final currentEpoch = ref.read(sessionProvider).activeEpoch;
+    if (expectedEpoch != null && currentEpoch != expectedEpoch) {
+      return null;
+    }
+    if (currentEpoch != null && currentEpoch.ownerDid != ownerDid) {
+      return null;
+    }
+    _selectOwner(ownerDid);
+    return _PeerDisplayOwnerOperation(
+      ownerDid: ownerDid,
+      epoch: currentEpoch,
+      generation: _stateGeneration,
+    );
+  }
+
+  bool _isOwnerOperationCurrent(_PeerDisplayOwnerOperation operation) {
+    return mounted &&
+        operation.generation == _stateGeneration &&
+        operation.ownerDid == state.ownerDid &&
+        operation.epoch == ref.read(sessionProvider).activeEpoch;
+  }
+
+  String _remoteLoadKey(_PeerDisplayOwnerOperation operation, String did) {
+    final epoch = operation.epoch;
+    return '${operation.generation}\u0000'
+        '${epoch?.ownerDid ?? ''}\u0000'
+        '${epoch?.identityKey ?? ''}\u0000'
+        '${epoch?.generation ?? -1}\u0000'
+        '${operation.ownerDid}\u0000$did';
   }
 
   void _registerPersonaRoutes(Map<String, String> peerPersonaIdsByDid) {

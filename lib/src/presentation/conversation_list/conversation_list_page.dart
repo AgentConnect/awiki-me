@@ -22,6 +22,7 @@ import '../agents/agents_provider.dart';
 import '../agents/agent_status_indicator.dart';
 import '../agents/agent_visual_status.dart';
 import '../group/group_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
@@ -199,6 +200,9 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
           .read(uiFeedbackProvider.notifier)
           .showInfo(AppMessage.conversationRemovedFromRecents());
     } catch (error) {
+      if (isSessionEpochChangedError(error)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));

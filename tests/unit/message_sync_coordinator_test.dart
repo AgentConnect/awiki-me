@@ -186,6 +186,107 @@ void main() {
     await request.timeout(const Duration(seconds: 1));
     await pumpEventQueue();
   });
+
+  test(
+    'an active identity sync cannot satisfy or coalesce the next identity sync',
+    () async {
+      final gateway = FakeAwikiGateway()
+        ..conversations = <ConversationSummary>[_conversation()];
+      final sync = _QueuedBlockingMessageSyncService();
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      final aliceSync = coordinator.requestSync(
+        'alice_startup',
+        immediate: true,
+      );
+      await pumpEventQueue();
+      expect(sync.syncReasons, ['alice_startup']);
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:test:bob',
+              credentialName: 'bob',
+              displayName: 'Bob',
+            ),
+          );
+      var bobCompleted = false;
+      final bobSync = coordinator
+          .requestSync('bob_startup', immediate: true)
+          .whenComplete(() => bobCompleted = true);
+      await pumpEventQueue();
+
+      expect(sync.syncReasons, ['alice_startup']);
+      expect(bobCompleted, isFalse);
+      expect(container.read(messageSyncCoordinatorProvider).isSyncing, isFalse);
+
+      sync.completeNext();
+      await aliceSync;
+      await pumpEventQueue();
+
+      expect(sync.syncReasons, ['alice_startup', 'bob_startup']);
+      expect(bobCompleted, isFalse);
+
+      sync.completeNext();
+      await bobSync;
+      await pumpEventQueue();
+
+      expect(gateway.listConversationsCalls, 1);
+      expect(
+        container.read(messageSyncCoordinatorProvider).lastReason,
+        'bob_startup',
+      );
+      expect(container.read(messageSyncCoordinatorProvider).lastError, isNull);
+    },
+  );
+
+  test('rapid identity replacement drops a delayed stale request', () async {
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[_conversation()];
+    final sync = FakeMessageSyncService();
+    final container = _container(
+      gateway,
+      sync,
+      minInterval: const Duration(seconds: 1),
+    );
+    addTearDown(container.dispose);
+    final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+
+    await coordinator.requestSync('alice_startup', immediate: true);
+    final staleDelayed = coordinator.requestSync('alice_resume');
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:bob',
+            credentialName: 'bob',
+            displayName: 'Bob',
+          ),
+        );
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:carol',
+            credentialName: 'carol',
+            displayName: 'Carol',
+          ),
+        );
+
+    await staleDelayed.timeout(const Duration(seconds: 1));
+    await coordinator.requestSync('carol_startup', immediate: true);
+
+    expect(sync.syncReasons, ['alice_startup', 'carol_startup']);
+    expect(
+      container.read(messageSyncCoordinatorProvider).lastReason,
+      'carol_startup',
+    );
+  });
 }
 
 ProviderContainer _container(
@@ -255,6 +356,34 @@ class _BlockingMessageSyncService extends FakeMessageSyncService {
       const MessageSyncDeltaResult(
         eventsApplied: 0,
         pagesFetched: 0,
+        hasMore: false,
+        snapshotRequired: false,
+      ),
+    );
+  }
+}
+
+class _QueuedBlockingMessageSyncService extends FakeMessageSyncService {
+  final List<Completer<MessageSyncDeltaResult>> _pending =
+      <Completer<MessageSyncDeltaResult>>[];
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) {
+    syncReasons.add(reason);
+    final completer = Completer<MessageSyncDeltaResult>();
+    _pending.add(completer);
+    return completer.future;
+  }
+
+  void completeNext() {
+    final completer = _pending.removeAt(0);
+    completer.complete(
+      const MessageSyncDeltaResult(
+        eventsApplied: 0,
+        pagesFetched: 1,
         hasMore: false,
         snapshotRequired: false,
       ),

@@ -30,7 +30,7 @@ class _DesktopAppRobot {
   Future<void> activate(AppSession session) async {
     await container
         .read(appRuntimeProvider.notifier)
-        .activateSession(session.toLegacySessionIdentity());
+        .activateCommittedSession(session);
     await pumpUntil(
       description: 'authenticated App shell',
       condition: () =>

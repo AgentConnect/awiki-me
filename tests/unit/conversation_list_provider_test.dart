@@ -1821,6 +1821,52 @@ void main() {
     expect(service.watchCalls, 1);
   });
 
+  test('badge updates stay ordered across an identity switch', () async {
+    final notifications = _BlockingFirstBadgeNotificationFacade();
+    final container = _conversationContainer(
+      service: _StaticConversationService(conversations: const []),
+      notifications: notifications,
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+
+    notifier.upsertConversation(
+      _conversation(
+        conversationId: 'conv:alice',
+        threadId: 'dm:alice:peer',
+        displayName: 'Alice peer',
+        unreadCount: 4,
+      ),
+    );
+    await notifications.firstUpdateStarted.future;
+
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:bob',
+            credentialName: 'bob',
+            displayName: 'Bob',
+          ),
+        );
+    notifier.clearLocal();
+    notifier.upsertConversation(
+      _conversation(
+        conversationId: 'conv:bob',
+        threadId: 'dm:bob:peer',
+        displayName: 'Bob peer',
+        unreadCount: 2,
+      ),
+    );
+    notifications.releaseFirstUpdate.complete();
+    await pumpEventQueue(times: 20);
+
+    expect(notifications.appliedCounts.first, 4);
+    expect(notifications.appliedCounts, containsAllInOrder(<int>[4, 0, 2]));
+    expect(notifications.lastBadgeCount, 2);
+  });
+
   test(
     'conversation patch publishes only after cached persona profile is ready',
     () async {
@@ -1890,6 +1936,75 @@ void main() {
       );
     },
   );
+
+  test('同 DID 重登后旧会话缓存 Future 不能注册旧本地备注', () async {
+    final service = _PatchConversationService(
+      conversations: const <ConversationSummary>[],
+    );
+    final directory = _DelayedCachedDirectoryService();
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+      directory: directory,
+    );
+    addTearDown(container.dispose);
+    final conversations = container.read(conversationListProvider.notifier);
+    final sessions = container.read(sessionProvider.notifier);
+    final profiles = container.read(peerDisplayProfileProvider.notifier);
+
+    await conversations.refreshFastLocal();
+    service.emitPatch(
+      ConversationListPatch(
+        kind: ConversationListPatchKind.upsert,
+        ownerDid: 'did:alice',
+        version: 1,
+        unreadTotal: 0,
+        item: _conversation(
+          conversationId: 'conv:bob',
+          threadId: 'wire:bob',
+          displayName: 'Bob',
+          targetDid: 'did:bob',
+          peerPersonaId: 'persona:bob',
+          peerLocalNote: 'old epoch note',
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(directory.requests, <Set<String>>[
+      <String>{'did:bob'},
+    ]);
+
+    sessions.clear();
+    conversations.clearLocal();
+    profiles.clear();
+    sessions.setSession(
+      const SessionIdentity(
+        did: 'did:alice',
+        credentialName: 'alice-relogin',
+        displayName: 'Alice',
+      ),
+    );
+    final currentEpoch = container.read(sessionProvider).activeEpoch!;
+    profiles.registerLocalNotes(
+      ownerDid: 'did:alice',
+      expectedEpoch: currentEpoch,
+      localNotesByPersonaId: const <String, String>{
+        'persona:bob': 'current epoch note',
+      },
+    );
+
+    directory.complete(const <PeerDisplayProfile>[]);
+    await pumpEventQueue();
+
+    expect(
+      container
+          .read(peerDisplayProfileProvider)
+          .localNotesByPersonaId['persona:bob'],
+      'current epoch note',
+    );
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+  });
 
   test(
     'conversation patch reset replaces canonical rows and is idempotent',
@@ -2069,6 +2184,116 @@ void main() {
 
     expect(service.repairCalls, 2);
   });
+
+  test(
+    'new epoch patch repair is not blocked by an old in-flight repair',
+    () async {
+      final firstRepair = Completer<ConversationStoreRepairResult>();
+      final secondRepair = Completer<ConversationStoreRepairResult>();
+      final service = _QueuedRepairConversationService(
+        <Completer<ConversationStoreRepairResult>>[firstRepair, secondRepair],
+      );
+      addTearDown(() {
+        if (!firstRepair.isCompleted) {
+          firstRepair.complete(
+            const ConversationStoreRepairResult(
+              conversations: <ConversationSummary>[],
+              version: 1,
+            ),
+          );
+        }
+        if (!secondRepair.isCompleted) {
+          secondRepair.complete(
+            const ConversationStoreRepairResult(
+              conversations: <ConversationSummary>[],
+              version: 1,
+            ),
+          );
+        }
+      });
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+      final conversations = container.read(conversationListProvider.notifier);
+      final sessions = container.read(sessionProvider.notifier);
+
+      await conversations.refreshFastLocal();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          reason: 'epoch-one-gap',
+        ),
+      );
+      await pumpEventQueue();
+      expect(service.repairCalls, 1);
+
+      sessions.activateSession(
+        const SessionIdentity(
+          did: 'did:alice',
+          credentialName: 'alice-epoch-two',
+          displayName: 'Alice',
+        ),
+      );
+      conversations.clearLocal();
+      await conversations.refreshFastLocal();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          reason: 'epoch-two-gap',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(service.repairCalls, 2);
+      expect(service.repairOwnerDids, <String>['did:alice', 'did:alice']);
+
+      final currentConversation = _conversation(
+        conversationId: 'conv:epoch-two',
+        threadId: 'dm:epoch-two',
+        displayName: 'Epoch two',
+      );
+      secondRepair.complete(
+        ConversationStoreRepairResult(
+          conversations: <ConversationSummary>[currentConversation],
+          version: 1,
+        ),
+      );
+      await pumpEventQueue();
+      expect(
+        container.read(conversationListProvider).conversations,
+        <ConversationSummary>[currentConversation],
+      );
+
+      firstRepair.complete(
+        ConversationStoreRepairResult(
+          conversations: <ConversationSummary>[
+            _conversation(
+              conversationId: 'conv:epoch-one-stale',
+              threadId: 'dm:epoch-one-stale',
+              displayName: 'Stale epoch one',
+            ),
+          ],
+          version: 9,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(conversationListProvider).conversations,
+        <ConversationSummary>[currentConversation],
+      );
+      expect(container.read(conversationListProvider).version, 1);
+    },
+  );
 
   test('conversation patch upsert respects local hidden waterline', () async {
     final seed = _conversation(
@@ -2295,6 +2520,50 @@ void main() {
     );
   });
 
+  test('canonical conversation commit cannot cross a session epoch', () async {
+    final conversation = _conversation(
+      conversationId: 'conv:alice-only',
+      threadId: 'dm:alice:peer',
+      displayName: 'Alice peer',
+    );
+    final service = _BlockingCommitConversationService(conversation);
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+
+    final commit = container
+        .read(conversationListProvider.notifier)
+        .commitConversationId(conversation.conversationId);
+    await service.ensureStarted.future;
+
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:bob',
+            credentialName: 'bob',
+            displayName: 'Bob',
+          ),
+        );
+    service.releaseEnsure.complete();
+
+    await expectLater(
+      commit,
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'session_epoch_changed',
+        ),
+      ),
+    );
+    expect(service.ensureOwnerDid, 'did:alice');
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+  });
+
   test('failed canonical hide rolls back the local removal', () async {
     final conversation = _conversation(
       conversationId: 'conv:bob',
@@ -2322,6 +2591,52 @@ void main() {
     expect(container.read(conversationListProvider).conversations, [
       conversation,
     ]);
+  });
+
+  test('身份切换期间完成的隐藏命令不会作为新身份成功返回', () async {
+    final conversation = _conversation(
+      conversationId: 'conv:bob',
+      threadId: 'dm:alice:bob',
+      displayName: 'Bob',
+    );
+    final service = _BlockingHideConversationService(
+      conversations: <ConversationSummary>[conversation],
+    );
+    addTearDown(service.completeIfPending);
+    final container = _conversationContainer(
+      service: service,
+      notifications: FakeNotificationFacade(),
+      ownerDid: 'did:alice',
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(conversationListProvider.notifier);
+    notifier.upsertConversation(conversation);
+
+    final deleting = notifier.deleteFromRecents(conversation);
+    await service.started.future;
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:bob',
+            credentialName: 'bob',
+            displayName: 'Bob',
+          ),
+        );
+    notifier.clearLocal();
+    service.complete();
+
+    await expectLater(
+      deleting,
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'session_epoch_changed',
+        ),
+      ),
+    );
+    expect(container.read(conversationListProvider).conversations, isEmpty);
   });
 
   test(
@@ -2623,39 +2938,15 @@ void main() {
       );
       await pumpEventQueue();
 
-      container
-          .read(sessionProvider.notifier)
-          .setSession(
-            const SessionIdentity(
-              did: 'did:alice',
-              credentialName: 'alice',
-              displayName: 'Alice',
-            ),
-          );
-      service.emitPatch(
-        ConversationListPatch(
-          kind: ConversationListPatchKind.upsert,
-          ownerDid: 'did:alice',
-          version: 2,
-          unreadTotal: 1,
-          item: _conversation(
-            threadId: 'thread-two',
-            displayName: 'Two',
-            targetDid: 'did:two',
-            unreadCount: 1,
-          ),
-        ),
-      );
-      await Future<void>.delayed(Duration.zero);
-
       expect(service.repairCalls, 1);
       expect(
         container
             .read(conversationListProvider)
             .conversations
             .map((item) => item.threadId),
-        containsAll(<String>['thread-one', 'thread-two']),
+        <String>['thread-one'],
       );
+      expect(container.read(conversationListProvider).version, 1);
       expect(
         container
             .read(conversationListProvider)
@@ -2663,7 +2954,7 @@ void main() {
             .map((item) => item.threadId),
         isNot(contains('thread-repair-stale')),
       );
-      expect(notifications.lastBadgeCount, 1);
+      expect(notifications.lastBadgeCount, 0);
     },
   );
 
@@ -3019,6 +3310,7 @@ ConversationSummary _conversation({
   String targetDid = 'did:bob',
   String? targetPeer,
   String? peerPersonaId,
+  String? peerLocalNote,
   bool isGroup = false,
   String? groupId,
   DateTime? lastMessageAt,
@@ -3036,6 +3328,7 @@ ConversationSummary _conversation({
     targetDid: isGroup ? null : targetDid,
     targetPeer: isGroup ? null : targetPeer,
     peerPersonaId: isGroup ? null : peerPersonaId,
+    peerLocalNote: isGroup ? null : peerLocalNote,
     groupId: groupId,
     resolutionState: resolutionState,
   );
@@ -3471,6 +3764,33 @@ class _FailingHideConversationService extends _StaticConversationService {
   }
 }
 
+class _BlockingHideConversationService extends _StaticConversationService {
+  _BlockingHideConversationService({required super.conversations});
+
+  final Completer<void> started = Completer<void>();
+  final Completer<void> _release = Completer<void>();
+
+  @override
+  Future<void> hideConversationFromRecents({
+    required String ownerDid,
+    required ConversationSummary conversation,
+    DateTime? updatedAt,
+  }) async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await _release.future;
+  }
+
+  void complete() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
+  }
+
+  void completeIfPending() => complete();
+}
+
 class _MutableConversationService extends _StaticConversationService {
   _MutableConversationService({required super.conversations})
     : currentConversations = conversations;
@@ -3636,6 +3956,26 @@ class _PatchConversationService extends _StaticConversationService {
   }
 }
 
+class _QueuedRepairConversationService extends _PatchConversationService {
+  _QueuedRepairConversationService(this.repairs)
+    : super(conversations: const <ConversationSummary>[]);
+
+  final List<Completer<ConversationStoreRepairResult>> repairs;
+  final List<String> repairOwnerDids = <String>[];
+
+  @override
+  Future<ConversationStoreRepairResult> repairConversationStore({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) {
+    repairOwnerDids.add(ownerDid);
+    final index = repairCalls;
+    repairCalls += 1;
+    return repairs[index].future;
+  }
+}
+
 class _CommitConversationService extends _StaticConversationService {
   _CommitConversationService({required this.failRestore})
     : super(conversations: const <ConversationSummary>[]);
@@ -3653,5 +3993,43 @@ class _CommitConversationService extends _StaticConversationService {
     if (failRestore) {
       throw StateError('ensure failed');
     }
+  }
+}
+
+class _BlockingCommitConversationService extends _StaticConversationService {
+  _BlockingCommitConversationService(ConversationSummary conversation)
+    : super(conversations: <ConversationSummary>[conversation]);
+
+  final Completer<void> ensureStarted = Completer<void>();
+  final Completer<void> releaseEnsure = Completer<void>();
+  String? ensureOwnerDid;
+
+  @override
+  Future<void> ensureConversationInRecents({
+    required String ownerDid,
+    required String conversationId,
+    DateTime? updatedAt,
+  }) async {
+    ensureOwnerDid = ownerDid;
+    ensureStarted.complete();
+    await releaseEnsure.future;
+  }
+}
+
+class _BlockingFirstBadgeNotificationFacade extends FakeNotificationFacade {
+  final Completer<void> firstUpdateStarted = Completer<void>();
+  final Completer<void> releaseFirstUpdate = Completer<void>();
+  final List<int> appliedCounts = <int>[];
+  bool _blockedFirstUpdate = false;
+
+  @override
+  Future<void> updateBadgeCount(int count) async {
+    if (!_blockedFirstUpdate) {
+      _blockedFirstUpdate = true;
+      firstUpdateStarted.complete();
+      await releaseFirstUpdate.future;
+    }
+    appliedCounts.add(count);
+    lastBadgeCount = count;
   }
 }

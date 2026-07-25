@@ -12,6 +12,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  const testSession = SessionIdentity(
+    did: 'did:test:me',
+    credentialName: 'me.json',
+    displayName: 'Me',
+  );
+
   testWidgets('私聊资料页以 handle 为主并紧凑显示 DID，复制保留全值', (tester) async {
     const longDid =
         'did:awiki:user:cgw-agent-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
@@ -189,6 +195,7 @@ void main() {
       buildLocalizedTestApp(
         home: const PeerProfilePage(did: did),
         gateway: gateway,
+        session: testSession,
         homepageMarkdownLoader: (_) async => null,
         providerOverrides: <Override>[
           chatThreadsProvider.overrideWith((ref) {
@@ -241,6 +248,7 @@ void main() {
       buildLocalizedTestApp(
         home: const PeerProfilePage(did: did),
         gateway: gateway,
+        session: testSession,
         homepageMarkdownLoader: (_) async => null,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(

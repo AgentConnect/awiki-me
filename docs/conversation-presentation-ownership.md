@@ -18,6 +18,7 @@
 6. `ConversationListProvider` 只发布 recents、unread 和 badge 状态；base row 来自 core conversation read model，App 只叠加 product overlay 和短生命周期 read presentation waterline。发布状态是一次替换的 `entitiesById + orderedIds + loadState + version`，不允许 Map、排序和 patch version 分帧更新。
 7. `ChatThreadsProvider` / `ChatThreadsController` 只拥有当前 `conversationId` 的 UI window，不拥有消息归属、read watermark、send correctness 或 realtime correctness。
 8. `ChatPage` 只渲染当前 selected conversation，并可对可见会话发出 read intent；它不得因为 conversation summary 变化反向拉取 history。
+9. 所有 App 消息同步、timeline window、patch、read 和 send presentation 工作都绑定当前 `SessionEpoch(ownerDid, stableIdentityKey, generation)`；登出、清空会话或 A→B 身份替换必须推进 generation，并在旧 Future 完成前先使其失效。同一身份只刷新 JWT、昵称等可变字段时不推进 generation。
 
 App list/detail/read/send/realtime 主链路必须通过 `ConversationIdentity.conversationId` / `AppConversationReadRef` 消费 core projection。`ThreadRef`、alias、targetPeer/targetDid、visibility key 只允许作为 legacy adapter、migration fallback 或 diagnostic input，不再作为消息归属、read correctness、send correctness 或 realtime correctness 的机制。
 
@@ -83,6 +84,7 @@ Rust im-core
 | SDK DTO -> App message projection | `awiki-me` data mapper | `AwikiImCoreMappers.chatMessageFromCore`、`chatMessageFromSnapshot` | `ChatMessage` |
 | message renderability | `awiki-me` domain model | `ChatMessage.hasRenderableContent` | adapters、providers、timeline、preview 回填共同使用 |
 | message timeline window | `ChatThreadsProvider` / `ChatThreadsController` | `openConversation`、conversation timeline load、conversation timeline patch、conversation-after、patch gap / stream repair | `ChatPage` 只通过 `chatThreadProvider` 渲染当前 selected conversation window |
+| App message session generation | `SessionProvider` / `SessionEpoch` | active identity set/clear/replacement；同身份 auth refresh 保持 generation | sync coordinator、chat history/patch/repair/read/send completion 在每次异步工作开始时 capture，完成时校验；旧 generation 不得写当前 state |
 | text / Markdown / mention / attachment widget render | `awiki-me` presentation widgets | `ChatMessage` 字段和当前 bubble context | `chat/parts/chat_message_part.dart` |
 | conversation preview | Rust `im-core` conversation summary + `awiki-me` mapper/overlay | SDK snapshot、conversation patch、latest renderable core message projection | `ConversationListProvider`、conversation workspace |
 | control payload 会话预览可见性 | `awiki-me` mapper / realtime projection | SDK message 的 `body.text` + `payloadJson` | 只允许带显式可见文本的 control payload 更新 recents 预览；payload-only control 继续隐藏 |
@@ -239,6 +241,13 @@ Chat presentation 是单向的：
 - `ChatThreadsProvider` / `ChatThreadsController` 负责 conversation timeline window、merge、sort、repair 和 read ack 调度，主 key 是 `ConversationSummary.conversationId` / `AppConversationReadRef`。
 - `ChatPage` 渲染 selected conversation；它可以确认当前会话可见并触发 read ack，但不得因 summary 更新主动补拉 history。
 
+Chat presentation 同时是 owner/session-generation scoped：
+
+- `SessionEpoch` 由规范化 owner DID、稳定本机 identity key 和单调 generation 组成。active identity 改变、登出或 clear 都会推进 generation；同一 identity 的 token/profile refresh 不会误伤正在进行的工作。
+- `MessageSyncCoordinator` 只允许同一 epoch 的请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、prewarm timeline 或更新 coordinator state。
+- `ChatThreadsController` 在 epoch 改变时同步取消旧 patch subscriptions 和 timers，清空 pending history/read/repair、thread window、message route cache 与 composer draft。history、conversation-after、patch repair、read ack、text/attachment send 和 retry 都在 await 后再次校验启动时 epoch。
+- Future、stream callback 或 timer 即使无法底层取消，旧 epoch 完成也只能安静结束；不得删除新 epoch 的 active marker、合并到新 timeline、更新新 recents preview、恢复旧 read intent 或显示旧错误。
+
 打开会话的 first-paint 路径：
 
 1. 从 selected conversation ID state 读取 `conversationId`，构造 `AppConversationReadRef`。
@@ -358,6 +367,9 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
+  - 身份隔离还必须覆盖 A 的 delayed local history、patch repair 和 send completion 在快速 A→B→C 后被丢弃，同时切换当下即清空旧 thread window、patch subscription 和 composer draft。
+- `tests/unit/message_sync_coordinator_test.dart`：除 single-flight、节流和 snapshot-required 外，验证 A active sync 不会 coalesce 或满足 B startup sync，旧 identity 的 delayed request 在快速切换后不会执行。
+- `tests/unit/session_provider_test.dart`：固定 clear、A→B 和快速身份替换推进 epoch，同一 identity 的 JWT/profile refresh 保持 epoch。
 - `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation。

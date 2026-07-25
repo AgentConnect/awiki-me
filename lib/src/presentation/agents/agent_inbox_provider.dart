@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../app_shell/providers/session_provider.dart';
 
 enum AgentInboxScope { all, direct, group }
 
@@ -276,6 +277,29 @@ class AgentInboxState {
   }
 }
 
+class _AgentInboxOwnerToken {
+  const _AgentInboxOwnerToken({
+    required this.epoch,
+    required this.controllerGeneration,
+  });
+
+  final SessionEpoch epoch;
+  final int controllerGeneration;
+}
+
+class _AgentInboxOperation {
+  _AgentInboxOperation({
+    required this.owner,
+    required this.daemonAgentDid,
+    required this.runtimeAgentDid,
+  });
+
+  final _AgentInboxOwnerToken owner;
+  final String daemonAgentDid;
+  final String runtimeAgentDid;
+  String? requestId;
+}
+
 class AgentInboxController extends StateNotifier<AgentInboxState> {
   AgentInboxController(this.ref) : super(const AgentInboxState());
 
@@ -293,6 +317,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
   Timer? _threadStatusPoll;
   bool _listAppending = false;
   bool _threadPrepending = false;
+  int _controllerGeneration = 0;
+  bool _hasBoundOwner = false;
+  SessionEpoch? _boundEpoch;
+  _AgentInboxOperation? _listOperation;
+  _AgentInboxOperation? _threadOperation;
 
   Future<void> queryInbox({
     required String daemonAgentDid,
@@ -300,9 +329,21 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     AgentInboxScope scope = AgentInboxScope.all,
     bool refresh = false,
   }) async {
+    if (!_bindToCurrentOwner()) {
+      return;
+    }
     final sameMailbox =
-        state.runtimeAgentDid == runtimeAgentDid && state.scope == scope;
-    _listAppending = false;
+        state.daemonAgentDid == daemonAgentDid &&
+        state.runtimeAgentDid == runtimeAgentDid &&
+        state.scope == scope;
+    if (!sameMailbox) {
+      _cancelThreadOperation();
+    }
+    final operation = _beginListOperation(
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+      appending: false,
+    );
     state = state.copyWith(
       daemonAgentDid: daemonAgentDid,
       runtimeAgentDid: runtimeAgentDid,
@@ -323,14 +364,25 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             scope: _scopeName(scope),
             limit: agentInboxPageSize,
           );
+      if (!_isListOperationCurrent(operation)) {
+        return;
+      }
+      operation.requestId = requestId;
       state = state.copyWith(lastRequestId: requestId);
-      _scheduleListTimeout(requestId);
+      _scheduleListTimeout(operation);
       _pollListStatus(
         daemonAgentDid: daemonAgentDid,
         runtimeAgentDid: runtimeAgentDid,
         requestId: requestId,
+        operation: operation,
       );
     } catch (error) {
+      if (!_isListOperationCurrent(operation)) {
+        return;
+      }
+      _listOperation = null;
+      _listAppending = false;
+      _cancelListTimers();
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
@@ -340,9 +392,13 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
   }
 
   Future<void> loadMoreInbox() async {
+    if (!_bindToCurrentOwner()) {
+      return;
+    }
     final daemonAgentDid = state.daemonAgentDid;
     final runtimeAgentDid = state.runtimeAgentDid;
     final cursor = state.nextCursor;
+    final scope = state.scope;
     if (daemonAgentDid == null ||
         runtimeAgentDid == null ||
         cursor == null ||
@@ -350,7 +406,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         state.isRefreshing) {
       return;
     }
-    _listAppending = true;
+    final operation = _beginListOperation(
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+      appending: true,
+    );
     state = state.copyWith(isRefreshing: true, clearError: true);
     try {
       final requestId = await ref
@@ -358,19 +418,29 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
           .queryRuntimeInbox(
             daemonAgentDid: daemonAgentDid,
             runtimeAgentDid: runtimeAgentDid,
-            scope: _scopeName(state.scope),
+            scope: _scopeName(scope),
             limit: agentInboxPageSize,
             cursor: cursor,
           );
+      if (!_isListOperationCurrent(operation)) {
+        return;
+      }
+      operation.requestId = requestId;
       state = state.copyWith(lastRequestId: requestId);
-      _scheduleListTimeout(requestId);
+      _scheduleListTimeout(operation);
       _pollListStatus(
         daemonAgentDid: daemonAgentDid,
         runtimeAgentDid: runtimeAgentDid,
         requestId: requestId,
+        operation: operation,
       );
     } catch (error) {
+      if (!_isListOperationCurrent(operation)) {
+        return;
+      }
+      _listOperation = null;
       _listAppending = false;
+      _cancelListTimers();
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
@@ -385,11 +455,26 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     required AgentInboxItem item,
     bool refresh = false,
   }) async {
+    if (!_bindToCurrentOwner()) {
+      return;
+    }
+    final sameMailbox =
+        state.daemonAgentDid == daemonAgentDid &&
+        state.runtimeAgentDid == runtimeAgentDid;
     final sameThread =
+        sameMailbox &&
         state.thread.runtimeAgentDid == runtimeAgentDid &&
         state.thread.threadId == item.threadId;
-    _threadPrepending = false;
-    final items = state.items
+    if (!sameMailbox) {
+      _cancelListOperation();
+      state = const AgentInboxState();
+    }
+    final operation = _beginThreadOperation(
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+      prepending: false,
+    );
+    final items = (sameMailbox ? state.items : const <AgentInboxItem>[])
         .map((candidate) {
           if (candidate.threadId != item.threadId ||
               candidate.unreadCount == 0) {
@@ -430,16 +515,27 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             groupDid: item.groupDid,
             limit: agentInboxPageSize,
           );
+      if (!_isThreadOperationCurrent(operation)) {
+        return;
+      }
+      operation.requestId = requestId;
       state = state.copyWith(
         thread: state.thread.copyWith(lastRequestId: requestId),
       );
-      _scheduleThreadTimeout(requestId);
+      _scheduleThreadTimeout(operation);
       _pollThreadStatus(
         daemonAgentDid: daemonAgentDid,
         runtimeAgentDid: runtimeAgentDid,
         requestId: requestId,
+        operation: operation,
       );
     } catch (error) {
+      if (!_isThreadOperationCurrent(operation)) {
+        return;
+      }
+      _threadOperation = null;
+      _threadPrepending = false;
+      _cancelThreadTimers();
       state = state.copyWith(
         thread: state.thread.copyWith(
           isLoading: false,
@@ -451,6 +547,9 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
   }
 
   Future<void> loadMoreThread() async {
+    if (!_bindToCurrentOwner()) {
+      return;
+    }
     final daemonAgentDid = state.daemonAgentDid;
     final runtimeAgentDid = state.runtimeAgentDid;
     final threadId = state.thread.threadId;
@@ -478,7 +577,11 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         peerHandle: kind == 'direct' ? state.thread.title : null,
       ),
     );
-    _threadPrepending = true;
+    final operation = _beginThreadOperation(
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+      prepending: true,
+    );
     state = state.copyWith(
       thread: state.thread.copyWith(isRefreshing: true, clearError: true),
     );
@@ -496,17 +599,27 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
             limit: agentInboxPageSize,
             cursor: cursor,
           );
+      if (!_isThreadOperationCurrent(operation)) {
+        return;
+      }
+      operation.requestId = requestId;
       state = state.copyWith(
         thread: state.thread.copyWith(lastRequestId: requestId),
       );
-      _scheduleThreadTimeout(requestId);
+      _scheduleThreadTimeout(operation);
       _pollThreadStatus(
         daemonAgentDid: daemonAgentDid,
         runtimeAgentDid: runtimeAgentDid,
         requestId: requestId,
+        operation: operation,
       );
     } catch (error) {
+      if (!_isThreadOperationCurrent(operation)) {
+        return;
+      }
+      _threadOperation = null;
       _threadPrepending = false;
+      _cancelThreadTimers();
       state = state.copyWith(
         thread: state.thread.copyWith(
           isLoading: false,
@@ -518,11 +631,13 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
   }
 
   void closeThread() {
+    _cancelThreadOperation();
     state = state.copyWith(thread: const AgentInboxThreadState());
   }
 
   void applyControlPayload(Map<String, Object?> payload) {
-    if (payload['schema'] != AgentControlPayloads.statusSchema) {
+    if (payload['schema'] != AgentControlPayloads.statusSchema ||
+        !_isBoundOwnerCurrent()) {
       return;
     }
     final scope = _string(payload['status_scope']);
@@ -533,21 +648,24 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     }
   }
 
-  void _applyInboxPayload(Map<String, Object?> payload) {
+  void _applyInboxPayload(
+    Map<String, Object?> payload, {
+    _AgentInboxOperation? operation,
+  }) {
+    final activeOperation = operation ?? _listOperation;
+    if (activeOperation == null || !_isListOperationCurrent(activeOperation)) {
+      return;
+    }
     final requestId =
         _string(payload['request_id']) ?? _string(payload['command_id']);
-    if (requestId != null &&
-        state.lastRequestId != null &&
-        requestId != state.lastRequestId) {
+    if (requestId == null || requestId != activeOperation.requestId) {
       return;
     }
-    if (!_matchesCurrentMailboxPayload(payload)) {
+    if (!_matchesOperationPayload(payload, activeOperation)) {
       return;
     }
-    _listTimeout?.cancel();
-    _listTimeout = null;
-    _listStatusPoll?.cancel();
-    _listStatusPoll = null;
+    _cancelListTimers();
+    _listOperation = null;
     final shouldAppend = _listAppending;
     _listAppending = false;
     final succeeded = _string(payload['state']) == 'succeeded';
@@ -586,21 +704,25 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     );
   }
 
-  void _applyThreadPayload(Map<String, Object?> payload) {
+  void _applyThreadPayload(
+    Map<String, Object?> payload, {
+    _AgentInboxOperation? operation,
+  }) {
+    final activeOperation = operation ?? _threadOperation;
+    if (activeOperation == null ||
+        !_isThreadOperationCurrent(activeOperation)) {
+      return;
+    }
     final requestId =
         _string(payload['request_id']) ?? _string(payload['command_id']);
-    if (requestId != null &&
-        state.thread.lastRequestId != null &&
-        requestId != state.thread.lastRequestId) {
+    if (requestId == null || requestId != activeOperation.requestId) {
       return;
     }
-    if (!_matchesCurrentMailboxPayload(payload)) {
+    if (!_matchesOperationPayload(payload, activeOperation)) {
       return;
     }
-    _threadTimeout?.cancel();
-    _threadTimeout = null;
-    _threadStatusPoll?.cancel();
-    _threadStatusPoll = null;
+    _cancelThreadTimers();
+    _threadOperation = null;
     final shouldPrepend = _threadPrepending;
     _threadPrepending = false;
     final succeeded = _string(payload['state']) == 'succeeded';
@@ -645,19 +767,28 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
     );
   }
 
-  bool _matchesCurrentMailboxPayload(Map<String, Object?> payload) {
+  bool _matchesOperationPayload(
+    Map<String, Object?> payload,
+    _AgentInboxOperation operation,
+  ) {
     final payloadDaemonDid = _string(payload['daemon_agent_did']);
     final payloadRuntimeDid = _string(payload['runtime_agent_did']);
     return payloadDaemonDid != null &&
         payloadRuntimeDid != null &&
-        payloadDaemonDid == state.daemonAgentDid &&
-        payloadRuntimeDid == state.runtimeAgentDid;
+        payloadDaemonDid == operation.daemonAgentDid &&
+        payloadRuntimeDid == operation.runtimeAgentDid;
   }
 
-  void _scheduleListTimeout(String requestId) {
+  void _scheduleListTimeout(_AgentInboxOperation operation) {
+    final requestId = operation.requestId!;
     _listTimeout?.cancel();
-    _listTimeout = Timer(responseTimeout, () {
-      if (!mounted || state.lastRequestId != requestId) {
+    late final Timer timer;
+    timer = Timer(responseTimeout, () {
+      if (identical(_listTimeout, timer)) {
+        _listTimeout = null;
+      }
+      if (!_isListOperationCurrent(operation) ||
+          state.lastRequestId != requestId) {
         return;
       }
       state = state.copyWith(
@@ -666,12 +797,19 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         error: _daemonNoResponseMessage,
       );
     });
+    _listTimeout = timer;
   }
 
-  void _scheduleThreadTimeout(String requestId) {
+  void _scheduleThreadTimeout(_AgentInboxOperation operation) {
+    final requestId = operation.requestId!;
     _threadTimeout?.cancel();
-    _threadTimeout = Timer(responseTimeout, () {
-      if (!mounted || state.thread.lastRequestId != requestId) {
+    late final Timer timer;
+    timer = Timer(responseTimeout, () {
+      if (identical(_threadTimeout, timer)) {
+        _threadTimeout = null;
+      }
+      if (!_isThreadOperationCurrent(operation) ||
+          state.thread.lastRequestId != requestId) {
         return;
       }
       state = state.copyWith(
@@ -682,74 +820,253 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
         ),
       );
     });
+    _threadTimeout = timer;
   }
 
   void _pollListStatus({
     required String daemonAgentDid,
     required String runtimeAgentDid,
     required String requestId,
+    required _AgentInboxOperation operation,
   }) {
     _listStatusPoll?.cancel();
     var attempts = 0;
-    _listStatusPoll = Timer.periodic(statusPollInterval, (timer) async {
-      if (!mounted || state.lastRequestId != requestId) {
+    var polling = false;
+    late final Timer periodicTimer;
+    periodicTimer = Timer.periodic(statusPollInterval, (timer) async {
+      if (!_isListOperationCurrent(operation) ||
+          state.lastRequestId != requestId) {
         timer.cancel();
+        if (identical(_listStatusPoll, periodicTimer)) {
+          _listStatusPoll = null;
+        }
         return;
       }
+      if (polling) {
+        return;
+      }
+      polling = true;
       attempts += 1;
-      final payload = await _findStatusPayload(
-        daemonAgentDid: daemonAgentDid,
-        runtimeAgentDid: runtimeAgentDid,
-        requestId: requestId,
-        statusScope: 'runtime_inbox',
-      );
-      if (!mounted || state.lastRequestId != requestId) {
+      Map<String, Object?>? payload;
+      try {
+        payload = await _findStatusPayload(
+          daemonAgentDid: daemonAgentDid,
+          runtimeAgentDid: runtimeAgentDid,
+          requestId: requestId,
+          statusScope: 'runtime_inbox',
+        );
+      } catch (_) {
+        payload = null;
+      } finally {
+        polling = false;
+      }
+      if (!_isListOperationCurrent(operation) ||
+          state.lastRequestId != requestId) {
         timer.cancel();
+        if (identical(_listStatusPoll, periodicTimer)) {
+          _listStatusPoll = null;
+        }
         return;
       }
       if (payload != null) {
         timer.cancel();
-        _applyInboxPayload(payload);
+        if (identical(_listStatusPoll, periodicTimer)) {
+          _listStatusPoll = null;
+        }
+        _applyInboxPayload(payload, operation: operation);
         return;
       }
       if (attempts >= statusPollAttempts) {
         timer.cancel();
+        if (identical(_listStatusPoll, periodicTimer)) {
+          _listStatusPoll = null;
+        }
       }
     });
+    _listStatusPoll = periodicTimer;
   }
 
   void _pollThreadStatus({
     required String daemonAgentDid,
     required String runtimeAgentDid,
     required String requestId,
+    required _AgentInboxOperation operation,
   }) {
     _threadStatusPoll?.cancel();
     var attempts = 0;
-    _threadStatusPoll = Timer.periodic(statusPollInterval, (timer) async {
-      if (!mounted || state.thread.lastRequestId != requestId) {
+    var polling = false;
+    late final Timer periodicTimer;
+    periodicTimer = Timer.periodic(statusPollInterval, (timer) async {
+      if (!_isThreadOperationCurrent(operation) ||
+          state.thread.lastRequestId != requestId) {
         timer.cancel();
+        if (identical(_threadStatusPoll, periodicTimer)) {
+          _threadStatusPoll = null;
+        }
         return;
       }
+      if (polling) {
+        return;
+      }
+      polling = true;
       attempts += 1;
-      final payload = await _findStatusPayload(
-        daemonAgentDid: daemonAgentDid,
-        runtimeAgentDid: runtimeAgentDid,
-        requestId: requestId,
-        statusScope: 'runtime_inbox_thread',
-      );
-      if (!mounted || state.thread.lastRequestId != requestId) {
+      Map<String, Object?>? payload;
+      try {
+        payload = await _findStatusPayload(
+          daemonAgentDid: daemonAgentDid,
+          runtimeAgentDid: runtimeAgentDid,
+          requestId: requestId,
+          statusScope: 'runtime_inbox_thread',
+        );
+      } catch (_) {
+        payload = null;
+      } finally {
+        polling = false;
+      }
+      if (!_isThreadOperationCurrent(operation) ||
+          state.thread.lastRequestId != requestId) {
         timer.cancel();
+        if (identical(_threadStatusPoll, periodicTimer)) {
+          _threadStatusPoll = null;
+        }
         return;
       }
       if (payload != null) {
         timer.cancel();
-        _applyThreadPayload(payload);
+        if (identical(_threadStatusPoll, periodicTimer)) {
+          _threadStatusPoll = null;
+        }
+        _applyThreadPayload(payload, operation: operation);
         return;
       }
       if (attempts >= statusPollAttempts) {
         timer.cancel();
+        if (identical(_threadStatusPoll, periodicTimer)) {
+          _threadStatusPoll = null;
+        }
       }
     });
+    _threadStatusPoll = periodicTimer;
+  }
+
+  bool _bindToCurrentOwner() {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (_hasBoundOwner && _boundEpoch == epoch) {
+      return epoch != null;
+    }
+    _controllerGeneration += 1;
+    _cancelPendingWork();
+    _hasBoundOwner = true;
+    _boundEpoch = epoch;
+    state = const AgentInboxState();
+    return epoch != null;
+  }
+
+  _AgentInboxOperation _beginListOperation({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required bool appending,
+  }) {
+    _cancelListOperation();
+    final operation = _AgentInboxOperation(
+      owner: _captureOwnerToken(),
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+    );
+    _listOperation = operation;
+    _listAppending = appending;
+    return operation;
+  }
+
+  _AgentInboxOperation _beginThreadOperation({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required bool prepending,
+  }) {
+    _cancelThreadOperation();
+    final operation = _AgentInboxOperation(
+      owner: _captureOwnerToken(),
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+    );
+    _threadOperation = operation;
+    _threadPrepending = prepending;
+    return operation;
+  }
+
+  _AgentInboxOwnerToken _captureOwnerToken() {
+    final epoch = _boundEpoch;
+    if (epoch == null) {
+      throw sessionEpochChangedError();
+    }
+    return _AgentInboxOwnerToken(
+      epoch: epoch,
+      controllerGeneration: _controllerGeneration,
+    );
+  }
+
+  bool _isBoundOwnerCurrent() {
+    return mounted &&
+        _hasBoundOwner &&
+        _boundEpoch != null &&
+        ref.read(sessionProvider).activeEpoch == _boundEpoch;
+  }
+
+  bool _isOwnerTokenCurrent(_AgentInboxOwnerToken token) {
+    return mounted &&
+        _hasBoundOwner &&
+        token.controllerGeneration == _controllerGeneration &&
+        token.epoch == _boundEpoch &&
+        ref.read(sessionProvider).activeEpoch == token.epoch;
+  }
+
+  bool _isListOperationCurrent(_AgentInboxOperation operation) {
+    return identical(_listOperation, operation) &&
+        _isOwnerTokenCurrent(operation.owner);
+  }
+
+  bool _isThreadOperationCurrent(_AgentInboxOperation operation) {
+    return identical(_threadOperation, operation) &&
+        _isOwnerTokenCurrent(operation.owner);
+  }
+
+  void _cancelListTimers() {
+    _listTimeout?.cancel();
+    _listTimeout = null;
+    _listStatusPoll?.cancel();
+    _listStatusPoll = null;
+  }
+
+  void _cancelThreadTimers() {
+    _threadTimeout?.cancel();
+    _threadTimeout = null;
+    _threadStatusPoll?.cancel();
+    _threadStatusPoll = null;
+  }
+
+  void _cancelListOperation() {
+    _listOperation = null;
+    _listAppending = false;
+    _cancelListTimers();
+  }
+
+  void _cancelThreadOperation() {
+    _threadOperation = null;
+    _threadPrepending = false;
+    _cancelThreadTimers();
+  }
+
+  void _cancelPendingWork() {
+    _cancelListOperation();
+    _cancelThreadOperation();
+  }
+
+  void clear() {
+    _controllerGeneration += 1;
+    _hasBoundOwner = false;
+    _boundEpoch = null;
+    _cancelPendingWork();
+    state = const AgentInboxState();
   }
 
   Future<Map<String, Object?>?> _findStatusPayload({
@@ -770,10 +1087,10 @@ class AgentInboxController extends StateNotifier<AgentInboxState> {
 
   @override
   void dispose() {
-    _listTimeout?.cancel();
-    _threadTimeout?.cancel();
-    _listStatusPoll?.cancel();
-    _threadStatusPoll?.cancel();
+    _controllerGeneration += 1;
+    _hasBoundOwner = false;
+    _boundEpoch = null;
+    _cancelPendingWork();
     super.dispose();
   }
 }

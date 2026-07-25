@@ -441,6 +441,16 @@ enum AgentDeleteAction {
   unavailable,
 }
 
+final class _AgentsOwnerOperation {
+  const _AgentsOwnerOperation({
+    required this.sessionEpoch,
+    required this.stateEpoch,
+  });
+
+  final SessionEpoch? sessionEpoch;
+  final int stateEpoch;
+}
+
 class AgentsController extends StateNotifier<AgentsState> {
   AgentsController(this.ref) : super(const AgentsState());
 
@@ -454,10 +464,13 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _deletionRefreshTimers = <String, Timer>{};
   Timer? _inventoryAutoSyncTimer;
+  _AgentsOwnerOperation? _inventoryAutoSyncOperation;
   Future<void>? _loadOperation;
+  Future<void> _cacheWriteTail = Future<void>.value();
   String? _loadOperationOwner;
-  int? _loadOperationEpoch;
+  _AgentsOwnerOperation? _loadOwnerOperation;
   String? _loadedCacheOwner;
+  _AgentsOwnerOperation? _loadedCacheOperation;
   int _stateEpoch = 0;
   int _inventoryAutoSyncAttempts = 0;
   bool _inventoryAutoSyncInFlight = false;
@@ -465,8 +478,31 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   bool get _agentsAvailable => ref.read(agentImEnabledProvider);
 
+  _AgentsOwnerOperation _captureOwnerOperation() {
+    return _AgentsOwnerOperation(
+      sessionEpoch: ref.read(sessionProvider).activeEpoch,
+      stateEpoch: _stateEpoch,
+    );
+  }
+
+  bool _isOwnerOperationCurrent(_AgentsOwnerOperation operation) {
+    return mounted &&
+        operation.stateEpoch == _stateEpoch &&
+        operation.sessionEpoch == ref.read(sessionProvider).activeEpoch;
+  }
+
+  bool _sameOwnerOperation(
+    _AgentsOwnerOperation? first,
+    _AgentsOwnerOperation second,
+  ) {
+    return first != null &&
+        first.stateEpoch == second.stateEpoch &&
+        first.sessionEpoch == second.sessionEpoch;
+  }
+
   void _setTenantUnsupported() {
     _loadedCacheOwner = null;
+    _loadedCacheOperation = null;
     _stateEpoch += 1;
     _inventoryAutoSyncExhaustedOwner = null;
     _stopInventoryAutoSync();
@@ -487,21 +523,24 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       state = const AgentsState();
       _loadedCacheOwner = null;
+      _loadedCacheOperation = null;
       _stateEpoch += 1;
       return Future<void>.value();
     }
     final cacheOwner = _agentCacheOwner(session);
+    final ownerOperation = _captureOwnerOperation();
     final activeLoad = _loadOperation;
     if (activeLoad != null &&
         _loadOperationOwner == cacheOwner &&
-        _loadOperationEpoch == _stateEpoch) {
+        _sameOwnerOperation(_loadOwnerOperation, ownerOperation)) {
       AwikiPerformanceLogger.log(
         'agents.ensure_loaded.reuse',
         level: AwikiPerformanceLogLevel.verbose,
       );
       return activeLoad;
     }
-    if (_loadedCacheOwner == cacheOwner) {
+    if (_loadedCacheOwner == cacheOwner &&
+        _sameOwnerOperation(_loadedCacheOperation, ownerOperation)) {
       AwikiPerformanceLogger.log(
         'agents.ensure_loaded.cached',
         level: AwikiPerformanceLogLevel.verbose,
@@ -522,27 +561,28 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final session = ref.read(sessionProvider).session;
     final cacheOwner = session == null ? null : _agentCacheOwner(session);
-    final epoch = _stateEpoch;
+    final ownerOperation = _captureOwnerOperation();
     final activeLoad = _loadOperation;
     if (activeLoad != null &&
         _loadOperationOwner == cacheOwner &&
-        _loadOperationEpoch == epoch) {
+        _sameOwnerOperation(_loadOwnerOperation, ownerOperation)) {
       return activeLoad;
     }
     final operation = _load(
       showLoading: showLoading,
       surfaceError: surfaceError,
+      ownerOperation: ownerOperation,
     );
     _loadOperation = operation;
     _loadOperationOwner = cacheOwner;
-    _loadOperationEpoch = epoch;
+    _loadOwnerOperation = ownerOperation;
     try {
       await operation;
     } finally {
       if (identical(_loadOperation, operation)) {
         _loadOperation = null;
         _loadOperationOwner = null;
-        _loadOperationEpoch = null;
+        _loadOwnerOperation = null;
       }
     }
   }
@@ -565,28 +605,32 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> _load({
     bool showLoading = true,
     bool surfaceError = true,
+    required _AgentsOwnerOperation ownerOperation,
   }) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
     final totalWatch = Stopwatch()..start();
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       _stopInventoryAutoSync();
       state = const AgentsState();
       _loadedCacheOwner = null;
+      _loadedCacheOperation = null;
       _stateEpoch += 1;
       return;
     }
-    final startedEpoch = _stateEpoch;
     final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: showLoading, clearError: surfaceError);
     await AwikiPerformanceLogger.async(
       'agents.load.cache',
-      () => _loadCached(cacheOwner),
+      () => _loadCached(cacheOwner, ownerOperation),
     );
-    if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
+    if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
       return;
     }
     try {
@@ -604,7 +648,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         fields: <String, Object?>{'remote': remoteAgents.length},
       );
-      if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
+      if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
         return;
       }
       final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
@@ -634,11 +678,15 @@ class AgentsController extends StateNotifier<AgentsState> {
         clearError: true,
       );
       _loadedCacheOwner = cacheOwner;
+      _loadedCacheOperation = ownerOperation;
       if (hasDaemon) {
         _inventoryAutoSyncExhaustedOwner = null;
         _stopInventoryAutoSync();
       }
-      await _saveCacheBestEffort(cacheOwner, agents);
+      await _saveCacheBestEffort(cacheOwner, agents, ownerOperation);
+      if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
+        return;
+      }
       final selectedAgent = state.selectedAgent;
       if (selectedAgent != null && selectedAgent.isRuntime) {
         unawaited(loadInvocationPolicy(selectedAgent.agentDid));
@@ -655,7 +703,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         fields: <String, Object?>{'agents': agents.length},
       );
     } catch (error) {
-      if (_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
+      if (_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
         state = surfaceError
             ? state.copyWith(
                 isLoading: false,
@@ -693,7 +741,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.handleUnavailable);
       return;
     }
-    await _runAction(AgentActionKeys.installCommand, () async {
+    await _runAction(AgentActionKeys.installCommand, (operation) async {
       final command = await ref
           .read(agentControlServiceProvider)
           .createDaemonInstallCommand(
@@ -701,6 +749,9 @@ class AgentsController extends StateNotifier<AgentsState> {
             controllerHandle: controllerHandle,
             clientPlatform: awikiClientPlatform(),
           );
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
       state = state.copyWith(installCommand: command, clearError: true);
       _inventoryAutoSyncExhaustedOwner = null;
       startInventoryAutoSync(
@@ -722,6 +773,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (owner == null || state.agents.any((agent) => agent.isDaemon)) {
       return;
     }
+    final operation = _captureOwnerOperation();
+    if (_inventoryAutoSyncTimer != null &&
+        !_sameOwnerOperation(_inventoryAutoSyncOperation, operation)) {
+      _stopInventoryAutoSync();
+    }
     if (_inventoryAutoSyncExhaustedOwner == owner &&
         _inventoryAutoSyncTimer == null) {
       return;
@@ -737,11 +793,12 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     _inventoryAutoSyncAttempts = 0;
+    _inventoryAutoSyncOperation = operation;
     state = state.copyWith(inventoryAutoSyncReason: reason);
-    _runInventoryAutoSyncAttempt();
+    _runInventoryAutoSyncAttempt(operation);
     _inventoryAutoSyncTimer = Timer.periodic(
       agentInventoryAutoSyncInterval,
-      (_) => _runInventoryAutoSyncAttempt(),
+      (_) => _runInventoryAutoSyncAttempt(operation),
     );
   }
 
@@ -757,6 +814,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       _setTenantUnsupported();
       return;
     }
+    final operation = _captureOwnerOperation();
     final now = DateTime.now().toUtc();
     if (state.isStatusQueryPending(daemonDid)) {
       return;
@@ -776,18 +834,28 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         clearError: true,
       );
-      _scheduleStatusQueryTimeout(daemonDid, commandId);
-      _pollDaemonStatusPayload(daemonDid: daemonDid, commandId: commandId);
+      _scheduleStatusQueryTimeout(daemonDid, commandId, operation);
+      _pollDaemonStatusPayload(
+        daemonDid: daemonDid,
+        commandId: commandId,
+        operation: operation,
+      );
     }
     try {
       await ref
           .read(agentControlServiceProvider)
           .refreshDaemonStatus(daemonDid, commandId: commandId)
           .timeout(agentStatusRequestSendTimeout);
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
       if (!fromAutoLoad) {
         state = state.copyWith(clearError: true);
       }
     } catch (error) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
       _cancelStatusQueryTracking(daemonDid);
       final nextPending = fromAutoLoad
           ? state.pendingStatusQueryAtByDaemon
@@ -837,7 +905,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.loginRequired);
       return;
     }
+    final ownerOperation = _captureOwnerOperation();
     await ensureLoaded();
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      return;
+    }
     final daemon = _agentByDid(daemonDid);
     if (daemon == null ||
         !daemon.isDaemon ||
@@ -846,7 +918,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
       return;
     }
-    await _runAction(AgentActionKeys.createRuntime(daemonDid), () async {
+    await _runAction(AgentActionKeys.createRuntime(daemonDid), (
+      operation,
+    ) async {
       final requestId = agentCommandId('app_req');
       final pending = PendingRuntimeCreation(
         requestId: requestId,
@@ -865,7 +939,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         selectedAgentDid: daemonDid,
         clearError: true,
       );
-      _scheduleRuntimeCreationTimeout(requestId);
+      _scheduleRuntimeCreationTimeout(requestId, operation);
       try {
         await ref
             .read(agentControlServiceProvider)
@@ -876,6 +950,9 @@ class AgentsController extends StateNotifier<AgentsState> {
               clientRequestId: requestId,
             );
       } catch (_) {
+        if (!_isOwnerOperationCurrent(operation)) {
+          return;
+        }
         _runtimeCreationTimeouts.remove(requestId)?.cancel();
         state = state.copyWith(
           pendingRuntimeCreations: _removePendingRuntimeCreation(
@@ -885,6 +962,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         );
         rethrow;
       }
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
       state = state.copyWith(
         pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
           state.pendingRuntimeCreations,
@@ -892,7 +972,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
       );
       unawaited(load());
-    });
+    }, expectedOperation: ownerOperation);
   }
 
   Future<void> bootstrapMessageAgent({
@@ -913,7 +993,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentDisabled);
       return;
     }
+    final ownerOperation = _captureOwnerOperation();
     await ensureLoaded();
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      return;
+    }
     final daemon = _agentByDid(daemonDid);
     if (daemon == null ||
         !daemon.isDaemon ||
@@ -932,12 +1016,15 @@ class AgentsController extends StateNotifier<AgentsState> {
     final existingMessageAgent = state.messageAgentRuntimeFor(daemonDid);
     await _runAction(
       AgentActionKeys.bootstrapMessageAgent(daemonDid),
-      () async {
+      (operation) async {
         final subkeyPackage =
             userSubkeyPackage ??
             await ref
                 .read(identityCorePortProvider)
                 .ensureDaemonSubkeyPackage(session.credentialName);
+        if (!_isOwnerOperationCurrent(operation)) {
+          return;
+        }
         if (existingMessageAgent != null) {
           await ref
               .read(messageAgentBindingPortProvider)
@@ -966,6 +1053,7 @@ class AgentsController extends StateNotifier<AgentsState> {
             );
       },
       timeout: agentMessageAgentBootstrapActionTimeout,
+      expectedOperation: ownerOperation,
     );
   }
 
@@ -977,6 +1065,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isDaemonUpgradePending(daemonDid)) {
       return false;
     }
+    final operation = _captureOwnerOperation();
     final daemon = _agentByDid(daemonDid);
     if (daemon == null ||
         !daemon.isDaemon ||
@@ -1017,13 +1106,16 @@ class AgentsController extends StateNotifier<AgentsState> {
       pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
       clearError: true,
     );
-    _scheduleDaemonUpgradeAckTimeout(daemonDid, commandId);
+    _scheduleDaemonUpgradeAckTimeout(daemonDid, commandId, operation);
     try {
       await ref
           .read(agentControlServiceProvider)
           .upgradeDaemon(daemonDid, commandId: commandId)
           .timeout(agentActionTimeout);
-      if (!mounted || !state.pendingDaemonUpgrades.containsKey(daemonDid)) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return false;
+      }
+      if (!state.pendingDaemonUpgrades.containsKey(daemonDid)) {
         return true;
       }
       state = state.copyWith(
@@ -1032,6 +1124,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       return true;
     } catch (error) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return false;
+      }
       _cancelDaemonUpgradeTimers(daemonDid);
       state = state.copyWith(
         pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
@@ -1051,7 +1146,8 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       return false;
     } finally {
-      if (mounted && state.isActionPending(actionKey)) {
+      if (_isOwnerOperationCurrent(operation) &&
+          state.isActionPending(actionKey)) {
         state = state.copyWith(
           pendingActionKeys: _withoutSetValue(
             state.pendingActionKeys,
@@ -1071,6 +1167,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         state.isDaemonUpgradeCancelling(daemonDid)) {
       return false;
     }
+    final operation = _captureOwnerOperation();
     final pendingUpgrade = state.pendingDaemonUpgrades[daemonDid];
     final commandId = agentCommandId('cmd_daemon_upgrade_cancel');
     state = state.copyWith(
@@ -1083,7 +1180,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       },
       clearError: true,
     );
-    _scheduleDaemonUpgradeCancelAckTimeout(daemonDid, commandId);
+    _scheduleDaemonUpgradeCancelAckTimeout(daemonDid, commandId, operation);
     try {
       await ref
           .read(agentControlServiceProvider)
@@ -1093,11 +1190,17 @@ class AgentsController extends StateNotifier<AgentsState> {
             upgradeCommandId: pendingUpgrade?.commandId,
           )
           .timeout(agentActionTimeout);
-      if (!mounted || !state.cancellingDaemonUpgrades.containsKey(daemonDid)) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return false;
+      }
+      if (!state.cancellingDaemonUpgrades.containsKey(daemonDid)) {
         return true;
       }
       return true;
     } catch (error) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return false;
+      }
       _cancelDaemonUpgradeCancelTimer(daemonDid);
       state = state.copyWith(
         cancellingDaemonUpgrades: _withoutMapKey(
@@ -1123,11 +1226,15 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (selected == null) {
       return;
     }
-    await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
+    await _runAction(AgentActionKeys.unbind(selected.agentDid), (
+      operation,
+    ) async {
       await ref
           .read(agentControlServiceProvider)
           .unbindAgent(selected.agentDid);
-      await load();
+      if (_isOwnerOperationCurrent(operation)) {
+        await load();
+      }
     });
   }
 
@@ -1151,11 +1258,15 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     if (deleteAction == AgentDeleteAction.unregister) {
-      await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
+      await _runAction(AgentActionKeys.unbind(selected.agentDid), (
+        operation,
+      ) async {
         await ref
             .read(agentControlServiceProvider)
             .unbindAgent(selected.agentDid);
-        await load();
+        if (_isOwnerOperationCurrent(operation)) {
+          await load();
+        }
       });
       return;
     }
@@ -1167,6 +1278,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isActionPending(actionKey)) {
       return;
     }
+    final operation = _captureOwnerOperation();
     final daemon = selected.isDaemon
         ? selected
         : state.daemonForRuntime(selected);
@@ -1207,16 +1319,16 @@ class AgentsController extends StateNotifier<AgentsState> {
             )
             .timeout(agentActionTimeout);
       }
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
         pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
         clearError: true,
       );
-      _scheduleDeletionRefresh(daemon.agentDid);
+      _scheduleDeletionRefresh(daemon.agentDid, operation: operation);
     } catch (error) {
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
@@ -1229,7 +1341,8 @@ class AgentsController extends StateNotifier<AgentsState> {
         debugLastError: error.toString(),
       );
     } finally {
-      if (mounted && state.isActionPending(actionKey)) {
+      if (_isOwnerOperationCurrent(operation) &&
+          state.isActionPending(actionKey)) {
         state = state.copyWith(
           pendingActionKeys: _withoutSetValue(
             state.pendingActionKeys,
@@ -1245,6 +1358,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isActionPending(actionKey)) {
       return;
     }
+    final operation = _captureOwnerOperation();
     final removingDids = selected.isDaemon
         ? {
             selected.agentDid,
@@ -1270,7 +1384,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         ...removingDids,
         ...removed.map((agent) => agent.agentDid),
       };
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       _removeAgentsLocally(removedDids);
@@ -1284,7 +1398,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       unawaited(load(showLoading: false, surfaceError: false));
     } catch (error) {
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
@@ -1297,7 +1411,8 @@ class AgentsController extends StateNotifier<AgentsState> {
         debugLastError: error.toString(),
       );
     } finally {
-      if (mounted && state.isActionPending(actionKey)) {
+      if (_isOwnerOperationCurrent(operation) &&
+          state.isActionPending(actionKey)) {
         state = state.copyWith(
           pendingActionKeys: _withoutSetValue(
             state.pendingActionKeys,
@@ -1378,7 +1493,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
       return;
     }
-    await _runAction(AgentActionKeys.pauseMessageAgent(daemonDid), () async {
+    await _runAction(AgentActionKeys.pauseMessageAgent(daemonDid), (_) async {
       await ref
           .read(agentControlServiceProvider)
           .pauseMessageAgent(
@@ -1405,6 +1520,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (state.isActionPending(actionKey)) {
       return;
     }
+    final operation = _captureOwnerOperation();
     state = state.copyWith(
       pendingActionKeys: _withSetValue(state.pendingActionKeys, actionKey),
       pendingDeletionAgentDids: <String>{
@@ -1421,16 +1537,16 @@ class AgentsController extends StateNotifier<AgentsState> {
             messageAgentDid: target.agentDid,
           )
           .timeout(agentActionTimeout);
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
         pendingActionKeys: _withoutSetValue(state.pendingActionKeys, actionKey),
         clearError: true,
       );
-      _scheduleDeletionRefresh(daemonDid);
+      _scheduleDeletionRefresh(daemonDid, operation: operation);
     } catch (error) {
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
@@ -1443,7 +1559,8 @@ class AgentsController extends StateNotifier<AgentsState> {
         debugLastError: error.toString(),
       );
     } finally {
-      if (mounted && state.isActionPending(actionKey)) {
+      if (_isOwnerOperationCurrent(operation) &&
+          state.isActionPending(actionKey)) {
         state = state.copyWith(
           pendingActionKeys: _withoutSetValue(
             state.pendingActionKeys,
@@ -1466,7 +1583,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
       return;
     }
-    await _runAction(AgentActionKeys.revokeMessageAgent(daemonDid), () async {
+    await _runAction(AgentActionKeys.revokeMessageAgent(daemonDid), (_) async {
       await ref
           .read(agentControlServiceProvider)
           .revokeMessageAgentAuthorization(
@@ -1497,14 +1614,18 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (normalizedAgentDid.isEmpty || normalizedDisplayName.isEmpty) {
       return;
     }
-    await _runAction(AgentActionKeys.rename(normalizedAgentDid), () async {
+    await _runAction(AgentActionKeys.rename(normalizedAgentDid), (
+      operation,
+    ) async {
       await ref
           .read(agentControlServiceProvider)
           .updateDisplayName(
             agentDid: normalizedAgentDid,
             displayName: normalizedDisplayName,
           );
-      await load();
+      if (_isOwnerOperationCurrent(operation)) {
+        await load();
+      }
     });
   }
 
@@ -1520,6 +1641,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         state.loadingInvocationPolicies.contains(normalized)) {
       return;
     }
+    final operation = _captureOwnerOperation();
     state = state.copyWith(
       loadingInvocationPolicies: <String>{
         ...state.loadingInvocationPolicies,
@@ -1534,6 +1656,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       final policy = await ref
           .read(agentControlServiceProvider)
           .getInvocationPolicy(normalized);
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
       state = state.copyWith(
         invocationPolicies: <String, AgentInvocationPolicy>{
           ...state.invocationPolicies,
@@ -1545,6 +1670,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
       );
     } catch (error) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
       state = state.copyWith(
         loadingInvocationPolicies: _withoutSetValue(
           state.loadingInvocationPolicies,
@@ -1572,6 +1700,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         state.savingInvocationPolicies.contains(normalized)) {
       return false;
     }
+    final operation = _captureOwnerOperation();
     state = state.copyWith(
       savingInvocationPolicies: <String>{
         ...state.savingInvocationPolicies,
@@ -1586,6 +1715,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       final saved = await ref
           .read(agentControlServiceProvider)
           .updateInvocationPolicy(agentDid: normalized, policy: policy);
+      if (!_isOwnerOperationCurrent(operation)) {
+        return false;
+      }
       state = state.copyWith(
         invocationPolicies: <String, AgentInvocationPolicy>{
           ...state.invocationPolicies,
@@ -1598,6 +1730,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       return true;
     } catch (error) {
+      if (!_isOwnerOperationCurrent(operation)) {
+        return false;
+      }
       state = state.copyWith(
         savingInvocationPolicies: _withoutSetValue(
           state.savingInvocationPolicies,
@@ -1618,6 +1753,7 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void clear() {
     _loadedCacheOwner = null;
+    _loadedCacheOperation = null;
     _stateEpoch += 1;
     _inventoryAutoSyncExhaustedOwner = null;
     _stopInventoryAutoSync();
@@ -1626,8 +1762,18 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   void applyControlPayload(Map<String, Object?> payload) {
+    _applyControlPayload(payload, _captureOwnerOperation());
+  }
+
+  void _applyControlPayload(
+    Map<String, Object?> payload,
+    _AgentsOwnerOperation operation,
+  ) {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
+      return;
+    }
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
     if (payload['schema'] != AgentControlPayloads.statusSchema) {
@@ -1653,7 +1799,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (_isStaleDaemonUpgradeCommandPayload(payload, daemonDid)) {
       return;
     }
-    final nextPending = _pendingAfterStatusPayload(daemonDid);
+    final nextPending = _pendingAfterStatusPayload(daemonDid, operation);
     final nextPendingDaemonUpgrades = _pendingDaemonUpgradesAfterPayload(
       payload,
       daemonDid,
@@ -1698,7 +1844,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
     final session = ref.read(sessionProvider).session;
     if (session != null) {
-      unawaited(_saveCacheBestEffort(_agentCacheOwner(session), merged));
+      unawaited(
+        _saveCacheBestEffort(_agentCacheOwner(session), merged, operation),
+      );
     }
   }
 
@@ -1725,9 +1873,14 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   Future<void> _runAction(
     String actionKey,
-    Future<void> Function() action, {
+    Future<void> Function(_AgentsOwnerOperation operation) action, {
     Duration timeout = agentActionTimeout,
+    _AgentsOwnerOperation? expectedOperation,
   }) async {
+    final operation = expectedOperation ?? _captureOwnerOperation();
+    if (!_isOwnerOperationCurrent(operation)) {
+      return;
+    }
     if (state.isActionPending(actionKey)) {
       return;
     }
@@ -1736,8 +1889,8 @@ class AgentsController extends StateNotifier<AgentsState> {
       clearError: true,
     );
     try {
-      await action().timeout(timeout);
-      if (!mounted) {
+      await action(operation).timeout(timeout);
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
@@ -1745,7 +1898,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         clearError: true,
       );
     } catch (error) {
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
@@ -1754,7 +1907,8 @@ class AgentsController extends StateNotifier<AgentsState> {
         debugLastError: error.toString(),
       );
     } finally {
-      if (mounted && state.isActionPending(actionKey)) {
+      if (_isOwnerOperationCurrent(operation) &&
+          state.isActionPending(actionKey)) {
         state = state.copyWith(
           pendingActionKeys: _withoutSetValue(
             state.pendingActionKeys,
@@ -1765,23 +1919,42 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  void _scheduleDeletionRefresh(String daemonDid, {int attempt = 0}) {
+  void _scheduleDeletionRefresh(
+    String daemonDid, {
+    required _AgentsOwnerOperation operation,
+    int attempt = 0,
+  }) {
     _deletionRefreshTimers.remove(daemonDid)?.cancel();
-    if (!mounted ||
+    if (!_isOwnerOperationCurrent(operation) ||
         attempt >= agentDeletionRefreshAttempts ||
         !_hasPendingDeletionForDaemon(daemonDid)) {
-      _finishDeletionRefresh(daemonDid);
+      if (_isOwnerOperationCurrent(operation)) {
+        _finishDeletionRefresh(daemonDid, operation);
+      }
       return;
     }
     final delay = attempt == 0 ? Duration.zero : agentDeletionRefreshDelay;
-    _deletionRefreshTimers[daemonDid] = Timer(delay, () {
+    late final Timer timer;
+    timer = Timer(delay, () {
+      if (!identical(_deletionRefreshTimers[daemonDid], timer)) {
+        return;
+      }
       _deletionRefreshTimers.remove(daemonDid);
-      unawaited(_runDeletionRefreshAttempt(daemonDid, attempt));
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
+      unawaited(_runDeletionRefreshAttempt(daemonDid, attempt, operation));
     });
+    _deletionRefreshTimers[daemonDid] = timer;
   }
 
-  Future<void> _runDeletionRefreshAttempt(String daemonDid, int attempt) async {
-    if (!mounted || !_hasPendingDeletionForDaemon(daemonDid)) {
+  Future<void> _runDeletionRefreshAttempt(
+    String daemonDid,
+    int attempt,
+    _AgentsOwnerOperation operation,
+  ) async {
+    if (!_isOwnerOperationCurrent(operation) ||
+        !_hasPendingDeletionForDaemon(daemonDid)) {
       return;
     }
     try {
@@ -1789,14 +1962,22 @@ class AgentsController extends StateNotifier<AgentsState> {
     } catch (_) {
       // Refresh errors are surfaced by refreshDaemonStatus when user-facing.
     }
-    if (!mounted || !_hasPendingDeletionForDaemon(daemonDid)) {
+    if (!_isOwnerOperationCurrent(operation) ||
+        !_hasPendingDeletionForDaemon(daemonDid)) {
       return;
     }
-    _scheduleDeletionRefresh(daemonDid, attempt: attempt + 1);
+    _scheduleDeletionRefresh(
+      daemonDid,
+      operation: operation,
+      attempt: attempt + 1,
+    );
   }
 
-  void _finishDeletionRefresh(String daemonDid) {
-    if (!mounted) {
+  void _finishDeletionRefresh(
+    String daemonDid,
+    _AgentsOwnerOperation operation,
+  ) {
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
     final remaining = _pendingDeletionAfterAgents(state.agents);
@@ -1816,12 +1997,23 @@ class AgentsController extends StateNotifier<AgentsState> {
         );
   }
 
-  void _scheduleStatusQueryTimeout(String daemonDid, String commandId) {
+  void _scheduleStatusQueryTimeout(
+    String daemonDid,
+    String commandId,
+    _AgentsOwnerOperation operation,
+  ) {
     _statusQueryTimeouts.remove(daemonDid)?.cancel();
-    _statusQueryTimeouts[daemonDid] = Timer(agentStatusQueryTimeout, () {
+    late final Timer timer;
+    timer = Timer(agentStatusQueryTimeout, () {
+      if (!identical(_statusQueryTimeouts[daemonDid], timer)) {
+        return;
+      }
       _statusQueryTimeouts.remove(daemonDid);
-      _handleStatusQueryTimeout(daemonDid, commandId);
+      if (_isOwnerOperationCurrent(operation)) {
+        _handleStatusQueryTimeout(daemonDid, commandId, operation);
+      }
     });
+    _statusQueryTimeouts[daemonDid] = timer;
   }
 
   Future<void> handleStatusQueryTimeoutForTest(String daemonDid) {
@@ -1829,14 +2021,16 @@ class AgentsController extends StateNotifier<AgentsState> {
     return _handleStatusQueryTimeout(
       daemonDid,
       _statusQueryCommandIds[daemonDid],
+      _captureOwnerOperation(),
     );
   }
 
   Future<void> _handleStatusQueryTimeout(
     String daemonDid,
     String? commandId,
+    _AgentsOwnerOperation operation,
   ) async {
-    if (!mounted ||
+    if (!_isOwnerOperationCurrent(operation) ||
         !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
       return;
     }
@@ -1859,6 +2053,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         _applyDaemonStatusPayloadFromStore(
           daemonDid: daemonDid,
           commandId: commandId,
+          operation: operation,
         ),
       );
     }
@@ -1867,6 +2062,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   void _pollDaemonStatusPayload({
     required String daemonDid,
     required String commandId,
+    required _AgentsOwnerOperation operation,
   }) {
     _statusQueryPollTimers.remove(daemonDid)?.cancel();
     var attempts = 0;
@@ -1874,7 +2070,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     _statusQueryPollTimers[daemonDid] = Timer.periodic(
       agentStatusQueryPollInterval,
       (timer) async {
-        if (!mounted ||
+        if (!_isOwnerOperationCurrent(operation) ||
+            !identical(_statusQueryPollTimers[daemonDid], timer) ||
             !state.pendingStatusQueryAtByDaemon.containsKey(daemonDid)) {
           timer.cancel();
           if (identical(_statusQueryPollTimers[daemonDid], timer)) {
@@ -1891,10 +2088,11 @@ class AgentsController extends StateNotifier<AgentsState> {
             await _applyDaemonStatusPayloadFromStore(
               daemonDid: daemonDid,
               commandId: commandId,
+              operation: operation,
             ).whenComplete(() {
               lookupInFlight = false;
             });
-        if (!mounted) {
+        if (!_isOwnerOperationCurrent(operation)) {
           timer.cancel();
           return;
         }
@@ -1907,7 +2105,9 @@ class AgentsController extends StateNotifier<AgentsState> {
             _statusQueryPollTimers.remove(daemonDid);
           }
           if (!applied && exhausted) {
-            unawaited(_handleStatusQueryTimeout(daemonDid, commandId));
+            unawaited(
+              _handleStatusQueryTimeout(daemonDid, commandId, operation),
+            );
           }
         }
       },
@@ -1917,7 +2117,11 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<bool> _applyDaemonStatusPayloadFromStore({
     required String daemonDid,
     required String commandId,
+    required _AgentsOwnerOperation operation,
   }) async {
+    if (!_isOwnerOperationCurrent(operation)) {
+      return false;
+    }
     final payload = await ref
         .read(agentControlStatusStoreProvider)
         .findDaemonStatusPayload(
@@ -1925,45 +2129,60 @@ class AgentsController extends StateNotifier<AgentsState> {
           requestId: commandId,
         )
         .timeout(agentStatusPayloadLookupTimeout, onTimeout: () => null);
-    if (!mounted || payload == null) {
+    if (!_isOwnerOperationCurrent(operation) || payload == null) {
       return false;
     }
-    applyControlPayload(payload);
+    _applyControlPayload(payload, operation);
     return true;
   }
 
-  void _scheduleRuntimeCreationTimeout(String requestId) {
+  void _scheduleRuntimeCreationTimeout(
+    String requestId,
+    _AgentsOwnerOperation operation,
+  ) {
     _runtimeCreationTimeouts.remove(requestId)?.cancel();
-    _runtimeCreationTimeouts[requestId] = Timer(
-      agentRuntimeCreationTimeout,
-      () {
-        _runtimeCreationTimeouts.remove(requestId);
-        if (!mounted) {
-          return;
-        }
-        state = state.copyWith(
-          pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
-            state.pendingRuntimeCreations,
-            requestId,
-          ),
-        );
-      },
-    );
+    late final Timer timer;
+    timer = Timer(agentRuntimeCreationTimeout, () {
+      if (!identical(_runtimeCreationTimeouts[requestId], timer)) {
+        return;
+      }
+      _runtimeCreationTimeouts.remove(requestId);
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
+      state = state.copyWith(
+        pendingRuntimeCreations: _markPendingRuntimeCreationWaiting(
+          state.pendingRuntimeCreations,
+          requestId,
+        ),
+      );
+    });
+    _runtimeCreationTimeouts[requestId] = timer;
   }
 
-  void _scheduleDaemonUpgradeAckTimeout(String daemonDid, String commandId) {
+  void _scheduleDaemonUpgradeAckTimeout(
+    String daemonDid,
+    String commandId,
+    _AgentsOwnerOperation operation,
+  ) {
     _daemonUpgradeAckTimeouts.remove(daemonDid)?.cancel();
-    _daemonUpgradeAckTimeouts[daemonDid] = Timer(
-      agentDaemonUpgradeAckTimeout,
-      () {
-        _daemonUpgradeAckTimeouts.remove(daemonDid);
-        _handleDaemonUpgradeAckTimeout(daemonDid, commandId);
-      },
-    );
+    late final Timer timer;
+    timer = Timer(agentDaemonUpgradeAckTimeout, () {
+      if (!identical(_daemonUpgradeAckTimeouts[daemonDid], timer)) {
+        return;
+      }
+      _daemonUpgradeAckTimeouts.remove(daemonDid);
+      _handleDaemonUpgradeAckTimeout(daemonDid, commandId, operation);
+    });
+    _daemonUpgradeAckTimeouts[daemonDid] = timer;
   }
 
-  void _handleDaemonUpgradeAckTimeout(String daemonDid, String commandId) {
-    if (!mounted) {
+  void _handleDaemonUpgradeAckTimeout(
+    String daemonDid,
+    String commandId,
+    _AgentsOwnerOperation operation,
+  ) {
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
     final pending = state.pendingDaemonUpgrades[daemonDid];
@@ -1988,22 +2207,26 @@ class AgentsController extends StateNotifier<AgentsState> {
   void _scheduleDaemonUpgradeCancelAckTimeout(
     String daemonDid,
     String commandId,
+    _AgentsOwnerOperation operation,
   ) {
     _daemonUpgradeCancelAckTimeouts.remove(daemonDid)?.cancel();
-    _daemonUpgradeCancelAckTimeouts[daemonDid] = Timer(
-      agentDaemonUpgradeCancelAckTimeout,
-      () {
-        _daemonUpgradeCancelAckTimeouts.remove(daemonDid);
-        _handleDaemonUpgradeCancelAckTimeout(daemonDid, commandId);
-      },
-    );
+    late final Timer timer;
+    timer = Timer(agentDaemonUpgradeCancelAckTimeout, () {
+      if (!identical(_daemonUpgradeCancelAckTimeouts[daemonDid], timer)) {
+        return;
+      }
+      _daemonUpgradeCancelAckTimeouts.remove(daemonDid);
+      _handleDaemonUpgradeCancelAckTimeout(daemonDid, commandId, operation);
+    });
+    _daemonUpgradeCancelAckTimeouts[daemonDid] = timer;
   }
 
   void _handleDaemonUpgradeCancelAckTimeout(
     String daemonDid,
     String commandId,
+    _AgentsOwnerOperation operation,
   ) {
-    if (!mounted) {
+    if (!_isOwnerOperationCurrent(operation)) {
       return;
     }
     final cancelling = state.cancellingDaemonUpgrades[daemonDid];
@@ -2027,7 +2250,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     String commandId,
   ) {
     _daemonUpgradeAckTimeouts.remove(daemonDid)?.cancel();
-    _handleDaemonUpgradeAckTimeout(daemonDid, commandId);
+    _handleDaemonUpgradeAckTimeout(
+      daemonDid,
+      commandId,
+      _captureOwnerOperation(),
+    );
   }
 
   void handleDaemonUpgradeCancelAckTimeoutForTest(
@@ -2035,10 +2262,17 @@ class AgentsController extends StateNotifier<AgentsState> {
     String commandId,
   ) {
     _daemonUpgradeCancelAckTimeouts.remove(daemonDid)?.cancel();
-    _handleDaemonUpgradeCancelAckTimeout(daemonDid, commandId);
+    _handleDaemonUpgradeCancelAckTimeout(
+      daemonDid,
+      commandId,
+      _captureOwnerOperation(),
+    );
   }
 
-  Map<String, DateTime> _pendingAfterStatusPayload(String? daemonDid) {
+  Map<String, DateTime> _pendingAfterStatusPayload(
+    String? daemonDid,
+    _AgentsOwnerOperation operation,
+  ) {
     if (daemonDid == null) {
       return state.pendingStatusQueryAtByDaemon;
     }
@@ -2050,7 +2284,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final elapsed = DateTime.now().toUtc().difference(pendingAt);
     final remaining = agentStatusRefreshMinimumIndicatorDuration - elapsed;
     if (remaining > Duration.zero) {
-      _scheduleStatusQueryClear(daemonDid, pendingAt, remaining);
+      _scheduleStatusQueryClear(daemonDid, pendingAt, remaining, operation);
       return state.pendingStatusQueryAtByDaemon;
     }
     _statusQueryClearTimers.remove(daemonDid)?.cancel();
@@ -2273,11 +2507,16 @@ class AgentsController extends StateNotifier<AgentsState> {
     String daemonDid,
     DateTime pendingAt,
     Duration delay,
+    _AgentsOwnerOperation operation,
   ) {
     _statusQueryClearTimers.remove(daemonDid)?.cancel();
-    _statusQueryClearTimers[daemonDid] = Timer(delay, () {
+    late final Timer timer;
+    timer = Timer(delay, () {
+      if (!identical(_statusQueryClearTimers[daemonDid], timer)) {
+        return;
+      }
       _statusQueryClearTimers.remove(daemonDid);
-      if (!mounted ||
+      if (!_isOwnerOperationCurrent(operation) ||
           state.pendingStatusQueryAtByDaemon[daemonDid] != pendingAt) {
         return;
       }
@@ -2288,6 +2527,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
       );
     });
+    _statusQueryClearTimers[daemonDid] = timer;
   }
 
   void _cancelDaemonUpgradeAckTimer(String daemonDid) {
@@ -2317,21 +2557,24 @@ class AgentsController extends StateNotifier<AgentsState> {
     super.dispose();
   }
 
-  void _runInventoryAutoSyncAttempt() {
-    if (!mounted ||
-        _inventoryAutoSyncInFlight ||
+  void _runInventoryAutoSyncAttempt(_AgentsOwnerOperation operation) {
+    if (!_isOwnerOperationCurrent(operation) ||
+        !_sameOwnerOperation(_inventoryAutoSyncOperation, operation)) {
+      return;
+    }
+    if (_inventoryAutoSyncInFlight ||
         ref.read(sessionProvider).session == null ||
         state.agents.any((agent) => agent.isDaemon)) {
       if (ref.read(sessionProvider).session == null) {
-        _stopInventoryAutoSync();
+        _stopInventoryAutoSync(expectedOperation: operation);
       }
       if (state.agents.any((agent) => agent.isDaemon)) {
-        _stopInventoryAutoSync();
+        _stopInventoryAutoSync(expectedOperation: operation);
       }
       return;
     }
     if (_inventoryAutoSyncAttempts >= agentInventoryAutoSyncMaxAttempts) {
-      _stopInventoryAutoSync(exhausted: true);
+      _stopInventoryAutoSync(exhausted: true, expectedOperation: operation);
       return;
     }
     _inventoryAutoSyncAttempts += 1;
@@ -2342,16 +2585,18 @@ class AgentsController extends StateNotifier<AgentsState> {
         resetAutoSyncExhaustion: false,
         surfaceError: false,
       ).whenComplete(() {
-        _inventoryAutoSyncInFlight = false;
-        if (!mounted) {
+        if (!_isOwnerOperationCurrent(operation) ||
+            !_sameOwnerOperation(_inventoryAutoSyncOperation, operation)) {
           return;
         }
+        _inventoryAutoSyncInFlight = false;
         if (state.agents.any((agent) => agent.isDaemon) ||
             _inventoryAutoSyncAttempts >= agentInventoryAutoSyncMaxAttempts) {
           _stopInventoryAutoSync(
             exhausted:
                 !state.agents.any((agent) => agent.isDaemon) &&
                 _inventoryAutoSyncAttempts >= agentInventoryAutoSyncMaxAttempts,
+            expectedOperation: operation,
           );
         } else if (_inventoryAutoSyncTimer != null &&
             !state.isAutoSyncingInventory) {
@@ -2364,7 +2609,18 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
   }
 
-  void _stopInventoryAutoSync({bool exhausted = false}) {
+  void _stopInventoryAutoSync({
+    bool exhausted = false,
+    _AgentsOwnerOperation? expectedOperation,
+  }) {
+    if (expectedOperation != null &&
+        (!_isOwnerOperationCurrent(expectedOperation) ||
+            !_sameOwnerOperation(
+              _inventoryAutoSyncOperation,
+              expectedOperation,
+            ))) {
+      return;
+    }
     if (exhausted) {
       final session = ref.read(sessionProvider).session;
       _inventoryAutoSyncExhaustedOwner = session == null
@@ -2373,6 +2629,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     _inventoryAutoSyncTimer?.cancel();
     _inventoryAutoSyncTimer = null;
+    _inventoryAutoSyncOperation = null;
     _inventoryAutoSyncAttempts = 0;
     _inventoryAutoSyncInFlight = false;
     if (mounted && state.isAutoSyncingInventory) {
@@ -2412,7 +2669,10 @@ class AgentsController extends StateNotifier<AgentsState> {
     _deletionRefreshTimers.clear();
   }
 
-  Future<void> _loadCached(String ownerDid) async {
+  Future<void> _loadCached(
+    String ownerDid,
+    _AgentsOwnerOperation operation,
+  ) async {
     final List<LocalAgentState> cached;
     try {
       cached = await ref
@@ -2444,7 +2704,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final ordered = _stableAgentOrder(agents);
     if (ordered.isNotEmpty) {
-      if (!_isCurrentCacheOwner(ownerDid)) {
+      if (!_isCurrentCacheOwner(ownerDid, operation: operation)) {
         return;
       }
       state = state.copyWith(
@@ -2454,11 +2714,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  bool _isCurrentCacheOwner(String ownerDid, {int? epoch}) {
-    if (!mounted) {
-      return false;
-    }
-    if (epoch != null && epoch != _stateEpoch) {
+  bool _isCurrentCacheOwner(
+    String ownerDid, {
+    required _AgentsOwnerOperation operation,
+  }) {
+    if (!_isOwnerOperationCurrent(operation)) {
       return false;
     }
     final session = ref.read(sessionProvider).session;
@@ -2468,13 +2728,40 @@ class AgentsController extends StateNotifier<AgentsState> {
   Future<void> _saveCacheBestEffort(
     String ownerDid,
     List<AgentSummary> agents,
+    _AgentsOwnerOperation operation,
   ) async {
+    final rawWrite = _enqueueCacheWrite(ownerDid, agents, operation);
     try {
-      await _saveCache(ownerDid, agents).timeout(agentLocalCacheWriteTimeout);
+      await rawWrite.timeout(agentLocalCacheWriteTimeout);
     } catch (_) {
       // Local cache is only a fast-start snapshot; remote inventory remains
       // the source of truth for the Agent page.
     }
+  }
+
+  Future<void> _enqueueCacheWrite(
+    String ownerDid,
+    List<AgentSummary> agents,
+    _AgentsOwnerOperation operation,
+  ) {
+    final previousWrite = _cacheWriteTail;
+    final snapshot = List<AgentSummary>.unmodifiable(agents);
+    final rawWrite = () async {
+      try {
+        await previousWrite;
+      } catch (_) {
+        // A failed snapshot must not prevent a later snapshot from converging.
+      }
+      if (!_isCurrentCacheOwner(ownerDid, operation: operation)) {
+        return;
+      }
+      await _saveCache(ownerDid, snapshot);
+    }();
+    // Keep the raw operation as the serialization tail. The caller may stop
+    // waiting after its best-effort timeout, but later writes must still wait
+    // for the underlying store operation to finish.
+    _cacheWriteTail = rawWrite;
+    return rawWrite;
   }
 
   Future<void> _saveCache(String ownerDid, List<AgentSummary> agents) async {

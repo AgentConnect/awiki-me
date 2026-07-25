@@ -319,7 +319,24 @@ const Object _chatComposerDraftUnset = Object();
 
 class ChatComposerDraftsController
     extends StateNotifier<Map<String, ChatComposerDraft>> {
-  ChatComposerDraftsController() : super(const <String, ChatComposerDraft>{});
+  ChatComposerDraftsController(Ref ref)
+    : _sessionEpoch = ref.read(sessionProvider).activeEpoch,
+      super(const <String, ChatComposerDraft>{}) {
+    _sessionSubscription = ref.listen<SessionState>(sessionProvider, (
+      previous,
+      next,
+    ) {
+      final nextEpoch = next.activeEpoch;
+      if (nextEpoch == _sessionEpoch) {
+        return;
+      }
+      _sessionEpoch = nextEpoch;
+      state = const <String, ChatComposerDraft>{};
+    });
+  }
+
+  late final ProviderSubscription<SessionState> _sessionSubscription;
+  SessionEpoch? _sessionEpoch;
 
   ChatComposerDraft draftFor(ConversationSummary conversation) {
     for (final key in _draftKeysFor(conversation)) {
@@ -396,16 +413,24 @@ class ChatComposerDraftsController
   List<String> _draftKeysFor(ConversationSummary conversation) {
     return <String>[conversation.conversationId];
   }
+
+  @override
+  void dispose() {
+    _sessionSubscription.close();
+    super.dispose();
+  }
 }
 
 class _PendingHistorySync {
   const _PendingHistorySync({
+    required this.sessionEpoch,
     required this.conversation,
     required this.force,
     required this.reportFailure,
     required this.showLoading,
   });
 
+  final SessionEpoch sessionEpoch;
   final ConversationSummary conversation;
   final bool force;
   final bool reportFailure;
@@ -414,11 +439,13 @@ class _PendingHistorySync {
 
 class _PendingVisibleThreadStaleGuard {
   const _PendingVisibleThreadStaleGuard({
+    required this.sessionEpoch,
     required this.conversation,
     this.afterServerSeq,
     this.forceThreadAfter = false,
   });
 
+  final SessionEpoch sessionEpoch;
   final ConversationSummary conversation;
   final String? afterServerSeq;
   final bool forceThreadAfter;
@@ -455,6 +482,7 @@ class _PendingReadAck {
 class _ThreadPatchSubscription {
   const _ThreadPatchSubscription({
     required this.token,
+    required this.sessionEpoch,
     required this.ownerDid,
     required this.conversationRef,
     required this.threadKind,
@@ -464,6 +492,7 @@ class _ThreadPatchSubscription {
   });
 
   final int token;
+  final SessionEpoch sessionEpoch;
   final String ownerDid;
   final AppConversationReadRef conversationRef;
   final String threadKind;
@@ -479,6 +508,7 @@ class _ThreadPatchSubscription {
   }) {
     return _ThreadPatchSubscription(
       token: token,
+      sessionEpoch: sessionEpoch,
       ownerDid: ownerDid,
       conversationRef: conversationRef,
       threadKind: threadKind,
@@ -620,10 +650,15 @@ class ChatThreadsController
     this.ref, {
     ThreadMemoryCachePolicy cachePolicy = const ThreadMemoryCachePolicy(),
   }) : _cachePolicy = cachePolicy,
+       _sessionEpoch = ref.read(sessionProvider).activeEpoch,
        super(const <String, ChatThreadState>{}) {
     _appLifecycleSubscription = ref.listen<AppLifecycleState>(
       appLifecycleProvider,
       _handleAppLifecycleChanged,
+    );
+    _sessionSubscription = ref.listen<SessionState>(
+      sessionProvider,
+      _handleSessionChanged,
     );
   }
 
@@ -667,6 +702,8 @@ class ChatThreadsController
       <String, Timer>{};
   final Map<String, Timer> _hiddenThreadCacheTrimTimers = <String, Timer>{};
   late final ProviderSubscription<AppLifecycleState> _appLifecycleSubscription;
+  late final ProviderSubscription<SessionState> _sessionSubscription;
+  SessionEpoch? _sessionEpoch;
   final Map<String, DateTime> _lastThreadPatchStreamEndAt =
       <String, DateTime>{};
   final Set<String> _activeReadReceipts = <String>{};
@@ -689,6 +726,10 @@ class ChatThreadsController
     ConversationSummary conversation, {
     String? displayThreadId,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     _touchConversationCache(conversation, targetThreadId);
     AwikiPerformanceLogger.log(
@@ -719,6 +760,7 @@ class ChatThreadsController
       _openConversationLocalFirst(
         conversation,
         displayThreadId: targetThreadId,
+        sessionEpoch: sessionEpoch,
       ),
     );
   }
@@ -728,14 +770,17 @@ class ChatThreadsController
     int maxConversations = 20,
     int limit = _initialLocalHistoryLimit,
   }) async {
-    if (!mounted || conversations.isEmpty || maxConversations <= 0) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null ||
+        conversations.isEmpty ||
+        maxConversations <= 0) {
       _chatProviderTrace(
         'local_history.prewarm.skip',
         fields: <String, Object?>{
           'mounted': mounted,
           'conversations': conversations.length,
           'max': maxConversations,
-          'reason': !mounted
+          'reason': sessionEpoch == null
               ? 'not_mounted'
               : conversations.isEmpty
               ? 'empty'
@@ -759,7 +804,7 @@ class ChatThreadsController
     var warmed = 0;
     final totalWatch = Stopwatch()..start();
     for (final conversation in conversations) {
-      if (!mounted || warmed >= maxConversations) {
+      if (!_isCurrentSessionEpoch(sessionEpoch) || warmed >= maxConversations) {
         break;
       }
       final threadId = _displayThreadIdFor(conversation, null);
@@ -803,7 +848,11 @@ class ChatThreadsController
         limit: limit,
         showHydratingState: false,
         markLoadedWhenEmpty: false,
+        sessionEpoch: sessionEpoch,
       );
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        break;
+      }
       _chatProviderTrace(
         'local_history.prewarm.item_done',
         fields: <String, Object?>{
@@ -836,7 +885,8 @@ class ChatThreadsController
     bool force = false,
     int limit = _initialLocalHistoryLimit,
   }) async {
-    if (!mounted) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
@@ -865,6 +915,7 @@ class ChatThreadsController
       limit: limit,
       showHydratingState: false,
       markLoadedWhenEmpty: false,
+      sessionEpoch: sessionEpoch,
     );
   }
 
@@ -872,7 +923,8 @@ class ChatThreadsController
     bool force = true,
     int limit = _initialLocalHistoryLimit,
   }) async {
-    if (!mounted) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
       return;
     }
     final visibleEntries = <MapEntry<String, _ThreadCacheMetadata>>[
@@ -884,7 +936,7 @@ class ChatThreadsController
       return;
     }
     for (final entry in visibleEntries) {
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
         break;
       }
       final conversation = entry.value.visibleConversation;
@@ -903,7 +955,11 @@ class ChatThreadsController
   Future<void> _openConversationLocalFirst(
     ConversationSummary conversation, {
     required String displayThreadId,
+    required SessionEpoch sessionEpoch,
   }) async {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      return;
+    }
     final aliasWarmCount = _warmDisplayThreadFromConversationAliases(
       conversation,
       displayThreadId: displayThreadId,
@@ -965,6 +1021,7 @@ class ChatThreadsController
         _syncThreadAfterLocalMax(
           conversation,
           displayThreadId: displayThreadId,
+          sessionEpoch: sessionEpoch,
         ),
       );
       return;
@@ -975,6 +1032,7 @@ class ChatThreadsController
             conversation,
             intoThreadId: displayThreadId,
             limit: _initialLocalHistoryLimit,
+            sessionEpoch: sessionEpoch,
           )
         : _HistoryLoadResult(
             loadedCount: 0,
@@ -984,7 +1042,7 @@ class ChatThreadsController
               thread(displayThreadId).messages,
             ),
           );
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     unawaited(
@@ -995,6 +1053,7 @@ class ChatThreadsController
         useExplicitAfterServerSeq:
             localResult.loadedFromLocalHistory &&
             localResult.maxServerSequence != null,
+        sessionEpoch: sessionEpoch,
       ),
     );
     final currentAfterLocal = thread(displayThreadId);
@@ -1025,12 +1084,13 @@ class ChatThreadsController
     final shouldShowRemoteFailure =
         localResult.failed || !localResult.loadedAny;
     unawaited(
-      syncHistoryForConversation(
+      _syncHistoryForConversation(
         conversation,
         displayThreadId: displayThreadId,
         force: true,
         reportFailure: shouldShowRemoteFailure,
         showLoading: true,
+        sessionEpoch: sessionEpoch,
       ),
     );
   }
@@ -1276,10 +1336,11 @@ class ChatThreadsController
   Future<void> _syncThreadAfterLocalMax(
     ConversationSummary conversation, {
     required String displayThreadId,
+    required SessionEpoch sessionEpoch,
     String? afterServerSeq,
     bool useExplicitAfterServerSeq = false,
   }) async {
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     final conversationRef = _conversationReadRefFor(conversation);
@@ -1294,6 +1355,7 @@ class ChatThreadsController
         limit: _initialLocalHistoryLimit,
         showHydratingState: false,
         markLoadedWhenEmpty: false,
+        sessionEpoch: sessionEpoch,
       );
       return;
     }
@@ -1326,7 +1388,7 @@ class ChatThreadsController
           afterServerSeq: effectiveAfterServerSeq,
         );
       }
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
       final repairedVersion = await _repairThreadFromLocalProjection(
@@ -1334,6 +1396,7 @@ class ChatThreadsController
         displayThreadId: displayThreadId,
         conversationRef: conversationRef,
         fallbackToLocalHistory: false,
+        sessionEpoch: sessionEpoch,
       );
       final localResult = repairedVersion == null
           ? await _loadLocalHistory(
@@ -1342,9 +1405,10 @@ class ChatThreadsController
               limit: _initialLocalHistoryLimit,
               showHydratingState: false,
               markLoadedWhenEmpty: false,
+              sessionEpoch: sessionEpoch,
             )
           : const _HistoryLoadResult(loadedCount: 0, failed: false);
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
       if (repairedVersion == null && !localResult.loadedAny) {
@@ -1360,6 +1424,9 @@ class ChatThreadsController
         return;
       }
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       _flushPendingReadAck(displayThreadId);
       _chatProviderTrace(
         'conversation_after.done',
@@ -1387,7 +1454,7 @@ class ChatThreadsController
         },
       );
     } finally {
-      if (mounted) {
+      if (_isCurrentSessionEpoch(sessionEpoch)) {
         _flushPendingReadAck(displayThreadId);
       }
     }
@@ -1397,6 +1464,10 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required String displayThreadId,
   }) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return Future<void>.value();
+    }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final beforeSyncAfterServerSeq = maxServerSequenceForMessages(
       thread(targetThreadId).messages,
@@ -1433,41 +1504,64 @@ class ChatThreadsController
         : _newerConversation(conversation, pending.conversation);
     _pendingVisibleThreadStaleGuards[targetThreadId] =
         _PendingVisibleThreadStaleGuard(
+          sessionEpoch: sessionEpoch,
           conversation: pendingConversation,
           afterServerSeq: pending?.afterServerSeq ?? beforeSyncAfterServerSeq,
           forceThreadAfter: pending?.forceThreadAfter ?? false,
         );
-    return _ensureVisibleThreadStaleGuardDrain(targetThreadId);
+    return _ensureVisibleThreadStaleGuardDrain(
+      targetThreadId,
+      sessionEpoch: sessionEpoch,
+    );
   }
 
-  Future<void> _ensureVisibleThreadStaleGuardDrain(String displayThreadId) {
+  Future<void> _ensureVisibleThreadStaleGuardDrain(
+    String displayThreadId, {
+    required SessionEpoch sessionEpoch,
+  }) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      return Future<void>.value();
+    }
     final active = _activeVisibleThreadStaleGuards[displayThreadId];
     if (active != null) {
       return active;
     }
     late final Future<void> operation;
-    operation = _drainVisibleThreadStaleGuard(displayThreadId).whenComplete(() {
-      if (identical(
-        _activeVisibleThreadStaleGuards[displayThreadId],
-        operation,
-      )) {
-        _activeVisibleThreadStaleGuards.remove(displayThreadId);
-      }
-      if (mounted &&
-          _pendingVisibleThreadStaleGuards.containsKey(displayThreadId) &&
-          !_threadHasActiveHistoryWork(displayThreadId)) {
-        _ensureVisibleThreadStaleGuardDrain(displayThreadId);
-      }
-    });
+    operation =
+        _drainVisibleThreadStaleGuard(
+          displayThreadId,
+          sessionEpoch: sessionEpoch,
+        ).whenComplete(() {
+          if (identical(
+            _activeVisibleThreadStaleGuards[displayThreadId],
+            operation,
+          )) {
+            _activeVisibleThreadStaleGuards.remove(displayThreadId);
+          }
+          if (_isCurrentSessionEpoch(sessionEpoch) &&
+              _pendingVisibleThreadStaleGuards.containsKey(displayThreadId) &&
+              !_threadHasActiveHistoryWork(displayThreadId)) {
+            _ensureVisibleThreadStaleGuardDrain(
+              displayThreadId,
+              sessionEpoch: sessionEpoch,
+            );
+          }
+        });
     _activeVisibleThreadStaleGuards[displayThreadId] = operation;
     return operation;
   }
 
-  Future<void> _drainVisibleThreadStaleGuard(String displayThreadId) async {
-    while (mounted) {
+  Future<void> _drainVisibleThreadStaleGuard(
+    String displayThreadId, {
+    required SessionEpoch sessionEpoch,
+  }) async {
+    while (_isCurrentSessionEpoch(sessionEpoch)) {
       final pending = _pendingVisibleThreadStaleGuards.remove(displayThreadId);
       if (pending == null) {
         return;
+      }
+      if (pending.sessionEpoch != sessionEpoch) {
+        continue;
       }
       final metadata = _cacheMetadataByThreadId[displayThreadId];
       if (metadata?.isVisible != true) {
@@ -1490,6 +1584,7 @@ class ChatThreadsController
         displayThreadId: displayThreadId,
         afterServerSeq: pending.afterServerSeq,
         forceThreadAfter: pending.forceThreadAfter,
+        sessionEpoch: sessionEpoch,
       );
     }
   }
@@ -1497,10 +1592,11 @@ class ChatThreadsController
   Future<void> _syncVisibleThreadIfStale(
     ConversationSummary conversation, {
     required String displayThreadId,
+    required SessionEpoch sessionEpoch,
     String? afterServerSeq,
     bool forceThreadAfter = false,
   }) async {
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     _touchConversationCache(conversation, displayThreadId, visible: true);
@@ -1515,6 +1611,7 @@ class ChatThreadsController
           displayThreadId: displayThreadId,
           afterServerSeq: afterServerSeq,
           useExplicitAfterServerSeq: true,
+          sessionEpoch: sessionEpoch,
         );
       }
       return;
@@ -1522,8 +1619,9 @@ class ChatThreadsController
     await _repairThreadFromLocalProjection(
       conversation,
       displayThreadId: displayThreadId,
+      sessionEpoch: sessionEpoch,
     );
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     if (!_needsVisibleThreadStaleGuard(thread(displayThreadId), conversation)) {
@@ -1533,11 +1631,12 @@ class ChatThreadsController
           displayThreadId: displayThreadId,
           afterServerSeq: afterServerSeq,
           useExplicitAfterServerSeq: true,
+          sessionEpoch: sessionEpoch,
         );
       }
       return;
     }
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     await _syncThreadAfterLocalMax(
@@ -1545,6 +1644,7 @@ class ChatThreadsController
       displayThreadId: displayThreadId,
       afterServerSeq: afterServerSeq,
       useExplicitAfterServerSeq: forceThreadAfter,
+      sessionEpoch: sessionEpoch,
     );
   }
 
@@ -1554,14 +1654,20 @@ class ChatThreadsController
   }
 
   void _runPendingVisibleThreadStaleGuardIfNeeded(String displayThreadId) {
-    if (!mounted ||
-        !_pendingVisibleThreadStaleGuards.containsKey(displayThreadId) ||
+    final pending = _pendingVisibleThreadStaleGuards[displayThreadId];
+    if (pending == null ||
+        !_isCurrentSessionEpoch(pending.sessionEpoch) ||
         _activeVisibleThreadStaleGuards.containsKey(displayThreadId) ||
         _threadHasActiveHistoryWork(displayThreadId) ||
         _cacheMetadataByThreadId[displayThreadId]?.isVisible != true) {
       return;
     }
-    unawaited(_ensureVisibleThreadStaleGuardDrain(displayThreadId));
+    unawaited(
+      _ensureVisibleThreadStaleGuardDrain(
+        displayThreadId,
+        sessionEpoch: pending.sessionEpoch,
+      ),
+    );
   }
 
   void acknowledgeVisibleConversationRead(
@@ -1714,7 +1820,12 @@ class ChatThreadsController
     required String displayThreadId,
     AppConversationReadRef? conversationRef,
     bool fallbackToLocalHistory = true,
+    SessionEpoch? sessionEpoch,
   }) async {
+    final operationEpoch = sessionEpoch ?? _captureSessionEpoch();
+    if (operationEpoch == null || !_isCurrentSessionEpoch(operationEpoch)) {
+      return null;
+    }
     final messaging = ref.read(messagingServiceProvider);
     final effectiveConversationRef =
         conversationRef ??
@@ -1726,6 +1837,7 @@ class ChatThreadsController
           conversation,
           intoThreadId: displayThreadId,
           limit: _initialLocalHistoryLimit,
+          sessionEpoch: operationEpoch,
         );
       }
       return null;
@@ -1737,7 +1849,7 @@ class ChatThreadsController
         final patch = await timelineMessaging.repairConversationTimelineStore(
           effectiveConversationRef,
         );
-        if (!mounted) {
+        if (!_isCurrentSessionEpoch(operationEpoch)) {
           return null;
         }
         final ownerDid = ref.read(sessionProvider).session?.did.trim();
@@ -1753,8 +1865,9 @@ class ChatThreadsController
             displayThreadId,
             patch,
             conversation,
+            sessionEpoch: operationEpoch,
           );
-          if (applied) {
+          if (applied && _isCurrentSessionEpoch(operationEpoch)) {
             _recordThreadPatchRepairVersion(displayThreadId, patch);
             return patch.version;
           }
@@ -1769,6 +1882,7 @@ class ChatThreadsController
         conversation,
         intoThreadId: displayThreadId,
         limit: _initialLocalHistoryLimit,
+        sessionEpoch: operationEpoch,
       );
     }
     return null;
@@ -1802,7 +1916,8 @@ class ChatThreadsController
     final timelineMessaging = messaging as ConversationTimelineMessagingService;
     final session = ref.read(sessionProvider).session;
     final ownerDid = session?.did.trim();
-    if (ownerDid == null || ownerDid.isEmpty) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (ownerDid == null || ownerDid.isEmpty || sessionEpoch == null) {
       return;
     }
     final conversationRef = _conversationReadRefFor(conversation);
@@ -1818,6 +1933,7 @@ class ChatThreadsController
     final existing = _threadPatchSubscriptions[displayThreadId];
     if (existing != null &&
         existing.ownerDid == ownerDid &&
+        existing.sessionEpoch == sessionEpoch &&
         existing.conversationRefKey == conversationRef.conversationId &&
         existing.threadKind == expectedPatchKey.kind &&
         existing.threadId == expectedPatchKey.id) {
@@ -1835,6 +1951,7 @@ class ChatThreadsController
             token: token,
             ownerDid: ownerDid,
             conversation: conversation,
+            sessionEpoch: sessionEpoch,
           ),
           onError: (_) {
             unawaited(
@@ -1842,6 +1959,7 @@ class ChatThreadsController
                 displayThreadId,
                 conversation: conversation,
                 token: token,
+                sessionEpoch: sessionEpoch,
               ),
             );
           },
@@ -1851,12 +1969,14 @@ class ChatThreadsController
                 displayThreadId,
                 conversation: conversation,
                 token: token,
+                sessionEpoch: sessionEpoch,
               ),
             );
           },
         );
     _threadPatchSubscriptions[displayThreadId] = _ThreadPatchSubscription(
       token: token,
+      sessionEpoch: sessionEpoch,
       ownerDid: ownerDid,
       conversationRef: conversationRef,
       threadKind: expectedPatchKey.kind,
@@ -1870,12 +1990,15 @@ class ChatThreadsController
     String displayThreadId, {
     required ConversationSummary conversation,
     required int token,
+    required SessionEpoch sessionEpoch,
   }) async {
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     final subscription = _threadPatchSubscriptions[displayThreadId];
-    if (subscription == null || subscription.token != token) {
+    if (subscription == null ||
+        subscription.token != token ||
+        subscription.sessionEpoch != sessionEpoch) {
       return;
     }
     _threadPatchSubscriptions.remove(displayThreadId);
@@ -1891,8 +2014,9 @@ class ChatThreadsController
       conversation,
       displayThreadId: displayThreadId,
       conversationRef: subscription.conversationRef,
+      sessionEpoch: sessionEpoch,
     );
-    if (!mounted ||
+    if (!_isCurrentSessionEpoch(sessionEpoch) ||
         _cacheMetadataByThreadId[displayThreadId]?.isVisible != true) {
       return;
     }
@@ -1909,13 +2033,15 @@ class ChatThreadsController
     required int token,
     required String ownerDid,
     required ConversationSummary conversation,
+    required SessionEpoch sessionEpoch,
   }) async {
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     final currentSubscription = _threadPatchSubscriptions[displayThreadId];
     if (currentSubscription == null ||
         currentSubscription.token != token ||
+        currentSubscription.sessionEpoch != sessionEpoch ||
         currentSubscription.ownerDid != ownerDid) {
       return;
     }
@@ -1941,6 +2067,7 @@ class ChatThreadsController
         displayThreadId,
         conversation: conversation,
         token: token,
+        sessionEpoch: sessionEpoch,
       );
       return;
     }
@@ -1953,6 +2080,7 @@ class ChatThreadsController
         displayThreadId,
         conversation: conversation,
         token: token,
+        sessionEpoch: sessionEpoch,
       );
       return;
     }
@@ -1960,8 +2088,9 @@ class ChatThreadsController
       displayThreadId,
       patch,
       conversation,
+      sessionEpoch: sessionEpoch,
     );
-    if (!mounted ||
+    if (!_isCurrentSessionEpoch(sessionEpoch) ||
         _threadPatchSubscriptions[displayThreadId]?.token != token) {
       return;
     }
@@ -1970,6 +2099,7 @@ class ChatThreadsController
         displayThreadId,
         conversation: conversation,
         token: token,
+        sessionEpoch: sessionEpoch,
       );
       return;
     }
@@ -1981,8 +2111,12 @@ class ChatThreadsController
   Future<bool> _applyThreadPatchBody(
     String displayThreadId,
     ThreadMessagePatch patch,
-    ConversationSummary conversation,
-  ) async {
+    ConversationSummary conversation, {
+    required SessionEpoch sessionEpoch,
+  }) async {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      return false;
+    }
     switch (patch.kind) {
       case ThreadMessagePatchKind.reset:
         if (_threadPatchMessagesHaveConversationMismatch(patch, conversation)) {
@@ -2067,6 +2201,7 @@ class ChatThreadsController
           displayThreadId,
           conversation: conversation,
           token: token,
+          sessionEpoch: sessionEpoch,
         );
         return true;
     }
@@ -2076,14 +2211,16 @@ class ChatThreadsController
     String displayThreadId, {
     required ConversationSummary conversation,
     required int token,
+    required SessionEpoch sessionEpoch,
   }) async {
-    if (!mounted) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
     final messaging = ref.read(messagingServiceProvider);
     final currentSubscription = _threadPatchSubscriptions[displayThreadId];
     if (currentSubscription == null ||
         currentSubscription.token != token ||
+        currentSubscription.sessionEpoch != sessionEpoch ||
         messaging is! ConversationTimelineMessagingService) {
       return;
     }
@@ -2092,30 +2229,45 @@ class ChatThreadsController
       final patch = await timelineMessaging.repairConversationTimelineStore(
         currentSubscription.conversationRef,
       );
-      if (!mounted ||
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
           _threadPatchSubscriptions[displayThreadId]?.token != token) {
         return;
       }
       if (patch.ownerDid.trim() != currentSubscription.ownerDid ||
           !_threadPatchMatchesSubscription(patch, currentSubscription)) {
-        await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+        await _loadLocalHistory(
+          conversation,
+          intoThreadId: displayThreadId,
+          sessionEpoch: sessionEpoch,
+        );
         return;
       }
       final applied = await _applyThreadPatchBody(
         displayThreadId,
         patch,
         conversation,
+        sessionEpoch: sessionEpoch,
       );
       if (applied &&
-          mounted &&
+          _isCurrentSessionEpoch(sessionEpoch) &&
           _threadPatchSubscriptions[displayThreadId]?.token == token) {
         _threadPatchSubscriptions[displayThreadId] = currentSubscription
             .copyWith(lastVersion: patch.version);
-      } else if (!applied && mounted) {
-        await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+      } else if (!applied && _isCurrentSessionEpoch(sessionEpoch)) {
+        await _loadLocalHistory(
+          conversation,
+          intoThreadId: displayThreadId,
+          sessionEpoch: sessionEpoch,
+        );
       }
     } catch (_) {
-      await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+      if (_isCurrentSessionEpoch(sessionEpoch)) {
+        await _loadLocalHistory(
+          conversation,
+          intoThreadId: displayThreadId,
+          sessionEpoch: sessionEpoch,
+        );
+      }
     }
   }
 
@@ -2125,6 +2277,10 @@ class ChatThreadsController
     required String displayThreadId,
     AppThreadReadWatermark? watermark,
   }) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     try {
       final conversationRef = _conversationReadRefFor(conversation);
       if (conversationRef == null) {
@@ -2159,6 +2315,9 @@ class ChatThreadsController
           .read(conversationServiceProvider)
           .markConversationRead(conversationRef, watermark: watermark)
           .then<void>((_) {
+            if (!_isCurrentSessionEpoch(sessionEpoch)) {
+              return;
+            }
             watch.stop();
             _activeReadReceipts.remove(readToken);
             _completedReadReceipts.add(readToken);
@@ -2190,6 +2349,9 @@ class ChatThreadsController
             );
           })
           .catchError((Object error) {
+            if (!_isCurrentSessionEpoch(sessionEpoch)) {
+              return;
+            }
             _chatProviderTrace(
               'mark_read.remote_failed',
               fields: <String, Object?>{
@@ -2352,8 +2514,10 @@ class ChatThreadsController
     int limit = 100,
     bool showHydratingState = true,
     bool markLoadedWhenEmpty = true,
+    SessionEpoch? sessionEpoch,
   }) async {
-    if (!mounted) {
+    final operationEpoch = sessionEpoch ?? _captureSessionEpoch();
+    if (operationEpoch == null || !_isCurrentSessionEpoch(operationEpoch)) {
       return const _HistoryLoadResult(loadedCount: 0, failed: false);
     }
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
@@ -2391,7 +2555,7 @@ class ChatThreadsController
     try {
       if (messaging is! ConversationTimelineMessagingService &&
           messaging is! LocalHistoryMessagingService) {
-        if (shouldShowLoading && mounted) {
+        if (shouldShowLoading && _isCurrentSessionEpoch(operationEpoch)) {
           _setThreadLoading(targetThreadId, false);
           if (showHydratingState) {
             _setThreadLocalHistoryHydrating(targetThreadId, false);
@@ -2433,6 +2597,9 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
+      if (!_isCurrentSessionEpoch(operationEpoch)) {
+        return const _HistoryLoadResult(loadedCount: 0, failed: false);
+      }
       _chatProviderTrace(
         'local_history.service_done',
         fields: <String, Object?>{
@@ -2470,7 +2637,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(operationEpoch)) {
         return _HistoryLoadResult(
           loadedCount: history.length,
           failed: false,
@@ -2531,10 +2698,10 @@ class ChatThreadsController
           'elapsed_ms': totalWatch.elapsedMilliseconds,
         },
       );
-      if (shouldShowLoading && mounted) {
+      if (shouldShowLoading && _isCurrentSessionEpoch(operationEpoch)) {
         _setThreadLoading(targetThreadId, false);
       }
-      if (mounted && showHydratingState) {
+      if (_isCurrentSessionEpoch(operationEpoch) && showHydratingState) {
         _setThreadLocalHistoryHydrating(targetThreadId, false);
       }
       totalWatch.stop();
@@ -2545,11 +2712,11 @@ class ChatThreadsController
       );
       return const _HistoryLoadResult(loadedCount: 0, failed: true);
     } finally {
-      _activeLocalHistoryLoads.remove(targetThreadId);
-      if (mounted && showHydratingState) {
-        _setThreadLocalHistoryHydrating(targetThreadId, false);
-      }
-      if (mounted) {
+      if (_isCurrentSessionEpoch(operationEpoch)) {
+        _activeLocalHistoryLoads.remove(targetThreadId);
+        if (showHydratingState) {
+          _setThreadLocalHistoryHydrating(targetThreadId, false);
+        }
         _chatProviderTrace(
           'local_history.load_finish',
           fields: <String, Object?>{
@@ -2576,8 +2743,10 @@ class ChatThreadsController
     String? intoThreadId,
     bool reportFailure = false,
     bool showLoading = true,
+    SessionEpoch? sessionEpoch,
   }) async {
-    if (!mounted) {
+    final operationEpoch = sessionEpoch ?? _captureSessionEpoch();
+    if (operationEpoch == null || !_isCurrentSessionEpoch(operationEpoch)) {
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
@@ -2626,7 +2795,7 @@ class ChatThreadsController
           },
           level: AwikiPerformanceLogLevel.verbose,
         );
-        if (!mounted) {
+        if (!_isCurrentSessionEpoch(operationEpoch)) {
           return;
         }
         final repairedVersion = await _repairThreadFromLocalProjection(
@@ -2634,6 +2803,7 @@ class ChatThreadsController
           displayThreadId: targetThreadId,
           conversationRef: syncConversationRef,
           fallbackToLocalHistory: false,
+          sessionEpoch: operationEpoch,
         );
         final localResult = repairedVersion == null
             ? await _loadLocalHistory(
@@ -2642,15 +2812,19 @@ class ChatThreadsController
                 limit: _initialLocalHistoryLimit,
                 showHydratingState: false,
                 markLoadedWhenEmpty: false,
+                sessionEpoch: operationEpoch,
               )
             : const _HistoryLoadResult(loadedCount: 0, failed: false);
-        if (!mounted) {
+        if (!_isCurrentSessionEpoch(operationEpoch)) {
           return;
         }
         if (showLoading) {
           _setThreadLoading(targetThreadId, false);
         }
         await ref.read(conversationListProvider.notifier).refreshFastLocal();
+        if (!_isCurrentSessionEpoch(operationEpoch)) {
+          return;
+        }
         _flushPendingReadAck(targetThreadId);
         totalWatch.stop();
         AwikiPerformanceLogger.log(
@@ -2675,7 +2849,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(operationEpoch)) {
         return;
       }
       final repairedVersion = await _repairThreadFromLocalProjection(
@@ -2683,6 +2857,7 @@ class ChatThreadsController
         displayThreadId: targetThreadId,
         conversationRef: conversationRef,
         fallbackToLocalHistory: false,
+        sessionEpoch: operationEpoch,
       );
       final localResult = repairedVersion == null
           ? await _loadLocalHistory(
@@ -2691,6 +2866,7 @@ class ChatThreadsController
               limit: _initialLocalHistoryLimit,
               showHydratingState: false,
               markLoadedWhenEmpty: false,
+              sessionEpoch: operationEpoch,
             )
           : const _HistoryLoadResult(loadedCount: 0, failed: false);
       AwikiPerformanceLogger.log(
@@ -2704,7 +2880,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(operationEpoch)) {
         return;
       }
       _flushPendingReadAck(targetThreadId);
@@ -2719,7 +2895,7 @@ class ChatThreadsController
         },
       );
     } catch (error) {
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(operationEpoch)) {
         return;
       }
       if (showLoading) {
@@ -2731,8 +2907,8 @@ class ChatThreadsController
             .showError(AppMessage.fromError(error));
       }
     } finally {
-      _activeRemoteHistorySyncs.remove(targetThreadId);
-      if (mounted) {
+      if (_isCurrentSessionEpoch(operationEpoch)) {
+        _activeRemoteHistorySyncs.remove(targetThreadId);
         _flushPendingReadAck(targetThreadId);
         _runPendingHistorySyncIfNeeded(targetThreadId);
         _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
@@ -2747,8 +2923,9 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
-    if (session == null || content.trim().isEmpty) {
+    if (sessionEpoch == null || session == null || content.trim().isEmpty) {
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
@@ -2791,6 +2968,9 @@ class ChatThreadsController
                   idempotencyKey: idempotencyKey,
                 )
                 .timeout(_sendTimeout);
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final deliveredMessage = _settleVisibleSendingMessage(
         displayThreadId: targetThreadId,
         submittedLocalMessageId: clientMessageId,
@@ -2808,6 +2988,9 @@ class ChatThreadsController
         deliveredMessage: deliveredMessage,
       );
     } catch (error) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       _chatProviderTrace(
         'send.conversation_failed',
         fields: <String, Object?>{
@@ -2834,8 +3017,9 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
     final session = ref.read(sessionProvider).session;
-    if (session == null) {
+    if (sessionEpoch == null || session == null) {
       return;
     }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
@@ -2910,10 +3094,16 @@ class ChatThreadsController
             idempotencyKey: idempotencyKey,
           )
           .timeout(_attachmentSendTimeout);
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final sentInThread = await _withCachedSentAttachment(
         sent: _withThreadId(sent, targetThreadId),
         originalAttachment: attachment,
       );
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final deliveredMessage = _replaceMessage(
         targetThreadId,
         pending.localId,
@@ -2931,6 +3121,9 @@ class ChatThreadsController
         deliveredMessage: deliveredMessage,
       );
     } catch (error) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       _chatProviderTrace(
         'send_attachment.conversation_failed',
         fields: <String, Object?>{
@@ -2950,19 +3143,27 @@ class ChatThreadsController
   Future<AttachmentDownloadResult> downloadAttachment({
     required ConversationSummary conversation,
     required ChatMessage message,
-  }) {
+  }) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      throw StateError('No active awiki session. Please sign in first.');
+    }
     final attachment = message.attachment;
     final messageId = message.remoteId ?? message.localId;
     if (attachment == null || messageId.trim().isEmpty) {
       throw StateError('Cannot download this attachment message.');
     }
-    return ref
+    final downloaded = await ref
         .read(messagingServiceProvider)
         .downloadAttachment(
           thread: _attachmentThreadRefFor(conversation),
           messageId: messageId,
           attachmentId: attachment.attachmentId,
         );
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      throw sessionEpochChangedError();
+    }
+    return downloaded;
   }
 
   Future<void> retryMessage({
@@ -2971,6 +3172,10 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     if (message.isAttachmentMessage) {
       await retryAttachment(
         conversation: conversation,
@@ -3026,6 +3231,9 @@ class ChatThreadsController
                   idempotencyKey: 'retry-$clientMessageId',
                 )
                 .timeout(_sendTimeout);
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final deliveredMessage = _settleVisibleSendingMessage(
         displayThreadId: targetThreadId,
         submittedLocalMessageId: clientMessageId,
@@ -3043,6 +3251,9 @@ class ChatThreadsController
         deliveredMessage: deliveredMessage,
       );
     } catch (error) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       _chatProviderTrace(
         'send.retry_conversation_failed',
         fields: <String, Object?>{
@@ -3123,6 +3334,10 @@ class ChatThreadsController
     String? expectedAgentReplyDid,
     String? displayThreadId,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
@@ -3178,6 +3393,9 @@ class ChatThreadsController
             idempotencyKey: 'retry-$clientMessageId',
           )
           .timeout(_attachmentSendTimeout);
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final retriedInThread = await _withCachedSentAttachment(
         sent: _withThreadId(retried, targetThreadId),
         originalAttachment: AttachmentDraft(
@@ -3187,6 +3405,9 @@ class ChatThreadsController
           sizeBytes: attachment.sizeBytes,
         ),
       );
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final deliveredMessage = _replaceMessage(
         targetThreadId,
         message.localId,
@@ -3204,6 +3425,9 @@ class ChatThreadsController
         deliveredMessage: deliveredMessage,
       );
     } catch (error) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       _chatProviderTrace(
         'send_attachment.retry_conversation_failed',
         fields: <String, Object?>{
@@ -3221,9 +3445,16 @@ class ChatThreadsController
   }
 
   Future<void> deleteConversation(ConversationSummary conversation) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     await ref
         .read(conversationListProvider.notifier)
         .deleteFromRecents(conversation);
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      throw sessionEpochChangedError();
+    }
     final conversationId = _conversationTimelineKeyFor(conversation);
     final next = Map<String, ChatThreadState>.from(state)
       ..remove(conversationId);
@@ -3257,12 +3488,20 @@ class ChatThreadsController
     ConversationSummary conversation, {
     String? displayThreadId,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     await ref.read(conversationListProvider.notifier).refresh();
-    await syncHistoryForConversation(
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      return;
+    }
+    await _syncHistoryForConversation(
       _refreshedConversationFor(conversation),
       displayThreadId: displayThreadId,
       force: true,
       reportFailure: true,
+      sessionEpoch: sessionEpoch,
     );
   }
 
@@ -3273,6 +3512,31 @@ class ChatThreadsController
     bool reportFailure = false,
     bool showLoading = true,
   }) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return Future<void>.value();
+    }
+    return _syncHistoryForConversation(
+      conversation,
+      displayThreadId: displayThreadId,
+      force: force,
+      reportFailure: reportFailure,
+      showLoading: showLoading,
+      sessionEpoch: sessionEpoch,
+    );
+  }
+
+  Future<void> _syncHistoryForConversation(
+    ConversationSummary conversation, {
+    String? displayThreadId,
+    bool force = false,
+    bool reportFailure = false,
+    bool showLoading = true,
+    required SessionEpoch sessionEpoch,
+  }) {
+    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      return Future<void>.value();
+    }
     final targetThreadId = _displayThreadIdFor(conversation, displayThreadId);
     final current = thread(targetThreadId);
     final shouldLoad = _shouldLoadHistory(current, conversation);
@@ -3314,6 +3578,7 @@ class ChatThreadsController
           force: force,
           reportFailure: reportFailure,
           showLoading: showLoading,
+          sessionEpoch: sessionEpoch,
         );
         _chatProviderTrace(
           'history_sync.queued',
@@ -3341,10 +3606,38 @@ class ChatThreadsController
       intoThreadId: targetThreadId,
       reportFailure: reportFailure,
       showLoading: showLoading,
+      sessionEpoch: sessionEpoch,
     );
   }
 
   void clear() {
+    _resetSessionBoundState();
+  }
+
+  SessionEpoch? _captureSessionEpoch() {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null || epoch != _sessionEpoch) {
+      return null;
+    }
+    return epoch;
+  }
+
+  bool _isCurrentSessionEpoch(SessionEpoch epoch) {
+    return mounted &&
+        epoch == _sessionEpoch &&
+        epoch.matches(ref.read(sessionProvider));
+  }
+
+  void _handleSessionChanged(SessionState? previous, SessionState next) {
+    final nextEpoch = next.activeEpoch;
+    if (nextEpoch == _sessionEpoch) {
+      return;
+    }
+    _sessionEpoch = nextEpoch;
+    _resetSessionBoundState();
+  }
+
+  void _resetSessionBoundState() {
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();
@@ -4092,16 +4385,20 @@ class ChatThreadsController
     required bool force,
     required bool reportFailure,
     required bool showLoading,
+    required SessionEpoch sessionEpoch,
   }) {
     final existing = _pendingHistorySyncs[threadId];
-    _pendingHistorySyncs[threadId] = existing == null
+    _pendingHistorySyncs[threadId] =
+        existing == null || existing.sessionEpoch != sessionEpoch
         ? _PendingHistorySync(
+            sessionEpoch: sessionEpoch,
             conversation: conversation,
             force: force,
             reportFailure: reportFailure,
             showLoading: showLoading,
           )
         : _PendingHistorySync(
+            sessionEpoch: sessionEpoch,
             conversation: _newerConversation(
               conversation,
               existing.conversation,
@@ -4115,17 +4412,19 @@ class ChatThreadsController
   void _runPendingHistorySyncIfNeeded(String threadId) {
     final pending = _pendingHistorySyncs.remove(threadId);
     if (pending == null ||
+        !_isCurrentSessionEpoch(pending.sessionEpoch) ||
         (!pending.force &&
             !_shouldLoadHistory(thread(threadId), pending.conversation))) {
       return;
     }
     unawaited(
-      syncHistoryForConversation(
+      _syncHistoryForConversation(
         pending.conversation,
         displayThreadId: threadId,
         force: pending.force,
         reportFailure: pending.reportFailure,
         showLoading: pending.showLoading,
+        sessionEpoch: pending.sessionEpoch,
       ),
     );
   }
@@ -5101,6 +5400,10 @@ class ChatThreadsController
     String? errorCode,
     String? errorSummary,
   }) async {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     final payload = appActionResultPayload(
       request: request,
       state: state,
@@ -5129,8 +5432,14 @@ class ChatThreadsController
             idempotencyKey: 'app-action-result:${request.actionId}:$state',
           )
           .timeout(_sendTimeout);
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       _applyLocalAppActionResult(threadId, payload);
     } catch (_) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        return;
+      }
       final failed = appActionResultPayload(
         request: request,
         state: appActionStateFailed,
@@ -5654,6 +5963,10 @@ class ChatThreadsController
 
   void _scheduleAgentProcessingOverdue(String threadId) {
     _cancelAgentProcessingTimer(threadId);
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     final current = state[threadId];
     if (current == null || current.agentPendingTurns.isEmpty) {
       return;
@@ -5679,7 +5992,7 @@ class ChatThreadsController
     }
     _agentProcessingTimers[threadId] = Timer(nextDelay, () {
       _agentProcessingTimers.remove(threadId);
-      if (!mounted) {
+      if (!_isCurrentSessionEpoch(sessionEpoch)) {
         return;
       }
       final current = state[threadId];
@@ -5745,7 +6058,8 @@ class ChatThreadsController
       return;
     }
     _threadPatchSubscriptionTtlTimers[threadId] = Timer(ttl, () {
-      if (!mounted || _cacheMetadataByThreadId[threadId]?.isVisible == true) {
+      if (!_isCurrentSessionEpoch(subscription.sessionEpoch) ||
+          _cacheMetadataByThreadId[threadId]?.isVisible == true) {
         return;
       }
       _cancelThreadPatchSubscription(threadId);
@@ -5773,9 +6087,14 @@ class ChatThreadsController
 
   void _scheduleHiddenThreadCacheTrim(String threadId) {
     _cancelHiddenThreadCacheTrim(threadId);
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     _hiddenThreadCacheTrimTimers[threadId] = Timer(Duration.zero, () {
       _hiddenThreadCacheTrimTimers.remove(threadId);
-      if (!mounted || _cacheMetadataByThreadId[threadId]?.isVisible == true) {
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
+          _cacheMetadataByThreadId[threadId]?.isVisible == true) {
         return;
       }
       _enforceThreadCacheForExistingState(threadId);
@@ -5876,18 +6195,8 @@ class ChatThreadsController
   @override
   void dispose() {
     _appLifecycleSubscription.close();
-    _cancelAgentProcessingTimers();
-    _cancelThreadPatchSubscriptions();
-    _cancelThreadPatchSubscriptionTtls();
-    _cancelHiddenThreadCacheTrimTimers();
-    _pendingHistorySyncs.clear();
-    _pendingVisibleThreadStaleGuards.clear();
-    _activeVisibleThreadStaleGuards.clear();
-    _lastThreadPatchStreamEndAt.clear();
-    _pendingReadAcksByThreadId.clear();
-    _activeLocalHistoryLoads.clear();
-    _activeRemoteHistorySyncs.clear();
-    _clearMemoryCacheMetadata();
+    _sessionSubscription.close();
+    _resetSessionBoundState();
     super.dispose();
   }
 
@@ -6690,7 +6999,7 @@ final chatComposerDraftsProvider =
     StateNotifierProvider<
       ChatComposerDraftsController,
       Map<String, ChatComposerDraft>
-    >((ref) => ChatComposerDraftsController());
+    >((ref) => ChatComposerDraftsController(ref));
 
 final chatThreadProvider = Provider.family<ChatThreadState, String>((
   ref,

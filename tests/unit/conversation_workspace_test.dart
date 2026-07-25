@@ -25,6 +25,7 @@ import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
@@ -93,7 +94,10 @@ class _BlockingRestoreConversationListController
   final Completer<void> restoreCompleter;
 
   @override
-  Future<ConversationSummary> commitConversationId(String conversationId) {
+  Future<ConversationSummary> commitConversationId(
+    String conversationId, {
+    SessionEpoch? expectedEpoch,
+  }) {
     if (!restoreStarted.isCompleted) {
       restoreStarted.complete();
     }
@@ -104,6 +108,13 @@ class _BlockingRestoreConversationListController
     });
   }
 }
+
+const _groupWorkspaceSession = SessionIdentity(
+  did: 'did:test:owner',
+  credentialName: 'group-workspace',
+  handle: 'owner.awiki',
+  displayName: 'Owner',
+);
 
 void main() {
   testWidgets('会话行头像和昵称复用 Persona Profile 投影', (tester) async {
@@ -1282,6 +1293,12 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
   testWidgets('macOS 群聊头像打开统一信息弹窗且头部不显示入口', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:owner',
+      credentialName: 'owner.json',
+      displayName: 'Owner',
+      handle: 'owner.awiki',
+    );
     const groupId = 'did:test:group:funding';
     final group = GroupSummary(
       groupId: groupId,
@@ -1334,6 +1351,7 @@ void main() {
       buildLocalizedTestApp(
         home: const ConversationWorkspacePage(),
         gateway: gateway,
+        session: session,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>
@@ -1492,6 +1510,7 @@ void main() {
       buildLocalizedTestApp(
         home: const ConversationWorkspacePage(),
         gateway: gateway,
+        session: _groupWorkspaceSession,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>
@@ -1587,6 +1606,7 @@ void main() {
       buildLocalizedTestApp(
         home: const ConversationWorkspacePage(),
         gateway: gateway,
+        session: _groupWorkspaceSession,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>
@@ -1738,6 +1758,7 @@ void main() {
           child: ConversationWorkspacePage(),
         ),
         gateway: gateway,
+        session: _groupWorkspaceSession,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>
@@ -1825,6 +1846,7 @@ void main() {
           },
         ),
         gateway: gateway,
+        session: _groupWorkspaceSession,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>
@@ -1919,6 +1941,7 @@ void main() {
       buildLocalizedTestApp(
         home: const ConversationWorkspacePage(),
         gateway: gateway,
+        session: _groupWorkspaceSession,
         providerOverrides: <Override>[
           conversationListProvider.overrideWith(
             (ref) =>

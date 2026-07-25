@@ -1,15 +1,39 @@
 // ignore_for_file: invalid_use_of_visible_for_testing_member
 
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agent_inbox_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
 
 void main() {
+  test(
+    'logged-out inbox query fails closed without sending a command',
+    () async {
+      final control = FakeAgentControlService();
+      final container = _container(control, authenticated: false);
+      addTearDown(container.dispose);
+
+      await container
+          .read(agentInboxProvider.notifier)
+          .queryInbox(
+            daemonAgentDid: 'did:agent:daemon',
+            runtimeAgentDid: 'did:agent:runtime',
+          );
+
+      expect(control.lastInboxDaemonDid, isNull);
+      expect(control.lastInboxRuntimeDid, isNull);
+      expect(container.read(agentInboxProvider), const AgentInboxState());
+    },
+  );
+
   test(
     'queryInbox sends command and accepts matching status payload only',
     () async {
@@ -716,19 +740,253 @@ void main() {
       expect(thread.error, isNull);
     },
   );
+
+  test(
+    'late command future and payload from the old session cannot overwrite the new inbox',
+    () async {
+      const ownerA = SessionIdentity(
+        did: 'did:human:owner-a',
+        credentialName: 'owner-a',
+        displayName: 'Owner A',
+      );
+      const ownerB = SessionIdentity(
+        did: 'did:human:owner-b',
+        credentialName: 'owner-b',
+        displayName: 'Owner B',
+      );
+      final control = _BlockingInboxControlService();
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final session = container.read(sessionProvider.notifier)
+        ..setSession(ownerA);
+      final inbox = container.read(agentInboxProvider.notifier);
+
+      final ownerAQuery = inbox.queryInbox(
+        daemonAgentDid: 'did:agent:shared-daemon',
+        runtimeAgentDid: 'did:agent:shared-runtime',
+      );
+      await control.waitUntilCalled(0);
+
+      session.setSession(ownerB);
+      final ownerBQuery = inbox.queryInbox(
+        daemonAgentDid: 'did:agent:shared-daemon',
+        runtimeAgentDid: 'did:agent:shared-runtime',
+      );
+      await control.waitUntilCalled(1);
+      control.completeCall(1, 'cmd_owner_b');
+      await ownerBQuery;
+      inbox.applyControlPayload(
+        _inboxPayload(requestId: 'cmd_owner_b', preview: 'owner-b-message'),
+      );
+
+      control.completeCall(0, 'cmd_owner_a');
+      await ownerAQuery;
+      inbox.applyControlPayload(
+        _inboxPayload(
+          requestId: 'cmd_owner_a',
+          preview: 'owner-a-late-message',
+        ),
+      );
+
+      final state = container.read(agentInboxProvider);
+      expect(state.lastRequestId, 'cmd_owner_b');
+      expect(state.items, hasLength(1));
+      expect(state.items.single.lastMessagePreview, 'owner-b-message');
+      expect(state.error, isNull);
+    },
+  );
+
+  test(
+    'clear rejects an in-flight old-session poll and cancels its timeout',
+    () async {
+      AgentInboxController.responseTimeout = const Duration(milliseconds: 30);
+      AgentInboxController.statusPollInterval = const Duration(milliseconds: 1);
+      addTearDown(() {
+        AgentInboxController.responseTimeout = const Duration(seconds: 20);
+        AgentInboxController.statusPollInterval = const Duration(
+          milliseconds: 700,
+        );
+      });
+      const ownerA = SessionIdentity(
+        did: 'did:human:owner-a',
+        credentialName: 'owner-a',
+        displayName: 'Owner A',
+      );
+      const ownerB = SessionIdentity(
+        did: 'did:human:owner-b',
+        credentialName: 'owner-b',
+        displayName: 'Owner B',
+      );
+      final control = FakeAgentControlService()
+        ..nextInboxRequestId = 'cmd_shared';
+      final store = _BlockingAgentControlStatusStore();
+      final container = _container(control, statusStore: store);
+      addTearDown(container.dispose);
+      final session = container.read(sessionProvider.notifier)
+        ..setSession(ownerA);
+      final inbox = container.read(agentInboxProvider.notifier);
+
+      await inbox.queryInbox(
+        daemonAgentDid: 'did:agent:shared-daemon',
+        runtimeAgentDid: 'did:agent:shared-runtime',
+      );
+      await store.lookupStarted.future;
+
+      inbox.clear();
+      session.setSession(ownerB);
+      await inbox.queryInbox(
+        daemonAgentDid: 'did:agent:shared-daemon',
+        runtimeAgentDid: 'did:agent:shared-runtime',
+      );
+      inbox.applyControlPayload(
+        _inboxPayload(requestId: 'cmd_shared', preview: 'owner-b-message'),
+      );
+
+      store.complete(
+        _inboxPayload(
+          requestId: 'cmd_shared',
+          preview: 'owner-a-polled-message',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final state = container.read(agentInboxProvider);
+      expect(state.items, hasLength(1));
+      expect(state.items.single.lastMessagePreview, 'owner-b-message');
+      expect(state.isLoading, isFalse);
+      expect(state.isRefreshing, isFalse);
+      expect(state.error, isNull);
+    },
+  );
+}
+
+Map<String, Object?> _inboxPayload({
+  required String requestId,
+  required String preview,
+}) {
+  return <String, Object?>{
+    'schema': AgentControlPayloads.statusSchema,
+    'status_scope': 'runtime_inbox',
+    'daemon_agent_did': 'did:agent:shared-daemon',
+    'runtime_agent_did': 'did:agent:shared-runtime',
+    'request_id': requestId,
+    'state': 'succeeded',
+    'result': <String, Object?>{
+      'items': <Object?>[
+        <String, Object?>{
+          'thread_id': 'dm:peer-scope:v1:shared',
+          'kind': 'direct',
+          'title': 'Shared peer',
+          'last_message_preview': preview,
+        },
+      ],
+    },
+  };
 }
 
 ProviderContainer _container(
   FakeAgentControlService control, {
   AgentControlStatusStore? statusStore,
+  bool authenticated = true,
 }) {
-  return ProviderContainer(
+  final container = ProviderContainer(
     overrides: <Override>[
       agentControlServiceProvider.overrideWithValue(control),
       if (statusStore != null)
         agentControlStatusStoreProvider.overrideWithValue(statusStore),
     ],
   );
+  if (authenticated) {
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:human:test-owner',
+            credentialName: 'test-owner',
+            displayName: 'Test owner',
+          ),
+        );
+  }
+  return container;
+}
+
+class _BlockingInboxControlService extends FakeAgentControlService {
+  final List<Completer<void>> _calls = List<Completer<void>>.generate(
+    2,
+    (_) => Completer<void>(),
+  );
+  final List<Completer<String>> _responses = List<Completer<String>>.generate(
+    2,
+    (_) => Completer<String>(),
+  );
+  int _callCount = 0;
+
+  Future<void> waitUntilCalled(int index) => _calls[index].future;
+
+  void completeCall(int index, String requestId) {
+    _responses[index].complete(requestId);
+  }
+
+  @override
+  Future<String> queryRuntimeInbox({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    String scope = 'all',
+    int limit = 20,
+    String? cursor,
+  }) async {
+    final callIndex = _callCount;
+    _callCount += 1;
+    await super.queryRuntimeInbox(
+      daemonAgentDid: daemonAgentDid,
+      runtimeAgentDid: runtimeAgentDid,
+      scope: scope,
+      limit: limit,
+      cursor: cursor,
+    );
+    _calls[callIndex].complete();
+    return _responses[callIndex].future;
+  }
+}
+
+class _BlockingAgentControlStatusStore implements AgentControlStatusStore {
+  final lookupStarted = Completer<void>();
+  final _result = Completer<Map<String, Object?>?>();
+  bool _lookupBlocked = false;
+
+  void complete(Map<String, Object?> payload) {
+    _result.complete(payload);
+  }
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) {
+    if (!_lookupBlocked) {
+      _lookupBlocked = true;
+      lookupStarted.complete();
+      return _result.future;
+    }
+    return Future<Map<String, Object?>?>.value();
+  }
 }
 
 class _FakeAgentControlStatusStore implements AgentControlStatusStore {

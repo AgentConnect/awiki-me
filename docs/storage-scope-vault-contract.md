@@ -262,8 +262,7 @@ Handle恢复或在升级完成前创建conversation/profile/product业务Store�
 - backend URL只有在server证明相同`remote_realm_id`/service identity时可原位修改。
 - server尚无stable realm ID时，scope有数据后禁止修改backend/DID host。
 - DID host/realm变化默认创建新tenant profile和scope。
-- tenant switch必须停止realtime、取消scope-owned work、等待active operations、flush/close
-  SQLite，旧runtime完整dispose后才能打开新scope。
+- tenant switch必须先推进 App active session generation，使旧 owner 的 sync、timeline、patch、read、send completion 和 presentation cache 立即失效；再停止 realtime、取消 scope-owned work、等待 active operations、flush/close SQLite，旧 runtime 完整 dispose 后才能打开新 scope。新 identity 只能在旧 runtime 释放后启动；同一 identity 的 JWT/profile refresh 不推进 generation。
 - archive默认保留scope和key。
 - explicit local-data deletion进入`deleting`，停止runtime、删除platform secret和scope files；
   失败保持可重试的`deleting/blocked`。

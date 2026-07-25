@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -148,4 +152,73 @@ void main() {
     );
     expect(controller.visibleProfileContent(), serverProfile.profileMarkdown);
   });
+
+  test('旧身份资料慢请求不会覆盖新身份状态', () async {
+    final profiles = _DelayedProfileService();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        profileApplicationServiceProvider.overrideWithValue(profiles),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:owner:a',
+            credentialName: 'owner-a',
+            displayName: 'Owner A',
+          ),
+        );
+    final controller = container.read(profileProvider.notifier);
+
+    final refresh = controller.refresh();
+    await profiles.started.future;
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:owner:b',
+            credentialName: 'owner-b',
+            displayName: 'Owner B',
+          ),
+        );
+    controller.clear();
+    profiles.result.complete(
+      const UserProfile(
+        did: 'did:owner:a',
+        nickName: 'Owner A',
+        bio: 'old owner profile',
+        tags: <String>[],
+        profileMarkdown: '# Owner A',
+      ),
+    );
+    await refresh;
+
+    final state = container.read(profileProvider);
+    expect(state.profile, isNull);
+    expect(state.isLoading, isFalse);
+    expect(state.isSaving, isFalse);
+  });
+}
+
+class _DelayedProfileService implements ProfileApplicationService {
+  final Completer<void> started = Completer<void>();
+  final Completer<UserProfile> result = Completer<UserProfile>();
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    started.complete();
+    return result.future;
+  }
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
 }

@@ -156,6 +156,18 @@ test OTP, and CLI peer are configured:
 dart run tests/e2e/runner.dart --case full
 ```
 
+同一安装内双身份消息闭环使用独立 focused suite，避免扩大既有 `full` UI
+流程。配置文件需提供同一非生产 OTP 账号池中的第二个本地身份 Handle：
+
+```bash
+dart run tests/e2e/runner.dart --case identity-switch
+```
+
+该场景验证 A→B 和 B→A 在 logout/activate 后都先得到 owner-scoped unread，
+再通过 Core conversation catch-up 得到精确正文并清零未读；最后快速切换确认旧
+realtime stop 不会终止新身份 session。它是 application/runtime 闭环，不替代账户
+选择器的视觉人工验收。
+
 `full` additionally runs the cross-conversation correctness slice: one Direct
 and one Group receive messages in alternating order, then the test verifies
 exact visible row title/preview/order, per-row and global unread isolation,
@@ -226,6 +238,9 @@ dart run tests/e2e/runner.dart --case full \
   --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
 
 dart run tests/e2e/runner.dart --case restart \
+  --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
+
+dart run tests/e2e/runner.dart --case identity-switch \
   --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
 
 dart run tests/e2e/runner.dart --case display-name-fallback \
@@ -372,10 +387,11 @@ The product oracle is fail-closed:
 `performance` remains a service-driven backend/integration diagnostic because
 it directly prepares a large dataset and calls application services to measure
 specific timing boundaries. Its results must not be relabeled as required UI
-acceptance. Profile editing, directory-wide search, identity switch,
-onboarding, group role/remove/leave flows, and secure-trust UI remain roadmap
-cases until they receive their own case IDs and vertical slices; `full` does
-not imply those features are covered.
+acceptance. Profile editing, directory-wide search, onboarding, group
+role/remove/leave flows, and secure-trust UI remain roadmap cases until they
+receive their own case IDs and vertical slices; `full` does not imply those
+features are covered. The focused identity-switch suite covers the runtime and
+message lifecycle, while account-picker visual acceptance remains manual.
 
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and

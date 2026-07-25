@@ -163,6 +163,23 @@ void main() {
       expect(restart.e2eCase.caseIds, <String>['PROCESS-RESTART-E2E-001']);
     });
 
+    test('parses the two-local-identity messaging case', () {
+      final identitySwitch = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'identity-switch',
+        '--dry-run',
+      ]);
+
+      expect(identitySwitch.e2eCase, DesktopE2eCase.identitySwitch);
+      expect(identitySwitch.e2eCase.caseIds, <String>[
+        'IDENTITY-SWITCH-E2E-001',
+      ]);
+      expect(
+        identitySwitch.e2eCase.testFile,
+        'integration_test/desktop_identity_switch_test.dart',
+      );
+    });
+
     test('parses App display-name fallback case aliases', () {
       final fallback = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -274,7 +291,7 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, full, performance, direct, group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
                 'message-agent, codex-agent, or claude-code-agent.',
           ),
@@ -631,6 +648,50 @@ cliHandle: legacy-cli
           ),
         ),
       );
+    });
+
+    test('identity-switch requires a distinct secondary App handle', () {
+      const base = DesktopE2eFileConfig(
+        path: '/tmp/e2e.local.yaml',
+        serviceBaseUrl: 'https://service.example.test',
+        didDomain: 'example.test',
+        otpPhone: 'test-phone-secret',
+        otpCode: 'test-otp-secret',
+        appHandle: 'primary-app',
+        cliHandle: 'cli-peer',
+        cliBin: '/tmp/file-awiki-cli',
+      );
+      final options = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'identity-switch',
+      ]);
+
+      expect(
+        () => DesktopCliPeerConfig.from(options, base),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            'accounts.appSecondaryUser.handle is required in /tmp/e2e.local.yaml.',
+          ),
+        ),
+      );
+
+      final configured = DesktopCliPeerConfig.from(
+        options,
+        const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          serviceBaseUrl: 'https://service.example.test',
+          didDomain: 'example.test',
+          otpPhone: 'test-phone-secret',
+          otpCode: 'test-otp-secret',
+          appHandle: 'primary-app',
+          secondaryAppHandle: 'secondary-app',
+          cliHandle: 'cli-peer',
+          cliBin: '/tmp/file-awiki-cli',
+        ),
+      );
+      expect(configured.secondaryAppHandle, 'secondary-app');
     });
 
     test('defaults message-agent case to enabled when YAML omits it', () {

@@ -1490,8 +1490,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _pickAndStageAttachment() async {
+    final expectedEpoch = ref.read(sessionProvider).activeEpoch;
     final conversation = _currentConversationSnapshot();
-    if (!_canAcceptExternalAttachment(conversation)) {
+    if (expectedEpoch == null || !_canAcceptExternalAttachment(conversation)) {
       return;
     }
     try {
@@ -1501,11 +1502,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (draft == null) {
         return;
       }
-      if (!mounted) {
+      if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
         return;
       }
-      _stageAttachmentDraft(conversation, draft);
+      _stageAttachmentDraft(conversation, draft, expectedEpoch: expectedEpoch);
     } catch (error) {
+      if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
@@ -1513,19 +1517,24 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _captureAndStageScreenshot({required bool hideApp}) async {
+    final expectedEpoch = ref.read(sessionProvider).activeEpoch;
     final conversation = _currentConversationSnapshot();
-    if (!_canAcceptExternalAttachment(conversation)) {
+    if (expectedEpoch == null || !_canAcceptExternalAttachment(conversation)) {
       return;
     }
     try {
       final draft = await ref
           .read(attachmentPickerServiceProvider)
           .captureScreenshot(hideApp: hideApp);
-      if (draft == null || !mounted) {
+      if (draft == null ||
+          !_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
         return;
       }
-      _stageAttachmentDraft(conversation, draft);
+      _stageAttachmentDraft(conversation, draft, expectedEpoch: expectedEpoch);
     } catch (error) {
+      if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
@@ -1533,8 +1542,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<bool> _pasteClipboardAttachment() async {
+    final expectedEpoch = ref.read(sessionProvider).activeEpoch;
     final conversation = _currentConversationSnapshot();
-    if (!_canAcceptExternalAttachment(conversation)) {
+    if (expectedEpoch == null || !_canAcceptExternalAttachment(conversation)) {
       return false;
     }
     try {
@@ -1544,16 +1554,15 @@ class _ChatViewState extends ConsumerState<ChatView> {
       if (draft == null) {
         return false;
       }
-      if (!mounted ||
-          !_sameCanonicalConversation(
-            conversation,
-            _currentConversationSnapshot(),
-          )) {
+      if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
         return true;
       }
-      _stageAttachmentDraft(conversation, draft);
+      _stageAttachmentDraft(conversation, draft, expectedEpoch: expectedEpoch);
       return true;
     } catch (error) {
+      if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
+        return true;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
@@ -1565,8 +1574,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
     if (mounted && _isDraggingExternalAttachment) {
       setState(() => _isDraggingExternalAttachment = false);
     }
+    final expectedEpoch = ref.read(sessionProvider).activeEpoch;
     final conversation = _currentConversationSnapshot();
-    if (!_canAcceptExternalAttachment(conversation)) {
+    if (expectedEpoch == null || !_canAcceptExternalAttachment(conversation)) {
       return;
     }
     final item = _firstDroppedFile(details.files);
@@ -1576,15 +1586,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
     try {
       final draft = await _draftFromDroppedItem(item);
       if (draft == null ||
-          !mounted ||
-          !_sameCanonicalConversation(
-            conversation,
-            _currentConversationSnapshot(),
-          )) {
+          !_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
         return;
       }
-      _stageAttachmentDraft(conversation, draft);
+      _stageAttachmentDraft(conversation, draft, expectedEpoch: expectedEpoch);
     } catch (error) {
+      if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
@@ -1652,14 +1661,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   void _stageAttachmentDraft(
     ConversationSummary conversation,
-    AttachmentDraft draft,
-  ) {
-    if (!mounted ||
-        !_canAcceptExternalAttachment(conversation) ||
-        !_sameCanonicalConversation(
-          conversation,
-          _currentConversationSnapshot(),
-        )) {
+    AttachmentDraft draft, {
+    required SessionEpoch expectedEpoch,
+  }) {
+    if (!_isExternalAttachmentOperationCurrent(expectedEpoch, conversation)) {
       return;
     }
     setState(() {
@@ -1669,6 +1674,19 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ref
         .read(chatComposerDraftsProvider.notifier)
         .setAttachment(conversation, draft);
+  }
+
+  bool _isExternalAttachmentOperationCurrent(
+    SessionEpoch expectedEpoch,
+    ConversationSummary conversation,
+  ) {
+    return mounted &&
+        expectedEpoch.matches(ref.read(sessionProvider)) &&
+        _canAcceptExternalAttachment(conversation) &&
+        _sameCanonicalConversation(
+          conversation,
+          _currentConversationSnapshot(),
+        );
   }
 
   void _clearPendingAttachment() {
@@ -1748,6 +1766,10 @@ class _ChatViewState extends ConsumerState<ChatView> {
     ConversationSummary conversation,
     ChatMessage message,
   ) async {
+    final sessionEpoch = ref.read(sessionProvider).activeEpoch;
+    if (sessionEpoch == null) {
+      return;
+    }
     final attachment = message.attachment;
     if (attachment == null) {
       return;
@@ -1770,8 +1792,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
                   message: message,
                 ),
           );
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
       await ref.read(attachmentOpenServiceProvider).open(previewPath);
     } catch (error, stackTrace) {
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(

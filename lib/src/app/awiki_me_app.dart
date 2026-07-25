@@ -92,7 +92,9 @@ class AwikiMeApp extends StatelessWidget {
                 onSessionUpdated: (session) {
                   ref
                       .read(sessionProvider.notifier)
-                      .setSession(session.toLegacySessionIdentity());
+                      .updateSessionMetadataIfCurrent(
+                        session.toLegacySessionIdentity(),
+                      );
                 },
               );
               return inventory.withAuthenticatedClient(
@@ -115,7 +117,9 @@ class AwikiMeApp extends StatelessWidget {
                 onSessionUpdated: (session) {
                   ref
                       .read(sessionProvider.notifier)
-                      .setSession(session.toLegacySessionIdentity());
+                      .updateSessionMetadataIfCurrent(
+                        session.toLegacySessionIdentity(),
+                      );
                 },
               );
               return bindings.withAuthenticatedClient(

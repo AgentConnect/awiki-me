@@ -64,9 +64,9 @@ void main() {
           bootstrap.onboardingService!,
           config,
         );
-        await ProviderScope.containerOf(tester.element(find.byType(AppShell)))
-            .read(appRuntimeProvider.notifier)
-            .activateSession(session.toLegacySessionIdentity());
+        await ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        ).read(appRuntimeProvider.notifier).activateCommittedSession(session);
         await _pumpFrame(tester);
 
         final appContainer = ProviderScope.containerOf(

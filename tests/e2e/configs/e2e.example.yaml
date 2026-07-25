@@ -19,6 +19,10 @@ otp:
 accounts:
   appUser:
     handle: awiki-e2e-app
+  # Required only by `--case identity-switch`. Keep this as a second account
+  # owned by the configured non-production OTP credential.
+  appSecondaryUser:
+    handle: awiki-e2e-app-secondary
   cliPeer:
     handle: awiki-e2e-cli
 

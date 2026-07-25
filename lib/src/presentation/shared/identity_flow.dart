@@ -145,13 +145,20 @@ Future<UserProfile> resolveIdentityProfile(
   WidgetRef ref,
   String rawQuery,
 ) async {
-  return (await _resolveIdentityProfile(ref, rawQuery)).profile;
+  final expectedEpoch = _requireActiveSessionEpoch(ref);
+  return (await _resolveIdentityProfile(
+    ref,
+    rawQuery,
+    expectedEpoch: expectedEpoch,
+  )).profile;
 }
 
 Future<_ResolvedIdentity> _resolveIdentityProfile(
   WidgetRef ref,
-  String rawQuery,
-) async {
+  String rawQuery, {
+  required SessionEpoch expectedEpoch,
+}) async {
+  _requireSessionEpochCurrent(ref, expectedEpoch);
   final query = normalizeDidOrHandleInput(rawQuery);
   if (query.isEmpty) {
     throw ArgumentError('identity_query_required');
@@ -162,15 +169,21 @@ Future<_ResolvedIdentity> _resolveIdentityProfile(
       final resolution = await ref
           .read(directoryApplicationServiceProvider)
           .resolvePeer(query);
+      _requireSessionEpochCurrent(ref, expectedEpoch);
       return _ResolvedIdentity(
         profile:
             resolution.profile ?? identityProfileFromResolution(resolution),
         conversationId: resolution.conversationId,
       );
     } catch (error) {
+      if (isSessionEpochChangedError(error)) {
+        rethrow;
+      }
+      _requireSessionEpochCurrent(ref, expectedEpoch);
       directoryError = error;
       if (attempt < 2) {
         await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
+        _requireSessionEpochCurrent(ref, expectedEpoch);
       }
     }
   }
@@ -182,11 +195,11 @@ Future<_ResolvedIdentity> _resolveIdentityProfile(
       StackTrace.current,
     );
   }
-  return _ResolvedIdentity(
-    profile: await ref
-        .read(profileApplicationServiceProvider)
-        .loadPublicProfile(query),
-  );
+  final profile = await ref
+      .read(profileApplicationServiceProvider)
+      .loadPublicProfile(query);
+  _requireSessionEpochCurrent(ref, expectedEpoch);
+  return _ResolvedIdentity(profile: profile);
 }
 
 UserProfile identityProfileFromResolution(DirectoryPeerResolution resolution) {
@@ -214,6 +227,7 @@ Future<void> openDirectConversationForProfile(
   WidgetRef ref,
   UserProfile profile, {
   String? conversationId,
+  SessionEpoch? expectedEpoch,
 }) async {
   await openDirectConversationForDid(
     context,
@@ -224,18 +238,23 @@ Future<void> openDirectConversationForProfile(
     avatarUri: profile.avatarUri,
     avatarSeed: profile.handle ?? profile.did,
     conversationId: conversationId,
+    expectedEpoch: expectedEpoch,
   );
 }
 
 Future<String> resolveCanonicalConversationIdForProfile(
   WidgetRef ref,
-  UserProfile profile,
-) async {
+  UserProfile profile, {
+  SessionEpoch? expectedEpoch,
+}) async {
+  final operationEpoch = expectedEpoch ?? _requireActiveSessionEpoch(ref);
   final resolved = await _resolveDirectPeer(
     ref,
     peerDid: profile.did,
     peerHandle: profile.fullHandle ?? profile.handle,
+    expectedEpoch: operationEpoch,
   );
+  _requireSessionEpochCurrent(ref, operationEpoch);
   return resolved.conversationId;
 }
 
@@ -248,12 +267,16 @@ Future<void> openDirectConversationForDid(
   String? avatarUri,
   String? avatarSeed,
   String? conversationId,
+  SessionEpoch? expectedEpoch,
 }) async {
-  final session = ref.read(sessionProvider).session;
-  if (session == null) {
+  final operationEpoch = expectedEpoch ?? ref.read(sessionProvider).activeEpoch;
+  if (operationEpoch == null) {
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.sessionExpiredRelogin());
+    return;
+  }
+  if (!_isSessionEpochCurrent(ref, operationEpoch)) {
     return;
   }
 
@@ -274,21 +297,35 @@ Future<void> openDirectConversationForDid(
       peerDid: peer,
       peerHandle: peerHandle,
       resolvedConversationId: conversationId,
+      expectedEpoch: operationEpoch,
     );
   } catch (error) {
+    if (isSessionEpochChangedError(error) ||
+        !_isSessionEpochCurrent(ref, operationEpoch)) {
+      return;
+    }
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.fromError(error));
     return;
   }
+  if (!_isSessionEpochCurrent(ref, operationEpoch)) {
+    return;
+  }
   final canonicalConversationId = resolvedPeer.conversationId;
   final conversation = await ref
       .read(conversationListProvider.notifier)
-      .commitConversationId(canonicalConversationId);
+      .commitConversationId(
+        canonicalConversationId,
+        expectedEpoch: operationEpoch,
+      );
+  if (!_isSessionEpochCurrent(ref, operationEpoch)) {
+    return;
+  }
   ref
       .read(peerDisplayProfileProvider.notifier)
       .updateFromRemote(
-        ownerDid: session.did,
+        ownerDid: operationEpoch.ownerDid,
         peerPersonaId: conversation.peerPersonaId,
         profile: UserProfile(
           did: resolvedPeer.did,
@@ -302,7 +339,7 @@ Future<void> openDirectConversationForDid(
         ),
       );
   await ref.read(chatThreadsProvider.notifier).openConversation(conversation);
-  if (!context.mounted) {
+  if (!context.mounted || !_isSessionEpochCurrent(ref, operationEpoch)) {
     return;
   }
 
@@ -319,9 +356,11 @@ Future<void> openDirectConversationForDid(
 Future<_ResolvedDirectPeer> _resolveDirectPeer(
   WidgetRef ref, {
   required String peerDid,
+  required SessionEpoch expectedEpoch,
   String? peerHandle,
   String? resolvedConversationId,
 }) async {
+  _requireSessionEpochCurrent(ref, expectedEpoch);
   final providedHandle = _normalizedOptionalHandle(peerHandle);
   final providedConversationId = resolvedConversationId?.trim();
   if (providedConversationId != null && providedConversationId.isNotEmpty) {
@@ -339,6 +378,7 @@ Future<_ResolvedDirectPeer> _resolveDirectPeer(
   final resolution = await ref
       .read(directoryApplicationServiceProvider)
       .resolvePeer(selector);
+  _requireSessionEpochCurrent(ref, expectedEpoch);
   final resolvedDid = resolution.did.trim();
   if (!resolvedDid.startsWith('did:')) {
     throw StateError('identity_invalid_contact');
@@ -379,15 +419,39 @@ bool _isDomainQualifiedHandle(String? value) {
   return separator > 0 && separator < handle.length - 1;
 }
 
+SessionEpoch _requireActiveSessionEpoch(WidgetRef ref) {
+  final epoch = ref.read(sessionProvider).activeEpoch;
+  if (epoch == null) {
+    throw sessionEpochChangedError();
+  }
+  return epoch;
+}
+
+bool _isSessionEpochCurrent(WidgetRef ref, SessionEpoch expectedEpoch) {
+  return expectedEpoch.matches(ref.read(sessionProvider));
+}
+
+void _requireSessionEpochCurrent(WidgetRef ref, SessionEpoch expectedEpoch) {
+  if (!_isSessionEpochCurrent(ref, expectedEpoch)) {
+    throw sessionEpochChangedError();
+  }
+}
+
 Future<void> showStartConversationDialog(
   BuildContext context,
   WidgetRef ref,
 ) async {
+  final expectedEpoch = ref.read(sessionProvider).activeEpoch;
+  if (expectedEpoch == null) {
+    return;
+  }
   final result = await AppNavigator.showDialog<IdentityFlowResult>(
     context,
     (_) => const IdentityLookupDialog(mode: IdentityFlowMode.startConversation),
   );
-  if (result == null || !context.mounted) {
+  if (result == null ||
+      !context.mounted ||
+      !_isSessionEpochCurrent(ref, expectedEpoch)) {
     return;
   }
   await openDirectConversationForProfile(
@@ -395,6 +459,7 @@ Future<void> showStartConversationDialog(
     ref,
     result.profile,
     conversationId: result.conversationId,
+    expectedEpoch: expectedEpoch,
   );
 }
 
@@ -402,20 +467,31 @@ Future<void> showFollowIdentityDialog(
   BuildContext context,
   WidgetRef ref,
 ) async {
+  final expectedEpoch = ref.read(sessionProvider).activeEpoch;
+  if (expectedEpoch == null) {
+    return;
+  }
   final result = await AppNavigator.showDialog<IdentityFlowResult>(
     context,
     (_) => const IdentityLookupDialog(mode: IdentityFlowMode.followContact),
   );
-  if (result == null) {
+  if (result == null || !_isSessionEpochCurrent(ref, expectedEpoch)) {
     return;
   }
 
   try {
     await ref.read(friendsProvider.notifier).follow(result.profile.did);
+    if (!_isSessionEpochCurrent(ref, expectedEpoch)) {
+      return;
+    }
     ref
         .read(uiFeedbackProvider.notifier)
         .showInfo(AppMessage.followContactSucceeded());
   } catch (error) {
+    if (isSessionEpochChangedError(error) ||
+        !_isSessionEpochCurrent(ref, expectedEpoch)) {
+      return;
+    }
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.fromError(error));
@@ -447,10 +523,17 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   String? _conversationId;
   RelationshipSummary? _relationship;
   String? _errorText;
+  late final SessionEpoch? _dialogEpoch;
 
   IdentityLookupDialogConfig get _config =>
       widget.config ??
       IdentityLookupDialogConfig.forMode(widget.mode!, context.l10n);
+
+  @override
+  void initState() {
+    super.initState();
+    _dialogEpoch = ref.read(sessionProvider).activeEpoch;
+  }
 
   @override
   void dispose() {
@@ -487,14 +570,22 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       if (!mounted) {
         return;
       }
+      if (!_isDialogEpochCurrent()) {
+        Navigator.of(context).pop();
+        return;
+      }
       setState(() {
         _profile = profile;
         _conversationId = resolved.conversationId;
         _relationship = relationship;
         _isResolving = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
+        return;
+      }
+      if (isSessionEpochChangedError(error) || !_isDialogEpochCurrent()) {
+        Navigator.of(context).pop();
         return;
       }
       setState(() {
@@ -505,12 +596,20 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
   }
 
   Future<_ResolvedIdentity> _resolveIdentity(String query) async {
-    return _resolveIdentityProfile(ref, query);
+    final epoch = _dialogEpoch;
+    if (epoch == null) {
+      throw sessionEpochChangedError();
+    }
+    return _resolveIdentityProfile(ref, query, expectedEpoch: epoch);
   }
 
   Future<void> _submit() async {
     final profile = _profile;
     if (profile == null || _isSubmitting || _isResolving) {
+      return;
+    }
+    if (!_isDialogEpochCurrent()) {
+      Navigator.of(context).pop();
       return;
     }
     if (_config.loadRelationship) {
@@ -539,6 +638,10 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       if (!mounted) {
         return;
       }
+      if (!_isDialogEpochCurrent()) {
+        Navigator.of(context).pop();
+        return;
+      }
       Navigator.of(context).pop(
         IdentityFlowResult(profile: profile, conversationId: _conversationId),
       );
@@ -546,11 +649,20 @@ class _IdentityLookupDialogState extends ConsumerState<IdentityLookupDialog> {
       if (!mounted) {
         return;
       }
+      if (isSessionEpochChangedError(error) || !_isDialogEpochCurrent()) {
+        Navigator.of(context).pop();
+        return;
+      }
       setState(() {
         _isSubmitting = false;
         _errorText = AppMessage.fromError(error).resolve(context.l10n);
       });
     }
+  }
+
+  bool _isDialogEpochCurrent() {
+    final epoch = _dialogEpoch;
+    return epoch != null && _isSessionEpochCurrent(ref, epoch);
   }
 
   @override

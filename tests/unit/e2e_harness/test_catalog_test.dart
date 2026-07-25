@@ -11,10 +11,10 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(56));
+      expect(catalog.cases, hasLength(57));
       expect(
         catalog.suiteCaseIds.keys,
-        containsAll(<String>['smoke', 'full', 'direct']),
+        containsAll(<String>['smoke', 'full', 'direct', 'identity-switch']),
       );
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },

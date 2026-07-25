@@ -26,6 +26,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -221,6 +222,44 @@ class _RecordingAttachmentOpenService extends AttachmentOpenService {
     if (error != null) {
       throw error;
     }
+  }
+}
+
+class _DelayedAttachmentPreviewService extends AttachmentPreviewService {
+  _DelayedAttachmentPreviewService()
+    : super(cache: FakeAttachmentCacheService());
+
+  final Completer<String> path = Completer<String>();
+  int previewCalls = 0;
+
+  @override
+  Future<String> previewPathFor({
+    required ChatMessage message,
+    required Future<AttachmentDownloadResult> Function() download,
+  }) {
+    previewCalls += 1;
+    return path.future;
+  }
+}
+
+class _DelayedAttachmentMessagingService extends FakeMessagingService {
+  _DelayedAttachmentMessagingService(super.gateway);
+
+  final Completer<AttachmentDownloadResult> result =
+      Completer<AttachmentDownloadResult>();
+  final Completer<void> started = Completer<void>();
+
+  @override
+  Future<AttachmentDownloadResult> downloadAttachment({
+    required AppThreadRef thread,
+    required String messageId,
+    String? attachmentId,
+    String? localPath,
+  }) {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return result.future;
   }
 }
 
@@ -5751,6 +5790,74 @@ void main() {
     expect(gateway.lastSentAttachment, isNull);
   });
 
+  testWidgets('选择附件期间切换身份不会把旧附件写入新身份草稿', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final picker = _BlockingAttachmentPickerService();
+    addTearDown(picker.completeIfPending);
+    const session = SessionIdentity(
+      did: 'did:test:owner-a',
+      handle: 'owner-a',
+      displayName: 'Owner A',
+      credentialName: 'owner-a',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:shared-canonical-id',
+      threadId: 'dm:shared-canonical-id',
+      displayName: 'Shared peer',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 7, 25, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          attachmentPickerServiceProvider.overrideWithValue(picker),
+        ],
+      ),
+    );
+    await tester.tap(find.byKey(const Key('chat-attachment-button')));
+    await picker.started.future;
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(sessionProvider.notifier)
+        .activateSession(
+          const SessionIdentity(
+            did: 'did:test:owner-b',
+            handle: 'owner-b',
+            displayName: 'Owner B',
+            credentialName: 'owner-b',
+          ),
+        );
+    picker.complete(
+      AttachmentDraft(
+        filename: 'owner-a-secret.png',
+        mimeType: 'image/png',
+        bytes: Uint8List.fromList(<int>[1, 2, 3]),
+        sizeBytes: 3,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('owner-a-secret.png'), findsNothing);
+    expect(
+      find.byKey(const Key('chat-pending-attachment-preview')),
+      findsNothing,
+    );
+    expect(container.read(chatComposerDraftsProvider), isEmpty);
+    expect(container.read(uiFeedbackProvider), isNull);
+  });
+
   testWidgets('输入框 Cmd/Ctrl+V 可把剪贴板图片暂存为附件', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()
@@ -7281,6 +7388,191 @@ void main() {
     expect(opener.openedPaths.single, contains('/att-native-open/'));
   });
 
+  test('附件下载在身份切换后不会向调用方返回旧身份文件', () async {
+    final gateway = FakeAwikiGateway();
+    final messagingService = _DelayedAttachmentMessagingService(gateway);
+    addTearDown(() {
+      if (!messagingService.result.isCompleted) {
+        messagingService.result.complete(
+          const AttachmentDownloadResult(
+            attachmentId: 'att-old-owner',
+            localPath: '/tmp/old-owner.txt',
+          ),
+        );
+      }
+    });
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        messagingServiceProvider.overrideWithValue(messagingService),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:owner-a',
+            credentialName: 'owner-a',
+            displayName: 'Owner A',
+          ),
+        );
+    final controller = container.read(chatThreadsProvider.notifier);
+    final conversation = ConversationSummary(
+      conversationId: 'dm:old-owner-peer',
+      threadId: 'dm:old-owner-peer',
+      displayName: 'Peer',
+      lastMessagePreview: '[附件] old-owner.txt',
+      lastMessageAt: DateTime(2026, 7, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final message = ChatMessage(
+      localId: 'old-owner-message',
+      remoteId: 'old-owner-message',
+      threadId: conversation.conversationId,
+      senderDid: 'did:test:peer',
+      receiverDid: 'did:test:owner-a',
+      content: '',
+      createdAt: DateTime(2026, 7, 24),
+      isMine: false,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'att-old-owner',
+        filename: 'old-owner.txt',
+        mimeType: 'text/plain',
+        sizeBytes: 5,
+      ),
+    );
+
+    final download = controller.downloadAttachment(
+      conversation: conversation,
+      message: message,
+    );
+    await messagingService.started.future;
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:owner-b',
+            credentialName: 'owner-b',
+            displayName: 'Owner B',
+          ),
+        );
+    messagingService.result.complete(
+      const AttachmentDownloadResult(
+        attachmentId: 'att-old-owner',
+        localPath: '/tmp/old-owner.txt',
+      ),
+    );
+
+    await expectLater(
+      download,
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'session_epoch_changed',
+        ),
+      ),
+    );
+  });
+
+  testWidgets('身份切换后缓存预览迟到也不会打开旧身份附件或显示错误', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final opener = _RecordingAttachmentOpenService();
+    final previews = _DelayedAttachmentPreviewService();
+    addTearDown(() {
+      if (!previews.path.isCompleted) {
+        previews.path.complete('/tmp/old-owner-cached.txt');
+      }
+      previews.dispose();
+    });
+    const ownerA = SessionIdentity(
+      did: 'did:test:owner-a',
+      handle: 'owner-a',
+      displayName: 'Owner A',
+      credentialName: 'owner-a',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:old-owner-cached',
+      threadId: 'dm:old-owner-cached',
+      displayName: 'Peer',
+      lastMessagePreview: '[附件] cached.txt',
+      lastMessageAt: DateTime(2026, 7, 24),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final message = _messageWithConversation(
+      ChatMessage(
+        localId: 'old-owner-cached',
+        remoteId: 'old-owner-cached',
+        threadId: conversation.conversationId,
+        senderDid: 'did:test:peer',
+        receiverDid: ownerA.did,
+        content: '',
+        createdAt: DateTime(2026, 7, 24),
+        isMine: false,
+        sendState: MessageSendState.sent,
+        attachment: const ChatAttachment(
+          attachmentId: 'att-old-owner-cached',
+          filename: 'cached.txt',
+          mimeType: 'text/plain',
+          sizeBytes: 5,
+        ),
+      ),
+      conversation,
+    );
+    final messagingService = FakeMessagingService(gateway)
+      ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+        message,
+      ];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: ownerA,
+        providerOverrides: <Override>[
+          attachmentPreviewServiceProvider.overrideWithValue(previews),
+          attachmentOpenServiceProvider.overrideWithValue(opener),
+          messagingServiceProvider.overrideWithValue(messagingService),
+        ],
+      ),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    await container
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('chat-open-attachment:old-owner-cached')),
+    );
+    await tester.pump();
+    expect(previews.previewCalls, 1);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:owner-b',
+            credentialName: 'owner-b',
+            displayName: 'Owner B',
+          ),
+        );
+    previews.path.complete('/tmp/old-owner-cached.txt');
+    await tester.pumpAndSettle();
+
+    expect(opener.openedPaths, isEmpty);
+    expect(container.read(uiFeedbackProvider), isNull);
+  });
+
   testWidgets('对方附件说明按 Markdown 渲染，文件名仍按普通文本复制', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -7640,6 +7932,28 @@ void main() {
       findsNothing,
     );
   });
+}
+
+class _BlockingAttachmentPickerService extends FakeAttachmentPickerService {
+  final Completer<void> started = Completer<void>();
+  final Completer<AttachmentDraft?> _result = Completer<AttachmentDraft?>();
+
+  @override
+  Future<AttachmentDraft?> pickAttachment() {
+    pickCalls += 1;
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return _result.future;
+  }
+
+  void complete(AttachmentDraft? draft) {
+    if (!_result.isCompleted) {
+      _result.complete(draft);
+    }
+  }
+
+  void completeIfPending() => complete(null);
 }
 
 String _dateLabel(DateTime date) {

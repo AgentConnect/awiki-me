@@ -19,25 +19,28 @@ class AuthenticatedUserServiceRpcClient {
     required Map<String, Object?> params,
     String requestId = 'req-1',
   }) async {
-    final token = await _sessions.ensureBearerToken();
+    final session = await _sessions.ensureBearerSession();
     try {
       return await _client.rpcCall(
         path: path,
         method: method,
         params: params,
-        bearerToken: token,
+        bearerToken: session.bearerToken,
         requestId: requestId,
       );
     } on AwikiOnboardingUtilityError catch (error) {
       if (!_isAuthFailure(error)) {
         rethrow;
       }
-      final refreshed = await _sessions.ensureBearerToken(forceRefresh: true);
+      final refreshed = await _sessions.ensureBearerSession(
+        forceRefresh: true,
+        expectedTransition: session.transition,
+      );
       return _client.rpcCall(
         path: path,
         method: method,
         params: params,
-        bearerToken: refreshed,
+        bearerToken: refreshed.bearerToken,
         requestId: requestId,
       );
     }

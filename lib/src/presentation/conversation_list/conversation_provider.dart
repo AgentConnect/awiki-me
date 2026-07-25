@@ -112,6 +112,39 @@ class ConversationListState {
 
 const Object _conversationListStateUnset = Object();
 
+class _ConversationOwnerOperation {
+  const _ConversationOwnerOperation({
+    required this.epoch,
+    required this.generation,
+  });
+
+  final SessionEpoch epoch;
+  final int generation;
+}
+
+class _ConversationPatchRepairOperation {
+  _ConversationPatchRepairOperation({
+    required this.epoch,
+    required this.generation,
+    required this.subscriptionToken,
+  });
+
+  final SessionEpoch epoch;
+  final int generation;
+  final int subscriptionToken;
+  late final Future<void> future;
+
+  bool matches({
+    required SessionEpoch otherEpoch,
+    required int otherGeneration,
+    required int otherSubscriptionToken,
+  }) {
+    return epoch == otherEpoch &&
+        generation == otherGeneration &&
+        subscriptionToken == otherSubscriptionToken;
+  }
+}
+
 class ConversationListController extends StateNotifier<ConversationListState> {
   ConversationListController(
     this.ref, {
@@ -133,9 +166,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   int _refreshGeneration = 0;
   StreamSubscription<ConversationListPatch>? _patchSubscription;
   String? _patchSubscriptionOwnerDid;
+  SessionEpoch? _patchSubscriptionEpoch;
   int _patchSubscriptionToken = 0;
   int _lastPatchVersion = 0;
-  Future<void>? _patchRepairOperation;
+  _ConversationPatchRepairOperation? _patchRepairOperation;
+  Future<void>? _badgeUpdateTail;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
   final _ConversationReadPresentationStore _readPresentation =
@@ -178,12 +213,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final activeRefresh = _refreshOperation ?? _startRefresh(fastLocal: true);
     if (!reused && state.conversations.isEmpty) {
       final session = ref.read(sessionProvider).session;
-      if (session != null) {
+      final sessionEpoch = ref.read(sessionProvider).activeEpoch;
+      if (session != null && sessionEpoch != null) {
         _snapshotBootstrapAllowedGeneration = _refreshGeneration;
         unawaited(
           _bootstrapFromSnapshot(
             generation: _refreshGeneration,
             ownerDid: session.did,
+            expectedEpoch: sessionEpoch,
           ).catchError((_) {}),
         );
       }
@@ -265,14 +302,26 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         );
         return;
       }
-      _ensurePatchSubscription(ownerDid: session.did, generation: generation);
+      final sessionEpoch = ref.read(sessionProvider).activeEpoch;
+      if (sessionEpoch == null || sessionEpoch.ownerDid != session.did) {
+        return;
+      }
+      _ensurePatchSubscription(
+        ownerDid: session.did,
+        generation: generation,
+        epoch: sessionEpoch,
+      );
       final conversationService = ref.read(conversationServiceProvider);
       if (!fastLocal) {
         final conversations = await AwikiPerformanceLogger.async(
           'conversation_list.refresh.service',
           () => conversationService.listConversations(ownerDid: session.did),
         );
-        await _loadCachedPeerProfiles(session.did, conversations);
+        await _loadCachedPeerProfiles(
+          session.did,
+          conversations,
+          expectedEpoch: sessionEpoch,
+        );
         if (generation != _refreshGeneration) {
           return;
         }
@@ -301,7 +350,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         ),
         level: AwikiPerformanceLogLevel.verbose,
       );
-      await _loadCachedPeerProfiles(session.did, conversations);
+      await _loadCachedPeerProfiles(
+        session.did,
+        conversations,
+        expectedEpoch: sessionEpoch,
+      );
       if (generation != _refreshGeneration) {
         return;
       }
@@ -325,6 +378,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         _enrichRefresh(
           generation: generation,
           ownerDid: session.did,
+          expectedEpoch: sessionEpoch,
           base: conversations,
           conversationService: conversationService,
         ).catchError((_) {}),
@@ -347,6 +401,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> _enrichRefresh({
     required int generation,
     required String ownerDid,
+    required SessionEpoch expectedEpoch,
     required List<ConversationSummary> base,
     required ConversationService conversationService,
   }) async {
@@ -360,7 +415,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       fields: <String, Object?>{'base': base.length},
       level: AwikiPerformanceLogLevel.verbose,
     );
-    await _loadCachedPeerProfiles(ownerDid, enriched);
+    await _loadCachedPeerProfiles(
+      ownerDid,
+      enriched,
+      expectedEpoch: expectedEpoch,
+    );
     if (generation != _refreshGeneration) {
       return;
     }
@@ -384,6 +443,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> _bootstrapFromSnapshot({
     required int generation,
     required String ownerDid,
+    required SessionEpoch expectedEpoch,
   }) async {
     if (!_canApplySnapshotBootstrap(
       generation: generation,
@@ -398,7 +458,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           .loadConversationSnapshot(ownerDid: ownerDid),
       level: AwikiPerformanceLogLevel.verbose,
     );
-    await _loadCachedPeerProfiles(ownerDid, conversations);
+    await _loadCachedPeerProfiles(
+      ownerDid,
+      conversations,
+      expectedEpoch: expectedEpoch,
+    );
     if (!_canApplySnapshotBootstrap(
           generation: generation,
           ownerDid: ownerDid,
@@ -430,8 +494,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
 
   Future<void> _loadCachedPeerProfiles(
     String ownerDid,
-    Iterable<ConversationSummary> conversations,
-  ) async {
+    Iterable<ConversationSummary> conversations, {
+    required SessionEpoch expectedEpoch,
+  }) async {
     final items = conversations.toList(growable: false);
     final controller = ref.read(peerDisplayProfileProvider.notifier);
     await controller.loadCached(
@@ -446,7 +511,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
               (conversation.peerPersonaId?.trim().isNotEmpty ?? false))
             conversation.targetDid!.trim(): conversation.peerPersonaId!.trim(),
       },
+      expectedEpoch: expectedEpoch,
     );
+    if (!expectedEpoch.matches(ref.read(sessionProvider))) {
+      return;
+    }
     controller.registerLocalNotes(
       ownerDid: ownerDid,
       localNotesByPersonaId: <String, String>{
@@ -456,30 +525,37 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             conversation.peerPersonaId!.trim():
                 conversation.peerLocalNote?.trim() ?? '',
       },
+      expectedEpoch: expectedEpoch,
     );
   }
 
   void _ensurePatchSubscriptionForCurrentSession() {
     final session = ref.read(sessionProvider).session;
-    if (session == null) {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (session == null || epoch == null) {
       unawaited(_cancelPatchSubscription());
       return;
     }
     _ensurePatchSubscription(
       ownerDid: session.did,
       generation: _refreshGeneration,
+      epoch: epoch,
     );
   }
 
   void _ensurePatchSubscription({
     required String ownerDid,
     required int generation,
+    required SessionEpoch epoch,
   }) {
-    if (_patchSubscriptionOwnerDid == ownerDid && _patchSubscription != null) {
+    if (_patchSubscriptionOwnerDid == ownerDid &&
+        _patchSubscriptionEpoch == epoch &&
+        _patchSubscription != null) {
       return;
     }
     unawaited(_cancelPatchSubscription());
     _patchSubscriptionOwnerDid = ownerDid;
+    _patchSubscriptionEpoch = epoch;
     final token = ++_patchSubscriptionToken;
     _lastPatchVersion = 0;
     _patchSubscription = ref
@@ -490,6 +566,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             patch,
             ownerDid: ownerDid,
             token: token,
+            expectedEpoch: epoch,
           );
           return patch;
         })
@@ -499,12 +576,14 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             ownerDid: ownerDid,
             generation: generation,
             token: token,
+            expectedEpoch: epoch,
             reason: 'stream_error',
           ),
           onDone: () => _schedulePatchRepair(
             ownerDid: ownerDid,
             generation: generation,
             token: token,
+            expectedEpoch: epoch,
             reason: 'stream_closed',
           ),
         );
@@ -514,6 +593,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final subscription = _patchSubscription;
     _patchSubscription = null;
     _patchSubscriptionOwnerDid = null;
+    _patchSubscriptionEpoch = null;
     _patchSubscriptionToken += 1;
     _lastPatchVersion = 0;
     await subscription?.cancel();
@@ -523,6 +603,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     ConversationListPatch patch, {
     required String ownerDid,
     required int token,
+    required SessionEpoch expectedEpoch,
   }) async {
     _trace(
       'patch.received',
@@ -535,7 +616,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'reason': patch.reason,
       },
     );
-    if (!_canApplyPatch(patch, ownerDid: ownerDid, token: token)) {
+    if (!_canApplyPatch(
+      patch,
+      ownerDid: ownerDid,
+      token: token,
+      expectedEpoch: expectedEpoch,
+    )) {
       _trace(
         'patch.ignored',
         fields: <String, Object?>{
@@ -573,18 +659,25 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         ownerDid: ownerDid,
         generation: _refreshGeneration,
         token: token,
+        expectedEpoch: expectedEpoch,
         reason: 'version_gap',
       );
       return;
     }
     switch (patch.kind) {
       case ConversationListPatchKind.reset:
-        await _loadCachedPeerProfiles(ownerDid, patch.items);
+        await _loadCachedPeerProfiles(
+          ownerDid,
+          patch.items,
+          expectedEpoch: expectedEpoch,
+        );
         break;
       case ConversationListPatchKind.upsert:
         final item = patch.item;
         if (item != null) {
-          await _loadCachedPeerProfiles(ownerDid, <ConversationSummary>[item]);
+          await _loadCachedPeerProfiles(ownerDid, <ConversationSummary>[
+            item,
+          ], expectedEpoch: expectedEpoch);
         }
         break;
       case ConversationListPatchKind.remove:
@@ -592,7 +685,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       case ConversationListPatchKind.repairRequired:
         break;
     }
-    if (!_canApplyPatch(patch, ownerDid: ownerDid, token: token)) {
+    if (!_canApplyPatch(
+      patch,
+      ownerDid: ownerDid,
+      token: token,
+      expectedEpoch: expectedEpoch,
+    )) {
       _trace(
         'patch.ignored',
         fields: <String, Object?>{
@@ -615,6 +713,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             ownerDid: ownerDid,
             generation: _refreshGeneration,
             token: token,
+            expectedEpoch: expectedEpoch,
             reason: 'missing_upsert_item',
           );
           return;
@@ -631,6 +730,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             ownerDid: ownerDid,
             generation: _refreshGeneration,
             token: token,
+            expectedEpoch: expectedEpoch,
             reason: 'missing_reorder_item',
           );
         }
@@ -639,6 +739,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           ownerDid: ownerDid,
           generation: _refreshGeneration,
           token: token,
+          expectedEpoch: expectedEpoch,
           reason: patch.reason ?? 'repair_required',
         );
         return;
@@ -652,11 +753,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     ConversationListPatch patch, {
     required String ownerDid,
     required int token,
+    required SessionEpoch expectedEpoch,
   }) {
     return token == _patchSubscriptionToken &&
         patch.ownerDid == ownerDid &&
         _patchSubscriptionOwnerDid == ownerDid &&
-        ref.read(sessionProvider).session?.did == ownerDid;
+        _patchSubscriptionEpoch == expectedEpoch &&
+        expectedEpoch.matches(ref.read(sessionProvider));
   }
 
   void _applyPatchReset(ConversationListPatch patch) {
@@ -812,9 +915,16 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required String ownerDid,
     required int generation,
     required int token,
+    required SessionEpoch expectedEpoch,
     required String reason,
   }) {
-    if (_patchRepairOperation != null) {
+    final active = _patchRepairOperation;
+    if (active != null &&
+        active.matches(
+          otherEpoch: expectedEpoch,
+          otherGeneration: generation,
+          otherSubscriptionToken: token,
+        )) {
       _trace(
         'patch_repair.skip',
         fields: <String, Object?>{
@@ -825,14 +935,23 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    _patchRepairOperation =
+    final operation = _ConversationPatchRepairOperation(
+      epoch: expectedEpoch,
+      generation: generation,
+      subscriptionToken: token,
+    );
+    _patchRepairOperation = operation;
+    operation.future =
         _repairFromPatchStream(
           ownerDid: ownerDid,
           generation: generation,
           token: token,
+          expectedEpoch: expectedEpoch,
           reason: reason,
         ).whenComplete(() {
-          _patchRepairOperation = null;
+          if (identical(_patchRepairOperation, operation)) {
+            _patchRepairOperation = null;
+          }
         });
   }
 
@@ -840,6 +959,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required String ownerDid,
     required int generation,
     required int token,
+    required SessionEpoch expectedEpoch,
     required String reason,
   }) async {
     _trace(
@@ -851,9 +971,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'last_version': _lastPatchVersion,
       },
     );
-    if (token != _patchSubscriptionToken ||
-        generation != _refreshGeneration ||
-        ref.read(sessionProvider).session?.did != ownerDid) {
+    if (!_isPatchRepairRequestCurrent(
+      ownerDid: ownerDid,
+      generation: generation,
+      token: token,
+      expectedEpoch: expectedEpoch,
+    )) {
       _trace(
         'patch_repair.skip',
         fields: <String, Object?>{
@@ -871,9 +994,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       fields: <String, Object?>{'reason': reason},
       level: AwikiPerformanceLogLevel.verbose,
     );
-    if (token != _patchSubscriptionToken ||
-        generation != _refreshGeneration ||
-        ref.read(sessionProvider).session?.did != ownerDid) {
+    if (!_isPatchRepairRequestCurrent(
+      ownerDid: ownerDid,
+      generation: generation,
+      token: token,
+      expectedEpoch: expectedEpoch,
+    )) {
       _trace(
         'patch_repair.skip',
         fields: <String, Object?>{
@@ -900,9 +1026,32 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       badgeSource: 'patch_repair',
       version: repair.version,
     );
+    if (!_isPatchRepairRequestCurrent(
+      ownerDid: ownerDid,
+      generation: generation,
+      token: token,
+      expectedEpoch: expectedEpoch,
+    )) {
+      return;
+    }
     if (applied && repair.version > _lastPatchVersion) {
       _lastPatchVersion = state.version;
     }
+  }
+
+  bool _isPatchRepairRequestCurrent({
+    required String ownerDid,
+    required int generation,
+    required int token,
+    required SessionEpoch expectedEpoch,
+  }) {
+    return mounted &&
+        expectedEpoch.ownerDid == ownerDid &&
+        expectedEpoch.matches(ref.read(sessionProvider)) &&
+        _patchSubscriptionEpoch == expectedEpoch &&
+        _patchSubscriptionOwnerDid == ownerDid &&
+        token == _patchSubscriptionToken &&
+        generation == _refreshGeneration;
   }
 
   bool _canApplySnapshotBootstrap({
@@ -998,10 +1147,11 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<ConversationSummary> commitConversationId(
-    String conversationId,
-  ) async {
-    final session = ref.read(sessionProvider).session;
-    if (session == null) {
+    String conversationId, {
+    SessionEpoch? expectedEpoch,
+  }) async {
+    final ownerOperation = _captureOwnerOperation(expectedEpoch: expectedEpoch);
+    if (ownerOperation == null) {
       throw StateError('No active awiki session. Please sign in first.');
     }
     final canonicalId = conversationId.trim();
@@ -1016,11 +1166,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _locallyHiddenConversationKeys.remove(canonicalId);
     final conversationService = ref.read(conversationServiceProvider);
     await conversationService.ensureConversationInRecents(
-      ownerDid: session.did,
+      ownerDid: ownerOperation.epoch.ownerDid,
       conversationId: canonicalId,
     );
+    _requireCurrentOwnerOperation(ownerOperation);
     final conversations = await conversationService
-        .listConversationSummariesFast(ownerDid: session.did);
+        .listConversationSummariesFast(ownerDid: ownerOperation.epoch.ownerDid);
+    _requireCurrentOwnerOperation(ownerOperation);
     final matches = conversations
         .where((item) => item.conversationId == canonicalId)
         .toList(growable: false);
@@ -1028,9 +1180,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       throw StateError('canonical_conversation_projection_missing');
     }
     final conversation = matches.single;
-    await _loadCachedPeerProfiles(session.did, <ConversationSummary>[
-      conversation,
-    ]);
+    await _loadCachedPeerProfiles(
+      ownerOperation.epoch.ownerDid,
+      <ConversationSummary>[conversation],
+      expectedEpoch: ownerOperation.epoch,
+    );
+    _requireCurrentOwnerOperation(ownerOperation);
     _upsertConversation(
       conversation,
       source: 'canonical_conversation_committed',
@@ -1069,7 +1224,17 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     ConversationSummary conversation, {
     String source = 'upsert_normalized',
   }) async {
-    final normalized = await _normalizeConversationForRecents(conversation);
+    final ownerOperation = _captureOwnerOperation();
+    if (ownerOperation == null) {
+      return;
+    }
+    final normalized = await _normalizeConversationForRecents(
+      conversation,
+      ownerOperation: ownerOperation,
+    );
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      return;
+    }
     if (normalized == null) {
       return;
     }
@@ -1203,8 +1368,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<void> deleteFromRecents(ConversationSummary conversation) async {
-    final session = ref.read(sessionProvider).session;
-    if (session == null) {
+    final ownerOperation = _captureOwnerOperation();
+    if (ownerOperation == null) {
       throw StateError('No active awiki session. Please sign in first.');
     }
     final hiddenAt = DateTime.now().toUtc();
@@ -1214,14 +1379,21 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       await ref
           .read(conversationServiceProvider)
           .hideConversationFromRecents(
-            ownerDid: session.did,
+            ownerDid: ownerOperation.epoch.ownerDid,
             conversation: conversation,
             updatedAt: hiddenAt,
           );
     } catch (_) {
-      _removeHiddenKeysFor(conversation);
-      _upsertConversation(conversation, source: 'delete_rollback');
+      if (_isOwnerOperationCurrent(ownerOperation)) {
+        _removeHiddenKeysFor(conversation);
+        _upsertConversation(conversation, source: 'delete_rollback');
+      } else {
+        throw sessionEpochChangedError();
+      }
       rethrow;
+    }
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      throw sessionEpochChangedError();
     }
     final selected = ref.read(selectedConversationProvider);
     if (selected == conversation.conversationId) {
@@ -1329,18 +1501,43 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<ConversationSummary?> _normalizeConversationForRecents(
-    ConversationSummary conversation,
-  ) async {
-    final session = ref.read(sessionProvider).session;
-    if (session == null) {
-      return conversation;
-    }
+    ConversationSummary conversation, {
+    required _ConversationOwnerOperation ownerOperation,
+  }) async {
     return ref
         .read(conversationServiceProvider)
         .normalizeConversationForRecents(
-          ownerDid: session.did,
+          ownerDid: ownerOperation.epoch.ownerDid,
           conversation: conversation,
         );
+  }
+
+  _ConversationOwnerOperation? _captureOwnerOperation({
+    SessionEpoch? expectedEpoch,
+  }) {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (expectedEpoch != null && epoch != expectedEpoch) {
+      throw sessionEpochChangedError();
+    }
+    if (epoch == null) {
+      return null;
+    }
+    return _ConversationOwnerOperation(
+      epoch: epoch,
+      generation: _refreshGeneration,
+    );
+  }
+
+  bool _isOwnerOperationCurrent(_ConversationOwnerOperation operation) {
+    return mounted &&
+        operation.generation == _refreshGeneration &&
+        operation.epoch.matches(ref.read(sessionProvider));
+  }
+
+  void _requireCurrentOwnerOperation(_ConversationOwnerOperation operation) {
+    if (!_isOwnerOperationCurrent(operation)) {
+      throw sessionEpochChangedError();
+    }
   }
 
   void _addHiddenKeysFor(
@@ -1445,15 +1642,54 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   Future<void> _updateBadgeCountBestEffort(
     int count, {
     required String source,
+  }) {
+    final generation = _refreshGeneration;
+    final itemCount = state.conversations.length;
+    final isLoading = state.isLoading;
+    final previous = _badgeUpdateTail;
+    final operation = previous == null
+        ? _performBadgeUpdate(
+            count,
+            source: source,
+            generation: generation,
+            itemCount: itemCount,
+            isLoading: isLoading,
+          )
+        : previous.then<void>(
+            (_) => _performBadgeUpdate(
+              count,
+              source: source,
+              generation: generation,
+              itemCount: itemCount,
+              isLoading: isLoading,
+            ),
+          );
+    _badgeUpdateTail = operation;
+    unawaited(
+      operation.then<void>((_) {
+        if (identical(_badgeUpdateTail, operation)) {
+          _badgeUpdateTail = null;
+        }
+      }),
+    );
+    return operation;
+  }
+
+  Future<void> _performBadgeUpdate(
+    int count, {
+    required String source,
+    required int generation,
+    required int itemCount,
+    required bool isLoading,
   }) async {
     _trace(
       'badge.request',
       fields: <String, Object?>{
         'source': source,
         'unread': count,
-        'items': state.conversations.length,
-        'loading': state.isLoading,
-        'generation': _refreshGeneration,
+        'items': itemCount,
+        'loading': isLoading,
+        'generation': generation,
       },
     );
     try {

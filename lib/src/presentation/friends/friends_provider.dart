@@ -11,6 +11,13 @@ import '../profile/peer_display_profile_provider.dart';
 
 enum FriendsRelationshipListType { following, followers }
 
+class _SessionOwnedOperation {
+  const _SessionOwnedOperation({required this.epoch, required this.generation});
+
+  final SessionEpoch? epoch;
+  final int generation;
+}
+
 class FriendsState {
   const FriendsState({
     this.followers = const <RelationshipSummary>[],
@@ -81,8 +88,10 @@ class FriendsController extends StateNotifier<FriendsState> {
   final Duration mutationTimeout;
   final Duration refreshTimeout;
   int _refreshGeneration = 0;
+  int _stateGeneration = 0;
 
   Future<void> refresh() async {
+    final ownerOperation = _captureOwnerOperation();
     final generation = ++_refreshGeneration;
     state = state.copyWith(
       isLoading: true,
@@ -96,7 +105,8 @@ class FriendsController extends StateNotifier<FriendsState> {
         _loadRelationshipPage(relationships.listFollowing()),
       ],
     );
-    if (!mounted || generation != _refreshGeneration) {
+    if (!_isOwnerOperationCurrent(ownerOperation) ||
+        generation != _refreshGeneration) {
       return;
     }
     final followersResult = results[0];
@@ -104,8 +114,9 @@ class FriendsController extends StateNotifier<FriendsState> {
     await _loadCachedPeerProfiles(<RelationshipSummary>[
       ...?followersResult.page?.items,
       ...?followingResult.page?.items,
-    ]);
-    if (!mounted || generation != _refreshGeneration) {
+    ], ownerOperation: ownerOperation);
+    if (!_isOwnerOperationCurrent(ownerOperation) ||
+        generation != _refreshGeneration) {
       return;
     }
     final followingItems = followingResult.page?.items;
@@ -154,33 +165,50 @@ class FriendsController extends StateNotifier<FriendsState> {
   }
 
   Future<void> _loadCachedPeerProfiles(
-    Iterable<RelationshipSummary> items,
-  ) async {
-    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    Iterable<RelationshipSummary> items, {
+    required _SessionOwnedOperation ownerOperation,
+  }) async {
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      return;
+    }
     await ref
         .read(peerDisplayProfileProvider.notifier)
-        .loadCached(ownerDid: ownerDid, dids: items.map((item) => item.did));
+        .loadCached(
+          ownerDid: ownerOperation.epoch?.ownerDid ?? '',
+          dids: items.map((item) => item.did),
+        );
   }
 
   Future<void> follow(String didOrHandle) async {
+    final ownerOperation = _captureOwnerOperation();
+    if (ownerOperation.epoch == null) {
+      throw StateError('No active awiki session. Please sign in first.');
+    }
     final relationships = ref.read(relationshipApplicationServiceProvider);
     await _runMutation(
       operation: relationships.follow(didOrHandle),
       applyOptimisticState: () => _markFollowing(didOrHandle),
+      ownerOperation: ownerOperation,
     );
   }
 
   Future<void> unfollow(String didOrHandle) async {
+    final ownerOperation = _captureOwnerOperation();
+    if (ownerOperation.epoch == null) {
+      throw StateError('No active awiki session. Please sign in first.');
+    }
     final relationships = ref.read(relationshipApplicationServiceProvider);
     await _runMutation(
       operation: relationships.unfollow(didOrHandle),
       applyOptimisticState: () => _markNotFollowing(didOrHandle),
+      ownerOperation: ownerOperation,
     );
   }
 
   Future<void> _runMutation({
     required Future<void> operation,
     required void Function() applyOptimisticState,
+    required _SessionOwnedOperation ownerOperation,
   }) async {
     try {
       await operation.timeout(mutationTimeout);
@@ -189,17 +217,34 @@ class FriendsController extends StateNotifier<FriendsState> {
       // reconcile the presentation overlay without keeping the button busy.
       unawaited(
         operation.then<void>(
-          (_) => _applyMutationResult(applyOptimisticState),
+          (_) => _applyMutationResult(
+            applyOptimisticState,
+            ownerOperation: ownerOperation,
+          ),
           onError: (_) {},
         ),
       );
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
+        throw sessionEpochChangedError();
+      }
+      rethrow;
+    } catch (_) {
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
+        throw sessionEpochChangedError();
+      }
       rethrow;
     }
-    _applyMutationResult(applyOptimisticState);
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
+      throw sessionEpochChangedError();
+    }
+    _applyMutationResult(applyOptimisticState, ownerOperation: ownerOperation);
   }
 
-  void _applyMutationResult(void Function() applyOptimisticState) {
-    if (!mounted) {
+  void _applyMutationResult(
+    void Function() applyOptimisticState, {
+    required _SessionOwnedOperation ownerOperation,
+  }) {
+    if (!_isOwnerOperationCurrent(ownerOperation)) {
       return;
     }
     applyOptimisticState();
@@ -255,9 +300,23 @@ class FriendsController extends StateNotifier<FriendsState> {
   }
 
   void clear() {
+    _stateGeneration += 1;
     _refreshGeneration += 1;
     state = const FriendsState();
     _invalidateRelationshipLists();
+  }
+
+  _SessionOwnedOperation _captureOwnerOperation() {
+    return _SessionOwnedOperation(
+      epoch: ref.read(sessionProvider).activeEpoch,
+      generation: _stateGeneration,
+    );
+  }
+
+  bool _isOwnerOperationCurrent(_SessionOwnedOperation operation) {
+    return mounted &&
+        operation.generation == _stateGeneration &&
+        operation.epoch == ref.read(sessionProvider).activeEpoch;
   }
 
   void _invalidateRelationshipLists() {
@@ -331,11 +390,13 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
   final Ref ref;
   final FriendsRelationshipListType type;
   final Duration requestTimeout;
+  int _operationGeneration = 0;
 
   Future<void> refresh() async {
     if (state.isLoading) {
       return;
     }
+    final ownerOperation = _captureOwnerOperation();
     state = state.copyWith(
       isLoading: true,
       isLoadingMore: false,
@@ -344,9 +405,15 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     );
     try {
       final page = await _loadPage(cursor: null);
-      await _loadCachedPeerProfiles(page.items);
-      await _refreshMissingPeerProfiles(page.items);
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
+        return;
+      }
+      await _loadCachedPeerProfiles(page.items, ownerOperation);
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
+        return;
+      }
+      await _refreshMissingPeerProfiles(page.items, ownerOperation);
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
         return;
       }
       state = RelationshipListState(
@@ -355,7 +422,7 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
         hasMore: page.hasMore,
       );
     } catch (error) {
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
         return;
       }
       state = state.copyWith(isLoading: false, error: error);
@@ -366,12 +433,20 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
     if (state.isLoading || state.isLoadingMore || !state.hasMore) {
       return;
     }
+    final ownerOperation = _captureOwnerOperation();
+    final cursor = state.nextCursor;
     state = state.copyWith(isLoadingMore: true, clearError: true);
     try {
-      final page = await _loadPage(cursor: state.nextCursor);
-      await _loadCachedPeerProfiles(page.items);
-      await _refreshMissingPeerProfiles(page.items);
-      if (!mounted) {
+      final page = await _loadPage(cursor: cursor);
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
+        return;
+      }
+      await _loadCachedPeerProfiles(page.items, ownerOperation);
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
+        return;
+      }
+      await _refreshMissingPeerProfiles(page.items, ownerOperation);
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
         return;
       }
       state = state.copyWith(
@@ -381,7 +456,7 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
         isLoadingMore: false,
       );
     } catch (error) {
-      if (!mounted) {
+      if (!_isOwnerOperationCurrent(ownerOperation)) {
         return;
       }
       state = state.copyWith(isLoadingMore: false, error: error);
@@ -404,23 +479,39 @@ class RelationshipListController extends StateNotifier<RelationshipListState> {
 
   Future<void> _loadCachedPeerProfiles(
     Iterable<RelationshipSummary> items,
+    _SessionOwnedOperation ownerOperation,
   ) async {
-    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
     await ref
         .read(peerDisplayProfileProvider.notifier)
-        .loadCached(ownerDid: ownerDid, dids: items.map((item) => item.did));
+        .loadCached(
+          ownerDid: ownerOperation.epoch?.ownerDid ?? '',
+          dids: items.map((item) => item.did),
+        );
   }
 
   Future<void> _refreshMissingPeerProfiles(
     Iterable<RelationshipSummary> items,
+    _SessionOwnedOperation ownerOperation,
   ) async {
-    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
     await ref
         .read(peerDisplayProfileProvider.notifier)
         .refreshRemoteMissing(
-          ownerDid: ownerDid,
+          ownerDid: ownerOperation.epoch?.ownerDid ?? '',
           dids: items.map((item) => item.did),
         );
+  }
+
+  _SessionOwnedOperation _captureOwnerOperation() {
+    return _SessionOwnedOperation(
+      epoch: ref.read(sessionProvider).activeEpoch,
+      generation: ++_operationGeneration,
+    );
+  }
+
+  bool _isOwnerOperationCurrent(_SessionOwnedOperation operation) {
+    return mounted &&
+        operation.generation == _operationGeneration &&
+        operation.epoch == ref.read(sessionProvider).activeEpoch;
   }
 }
 

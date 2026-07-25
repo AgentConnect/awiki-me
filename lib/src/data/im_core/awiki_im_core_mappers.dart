@@ -597,6 +597,7 @@ class AwikiImCoreMappers {
     if (message == null) {
       if (event.kind == 'group_updated') {
         return RealtimeUpdate(
+          ownerDid: ownerDid,
           group: null,
           syncDirty: event.sync?.syncDirty ?? true,
           gapDetected: event.sync?.gapDetected ?? false,
@@ -649,6 +650,7 @@ class AwikiImCoreMappers {
           );
     if (chatMessage.isAgentControlPayload) {
       return RealtimeUpdate(
+        ownerDid: ownerDid,
         group: null,
         agentControlPayload:
             AgentControlPayloads.decode(chatMessage.payloadJson) ??
@@ -660,6 +662,7 @@ class AwikiImCoreMappers {
       );
     }
     return RealtimeUpdate(
+      ownerDid: ownerDid,
       message: chatMessage,
       conversationHint: conversation,
       group: group,

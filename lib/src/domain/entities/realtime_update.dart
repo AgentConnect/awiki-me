@@ -4,6 +4,7 @@ import 'group_summary.dart';
 
 class RealtimeUpdate {
   const RealtimeUpdate({
+    required this.ownerDid,
     this.message,
     this.conversationHint,
     this.conversation,
@@ -15,6 +16,7 @@ class RealtimeUpdate {
     this.syncEventType,
   });
 
+  final String ownerDid;
   final ChatMessage? message;
   final ConversationSummary? conversationHint;
   final ConversationSummary? conversation;

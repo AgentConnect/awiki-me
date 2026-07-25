@@ -7,6 +7,7 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
 import '../group/group_list_page.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../settings/settings_page.dart';
 import '../profile/peer_display_profile_provider.dart';
 import '../shared/awiki_me_design.dart';
@@ -872,6 +873,9 @@ Future<void> confirmAndUnfollow(
   try {
     await ref.read(friendsProvider.notifier).unfollow(did);
   } catch (error) {
+    if (isSessionEpochChangedError(error)) {
+      return;
+    }
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.fromError(error));
@@ -885,6 +889,9 @@ Future<void> _runRelationshipAction(
   try {
     await action();
   } catch (error) {
+    if (isSessionEpochChangedError(error)) {
+      return;
+    }
     ref
         .read(uiFeedbackProvider.notifier)
         .showError(AppMessage.fromError(error));

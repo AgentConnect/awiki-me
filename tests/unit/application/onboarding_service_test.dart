@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
@@ -90,6 +92,36 @@ void main() {
       expect(profiles.patches.single.profileMarkdown, '# Open Alice');
     },
   );
+
+  test('superseded registration cannot activate its late identity', () async {
+    final identities = _FakeIdentities();
+    final registration = Completer<AppSession>();
+    identities.registerPhoneCompleter = registration;
+    final sessions = _FakeSessions();
+    final profiles = _FakeProfiles();
+    final service = ImCoreOnboardingService(
+      identities: identities,
+      sessions: sessions,
+      profiles: profiles,
+    );
+    final transition = sessions.beginSessionTransition();
+
+    final pending = service.registerHandleWithPhone(
+      phone: '13800138000',
+      otp: '123456',
+      handle: 'alice',
+      nickName: 'Alice',
+      profileMarkdown: '# Alice',
+      transition: transition,
+    );
+    await pumpEventQueue();
+    sessions.beginSessionTransition();
+    registration.complete(_session('late-id'));
+
+    await expectLater(pending, throwsA(isA<AppSessionTransitionSuperseded>()));
+    expect(sessions.activated, isEmpty);
+    expect(profiles.patches, isEmpty);
+  });
 }
 
 AppSession _session(String id, {String handle = 'alice'}) {
@@ -106,6 +138,7 @@ class _FakeIdentities implements IdentityCorePort {
   String? lastPhone;
   String? lastOtp;
   String? lastHandle;
+  Completer<AppSession>? registerPhoneCompleter;
 
   @override
   Future<AppSession?> defaultIdentity() async => null;
@@ -144,6 +177,10 @@ class _FakeIdentities implements IdentityCorePort {
     lastPhone = phone;
     lastOtp = otp;
     lastHandle = handle;
+    final completer = registerPhoneCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     return _session('phone-id', handle: handle);
   }
 
@@ -187,13 +224,26 @@ class _FakeIdentities implements IdentityCorePort {
   }
 }
 
-class _FakeSessions implements AppSessionService {
+class _FakeSessions
+    with AppSessionTransitionGuard
+    implements AppSessionService {
   final List<AppSession> activated = <AppSession>[];
 
   @override
-  Future<AppSession> activateIdentity(AppSession identity) async {
+  Future<AppSession> activateIdentity(
+    AppSession identity, {
+    AppSessionTransition? transition,
+    Future<void> Function(AppSession session)? initializeIdentitySession,
+  }) async {
+    final requestedTransition = transition ?? beginSessionTransition();
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
     activated.add(identity);
-    return identity.copyWith(authenticated: true);
+    final session = identity.copyWith(authenticated: true);
+    await initializeIdentitySession?.call(session);
+    markSessionTransitionCommitted(requestedTransition);
+    return session;
   }
 
   @override
@@ -201,10 +251,17 @@ class _FakeSessions implements AppSessionService {
       activated.isEmpty ? null : activated.last;
 
   @override
+  Future<AppSessionLease?> currentSessionLease() async =>
+      sessionLeaseFor(activated.isEmpty ? null : activated.last);
+
+  @override
   Future<List<AppSession>> listLocalIdentities() async => const <AppSession>[];
 
   @override
-  Future<AppSession> loginWithIdentity(String identityIdOrAlias) {
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) {
     throw UnsupportedError('unsupported');
   }
 

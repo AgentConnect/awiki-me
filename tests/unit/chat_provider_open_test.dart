@@ -1264,6 +1264,247 @@ void main() {
     await expectLater(staleGuard, completes);
   });
 
+  test(
+    'delayed local history from an old identity cannot write after rapid switches',
+    () async {
+      final blockingMessaging = _BlockingTimelineMessagingService(gateway);
+      final identityContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            messageSyncService: messageSyncService,
+            messagingService: blockingMessaging,
+          ),
+          messagingServiceProvider.overrideWithValue(blockingMessaging),
+          sessionProvider.overrideWith((ref) {
+            return SessionController()..setSession(
+              const SessionIdentity(
+                did: 'did:alice',
+                credentialName: 'alice',
+                displayName: 'Alice',
+              ),
+            );
+          }),
+        ],
+      );
+      addTearDown(identityContainer.dispose);
+      final controller = identityContainer.read(chatThreadsProvider.notifier);
+      identityContainer
+          .read(chatComposerDraftsProvider.notifier)
+          .setText(conversation, 'alice draft');
+
+      await controller.openConversation(conversation);
+      await blockingMessaging.loadStarted.future;
+      expect(controller.debugCacheStats().activePatchSubscriptionCount, 1);
+
+      identityContainer.read(sessionProvider.notifier)
+        ..setSession(
+          const SessionIdentity(
+            did: 'did:bob',
+            credentialName: 'bob',
+            displayName: 'Bob',
+          ),
+        )
+        ..setSession(
+          const SessionIdentity(
+            did: 'did:carol',
+            credentialName: 'carol',
+            displayName: 'Carol',
+          ),
+        );
+      expect(identityContainer.read(chatThreadsProvider), isEmpty);
+      expect(identityContainer.read(chatComposerDraftsProvider), isEmpty);
+      expect(controller.debugCacheStats().activePatchSubscriptionCount, 0);
+      final carolMessage = _identityRaceMessage(
+        message,
+        id: 'carol-message',
+        content: 'carol timeline',
+        conversationId: conversation.conversationId,
+      );
+      controller.debugSeedMessagesForTesting(
+        _timelineThreadId(conversation),
+        <ChatMessage>[carolMessage],
+      );
+
+      blockingMessaging.completeLoad(<ChatMessage>[
+        _identityRaceMessage(
+          message,
+          id: 'alice-delayed',
+          content: 'alice delayed timeline',
+          conversationId: conversation.conversationId,
+        ),
+      ]);
+      await pumpEventQueue();
+
+      expect(
+        identityContainer
+            .read(chatThreadProvider(_timelineThreadId(conversation)))
+            .messages
+            .map((item) => item.content),
+        ['carol timeline'],
+      );
+    },
+  );
+
+  test(
+    'delayed patch repair from identity A cannot write identity B state',
+    () async {
+      final oldMessage = _identityRaceMessage(
+        message,
+        id: 'alice-old',
+        content: 'alice old',
+        serverSequence: 10,
+        conversationId: conversation.conversationId,
+      );
+      final repairCompleter = Completer<void>();
+      final repairMessaging = FakeMessagingService(gateway)
+        ..conversationTimelineById[conversation.conversationId] = <ChatMessage>[
+          oldMessage,
+        ]
+        ..repairConversationTimelineCompleter = repairCompleter;
+      final identityContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            messageSyncService: messageSyncService,
+            messagingService: repairMessaging,
+          ),
+          messagingServiceProvider.overrideWithValue(repairMessaging),
+          sessionProvider.overrideWith((ref) {
+            return SessionController()..setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'alice',
+                displayName: 'Alice',
+              ),
+            );
+          }),
+        ],
+      );
+      addTearDown(identityContainer.dispose);
+      final controller = identityContainer.read(chatThreadsProvider.notifier);
+
+      await controller.openConversation(conversation);
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+      final staleRepair = controller.syncVisibleConversationAfterSummaryUpdate(
+        conversation.copyWith(
+          lastMessagePreview: 'alice delayed repair',
+          lastMessageAt: conversation.lastMessageAt.add(
+            const Duration(minutes: 1),
+          ),
+          unreadCount: 1,
+        ),
+        displayThreadId: _timelineThreadId(conversation),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      identityContainer
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:bob',
+              credentialName: 'bob',
+              displayName: 'Bob',
+            ),
+          );
+      final bobMessage = _identityRaceMessage(
+        message,
+        id: 'bob-message',
+        content: 'bob timeline',
+        conversationId: conversation.conversationId,
+      );
+      controller.debugSeedMessagesForTesting(
+        _timelineThreadId(conversation),
+        <ChatMessage>[bobMessage],
+      );
+      repairCompleter.complete();
+
+      await staleRepair;
+      await pumpEventQueue();
+      expect(
+        identityContainer
+            .read(chatThreadProvider(_timelineThreadId(conversation)))
+            .messages
+            .map((item) => item.content),
+        ['bob timeline'],
+      );
+    },
+  );
+
+  test(
+    'delayed send completion from identity A cannot write identity B state',
+    () async {
+      final sendCompleter = Completer<void>();
+      gateway.sendTextMessageCompleter = sendCompleter;
+      final sendMessaging = FakeMessagingService(gateway);
+      final identityContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            messageSyncService: messageSyncService,
+            messagingService: sendMessaging,
+          ),
+          messagingServiceProvider.overrideWithValue(sendMessaging),
+          sessionProvider.overrideWith((ref) {
+            return SessionController()..setSession(
+              const SessionIdentity(
+                did: 'did:me',
+                credentialName: 'alice',
+                displayName: 'Alice',
+              ),
+            );
+          }),
+        ],
+      );
+      addTearDown(identityContainer.dispose);
+      final controller = identityContainer.read(chatThreadsProvider.notifier);
+
+      final staleSend = controller.sendMessage(
+        conversation: conversation,
+        content: 'alice delayed send',
+      );
+      await pumpEventQueue();
+      expect(gateway.sendTextMessageCalls, 1);
+
+      identityContainer
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:bob',
+              credentialName: 'bob',
+              displayName: 'Bob',
+            ),
+          );
+      final bobMessage = _identityRaceMessage(
+        message,
+        id: 'bob-after-send',
+        content: 'bob timeline after send',
+        conversationId: conversation.conversationId,
+      );
+      controller.debugSeedMessagesForTesting(
+        _timelineThreadId(conversation),
+        <ChatMessage>[bobMessage],
+      );
+      sendCompleter.complete();
+
+      await staleSend;
+      expect(
+        identityContainer
+            .read(chatThreadProvider(_timelineThreadId(conversation)))
+            .messages
+            .map((item) => item.content),
+        ['bob timeline after send'],
+      );
+    },
+  );
+
   test('可见会话摘要未领先当前消息时不触发补齐', () async {
     final currentMessage = ChatMessage(
       localId: 'msg-current',
@@ -3536,7 +3777,7 @@ void main() {
     );
   });
 
-  test('打开未读会话时远端 mark-read 不支持也不会抛出或误清未读', () async {
+  test('打开未读会话时远端 mark-read 不支持也不会抛出或回滚本地可见水位', () async {
     final throwingGateway = _ThrowingMarkReadGateway()
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
         'did:peer': <ChatMessage>[message],
@@ -3549,6 +3790,15 @@ void main() {
       ],
     );
     addTearDown(markReadContainer.dispose);
+    markReadContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:me',
+            credentialName: 'me.json',
+            displayName: 'Me',
+          ),
+        );
     final unreadConversation = ConversationSummary(
       conversationId: conversation.conversationId,
       threadId: conversation.threadId,
@@ -3584,7 +3834,7 @@ void main() {
         .read(conversationListProvider)
         .conversations;
     if (conversations.isNotEmpty) {
-      expect(conversations.single.unreadCount, 2);
+      expect(conversations.single.unreadCount, 0);
     }
     expect(throwingGateway.markReadCalls, 0);
     expect(throwingGateway.markConversationReadCalls, 1);
@@ -6394,6 +6644,68 @@ class _ThrowingMarkReadGateway extends FakeAwikiGateway {
     lastMarkConversationReadConversationId = conversationId;
     lastMarkConversationReadWatermark = watermark;
     throw UnsupportedError('IM Core markConversationRead is not available yet');
+  }
+}
+
+ChatMessage _identityRaceMessage(
+  ChatMessage base, {
+  required String id,
+  required String content,
+  required String conversationId,
+  int? serverSequence,
+}) {
+  return ChatMessage(
+    localId: id,
+    remoteId: id,
+    threadId: base.threadId,
+    conversationId: conversationId,
+    senderDid: base.senderDid,
+    receiverDid: base.receiverDid,
+    content: content,
+    createdAt: base.createdAt,
+    isMine: base.isMine,
+    sendState: base.sendState,
+    serverSequence: serverSequence ?? base.serverSequence,
+  );
+}
+
+class _BlockingTimelineMessagingService extends FakeMessagingService {
+  _BlockingTimelineMessagingService(super.gateway);
+
+  final Completer<void> loadStarted = Completer<void>();
+  final Completer<List<ChatMessage>> _loadResult =
+      Completer<List<ChatMessage>>();
+
+  @override
+  Future<List<ChatMessage>> loadConversationTimeline(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+    String? cursor,
+    bool includeControlPayloads = false,
+  }) {
+    conversationTimelineCalls += 1;
+    lastConversationTimelineLimit = limit;
+    lastConversationTimelineId = conversation.conversationId;
+    if (!loadStarted.isCompleted) {
+      loadStarted.complete();
+    }
+    return _loadResult.future;
+  }
+
+  @override
+  Stream<ThreadMessagePatch> watchConversationTimelinePatches(
+    AppConversationReadRef conversation, {
+    int limit = 100,
+  }) {
+    return Stream<ThreadMessagePatch>.multi((controller) {
+      controller.onCancel = () {};
+    });
+  }
+
+  void completeLoad(List<ChatMessage> messages) {
+    if (!_loadResult.isCompleted) {
+      _loadResult.complete(messages);
+    }
   }
 }
 

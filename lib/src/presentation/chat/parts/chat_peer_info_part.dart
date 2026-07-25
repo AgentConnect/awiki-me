@@ -456,6 +456,9 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     try {
       await ref.read(friendsProvider.notifier).follow(targetDid);
     } catch (error) {
+      if (isSessionEpochChangedError(error)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));

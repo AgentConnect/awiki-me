@@ -236,6 +236,288 @@ void main() {
       },
     );
 
+    test(
+      'session leases are committed, cancellable, and relogin-scoped',
+      () async {
+        final identity = _session('id-default');
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+        );
+
+        await service.restoreSession();
+        final restoredLease = await service.currentSessionLease();
+        expect(restoredLease?.session.identityId, identity.identityId);
+
+        service.cancelPendingSessionTransition(restoredLease!.transition);
+        expect(
+          (await service.currentSessionLease())?.transition,
+          same(restoredLease.transition),
+        );
+
+        final pending = service.beginSessionTransition();
+        expect(await service.currentSessionLease(), isNull);
+        service.cancelPendingSessionTransition(pending);
+        expect(
+          (await service.currentSessionLease())?.transition,
+          same(restoredLease.transition),
+        );
+
+        await service.loginWithIdentity(identity.localAlias!);
+        final reloginLease = await service.currentSessionLease();
+        expect(reloginLease?.session.identityId, identity.identityId);
+        expect(reloginLease?.transition, isNot(same(restoredLease.transition)));
+      },
+    );
+
+    test('abort clears only the matching committed session', () async {
+      final identity = _session('id-default');
+      final active = _FakeActiveSessionStore(identity.identityId);
+      final realtime = _FakeRealtime();
+      final service = ImCoreAppSessionService(
+        runtime: _FakeRuntime(),
+        identities: _FakeIdentities(defaultIdentity: identity),
+        auth: _FakeAuth(),
+        activeSessionStore: active,
+        realtime: realtime,
+      );
+      await service.restoreSession();
+      await realtime.start();
+      final lease = (await service.currentSessionLease())!;
+
+      expect(await service.abortSessionIfCurrent(lease), isTrue);
+
+      expect(await service.currentSession(), isNull);
+      expect(await service.currentSessionLease(), isNull);
+      expect(await active.readActiveIdentityId(), isNull);
+      expect(realtime.stopCount, 1);
+    });
+
+    test(
+      'abort preserves the committed lease when its identity invariant fails',
+      () async {
+        final identity = _session('id-default');
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+        );
+        await service.restoreSession();
+        final lease = (await service.currentSessionLease())!;
+        final mismatchedLease = AppSessionLease(
+          session: _session('id-other'),
+          transition: lease.transition,
+        );
+
+        expect(await service.abortSessionIfCurrent(mismatchedLease), isFalse);
+
+        final current = await service.currentSessionLease();
+        expect(current?.transition, same(lease.transition));
+        expect(current?.session.identityId, identity.identityId);
+      },
+    );
+
+    test(
+      'abort stops realtime even when active-session cleanup fails',
+      () async {
+        final identity = _session('id-default');
+        final active = _FakeActiveSessionStore(identity.identityId)
+          ..clearError = StateError('active session store unavailable');
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await realtime.start();
+        final lease = (await service.currentSessionLease())!;
+
+        await expectLater(
+          service.abortSessionIfCurrent(lease),
+          throwsStateError,
+        );
+
+        expect(await service.currentSession(), isNull);
+        expect(await service.currentSessionLease(), isNull);
+        expect(realtime.stopCount, 1);
+        expect(await active.readActiveIdentityId(), identity.identityId);
+      },
+    );
+
+    test('an old lease cannot abort a replacement session', () async {
+      final first = _session('id-first');
+      final second = _session(
+        'id-second',
+      ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
+      final active = _FakeActiveSessionStore(first.identityId);
+      final service = ImCoreAppSessionService(
+        runtime: _FakeRuntime(),
+        identities: _FakeIdentities(
+          defaultIdentity: first,
+          extraIdentities: <AppSession>[second],
+        ),
+        auth: _FakeAuth(),
+        activeSessionStore: active,
+      );
+      await service.restoreSession();
+      final firstLease = (await service.currentSessionLease())!;
+      await service.loginWithIdentity(second.localAlias!);
+
+      expect(await service.abortSessionIfCurrent(firstLease), isFalse);
+
+      expect((await service.currentSession())?.identityId, second.identityId);
+      expect(
+        (await service.currentSessionLease())?.session.identityId,
+        second.identityId,
+      );
+      expect(await active.readActiveIdentityId(), second.identityId);
+    });
+
+    test(
+      'failed login intent restores the previous committed session lease',
+      () async {
+        final first = _session('id-first');
+        final second = _session(
+          'id-second',
+        ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
+        final runtime = _FakeRuntime(
+          vaultErrorsByIdentity: <String, Object>{
+            second.identityId: StateError('second vault unavailable'),
+          },
+        );
+        final active = _FakeActiveSessionStore(first.identityId);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: first,
+            extraIdentities: <AppSession>[second],
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+        );
+        await service.restoreSession();
+        final firstLease = await service.currentSessionLease();
+
+        await expectLater(
+          service.loginWithIdentity(second.localAlias!),
+          throwsStateError,
+        );
+
+        final restoredLease = await service.currentSessionLease();
+        expect(restoredLease?.session.identityId, first.identityId);
+        expect(restoredLease?.transition, same(firstLease!.transition));
+        expect(await active.readActiveIdentityId(), first.identityId);
+        expect(runtime.switchedIdentities, <String>[first.identityId]);
+      },
+    );
+
+    test(
+      'auth failure after identity cutover fails closed without restoring the old lease',
+      () async {
+        final first = _session('id-first');
+        final second = _session(
+          'id-second',
+        ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
+        final secondAuth = Completer<AppAuthState>();
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final active = _FakeActiveSessionStore(first.identityId);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: first,
+            extraIdentities: <AppSession>[second],
+          ),
+          auth: _FakeAuth(
+            ensureCompleter: secondAuth,
+            ensureCompleterCall: 2,
+          ),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await realtime.start();
+        final firstLease = (await service.currentSessionLease())!;
+
+        final switching = service.loginWithIdentity(second.localAlias!);
+        await pumpEventQueue();
+
+        expect(runtime.switchedIdentities, <String>[
+          first.identityId,
+          second.identityId,
+        ]);
+        expect(realtime.stopCount, 1);
+        expect(realtime.isRunning, isFalse);
+        expect(await service.currentSession(), isNull);
+        expect(await service.currentSessionLease(), isNull);
+
+        secondAuth.completeError(StateError('second authentication failed'));
+        await expectLater(switching, throwsStateError);
+
+        expect(await service.currentSession(), isNull);
+        expect(await service.currentSessionLease(), isNull);
+        expect(
+          service.isSessionTransitionCurrent(firstLease.transition),
+          isFalse,
+        );
+        expect(await active.readActiveIdentityId(), first.identityId);
+        expect(realtime.stopCount, 1);
+        expect(realtime.isRunning, isFalse);
+      },
+    );
+
+    test(
+      'active-session store failure after identity cutover fails closed without restoring the old lease',
+      () async {
+        final first = _session('id-first');
+        final second = _session(
+          'id-second',
+        ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final active = _FakeActiveSessionStore(first.identityId);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: first,
+            extraIdentities: <AppSession>[second],
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await realtime.start();
+        final firstLease = (await service.currentSessionLease())!;
+        active.writeError = StateError('active session store unavailable');
+
+        await expectLater(
+          service.loginWithIdentity(second.localAlias!),
+          throwsStateError,
+        );
+
+        expect(runtime.switchedIdentities, <String>[
+          first.identityId,
+          second.identityId,
+        ]);
+        expect(await service.currentSession(), isNull);
+        expect(await service.currentSessionLease(), isNull);
+        expect(
+          service.isSessionTransitionCurrent(firstLease.transition),
+          isFalse,
+        );
+        expect(await active.readActiveIdentityId(), first.identityId);
+        expect(realtime.stopCount, 1);
+        expect(realtime.isRunning, isFalse);
+      },
+    );
+
     test('logout clears active identity without disposing runtime', () async {
       final runtime = _FakeRuntime();
       final realtime = _FakeRealtime();
@@ -258,32 +540,263 @@ void main() {
       expect(await active.readActiveIdentityId(), isNull);
     });
 
-    test('logout is not blocked by slow realtime shutdown', () async {
-      final runtime = _FakeRuntime();
+    test(
+      'logout stops realtime even when active-session cleanup fails',
+      () async {
+        final identity = _session('id-default');
+        final active = _FakeActiveSessionStore(identity.identityId)
+          ..clearError = StateError('active session store unavailable');
+        final realtime = _FakeRealtime();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+        await service.restoreSession();
+        await realtime.start();
+
+        await expectLater(service.logout(), throwsStateError);
+
+        expect(await service.currentSession(), isNull);
+        expect(await service.currentSessionLease(), isNull);
+        expect(realtime.stopCount, 1);
+        expect(await active.readActiveIdentityId(), identity.identityId);
+      },
+    );
+
+    test(
+      'logout invalidates the session before realtime shutdown completes',
+      () async {
+        final runtime = _FakeRuntime();
+        final stopCompleter = Completer<void>();
+        final realtime = _FakeRealtime(
+          onStop: () async {
+            await stopCompleter.future;
+          },
+        );
+        final active = _FakeActiveSessionStore('id-default');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: _session('id-default')),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        final logout = service.logout();
+        var logoutCompleted = false;
+        unawaited(logout.then((_) => logoutCompleted = true));
+        await pumpEventQueue();
+
+        expect(await service.currentSession(), isNull);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(runtime.disposeCount, 0);
+        expect(realtime.stopCount, 1);
+        expect(logoutCompleted, isFalse);
+        stopCompleter.complete();
+        await logout;
+        expect(logoutCompleted, isTrue);
+      },
+    );
+
+    test('logout bounds an unresponsive realtime shutdown', () async {
       final stopCompleter = Completer<void>();
-      final realtime = _FakeRealtime(
-        onStop: () async {
-          await stopCompleter.future;
-        },
-      );
-      final active = _FakeActiveSessionStore('id-default');
+      final realtime = _FakeRealtime(onStop: () async => stopCompleter.future);
       final service = ImCoreAppSessionService(
-        runtime: runtime,
+        runtime: _FakeRuntime(),
         identities: _FakeIdentities(defaultIdentity: _session('id-default')),
         auth: _FakeAuth(),
-        activeSessionStore: active,
+        activeSessionStore: _FakeActiveSessionStore('id-default'),
         realtime: realtime,
+        realtimeCleanupTimeout: const Duration(milliseconds: 20),
       );
 
       await service.restoreSession();
       await service.logout();
 
       expect(await service.currentSession(), isNull);
-      expect(await active.readActiveIdentityId(), isNull);
-      expect(runtime.disposeCount, 0);
       expect(realtime.stopCount, 1);
       stopCompleter.complete();
+    });
+
+    test(
+      'identity switch waits for the previous realtime owner to stop',
+      () async {
+        final oldOwnerStop = Completer<void>();
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime(onStop: () async => oldOwnerStop.future);
+        final first = _session('id-first');
+        final second = _session(
+          'id-second',
+        ).copyWith(handle: 'bob.awiki', localAlias: 'bob-local');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: first,
+            extraIdentities: <AppSession>[second],
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: _FakeActiveSessionStore(first.identityId),
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        await realtime.start();
+        final switching = service.loginWithIdentity(second.identityId);
+        await pumpEventQueue();
+
+        expect(await service.currentSession(), isNull);
+        expect(runtime.switchedIdentities, <String>[first.identityId]);
+        expect(realtime.stopCount, 1);
+
+        oldOwnerStop.complete();
+        final activated = await switching;
+
+        expect(activated.identityId, second.identityId);
+        expect(runtime.switchedIdentities, <String>[
+          first.identityId,
+          second.identityId,
+        ]);
+      },
+    );
+
+    test(
+      'a superseded prepared activation cannot commit over a newer login',
+      () async {
+        final first = _session('id-first');
+        final prepared = _session(
+          'id-prepared',
+        ).copyWith(handle: 'prepared.awiki', localAlias: 'prepared-local');
+        final latest = _session(
+          'id-latest',
+        ).copyWith(handle: 'latest.awiki', localAlias: 'latest-local');
+        final runtime = _FakeRuntime();
+        final active = _FakeActiveSessionStore(first.identityId);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: first,
+            extraIdentities: <AppSession>[latest],
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: _FakeRealtime(),
+        );
+        await service.restoreSession();
+
+        final initializerStarted = Completer<void>();
+        final releaseInitializer = Completer<void>();
+        final preparedTransition = service.beginSessionTransition();
+        final staleActivation = service.activateIdentity(
+          prepared,
+          transition: preparedTransition,
+          initializeIdentitySession: (_) async {
+            initializerStarted.complete();
+            await releaseInitializer.future;
+          },
+        );
+        await initializerStarted.future;
+
+        final latestLogin = service.loginWithIdentity(latest.localAlias!);
+        releaseInitializer.complete();
+
+        await expectLater(
+          staleActivation,
+          throwsA(isA<AppSessionTransitionSuperseded>()),
+        );
+        final activated = await latestLogin;
+
+        expect(activated.identityId, latest.identityId);
+        expect((await service.currentSession())?.identityId, latest.identityId);
+        expect(await active.readActiveIdentityId(), latest.identityId);
+        expect(runtime.switchedIdentities, <String>[
+          first.identityId,
+          prepared.identityId,
+          latest.identityId,
+        ]);
+      },
+    );
+
+    test(
+      'a superseded login normalizes its late auth error before the latest login',
+      () async {
+        final first = _session('id-first');
+        final stale = _session(
+          'id-stale',
+        ).copyWith(handle: 'stale.awiki', localAlias: 'stale-local');
+        final latest = _session(
+          'id-latest',
+        ).copyWith(handle: 'latest.awiki', localAlias: 'latest-local');
+        final staleAuth = Completer<AppAuthState>();
+        final auth = _FakeAuth(
+          ensureCompleter: staleAuth,
+          ensureCompleterCall: 2,
+        );
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(
+            defaultIdentity: first,
+            extraIdentities: <AppSession>[stale, latest],
+          ),
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(first.identityId),
+          realtime: _FakeRealtime(),
+        );
+        await service.restoreSession();
+
+        final staleLogin = service.loginWithIdentity(stale.localAlias!);
+        await pumpEventQueue();
+        final latestLogin = service.loginWithIdentity(latest.localAlias!);
+        staleAuth.completeError(StateError('session_expired'));
+
+        await expectLater(
+          staleLogin,
+          throwsA(isA<AppSessionTransitionSuperseded>()),
+        );
+        final activated = await latestLogin;
+
+        expect(activated.identityId, latest.identityId);
+        expect((await service.currentSession())?.identityId, latest.identityId);
+      },
+    );
+
+    test('a refresh cannot publish after a newer identity intent', () async {
+      final first = _session('id-first');
+      final latest = _session(
+        'id-latest',
+      ).copyWith(handle: 'latest.awiki', localAlias: 'latest-local');
+      final refreshResult = Completer<AppAuthState>();
+      final auth = _FakeAuth(refreshCompleter: refreshResult);
+      final service = ImCoreAppSessionService(
+        runtime: _FakeRuntime(),
+        identities: _FakeIdentities(
+          defaultIdentity: first,
+          extraIdentities: <AppSession>[latest],
+        ),
+        auth: auth,
+        activeSessionStore: _FakeActiveSessionStore(first.identityId),
+      );
+      await service.restoreSession();
+
+      final staleRefresh = service.refreshSession();
       await pumpEventQueue();
+      expect(auth.refreshCount, 1);
+      final latestLogin = service.loginWithIdentity(latest.localAlias!);
+      refreshResult.complete(
+        AppAuthState(
+          authenticated: true,
+          subject: first.did,
+          bearerToken: 'stale-token',
+        ),
+      );
+
+      expect(await staleRefresh, isNull);
+      final activated = await latestLogin;
+      expect(activated.identityId, latest.identityId);
+      expect((await service.currentSession())?.identityId, latest.identityId);
     });
 
     test('disposeRuntime stops realtime and disposes runtime', () async {
@@ -413,9 +926,10 @@ AppSession _session(String id) {
 }
 
 class _FakeRuntime implements ImCoreRuntimePort {
-  _FakeRuntime({this.vaultError});
+  _FakeRuntime({this.vaultError, this.vaultErrorsByIdentity = const {}});
 
   final Object? vaultError;
+  final Map<String, Object> vaultErrorsByIdentity;
   int openCount = 0;
   int disposeCount = 0;
   final List<String> switchedIdentities = <String>[];
@@ -435,7 +949,7 @@ class _FakeRuntime implements ImCoreRuntimePort {
   @override
   Future<void> ensureIdentityVault(String identityIdOrAlias) async {
     vaultChecks.add(identityIdOrAlias);
-    final error = vaultError;
+    final error = vaultErrorsByIdentity[identityIdOrAlias] ?? vaultError;
     if (error != null) {
       throw error;
     }
@@ -543,9 +1057,15 @@ class _FakeActiveSessionStore implements ActiveSessionStore {
   _FakeActiveSessionStore([this.activeIdentityId]);
 
   String? activeIdentityId;
+  Object? clearError;
+  Object? writeError;
 
   @override
   Future<void> clearActiveIdentityId() async {
+    final error = clearError;
+    if (error != null) {
+      throw error;
+    }
     activeIdentityId = null;
   }
 
@@ -554,6 +1074,10 @@ class _FakeActiveSessionStore implements ActiveSessionStore {
 
   @override
   Future<void> writeActiveIdentityId(String identityId) async {
+    final error = writeError;
+    if (error != null) {
+      throw error;
+    }
     activeIdentityId = identityId;
   }
 }
@@ -563,6 +1087,9 @@ class _FakeAuth implements AuthCorePort {
     AppAuthState? ensureResult,
     AppAuthState? refreshResult,
     this.ensureError,
+    this.ensureCompleter,
+    this.ensureCompleterCall,
+    this.refreshCompleter,
   }) : _ensureResult = ensureResult ?? const AppAuthState(authenticated: true),
        _refreshResult =
            refreshResult ?? const AppAuthState(authenticated: true);
@@ -570,12 +1097,18 @@ class _FakeAuth implements AuthCorePort {
   final AppAuthState _ensureResult;
   final AppAuthState _refreshResult;
   final Object? ensureError;
+  final Completer<AppAuthState>? ensureCompleter;
+  final int? ensureCompleterCall;
+  final Completer<AppAuthState>? refreshCompleter;
   int ensureCount = 0;
   int refreshCount = 0;
 
   @override
   Future<AppAuthState> ensureSession() async {
     ensureCount += 1;
+    if (ensureCount == ensureCompleterCall) {
+      return ensureCompleter!.future;
+    }
     final error = ensureError;
     if (error != null) {
       throw error;
@@ -589,6 +1122,10 @@ class _FakeAuth implements AuthCorePort {
   @override
   Future<AppAuthState> refreshSession() async {
     refreshCount += 1;
+    final completer = refreshCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     return _refreshResult;
   }
 
@@ -601,22 +1138,26 @@ class _FakeRealtime implements RealtimeCorePort {
 
   final Future<void> Function()? onStop;
   int stopCount = 0;
+  bool _isRunning = false;
 
   @override
   Stream<RealtimeConnectionStatus> get connectionStates => const Stream.empty();
 
   @override
-  bool get isRunning => stopCount == 0;
+  bool get isRunning => _isRunning;
 
   @override
   Stream<RealtimeUpdate> get updates => const Stream.empty();
 
   @override
-  Future<void> start() async {}
+  Future<void> start() async {
+    _isRunning = true;
+  }
 
   @override
   Future<void> stop() async {
     stopCount += 1;
+    _isRunning = false;
     await onStop?.call();
   }
 }

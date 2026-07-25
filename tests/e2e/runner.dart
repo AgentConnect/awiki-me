@@ -90,6 +90,9 @@ const List<String> _desktopCliPeerInboundCaseIds = <String>[
   'AUTH-E2E-001',
   'INBOUND-FIRST-CONV-E2E-001',
 ];
+const List<String> _desktopIdentitySwitchCaseIds = <String>[
+  'IDENTITY-SWITCH-E2E-001',
+];
 const List<String> _desktopCliPeerRestartCaseIds = <String>[
   'PROCESS-RESTART-E2E-001',
 ];
@@ -458,6 +461,9 @@ class DesktopE2eRunner {
       _line('daemon env file: ${redactor.redact(peerConfig.daemonEnvFile!)}');
     }
     _line('app handle: ${peerConfig.appHandle}');
+    if (peerConfig.secondaryAppHandle != null) {
+      _line('secondary app handle: ${peerConfig.secondaryAppHandle}');
+    }
     _line('cli handle: ${peerConfig.cliHandle}');
     _line('case: ${peerConfig.e2eCase.caseName}');
     _line('flutter build dir: ${flutterBuildIsolation.buildDirectory}');
@@ -729,15 +735,31 @@ class DesktopE2eRunner {
       '--handle',
       peerConfig.appHandle,
     ]);
+    final secondaryAppResolved = peerConfig.secondaryAppHandle == null
+        ? null
+        : await _cli(<String>[
+            '--format',
+            'json',
+            'id',
+            'resolve',
+            '--handle',
+            peerConfig.secondaryAppHandle!,
+          ]);
     final currentDid = _cliDidFromJson(current.output, current: true);
     final cliDid = _cliDidFromJson(cliResolved.output);
     final appDid = _cliDidFromJson(appResolved.output);
+    final secondaryAppDid = secondaryAppResolved == null
+        ? null
+        : _cliDidFromJson(secondaryAppResolved.output);
     final cliMatches = currentDid == cliDid;
-    final identitiesDistinct = currentDid != appDid;
+    final identitiesDistinct = secondaryAppDid == null
+        ? currentDid != appDid
+        : <String>{currentDid, appDid, secondaryAppDid}.length == 3;
     _identityPreflight = <String, Object?>{
       'status': cliMatches && identitiesDistinct ? 'passed' : 'failed',
       'cliHandleMatchesCurrent': cliMatches,
       'appHandleResolvable': true,
+      'secondaryAppHandleResolvable': secondaryAppDid != null,
       'identitiesDistinct': identitiesDistinct,
       'containsRawDids': false,
     };
@@ -892,6 +914,10 @@ class DesktopE2eRunner {
       },
       'accounts': <String, Object?>{
         'appUser': <String, Object?>{'handle': peerConfig.appHandle},
+        if (peerConfig.secondaryAppHandle != null)
+          'appSecondaryUser': <String, Object?>{
+            'handle': peerConfig.secondaryAppHandle,
+          },
         'cliPeer': <String, Object?>{'handle': peerConfig.cliHandle},
       },
       'cliPeer': <String, Object?>{
@@ -2345,6 +2371,7 @@ Usage:
   dart run tests/e2e/runner.dart --case inbound
   dart run tests/e2e/runner.dart --case restart
   dart run tests/e2e/runner.dart --case display-name-fallback
+  dart run tests/e2e/runner.dart --case identity-switch
   dart run tests/e2e/runner.dart --case performance
   dart run tests/e2e/runner.dart --case message-agent
   dart run tests/e2e/runner.dart --case codex-agent
@@ -2353,7 +2380,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|message-agent|codex-agent|claude-code-agent
+  --case smoke|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|message-agent|codex-agent|claude-code-agent
                                smoke runs local App/native checks. The other
                                cases run real App+CLI peer flows. The
                                performance case records product-level startup,
@@ -2380,6 +2407,7 @@ class DesktopCliPeerConfig {
     required this.otpPhone,
     required this.otpCode,
     required this.appHandle,
+    this.secondaryAppHandle,
     required this.cliHandle,
     required this.cliBin,
     required this.cliSourceRef,
@@ -2418,6 +2446,7 @@ class DesktopCliPeerConfig {
   final String otpPhone;
   final String otpCode;
   final String appHandle;
+  final String? secondaryAppHandle;
   final String cliHandle;
   final String cliBin;
   final String cliSourceRef;
@@ -2486,6 +2515,13 @@ class DesktopCliPeerConfig {
       'accounts.appUser.handle',
       sourcePath,
     );
+    final secondaryAppHandle = options.e2eCase == DesktopE2eCase.identitySwitch
+        ? _requiredConfig(
+            fileConfig.secondaryAppHandle,
+            'accounts.appSecondaryUser.handle',
+            sourcePath,
+          )
+        : fileConfig.secondaryAppHandle;
     final cliHandle = _requiredConfig(
       fileConfig.cliHandle,
       'accounts.cliPeer.handle',
@@ -2493,6 +2529,17 @@ class DesktopCliPeerConfig {
     );
     if (appHandle.toLowerCase() == cliHandle.toLowerCase()) {
       throw E2eFailure('App handle and CLI handle must differ.');
+    }
+    if (secondaryAppHandle != null &&
+        <String>{
+              appHandle.toLowerCase(),
+              cliHandle.toLowerCase(),
+              secondaryAppHandle.toLowerCase(),
+            }.length !=
+            3) {
+      throw E2eFailure(
+        'Primary App, secondary App, and CLI handles must all differ.',
+      );
     }
     final cliBin = _requiredConfig(
       fileConfig.cliBin,
@@ -2506,6 +2553,7 @@ class DesktopCliPeerConfig {
       otpPhone: otpPhone,
       otpCode: otpCode,
       appHandle: appHandle,
+      secondaryAppHandle: secondaryAppHandle,
       cliHandle: cliHandle,
       cliBin: cliBin,
       cliSourceRef: fileConfig.cliSourceRef ?? 'unrecorded',
@@ -2691,6 +2739,7 @@ class DesktopE2eFileConfig {
     this.otpPhone,
     this.otpCode,
     this.appHandle,
+    this.secondaryAppHandle,
     this.cliHandle,
     this.cliBin,
     this.cliSourceRef,
@@ -2730,6 +2779,7 @@ class DesktopE2eFileConfig {
       otpPhone = null,
       otpCode = null,
       appHandle = null,
+      secondaryAppHandle = null,
       cliHandle = null,
       cliBin = null,
       cliSourceRef = null,
@@ -2767,6 +2817,7 @@ class DesktopE2eFileConfig {
   final String? otpPhone;
   final String? otpCode;
   final String? appHandle;
+  final String? secondaryAppHandle;
   final String? cliHandle;
   final String? cliBin;
   final String? cliSourceRef;
@@ -2784,6 +2835,11 @@ class DesktopE2eFileConfig {
     final service = _mapAt(raw, 'service', optional: true);
     final accounts = _mapAt(raw, 'accounts', optional: true);
     final appUser = _mapAt(accounts, 'appUser', optional: true);
+    final secondaryAppUser = _mapAt(
+      accounts,
+      'appSecondaryUser',
+      optional: true,
+    );
     final cliUser = _mapAt(accounts, 'cliPeer', optional: true);
     final cliPeer = _mapAt(raw, 'cliPeer', optional: true);
     final daemon = _mapAt(raw, 'daemon', optional: true);
@@ -2798,6 +2854,7 @@ class DesktopE2eFileConfig {
     final otpPhone = _stringAt(otp, 'phone');
     final otpCode = _stringAt(otp, 'code');
     final appHandle = _stringAt(appUser, 'handle');
+    final secondaryAppHandle = _stringAt(secondaryAppUser, 'handle');
     final cliHandle = _stringAt(cliUser, 'handle');
     final cliBin = _stringAt(cliPeer, 'binary');
     final platformValue = _stringAt(raw, 'platform');
@@ -2846,6 +2903,7 @@ class DesktopE2eFileConfig {
       otpPhone: otpPhone,
       otpCode: otpCode,
       appHandle: appHandle,
+      secondaryAppHandle: secondaryAppHandle,
       cliHandle: cliHandle,
       cliBin: cliBin == null ? null : _resolvePath(root, cliBin),
       cliSourceRef: _stringAt(cliPeer, 'sourceRef'),
@@ -3168,6 +3226,7 @@ enum DesktopE2eCase {
   attachment(_desktopCliPeerAttachmentCaseIds),
   contacts(_desktopCliPeerContactsCaseIds),
   inbound(_desktopCliPeerInboundCaseIds),
+  identitySwitch(_desktopIdentitySwitchCaseIds),
   restart(_desktopCliPeerRestartCaseIds),
   displayNameFallback(_desktopCliPeerDisplayNameFallbackCaseIds),
   messageAgent(_messageAgentCaseIds),
@@ -3195,6 +3254,8 @@ enum DesktopE2eCase {
         'integration_test/desktop_cli_peer_contacts_test.dart',
       DesktopE2eCase.inbound =>
         'integration_test/desktop_cli_peer_inbound_test.dart',
+      DesktopE2eCase.identitySwitch =>
+        'integration_test/desktop_identity_switch_test.dart',
       DesktopE2eCase.restart =>
         'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
       DesktopE2eCase.displayNameFallback =>
@@ -3214,6 +3275,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.codexAgent => 'codex-agent',
       DesktopE2eCase.claudeCodeAgent => 'claude-code-agent',
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
+      DesktopE2eCase.identitySwitch => 'identity-switch',
       _ => name,
     };
   }
@@ -3242,6 +3304,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.performance => const Duration(minutes: 12),
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
+      DesktopE2eCase.identitySwitch => const Duration(minutes: 10),
       _ => const Duration(minutes: 5),
     };
   }
@@ -3295,6 +3358,10 @@ enum DesktopE2eCase {
       'inbound-first' ||
       'inbound_first' ||
       'inbound-only' => DesktopE2eCase.inbound,
+      'identity-switch' ||
+      'identity_switch' ||
+      'switch-identity' ||
+      'switch_identity' => DesktopE2eCase.identitySwitch,
       'restart' ||
       'process-restart' ||
       'process_restart' ||
@@ -3323,7 +3390,7 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'Use smoke, full, performance, direct, group, attachment, contacts, inbound, identity-switch, restart, '
         'display-name-fallback, '
         'message-agent, codex-agent, or claude-code-agent.',
       ),

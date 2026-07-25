@@ -94,11 +94,16 @@ variance can be tracked before thresholds are tightened.
 App + CLI peer exchange. It must not replace App user actions with direct
 application-service calls. `--case performance` is intentionally a
 service-driven timing/backend integration diagnostic and does not count as UI
-acceptance. Use the two gates for their distinct purposes:
+acceptance. `--case identity-switch` is a focused product-application gate for
+two local App identities: it sends in both directions, performs real logout /
+activation transitions, and requires unread plus canonical timeline hydration
+to converge for each owner. It requires `accounts.appSecondaryUser.handle` in
+the ignored local E2E config. Use the gates for their distinct purposes:
 
 ```bash
 dart run tests/e2e/runner.dart --case performance
 dart run tests/e2e/runner.dart --case full
+dart run tests/e2e/runner.dart --case identity-switch
 ```
 
 The Full gate includes App-visible conversation correctness rather than only

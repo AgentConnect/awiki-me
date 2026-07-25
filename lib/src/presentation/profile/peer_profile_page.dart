@@ -8,6 +8,7 @@ import '../../app/ui_feedback.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../chat/chat_provider.dart';
+import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -289,6 +290,9 @@ class PeerProfilePage extends ConsumerWidget {
                                   AppMessage.peerProfileThreadDeleted(),
                                 );
                           } catch (error) {
+                            if (isSessionEpochChangedError(error)) {
+                              return;
+                            }
                             ref
                                 .read(uiFeedbackProvider.notifier)
                                 .showError(AppMessage.fromError(error));

@@ -307,8 +307,9 @@ List<Override> fakeApplicationServiceOverrides(
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   final resolvedMessageSync = messageSyncService ?? FakeMessageSyncService();
+  final sessions = FakeAppSessionService(gateway);
   return <Override>[
-    appSessionServiceProvider.overrideWithValue(FakeAppSessionService(gateway)),
+    appSessionServiceProvider.overrideWithValue(sessions),
     identityCorePortProvider.overrideWithValue(FakeIdentityCorePort()),
     profileApplicationServiceProvider.overrideWithValue(
       FakeProfileApplicationService(gateway),
@@ -343,7 +344,9 @@ List<Override> fakeApplicationServiceOverrides(
     relationshipApplicationServiceProvider.overrideWithValue(
       FakeRelationshipApplicationService(gateway),
     ),
-    onboardingServiceProvider.overrideWithValue(FakeOnboardingService(gateway)),
+    onboardingServiceProvider.overrideWithValue(
+      FakeOnboardingService(gateway, sessions),
+    ),
     onboardingSupportServiceProvider.overrideWithValue(
       FakeOnboardingSupportService(gateway),
     ),
@@ -1576,20 +1579,52 @@ class FakeDirectoryApplicationService implements DirectoryApplicationService {
   }
 }
 
-class FakeAppSessionService implements AppSessionService {
+class FakeAppSessionService
+    with AppSessionTransitionGuard
+    implements AppSessionService {
   FakeAppSessionService(this.gateway);
 
   final FakeAwikiGateway gateway;
   AppSession? _current;
 
   @override
-  Future<AppSession> activateIdentity(AppSession identity) async {
+  Future<AppSession> activateIdentity(
+    AppSession identity, {
+    AppSessionTransition? transition,
+    Future<void> Function(AppSession session)? initializeIdentitySession,
+  }) async {
+    final requestedTransition = transition ?? beginSessionTransition();
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
+    await initializeIdentitySession?.call(identity);
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
     _current = identity;
+    markSessionTransitionCommitted(requestedTransition);
     return identity;
   }
 
   @override
   Future<AppSession?> currentSession() async => _current;
+
+  @override
+  Future<AppSessionLease?> currentSessionLease() async =>
+      sessionLeaseFor(_current);
+
+  @override
+  Future<bool> abortSessionIfCurrent(AppSessionLease lease) async {
+    if (!isSessionTransitionCurrent(lease.transition) ||
+        !isCommittedSessionTransition(lease.transition) ||
+        _current?.identityId != lease.session.identityId) {
+      return false;
+    }
+    beginSessionTransition();
+    _current = null;
+    clearCommittedSessionTransition();
+    return true;
+  }
 
   @override
   Future<List<AppSession>> listLocalIdentities() async {
@@ -1598,15 +1633,25 @@ class FakeAppSessionService implements AppSessionService {
   }
 
   @override
-  Future<AppSession> loginWithIdentity(String identityIdOrAlias) async {
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) async {
+    final requestedTransition = transition ?? beginSessionTransition();
     final session = await gateway.loginWithLocalCredential(identityIdOrAlias);
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
     _current = _appSessionFromLegacy(session);
+    markSessionTransitionCommitted(requestedTransition);
     return _current!;
   }
 
   @override
   Future<void> logout() async {
+    beginSessionTransition();
     _current = null;
+    clearCommittedSessionTransition();
     gateway.logoutCalls += 1;
   }
 
@@ -3399,18 +3444,23 @@ class FakeRelationshipApplicationService
 }
 
 class FakeOnboardingService implements OnboardingService {
-  const FakeOnboardingService(this.gateway);
+  const FakeOnboardingService(this.gateway, [this.sessions]);
 
   final FakeAwikiGateway gateway;
+  final AppSessionService? sessions;
 
   @override
   Future<AppSession> recoverHandle({
     required String phone,
     required String otp,
     required String handle,
+    AppSessionTransition? transition,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.recoverHandle(phone: phone, otp: otp, handle: handle),
+    return _activate(
+      _appSessionFromLegacy(
+        await gateway.recoverHandle(phone: phone, otp: otp, handle: handle),
+      ),
+      transition,
     );
   }
 
@@ -3421,15 +3471,19 @@ class FakeOnboardingService implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandleWithEmail(
-        email: email,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    return _activate(
+      _appSessionFromLegacy(
+        await gateway.registerHandleWithEmail(
+          email: email,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
+      transition,
     );
   }
 
@@ -3441,16 +3495,20 @@ class FakeOnboardingService implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandle(
-        phone: phone,
-        otp: otp,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    return _activate(
+      _appSessionFromLegacy(
+        await gateway.registerHandle(
+          phone: phone,
+          otp: otp,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
+      transition,
     );
   }
 
@@ -3461,16 +3519,31 @@ class FakeOnboardingService implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandleWithoutContactVerification(
-        phone: phone,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    return _activate(
+      _appSessionFromLegacy(
+        await gateway.registerHandleWithoutContactVerification(
+          phone: phone,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
+      transition,
     );
+  }
+
+  Future<AppSession> _activate(
+    AppSession session,
+    AppSessionTransition? transition,
+  ) {
+    final service = sessions;
+    if (service == null) {
+      return Future<AppSession>.value(session);
+    }
+    return service.activateIdentity(session, transition: transition);
   }
 }
 

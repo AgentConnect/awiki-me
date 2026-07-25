@@ -25,12 +25,16 @@ void main() {
         200,
       ),
     ]);
+    var publishedRefreshes = 0;
     final client = AuthenticatedUserServiceRpcClient(
       client: AwikiOnboardingUtilityHttpClient(
         baseUrl: 'https://example.test',
         httpClient: httpClient,
       ),
-      sessions: AuthSessionCoordinator(sessions: sessions),
+      sessions: AuthSessionCoordinator(
+        sessions: sessions,
+        onSessionUpdated: (_) => publishedRefreshes += 1,
+      ),
     );
 
     final result = await client.rpcCall(
@@ -50,6 +54,7 @@ void main() {
       httpClient.requests[1].headers['Authorization'],
       'Bearer fresh-token',
     );
+    expect(publishedRefreshes, 1);
   });
 
   test(
@@ -134,6 +139,58 @@ void main() {
       'Bearer valid-token',
     );
   });
+
+  test('does not retry an old RPC with a replacement session token', () async {
+    final refreshResult = Completer<AppSession?>();
+    final sessions = _FakeSessions(
+      current: _session(jwtToken: 'identity-a-token'),
+      refreshed: _session(jwtToken: 'identity-a-refreshed-token'),
+      refreshCompleter: refreshResult,
+    );
+    final httpClient = _QueueHttpClient([
+      http.Response(
+        '{"jsonrpc":"2.0","result":null,"error":{"code":-32000,"message":"Missing or invalid Authorization header","data":null},"id":"req-1"}',
+        401,
+      ),
+    ]);
+    var publishedRefreshes = 0;
+    final client = AuthenticatedUserServiceRpcClient(
+      client: AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://example.test',
+        httpClient: httpClient,
+      ),
+      sessions: AuthSessionCoordinator(
+        sessions: sessions,
+        onSessionUpdated: (_) => publishedRefreshes += 1,
+      ),
+    );
+
+    final request = client.rpcCall(
+      path: '/user-service/agent-inventory/rpc',
+      method: 'list_agents',
+      params: const <String, Object?>{'include_inactive': false},
+    );
+    await pumpEventQueue();
+    expect(sessions.refreshCount, 1);
+
+    sessions.replaceCommittedSession(
+      _session(jwtToken: 'same-identity-new-login-token'),
+    );
+    refreshResult.complete(_session(jwtToken: 'identity-a-refreshed-token'));
+
+    await expectLater(
+      request,
+      throwsA(
+        isA<AuthSessionUnavailable>().having(
+          (error) => error.message,
+          'message',
+          'auth_session_changed',
+        ),
+      ),
+    );
+    expect(httpClient.requests, hasLength(1));
+    expect(publishedRefreshes, 0);
+  });
 }
 
 class _QueueHttpClient extends http.BaseClient {
@@ -161,23 +218,43 @@ class _QueueHttpClient extends http.BaseClient {
   }
 }
 
-class _FakeSessions implements AppSessionService {
-  _FakeSessions({required AppSession current, required AppSession refreshed})
-    : _current = current,
-      _refreshed = refreshed;
+class _FakeSessions
+    with AppSessionTransitionGuard
+    implements AppSessionService {
+  _FakeSessions({
+    required AppSession current,
+    required AppSession refreshed,
+    this.refreshCompleter,
+  }) : _current = current,
+       _refreshed = refreshed;
 
   AppSession? _current;
   final AppSession _refreshed;
+  final Completer<AppSession?>? refreshCompleter;
   int refreshCount = 0;
 
   @override
-  Future<AppSession> activateIdentity(AppSession identity) async {
+  Future<AppSession> activateIdentity(
+    AppSession identity, {
+    AppSessionTransition? transition,
+    Future<void> Function(AppSession session)? initializeIdentitySession,
+  }) async {
+    final requestedTransition = transition ?? beginSessionTransition();
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
+    await initializeIdentitySession?.call(identity);
     _current = identity;
+    markSessionTransitionCommitted(requestedTransition);
     return identity;
   }
 
   @override
   Future<AppSession?> currentSession() async => _current;
+
+  @override
+  Future<AppSessionLease?> currentSessionLease() async =>
+      sessionLeaseFor(_current);
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async =>
@@ -189,8 +266,10 @@ class _FakeSessions implements AppSessionService {
   ];
 
   @override
-  Future<AppSession> loginWithIdentity(String identityIdOrAlias) async =>
-      _current ?? _session(jwtToken: null);
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) async => _current ?? _session(jwtToken: null);
 
   @override
   Future<void> logout() async {
@@ -200,8 +279,18 @@ class _FakeSessions implements AppSessionService {
   @override
   Future<AppSession?> refreshSession() async {
     refreshCount += 1;
+    final completer = refreshCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     _current = _refreshed;
     return _current;
+  }
+
+  void replaceCommittedSession(AppSession session) {
+    final transition = beginSessionTransition();
+    _current = session;
+    markSessionTransitionCommitted(transition);
   }
 
   @override

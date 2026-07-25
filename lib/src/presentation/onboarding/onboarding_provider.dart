@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/app_session_service.dart';
 import '../../application/models/app_session.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../domain/entities/session_identity.dart';
@@ -123,18 +124,33 @@ class OnboardingState {
 }
 
 class OnboardingController extends StateNotifier<OnboardingState> {
-  OnboardingController(this.ref) : super(const OnboardingState());
+  OnboardingController(
+    this.ref, {
+    Duration requestTimeout = const Duration(seconds: 20),
+  }) : _requestTimeout = requestTimeout,
+       super(const OnboardingState());
 
   final Ref ref;
-  static const Duration _requestTimeout = Duration(seconds: 20);
+  final Duration _requestTimeout;
+  late final AppSessionService _sessionService = ref.read(
+    appSessionServiceProvider,
+  );
   static const Duration _groupRecoveryTimeout = Duration(seconds: 8);
   static const int _otpResendCooldownSeconds = 60;
   static const int _emailResendCooldownSeconds = 60;
   Timer? _otpResendTimer;
   Timer? _emailResendTimer;
+  int _busyGeneration = 0;
+  AppSessionTransition? _activeSessionTransition;
 
   @override
   void dispose() {
+    final transition = _activeSessionTransition;
+    if (transition != null) {
+      unawaited(_cancelOrAbortSessionTransition(transition));
+      _activeSessionTransition = null;
+    }
+    _busyGeneration += 1;
     _otpResendTimer?.cancel();
     _emailResendTimer?.cancel();
     super.dispose();
@@ -310,6 +326,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final transition = _beginSessionTransition();
     await _runBusy(() async {
       final session = await ref
           .read(onboardingServiceProvider)
@@ -319,11 +336,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
+            transition: transition,
           );
-      await ref
-          .read(appRuntimeProvider.notifier)
-          .activateSession(_legacySessionFromAppSession(session));
-    });
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
+      await _activateCommittedSession(session, transition);
+    }, sessionTransition: transition);
   }
 
   Future<void> loginOrRegisterWithPhone({
@@ -339,11 +358,16 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final transition = _beginSessionTransition();
+    var recovered = false;
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       final onboarding = ref.read(onboardingServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
-      final recovered = status == HandleRegistrationStatus.registered;
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
+      recovered = status == HandleRegistrationStatus.registered;
       final session = switch (status) {
         HandleRegistrationStatus.registered =>
           state.supportsPhoneOtpRecovery
@@ -351,6 +375,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
                   phone: phone,
                   otp: otp,
                   handle: handle,
+                  transition: transition,
                 )
               : throw StateError('handle_recovery_unsupported'),
         HandleRegistrationStatus.notRegistered =>
@@ -360,23 +385,33 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
+            transition: transition,
           ),
       };
-      await ref
-          .read(appRuntimeProvider.notifier)
-          .activateSession(_legacySessionFromAppSession(session));
-      if (recovered) {
-        await _resumeGroupRecoveryBestEffort();
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
       }
-    });
+      await _activateCommittedSession(session, transition);
+    }, sessionTransition: transition);
+    if (recovered && _isSessionTransitionCurrent(transition)) {
+      await _resumeGroupRecoveryBestEffort(transition: transition);
+    }
   }
 
-  Future<void> _resumeGroupRecoveryBestEffort() async {
+  Future<void> _resumeGroupRecoveryBestEffort({
+    required AppSessionTransition transition,
+  }) async {
+    if (!_isSessionTransitionCurrent(transition)) {
+      return;
+    }
     try {
       final summary = await ref
           .read(groupProvider.notifier)
           .resumeRebindRecovery()
           .timeout(_groupRecoveryTimeout);
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
       final feedback = ref.read(uiFeedbackProvider.notifier);
       if (summary.hasBlocked) {
         feedback.showInfo(AppMessage.groupRecoveryBlocked(summary.blocked));
@@ -386,6 +421,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         feedback.showInfo(AppMessage.groupRecoveryCompleted());
       }
     } catch (_) {
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showInfo(AppMessage.groupRecoveryStatusUnavailable());
@@ -403,15 +441,24 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final transition = _beginSessionTransition();
     await _runBusy(() async {
       final session = await ref
           .read(onboardingServiceProvider)
-          .recoverHandle(phone: phone, otp: otp, handle: handle);
-      await ref
-          .read(appRuntimeProvider.notifier)
-          .activateSession(_legacySessionFromAppSession(session));
-      await _resumeGroupRecoveryBestEffort();
-    });
+          .recoverHandle(
+            phone: phone,
+            otp: otp,
+            handle: handle,
+            transition: transition,
+          );
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
+      await _activateCommittedSession(session, transition);
+    }, sessionTransition: transition);
+    if (_isSessionTransitionCurrent(transition)) {
+      await _resumeGroupRecoveryBestEffort(transition: transition);
+    }
   }
 
   Future<void> registerWithEmail({
@@ -426,9 +473,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final transition = _beginSessionTransition();
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
       if (status == HandleRegistrationStatus.registered) {
         throw StateError('email_login_unsupported_for_registered_handle');
       }
@@ -436,6 +487,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         email: email,
         handle: handle,
       );
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
       if (!verified) {
         throw StateError('email_not_activated');
       }
@@ -446,11 +500,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
+            transition: transition,
           );
-      await ref
-          .read(appRuntimeProvider.notifier)
-          .activateSession(_legacySessionFromAppSession(session));
-    });
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
+      await _activateCommittedSession(session, transition);
+    }, sessionTransition: transition);
   }
 
   Future<void> registerWithoutContactVerification({
@@ -465,9 +521,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    final transition = _beginSessionTransition();
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
       final status = await support.lookupHandleRegistration(handle: handle);
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
       if (status == HandleRegistrationStatus.registered) {
         throw StateError('handle_already_registered_import_credential');
       }
@@ -478,27 +538,82 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             handle: handle,
             nickName: nickName,
             profileMarkdown: profileMarkdown,
+            transition: transition,
           );
-      await ref
-          .read(appRuntimeProvider.notifier)
-          .activateSession(_legacySessionFromAppSession(session));
-    });
+      if (!_isSessionTransitionCurrent(transition)) {
+        return;
+      }
+      await _activateCommittedSession(session, transition);
+    }, sessionTransition: transition);
   }
 
-  Future<void> _runBusy(Future<void> Function() action) async {
+  AppSessionTransition _beginSessionTransition() {
+    return _sessionService.beginSessionTransition();
+  }
+
+  bool _isSessionTransitionCurrent(AppSessionTransition transition) {
+    return mounted && _sessionService.isSessionTransitionCurrent(transition);
+  }
+
+  Future<void> _activateCommittedSession(
+    AppSession session,
+    AppSessionTransition transition,
+  ) async {
+    await ref
+        .read(appRuntimeProvider.notifier)
+        .activateCommittedSession(session, expectedTransition: transition);
+  }
+
+  Future<void> _runBusy(
+    Future<void> Function() action, {
+    AppSessionTransition? sessionTransition,
+  }) async {
+    final generation = ++_busyGeneration;
+    if (sessionTransition != null) {
+      _activeSessionTransition = sessionTransition;
+    }
     state = state.copyWith(isBusy: true);
     try {
       await action().timeout(_requestTimeout);
     } on TimeoutException {
+      await _cancelOrAbortSessionTransition(sessionTransition);
+      if (generation != _busyGeneration) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
+    } on AppSessionTransitionSuperseded {
+      await _cancelOrAbortSessionTransition(sessionTransition);
+      return;
     } catch (error) {
+      await _cancelOrAbortSessionTransition(sessionTransition);
+      if (generation != _busyGeneration) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
     } finally {
-      state = state.copyWith(isBusy: false);
+      if (identical(_activeSessionTransition, sessionTransition)) {
+        _activeSessionTransition = null;
+      }
+      if (generation == _busyGeneration) {
+        state = state.copyWith(isBusy: false);
+      }
+    }
+  }
+
+  Future<void> _cancelOrAbortSessionTransition(
+    AppSessionTransition? transition,
+  ) async {
+    if (transition == null) {
+      return;
+    }
+    _sessionService.cancelPendingSessionTransition(transition);
+    final lease = await _sessionService.currentSessionLease();
+    if (lease != null && identical(lease.transition, transition)) {
+      await _sessionService.abortSessionIfCurrent(lease);
     }
   }
 
@@ -585,10 +700,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     return state.serverInfo?.registrationMethod(id);
   }
-}
-
-SessionIdentity _legacySessionFromAppSession(AppSession session) {
-  return session.toLegacySessionIdentity();
 }
 
 final onboardingProvider =

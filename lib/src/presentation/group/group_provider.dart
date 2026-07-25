@@ -41,20 +41,59 @@ class GroupState {
   }
 }
 
+class _GroupOwnerOperation {
+  const _GroupOwnerOperation({required this.generation, required this.epoch});
+
+  final int generation;
+  final SessionEpoch epoch;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _GroupOwnerOperation &&
+        other.generation == generation &&
+        other.epoch == epoch;
+  }
+
+  @override
+  int get hashCode => Object.hash(generation, epoch);
+}
+
+class _GroupMemberLoadOperation {
+  const _GroupMemberLoadOperation({
+    required this.owner,
+    required this.operation,
+  });
+
+  final _GroupOwnerOperation owner;
+  final Future<List<GroupMemberSummary>> operation;
+}
+
+class _GroupRecoveryOperation {
+  const _GroupRecoveryOperation({required this.owner, required this.operation});
+
+  final _GroupOwnerOperation owner;
+  final Future<GroupRebindRecoverySummary> operation;
+}
+
 class GroupController extends StateNotifier<GroupState> {
   GroupController(this.ref) : super(const GroupState());
 
   final Ref ref;
-  final Map<String, Future<List<GroupMemberSummary>>> _initialMemberLoads =
-      <String, Future<List<GroupMemberSummary>>>{};
+  final Map<String, _GroupMemberLoadOperation> _initialMemberLoads =
+      <String, _GroupMemberLoadOperation>{};
   int _memberLoadGeneration = 0;
+  _GroupRecoveryOperation? _recoveryOperation;
 
   Future<void> refresh() async {
+    final ownerOperation = _captureOwnerOperation();
     state = state.copyWith(isLoading: true);
     try {
       final groups = await ref
           .read(groupApplicationServiceProvider)
           .listGroups();
+      if (!_isGroupOwnerOperationCurrent(ownerOperation)) {
+        return;
+      }
       final merged = _mergeGroupList(
         local: state.groups,
         incoming: groups,
@@ -62,64 +101,93 @@ class GroupController extends StateNotifier<GroupState> {
       );
       state = state.copyWith(groups: merged, isLoading: false);
     } catch (_) {
-      state = state.copyWith(isLoading: false);
+      if (_isGroupOwnerOperationCurrent(ownerOperation)) {
+        state = state.copyWith(isLoading: false);
+      }
       rethrow;
     }
   }
 
   Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
+    final ownerOperation = _captureOwnerOperation();
     final normalizedGroupId = groupId.trim();
     final initialLoad = _initialMemberLoads[normalizedGroupId];
-    if (initialLoad != null) {
+    if (initialLoad != null && initialLoad.owner == ownerOperation) {
       try {
-        await initialLoad;
+        await initialLoad.operation;
       } catch (_) {
         // An explicit refresh must still retry after an initial preload fails.
       }
     }
-    return _loadGroupMembers(normalizedGroupId, hydrateProfiles: true);
+    _requireCurrentOwnerOperation(ownerOperation);
+    return _loadGroupMembers(
+      normalizedGroupId,
+      ownerOperation: ownerOperation,
+      hydrateProfiles: true,
+    );
   }
 
   Future<List<GroupMemberSummary>> ensureGroupMembersLoaded(String groupId) {
-    final normalizedGroupId = groupId.trim();
+    final ownerOperation = _captureOwnerOperation();
+    return _ensureGroupMembersLoaded(
+      groupId.trim(),
+      ownerOperation: ownerOperation,
+    );
+  }
+
+  Future<List<GroupMemberSummary>> _ensureGroupMembersLoaded(
+    String normalizedGroupId, {
+    required _GroupOwnerOperation ownerOperation,
+  }) {
+    _requireCurrentOwnerOperation(ownerOperation);
     final cached = state.membersByGroup[normalizedGroupId];
     if (cached != null) {
       return Future<List<GroupMemberSummary>>.value(cached);
     }
     final active = _initialMemberLoads[normalizedGroupId];
-    if (active != null) {
-      return active;
+    if (active != null && active.owner == ownerOperation) {
+      return active.operation;
     }
     late final Future<List<GroupMemberSummary>> load;
-    load = _loadGroupMembers(normalizedGroupId, hydrateProfiles: false)
-        .whenComplete(() {
-          if (identical(_initialMemberLoads[normalizedGroupId], load)) {
+    load =
+        _loadGroupMembers(
+          normalizedGroupId,
+          ownerOperation: ownerOperation,
+          hydrateProfiles: false,
+        ).whenComplete(() {
+          if (identical(
+            _initialMemberLoads[normalizedGroupId]?.operation,
+            load,
+          )) {
             _initialMemberLoads.remove(normalizedGroupId);
           }
         });
-    _initialMemberLoads[normalizedGroupId] = load;
+    _initialMemberLoads[normalizedGroupId] = _GroupMemberLoadOperation(
+      owner: ownerOperation,
+      operation: load,
+    );
     return load;
   }
 
   Future<List<GroupMemberSummary>> _loadGroupMembers(
     String groupId, {
+    required _GroupOwnerOperation ownerOperation,
     required bool hydrateProfiles,
   }) async {
-    final generation = _memberLoadGeneration;
+    _requireCurrentOwnerOperation(ownerOperation);
     final members = await ref
         .read(groupApplicationServiceProvider)
         .listMembers(groupId);
-    if (generation != _memberLoadGeneration) {
-      return members;
-    }
+    _requireCurrentOwnerOperation(ownerOperation);
     _publishGroupMembers(groupId, members);
     if (!hydrateProfiles) {
       return members;
     }
-    final hydratedMembers = await _hydrateMemberProfiles(members);
-    if (generation != _memberLoadGeneration) {
-      return hydratedMembers;
-    }
+    final hydratedMembers = await _hydrateMemberProfiles(
+      members,
+      ownerOperation: ownerOperation,
+    );
+    _requireCurrentOwnerOperation(ownerOperation);
     _publishGroupMembers(groupId, hydratedMembers);
     return hydratedMembers;
   }
@@ -134,8 +202,9 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   Future<List<GroupMemberSummary>> _hydrateMemberProfiles(
-    List<GroupMemberSummary> members,
-  ) async {
+    List<GroupMemberSummary> members, {
+    required _GroupOwnerOperation ownerOperation,
+  }) async {
     if (members.isEmpty) {
       return members;
     }
@@ -148,11 +217,13 @@ class GroupController extends StateNotifier<GroupState> {
         }
         try {
           final profile = await profiles.loadPublicProfile(subject);
-          final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+          if (!_isGroupOwnerOperationCurrent(ownerOperation)) {
+            return member;
+          }
           ref
               .read(peerDisplayProfileProvider.notifier)
               .updateFromRemote(
-                ownerDid: ownerDid,
+                ownerDid: ownerOperation.epoch.ownerDid,
                 profile: profile,
                 peerPersonaId: member.peerPersonaId,
               );
@@ -167,10 +238,17 @@ class GroupController extends StateNotifier<GroupState> {
     );
   }
 
+  bool _isOwnerOperationCurrent(int generation, SessionEpoch epoch) {
+    return mounted &&
+        generation == _memberLoadGeneration &&
+        ref.read(sessionProvider).activeEpoch == epoch;
+  }
+
   Future<GroupSummary> refreshGroup(
     String groupId, {
     bool refreshMembers = true,
   }) async {
+    final ownerOperation = _captureOwnerOperation();
     late GroupSummary group;
     Object? groupError;
     StackTrace? groupStackTrace;
@@ -180,14 +258,23 @@ class GroupController extends StateNotifier<GroupState> {
       groupError = error;
       groupStackTrace = stackTrace;
     }
+    _requireCurrentOwnerOperation(ownerOperation);
     if (refreshMembers) {
-      await loadGroupMembers(groupId);
+      await _loadGroupMembers(
+        groupId.trim(),
+        ownerOperation: ownerOperation,
+        hydrateProfiles: true,
+      );
     } else {
-      await ensureGroupMembersLoaded(groupId);
+      await _ensureGroupMembersLoaded(
+        groupId.trim(),
+        ownerOperation: ownerOperation,
+      );
     }
     if (groupError != null) {
       Error.throwWithStackTrace(groupError, groupStackTrace!);
     }
+    _requireCurrentOwnerOperation(ownerOperation);
     upsertGroup(group);
     return group;
   }
@@ -201,6 +288,8 @@ class GroupController extends StateNotifier<GroupState> {
     String? messagePrompt,
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async {
+    final ownerOperation = _captureOwnerOperation();
+    _requireCurrentOwnerOperation(ownerOperation);
     final created = await ref
         .read(groupApplicationServiceProvider)
         .createGroup(
@@ -212,6 +301,7 @@ class GroupController extends StateNotifier<GroupState> {
           messagePrompt: messagePrompt,
           identity: identity,
         );
+    _requireCurrentOwnerOperation(ownerOperation);
     upsertGroup(created);
     return created;
   }
@@ -220,31 +310,56 @@ class GroupController extends StateNotifier<GroupState> {
     String groupDid, {
     GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
   }) async {
+    final ownerOperation = _captureOwnerOperation();
+    _requireCurrentOwnerOperation(ownerOperation);
     final joined = await ref
         .read(groupApplicationServiceProvider)
         .joinGroup(groupDid, identity: identity);
+    _requireCurrentOwnerOperation(ownerOperation);
     upsertGroup(joined);
     return joined;
   }
 
-  Future<GroupRebindRecoverySummary> resumeRebindRecovery({
-    int limit = 100,
-  }) async {
-    if (state.isResumingRecovery) {
-      return state.recoverySummary ?? GroupRebindRecoverySummary.empty;
+  Future<GroupRebindRecoverySummary> resumeRebindRecovery({int limit = 100}) {
+    final ownerOperation = _captureOwnerOperation();
+    final active = _recoveryOperation;
+    if (active != null && active.owner == ownerOperation) {
+      return active.operation;
     }
+    late final Future<GroupRebindRecoverySummary> operation;
+    operation = _runRebindRecovery(ownerOperation: ownerOperation, limit: limit)
+        .whenComplete(() {
+          if (identical(_recoveryOperation?.operation, operation)) {
+            _recoveryOperation = null;
+          }
+        });
+    _recoveryOperation = _GroupRecoveryOperation(
+      owner: ownerOperation,
+      operation: operation,
+    );
+    return operation;
+  }
+
+  Future<GroupRebindRecoverySummary> _runRebindRecovery({
+    required _GroupOwnerOperation ownerOperation,
+    required int limit,
+  }) async {
+    _requireCurrentOwnerOperation(ownerOperation);
     state = state.copyWith(isResumingRecovery: true);
     try {
       final summary = await ref
           .read(groupApplicationServiceProvider)
           .resumeRebindRecovery(limit: limit);
+      _requireCurrentOwnerOperation(ownerOperation);
       state = state.copyWith(
         isResumingRecovery: false,
         recoverySummary: summary,
       );
       return summary;
     } catch (_) {
-      state = state.copyWith(isResumingRecovery: false);
+      if (_isGroupOwnerOperationCurrent(ownerOperation)) {
+        state = state.copyWith(isResumingRecovery: false);
+      }
       rethrow;
     }
   }
@@ -254,11 +369,18 @@ class GroupController extends StateNotifier<GroupState> {
     required String memberRef,
     String role = 'member',
   }) async {
+    final ownerOperation = _captureOwnerOperation();
+    _requireCurrentOwnerOperation(ownerOperation);
     final updated = await ref
         .read(groupApplicationServiceProvider)
         .addMember(groupDid: groupId, memberRef: memberRef, role: role);
+    _requireCurrentOwnerOperation(ownerOperation);
     upsertGroup(updated);
-    await loadGroupMembers(groupId);
+    await _loadGroupMembers(
+      groupId.trim(),
+      ownerOperation: ownerOperation,
+      hydrateProfiles: true,
+    );
     return updated;
   }
 
@@ -266,11 +388,18 @@ class GroupController extends StateNotifier<GroupState> {
     required String groupId,
     required String memberRef,
   }) async {
+    final ownerOperation = _captureOwnerOperation();
+    _requireCurrentOwnerOperation(ownerOperation);
     final updated = await ref
         .read(groupApplicationServiceProvider)
         .removeMember(groupDid: groupId, memberRef: memberRef);
+    _requireCurrentOwnerOperation(ownerOperation);
     upsertGroup(updated);
-    await loadGroupMembers(groupId);
+    await _loadGroupMembers(
+      groupId.trim(),
+      ownerOperation: ownerOperation,
+      hydrateProfiles: true,
+    );
     return updated;
   }
 
@@ -286,7 +415,29 @@ class GroupController extends StateNotifier<GroupState> {
   void clear() {
     _memberLoadGeneration += 1;
     _initialMemberLoads.clear();
+    _recoveryOperation = null;
     state = const GroupState();
+  }
+
+  _GroupOwnerOperation _captureOwnerOperation() {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null) {
+      throw StateError('No active awiki session. Please sign in first.');
+    }
+    return _GroupOwnerOperation(
+      generation: _memberLoadGeneration,
+      epoch: epoch,
+    );
+  }
+
+  bool _isGroupOwnerOperationCurrent(_GroupOwnerOperation operation) {
+    return _isOwnerOperationCurrent(operation.generation, operation.epoch);
+  }
+
+  void _requireCurrentOwnerOperation(_GroupOwnerOperation operation) {
+    if (!_isGroupOwnerOperationCurrent(operation)) {
+      throw sessionEpochChangedError();
+    }
   }
 }
 

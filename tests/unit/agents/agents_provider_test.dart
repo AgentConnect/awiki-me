@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
+import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -94,6 +95,60 @@ void main() {
       expect(control.listAgentsCalls, 1);
       await controller.load();
       expect(control.listAgentsCalls, 2);
+    },
+  );
+
+  test(
+    'next identity does not reuse or accept a stale inventory load',
+    () async {
+      final control = _BlockingFirstListAgentControlService();
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final staleLoad = controller.load();
+      await control.firstListStarted.future;
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:human:b',
+              credentialName: 'identity-b',
+              displayName: 'B',
+              handle: 'b.anpclaw.com',
+            ),
+          );
+      controller.clear();
+      control.nextAgents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon-b',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon B',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      await controller.load();
+
+      control.firstListResult.complete(const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon-a',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon A',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'offline'),
+        ),
+      ]);
+      await staleLoad;
+
+      final state = container.read(agentsProvider);
+      expect(control.listAgentsCalls, 2);
+      expect(state.agents.map((agent) => agent.agentDid), [
+        'did:agent:daemon-b',
+      ]);
+      expect(state.isLoading, isFalse);
+      expect(state.error, isNull);
     },
   );
 
@@ -342,6 +397,53 @@ void main() {
     },
   );
 
+  test(
+    'stale agent action cannot restore state after identity switch',
+    () async {
+      final control = _BlockingInstallCommandAgentControlService();
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final staleAction = controller.createDaemonInstallCommand();
+      await control.installCommandStarted.future;
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:human:b',
+              credentialName: 'identity-b',
+              displayName: 'B',
+              handle: 'b.anpclaw.com',
+            ),
+          );
+      controller.clear();
+      control.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon-b',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon B',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      await controller.load();
+
+      control.installCommandResult.complete(control.nextInstallCommand);
+      await staleAction;
+
+      final state = container.read(agentsProvider);
+      expect(state.agents.map((agent) => agent.agentDid), [
+        'did:agent:daemon-b',
+      ]);
+      expect(state.installCommand, isNull);
+      expect(state.pendingActionKeys, isEmpty);
+      expect(state.isAutoSyncingInventory, isFalse);
+      expect(state.error, isNull);
+    },
+  );
+
   test('load ignores local cache read and write failures', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
@@ -366,6 +468,170 @@ void main() {
     expect(state.isLoading, isFalse);
     expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
   });
+
+  test(
+    'same-DID new epoch cache write waits for the raw old write and wins',
+    () async {
+      const session = SessionIdentity(
+        did: 'did:human:me',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'me.anpclaw.com',
+      );
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:epoch-1',
+            kind: AgentKind.daemon,
+            displayName: 'Epoch 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final localStore = _BlockingFirstAgentCacheWriteStore();
+      final container = _container(
+        control,
+        localStore: localStore,
+        statusStore: const _StaticAgentControlStatusStore(),
+        session: session,
+      );
+      addTearDown(() {
+        localStore.releaseFirstWrite();
+        container.dispose();
+      });
+      final controller = container.read(agentsProvider.notifier);
+
+      final epoch1Load = controller.load();
+      await localStore.firstWriteStarted.future;
+
+      container.read(sessionProvider.notifier).activateSession(session);
+      controller.clear();
+      control.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:epoch-2',
+          kind: AgentKind.daemon,
+          displayName: 'Epoch 2',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      final epoch2Load = controller.load();
+
+      await Future.wait(<Future<void>>[
+        epoch1Load,
+        epoch2Load,
+      ]).timeout(const Duration(seconds: 4));
+      expect(localStore.saveCalls, 1);
+      expect(localStore.savedAgentDids, isEmpty);
+
+      localStore.releaseFirstWrite();
+      await localStore.secondWriteCompleted.future.timeout(
+        const Duration(seconds: 1),
+      );
+
+      expect(localStore.savedAgentDids, <String>[
+        'did:agent:epoch-1',
+        'did:agent:epoch-2',
+      ]);
+      expect(
+        localStore.agentStates.values.map((item) => item.agentDid),
+        <String>['did:agent:epoch-2'],
+      );
+    },
+  );
+
+  test(
+    'stale queued control cache write is skipped before the next epoch write',
+    () async {
+      const session = SessionIdentity(
+        did: 'did:human:me',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'me.anpclaw.com',
+      );
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:epoch-1',
+            kind: AgentKind.daemon,
+            displayName: 'Epoch 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final localStore = _BlockingFirstAgentCacheWriteStore();
+      final container = _container(
+        control,
+        localStore: localStore,
+        statusStore: const _StaticAgentControlStatusStore(),
+        session: session,
+      );
+      addTearDown(() {
+        localStore.releaseFirstWrite();
+        container.dispose();
+      });
+      final controller = container.read(agentsProvider.notifier);
+
+      final epoch1Load = controller.load();
+      await localStore.firstWriteStarted.future;
+      controller.applyControlPayload(<String, Object?>{
+        'schema': AgentControlPayloads.statusSchema,
+        'event_id': 'evt_epoch_1_queued',
+        'sent_at': '2026-07-24T08:00:00Z',
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:epoch-1',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:epoch-1',
+          'status': 'ready',
+        },
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': 'did:agent:stale-runtime',
+            'daemon_agent_did': 'did:agent:epoch-1',
+            'runtime': 'hermes',
+            'display_name': 'Stale Runtime',
+            'status': 'ready',
+          },
+        ],
+      });
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains('did:agent:stale-runtime'),
+      );
+
+      container.read(sessionProvider.notifier).activateSession(session);
+      controller.clear();
+      control.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:epoch-2',
+          kind: AgentKind.daemon,
+          displayName: 'Epoch 2',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      final epoch2Load = controller.load();
+      localStore.releaseFirstWrite();
+
+      await Future.wait(<Future<void>>[
+        epoch1Load,
+        epoch2Load,
+      ]).timeout(const Duration(seconds: 2));
+
+      expect(localStore.savedAgentDids, <String>[
+        'did:agent:epoch-1',
+        'did:agent:epoch-2',
+      ]);
+      expect(
+        localStore.savedAgentDids,
+        isNot(contains('did:agent:stale-runtime')),
+      );
+      expect(
+        localStore.agentStates.values.map((item) => item.agentDid),
+        <String>['did:agent:epoch-2'],
+      );
+    },
+  );
 
   test(
     'load keeps inventory visible when automatic daemon refresh fails',
@@ -717,6 +983,128 @@ void main() {
       expect(container.read(agentsProvider).invocationPolicyErrors, isEmpty);
     },
   );
+
+  test(
+    'stale invocation policy result cannot overwrite the next identity',
+    () async {
+      final control = _BlockingInvocationPolicyAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:runtime-a',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon-a',
+            runtime: 'hermes',
+            displayName: 'Runtime A',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      await controller.load();
+      final staleLoad = controller.loadInvocationPolicy('did:agent:runtime-a');
+      await control.policyRequestStarted.future;
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:human:b',
+              credentialName: 'identity-b',
+              displayName: 'B',
+              handle: 'b.anpclaw.com',
+            ),
+          );
+      controller.clear();
+      control.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon-b',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon B',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+      await controller.load();
+
+      control.policyResult.complete(
+        const AgentInvocationPolicy(
+          whitelistHandles: <String>['identity-a@awiki.info'],
+        ),
+      );
+      await staleLoad;
+
+      final state = container.read(agentsProvider);
+      expect(state.agents.map((agent) => agent.agentDid), [
+        'did:agent:daemon-b',
+      ]);
+      expect(state.invocationPolicies, isEmpty);
+      expect(state.loadingInvocationPolicies, isEmpty);
+      expect(state.invocationPolicyErrors, isEmpty);
+    },
+  );
+
+  test('stale status poll payload cannot mutate the next identity', () async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon-a',
+          kind: AgentKind.daemon,
+          displayName: 'Daemon A',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final statusStore = _BlockingDaemonStatusLookupStore();
+    final container = _container(control, statusStore: statusStore);
+    addTearDown(container.dispose);
+    final controller = container.read(agentsProvider.notifier);
+
+    await controller.load();
+    await controller.refreshDaemonStatus('did:agent:daemon-a');
+    await statusStore.lookupStarted.future.timeout(const Duration(seconds: 2));
+
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:human:b',
+            credentialName: 'identity-b',
+            displayName: 'B',
+            handle: 'b.anpclaw.com',
+          ),
+        );
+    controller.clear();
+    control.agents = const <AgentSummary>[
+      AgentSummary(
+        agentDid: 'did:agent:daemon-b',
+        kind: AgentKind.daemon,
+        displayName: 'Daemon B',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      ),
+    ];
+    await controller.load();
+
+    statusStore.payloadResult.complete(<String, Object?>{
+      'schema': AgentControlPayloads.statusSchema,
+      'status_scope': 'daemon',
+      'daemon_agent_did': 'did:agent:daemon-a',
+      'daemon': <String, Object?>{
+        'agent_did': 'did:agent:daemon-a',
+        'status': 'offline',
+      },
+    });
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(agentsProvider);
+    expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon-b']);
+    expect(state.statusQueryErrors, isEmpty);
+    expect(state.pendingStatusQueryAtByDaemon, isEmpty);
+  });
 
   test('does not load or save invocation policy for daemon agents', () async {
     final control = FakeAgentControlService()
@@ -3340,6 +3728,40 @@ class _StaticAgentControlStatusStore implements AgentControlStatusStore {
   }
 }
 
+class _BlockingDaemonStatusLookupStore implements AgentControlStatusStore {
+  final Completer<void> lookupStarted = Completer<void>();
+  final Completer<Map<String, Object?>?> payloadResult =
+      Completer<Map<String, Object?>?>();
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) {
+    if (!lookupStarted.isCompleted) {
+      lookupStarted.complete();
+    }
+    return payloadResult.future;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
+  }
+}
+
 class _HangingAgentControlStatusStore implements AgentControlStatusStore {
   const _HangingAgentControlStatusStore();
 
@@ -3465,6 +3887,58 @@ class _CountingAgentControlService extends FakeAgentControlService {
   }
 }
 
+class _BlockingFirstListAgentControlService extends FakeAgentControlService {
+  final Completer<void> firstListStarted = Completer<void>();
+  final Completer<List<AgentSummary>> firstListResult =
+      Completer<List<AgentSummary>>();
+  List<AgentSummary> nextAgents = const <AgentSummary>[];
+  int listAgentsCalls = 0;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    listAgentsCalls += 1;
+    if (listAgentsCalls == 1) {
+      firstListStarted.complete();
+      return firstListResult.future;
+    }
+    return Future<List<AgentSummary>>.value(nextAgents);
+  }
+}
+
+class _BlockingInstallCommandAgentControlService
+    extends FakeAgentControlService {
+  final Completer<void> installCommandStarted = Completer<void>();
+  final Completer<InstallCommand> installCommandResult =
+      Completer<InstallCommand>();
+
+  @override
+  Future<InstallCommand> createDaemonInstallCommand({
+    required String controllerDid,
+    required String controllerHandle,
+    required String clientPlatform,
+  }) {
+    if (!installCommandStarted.isCompleted) {
+      installCommandStarted.complete();
+    }
+    return installCommandResult.future;
+  }
+}
+
+class _BlockingInvocationPolicyAgentControlService
+    extends FakeAgentControlService {
+  final Completer<void> policyRequestStarted = Completer<void>();
+  final Completer<AgentInvocationPolicy> policyResult =
+      Completer<AgentInvocationPolicy>();
+
+  @override
+  Future<AgentInvocationPolicy> getInvocationPolicy(String agentDid) {
+    if (!policyRequestStarted.isCompleted) {
+      policyRequestStarted.complete();
+    }
+    return policyResult.future;
+  }
+}
+
 class _SequencedAgentControlService extends FakeAgentControlService {
   _SequencedAgentControlService(this.responses);
 
@@ -3518,5 +3992,33 @@ class _FailingAgentStateStore extends FakeProductLocalStore {
   @override
   Future<void> saveAgentState(LocalAgentState state) async {
     throw StateError('local cache unavailable');
+  }
+}
+
+class _BlockingFirstAgentCacheWriteStore extends FakeProductLocalStore {
+  final Completer<void> firstWriteStarted = Completer<void>();
+  final Completer<void> _releaseFirstWrite = Completer<void>();
+  final Completer<void> secondWriteCompleted = Completer<void>();
+  final List<String> savedAgentDids = <String>[];
+  int saveCalls = 0;
+
+  void releaseFirstWrite() {
+    if (!_releaseFirstWrite.isCompleted) {
+      _releaseFirstWrite.complete();
+    }
+  }
+
+  @override
+  Future<void> saveAgentState(LocalAgentState state) async {
+    saveCalls += 1;
+    if (saveCalls == 1) {
+      firstWriteStarted.complete();
+      await _releaseFirstWrite.future;
+    }
+    savedAgentDids.add(state.agentDid);
+    await super.saveAgentState(state);
+    if (saveCalls == 2 && !secondWriteCompleted.isCompleted) {
+      secondWriteCompleted.complete();
+    }
   }
 }

@@ -6,11 +6,23 @@ import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/peer_display_name_resolver.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const _ownerDid = 'did:test:owner';
+
+SessionIdentity _ownerSession() {
+  return const SessionIdentity(
+    did: _ownerDid,
+    credentialName: 'owner-identity',
+    displayName: 'Owner',
+  );
+}
 
 void main() {
   test('本地 profile 投影按 owner 隔离且同一 DID 不重复读取', () async {
@@ -51,6 +63,117 @@ void main() {
     expect(switched.ownerDid, 'did:test:owner-b');
     expect(switched.forDid('did:test:alice'), isNull);
     expect(switched.forDid('did:test:bob')?.displayName, 'Bob');
+  });
+
+  test('同一 DID 重登后旧 cached Future 不能覆盖新 epoch', () async {
+    final directory = _DelayedCachedDirectoryService();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(directory),
+        sessionProvider.overrideWith((ref) {
+          return SessionController()..setSession(_ownerSession());
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    final session = container.read(sessionProvider.notifier);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    final staleLoad = controller.loadCached(
+      ownerDid: _ownerDid,
+      dids: const <String>['did:test:alice'],
+    );
+
+    session.clear();
+    controller.clear();
+    session.setSession(_ownerSession());
+    final currentEpoch = container.read(sessionProvider).activeEpoch;
+    controller.updateFromRemote(
+      ownerDid: _ownerDid,
+      expectedEpoch: currentEpoch,
+      profile: const UserProfile(
+        did: 'did:test:alice',
+        displayName: 'Alice current',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        fullHandle: 'alice.current.test',
+      ),
+    );
+
+    directory.completeWithFallback();
+    await staleLoad;
+
+    final projected = container
+        .read(peerDisplayProfileProvider)
+        .forDid('did:test:alice');
+    expect(projected?.displayName, 'Alice current');
+    expect(projected?.handle, 'alice.current.test');
+  });
+
+  test('同一 DID 重登不复用旧 remote Future 且旧完成不移除新 holder', () async {
+    final profiles = _BlockingRemoteProfileService();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        directoryApplicationServiceProvider.overrideWithValue(
+          _EmptyCachedDirectoryService(),
+        ),
+        profileApplicationServiceProvider.overrideWithValue(profiles),
+        sessionProvider.overrideWith((ref) {
+          return SessionController()..setSession(_ownerSession());
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    final session = container.read(sessionProvider.notifier);
+    final controller = container.read(peerDisplayProfileProvider.notifier);
+
+    final staleRefresh = controller.refreshRemoteMissing(
+      ownerDid: _ownerDid,
+      dids: const <String>['did:test:alice'],
+    );
+    await profiles.firstStarted.future;
+
+    session.clear();
+    controller.clear();
+    session.setSession(_ownerSession());
+    final currentRefresh = controller.refreshRemoteMissing(
+      ownerDid: _ownerDid,
+      dids: const <String>['did:test:alice'],
+    );
+    await profiles.secondStarted.future;
+    expect(profiles.requests, hasLength(2));
+
+    profiles.complete(
+      0,
+      displayName: 'Alice stale',
+      handle: 'alice.stale.test',
+    );
+    await staleRefresh;
+
+    final joinedCurrentRefresh = controller.refreshRemoteMissing(
+      ownerDid: _ownerDid,
+      dids: const <String>['did:test:alice'],
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(profiles.requests, hasLength(2));
+
+    profiles.complete(
+      1,
+      displayName: 'Alice current',
+      handle: 'alice.current.test',
+    );
+    await Future.wait<void>(<Future<void>>[
+      currentRefresh,
+      joinedCurrentRefresh,
+    ]);
+
+    final projected = container
+        .read(peerDisplayProfileProvider)
+        .forDid('did:test:alice');
+    expect(projected?.displayName, 'Alice current');
+    expect(projected?.handle, 'alice.current.test');
+    expect(profiles.requests, hasLength(2));
   });
 
   test('远端 profile 不会按未经验证的旧 DID 复制展示别名', () {
@@ -479,6 +602,53 @@ class _RemoteProfileService implements ProfileApplicationService {
       tags: const <String>[],
       profileMarkdown: '',
       fullHandle: '$name.awiki.ai',
+    );
+  }
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
+}
+
+class _BlockingRemoteProfileService implements ProfileApplicationService {
+  final List<String> requests = <String>[];
+  final List<Completer<UserProfile>> _results = <Completer<UserProfile>>[];
+  final Completer<void> firstStarted = Completer<void>();
+  final Completer<void> secondStarted = Completer<void>();
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    requests.add(didOrHandle);
+    final result = Completer<UserProfile>();
+    _results.add(result);
+    if (_results.length == 1) {
+      firstStarted.complete();
+    } else if (_results.length == 2) {
+      secondStarted.complete();
+    }
+    return result.future;
+  }
+
+  void complete(
+    int index, {
+    required String displayName,
+    required String handle,
+  }) {
+    _results[index].complete(
+      UserProfile(
+        did: requests[index],
+        displayName: displayName,
+        bio: '',
+        tags: const <String>[],
+        profileMarkdown: '',
+        fullHandle: handle,
+      ),
     );
   }
 

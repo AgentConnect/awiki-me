@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-17.conversation-correctness-v8",
+  "sourceRevision": "2026-07-24.identity-switch-hydration-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -228,6 +228,31 @@
       "caseIds": [
         "AUTH-E2E-001",
         "INBOUND-FIRST-CONV-E2E-001"
+      ]
+    },
+    "identity-switch": {
+      "tier": "product_application",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "estimatedMinutes": 8,
+      "timeoutMinutes": 12,
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "local_identities",
+        "direct_messages",
+        "read_state"
+      ],
+      "caseIds": [
+        "IDENTITY-SWITCH-E2E-001"
       ]
     },
     "restart": {

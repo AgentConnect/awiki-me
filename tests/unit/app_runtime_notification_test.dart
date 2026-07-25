@@ -3,14 +3,18 @@ import 'dart:async';
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/desktop_shell_service.dart';
+import 'package:awiki_me/src/application/app_session_service.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -33,6 +37,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -127,21 +132,21 @@ void main() {
     });
 
     Future<void> activate() async {
-      await container
-          .read(appRuntimeProvider.notifier)
-          .activateSession(
-            const SessionIdentity(
-              did: 'did:test:me',
-              credentialName: 'default',
-              displayName: 'Me',
-              handle: 'me',
-              jwtToken: 'token',
-            ),
-          );
+      await _activateRuntimeSession(
+        container,
+        const SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+          jwtToken: 'token',
+        ),
+      );
     }
 
     RealtimeUpdate buildUpdate() {
       return RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'remote-1',
           remoteId: 'remote-1',
@@ -190,6 +195,316 @@ void main() {
       expect(container.read(selectedConversationProvider), isNull);
     });
 
+    test(
+      'committed activation replaces the old identity state after E2EE',
+      () async {
+        await _activateRuntimeSession(container, _epochSession('first'));
+        container
+            .read(groupProvider.notifier)
+            .upsertGroup(
+              const GroupSummary(
+                conversationId: 'group:first',
+                groupId: 'group-first',
+                displayName: 'First owner group',
+                description: '',
+                memberCount: 1,
+                lastMessageAt: null,
+              ),
+            );
+
+        final activation = _activateRuntimeSession(
+          container,
+          _epochSession('second'),
+        );
+        await activation;
+
+        expect(container.read(sessionProvider).session?.did, 'did:test:second');
+        expect(container.read(groupProvider).groups, isEmpty);
+      },
+    );
+
+    test(
+      'committed activation uses the latest session snapshot for its lease',
+      () async {
+        final committed = await _commitRuntimeSession(
+          container,
+          _epochSession('first'),
+        );
+
+        await container
+            .read(appRuntimeProvider.notifier)
+            .activateCommittedSession(
+              committed.copyWith(jwtToken: 'stale-token'),
+            );
+
+        expect(
+          container.read(sessionProvider).session?.jwtToken,
+          'token-first',
+        );
+      },
+    );
+
+    test(
+      'aborting a committed session during E2EE clears Core lease and UI',
+      () async {
+        final sessions = FakeAppSessionService(gateway);
+        final e2ee = _FirstBlockingE2eeFacade();
+        addTearDown(e2ee.completeFirstIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            desktopShellServiceProvider.overrideWithValue(desktopShell),
+            e2eeFacadeProvider.overrideWithValue(e2ee),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        final committed = await _commitRuntimeSession(
+          container,
+          _epochSession('first'),
+        );
+        final lease = (await sessions.currentSessionLease())!;
+
+        final activation = runtime.activateCommittedSession(committed);
+        await e2ee.firstStarted;
+        expect(container.read(sessionProvider).session, isNull);
+
+        expect(await sessions.abortSessionIfCurrent(lease), isTrue);
+        e2ee.completeFirst();
+        await activation;
+
+        expect(await sessions.currentSession(), isNull);
+        expect(await sessions.currentSessionLease(), isNull);
+        expect(container.read(sessionProvider).session, isNull);
+        expect(container.read(sessionProvider).activeEpoch, isNull);
+      },
+    );
+
+    test('E2EE failure aborts the matching committed session', () async {
+      final sessions = FakeAppSessionService(gateway);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          appSessionServiceProvider.overrideWithValue(sessions),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          desktopShellServiceProvider.overrideWithValue(desktopShell),
+          e2eeFacadeProvider.overrideWithValue(_FailingE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      final committed = await _commitRuntimeSession(
+        container,
+        _epochSession('first'),
+      );
+
+      await expectLater(
+        container
+            .read(appRuntimeProvider.notifier)
+            .activateCommittedSession(committed),
+        throwsStateError,
+      );
+
+      expect(await sessions.currentSession(), isNull);
+      expect(await sessions.currentSessionLease(), isNull);
+      expect(container.read(sessionProvider).session, isNull);
+      expect(
+        container.read(realtimeApplicationServiceProvider).isRunning,
+        isFalse,
+      );
+    });
+
+    test(
+      'timed out E2EE cannot publish late and a replacement still activates',
+      () async {
+        final sessions = FakeAppSessionService(gateway);
+        final e2ee = _FirstBlockingE2eeFacade();
+        addTearDown(e2ee.completeFirstIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            desktopShellServiceProvider.overrideWithValue(desktopShell),
+            e2eeFacadeProvider.overrideWithValue(e2ee),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+            appRuntimeProvider.overrideWith(
+              (ref) => AppRuntimeController(
+                ref,
+                requestTimeout: const Duration(milliseconds: 20),
+              ),
+            ),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        final first = await _commitRuntimeSession(
+          container,
+          _epochSession('first'),
+        );
+
+        await expectLater(
+          runtime.activateCommittedSession(first),
+          throwsA(isA<TimeoutException>()),
+        );
+        expect(await sessions.currentSessionLease(), isNull);
+        expect(container.read(sessionProvider).session, isNull);
+
+        final second = await _commitRuntimeSession(
+          container,
+          _epochSession('second'),
+        );
+        final secondActivation = runtime.activateCommittedSession(second);
+        e2ee.completeFirst();
+        await secondActivation;
+
+        expect(container.read(sessionProvider).session?.did, 'did:test:second');
+        expect(e2ee.initializedDids, <String>[
+          'did:test:first',
+          'did:test:second',
+        ]);
+      },
+    );
+
+    test(
+      'superseded E2EE completion cannot clear the replacement session',
+      () async {
+        final sessions = FakeAppSessionService(gateway);
+        final e2ee = _FirstBlockingE2eeFacade();
+        addTearDown(e2ee.completeFirstIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            desktopShellServiceProvider.overrideWithValue(desktopShell),
+            e2eeFacadeProvider.overrideWithValue(e2ee),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        final first = await _commitRuntimeSession(
+          container,
+          _epochSession('first'),
+        );
+
+        final firstActivation = runtime.activateCommittedSession(first);
+        await e2ee.firstStarted;
+        final second = await _commitRuntimeSession(
+          container,
+          _epochSession('second'),
+        );
+        final secondActivation = runtime.activateCommittedSession(second);
+
+        e2ee.completeFirst();
+        await Future.wait<void>(<Future<void>>[
+          firstActivation,
+          secondActivation,
+        ]);
+
+        expect(container.read(sessionProvider).session?.did, 'did:test:second');
+        expect(
+          container.read(sessionProvider).session?.credentialName,
+          'second',
+        );
+        expect(e2ee.initializedDids, <String>[
+          'did:test:first',
+          'did:test:second',
+        ]);
+      },
+    );
+
+    test(
+      'same-identity reactivation supersedes a blocked old E2EE epoch',
+      () async {
+        final sessions = FakeAppSessionService(gateway);
+        final e2ee = _FirstBlockingE2eeFacade();
+        addTearDown(e2ee.completeFirstIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            desktopShellServiceProvider.overrideWithValue(desktopShell),
+            e2eeFacadeProvider.overrideWithValue(e2ee),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        const session = SessionIdentity(
+          did: 'did:test:same',
+          credentialName: 'same',
+          displayName: 'Same identity',
+          jwtToken: 'first-token',
+        );
+        final first = await _commitRuntimeSession(container, session);
+
+        final firstActivation = runtime.activateCommittedSession(first);
+        await e2ee.firstStarted;
+        final second = await _commitRuntimeSession(
+          container,
+          const SessionIdentity(
+            did: 'did:test:same',
+            credentialName: 'same',
+            displayName: 'Same identity',
+            jwtToken: 'replacement-token',
+          ),
+        );
+        final secondActivation = runtime.activateCommittedSession(second);
+
+        e2ee.completeFirst();
+        await Future.wait<void>(<Future<void>>[
+          firstActivation,
+          secondActivation,
+        ]);
+
+        expect(container.read(sessionProvider).activeEpoch, isNotNull);
+        expect(
+          container.read(sessionProvider).session?.jwtToken,
+          'replacement-token',
+        );
+        expect(e2ee.initializedDids, <String>[
+          'did:test:same',
+          'did:test:same',
+        ]);
+      },
+    );
+
     test('退出登录时清理当前选中会话', () async {
       container
           .read(sessionProvider.notifier)
@@ -236,6 +551,7 @@ void main() {
         NotificationActivation.valid(
           NotificationTarget(
             storageScopeId: StorageScopeId.generate(),
+            ownerDid: 'did:test:me',
             conversationId: 'dm:foreign',
           ),
         ),
@@ -245,6 +561,32 @@ void main() {
       expect(container.read(shellTabProvider), 0);
       expect(container.read(selectedConversationProvider), isNull);
       expect(desktopShell.showWindowCalls, 1);
+    });
+
+    test('同 scope 但 owner 不匹配的通知只打开消息列表', () async {
+      await activate();
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(staleSelectedConversation());
+      container.read(shellTabProvider.notifier).setTab(3);
+
+      notificationFacade.emitActivation(
+        NotificationActivation.valid(
+          NotificationTarget(
+            storageScopeId: container
+                .read(activeAppTenantProvider)
+                .storageScopeId,
+            ownerDid: 'did:test:other-local-identity',
+            conversationId: 'dm:foreign-owner',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(container.read(shellTabProvider), 0);
+      expect(container.read(selectedConversationProvider), isNull);
+      expect(desktopShell.showWindowCalls, 1);
+      expect(gateway.fetchLocalDmHistoryCalls, 0);
     });
 
     test('同 scope 通知打开 canonical conversation', () async {
@@ -267,6 +609,7 @@ void main() {
             storageScopeId: container
                 .read(activeAppTenantProvider)
                 .storageScopeId,
+            ownerDid: 'did:test:me',
             conversationId: conversation.conversationId,
           ),
         ),
@@ -281,6 +624,57 @@ void main() {
       expect(desktopShell.showWindowCalls, 1);
       expect(gateway.fetchLocalDmHistoryCalls, greaterThan(0));
       expect(gateway.lastFetchedLocalDmPeerDid, conversation.targetDid);
+    });
+
+    test('旧 epoch 的通知路由完成后不会覆盖新身份选择', () async {
+      final oldConversation = ConversationSummary(
+        threadId: 'dm:old-notification',
+        conversationId: 'dm:old-notification',
+        displayName: 'Old notification',
+        lastMessagePreview: 'old',
+        lastMessageAt: DateTime(2026, 7, 21),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: 'did:test:old-peer',
+      );
+      final newConversation = ConversationSummary(
+        threadId: 'dm:new-selection',
+        conversationId: 'dm:new-selection',
+        displayName: 'New selection',
+        lastMessagePreview: 'new',
+        lastMessageAt: DateTime(2026, 7, 22),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:new-peer',
+      );
+      gateway.conversations = <ConversationSummary>[oldConversation];
+      await _activateRuntimeSession(container, _epochSession('first'));
+      desktopShell.showWindowCompleter = Completer<void>();
+
+      notificationFacade.emitActivation(
+        NotificationActivation.valid(
+          NotificationTarget(
+            storageScopeId: container
+                .read(activeAppTenantProvider)
+                .storageScopeId,
+            ownerDid: 'did:test:first',
+            conversationId: oldConversation.conversationId,
+          ),
+        ),
+      );
+      await _pumpUntil(() => desktopShell.showWindowCalls == 1);
+
+      await _activateRuntimeSession(container, _epochSession('second'));
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(newConversation);
+      desktopShell.showWindowCompleter!.complete();
+      await pumpEventQueue();
+
+      expect(
+        container.read(selectedConversationProvider),
+        newConversation.conversationId,
+      );
     });
 
     test('冷启动 initial activation 聚焦并恢复 canonical conversation', () async {
@@ -312,6 +706,7 @@ void main() {
               storageScopeId: container
                   .read(activeAppTenantProvider)
                   .storageScopeId,
+              ownerDid: 'did:test:me',
               conversationId: conversation.conversationId,
             ),
           );
@@ -386,17 +781,16 @@ void main() {
       );
       addTearDown(lifecycleContainer.dispose);
 
-      await lifecycleContainer
-          .read(appRuntimeProvider.notifier)
-          .activateSession(
-            const SessionIdentity(
-              did: 'did:test:me',
-              credentialName: 'default',
-              displayName: 'Me',
-              handle: 'me',
-              jwtToken: 'token',
-            ),
-          );
+      await _activateRuntimeSession(
+        lifecycleContainer,
+        const SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+          jwtToken: 'token',
+        ),
+      );
       await pumpEventQueue();
       await Future<void>.delayed(const Duration(milliseconds: 10));
       final callsAfterStartup = agentControl.listAgentsCalls;
@@ -574,6 +968,7 @@ void main() {
       await activate();
       messageSyncService.syncReasons.clear();
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: buildUpdate().message,
         conversationHint: buildUpdate().conversationHint,
         syncDirty: true,
@@ -605,6 +1000,7 @@ void main() {
 
     test('后台系统通知标题使用发信人短昵称', () async {
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'remote-2',
           remoteId: 'remote-2',
@@ -725,10 +1121,360 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     });
 
+    test('身份切换启动独立后台刷新且旧身份迟到结果不会覆盖新身份', () async {
+      final profiles = _EpochProfileService();
+      final groups = _EpochGroupService();
+      addTearDown(profiles.completeFirstIfPending);
+      addTearDown(groups.completeFirstIfPending);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+          groupApplicationServiceProvider.overrideWithValue(groups),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      final runtime = container.read(appRuntimeProvider.notifier);
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await _pumpUntil(() => profiles.loadCalls == 1 && groups.loadCalls == 1);
+
+      await runtime.logout();
+      await _activateRuntimeSession(container, _epochSession('second'));
+      await _pumpUntil(() => profiles.loadCalls == 2 && groups.loadCalls == 2);
+
+      expect(container.read(profileProvider).profile?.did, 'did:test:second');
+      expect(
+        container.read(groupProvider).groups.single.groupId,
+        'group-second',
+      );
+
+      profiles.completeFirst();
+      groups.completeFirst();
+      await pumpEventQueue();
+
+      expect(container.read(sessionProvider).session?.did, 'did:test:second');
+      expect(container.read(profileProvider).profile?.did, 'did:test:second');
+      expect(
+        container.read(groupProvider).groups.single.groupId,
+        'group-second',
+      );
+    });
+
+    test('realtime recovery is isolated by session epoch', () async {
+      final sessions = _EpochAppSessionService(gateway);
+      addTearDown(sessions.completeFirstRefreshIfPending);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          appSessionServiceProvider.overrideWithValue(sessions),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await _pumpUntil(
+        () => container.read(realtimeConnectionStatusProvider).hasValue,
+        reason: 'realtime status subscription did not start',
+      );
+      realtimeGateway.setStatus(RealtimeConnectionStatus.failed);
+      await _pumpUntil(
+        () => sessions.refreshCalls == 1,
+        reason: 'first recovery did not start',
+      );
+
+      await _activateRuntimeSession(container, _epochSession('second'));
+      await pumpEventQueue();
+      realtimeGateway.setStatus(RealtimeConnectionStatus.failed);
+      await _pumpUntil(
+        () => sessions.refreshCalls == 2,
+        reason: 'second recovery did not start',
+      );
+
+      sessions.completeFirstRefresh();
+      await pumpEventQueue();
+
+      expect(sessions.refreshCalls, 2);
+      expect(container.read(sessionProvider).session?.did, 'did:test:second');
+      expect(container.read(sessionProvider).session?.credentialName, 'second');
+    });
+
+    test(
+      'direct identity login invalidates the old epoch before Core switch',
+      () async {
+        final sessions = _EpochAppSessionService(gateway)..blockNextLogin();
+        addTearDown(sessions.completeLoginIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        await _activateRuntimeSession(container, _epochSession('first'));
+
+        final login = runtime.loginWithLocalCredential('second');
+        await _pumpUntil(() => sessions.loginCalls == 1);
+
+        expect(container.read(sessionProvider).session, isNull);
+        expect(container.read(sessionProvider).activeEpoch, isNull);
+
+        gateway.nextRealtimeUpdate = const RealtimeUpdate(
+          ownerDid: 'did:test:first',
+          group: GroupSummary(
+            conversationId: 'group:stale',
+            groupId: 'group-stale',
+            displayName: 'stale',
+            description: '',
+            memberCount: 1,
+            lastMessageAt: null,
+          ),
+          syncDirty: true,
+        );
+        await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+        expect(container.read(groupProvider).groups, isEmpty);
+
+        sessions.completeLogin();
+        await login;
+
+        expect(container.read(sessionProvider).session?.did, 'did:test:second');
+        expect(
+          container.read(sessionProvider).session?.credentialName,
+          'second',
+        );
+
+        await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+        expect(container.read(groupProvider).groups, isEmpty);
+      },
+    );
+
+    test(
+      'failed identity login restores the predecessor lease with a new epoch',
+      () async {
+        final sessions = _FailingIdentityLoginAppSessionService(gateway);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        await _activateRuntimeSession(container, _epochSession('first'));
+        final originalEpoch = container.read(sessionProvider).activeEpoch!;
+        final originalLease = (await sessions.currentSessionLease())!;
+
+        await runtime.loginWithLocalCredential('second');
+
+        final restoredLease = (await sessions.currentSessionLease())!;
+        expect(restoredLease.transition, same(originalLease.transition));
+        expect(restoredLease.session.identityId, 'first');
+        expect(container.read(sessionProvider).session?.did, 'did:test:first');
+        expect(
+          container.read(sessionProvider).activeEpoch,
+          isNot(equals(originalEpoch)),
+        );
+      },
+    );
+
+    test(
+      'rapid identity login intents only activate the latest intent',
+      () async {
+        final sessions = _EpochAppSessionService(gateway)..blockNextLogin();
+        addTearDown(sessions.completeLoginIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        await _activateRuntimeSession(container, _epochSession('first'));
+
+        final firstLogin = runtime.loginWithLocalCredential('second');
+        await _pumpUntil(() => sessions.loginCalls == 1);
+        final latestLogin = runtime.loginWithLocalCredential('second');
+        await _pumpUntil(() => sessions.loginCalls == 2);
+        sessions.completeLogin();
+        await Future.wait<void>(<Future<void>>[firstLogin, latestLogin]);
+
+        expect(container.read(sessionProvider).session?.did, 'did:test:second');
+        expect(container.read(uiFeedbackProvider), isNull);
+      },
+    );
+
+    test(
+      'a stale login auth failure cannot report or logout the latest identity',
+      () async {
+        final sessions = _DelayedStaleAuthFailureSessionService(gateway);
+        addTearDown(sessions.releaseFirstIfPending);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            appSessionServiceProvider.overrideWithValue(sessions),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        final runtime = container.read(appRuntimeProvider.notifier);
+        await _activateRuntimeSession(container, _epochSession('first'));
+
+        final staleLogin = runtime.loginWithLocalCredential('stale');
+        await sessions.firstStarted.future;
+        final latestLogin = runtime.loginWithLocalCredential('second');
+        await latestLogin;
+        sessions.releaseFirst();
+        await staleLogin;
+
+        expect(container.read(sessionProvider).session?.did, 'did:test:second');
+        expect(container.read(uiFeedbackProvider), isNull);
+        expect(gateway.logoutCalls, 0);
+      },
+    );
+
+    test('timed out local login cannot commit or activate late', () async {
+      final sessions = _EpochAppSessionService(gateway)..blockNextLogin();
+      addTearDown(sessions.completeLoginIfPending);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          appSessionServiceProvider.overrideWithValue(sessions),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          appRuntimeProvider.overrideWith(
+            (ref) => AppRuntimeController(
+              ref,
+              requestTimeout: const Duration(milliseconds: 20),
+            ),
+          ),
+        ],
+      );
+      final runtime = container.read(appRuntimeProvider.notifier);
+
+      final login = runtime.loginWithLocalCredential('second');
+      await _pumpUntil(() => sessions.loginCalls == 1);
+      await login;
+
+      expect(container.read(sessionProvider).session, isNull);
+      expect(await sessions.currentSessionLease(), isNull);
+
+      sessions.completeLogin();
+      await pumpEventQueue();
+
+      expect(await sessions.currentSession(), isNull);
+      expect(await sessions.currentSessionLease(), isNull);
+      expect(container.read(sessionProvider).session, isNull);
+    });
+
+    test(
+      'same-owner relogin drops an update queued for the old epoch',
+      () async {
+        final queuedRealtime = _QueuedRealtimeApplicationService();
+        addTearDown(queuedRealtime.dispose);
+        container.dispose();
+        container = ProviderContainer(
+          overrides: <Override>[
+            awikiGatewayProvider.overrideWithValue(gateway),
+            awikiAccountGatewayProvider.overrideWithValue(gateway),
+            ...fakeApplicationServiceOverrides(
+              gateway,
+              realtimeGateway: realtimeGateway,
+            ),
+            realtimeApplicationServiceProvider.overrideWithValue(
+              queuedRealtime,
+            ),
+            realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+            notificationFacadeProvider.overrideWithValue(notificationFacade),
+            desktopShellServiceProvider.overrideWithValue(desktopShell),
+            e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+            updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          ],
+        );
+        const session = SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+          jwtToken: 'token',
+        );
+        await _activateRuntimeSession(container, session);
+
+        queuedRealtime.emit(buildUpdate());
+        container.read(sessionProvider.notifier).clear();
+        await _activateRuntimeSession(container, session);
+        await pumpEventQueue();
+
+        expect(notificationFacade.lastSystemTitle, isNull);
+        expect(notificationFacade.lastSystemBody, isNull);
+      },
+    );
+
     test('实时附件消息通知使用附件预览', () async {
       container.read(appLocaleModeProvider.notifier).state =
           AppLocaleMode.zhHans;
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'remote-attachment',
           remoteId: 'remote-attachment',
@@ -788,6 +1534,7 @@ void main() {
       expect(notificationFacade.lastInAppBody, 'hello');
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'group-remote-1',
           remoteId: 'group-remote-1',
@@ -892,6 +1639,7 @@ void main() {
       expect(afterMentionPatch.firstUnreadMentionMessageId, 'msg-mention-1');
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'msg-normal-2',
           remoteId: 'msg-normal-2',
@@ -975,6 +1723,7 @@ void main() {
         targetPeer: 'alice.awiki.info',
       );
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'alias-direct-1',
           remoteId: 'alias-direct-1',
@@ -1013,6 +1762,7 @@ void main() {
       }
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'alias-direct-1',
           remoteId: 'alias-direct-1',
@@ -1046,6 +1796,7 @@ void main() {
       await activate();
       messageSyncService.syncReasons.clear();
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'alias-group-1',
           remoteId: 'alias-group-1',
@@ -1111,6 +1862,7 @@ void main() {
         },
       );
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'daemon-normal',
           remoteId: 'daemon-normal',
@@ -1170,6 +1922,7 @@ void main() {
         },
       );
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'runtime-normal',
           remoteId: 'runtime-normal',
@@ -1253,6 +2006,7 @@ void main() {
           .read(conversationListProvider.notifier)
           .upsertConversation(pendingAlias);
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'runtime-normalized',
           remoteId: 'runtime-normalized',
@@ -1314,6 +2068,7 @@ void main() {
           .setLifecycle(AppLifecycleState.resumed);
       await activate();
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         message: ChatMessage(
           localId: 'runtime-stale-hint',
           remoteId: 'runtime-stale-hint',
@@ -1360,6 +2115,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        ownerDid: 'did:test:me',
         agentControlPayload: <String, Object?>{
           'schema': 'awiki.agent.status.v1',
           'status_scope': 'daemon',
@@ -1409,6 +2165,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
         agentControlPayload: const <String, Object?>{
           'schema': 'awiki.agent.status.v1',
           'status_scope': 'runtime',
@@ -1500,6 +2257,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        ownerDid: 'did:test:me',
         agentControlPayload: <String, Object?>{
           'schema': 'awiki.app.action.v1',
           'action_id': 'act_draft',
@@ -1729,6 +2487,280 @@ class _BlockingProfileService implements ProfileApplicationService {
   }
 }
 
+SessionIdentity _epochSession(String identity) {
+  return SessionIdentity(
+    did: 'did:test:$identity',
+    credentialName: identity,
+    displayName: identity,
+    handle: identity,
+    jwtToken: 'token-$identity',
+  );
+}
+
+AppSession _epochAppSession(String identity) {
+  return AppSession(
+    did: 'did:test:$identity',
+    identityId: identity,
+    displayName: identity,
+    handle: identity,
+    localAlias: identity,
+    authenticated: true,
+    jwtToken: 'token-$identity',
+  );
+}
+
+Future<AppSession> _commitRuntimeSession(
+  ProviderContainer container,
+  SessionIdentity session,
+) {
+  return container
+      .read(appSessionServiceProvider)
+      .activateIdentity(
+        AppSession(
+          did: session.did,
+          identityId: session.credentialName,
+          displayName: session.displayName,
+          handle: session.handle,
+          localAlias: session.credentialName,
+          authenticated: session.jwtToken != null,
+          jwtToken: session.jwtToken,
+        ),
+      );
+}
+
+Future<void> _activateRuntimeSession(
+  ProviderContainer container,
+  SessionIdentity session,
+) async {
+  final committed = await _commitRuntimeSession(container, session);
+  await container
+      .read(appRuntimeProvider.notifier)
+      .activateCommittedSession(committed);
+}
+
+Future<void> _pumpUntil(bool Function() predicate, {String? reason}) async {
+  for (var attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+    await pumpEventQueue();
+  }
+  expect(
+    predicate(),
+    isTrue,
+    reason: reason ?? 'condition did not become true',
+  );
+}
+
+class _EpochProfileService implements ProfileApplicationService {
+  final Completer<UserProfile> _first = Completer<UserProfile>();
+  int loadCalls = 0;
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    loadCalls += 1;
+    if (loadCalls == 1) {
+      return _first.future;
+    }
+    return Future<UserProfile>.value(_profile('second'));
+  }
+
+  void completeFirst() {
+    if (!_first.isCompleted) {
+      _first.complete(_profile('first'));
+    }
+  }
+
+  void completeFirstIfPending() => completeFirst();
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
+
+  static UserProfile _profile(String identity) {
+    return UserProfile(
+      did: 'did:test:$identity',
+      nickName: identity,
+      bio: '',
+      tags: const <String>[],
+      profileMarkdown: '',
+      handle: identity,
+    );
+  }
+}
+
+class _EpochGroupService extends FakeGroupApplicationService {
+  _EpochGroupService() : super(FakeAwikiGateway());
+
+  final Completer<List<GroupSummary>> _first = Completer<List<GroupSummary>>();
+  int loadCalls = 0;
+
+  @override
+  Future<List<GroupSummary>> listGroups({int limit = 100}) {
+    loadCalls += 1;
+    if (loadCalls == 1) {
+      return _first.future;
+    }
+    return Future<List<GroupSummary>>.value(<GroupSummary>[_group('second')]);
+  }
+
+  void completeFirst() {
+    if (!_first.isCompleted) {
+      _first.complete(<GroupSummary>[_group('first')]);
+    }
+  }
+
+  void completeFirstIfPending() => completeFirst();
+
+  static GroupSummary _group(String identity) {
+    return GroupSummary(
+      conversationId: 'group:$identity',
+      groupId: 'group-$identity',
+      displayName: identity,
+      description: '',
+      memberCount: 1,
+      lastMessageAt: null,
+    );
+  }
+}
+
+class _EpochAppSessionService extends FakeAppSessionService {
+  _EpochAppSessionService(super.gateway);
+
+  final Completer<AppSession?> _firstRefresh = Completer<AppSession?>();
+  Completer<AppSession>? _login;
+  int refreshCalls = 0;
+  int loginCalls = 0;
+
+  @override
+  Future<AppSession?> refreshSession() {
+    refreshCalls += 1;
+    if (refreshCalls == 1) {
+      return _firstRefresh.future;
+    }
+    return Future<AppSession?>.value(_epochAppSession('second'));
+  }
+
+  void completeFirstRefresh() {
+    if (!_firstRefresh.isCompleted) {
+      _firstRefresh.complete(_epochAppSession('first'));
+    }
+  }
+
+  void completeFirstRefreshIfPending() => completeFirstRefresh();
+
+  void blockNextLogin() {
+    _login = Completer<AppSession>();
+  }
+
+  @override
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) async {
+    loginCalls += 1;
+    final session =
+        await (_login?.future ??
+            Future<AppSession>.value(_epochAppSession('second')));
+    return super.activateIdentity(session, transition: transition);
+  }
+
+  void completeLogin() {
+    final login = _login;
+    if (login != null && !login.isCompleted) {
+      login.complete(_epochAppSession('second'));
+    }
+  }
+
+  void completeLoginIfPending() => completeLogin();
+}
+
+class _FailingIdentityLoginAppSessionService extends FakeAppSessionService {
+  _FailingIdentityLoginAppSessionService(super.gateway);
+
+  @override
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) async {
+    throw StateError('identity vault unavailable');
+  }
+}
+
+class _DelayedStaleAuthFailureSessionService extends FakeAppSessionService {
+  _DelayedStaleAuthFailureSessionService(super.gateway);
+
+  final Completer<void> firstStarted = Completer<void>();
+  final Completer<void> _releaseFirst = Completer<void>();
+  int _loginCalls = 0;
+
+  @override
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) async {
+    _loginCalls += 1;
+    if (_loginCalls == 1) {
+      firstStarted.complete();
+      await _releaseFirst.future;
+      throw StateError('session_expired');
+    }
+    return super.activateIdentity(
+      _epochAppSession('second'),
+      transition: transition,
+    );
+  }
+
+  void releaseFirst() {
+    if (!_releaseFirst.isCompleted) {
+      _releaseFirst.complete();
+    }
+  }
+
+  void releaseFirstIfPending() => releaseFirst();
+}
+
+class _FirstBlockingE2eeFacade extends FakeE2eeFacade {
+  final Completer<void> _firstStarted = Completer<void>();
+  final Completer<void> _releaseFirst = Completer<void>();
+  int _initializeCalls = 0;
+  final List<String> initializedDids = <String>[];
+
+  Future<void> get firstStarted => _firstStarted.future;
+
+  @override
+  Future<void> initialize(SessionIdentity identity) async {
+    _initializeCalls += 1;
+    initializedDids.add(identity.did);
+    if (_initializeCalls != 1) {
+      return;
+    }
+    _firstStarted.complete();
+    await _releaseFirst.future;
+  }
+
+  void completeFirst() {
+    if (!_releaseFirst.isCompleted) {
+      _releaseFirst.complete();
+    }
+  }
+
+  void completeFirstIfPending() => completeFirst();
+}
+
+class _FailingE2eeFacade extends FakeE2eeFacade {
+  @override
+  Future<void> initialize(SessionIdentity identity) async {
+    throw StateError('e2ee initialization failed');
+  }
+}
+
 class _CountingAgentControlService extends FakeAgentControlService {
   int listAgentsCalls = 0;
 
@@ -1739,8 +2771,48 @@ class _CountingAgentControlService extends FakeAgentControlService {
   }
 }
 
+class _QueuedRealtimeApplicationService implements RealtimeApplicationService {
+  final StreamController<RealtimeUpdate> _updates =
+      StreamController<RealtimeUpdate>.broadcast();
+  final StreamController<RealtimeConnectionStatus> _connectionStates =
+      StreamController<RealtimeConnectionStatus>.broadcast();
+  bool _isRunning = false;
+
+  @override
+  Stream<RealtimeConnectionStatus> get connectionStates =>
+      _connectionStates.stream;
+
+  @override
+  bool get isRunning => _isRunning;
+
+  @override
+  Stream<RealtimeUpdate> get updates => _updates.stream;
+
+  void emit(RealtimeUpdate update) {
+    _updates.add(update);
+  }
+
+  @override
+  Future<void> start() async {
+    _isRunning = true;
+    _connectionStates.add(RealtimeConnectionStatus.connected);
+  }
+
+  @override
+  Future<void> stop() async {
+    _isRunning = false;
+    _connectionStates.add(RealtimeConnectionStatus.idle);
+  }
+
+  Future<void> dispose() async {
+    await _updates.close();
+    await _connectionStates.close();
+  }
+}
+
 final class _FakeDesktopShellService implements DesktopShellService {
   int showWindowCalls = 0;
+  Completer<void>? showWindowCompleter;
 
   @override
   Stream<DesktopShellEvent> get events =>
@@ -1772,6 +2844,7 @@ final class _FakeDesktopShellService implements DesktopShellService {
   @override
   Future<void> showWindow() async {
     showWindowCalls += 1;
+    await showWindowCompleter?.future;
   }
 }
 

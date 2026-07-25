@@ -98,7 +98,9 @@ AppSession _session(String id, {String? jwtToken}) {
   );
 }
 
-class _FakeSessions implements AppSessionService {
+class _FakeSessions
+    with AppSessionTransitionGuard
+    implements AppSessionService {
   _FakeSessions({AppSession? defaultSession})
     : _defaultSession = defaultSession;
 
@@ -106,10 +108,26 @@ class _FakeSessions implements AppSessionService {
   final List<String> deletedIdentities = <String>[];
 
   @override
-  Future<AppSession> activateIdentity(AppSession identity) async => identity;
+  Future<AppSession> activateIdentity(
+    AppSession identity, {
+    AppSessionTransition? transition,
+    Future<void> Function(AppSession session)? initializeIdentitySession,
+  }) async {
+    final requestedTransition = transition ?? beginSessionTransition();
+    if (!isSessionTransitionCurrent(requestedTransition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
+    await initializeIdentitySession?.call(identity);
+    markSessionTransitionCommitted(requestedTransition);
+    return identity;
+  }
 
   @override
   Future<AppSession?> currentSession() async => _defaultSession;
+
+  @override
+  Future<AppSessionLease?> currentSessionLease() async =>
+      sessionLeaseFor(_defaultSession);
 
   @override
   Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
@@ -117,7 +135,10 @@ class _FakeSessions implements AppSessionService {
   ];
 
   @override
-  Future<AppSession> loginWithIdentity(String identityIdOrAlias) {
+  Future<AppSession> loginWithIdentity(
+    String identityIdOrAlias, {
+    AppSessionTransition? transition,
+  }) {
     throw UnsupportedError('unsupported');
   }
 
@@ -143,6 +164,7 @@ class _FakeOnboarding implements OnboardingService {
     required String phone,
     required String otp,
     required String handle,
+    AppSessionTransition? transition,
   }) async => _session('recovered-id', jwtToken: 'jwt-recovered-id');
 
   @override
@@ -152,6 +174,7 @@ class _FakeOnboarding implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async => _session('email-id', jwtToken: 'jwt-email-id');
 
   @override
@@ -162,6 +185,7 @@ class _FakeOnboarding implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async => _session('phone-id', jwtToken: 'jwt-phone-id');
 
   @override
@@ -171,5 +195,6 @@ class _FakeOnboarding implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async => _session('open-id', jwtToken: 'jwt-open-id');
 }

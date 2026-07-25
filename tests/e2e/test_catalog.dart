@@ -307,8 +307,13 @@ class AppTestCatalog {
       ..writeln(
         '- `full` means the audited Direct, Group, P9 Mention, Contacts and '
         'Attachment product slices only. It does **not** claim onboarding, '
-        'profile editing/search, identity switching, group role/remove/leave, '
+        'profile editing/search, group role/remove/leave, '
         'secure-trust UI, mobile-device, or optional runtime-provider coverage.',
+      )
+      ..writeln(
+        '- `identity-switch` separately covers bidirectional messaging, unread '
+        'and canonical timeline hydration across two local App identities. It '
+        'does not claim visual acceptance of every account-picker surface.',
       )
       ..writeln(
         '- `performance` is an integration diagnostic because it prepares data '

@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/ports/directory_core_port.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
@@ -424,6 +429,106 @@ void main() {
     expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
     expect(gateway.following.single.did, 'did:test:peer');
   });
+
+  testWidgets('关注请求期间切换身份不会在新身份下显示成功或错误', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..publicProfilesByQuery = <String, UserProfile>{
+        'cgw.awiki.ai': peerProfile,
+      };
+    final relationships = _BlockingFollowRelationshipService(gateway);
+    addTearDown(relationships.completeIfPending);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _IdentityFlowHarness(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          relationshipApplicationServiceProvider.overrideWithValue(
+            relationships,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关注联系人'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      'cgw.awiki.ai',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-contact-button')));
+    await tester.pump();
+    await relationships.started.future;
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(_IdentityFlowHarness)),
+    );
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:new-owner',
+            credentialName: 'new-owner.json',
+            displayName: 'New owner',
+          ),
+        );
+    container.read(friendsProvider.notifier).clear();
+    relationships.complete();
+    await tester.pumpAndSettle();
+
+    expect(container.read(uiFeedbackProvider), isNull);
+  });
+
+  testWidgets('身份解析期间切换身份会丢弃旧结果并关闭旧对话框', (tester) async {
+    final gateway = FakeAwikiGateway();
+    final directory = _BlockingIdentityDirectoryService(gateway);
+    addTearDown(directory.completeIfPending);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const _StartIdentityFlowHarness(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          directoryApplicationServiceProvider.overrideWithValue(directory),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('start-conversation-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      'peer.awiki.test',
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await directory.started.future;
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(_StartIdentityFlowHarness)),
+    );
+    container
+        .read(sessionProvider.notifier)
+        .activateSession(
+          const SessionIdentity(
+            did: 'did:test:new-owner',
+            credentialName: 'new-owner.json',
+            displayName: 'New owner',
+          ),
+        );
+    directory.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('identity-lookup-input')), findsNothing);
+    expect(find.byType(ChatView), findsNothing);
+    expect(container.read(conversationListProvider).conversations, isEmpty);
+    expect(container.read(selectedConversationProvider), isNull);
+    expect(container.read(uiFeedbackProvider), isNull);
+  });
 }
 
 class _IdentityFlowHarness extends ConsumerWidget {
@@ -443,4 +548,86 @@ class _IdentityFlowHarness extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _StartIdentityFlowHarness extends ConsumerWidget {
+  const _StartIdentityFlowHarness();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return CupertinoPageScaffold(
+      child: Center(
+        child: AppPrimaryButton(
+          key: const Key('start-conversation-button'),
+          label: '发起新消息',
+          onPressed: () => showStartConversationDialog(context, ref),
+        ),
+      ),
+    );
+  }
+}
+
+class _BlockingFollowRelationshipService
+    extends FakeRelationshipApplicationService {
+  _BlockingFollowRelationshipService(super.gateway);
+
+  final Completer<void> started = Completer<void>();
+  final Completer<void> _result = Completer<void>();
+
+  @override
+  Future<void> follow(String peer) {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return _result.future;
+  }
+
+  void complete() {
+    if (!_result.isCompleted) {
+      _result.complete();
+    }
+  }
+
+  void completeIfPending() => complete();
+}
+
+class _BlockingIdentityDirectoryService
+    extends FakeDirectoryApplicationService {
+  _BlockingIdentityDirectoryService(super.gateway);
+
+  final Completer<void> started = Completer<void>();
+  final Completer<DirectoryPeerResolution> _result =
+      Completer<DirectoryPeerResolution>();
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return _result.future;
+  }
+
+  void complete() {
+    if (_result.isCompleted) {
+      return;
+    }
+    _result.complete(
+      const DirectoryPeerResolution(
+        input: 'peer.awiki.test',
+        did: 'did:test:peer',
+        handle: 'peer.awiki.test',
+        conversationId: 'dm:peer-scope:v1:peer',
+        profile: UserProfile(
+          did: 'did:test:peer',
+          displayName: 'Peer',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'peer.awiki.test',
+        ),
+      ),
+    );
+  }
+
+  void completeIfPending() => complete();
 }

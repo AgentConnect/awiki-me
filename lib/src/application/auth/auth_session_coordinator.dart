@@ -21,40 +21,76 @@ class AuthSessionCoordinator {
   final DateTime Function() _now;
   final Duration refreshSkew;
 
-  Future<AppSession?>? _refreshInFlight;
+  final Map<AppSessionTransition, Future<AppSession?>> _refreshInFlight =
+      <AppSessionTransition, Future<AppSession?>>{};
 
   Future<String> ensureBearerToken({bool forceRefresh = false}) async {
-    var session = await _sessions.currentSession();
-    if (session == null) {
+    return (await ensureBearerSession(forceRefresh: forceRefresh)).bearerToken;
+  }
+
+  Future<AuthenticatedBearerSession> ensureBearerSession({
+    bool forceRefresh = false,
+    AppSessionTransition? expectedTransition,
+  }) async {
+    var lease = await _sessions.currentSessionLease();
+    _requireExpectedTransition(lease, expectedTransition);
+    var session = lease?.session;
+    if (lease == null || session == null) {
       throw const AuthSessionUnavailable('auth_session_unavailable');
     }
     if (forceRefresh || !_hasUsableToken(session)) {
-      session = await _refreshSession();
+      session = await _refreshSession(lease);
+      final refreshedLease = await _sessions.currentSessionLease();
+      if (session == null ||
+          refreshedLease == null ||
+          !identical(refreshedLease.transition, lease.transition)) {
+        throw const AuthSessionUnavailable('auth_session_changed');
+      }
+      lease = refreshedLease;
     }
-    final token = session?.jwtToken?.trim();
-    if (session == null || token == null || token.isEmpty) {
+    _requireExpectedTransition(lease, expectedTransition);
+    final token = session.jwtToken?.trim();
+    if (token == null || token.isEmpty) {
       throw const AuthSessionUnavailable('session_expired');
     }
-    return token;
+    return AuthenticatedBearerSession(
+      transition: lease.transition,
+      bearerToken: token,
+    );
   }
 
-  Future<AppSession?> _refreshSession() {
-    final inFlight = _refreshInFlight;
+  Future<AppSession?> _refreshSession(AppSessionLease lease) {
+    final inFlight = _refreshInFlight[lease.transition];
     if (inFlight != null) {
       return inFlight;
     }
-    final future = _sessions.refreshSession().then((session) {
-      if (session != null) {
-        _onSessionUpdated?.call(session);
+    late final Future<AppSession?> future;
+    future = _sessions.refreshSession().then((session) async {
+      final currentLease = await _sessions.currentSessionLease();
+      if (session == null ||
+          currentLease == null ||
+          !identical(currentLease.transition, lease.transition)) {
+        return null;
       }
+      _onSessionUpdated?.call(session);
       return session;
     });
-    _refreshInFlight = future;
+    _refreshInFlight[lease.transition] = future;
     return future.whenComplete(() {
-      if (identical(_refreshInFlight, future)) {
-        _refreshInFlight = null;
+      if (identical(_refreshInFlight[lease.transition], future)) {
+        _refreshInFlight.remove(lease.transition);
       }
     });
+  }
+
+  void _requireExpectedTransition(
+    AppSessionLease? lease,
+    AppSessionTransition? expected,
+  ) {
+    if (expected != null &&
+        (lease == null || !identical(lease.transition, expected))) {
+      throw const AuthSessionUnavailable('auth_session_changed');
+    }
   }
 
   bool _hasUsableToken(AppSession session) {
@@ -68,6 +104,16 @@ class AuthSessionCoordinator {
     }
     return expiresAt.toUtc().isAfter(_now().toUtc().add(refreshSkew));
   }
+}
+
+final class AuthenticatedBearerSession {
+  const AuthenticatedBearerSession({
+    required this.transition,
+    required this.bearerToken,
+  });
+
+  final AppSessionTransition transition;
+  final String bearerToken;
 }
 
 class AuthSessionUnavailable implements Exception {

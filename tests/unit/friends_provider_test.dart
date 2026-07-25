@@ -4,6 +4,8 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,6 +106,54 @@ void main() {
       operation.complete();
       await Future<void>.delayed(Duration.zero);
       expect(container.read(friendsProvider).isFollowing(peer), isTrue);
+    },
+  );
+
+  test(
+    'old identity follow completion cannot mutate the new identity',
+    () async {
+      const peer = 'did:wba:awiki.ai:alice';
+      final operation = Completer<void>();
+      final service = _RelationshipService()..followResult = operation.future;
+      final container = _container(
+        service,
+        session: const SessionIdentity(
+          did: 'did:owner:a',
+          credentialName: 'owner-a',
+          displayName: 'Owner A',
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(friendsProvider.notifier);
+
+      final follow = controller.follow(peer);
+      expect(service.followCalls, 1);
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:owner:b',
+              credentialName: 'owner-b',
+              displayName: 'Owner B',
+            ),
+          );
+      controller.clear();
+      operation.complete();
+      await expectLater(
+        follow,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'session_epoch_changed',
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(friendsProvider).isFollowing(peer), isFalse);
+      expect(service.listFollowersCalls, 0);
+      expect(service.listFollowingCalls, 0);
     },
   );
 
@@ -210,10 +260,23 @@ ProviderContainer _container(
   _RelationshipService service, {
   Duration mutationTimeout = const Duration(seconds: 1),
   Duration refreshTimeout = const Duration(seconds: 1),
+  SessionIdentity? session,
 }) {
+  final activeSession =
+      session ??
+      const SessionIdentity(
+        did: 'did:owner:default',
+        credentialName: 'owner-default',
+        displayName: 'Owner',
+      );
   return ProviderContainer(
     overrides: <Override>[
       relationshipApplicationServiceProvider.overrideWithValue(service),
+      sessionProvider.overrideWith((ref) {
+        final controller = SessionController();
+        controller.setSession(activeSession);
+        return controller;
+      }),
       friendsProvider.overrideWith(
         (ref) => FriendsController(
           ref,

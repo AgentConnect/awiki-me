@@ -12,6 +12,7 @@ abstract interface class OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   });
 
   Future<AppSession> registerHandleWithEmail({
@@ -20,6 +21,7 @@ abstract interface class OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   });
 
   Future<AppSession> registerHandleWithoutContactVerification({
@@ -28,12 +30,14 @@ abstract interface class OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   });
 
   Future<AppSession> recoverHandle({
     required String phone,
     required String otp,
     required String handle,
+    AppSessionTransition? transition,
   });
 }
 
@@ -58,19 +62,26 @@ class ImCoreOnboardingService implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async {
-    final identity = await _identities.registerHandleWithPhone(
-      phone: _normalizePhone(phone),
-      otp: _sanitizeOtp(otp),
-      handle: _normalizeHandle(handle),
-      inviteCode: _nonEmpty(inviteCode),
-      displayName: _nonEmpty(nickName),
-    );
-    return _activateAndPatchProfile(
-      identity,
-      nickName: nickName,
-      profileMarkdown: profileMarkdown,
-    );
+    final normalizedPhone = _normalizePhone(phone);
+    final normalizedOtp = _sanitizeOtp(otp);
+    final normalizedHandle = _normalizeHandle(handle);
+    return _runSessionTransition(transition, (requestedTransition) async {
+      final identity = await _identities.registerHandleWithPhone(
+        phone: normalizedPhone,
+        otp: normalizedOtp,
+        handle: normalizedHandle,
+        inviteCode: _nonEmpty(inviteCode),
+        displayName: _nonEmpty(nickName),
+      );
+      return _activateAndPatchProfile(
+        identity,
+        transition: requestedTransition,
+        nickName: nickName,
+        profileMarkdown: profileMarkdown,
+      );
+    });
   }
 
   @override
@@ -80,18 +91,24 @@ class ImCoreOnboardingService implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async {
-    final identity = await _identities.registerHandleWithEmail(
-      email: email.trim().toLowerCase(),
-      handle: _normalizeHandle(handle),
-      inviteCode: _nonEmpty(inviteCode),
-      displayName: _nonEmpty(nickName),
-    );
-    return _activateAndPatchProfile(
-      identity,
-      nickName: nickName,
-      profileMarkdown: profileMarkdown,
-    );
+    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedHandle = _normalizeHandle(handle);
+    return _runSessionTransition(transition, (requestedTransition) async {
+      final identity = await _identities.registerHandleWithEmail(
+        email: normalizedEmail,
+        handle: normalizedHandle,
+        inviteCode: _nonEmpty(inviteCode),
+        displayName: _nonEmpty(nickName),
+      );
+      return _activateAndPatchProfile(
+        identity,
+        transition: requestedTransition,
+        nickName: nickName,
+        profileMarkdown: profileMarkdown,
+      );
+    });
   }
 
   @override
@@ -99,13 +116,22 @@ class ImCoreOnboardingService implements OnboardingService {
     required String phone,
     required String otp,
     required String handle,
+    AppSessionTransition? transition,
   }) async {
-    final identity = await _identities.recoverHandle(
-      phone: _normalizePhone(phone),
-      otp: _sanitizeOtp(otp),
-      handle: _normalizeHandle(handle),
-    );
-    return _sessions.activateIdentity(identity);
+    final normalizedPhone = _normalizePhone(phone);
+    final normalizedOtp = _sanitizeOtp(otp);
+    final normalizedHandle = _normalizeHandle(handle);
+    return _runSessionTransition(transition, (requestedTransition) async {
+      final identity = await _identities.recoverHandle(
+        phone: normalizedPhone,
+        otp: normalizedOtp,
+        handle: normalizedHandle,
+      );
+      return _sessions.activateIdentity(
+        identity,
+        transition: requestedTransition,
+      );
+    });
   }
 
   @override
@@ -115,33 +141,61 @@ class ImCoreOnboardingService implements OnboardingService {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
+    AppSessionTransition? transition,
   }) async {
     _normalizePhone(phone);
-    final identity = await _identities.registerHandleWithoutContactVerification(
-      handle: _normalizeHandle(handle),
-      inviteCode: _nonEmpty(inviteCode),
-      displayName: _nonEmpty(nickName),
-    );
-    return _activateAndPatchProfile(
-      identity,
-      nickName: nickName,
-      profileMarkdown: profileMarkdown,
-    );
+    final normalizedHandle = _normalizeHandle(handle);
+    return _runSessionTransition(transition, (requestedTransition) async {
+      final identity = await _identities
+          .registerHandleWithoutContactVerification(
+            handle: normalizedHandle,
+            inviteCode: _nonEmpty(inviteCode),
+            displayName: _nonEmpty(nickName),
+          );
+      return _activateAndPatchProfile(
+        identity,
+        transition: requestedTransition,
+        nickName: nickName,
+        profileMarkdown: profileMarkdown,
+      );
+    });
   }
 
   Future<AppSession> _activateAndPatchProfile(
     AppSession identity, {
+    required AppSessionTransition transition,
     String? nickName,
     String? profileMarkdown,
   }) async {
-    final session = await _sessions.activateIdentity(identity);
     final markdown = _nonEmpty(profileMarkdown);
-    if (markdown != null && _profiles != null) {
-      await _profiles.updateProfile(
-        ProfilePatch(nickName: _nonEmpty(nickName), profileMarkdown: markdown),
-      );
+    return _sessions.activateIdentity(
+      identity,
+      transition: transition,
+      initializeIdentitySession: markdown == null || _profiles == null
+          ? null
+          : (_) async {
+              await _profiles.updateProfile(
+                ProfilePatch(
+                  nickName: _nonEmpty(nickName),
+                  profileMarkdown: markdown,
+                ),
+              );
+            },
+    );
+  }
+
+  Future<AppSession> _runSessionTransition(
+    AppSessionTransition? transition,
+    Future<AppSession> Function(AppSessionTransition transition) action,
+  ) async {
+    final requestedTransition =
+        transition ?? _sessions.beginSessionTransition();
+    try {
+      return await action(requestedTransition);
+    } catch (_) {
+      _sessions.cancelPendingSessionTransition(requestedTransition);
+      rethrow;
     }
-    return session;
   }
 }
 

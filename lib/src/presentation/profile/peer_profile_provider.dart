@@ -11,11 +11,28 @@ import 'peer_display_profile_provider.dart';
 import 'profile_provider.dart';
 import '../../domain/entities/user_profile.dart';
 
+class PeerPublicProfileRequest {
+  const PeerPublicProfileRequest({required this.did, required this.epoch});
+
+  final String did;
+  final SessionEpoch? epoch;
+
+  @override
+  bool operator ==(Object other) {
+    return other is PeerPublicProfileRequest &&
+        other.did == did &&
+        other.epoch == epoch;
+  }
+
+  @override
+  int get hashCode => Object.hash(did, epoch);
+}
+
 final peerPublicProfileProvider = FutureProvider.autoDispose
-    .family<UserProfile, String>((ref, did) {
+    .family<UserProfile, PeerPublicProfileRequest>((ref, request) {
       return ref
           .watch(profileApplicationServiceProvider)
-          .loadPublicProfile(did)
+          .loadPublicProfile(request.did)
           .timeout(const Duration(seconds: 12));
     });
 
@@ -54,47 +71,74 @@ class PeerProfileState {
   }
 }
 
+final class _PeerProfileOperation {
+  const _PeerProfileOperation({required this.epoch, required this.generation});
+
+  final SessionEpoch? epoch;
+  final int generation;
+}
+
 class PeerProfileController extends StateNotifier<PeerProfileState> {
-  PeerProfileController(this.ref, this.did) : super(const PeerProfileState()) {
+  PeerProfileController(this.ref, this.did)
+    : _ownerEpoch = ref.read(sessionProvider).activeEpoch,
+      super(const PeerProfileState()) {
     unawaited(load());
   }
 
   final Ref ref;
   final String did;
+  final SessionEpoch? _ownerEpoch;
+  int _loadGeneration = 0;
+  int _actionGeneration = 0;
 
   Future<void> load() async {
+    final operation = _PeerProfileOperation(
+      epoch: _ownerEpoch,
+      generation: ++_loadGeneration,
+    );
+    if (!_isLoadOperationCurrent(operation)) {
+      return;
+    }
     state = state.copyWith(isLoading: true, clearError: true);
     final UserProfile profile;
     try {
-      profile = await ref.read(peerPublicProfileProvider(did).future);
+      profile = await ref.read(
+        peerPublicProfileProvider(
+          PeerPublicProfileRequest(did: did, epoch: operation.epoch),
+        ).future,
+      );
     } catch (error) {
-      if (!mounted) {
+      if (!_isLoadOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(isLoading: false, error: error);
       return;
     }
-    if (!mounted) {
+    if (!_isLoadOperationCurrent(operation)) {
       return;
     }
-    final ownerDid = ref.read(sessionProvider).session?.did ?? '';
+    final ownerDid = operation.epoch?.ownerDid ?? '';
     ref
         .read(peerDisplayProfileProvider.notifier)
-        .updateFromRemote(ownerDid: ownerDid, profile: profile);
+        .updateFromRemote(
+          ownerDid: ownerDid,
+          profile: profile,
+          expectedEpoch: operation.epoch,
+        );
     state = state.copyWith(profile: profile, clearError: true);
 
     try {
       final relationship = await ref
           .read(friendsProvider.notifier)
           .checkRelationship(did);
-      if (!mounted) {
+      if (!_isLoadOperationCurrent(operation)) {
         return;
       }
       state = state.copyWith(
         relationship: relationship?.relationship ?? 'none',
       );
     } catch (_) {
-      if (!mounted) {
+      if (!_isLoadOperationCurrent(operation)) {
         return;
       }
     }
@@ -107,7 +151,7 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
         final markdown = await ref.read(homepageMarkdownLoaderProvider)(
           homepageUrl,
         );
-        if (!mounted) {
+        if (!_isLoadOperationCurrent(operation)) {
           return;
         }
         if (markdown != null && markdown.trim().isNotEmpty) {
@@ -116,26 +160,52 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
           );
         }
       } catch (_) {
-        if (!mounted) {
+        if (!_isLoadOperationCurrent(operation)) {
           return;
         }
       }
+    }
+    if (!_isLoadOperationCurrent(operation)) {
+      return;
     }
     state = state.copyWith(isLoading: false, clearError: true);
   }
 
   Future<void> unfollow() async {
+    final operation = _PeerProfileOperation(
+      epoch: _ownerEpoch,
+      generation: ++_actionGeneration,
+    );
+    if (!_isActionOperationCurrent(operation)) {
+      return;
+    }
     state = state.copyWith(isActionBusy: true);
     try {
       await ref.read(friendsProvider.notifier).unfollow(did);
-      if (mounted) {
+      if (_isActionOperationCurrent(operation)) {
         state = state.copyWith(relationship: 'none');
       }
+    } catch (error) {
+      if (!isSessionEpochChangedError(error)) {
+        rethrow;
+      }
     } finally {
-      if (mounted) {
+      if (_isActionOperationCurrent(operation)) {
         state = state.copyWith(isActionBusy: false);
       }
     }
+  }
+
+  bool _isLoadOperationCurrent(_PeerProfileOperation operation) {
+    return mounted &&
+        operation.generation == _loadGeneration &&
+        operation.epoch == ref.read(sessionProvider).activeEpoch;
+  }
+
+  bool _isActionOperationCurrent(_PeerProfileOperation operation) {
+    return mounted &&
+        operation.generation == _actionGeneration &&
+        operation.epoch == ref.read(sessionProvider).activeEpoch;
   }
 
   void showLinkOpenError(Object error) {

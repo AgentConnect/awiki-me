@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-17.mention-local-roster-v9",
+  "sourceRevision": "2026-07-24.identity-switch-hydration-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1036,6 +1036,57 @@
             "INBOUND-FIRST-CONV-E2E-001:no_direct_before_first_inbound_message",
             "INBOUND-FIRST-CONV-E2E-001:inbound_message_created_one_canonical_persona_conversation",
             "INBOUND-FIRST-CONV-E2E-001:lookup_recents_and_local_search_reused_same_conversation"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "IDENTITY-SWITCH-E2E-001",
+      "feature": "Bidirectional local identity switch message recovery",
+      "layer": "product_application",
+      "preconditions": "The awiki.info run has one isolated App state root containing two distinct local App identities plus a distinct CLI preflight identity.",
+      "action": "Send from primary App identity to secondary, logout and activate secondary, hydrate and read the exact message, then repeat in reverse and rapidly switch both identities once more.",
+      "exactOracles": [
+        "Each receiver first obtains exactly one owner-scoped unread conversation and then exactly one renderable canonical timeline message with the sent ID, body and sender after conversation catch-up.",
+        "Read clearing is owner-scoped, the reverse direction behaves symmetrically, and rapid final switches preserve both messages with isMine projected relative to the active identity.",
+        "The newly active realtime session remains running after the old identity shutdown completes."
+      ],
+      "negativeChecks": [
+        "Unread without a hydrated body, duplicate or missing message, cross-owner direction leakage, unread rebound, or a stale stop terminating the new realtime session fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-SWITCH-E2E-001:primary_to_secondary_exact_message_hydrated_after_switch",
+          "IDENTITY-SWITCH-E2E-001:secondary_to_primary_exact_message_hydrated_after_switch",
+          "IDENTITY-SWITCH-E2E-001:owner_scoped_unread_and_timeline_stable_after_rapid_switch"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-SWITCH-E2E-001:primary_to_secondary_exact_message_hydrated_after_switch",
+            "IDENTITY-SWITCH-E2E-001:secondary_to_primary_exact_message_hydrated_after_switch"
+          ],
+          [
+            "IDENTITY-SWITCH-E2E-001:owner_scoped_unread_and_timeline_stable_after_rapid_switch"
+          ],
+          [
+            "IDENTITY-SWITCH-E2E-001:owner_scoped_unread_and_timeline_stable_after_rapid_switch"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-SWITCH-E2E-001:primary_to_secondary_exact_message_hydrated_after_switch",
+            "IDENTITY-SWITCH-E2E-001:secondary_to_primary_exact_message_hydrated_after_switch",
+            "IDENTITY-SWITCH-E2E-001:owner_scoped_unread_and_timeline_stable_after_rapid_switch"
           ]
         ]
       }

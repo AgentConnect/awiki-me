@@ -28,6 +28,13 @@ class _StaticGroupController extends GroupController {
   }
 }
 
+const _friendsWorkspaceSession = SessionIdentity(
+  did: 'did:test:me',
+  credentialName: 'friends-workspace',
+  handle: 'me.awiki',
+  displayName: 'Me',
+);
+
 void main() {
   testWidgets('桌面宽度下联系人页保持左右分栏布局', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -140,6 +147,7 @@ void main() {
       buildLocalizedTestApp(
         home: const FriendsPage(),
         gateway: gateway,
+        session: _friendsWorkspaceSession,
         providerOverrides: <Override>[
           friendsProvider.overrideWith(
             (ref) => _StaticFriendsController(
@@ -183,6 +191,7 @@ void main() {
       buildLocalizedTestApp(
         home: const FriendsPage(),
         gateway: gateway,
+        session: _friendsWorkspaceSession,
         providerOverrides: <Override>[
           friendsProvider.overrideWith(
             (ref) => _StaticFriendsController(
@@ -364,6 +373,7 @@ void main() {
         buildLocalizedTestApp(
           home: const FriendsWorkspacePage(),
           gateway: gateway,
+          session: _friendsWorkspaceSession,
           providerOverrides: <Override>[
             friendsProvider.overrideWith(
               (ref) => _StaticFriendsController(

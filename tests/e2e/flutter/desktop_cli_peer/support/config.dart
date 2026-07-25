@@ -7,6 +7,7 @@ class _DesktopCliPeerSmokeConfig {
     required this.e2eCase,
     required this.environment,
     required this.appHandle,
+    required this.secondaryAppHandle,
     required this.cliHandle,
     required this.otpPhone,
     required this.otpCode,
@@ -46,6 +47,11 @@ class _DesktopCliPeerSmokeConfig {
     final otp = _mapAt(map, 'otp');
     final accounts = _mapAt(map, 'accounts');
     final appUser = _mapAt(accounts, 'appUser');
+    final secondaryAppUser = _mapAt(
+      accounts,
+      'appSecondaryUser',
+      optional: true,
+    );
     final cliPeerAccount = _mapAt(accounts, 'cliPeer');
     final cliPeer = _mapAt(map, 'cliPeer');
     final app = _mapAt(map, 'app');
@@ -77,6 +83,7 @@ class _DesktopCliPeerSmokeConfig {
         agentImEnabled: true,
       ),
       appHandle: _requiredConfig(appUser, 'handle', 'accounts.appUser.handle'),
+      secondaryAppHandle: _optionalConfig(secondaryAppUser, 'handle'),
       cliHandle: _requiredConfig(
         cliPeerAccount,
         'handle',
@@ -98,6 +105,7 @@ class _DesktopCliPeerSmokeConfig {
   final DesktopCliPeerIntegrationCase e2eCase;
   final AwikiEnvironmentConfig environment;
   final String appHandle;
+  final String? secondaryAppHandle;
   final String cliHandle;
   final String otpPhone;
   final String otpCode;

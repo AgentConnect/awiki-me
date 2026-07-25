@@ -12,6 +12,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
+import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
@@ -67,6 +68,7 @@ part 'flows/conversation_correctness_flow.dart';
 part 'flows/direct_message_flow.dart';
 part 'flows/group_message_flow.dart';
 part 'flows/inbound_first_flow.dart';
+part 'flows/identity_switch_flow.dart';
 part 'flows/performance_flow.dart';
 part 'flows/profile_refresh_flow.dart';
 part 'flows/process_restart_flow.dart';
@@ -86,6 +88,7 @@ enum DesktopCliPeerIntegrationCase {
   attachment,
   contacts,
   inboundFirst,
+  identitySwitch,
   processRestart,
   displayNameFallback,
   performance;
@@ -115,6 +118,10 @@ enum DesktopCliPeerIntegrationCase {
       'inbound-first' ||
       'inbound_first' ||
       'inbound-only' => DesktopCliPeerIntegrationCase.inboundFirst,
+      'identity-switch' ||
+      'identity_switch' ||
+      'switch-identity' ||
+      'switch_identity' => DesktopCliPeerIntegrationCase.identitySwitch,
       'restart' ||
       'process-restart' ||
       'process_restart' ||
@@ -132,7 +139,7 @@ enum DesktopCliPeerIntegrationCase {
       'conversation_performance' => DesktopCliPeerIntegrationCase.performance,
       _ => throw StateError(
         'Unsupported Desktop CLI peer E2E case "$value". '
-        'Use full, performance, direct, group, attachment, contacts, inbound, '
+        'Use full, performance, direct, group, attachment, contacts, inbound, identity-switch, '
         'restart, or display-name-fallback.',
       ),
     };
@@ -159,6 +166,9 @@ enum DesktopCliPeerIntegrationCase {
 
   bool get runsInboundFirst =>
       this == DesktopCliPeerIntegrationCase.inboundFirst;
+
+  bool get runsIdentitySwitch =>
+      this == DesktopCliPeerIntegrationCase.identitySwitch;
 
   bool get runsPerformance => this == DesktopCliPeerIntegrationCase.performance;
 
@@ -190,9 +200,31 @@ void runDesktopCliPeerE2e({
         appStateRoot: config.appStateRoot,
       );
       appCreateWatch.stop();
+      addTearDown(bootstrap.dispose);
+      final identitySwitchSessions = selectedCase.runsIdentitySwitch
+          ? await _prepareIdentitySwitchSessions(bootstrap, config)
+          : null;
       final preparedSession = selectedCase.runsPerformance
           ? null
-          : await _prepareAppIdentity(bootstrap.onboardingService!, config);
+          : identitySwitchSessions?.primary ??
+                await _prepareAppIdentity(bootstrap.onboardingService!, config);
+      if (selectedCase.runsIdentitySwitch) {
+        await _verifyIdentitySwitchRegression(
+          bootstrap: bootstrap,
+          primary: identitySwitchSessions!.primary,
+          secondary: identitySwitchSessions.secondary,
+          config: config,
+          nonce: _messageNonce(),
+        );
+        await _attestPassedCases(<String, List<String>>{
+          'IDENTITY-SWITCH-E2E-001': const <String>[
+            'primary_to_secondary_exact_message_hydrated_after_switch',
+            'secondary_to_primary_exact_message_hydrated_after_switch',
+            'owner_scoped_unread_and_timeline_stable_after_rapid_switch',
+          ],
+        });
+        return;
+      }
       final countingConversations = config.e2eCase.runsPerformance
           ? _CountingConversationService(bootstrap.conversationService!)
           : null;
@@ -210,10 +242,6 @@ void runDesktopCliPeerE2e({
           messagingServiceProvider.overrideWithValue(faultMessaging),
         attachmentOpenServiceProvider.overrideWithValue(attachmentOpenRecorder),
       ];
-      addTearDown(() async {
-        await bootstrap.appSessionService?.logout();
-      });
-
       final shellWatch = Stopwatch()..start();
       await tester.pumpWidget(
         AwikiMeApp(
@@ -240,7 +268,7 @@ void runDesktopCliPeerE2e({
             : null,
       );
       await robot.activate(session);
-      if (!selectedCase.runsPerformance) {
+      if (!selectedCase.runsPerformance && !selectedCase.runsIdentitySwitch) {
         await E2eCaseAttestationWriter.markPassed(
           'AUTH-E2E-001',
           phases: const <String>[
@@ -561,12 +589,26 @@ Future<void> _attestPassedCases(Map<String, List<String>> cases) async {
 Future<AppSession> _prepareAppIdentity(
   OnboardingService onboarding,
   _DesktopCliPeerSmokeConfig config,
-) async {
+) {
+  return _prepareAppIdentityForHandle(
+    onboarding,
+    config,
+    handle: config.appHandle,
+    displayLabel: '',
+  );
+}
+
+Future<AppSession> _prepareAppIdentityForHandle(
+  OnboardingService onboarding,
+  _DesktopCliPeerSmokeConfig config, {
+  required String handle,
+  required String displayLabel,
+}) async {
   final recover = await _tryAppIdentityAction(
     () => onboarding.recoverHandle(
       phone: config.otpPhone,
       otp: config.otpCode,
-      handle: config.appHandle,
+      handle: handle,
     ),
   );
   if (recover.session != null) {
@@ -583,8 +625,12 @@ Future<AppSession> _prepareAppIdentity(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
       otp: config.otpCode,
-      handle: config.appHandle,
-      nickName: 'AWiki E2E ${config.runId}',
+      handle: handle,
+      nickName: [
+        'AWiki E2E',
+        displayLabel.trim(),
+        config.runId,
+      ].where((value) => value.isNotEmpty).join(' '),
     ),
   );
   if (register.session != null) {

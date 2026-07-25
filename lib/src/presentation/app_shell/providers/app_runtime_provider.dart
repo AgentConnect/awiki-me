@@ -8,6 +8,7 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 import '../../../app/app_locale.dart';
 import '../../../app/app_services.dart';
 import '../../../app/ui_feedback.dart';
+import '../../../application/app_session_service.dart';
 import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
 import '../../../application/agent/agent_control_projection.dart';
@@ -25,8 +26,9 @@ import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
-import '../../profile/profile_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
+import '../../profile/peer_profile_provider.dart';
+import '../../profile/profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
@@ -56,7 +58,11 @@ class AppRuntimeState {
 }
 
 class AppRuntimeController extends StateNotifier<AppRuntimeState> {
-  AppRuntimeController(this.ref) : super(const AppRuntimeState()) {
+  AppRuntimeController(
+    this.ref, {
+    Duration requestTimeout = const Duration(seconds: 20),
+  }) : _requestTimeout = requestTimeout,
+       super(const AppRuntimeState()) {
     _lifecycleSubscription = ref.listen<AppLifecycleState>(
       appLifecycleProvider,
       _handleLifecycleChanged,
@@ -66,10 +72,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           realtimeConnectionStatusProvider,
           _handleRealtimeStatusChanged,
         );
-    _realtimeUpdateSubscription = ref
-        .read(realtimeApplicationServiceProvider)
-        .updates
-        .listen(_applyRealtimeUpdate);
     _notificationActivationSubscription = ref
         .read(notificationFacadeProvider)
         .activations
@@ -79,16 +81,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   final Ref ref;
-  static const Duration _requestTimeout = Duration(seconds: 20);
+  final Duration _requestTimeout;
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
-  bool _isRecoveringRealtimeSession = false;
   bool _isLoggingOut = false;
-  Future<void>? _authenticatedRefreshOperation;
+  _SessionEpochOperation? _authenticatedRefreshOperation;
+  _SessionEpochOperation? _realtimeRecoveryOperation;
+  int _busyOperationCount = 0;
+  Future<void> _e2eeInitializationTail = Future<void>.value();
+  SessionEpoch? _lastAuthenticatedRefreshEpoch;
   DateTime? _lastAuthenticatedRefreshStartedAt;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
-  late final StreamSubscription<RealtimeUpdate> _realtimeUpdateSubscription;
+  StreamSubscription<RealtimeUpdate>? _realtimeUpdateSubscription;
   late final StreamSubscription<NotificationActivation>
   _notificationActivationSubscription;
 
@@ -96,7 +101,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (state.isInitialized) {
       return;
     }
-    state = state.copyWith(isBusy: true);
+    _beginBusyOperation();
     try {
       final sessions = ref.read(appSessionServiceProvider);
       final localIdentities = await sessions.listLocalIdentities();
@@ -106,7 +111,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
       final session = await sessions.restoreSession();
       if (session != null) {
-        await activateSession(_legacySessionFromAppSession(session));
+        await activateCommittedSession(session);
       }
       final initialActivation = await ref
           .read(notificationFacadeProvider)
@@ -114,36 +119,82 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       if (initialActivation != null) {
         await _handleNotificationActivation(initialActivation);
       }
-      state = state.copyWith(isInitialized: true, isBusy: false);
+      state = state.copyWith(isInitialized: true);
     } on TimeoutException {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
-      state = state.copyWith(isBusy: false, isInitialized: true);
+      state = state.copyWith(isInitialized: true);
     } catch (error) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
-      state = state.copyWith(isBusy: false, isInitialized: true);
+      state = state.copyWith(isInitialized: true);
+    } finally {
+      _endBusyOperation();
     }
   }
 
-  Future<void> activateSession(SessionIdentity session) async {
+  Future<void> _activateSession(AppSessionLease requestedLease) async {
+    final lease = await _currentSessionLeaseMatching(requestedLease);
+    if (lease == null || !mounted) {
+      return;
+    }
+    final session = _legacySessionFromAppSession(lease.session);
     final totalWatch = Stopwatch()..start();
-    state = state.copyWith(isBusy: true);
+    _beginBusyOperation();
     try {
+      final currentSession = ref.read(sessionProvider).session;
+      if (currentSession != null) {
+        ref
+            .read(sessionProvider.notifier)
+            .upsertLocalCredential(currentSession);
+        _clearAuthenticatedUiState();
+      }
       ref.read(selectedConversationProvider.notifier).clearSelection();
-      ref.read(sessionProvider.notifier).setSession(session);
-      await AwikiPerformanceLogger.async(
-        'app_runtime.activate_session.e2ee',
-        () => ref.read(e2eeFacadeProvider).initialize(session),
+      final initialized = await _enqueueE2eeInitialization(
+        lease,
+        session,
+      ).timeout(_requestTimeout);
+      if (!initialized || !_isSessionLeaseTransitionCurrent(lease)) {
+        return;
+      }
+      ref.read(sessionProvider.notifier).activateSession(session);
+      final epoch = ref.read(sessionProvider).activeEpoch!;
+      _adoptSessionEpoch(epoch);
+      _bindRealtimeUpdates(epoch);
+      if (!_isSessionLeaseTransitionCurrent(lease)) {
+        if (_isSessionEpochActive(epoch)) {
+          _clearAuthenticatedUiState();
+        }
+        return;
+      }
+      if (!_isSessionEpochActive(epoch)) {
+        return;
+      }
+      state = state.copyWith(isInitialized: true);
+      unawaited(
+        _refreshAuthenticatedDataInBackground(epoch: epoch, debounce: false),
       );
-      state = state.copyWith(isBusy: false, isInitialized: true);
-      unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
       _scheduleReliableSync('startup', immediate: true);
-      _ensureRealtimeConnected();
+      _ensureRealtimeConnected(epoch);
+    } on TimeoutException {
+      if (!_isSessionLeaseTransitionCurrent(lease)) {
+        return;
+      }
+      await ref.read(appSessionServiceProvider).abortSessionIfCurrent(lease);
+      rethrow;
+    } catch (_) {
+      if (!_isSessionLeaseTransitionCurrent(lease)) {
+        return;
+      }
+      await ref.read(appSessionServiceProvider).abortSessionIfCurrent(lease);
+      rethrow;
     } finally {
-      state = state.copyWith(isBusy: false, isInitialized: true);
+      if (mounted) {
+        state = state.copyWith(isInitialized: true);
+      }
+      _endBusyOperation();
       totalWatch.stop();
       AwikiPerformanceLogger.log(
         'app_runtime.activate_session',
@@ -153,12 +204,110 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> loginWithLocalCredential(String credentialName) async {
-    await _runBusy(() async {
-      final session = await ref
-          .read(appSessionServiceProvider)
-          .loginWithIdentity(credentialName);
-      await activateSession(_legacySessionFromAppSession(session));
-    });
+    final currentSession = ref.read(sessionProvider).session;
+    if (currentSession != null) {
+      ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
+      _clearAuthenticatedUiState();
+    }
+    AppSession? session;
+    AppSessionLease? restoredLease;
+    final sessions = ref.read(appSessionServiceProvider);
+    final transition = sessions.beginSessionTransition();
+    await _runBusy(
+      () async {
+        session = await sessions.loginWithIdentity(
+          credentialName,
+          transition: transition,
+        );
+      },
+      onFailure: () async {
+        restoredLease = await _cancelOrAbortSessionTransition(transition);
+      },
+      shouldReportFailure: () => sessions.isLatestSessionTransition(transition),
+    );
+    final committed = session;
+    if (committed == null) {
+      final predecessor = restoredLease;
+      if (predecessor != null) {
+        await _runBusy(
+          () => _activateSession(predecessor),
+          enforceTimeout: false,
+        );
+      }
+      return;
+    }
+    await _runBusy(
+      () => activateCommittedSession(committed),
+      enforceTimeout: false,
+    );
+  }
+
+  Future<void> activateCommittedSession(
+    AppSession session, {
+    AppSessionTransition? expectedTransition,
+  }) async {
+    final lease = await ref
+        .read(appSessionServiceProvider)
+        .currentSessionLease();
+    if (lease == null ||
+        lease.session.identityId != session.identityId ||
+        lease.session.did != session.did ||
+        (expectedTransition != null &&
+            !identical(lease.transition, expectedTransition))) {
+      if (expectedTransition != null) {
+        throw const AppSessionTransitionSuperseded();
+      }
+      return;
+    }
+    await _activateSession(lease);
+  }
+
+  Future<AppSessionLease?> _currentSessionLeaseMatching(
+    AppSessionLease requested,
+  ) async {
+    final current = await ref
+        .read(appSessionServiceProvider)
+        .currentSessionLease();
+    if (current == null ||
+        !identical(current.transition, requested.transition) ||
+        current.session.identityId != requested.session.identityId) {
+      return null;
+    }
+    return current;
+  }
+
+  bool _isSessionLeaseTransitionCurrent(AppSessionLease lease) {
+    return mounted &&
+        ref
+            .read(appSessionServiceProvider)
+            .isSessionTransitionCurrent(lease.transition);
+  }
+
+  Future<bool> _enqueueE2eeInitialization(
+    AppSessionLease lease,
+    SessionIdentity session,
+  ) {
+    final previous = _e2eeInitializationTail;
+    final completed = Completer<void>();
+    _e2eeInitializationTail = completed.future;
+
+    return () async {
+      await previous;
+      try {
+        if (!_isSessionLeaseTransitionCurrent(lease)) {
+          return false;
+        }
+        await AwikiPerformanceLogger.async(
+          'app_runtime.activate_session.e2ee',
+          () => ref.read(e2eeFacadeProvider).initialize(session),
+        );
+        return _isSessionLeaseTransitionCurrent(lease);
+      } finally {
+        if (!completed.isCompleted) {
+          completed.complete();
+        }
+      }
+    }();
   }
 
   Future<void> refreshLocalCredentials() async {
@@ -179,7 +328,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     _isLoggingOut = true;
     _clearAuthenticatedUiState();
-    state = state.copyWith(isBusy: false, isInitialized: true);
+    state = state.copyWith(isInitialized: true);
     try {
       await ref.read(appSessionServiceProvider).logout();
     } finally {
@@ -196,13 +345,17 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       _isLoggingOut = true;
       try {
         ref.read(sessionProvider.notifier).clear();
+        _invalidateSessionOperations();
+        _cancelRealtimeUpdates();
         ref.read(profileProvider.notifier).clear();
         ref.read(agentsProvider.notifier).clear();
+        ref.read(agentInboxProvider.notifier).clear();
         ref.read(selectedConversationProvider.notifier).clearSelection();
         await ref.read(conversationListProvider.notifier).clear();
         ref.read(chatThreadsProvider.notifier).clear();
         ref.read(friendsProvider.notifier).clear();
         ref.read(peerDisplayProfileProvider.notifier).clear();
+        ref.invalidate(peerProfileProvider);
         ref.read(groupProvider.notifier).clear();
         await ref
             .read(appSessionServiceProvider)
@@ -217,13 +370,17 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   void _clearAuthenticatedUiState() {
     ref.read(sessionProvider.notifier).clear();
+    _invalidateSessionOperations();
+    _cancelRealtimeUpdates();
     ref.read(profileProvider.notifier).clear();
     ref.read(agentsProvider.notifier).clear();
+    ref.read(agentInboxProvider.notifier).clear();
     ref.read(selectedConversationProvider.notifier).clearSelection();
     ref.read(conversationListProvider.notifier).clearLocal();
     ref.read(chatThreadsProvider.notifier).clear();
     ref.read(friendsProvider.notifier).clear();
     ref.read(peerDisplayProfileProvider.notifier).clear();
+    ref.invalidate(peerProfileProvider);
     ref.read(groupProvider.notifier).clear();
   }
 
@@ -239,9 +396,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         .showInfo(AppMessage.featureNotImplemented());
   }
 
-  Future<void> _refreshAuthenticatedData() async {
+  Future<void> _refreshAuthenticatedData(SessionEpoch epoch) async {
     final totalWatch = Stopwatch()..start();
-    if (!_canRefreshAuthenticatedData) {
+    if (!_isSessionEpochActive(epoch)) {
       return;
     }
 
@@ -256,7 +413,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       'app_refresh.conversation_fast_local',
       () => ref.read(conversationListProvider.notifier).refreshFastLocal(),
     );
-    if (!_canRefreshAuthenticatedData) {
+    if (!_isSessionEpochActive(epoch)) {
       return;
     }
 
@@ -278,6 +435,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         () => ref.read(groupProvider.notifier).refresh(),
       ),
     ]);
+    if (!_isSessionEpochActive(epoch)) {
+      return;
+    }
     totalWatch.stop();
     AwikiPerformanceLogger.log(
       'app_refresh.authenticated_data',
@@ -285,20 +445,26 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     );
   }
 
-  bool get _canRefreshAuthenticatedData =>
-      mounted && !_isLoggingOut && ref.read(sessionProvider).session != null;
-
-  Future<void> _refreshAuthenticatedDataInBackground({bool debounce = true}) {
+  Future<void> _refreshAuthenticatedDataInBackground({
+    SessionEpoch? epoch,
+    bool debounce = true,
+  }) {
+    final requestedEpoch = epoch ?? ref.read(sessionProvider).activeEpoch;
+    if (requestedEpoch == null || !_isSessionEpochActive(requestedEpoch)) {
+      return Future<void>.value();
+    }
     final active = _authenticatedRefreshOperation;
-    if (active != null) {
+    if (active != null && active.epoch == requestedEpoch) {
       AwikiPerformanceLogger.log(
         'app_refresh.authenticated_data.request',
         fields: const <String, Object?>{'reused': true},
       );
-      return active;
+      return active.operation;
     }
     final now = DateTime.now();
-    final lastStarted = _lastAuthenticatedRefreshStartedAt;
+    final lastStarted = _lastAuthenticatedRefreshEpoch == requestedEpoch
+        ? _lastAuthenticatedRefreshStartedAt
+        : null;
     final delay = debounce && lastStarted != null
         ? _refreshDebounceWindow - now.difference(lastStarted)
         : Duration.zero;
@@ -312,16 +478,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             );
             await Future<void>.delayed(delay);
           }
+          if (!_isSessionEpochActive(requestedEpoch)) {
+            return;
+          }
+          _lastAuthenticatedRefreshEpoch = requestedEpoch;
           _lastAuthenticatedRefreshStartedAt = DateTime.now();
           try {
-            await _refreshAuthenticatedData().timeout(_requestTimeout);
+            await _refreshAuthenticatedData(
+              requestedEpoch,
+            ).timeout(_requestTimeout);
           } on TimeoutException {
             return;
           } catch (error) {
-            if (!mounted) {
-              return;
-            }
-            if (_isLoggingOut || ref.read(sessionProvider).session == null) {
+            if (!_isSessionEpochActive(requestedEpoch)) {
               return;
             }
             final message = AppMessage.fromError(error);
@@ -331,11 +500,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             }
           }
         })().whenComplete(() {
-          if (identical(_authenticatedRefreshOperation, operation)) {
+          if (identical(_authenticatedRefreshOperation?.operation, operation)) {
             _authenticatedRefreshOperation = null;
           }
         });
-    _authenticatedRefreshOperation = operation;
+    _authenticatedRefreshOperation = _SessionEpochOperation(
+      epoch: requestedEpoch,
+      operation: operation,
+    );
     AwikiPerformanceLogger.log(
       'app_refresh.authenticated_data.request',
       fields: <String, Object?>{
@@ -362,11 +534,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (next != AppLifecycleState.resumed) {
       return;
     }
-    final session = ref.read(sessionProvider).session;
-    if (session == null) {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null) {
       return;
     }
-    _ensureRealtimeConnected();
+    _ensureRealtimeConnected(epoch);
     _scheduleReliableSync('app_resumed');
     unawaited(_refreshAuthenticatedDataInBackground());
   }
@@ -396,15 +568,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         previousStatus != RealtimeConnectionStatus.failed) {
       return;
     }
-    if (ref.read(sessionProvider).session == null) {
+    if (ref.read(sessionProvider).activeEpoch == null) {
       return;
     }
     _scheduleReliableSync('realtime_reconnected');
     unawaited(_refreshAuthenticatedDataInBackground());
   }
 
-  void _ensureRealtimeConnected() {
-    if (_isLoggingOut || ref.read(sessionProvider).session == null) {
+  void _ensureRealtimeConnected(SessionEpoch epoch) {
+    if (!_isSessionEpochActive(epoch)) {
       return;
     }
     final realtime = ref.read(realtimeApplicationServiceProvider);
@@ -414,49 +586,112 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     unawaited(realtime.start().catchError((_) {}));
   }
 
-  Future<void> _recoverRealtimeSession() async {
-    if (_isLoggingOut || _isRecoveringRealtimeSession) {
-      return;
+  Future<void> _recoverRealtimeSession() {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null || !_isSessionEpochActive(epoch)) {
+      return Future<void>.value();
     }
-    _isRecoveringRealtimeSession = true;
+    final active = _realtimeRecoveryOperation;
+    if (active != null && active.epoch == epoch) {
+      return active.operation;
+    }
+    late final Future<void> operation;
+    operation = _runRealtimeRecovery(epoch).whenComplete(() {
+      if (identical(_realtimeRecoveryOperation?.operation, operation)) {
+        _realtimeRecoveryOperation = null;
+      }
+    });
+    _realtimeRecoveryOperation = _SessionEpochOperation(
+      epoch: epoch,
+      operation: operation,
+    );
+    return operation;
+  }
+
+  Future<void> _runRealtimeRecovery(SessionEpoch epoch) async {
     try {
-      if (ref.read(sessionProvider).session == null) {
+      if (!_isSessionEpochActive(epoch)) {
         return;
       }
       final refreshed = await ref
           .read(appSessionServiceProvider)
           .refreshSession();
-      if (!mounted ||
-          _isLoggingOut ||
-          ref.read(sessionProvider).session == null) {
+      if (!_isSessionEpochActive(epoch)) {
         return;
       }
       if (refreshed != null) {
         ref
             .read(sessionProvider.notifier)
-            .setSession(_legacySessionFromAppSession(refreshed));
+            .updateSessionMetadataIfCurrent(
+              _legacySessionFromAppSession(refreshed),
+            );
+        if (!_isSessionEpochActive(epoch)) {
+          return;
+        }
       }
-      await _refreshAuthenticatedDataInBackground();
-      if (!mounted ||
-          _isLoggingOut ||
-          ref.read(sessionProvider).session == null) {
+      await _refreshAuthenticatedDataInBackground(epoch: epoch);
+      if (!_isSessionEpochActive(epoch)) {
         return;
       }
       if (refreshed != null) {
-        _ensureRealtimeConnected();
+        _ensureRealtimeConnected(epoch);
       }
     } catch (_) {
-      if (mounted &&
-          !_isLoggingOut &&
-          ref.read(sessionProvider).session != null) {
-        await _refreshAuthenticatedDataInBackground();
+      if (_isSessionEpochActive(epoch)) {
+        await _refreshAuthenticatedDataInBackground(epoch: epoch);
       }
-    } finally {
-      _isRecoveringRealtimeSession = false;
     }
   }
 
-  void _applyRealtimeUpdate(RealtimeUpdate update) {
+  bool _isSessionEpochActive(SessionEpoch epoch) {
+    return mounted &&
+        !_isLoggingOut &&
+        epoch.matches(ref.read(sessionProvider));
+  }
+
+  void _adoptSessionEpoch(SessionEpoch epoch) {
+    final refresh = _authenticatedRefreshOperation;
+    if (refresh != null && refresh.epoch != epoch) {
+      _authenticatedRefreshOperation = null;
+    }
+    final recovery = _realtimeRecoveryOperation;
+    if (recovery != null && recovery.epoch != epoch) {
+      _realtimeRecoveryOperation = null;
+    }
+    if (_lastAuthenticatedRefreshEpoch != epoch) {
+      _lastAuthenticatedRefreshEpoch = null;
+      _lastAuthenticatedRefreshStartedAt = null;
+    }
+  }
+
+  void _invalidateSessionOperations() {
+    _authenticatedRefreshOperation = null;
+    _realtimeRecoveryOperation = null;
+    _lastAuthenticatedRefreshEpoch = null;
+    _lastAuthenticatedRefreshStartedAt = null;
+  }
+
+  void _bindRealtimeUpdates(SessionEpoch epoch) {
+    _cancelRealtimeUpdates();
+    _realtimeUpdateSubscription = ref
+        .read(realtimeApplicationServiceProvider)
+        .updates
+        .listen((update) => _applyRealtimeUpdate(epoch, update));
+  }
+
+  void _cancelRealtimeUpdates() {
+    final subscription = _realtimeUpdateSubscription;
+    _realtimeUpdateSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel().catchError((_) {}));
+    }
+  }
+
+  void _applyRealtimeUpdate(SessionEpoch expectedEpoch, RealtimeUpdate update) {
+    if (!_isSessionEpochActive(expectedEpoch) ||
+        update.ownerDid.trim() != expectedEpoch.ownerDid) {
+      return;
+    }
     final traceConversation = update.conversation ?? update.conversationHint;
     _runtimeTrace(
       'realtime.update',
@@ -593,6 +828,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       } else {
         final target = NotificationTarget(
           storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+          ownerDid: expectedEpoch.ownerDid,
           conversationId: normalizedConversationHint.conversationId,
         );
         ref
@@ -605,27 +841,36 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<void> _handleNotificationActivation(
     NotificationActivation activation,
   ) async {
+    final epoch = ref.read(sessionProvider).activeEpoch;
     try {
       await ref.read(desktopShellServiceProvider).showWindow();
     } on Object {
       // Routing remains available even when a platform shell is absent.
     }
+    if (!_isNotificationEpochCurrent(epoch)) {
+      return;
+    }
     ref.read(shellTabProvider.notifier).setTab(0);
     ref.read(selectedConversationProvider.notifier).clearSelection();
     final target = activation.target;
-    if (target == null ||
+    if (epoch == null ||
+        target == null ||
         target.storageScopeId !=
-            ref.read(activeAppTenantProvider).storageScopeId) {
+            ref.read(activeAppTenantProvider).storageScopeId ||
+        target.ownerDid != epoch.ownerDid) {
       return;
     }
     try {
       final conversation = await ref
           .read(conversationListProvider.notifier)
-          .commitConversationId(target.conversationId);
+          .commitConversationId(target.conversationId, expectedEpoch: epoch);
+      if (!_isNotificationEpochCurrent(epoch)) {
+        return;
+      }
       await ref
           .read(chatThreadsProvider.notifier)
           .openConversation(conversation);
-      if (!mounted) {
+      if (!_isNotificationEpochCurrent(epoch)) {
         return;
       }
       ref
@@ -634,6 +879,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     } on Object {
       // A stale/deleted conversation target degrades to the message list.
     }
+  }
+
+  bool _isNotificationEpochCurrent(SessionEpoch? epoch) {
+    return mounted &&
+        !_isLoggingOut &&
+        ref.read(sessionProvider).activeEpoch == epoch;
   }
 
   void _scheduleReliableSync(String reason, {bool immediate = false}) {
@@ -699,33 +950,86 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     return lookupAppLocalizations(effective.locale);
   }
 
-  Future<void> _runBusy(Future<void> Function() action) async {
-    state = state.copyWith(isBusy: true);
+  Future<void> _runBusy(
+    Future<void> Function() action, {
+    bool enforceTimeout = true,
+    Future<void> Function()? onFailure,
+    bool Function()? shouldReportFailure,
+  }) async {
+    _beginBusyOperation();
     try {
-      await action().timeout(_requestTimeout);
+      final operation = action();
+      await (enforceTimeout ? operation.timeout(_requestTimeout) : operation);
     } on TimeoutException {
+      await onFailure?.call();
+      if (shouldReportFailure?.call() == false) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
+    } on AppSessionTransitionSuperseded {
+      await onFailure?.call();
     } catch (error) {
+      await onFailure?.call();
+      if (shouldReportFailure?.call() == false) {
+        return;
+      }
       final message = AppMessage.fromError(error);
       ref.read(uiFeedbackProvider.notifier).showError(message);
       if (message == AppMessage.sessionExpiredRelogin()) {
         await logout();
       }
     } finally {
+      _endBusyOperation();
+    }
+  }
+
+  Future<AppSessionLease?> _cancelOrAbortSessionTransition(
+    AppSessionTransition transition,
+  ) async {
+    final sessions = ref.read(appSessionServiceProvider);
+    sessions.cancelPendingSessionTransition(transition);
+    final lease = await sessions.currentSessionLease();
+    if (lease != null && identical(lease.transition, transition)) {
+      await sessions.abortSessionIfCurrent(lease);
+      return null;
+    }
+    return lease != null && transition.isPredecessorLease(lease) ? lease : null;
+  }
+
+  void _beginBusyOperation() {
+    _busyOperationCount += 1;
+    if (mounted && !state.isBusy) {
+      state = state.copyWith(isBusy: true);
+    }
+  }
+
+  void _endBusyOperation() {
+    if (_busyOperationCount > 0) {
+      _busyOperationCount -= 1;
+    }
+    if (mounted && state.isBusy && _busyOperationCount == 0) {
       state = state.copyWith(isBusy: false);
     }
   }
 
   @override
   void dispose() {
+    _invalidateSessionOperations();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
-    _realtimeUpdateSubscription.cancel();
+    _cancelRealtimeUpdates();
     _notificationActivationSubscription.cancel();
     super.dispose();
   }
+}
+
+class _SessionEpochOperation {
+  const _SessionEpochOperation({required this.epoch, required this.operation});
+
+  final SessionEpoch epoch;
+  final Future<void> operation;
 }
 
 void _runtimeTrace(String event, {Map<String, Object?> fields = const {}}) {

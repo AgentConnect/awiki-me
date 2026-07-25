@@ -1,16 +1,19 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
@@ -29,6 +32,134 @@ class _RecoveryGroupController extends GroupController {
   }
 }
 
+class _DelayedPublicProfileService implements ProfileApplicationService {
+  final Completer<UserProfile> profile = Completer<UserProfile>();
+  int loadCalls = 0;
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    loadCalls += 1;
+    return profile.future;
+  }
+
+  @override
+  Future<UserProfile> loadMyProfile() {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
+}
+
+class _DelayedCreateGroupService extends FakeGroupApplicationService {
+  _DelayedCreateGroupService(super.gateway);
+
+  final Completer<void> started = Completer<void>();
+  final Completer<GroupSummary> result = Completer<GroupSummary>();
+
+  @override
+  Future<GroupSummary> createGroup({
+    required String name,
+    required String slug,
+    required String description,
+    required String goal,
+    required String rules,
+    String? messagePrompt,
+    GroupIdentitySelection identity = const GroupIdentitySelection.didOnly(),
+  }) {
+    started.complete();
+    return result.future;
+  }
+}
+
+class _DelayedRefreshGroupService extends FakeGroupApplicationService {
+  _DelayedRefreshGroupService(super.gateway);
+
+  final Completer<void> getStarted = Completer<void>();
+  final Completer<GroupSummary> getResult = Completer<GroupSummary>();
+  int listMembersCalls = 0;
+
+  @override
+  Future<GroupSummary> getGroup(String groupDid) {
+    getStarted.complete();
+    return getResult.future;
+  }
+
+  @override
+  Future<List<GroupMemberSummary>> listMembers(
+    String groupDid, {
+    int limit = 100,
+  }) {
+    listMembersCalls += 1;
+    return Future<List<GroupMemberSummary>>.value(const <GroupMemberSummary>[]);
+  }
+}
+
+class _DelayedMemberMutationGroupService extends FakeGroupApplicationService {
+  _DelayedMemberMutationGroupService(super.gateway);
+
+  final Completer<void> addStarted = Completer<void>();
+  final Completer<GroupSummary> addResult = Completer<GroupSummary>();
+  final Completer<void> removeStarted = Completer<void>();
+  final Completer<GroupSummary> removeResult = Completer<GroupSummary>();
+  int listMembersCalls = 0;
+
+  @override
+  Future<GroupSummary> addMember({
+    required String groupDid,
+    required String memberRef,
+    String role = 'member',
+  }) {
+    addStarted.complete();
+    return addResult.future;
+  }
+
+  @override
+  Future<GroupSummary> removeMember({
+    required String groupDid,
+    required String memberRef,
+  }) {
+    removeStarted.complete();
+    return removeResult.future;
+  }
+
+  @override
+  Future<List<GroupMemberSummary>> listMembers(
+    String groupDid, {
+    int limit = 100,
+  }) {
+    listMembersCalls += 1;
+    return Future<List<GroupMemberSummary>>.value(const <GroupMemberSummary>[]);
+  }
+}
+
+class _QueuedGroupMemberService extends FakeGroupApplicationService {
+  _QueuedGroupMemberService(super.gateway, this.results);
+
+  final List<Completer<List<GroupMemberSummary>>> results;
+  int listMembersCalls = 0;
+
+  @override
+  Future<List<GroupMemberSummary>> listMembers(
+    String groupDid, {
+    int limit = 100,
+  }) {
+    final result = results[listMembersCalls];
+    listMembersCalls += 1;
+    return result.future;
+  }
+}
+
+Matcher get throwsSessionEpochChanged => throwsA(
+  isA<StateError>().having(
+    (error) => error.message,
+    'message',
+    'session_epoch_changed',
+  ),
+);
+
 void main() {
   const session = SessionIdentity(
     did: 'did:wba:awiki.ai:me:e1_key',
@@ -36,6 +167,13 @@ void main() {
     displayName: 'Me',
     handle: 'me',
     jwtToken: 'token',
+  );
+  const replacementSession = SessionIdentity(
+    did: 'did:wba:awiki.ai:new-owner:e1_key',
+    credentialName: 'new-owner.json',
+    displayName: 'New owner',
+    handle: 'new-owner',
+    jwtToken: 'new-token',
   );
 
   testWidgets('macOS 创建群弹窗只填写名称并直接进入群聊', (tester) async {
@@ -303,6 +441,7 @@ void main() {
             myRole: 'member',
           ),
         ),
+        session: session,
       ),
     );
     await tester.pumpAndSettle();
@@ -359,6 +498,7 @@ void main() {
       overrides: fakeApplicationServiceOverrides(gateway),
     );
     addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
 
     final members = await container
         .read(groupProvider.notifier)
@@ -371,6 +511,311 @@ void main() {
       container.read(groupMembersProvider(groupDid)).single.displayName,
       '李智诚',
     );
+  });
+
+  test('旧身份群成员 Profile 慢请求不会写入新身份投影', () async {
+    const groupDid = 'did:wba:awiki.ai:group:e1_group';
+    const memberDid = 'did:wba:awiki.ai:user:lzc:e1_member';
+    final profiles = _DelayedPublicProfileService();
+    addTearDown(() {
+      if (!profiles.profile.isCompleted) {
+        profiles.profile.complete(
+          const UserProfile(
+            did: memberDid,
+            nickName: 'Old member',
+            bio: '',
+            tags: <String>[],
+            profileMarkdown: '',
+          ),
+        );
+      }
+    });
+    final gateway = FakeAwikiGateway()
+      ..groupMembersByGroupId = const <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: memberDid,
+            did: memberDid,
+            handle: 'lzc',
+            role: 'member',
+            peerPersonaId: 'persona-old-member',
+          ),
+        ],
+      };
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        profileApplicationServiceProvider.overrideWithValue(profiles),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+
+    final load = container
+        .read(groupProvider.notifier)
+        .loadGroupMembers(groupDid);
+    await pumpEventQueue();
+    expect(profiles.loadCalls, 1);
+    final loadFailure = expectLater(load, throwsSessionEpochChanged);
+
+    container.read(sessionProvider.notifier).setSession(replacementSession);
+    container.read(groupProvider.notifier).clear();
+    container.read(peerDisplayProfileProvider.notifier).clear();
+    profiles.profile.complete(
+      const UserProfile(
+        did: memberDid,
+        nickName: 'Old member',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+      ),
+    );
+    await loadFailure;
+
+    final peerState = container.read(peerDisplayProfileProvider);
+    expect(peerState.ownerDid, isNull);
+    expect(peerState.profilesByPersonaId, isEmpty);
+    expect(container.read(groupProvider).membersByGroup, isEmpty);
+  });
+
+  test('旧身份建群结果不会写入新身份群列表', () async {
+    final gateway = FakeAwikiGateway();
+    final groups = _DelayedCreateGroupService(gateway);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+    final controller = container.read(groupProvider.notifier);
+
+    final create = controller.createGroup(
+      name: 'Old owner group',
+      slug: 'old-owner-group',
+      description: '',
+      goal: '',
+      rules: '',
+    );
+    await groups.started.future;
+    final createFailure = expectLater(create, throwsSessionEpochChanged);
+    container.read(sessionProvider.notifier).setSession(replacementSession);
+    controller.clear();
+    groups.result.complete(
+      const GroupSummary(
+        conversationId: 'group:old-owner',
+        groupId: 'did:wba:awiki.ai:group:old-owner',
+        name: 'Old owner group',
+        description: '',
+        memberCount: 1,
+        lastMessageAt: null,
+      ),
+    );
+
+    await createFailure;
+    expect(container.read(groupProvider).groups, isEmpty);
+  });
+
+  test('旧身份群详情慢请求不会继续加载成员或发布群状态', () async {
+    const groupDid = 'did:wba:awiki.ai:group:old-owner';
+    final gateway = FakeAwikiGateway();
+    final groups = _DelayedRefreshGroupService(gateway);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+    final controller = container.read(groupProvider.notifier);
+
+    final refresh = controller.refreshGroup(groupDid);
+    await groups.getStarted.future;
+    final refreshFailure = expectLater(refresh, throwsSessionEpochChanged);
+    container.read(sessionProvider.notifier).setSession(replacementSession);
+    groups.getResult.complete(
+      const GroupSummary(
+        conversationId: 'group:old-owner',
+        groupId: groupDid,
+        name: 'Old owner group',
+        description: '',
+        memberCount: 1,
+        lastMessageAt: null,
+      ),
+    );
+
+    await refreshFailure;
+    expect(groups.listMembersCalls, 0);
+    expect(container.read(groupProvider).groups, isEmpty);
+    expect(container.read(groupProvider).membersByGroup, isEmpty);
+  });
+
+  test('旧身份添加成员的迟到结果不会刷新成员或返回群实体', () async {
+    const groupDid = 'did:wba:awiki.ai:group:old-owner';
+    final gateway = FakeAwikiGateway();
+    final groups = _DelayedMemberMutationGroupService(gateway);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+
+    final add = container
+        .read(groupProvider.notifier)
+        .addGroupMember(groupId: groupDid, memberRef: 'bob.awiki.ai');
+    await groups.addStarted.future;
+    final addFailure = expectLater(add, throwsSessionEpochChanged);
+    container.read(sessionProvider.notifier).setSession(replacementSession);
+    groups.addResult.complete(
+      const GroupSummary(
+        conversationId: 'group:old-owner',
+        groupId: groupDid,
+        name: 'Old owner group',
+        description: '',
+        memberCount: 2,
+        lastMessageAt: null,
+      ),
+    );
+
+    await addFailure;
+    expect(groups.listMembersCalls, 0);
+    expect(container.read(groupProvider).groups, isEmpty);
+    expect(container.read(groupProvider).membersByGroup, isEmpty);
+  });
+
+  test('旧身份移除成员的迟到结果不会刷新成员或返回群实体', () async {
+    const groupDid = 'did:wba:awiki.ai:group:old-owner';
+    final gateway = FakeAwikiGateway();
+    final groups = _DelayedMemberMutationGroupService(gateway);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+
+    final remove = container
+        .read(groupProvider.notifier)
+        .removeGroupMember(groupId: groupDid, memberRef: 'bob.awiki.ai');
+    await groups.removeStarted.future;
+    final removeFailure = expectLater(remove, throwsSessionEpochChanged);
+    container.read(sessionProvider.notifier).setSession(replacementSession);
+    groups.removeResult.complete(
+      const GroupSummary(
+        conversationId: 'group:old-owner',
+        groupId: groupDid,
+        name: 'Old owner group',
+        description: '',
+        memberCount: 1,
+        lastMessageAt: null,
+      ),
+    );
+
+    await removeFailure;
+    expect(groups.listMembersCalls, 0);
+    expect(container.read(groupProvider).groups, isEmpty);
+    expect(container.read(groupProvider).membersByGroup, isEmpty);
+  });
+
+  test('相同群的成员初始加载按 session epoch 独立且只发布新身份结果', () async {
+    const groupDid = 'did:wba:awiki.ai:group:shared';
+    const oldMember = GroupMemberSummary(
+      userId: 'did:wba:awiki.ai:user:old-member',
+      did: 'did:wba:awiki.ai:user:old-member',
+      handle: 'old-member.awiki.ai',
+      role: 'member',
+    );
+    const newMember = GroupMemberSummary(
+      userId: 'did:wba:awiki.ai:user:new-member',
+      did: 'did:wba:awiki.ai:user:new-member',
+      handle: 'new-member.awiki.ai',
+      role: 'member',
+    );
+    final oldResult = Completer<List<GroupMemberSummary>>();
+    final newResult = Completer<List<GroupMemberSummary>>();
+    final gateway = FakeAwikiGateway();
+    final groups = _QueuedGroupMemberService(
+      gateway,
+      <Completer<List<GroupMemberSummary>>>[oldResult, newResult],
+    );
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(session);
+    final controller = container.read(groupProvider.notifier);
+
+    final oldLoad = controller.ensureGroupMembersLoaded(groupDid);
+    expect(groups.listMembersCalls, 1);
+    final oldLoadFailure = expectLater(oldLoad, throwsSessionEpochChanged);
+    container.read(sessionProvider.notifier).setSession(replacementSession);
+
+    final newLoad = controller.ensureGroupMembersLoaded(groupDid);
+    expect(identical(newLoad, oldLoad), isFalse);
+    expect(groups.listMembersCalls, 2);
+    newResult.complete(const <GroupMemberSummary>[newMember]);
+    expect(await newLoad, const <GroupMemberSummary>[newMember]);
+
+    oldResult.complete(const <GroupMemberSummary>[oldMember]);
+    await oldLoadFailure;
+    expect(
+      container.read(groupProvider).membersByGroup[groupDid],
+      const <GroupMemberSummary>[newMember],
+    );
+  });
+
+  test('没有 active session epoch 时群操作在调用服务前失败', () async {
+    final gateway = FakeAwikiGateway();
+    final groups = _DelayedCreateGroupService(gateway);
+    groups.result.complete(
+      const GroupSummary(
+        conversationId: 'group:should-not-exist',
+        groupId: 'did:wba:awiki.ai:group:should-not-exist',
+        name: 'Should not exist',
+        description: '',
+        memberCount: 1,
+        lastMessageAt: null,
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: <Override>[
+        ...fakeApplicationServiceOverrides(gateway),
+        groupApplicationServiceProvider.overrideWithValue(groups),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await expectLater(
+      container
+          .read(groupProvider.notifier)
+          .createGroup(
+            name: 'Should not exist',
+            slug: 'should-not-exist',
+            description: '',
+            goal: '',
+            rules: '',
+          ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'No active awiki session. Please sign in first.',
+        ),
+      ),
+    );
+    expect(groups.started.isCompleted, isFalse);
+    expect(container.read(groupProvider).groups, isEmpty);
+    expect(container.read(groupProvider).membersByGroup, isEmpty);
   });
 
   testWidgets('群成员行优先展示 Display Name 而不是 handle', (tester) async {
