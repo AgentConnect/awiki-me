@@ -248,6 +248,7 @@ Future<void> openDirectConversationForDid(
   String? avatarUri,
   String? avatarSeed,
   String? conversationId,
+  bool popCurrentRouteOnTwoPane = false,
 }) async {
   final session = ref.read(sessionProvider).session;
   if (session == null) {
@@ -311,6 +312,9 @@ Future<void> openDirectConversationForDid(
         .read(selectedConversationProvider.notifier)
         .selectConversation(conversation);
     ref.read(shellTabProvider.notifier).setTab(0);
+    if (popCurrentRouteOnTwoPane && context.mounted) {
+      await Navigator.of(context).maybePop();
+    }
     return;
   }
   await AppNavigator.push(context, (_) => ChatPage(conversation: conversation));

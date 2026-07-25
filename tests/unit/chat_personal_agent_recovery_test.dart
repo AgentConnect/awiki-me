@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -49,7 +51,7 @@ const _runtime = AgentSummary(
   kind: AgentKind.runtime,
   daemonAgentDid: 'did:agent:daemon',
   runtime: 'hermes',
-  displayName: 'Hermes Message Agent',
+  displayName: 'Hermes Personal Agent',
   activeState: 'active',
   latest: AgentLatestStatus(status: 'ready'),
 );
@@ -133,7 +135,7 @@ void main() {
 
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.message.sync.v1',
             'message_id': 'msg_1',
             'conversation_id': 'dm:did:human:bob',
@@ -149,9 +151,9 @@ void main() {
       );
       expect(thread.messages, hasLength(1));
       expect(thread.messages.single.content, 'hello');
-      expect(thread.messageAgentSyncs, hasLength(1));
-      expect(thread.messageAgentSyncs.single.messageId, 'msg_1');
-      expect(thread.messageAgentSyncs.single.processingStatus, 'dispatched');
+      expect(thread.personalAgentSyncs, hasLength(1));
+      expect(thread.personalAgentSyncs.single.messageId, 'msg_1');
+      expect(thread.personalAgentSyncs.single.processingStatus, 'dispatched');
     },
   );
 
@@ -185,7 +187,7 @@ void main() {
 
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.message.sync.v1',
             'sync_type': 'runtime_final',
             'binding_id': 'binding_1',
@@ -203,8 +205,8 @@ void main() {
         chatThreadProvider(_timelineThreadId(conversation)),
       );
       expect(thread.agentPendingTurns, isEmpty);
-      expect(thread.messageAgentSyncs.single.type, 'runtime_final');
-      expect(thread.messageAgentSyncs.single.hasText, isTrue);
+      expect(thread.personalAgentSyncs.single.type, 'runtime_final');
+      expect(thread.personalAgentSyncs.single.hasText, isTrue);
     },
   );
 
@@ -233,7 +235,7 @@ void main() {
 
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.message.sync.v1',
             'sync_type': 'runtime_final',
             'binding_id': 'binding_1',
@@ -251,15 +253,15 @@ void main() {
         chatThreadProvider(_timelineThreadId(conversation)),
       );
       expect(sourceThread.messages, isEmpty);
-      expect(sourceThread.messageAgentSyncs.single.type, 'runtime_final');
+      expect(sourceThread.personalAgentSyncs.single.type, 'runtime_final');
       expect(
-        sourceThread.messageAgentSyncs.single.conversationId,
+        sourceThread.personalAgentSyncs.single.conversationId,
         'dm:peer-scope:v1:stable-bob',
       );
       expect(
         container
             .read(chatThreadProvider('dm:peer-scope:v1:stable-bob'))
-            .messageAgentSyncs,
+            .personalAgentSyncs,
         isEmpty,
       );
     },
@@ -424,7 +426,7 @@ void main() {
         createdAt: DateTime(2026, 6, 19, 10, 1),
       ),
     );
-    controller.applyMessageAgentControlPayload(const <String, Object?>{
+    controller.applyPersonalAgentControlPayload(const <String, Object?>{
       'schema': 'awiki.app.action.v1',
       'action_id': 'act_protected',
       'action': 'message.create_draft',
@@ -524,7 +526,7 @@ void main() {
           .debugSeedMessageForTesting(message);
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.app.action.v1',
             'action_id': 'act_draft',
             'action': 'message.create_draft',
@@ -549,6 +551,8 @@ void main() {
           .read(chatComposerDraftsProvider.notifier)
           .draftFor(conversation);
       expect(draft.text, '收到，我稍后处理。');
+      expect(gateway.lastSentContent, isEmpty);
+      expect(gateway.sendTextMessageCalls, 1);
       expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
       expect(gateway.lastSentPayloadIdempotencyKey, contains('act_draft'));
       expect(
@@ -556,6 +560,11 @@ void main() {
         AgentControlPayloads.appActionResultSchema,
       );
       expect(gateway.lastSentPayload?['state'], appActionStateSucceeded);
+      expect(gateway.lastSentPayload?.containsKey('result'), isFalse);
+      expect(
+        jsonEncode(gateway.lastSentPayload),
+        isNot(contains('draft_text')),
+      );
       expect(
         gateway.lastSentPayload?['runtime_agent_did'],
         'did:agent:runtime',
@@ -568,6 +577,57 @@ void main() {
   );
 
   test(
+    'confirm unsupported action fails closed without side effects',
+    () async {
+      container
+          .read(chatThreadsProvider.notifier)
+          .debugSeedMessageForTesting(message);
+      container
+          .read(chatThreadsProvider.notifier)
+          .applyPersonalAgentControlPayload(const <String, Object?>{
+            'schema': 'awiki.app.action.v1',
+            'action_id': 'act_unsupported',
+            'action': 'message.summarize_plain',
+            'state': 'requires_confirmation',
+            'runtime_agent_did': 'did:agent:runtime',
+            'run_id': 'run_unsupported',
+            'source_message_id': 'msg_1',
+            'conversation_id': 'direct:did:human:bob',
+            'requires_confirmation': true,
+            'args': <String, Object?>{'text': 'summarize this'},
+          });
+
+      await container
+          .read(chatThreadsProvider.notifier)
+          .confirmAppAction(
+            conversation: conversation,
+            actionId: 'act_unsupported',
+          );
+
+      final action = container
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .appActionRecords['act_unsupported'];
+      expect(action?.state, appActionStateFailed);
+      expect(action?.result?.errorCode, 'app_action_handler_unavailable');
+      expect(
+        container
+            .read(chatComposerDraftsProvider.notifier)
+            .draftFor(conversation)
+            .text,
+        isEmpty,
+      );
+      expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+      expect(gateway.lastSentPayload?['state'], appActionStateFailed);
+      expect(
+        gateway.lastSentPayload?['error_code'],
+        'app_action_handler_unavailable',
+      );
+      expect(gateway.lastSentContent, isEmpty);
+      expect(gateway.sendTextMessageCalls, 1);
+    },
+  );
+
+  test(
     'reject action sends rejected result and keeps composer untouched',
     () async {
       container
@@ -575,7 +635,7 @@ void main() {
           .debugSeedMessageForTesting(message);
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.app.action.v1',
             'action_id': 'act_contact',
             'action': 'contact.update_note',
@@ -614,7 +674,7 @@ void main() {
         .debugSeedMessageForTesting(message);
     container
         .read(chatThreadsProvider.notifier)
-        .applyMessageAgentControlPayload(const <String, Object?>{
+        .applyPersonalAgentControlPayload(const <String, Object?>{
           'schema': 'awiki.app.action.v1',
           'action_id': 'act_missing_target',
           'action': 'message.create_draft',

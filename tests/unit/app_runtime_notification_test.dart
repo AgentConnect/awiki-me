@@ -180,6 +180,76 @@ void main() {
       expect(container.read(appRuntimeProvider).isBusy, isFalse);
     });
 
+    test('系统通知变化只调度可靠同步，不投影成聊天提示', () async {
+      await activate();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        systemNotificationChanged: true,
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{
+        'type': 'system_notification_changed',
+      });
+      await pumpEventQueue();
+
+      expect(
+        messageSyncService.syncReasons,
+        contains('system_notification_changed'),
+      );
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    });
+
+    test('已授权成员设备按精确 DID 单飞激活一次', () async {
+      const joinedDid = 'did:test:joined-member';
+      gateway.loginResult = const SessionIdentity(
+        did: joinedDid,
+        credentialName: 'joined-local',
+        displayName: 'Joined',
+        handle: 'joined',
+      );
+      final runtime = container.read(appRuntimeProvider.notifier);
+
+      await Future.wait(<Future<void>>[
+        runtime.activateJoinedMember(joinedDid),
+        runtime.activateJoinedMember(joinedDid),
+      ]);
+
+      expect(gateway.loginCalls, 1);
+      expect(gateway.lastLoginCredentialName, joinedDid);
+      expect(container.read(sessionProvider).session?.did, joinedDid);
+      expect(container.read(appRuntimeProvider).activatedDid, joinedDid);
+    });
+
+    test('成员设备激活遇到错误 DID 时失败关闭并登出', () async {
+      gateway.loginResult = const SessionIdentity(
+        did: 'did:test:wrong',
+        credentialName: 'wrong-local',
+        displayName: 'Wrong',
+        handle: 'wrong',
+      );
+
+      await expectLater(
+        container
+            .read(appRuntimeProvider.notifier)
+            .activateJoinedMember('did:test:expected'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'joined_identity_did_mismatch',
+          ),
+        ),
+      );
+
+      expect(gateway.loginCalls, 1);
+      expect(gateway.logoutCalls, 1);
+      expect(container.read(sessionProvider).session, isNull);
+    });
+
     test('恢复前台时调度 app_resumed 可靠同步', () async {
       await activate();
       messageSyncService.syncReasons.clear();
@@ -1272,7 +1342,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('实时 Message Agent 控制 payload 回收到 chat provider', () async {
+    test('实时 Personal Agent 控制 payload 回收到 chat provider', () async {
       final conversation = ConversationSummary(
         threadId: 'direct:did:human:bob',
         conversationId: 'direct:did:human:bob',
@@ -1317,7 +1387,7 @@ void main() {
               'daemon_agent_did': 'did:agent:daemon',
               'runtime': 'hermes',
               'status': 'ready',
-              'display_name': 'Hermes Message Agent',
+              'display_name': 'Hermes Personal Agent',
             },
           ],
         },

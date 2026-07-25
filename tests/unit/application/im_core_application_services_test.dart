@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
+import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/group_core_port.dart';
 import 'package:awiki_me/src/application/ports/profile_core_port.dart';
@@ -279,10 +280,16 @@ class _FakeGroups implements GroupCorePort {
   Future<void> leaveGroup(String groupDid) async {}
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
-  }) async => const <GroupMemberSummary>[];
+    String? cursor,
+  }) async => GroupCollectionPage<GroupMemberSummary>(
+    items: const <GroupMemberSummary>[],
+    hasMore: false,
+    pageGroupDid: groupDid,
+    groupStateVersion: '1',
+  );
 
   @override
   Future<List<ChatMessage>> listMessages(
@@ -292,9 +299,15 @@ class _FakeGroups implements GroupCorePort {
   }) async => const <ChatMessage>[];
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) async {
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) async {
     listLimit = limit;
-    return <GroupSummary>[_group()];
+    return GroupCollectionPage<GroupSummary>(
+      items: <GroupSummary>[_group()],
+      hasMore: false,
+    );
   }
 
   @override

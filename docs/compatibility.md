@@ -73,7 +73,7 @@ AWiki Me currently focuses on:
 - Direct/Group messages, local projection, unread state, read acknowledgements, realtime hints, and reliable sync;
 - attachment/Object Transfer direction;
 - group-message mentions; and
-- Agent, Daemon, and Message Agent product entry points.
+- Agent, Daemon, and Personal Agent product entry points.
 
 It must not claim complete coverage of all ANP application protocols, complete cross-domain federation, AP2 payments, complete Group E2EE on arbitrary servers, or AWiki Agent Runtime management on arbitrary domains.
 

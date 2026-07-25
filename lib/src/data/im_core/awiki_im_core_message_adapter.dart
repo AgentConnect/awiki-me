@@ -42,6 +42,7 @@ class AwikiImCoreMessageAdapter
         core.SendTextRequest(
           target: _mappers.messageTargetToCore(thread),
           text: content,
+          security: _securityMode(isDirect: thread is AppDirectThreadRef),
         ),
       );
       return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
@@ -138,9 +139,10 @@ class AwikiImCoreMessageAdapter
         core.SendPayloadRequest(
           target: _mappers.messageTargetToCore(thread),
           payloadJson: jsonEncode(payload),
-          security: secure
-              ? core.MessageSecurityMode.secureDirect
-              : core.MessageSecurityMode.defaultPlain,
+          security: _securityMode(
+            isDirect: thread is AppDirectThreadRef,
+            secureRequested: secure,
+          ),
           idempotencyKey: idempotencyKey,
         ),
       );
@@ -163,6 +165,9 @@ class AwikiImCoreMessageAdapter
             conversationId: conversation.conversationId,
           ),
           text: content,
+          security: _securityMode(
+            isDirect: conversation.conversationId.startsWith('dm:'),
+          ),
           clientMessageId: clientMessageId,
           idempotencyKey: idempotencyKey,
         ),
@@ -190,6 +195,9 @@ class AwikiImCoreMessageAdapter
             conversationId: conversation.conversationId,
           ),
           payloadJson: jsonEncode(payload),
+          security: _securityMode(
+            isDirect: conversation.conversationId.startsWith('dm:'),
+          ),
           clientMessageId: clientMessageId,
           idempotencyKey: idempotencyKey,
         ),
@@ -200,6 +208,17 @@ class AwikiImCoreMessageAdapter
         expectedConversationId: conversation.conversationId,
       );
     });
+  }
+
+  core.MessageSecurityMode _securityMode({
+    required bool isDirect,
+    bool secureRequested = true,
+  }) {
+    return isDirect &&
+            secureRequested &&
+            _runtime.multiDeviceDirectE2eeEnabled
+        ? core.MessageSecurityMode.secureDirect
+        : core.MessageSecurityMode.defaultPlain;
   }
 
   @override

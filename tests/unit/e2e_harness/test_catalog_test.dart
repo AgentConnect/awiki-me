@@ -11,14 +11,79 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(56));
+      expect(catalog.cases, hasLength(66));
+      expect(
+        catalog.caseById.keys,
+        containsAll(<String>[
+          'ROOT-TRANSFER-E2E-001',
+          'ROOT-TRANSFER-E2E-002',
+          'DEVICE-JOIN-E2E-001',
+          'DEVICE-JOIN-E2E-002',
+          'DEVICE-REVOKE-E2E-001',
+          'STEP4-GROUP-PAGINATION-E2E-001',
+          'MLS-MULTI-DEVICE-E2E-001',
+          'MLS-MULTI-DEVICE-E2E-002',
+          'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+        ]),
+      );
       expect(
         catalog.suiteCaseIds.keys,
-        containsAll(<String>['smoke', 'full', 'direct']),
+        containsAll(<String>[
+          'smoke',
+          'multi-device',
+          'multi-device-remote-join',
+          'step4-revoke-mls',
+          'full',
+          'direct',
+        ]),
       );
+      expect(catalog.caseById['DEVICE-JOIN-E2E-001']!.catalogStatus, 'active');
+      expect(catalog.caseById['DEVICE-JOIN-E2E-002']!.catalogStatus, 'active');
+      expect(
+        catalog.caseById['ROOT-TRANSFER-E2E-001']!.catalogStatus,
+        'active',
+      );
+      expect(
+        catalog.caseById['DEVICE-REVOKE-E2E-001']!.catalogStatus,
+        'active',
+      );
+      expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
+        'DEVICE-JOIN-E2E-001',
+        'DEVICE-JOIN-E2E-002',
+      ]);
+      expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
+      expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[
+        'STEP4-GROUP-PAGINATION-E2E-001',
+        'DEVICE-REVOKE-E2E-001',
+        'MLS-MULTI-DEVICE-E2E-002',
+      ]);
+      expect(
+        catalog.caseById['MLS-MULTI-DEVICE-E2E-001']!.catalogStatus,
+        'planned',
+      );
+      expect(
+        catalog.caseById['MLS-MULTI-DEVICE-E2E-002']!.catalogStatus,
+        'active',
+      );
+      expect(catalog.suiteCaseIds, isNot(contains('multi-device-remote-mls')));
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },
   );
+
+  test('future Root recovery Revoke and MLS cases have one planned anchor', () {
+    final source = File(
+      'tests/e2e/planned/multi_device_future_cases.md',
+    ).readAsStringSync();
+
+    for (final caseId in <String>[
+      'ROOT-TRANSFER-E2E-002',
+      'MLS-MULTI-DEVICE-E2E-001',
+    ]) {
+      expect(source, contains('`$caseId`'));
+    }
+    expect(source, contains('non-executable catalog anchor'));
+    expect(source, contains('have been deleted'));
+  });
 
   test('every active conversation-correctness case has claim mapping', () {
     final catalog = AppTestCatalog.load(Directory.current);

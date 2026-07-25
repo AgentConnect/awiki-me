@@ -5931,7 +5931,7 @@ void main() {
     expect(find.text(filename), findsOneWidget);
   });
 
-  testWidgets('Message Agent 回收卡片展示状态和草稿确认，不显示 raw JSON', (tester) async {
+  testWidgets('Personal Agent 回收卡片展示状态和草稿确认，不显示 raw JSON', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -6010,7 +6010,7 @@ void main() {
                   kind: AgentKind.runtime,
                   daemonAgentDid: 'did:agent:daemon',
                   runtime: 'hermes',
-                  displayName: 'Hermes Message Agent',
+                  displayName: 'Hermes Personal Agent',
                   activeState: 'active',
                   latest: AgentLatestStatus(status: 'ready'),
                 ),
@@ -6035,7 +6035,7 @@ void main() {
 
     container
         .read(chatThreadsProvider.notifier)
-        .applyMessageAgentControlPayload(<String, Object?>{
+        .applyPersonalAgentControlPayload(<String, Object?>{
           'schema': 'awiki.message.sync.v1',
           'sync_type': 'runtime_final',
           'runtime_agent_did': 'did:agent:runtime',
@@ -6048,7 +6048,7 @@ void main() {
         });
     container
         .read(chatThreadsProvider.notifier)
-        .applyMessageAgentControlPayload(<String, Object?>{
+        .applyPersonalAgentControlPayload(<String, Object?>{
           'schema': 'awiki.app.action.v1',
           'action_id': 'act_draft',
           'action': 'message.create_draft',
@@ -6062,14 +6062,16 @@ void main() {
         });
     await tester.pumpAndSettle();
 
-    expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
+    expect(find.text('个人助理已完成处理'), findsOneWidget);
     expect(find.text('已生成处理结果'), findsOneWidget);
-    expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
+    expect(find.text('个人助理生成了草稿'), findsOneWidget);
     expect(find.text('收到，我会处理。'), findsOneWidget);
     expect(find.text('使用草稿'), findsOneWidget);
     expect(find.text('拒绝'), findsOneWidget);
 
-    await tester.tap(find.text('使用草稿'));
+    await tester.tap(
+      find.byKey(const Key('personal-agent-action-confirm:act_draft')),
+    );
     await tester.pumpAndSettle();
 
     final input = tester.widget<CupertinoTextField>(
@@ -6078,6 +6080,8 @@ void main() {
     expect(input.controller?.text, '收到，我会处理。');
     expect(gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
     expect(gateway.lastSentPayload?['state'], appActionStateSucceeded);
+    expect(gateway.lastSentContent, isEmpty);
+    expect(gateway.sendTextMessageCalls, 1);
     expect(find.text('草稿已放入输入框'), findsOneWidget);
   });
 

@@ -197,15 +197,23 @@ mention 渲染规则：
 
 ## 8. Control Payload 和 Agent Projection
 
-Agent / Message Agent control payload 是控制面事件，不是普通聊天消息。默认规则：
+Agent / Personal Agent control payload 是控制面事件，不是普通聊天消息。默认规则：
 
 1. `ChatMessage.hasRenderableContent` 对 agent control payload 返回 false。
 2. payload-only control 不进入普通聊天 timeline，也不触发普通消息通知。
 3. control payload 带有显式 `body.text` 时，mapper 允许它更新 conversation preview，避免详情页可见状态文本和 recents “暂无消息”不一致。
-4. control payload 的结构化语义交给 Agent control projection、runtime status、Message Agent cards 或后续 application service 处理。
+4. control payload 的结构化语义交给 Agent control projection、runtime status、Personal Agent cards 或后续 application service 处理。
 5. 不允许把 control payload raw JSON 作为普通聊天文案展示。
 
 `realtimeUpdateFromCore` 对 control payload 的处理也遵守该边界：有可见 preview 才返回 conversation update；结构化 payload 放在 `RealtimeUpdate.agentControlPayload`，普通 `message` 为空。
+
+通用系统通知同样不是聊天消息。Core 只有在完成 P3 envelope、service DID/proof、
+audience、expiry 和业务 payload 验证并提交本地投影后，才向 App 发出
+`system_notification_changed`。`AwikiImCoreMappers` 将它映射为纯同步信号：
+`message`、`conversationHint`、`conversation` 和 `agentControlPayload` 必须为空。
+`AppRuntimeController` 只安排一次 reliable message sync；sync 成功后，设备模块才能刷新
+Core 的 typed local Join inbox。通知自带的 title/body、payload JSON 或 sender 不得生成
+普通 banner、recents 行、timeline 气泡或 App 自己维护的通知业务状态。
 
 ## 9. Conversation Preview 规则
 

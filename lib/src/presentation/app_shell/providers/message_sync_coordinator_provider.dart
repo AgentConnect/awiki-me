@@ -7,6 +7,7 @@ import '../../../app/app_services.dart';
 import '../../../core/performance_logger.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
+import '../../devices/devices_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
   'AWIKI_MESSAGE_SYNC_TRACE',
@@ -203,6 +204,10 @@ class MessageSyncCoordinator
           snapshotRequired: result.snapshotRequired,
           lastError: null,
         );
+        await ref.read(devicesProvider.notifier).refreshJoinInbox();
+        if (_disposed) {
+          return;
+        }
         if (!result.snapshotRequired) {
           _messageSyncTrace(
             'run.refresh_fast_local.start',

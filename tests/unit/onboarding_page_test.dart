@@ -3,13 +3,17 @@ import 'dart:async';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/app/app_locale.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
+import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
-import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
@@ -22,6 +26,74 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets(
+    'Legacy upgrade blocks login, shows loading, and retries the same identity id',
+    (tester) async {
+      const localIdentity = SessionIdentity(
+        did: 'did:wba:awiki.ai:alice:e1_legacy',
+        credentialName: 'legacy-alias',
+        displayName: 'Alice',
+        handle: 'alice.awiki.ai',
+      );
+      final gateway = FakeAwikiGateway()
+        ..localCredentials = const <SessionIdentity>[localIdentity]
+        ..loginResult = localIdentity;
+      final firstUpgrade = Completer<LegacyIdentityUpgradeStatus>();
+      final onboarding = _LegacyUpgradeOnboardingService(firstUpgrade);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: gateway,
+          providerOverrides: <Override>[
+            onboardingServiceProvider.overrideWithValue(onboarding),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alice'));
+      await tester.pump();
+
+      expect(onboarding.statusSelectors, <String>['legacy-alias']);
+      expect(onboarding.upgradeSelectors, <String>['legacy-alias']);
+      expect(
+        find.byKey(const Key('legacy-upgrade-loading-mask')),
+        findsOneWidget,
+      );
+      expect(gateway.loginCalls, 0);
+
+      firstUpgrade.complete(
+        const LegacyIdentityUpgradeStatus.retryRequired(
+          identityId: 'identity-123',
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('legacy-upgrade-retry-message')),
+        findsOneWidget,
+      );
+      expect(find.text('旧身份升级失败，请重试。'), findsOneWidget);
+      expect(find.textContaining('document'), findsNothing);
+      expect(find.textContaining('key'), findsNothing);
+      expect(find.textContaining('proof'), findsNothing);
+      expect(find.textContaining('token'), findsNothing);
+      expect(gateway.loginCalls, 0);
+
+      await tester.tap(find.text('重试'));
+      await tester.pumpAndSettle();
+
+      expect(onboarding.upgradeSelectors, <String>[
+        'legacy-alias',
+        'identity-123',
+      ]);
+      expect(gateway.loginCalls, 1);
+      expect(gateway.lastLoginCredentialName, 'identity-123');
+    },
+  );
+
   testWidgets('macOS 桌面登录页使用新稿左右分栏和单层认证入口', (tester) async {
     final gateway = FakeAwikiGateway()
       ..localCredentials = const <SessionIdentity>[
@@ -343,7 +415,6 @@ void main() {
     await tester.pump();
 
     expect(gateway.sendEmailVerificationCalls, 1);
-    expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.lastEmailVerificationHandle, 'alice');
 
     debugDefaultTargetPlatformOverride = null;
@@ -407,6 +478,7 @@ void main() {
     );
     await tester.pump();
 
+    await _scrollToOnboardingUtilityBar(tester);
     expect(find.byTooltip('管理租户'), findsOneWidget);
     expect(find.text('AWiki'), findsWidgets);
     expect(find.text('Based on awiki.info'), findsNothing);
@@ -424,6 +496,7 @@ void main() {
 
     expect(find.text('登录或注册'), findsOneWidget);
 
+    await _scrollToOnboardingUtilityBar(tester);
     await tester.tap(
       find.byKey(const Key('onboarding-language-switcher-button')),
     );
@@ -431,12 +504,15 @@ void main() {
     await tester.tap(find.text('English'));
     await tester.pumpAndSettle();
 
+    await _scrollToOnboardingUtilityBar(tester);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
     expect(localePreferenceService.saveCalls, 1);
     expect(container.read(appLocaleModeProvider), AppLocaleMode.english);
     expect(find.text('EN'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 1200));
+    await tester.pumpAndSettle();
     expect(find.text('Log in or register'), findsOneWidget);
   });
 
@@ -465,6 +541,7 @@ void main() {
     );
     await tester.pump();
 
+    await _scrollToOnboardingUtilityBar(tester);
     await tester.tap(find.byTooltip('管理租户'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tenant-management-create-button')));
@@ -519,6 +596,7 @@ void main() {
     );
     await tester.pump();
 
+    await _scrollToOnboardingUtilityBar(tester);
     await tester.tap(find.byTooltip('管理租户'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('tenant-management-create-button')));
@@ -716,7 +794,6 @@ void main() {
     await tester.pump();
 
     expect(gateway.sendEmailVerificationCalls, 1);
-    expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.lastEmailVerificationHandle, 'alice');
     expect(find.textContaining('重新发送（'), findsOneWidget);
     final container = ProviderScope.containerOf(
@@ -742,6 +819,7 @@ void main() {
       find.byType(CupertinoTextField).first,
       '13800138000',
     );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
     await tester.tap(find.text('发送验证码'));
     await tester.pump();
 
@@ -774,6 +852,7 @@ void main() {
       find.byType(CupertinoTextField).first,
       '13800138000',
     );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
     await tester.tap(find.text('发送验证码'));
     await tester.pump();
     await tester.pump();
@@ -838,7 +917,7 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
+    await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
 
@@ -848,9 +927,8 @@ void main() {
     expect(handleField.controller?.text, isEmpty);
   });
 
-  testWidgets('手机号提交时未注册 handle 走注册路径', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..handleRegistrationStatus = HandleRegistrationStatus.notRegistered;
+  testWidgets('手机号提交直接走注册路径', (tester) async {
+    final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -863,24 +941,23 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
 
-    expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.registerHandleCalls, 1);
-    expect(gateway.recoverHandleCalls, 0);
     expect(gateway.lastRegisteredNickName, 'alice');
     expect(gateway.lastRegisteredProfileMarkdown, '# alice\n\n');
   });
 
-  testWidgets('手机号提交时已注册 handle 走登录路径', (tester) async {
+  testWidgets('手机号注册返回 joinRequired 时进入设备加入页', (tester) async {
     final gateway = FakeAwikiGateway()
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered
-      ..failGroupRecovery = true;
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -893,27 +970,26 @@ void main() {
       find.byType(CupertinoTextField).at(0),
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), '123456');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
     await tester.tap(find.text('下一步'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
 
-    expect(gateway.lookupHandleRegistrationCalls, 1);
-    expect(gateway.recoverHandleCalls, 1);
     expect(gateway.registerHandleCalls, 0);
-    expect(gateway.resumeGroupRecoveryCalls, 1);
+    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
+      tester.element(find.byType(DeviceJoinPage)),
     );
+    final join = container.read(devicesProvider).activeJoin;
+    expect(join?.joinSessionId, 'registration-join-1');
+    expect(join.toString(), isNot(contains('123456')));
     expect(
-      container.read(sessionProvider).session?.did,
-      contains('e1_recovered'),
-    );
-    expect(
-      container.read(uiFeedbackProvider)?.message.id,
-      'groupRecoveryStatusUnavailable',
+      container.read(onboardingProvider).toString(),
+      isNot(contains('123456')),
     );
   });
 
@@ -921,8 +997,7 @@ void main() {
     final gateway = FakeAwikiGateway()
       ..serverInfo = OnboardingServerInfo.openServerDefault(
         didDomain: 'anpolis.net',
-      )
-      ..handleRegistrationStatus = HandleRegistrationStatus.notRegistered;
+      );
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -941,39 +1016,8 @@ void main() {
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
 
-    expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.registerHandleWithoutContactVerificationCalls, 1);
     expect(gateway.registerHandleCalls, 0);
-    expect(gateway.recoverHandleCalls, 0);
-  });
-
-  testWidgets('OpenServer 无验证码注册遇到已有 handle 时提示导入凭证', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..serverInfo = OnboardingServerInfo.openServerDefault()
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.enterText(
-      find.byType(CupertinoTextField).at(0),
-      '13800138000',
-    );
-    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
-    await tester.tap(find.text('完成'));
-    await tester.pump();
-
-    expect(gateway.lookupHandleRegistrationCalls, 1);
-    expect(gateway.registerHandleWithoutContactVerificationCalls, 0);
-    expect(gateway.recoverHandleCalls, 0);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.message.id, 'handleAlreadyRegisteredImportCredential');
-    expect(feedback?.danger, isTrue);
   });
 
   testWidgets('server-info 加载失败时注册区展示重试入口', (tester) async {
@@ -997,42 +1041,8 @@ void main() {
     expect(find.text('发送验证码'), findsOneWidget);
   });
 
-  testWidgets('邮箱提交遇到已注册 handle 时提示改用手机号登录', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..emailVerificationResult = true
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
-    );
-    await tester.pump();
-
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('auth-mode-email')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'alice');
-    await tester.enterText(find.byType(CupertinoTextField).at(1), 'a@b.com');
-    await tester.tap(find.text('我已激活，检查状态'));
-    await tester.pump();
-    await tester.tap(find.text('完成注册'));
-    await tester.pump();
-
-    expect(gateway.lookupHandleRegistrationCalls, 1);
-    expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
-    expect(gateway.registerHandleWithEmailCalls, 0);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    final feedback = container.read(uiFeedbackProvider);
-    expect(feedback?.message.id, 'emailLoginUnsupportedForRegisteredHandle');
-    expect(feedback?.danger, isTrue);
-  });
-
-  testWidgets('邮箱提交时未注册 handle 默认用 handle 作为昵称', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..emailVerificationResult = true
-      ..handleRegistrationStatus = HandleRegistrationStatus.notRegistered;
+  testWidgets('邮箱提交直接注册并默认用 handle 作为昵称', (tester) async {
+    final gateway = FakeAwikiGateway()..emailVerificationResult = true;
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
@@ -1050,10 +1060,81 @@ void main() {
     await tester.tap(find.text('完成注册'));
     await tester.pumpAndSettle();
 
-    expect(gateway.lookupHandleRegistrationCalls, 1);
     expect(gateway.lastCheckedEmailVerificationHandle, 'alice');
     expect(gateway.registerHandleWithEmailCalls, 1);
     expect(gateway.lastEmailRegisteredNickName, 'alice');
     expect(gateway.lastEmailRegisteredProfileMarkdown, '# alice\n\n');
   });
+}
+
+class _LegacyUpgradeOnboardingService implements OnboardingService {
+  _LegacyUpgradeOnboardingService(this.firstUpgrade);
+
+  final Completer<LegacyIdentityUpgradeStatus> firstUpgrade;
+  final List<String> statusSelectors = <String>[];
+  final List<String> upgradeSelectors = <String>[];
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async {
+    statusSelectors.add(identityIdOrAlias);
+    return const LegacyIdentityUpgradeStatus.idle();
+  }
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) {
+    upgradeSelectors.add(identityIdOrAlias);
+    if (upgradeSelectors.length == 1) {
+      return firstUpgrade.future;
+    }
+    return Future<LegacyIdentityUpgradeStatus>.value(
+      const LegacyIdentityUpgradeStatus.completed(),
+    );
+  }
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
+    required String email,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) {
+    throw UnsupportedError('not used');
+  }
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
+    required String phone,
+    required String otp,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) {
+    throw UnsupportedError('not used');
+  }
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
+    required String phone,
+    required String handle,
+    String? inviteCode,
+    String? nickName,
+    String? profileMarkdown,
+  }) {
+    throw UnsupportedError('not used');
+  }
+}
+
+Future<void> _scrollToOnboardingUtilityBar(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.byKey(const Key('onboarding-language-switcher-button')),
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pump();
 }

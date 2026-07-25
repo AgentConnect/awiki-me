@@ -7,6 +7,8 @@ class _AgentListPane extends StatelessWidget {
     required this.pendingAgentDids,
     required this.selectedAgentDid,
     required this.onCreateDaemon,
+    required this.onCreateSkill,
+    required this.isCreatingSkill,
     required this.onRefreshDaemon,
     required this.onSelect,
     required this.onSyncInventory,
@@ -17,6 +19,8 @@ class _AgentListPane extends StatelessWidget {
   final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
   final VoidCallback onCreateDaemon;
+  final VoidCallback onCreateSkill;
+  final bool isCreatingSkill;
   final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
   final VoidCallback onSyncInventory;
@@ -46,6 +50,16 @@ class _AgentListPane extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                ),
+                SizedBox(width: responsive.spacing(8)),
+                AppIconButton(
+                  key: const Key('agent-skill-onboarding-button'),
+                  onPressed: isCreatingSkill ? null : onCreateSkill,
+                  semanticLabel: context.l10n.agentSkillCreateInstruction,
+                  tooltip: context.l10n.agentSkillCreateInstruction,
+                  size: responsive.displayScaled(34),
+                  isLoading: isCreatingSkill,
+                  child: const Icon(CupertinoIcons.command),
                 ),
                 SizedBox(width: responsive.spacing(8)),
                 AppIconButton(

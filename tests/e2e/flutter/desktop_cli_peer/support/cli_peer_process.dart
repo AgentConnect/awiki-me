@@ -245,6 +245,7 @@ Future<_CliResult> _runCli(
         'TMPDIR',
         'SSL_CERT_FILE',
         'SSL_CERT_DIR',
+        'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED',
       ])
         if ((Platform.environment[name] ?? '').trim().isNotEmpty)
           name: Platform.environment[name]!,

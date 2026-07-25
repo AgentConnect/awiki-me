@@ -812,6 +812,7 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
       peerHandle: item.handle,
       peerName: _displayName(ref, item),
       avatarUri: _avatarUri(ref, item),
+      popCurrentRouteOnTwoPane: !widget.embedded,
     );
   }
 }

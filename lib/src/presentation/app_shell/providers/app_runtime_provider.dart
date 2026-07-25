@@ -38,16 +38,30 @@ const bool _runtimeTraceEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
+const Object _unsetActivatedDid = Object();
+
 class AppRuntimeState {
-  const AppRuntimeState({this.isInitialized = false, this.isBusy = false});
+  const AppRuntimeState({
+    this.isInitialized = false,
+    this.isBusy = false,
+    this.activatedDid,
+  });
 
   final bool isInitialized;
   final bool isBusy;
+  final String? activatedDid;
 
-  AppRuntimeState copyWith({bool? isInitialized, bool? isBusy}) {
+  AppRuntimeState copyWith({
+    bool? isInitialized,
+    bool? isBusy,
+    Object? activatedDid = _unsetActivatedDid,
+  }) {
     return AppRuntimeState(
       isInitialized: isInitialized ?? this.isInitialized,
       isBusy: isBusy ?? this.isBusy,
+      activatedDid: identical(activatedDid, _unsetActivatedDid)
+          ? this.activatedDid
+          : activatedDid as String?,
     );
   }
 }
@@ -74,6 +88,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
   bool _isLoggingOut = false;
+  Future<void>? _joinedMemberActivation;
+  String? _joinedMemberActivationDid;
   Future<void>? _authenticatedRefreshOperation;
   DateTime? _lastAuthenticatedRefreshStartedAt;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
@@ -86,6 +102,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     state = state.copyWith(isBusy: true);
+    var restoreStarted = false;
+    var runtimeActivationStarted = false;
     try {
       final sessions = ref.read(appSessionServiceProvider);
       final localIdentities = await sessions.listLocalIdentities();
@@ -93,17 +111,25 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref.read(sessionProvider.notifier).setCapabilities(_imCoreCapabilities);
       ref.read(sessionProvider.notifier).setLocalCredentials(localCredentials);
 
+      restoreStarted = true;
       final session = await sessions.restoreSession();
       if (session != null) {
+        runtimeActivationStarted = true;
         await activateSession(_legacySessionFromAppSession(session));
       }
       state = state.copyWith(isInitialized: true, isBusy: false);
     } on TimeoutException {
+      if (restoreStarted && !runtimeActivationStarted) {
+        await _rollbackSessionActivationBestEffort();
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
       state = state.copyWith(isBusy: false, isInitialized: true);
     } catch (error) {
+      if (restoreStarted && !runtimeActivationStarted) {
+        await _rollbackSessionActivationBestEffort();
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.fromError(error));
@@ -113,7 +139,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> activateSession(SessionIdentity session) async {
     final totalWatch = Stopwatch()..start();
-    state = state.copyWith(isBusy: true);
+    state = state.copyWith(isBusy: true, activatedDid: null);
     try {
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(sessionProvider.notifier).setSession(session);
@@ -121,10 +147,18 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         'app_runtime.activate_session.e2ee',
         () => ref.read(e2eeFacadeProvider).initialize(session),
       );
-      state = state.copyWith(isBusy: false, isInitialized: true);
+      _isLoggingOut = false;
+      state = state.copyWith(
+        isBusy: false,
+        isInitialized: true,
+        activatedDid: session.did,
+      );
       unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
       _scheduleReliableSync('startup', immediate: true);
       _ensureRealtimeConnected();
+    } catch (error, stackTrace) {
+      await _rollbackSessionActivationBestEffort();
+      Error.throwWithStackTrace(error, stackTrace);
     } finally {
       state = state.copyWith(isBusy: false, isInitialized: true);
       totalWatch.stop();
@@ -135,6 +169,26 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
   }
 
+  Future<void> prepareIdentityActivation() async {
+    _isLoggingOut = true;
+    _clearAuthenticatedUiState();
+    state = state.copyWith(
+      isBusy: true,
+      isInitialized: true,
+      activatedDid: null,
+    );
+    try {
+      await ref.read(realtimeApplicationServiceProvider).stop();
+    } catch (error, stackTrace) {
+      await _rollbackSessionActivationBestEffort();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> rollbackIdentityActivation() {
+    return _rollbackSessionActivationBestEffort();
+  }
+
   Future<void> loginWithLocalCredential(String credentialName) async {
     await _runBusy(() async {
       final session = await ref
@@ -142,6 +196,50 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .loginWithIdentity(credentialName);
       await activateSession(_legacySessionFromAppSession(session));
     });
+  }
+
+  Future<void> activateJoinedMember(String expectedDid) {
+    final normalizedDid = expectedDid.trim();
+    if (normalizedDid.isEmpty) {
+      return Future<void>.error(StateError('joined_identity_did_missing'));
+    }
+    if (state.activatedDid == normalizedDid &&
+        ref.read(sessionProvider).session?.did == normalizedDid) {
+      return Future<void>.value();
+    }
+    final active = _joinedMemberActivation;
+    if (active != null) {
+      if (_joinedMemberActivationDid != normalizedDid) {
+        return Future<void>.error(
+          StateError('joined_identity_activation_conflict'),
+        );
+      }
+      return active;
+    }
+
+    late final Future<void> operation;
+    operation =
+        (() async {
+          final sessions = ref.read(appSessionServiceProvider);
+          final session = await sessions.loginWithIdentity(normalizedDid);
+          if (session.did.trim() != normalizedDid) {
+            await sessions.logout();
+            throw StateError('joined_identity_did_mismatch');
+          }
+          await activateSession(_legacySessionFromAppSession(session));
+          if (state.activatedDid != normalizedDid ||
+              ref.read(sessionProvider).session?.did != normalizedDid) {
+            throw StateError('joined_identity_activation_incomplete');
+          }
+        })().whenComplete(() {
+          if (identical(_joinedMemberActivation, operation)) {
+            _joinedMemberActivation = null;
+            _joinedMemberActivationDid = null;
+          }
+        });
+    _joinedMemberActivationDid = normalizedDid;
+    _joinedMemberActivation = operation;
+    return operation;
   }
 
   Future<void> refreshLocalCredentials() async {
@@ -162,7 +260,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     _isLoggingOut = true;
     _clearAuthenticatedUiState();
-    state = state.copyWith(isBusy: false, isInitialized: true);
+    state = state.copyWith(
+      isBusy: false,
+      isInitialized: true,
+      activatedDid: null,
+    );
     try {
       await ref.read(appSessionServiceProvider).logout();
     } finally {
@@ -178,6 +280,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     await _runBusy(() async {
       _isLoggingOut = true;
       try {
+        state = state.copyWith(activatedDid: null);
         ref.read(sessionProvider.notifier).clear();
         ref.read(profileProvider.notifier).clear();
         ref.read(agentsProvider.notifier).clear();
@@ -208,6 +311,22 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ref.read(friendsProvider.notifier).clear();
     ref.read(peerDisplayProfileProvider.notifier).clear();
     ref.read(groupProvider.notifier).clear();
+  }
+
+  Future<void> _rollbackSessionActivationBestEffort() async {
+    _clearAuthenticatedUiState();
+    state = state.copyWith(
+      isBusy: false,
+      isInitialized: true,
+      activatedDid: null,
+    );
+    try {
+      await ref.read(appSessionServiceProvider).logout();
+    } catch (_) {
+      // Keep the original activation failure authoritative.
+    } finally {
+      _isLoggingOut = false;
+    }
   }
 
   Future<void> exportCurrentCredential() async {
@@ -440,11 +559,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _applyRealtimeUpdate(RealtimeUpdate update) {
+    if (_isLoggingOut || ref.read(sessionProvider).session == null) return;
     final traceConversation = update.conversation ?? update.conversationHint;
     _runtimeTrace(
       'realtime.update',
       fields: <String, Object?>{
         'control': update.agentControlPayload != null,
+        'system_notification': update.systemNotificationChanged,
         'message': update.message != null,
         'conversation': traceConversation != null,
         'conversation_hint': update.conversationHint != null,
@@ -481,7 +602,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .applyAgentRunStatusPayload(controlPayload);
       ref
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(controlPayload);
+          .applyPersonalAgentControlPayload(controlPayload);
       _runtimeTrace(
         'realtime.control_applied',
         fields: <String, Object?>{
@@ -596,6 +717,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   String? _reliableSyncReasonFor(RealtimeUpdate update) {
+    if (update.systemNotificationChanged) {
+      return 'system_notification_changed';
+    }
     if (update.gapDetected) {
       return 'realtime_gap';
     }

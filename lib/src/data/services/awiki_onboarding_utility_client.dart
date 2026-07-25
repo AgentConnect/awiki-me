@@ -120,6 +120,7 @@ class AwikiOnboardingUtilityClient {
   static const String serverInfoEndpoint = '/user-service/server-info';
   static const String emailSendEndpoint = '/user-service/auth/email-send';
   static const String emailStatusEndpoint = '/user-service/auth/email-status';
+  static const String registrationOtpPurpose = 'awiki.identity.register.v1';
 
   final AwikiOnboardingUtilityHttpClient _serviceClient;
   final http.Client _httpClient;
@@ -151,6 +152,26 @@ class AwikiOnboardingUtilityClient {
       path: handleRpcEndpoint,
       method: 'send_otp',
       params: <String, Object?>{'phone': phone},
+    );
+  }
+
+  Future<void> sendRegistrationOtp({
+    required String phone,
+    required String purpose,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) async {
+    await _serviceClient.rpcCall(
+      path: handleRpcEndpoint,
+      method: 'send_otp',
+      params: <String, Object?>{
+        'phone': phone,
+        'purpose': purpose,
+        'handle': handle,
+        'domain': domain,
+        'full_handle': fullHandle,
+      },
     );
   }
 

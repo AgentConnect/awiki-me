@@ -1,9 +1,25 @@
+// [INPUT]: Compile-time flags and optional tenant/service overrides.
+// [OUTPUT]: Normalized AWiki runtime endpoints and independent capability gates.
+// [POS]: Application configuration boundary shared by bootstrap and feature providers.
+
 const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
 const String primaryTenantDomain = String.fromEnvironment(
   primaryTenantDomainEnvironmentKey,
   defaultValue: 'awiki.ai',
 );
 const String primaryTenantBaseUrl = 'https://$primaryTenantDomain';
+const bool defaultMultiDeviceDeviceRevokeEnabled = bool.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED',
+  defaultValue: false,
+);
+const bool defaultMultiDeviceDirectE2eeEnabled = bool.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED',
+  defaultValue: false,
+);
+const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED',
+  defaultValue: false,
+);
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
   'awiki.ai',
   'anpclaw.com',
@@ -23,6 +39,9 @@ class AwikiEnvironmentConfig {
     String? updateManifestUrl,
     String? releasesUrl,
     bool? agentImEnabled,
+    bool? multiDeviceDeviceRevokeEnabled,
+    bool? multiDeviceDirectE2eeEnabled,
+    bool? multiDeviceGroupE2eeEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl,
@@ -68,6 +87,12 @@ class AwikiEnvironmentConfig {
           backendBaseUrl: normalizedBase,
           didHost: this.didDomain,
         );
+    this.multiDeviceDeviceRevokeEnabled =
+        multiDeviceDeviceRevokeEnabled ?? defaultMultiDeviceDeviceRevokeEnabled;
+    this.multiDeviceDirectE2eeEnabled =
+        multiDeviceDirectE2eeEnabled ?? defaultMultiDeviceDirectE2eeEnabled;
+    this.multiDeviceGroupE2eeEnabled =
+        multiDeviceGroupE2eeEnabled ?? defaultMultiDeviceGroupE2eeEnabled;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -85,6 +110,9 @@ class AwikiEnvironmentConfig {
   late final String updateManifestUrl;
   late final String releasesUrl;
   late final bool agentImEnabled;
+  late final bool multiDeviceDeviceRevokeEnabled;
+  late final bool multiDeviceDirectE2eeEnabled;
+  late final bool multiDeviceGroupE2eeEnabled;
 }
 
 bool isAgentDaemonTenantRealmAllowed({

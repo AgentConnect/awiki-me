@@ -3,6 +3,7 @@ import '../domain/entities/group_member_summary.dart';
 import '../domain/entities/group_identity.dart';
 import '../domain/entities/group_summary.dart';
 import 'ports/group_core_port.dart';
+import 'models/group_collection_page.dart';
 
 abstract interface class GroupApplicationService {
   Future<GroupSummary> createGroup({
@@ -24,11 +25,15 @@ abstract interface class GroupApplicationService {
 
   Future<GroupSummary> getGroup(String groupDid);
 
-  Future<List<GroupSummary>> listGroups({int limit = 100});
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  });
 
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   });
 
   Future<List<ChatMessage>> listMessages(
@@ -92,16 +97,20 @@ class ImCoreGroupApplicationService implements GroupApplicationService {
   Future<GroupSummary> getGroup(String groupDid) => _groups.getGroup(groupDid);
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) {
-    return _groups.listGroups(limit: limit);
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) {
+    return _groups.listGroups(limit: limit, cursor: cursor);
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   }) {
-    return _groups.listMembers(groupDid, limit: limit);
+    return _groups.listMembers(groupDid, limit: limit, cursor: cursor);
   }
 
   @override

@@ -24,7 +24,7 @@ DOC：awiki-me/docs/group/group-chat-processing-plan.md
 - 本阶段不设计完整黑白名单 UI，只预留 policy 扩展点。
 - 本阶段不让 runtime 直接持有 DID 私钥或直连 message-service。
 - 本阶段不要求 Runtime Agent 处理 Group E2EE 明文；如果消息是 E2EE opaque，应保持不解密、不转发给 Agent 的安全边界，除非后续有单独安全设计。
-- 本阶段不改变 App delegated Message Agent 的用户 inbox 处理链路；这里讨论的是 **Runtime Agent 自己的 DID 被拉入群后处理群消息**。
+- 本阶段不改变 App delegated Personal Agent 的用户 inbox 处理链路；这里讨论的是 **Runtime Agent 自己的 DID 被拉入群后处理群消息**。
 
 ## 2. 当前实现状态
 

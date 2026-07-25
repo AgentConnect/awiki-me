@@ -42,6 +42,9 @@ void main() {
       paths: layout,
       scopeId: StorageScopeId.parse(scopeValue),
       vaultSecretProvider: vaultProvider,
+      multiDeviceDeviceRevokeEnabled: true,
+      multiDeviceDirectE2eeEnabled: true,
+      multiDeviceGroupE2eeEnabled: true,
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
         expect(await Directory(paths.identityRootDir).exists(), isTrue);
@@ -94,6 +97,9 @@ void main() {
               openOptions?.identitySecretVault?.rootKey.bytes,
               List<int>.filled(32, 7),
             );
+            expect(openOptions?.multiDeviceDeviceRevokeEnabled, isTrue);
+            expect(openOptions?.multiDeviceDirectE2eeEnabled, isTrue);
+            expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);
             throw UnsupportedError('fake opener stops before native load');
           },
     );

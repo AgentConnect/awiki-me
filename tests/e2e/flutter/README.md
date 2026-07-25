@@ -8,7 +8,7 @@ loading. These tests may run against a Flutter desktop target such as `macos` or
 Current groups:
 
 - `app/`: App shell smoke with fake bootstrap, onboarding/authenticated shell,
-  basic profile/settings navigation, Message Agent full-UI harness, Codex
+  basic profile/settings navigation, Personal Agent full-UI harness, Codex
   Agent, and Claude Code Agent user-visible reply acceptance.
 - `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` product E2E for
   UI-driven direct/unread/read/retry, group/mention, attachment, and
@@ -22,10 +22,12 @@ Run E2E through the repository-level runner:
 
 ```bash
 dart run tests/e2e/runner.dart --case smoke
+dart run tests/e2e/runner.dart --case multi-device
+dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case display-name-fallback
 dart run tests/e2e/runner.dart --case performance
-dart run tests/e2e/runner.dart --case message-agent
+dart run tests/e2e/runner.dart --case personal-agent
 dart run tests/e2e/runner.dart --case codex-agent
 dart run tests/e2e/runner.dart --case claude-code-agent
 ```
@@ -121,10 +123,43 @@ generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
 later self-healing title fail. CLI is only the remote identity/traffic stimulus,
 not the product assertion surface.
 
-`--case message-agent` is the durable acceptance entry for Message Agent
-product behavior. It must exercise the App UI path for selecting a daemon,
-enabling the Message Agent, recovering the exact source plus `runtime_final`,
-and revoking authorization through the visible confirmation flow. Lower-level probes such as
+`--case multi-device-remote-join` is the operator-confirmed
+`DEVICE-JOIN-E2E-001/002` product-security suite. In one direction a real AWiki
+Me onboarding surface joins an existing CLI ready admin through the production
+foreground TTY approval contract; in the other, a real AWiki Me ready admin
+receives the system notification, starts verification explicitly, and approves
+an independent CLI requester through exactly one real macOS
+LocalAuthentication prompt. Both directions use fresh independent native Core
+roots, dynamically resolve purpose-bound OTPs, compare the independently
+derived SAS without recording it, and require the new device to converge as a
+non-admin member in both Registries. The App-new-device direction also restarts
+from the same pending Core session and rejects persisted SAS. The suite fails
+closed unless the dedicated account allowlist, JSON-argv OTP resolver, exact
+CLI source revision, and manual system-auth prerequisites are explicit. The
+optional synthetic-number staged-OTP mode is an explicit operator test path
+with fixed resolver argv and an exact deployed
+`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` RFC7807 gate;
+provider/channel drift, additional markers, and secret-like detail are rejected
+before resolver execution. It does not prove SMS delivery or change product
+behavior. See
+[../../../docs/testing.md](../../../docs/testing.md) for the environment
+contract and command.
+
+Root transfer, exact-device revoke, and MLS are not executable from the Step 2
+runner. `ROOT-TRANSFER-E2E-001/002`, `DEVICE-REVOKE-E2E-001`, and
+`MLS-MULTI-DEVICE-E2E-001/002` remain planned for Step 3 or a later version.
+Their old Dart implementations depended on direct-admin Join and have been
+deleted; a catalog entry or planning document is not remote pass evidence.
+
+`--case personal-agent` is the durable acceptance entry for Personal Agent
+product behavior. It is a fail-fast real-backend gate: local YAML must provide
+`personalAgent.realBackend: true`, `service.messageServiceUrl`,
+`service.messageServiceWsUrl`, `daemon.rustRepo`, `daemon.binary`,
+`daemon.stateRoot`, `daemon.readyFile`, and `daemon.fakeHermesGatewayCommand`.
+The selected gate must exercise the App UI path for selecting a daemon,
+enabling the Personal Agent, recovering `message.sync` / `runtime_final`
+payloads, and revoking daemon message authorization without silently returning
+from a skipped test. Lower-level probes such as
 `tool/daemon_control_probe.dart` and daemon pytest probes may support payload,
 security, or backend diagnostics, but they do not replace this full UI E2E gate.
 The real-backend branch must also prove the received/returned/content contract:
@@ -132,12 +167,14 @@ the App local history contains the exact CLI source message, the daemon records
 a sent `runtime_final_outbox` row with a non-null message id and sent timestamp,
 and the final text equals the deterministic expected reply.
 
-The executable case IDs are `MSGAGENT-E2E-001/002/004`. The visible
-action/draft confirmation `MSGAGENT-E2E-003` is cataloged as planned and is not
-in the executable manifest because the current real scenario has no such UI
-action. Fake-backed Widget tests, an outer `flutter test` exit code, a missing
-config, or a partial runnable lifecycle cannot attest a pass. Lower-level
-backend coverage remains separate and must not be relabeled as UI acceptance.
+The executable case IDs are `PERSONALAGENT-E2E-001/002/004`.
+`PERSONALAGENT-E2E-003` and visible action/draft confirmation remain planned
+until the product has a real action flow and its own accepted case attestation;
+they must not block or be inferred from the current message-processing gate.
+Fake-backed Widget tests, an outer `flutter test` exit code, a missing config,
+or a partial runnable lifecycle cannot attest a pass.
+Lower-level backend coverage remains separate and must not be relabeled as UI
+acceptance.
 
 Every runner-owned Flutter invocation receives an ignored local attestation
 path through dart-defines. Durable scenarios call
@@ -194,7 +231,7 @@ bypass that protection and are intended only for deliberate low-level debugging.
 
 ```bash
 flutter test --dart-define=AWIKI_E2E=true integration_test/app_smoke_test.dart -d macos
-flutter test --dart-define=AWIKI_E2E=true integration_test/message_agent_full_ui_test.dart -d macos
+flutter test --dart-define=AWIKI_E2E=true integration_test/personal_agent_full_ui_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/codex_agent_full_ui_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/claude_code_agent_full_ui_test.dart -d macos
 flutter test --dart-define=AWIKI_E2E=true integration_test/desktop_cli_peer_smoke_test.dart -d macos

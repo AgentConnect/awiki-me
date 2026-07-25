@@ -410,7 +410,7 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
     description: 'same-body Direct messages converge to server sequence order',
     timeout: const Duration(seconds: 90),
     observe: observeSameBodyServerSequences,
-    failureLayer: 'core_projection',
+    failureLayer: 'core_canonical',
   );
   await robot.assertStableFor(
     description: 'two same-body Direct messages',
@@ -594,6 +594,8 @@ Future<String> _cliSendDirectText({
     config.appHandle,
     '--text',
     text,
+    '--secure',
+    'off',
   ]);
   if (result.exitCode != 0) {
     fail('CLI msg send failed: ${_summarizeCliResult(result)}');

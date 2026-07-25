@@ -2081,10 +2081,13 @@ void main() {
       ),
       findsOneWidget,
     );
-
     await tester.tap(find.text('任务'));
     await tester.pumpAndSettle();
     expect(find.textContaining('任务视图即将接入'), findsOneWidget);
+
+    await tester.tap(find.text('消息'));
+    await tester.pumpAndSettle();
+    expect(find.text('最近会话'), findsOneWidget);
 
     await tester.tap(find.text('联系人'));
     await tester.pumpAndSettle();

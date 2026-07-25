@@ -211,10 +211,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'This server does not require SMS or email verification. You can create a new identity directly.';
 
   @override
-  String get handleAlreadyRegisteredImportCredential =>
-      'This handle already exists. This server cannot recover it without verification. Import its identity credential or contact the server administrator.';
-
-  @override
   String get registrationMethodUnavailable =>
       'This server does not support the selected registration method. Refresh and try again.';
 
@@ -684,6 +680,262 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTitle => 'Settings';
 
   @override
+  String get settingsDevices => 'Devices';
+
+  @override
+  String get settingsDevicesSubtitle =>
+      'Review authorized devices and approve new ones';
+
+  @override
+  String get devicesTitle => 'Device management';
+
+  @override
+  String get devicesAuthorizedTitle => 'Authorized devices';
+
+  @override
+  String get devicesPendingTitle => 'Pending approval';
+
+  @override
+  String get devicesEmpty => 'No device information';
+
+  @override
+  String get devicesPendingEmpty => 'No pending approval requests';
+
+  @override
+  String get deviceCurrent => 'Current device';
+
+  @override
+  String get deviceRoleMember => 'Member device';
+
+  @override
+  String get deviceRoleAdmin => 'Admin device';
+
+  @override
+  String get deviceStatusActive => 'Active';
+
+  @override
+  String get deviceStatusRevoked => 'Revoked';
+
+  @override
+  String get deviceManagementReady => 'Can manage devices';
+
+  @override
+  String get deviceManagementPending => 'Waiting for management readiness';
+
+  @override
+  String get deviceManagementAwaitingRoot => 'Admin awaiting root key';
+
+  @override
+  String get deviceManagementActionDisabled =>
+      'A management-ready admin device is required';
+
+  @override
+  String get deviceRootTransferGrantManagement =>
+      'Continue granting management access';
+
+  @override
+  String get deviceRootTransferPreparing => 'Preparing secure transfer…';
+
+  @override
+  String get deviceRootTransferConfirm => 'Confirm and send root key';
+
+  @override
+  String get deviceRootTransferSending => 'Sending root key…';
+
+  @override
+  String deviceRootTransferTarget(
+    String deviceId,
+    String signingKeyId,
+    String e2eeKeyId,
+  ) {
+    return 'Target device: $deviceId\nSigning key: $signingKeyId\nEnd-to-end encryption key: $e2eeKeyId';
+  }
+
+  @override
+  String get deviceRootTransferSent => 'Root key sent';
+
+  @override
+  String get deviceRootTransferFailed =>
+      'The device joined, but it did not receive management access. Please try again later.';
+
+  @override
+  String get deviceRootTransferPresenceReason =>
+      'Confirm secure root-key transfer';
+
+  @override
+  String get deviceRevokeAction => 'Revoke';
+
+  @override
+  String get deviceRevokeSubmitting => 'Revoking device…';
+
+  @override
+  String get deviceRevokeConfirmingAction => 'Confirm again';
+
+  @override
+  String get deviceRevokeSucceeded => 'Device revoked.';
+
+  @override
+  String get deviceRevokeSucceededGroupsSyncing =>
+      'Device revoked. Affected groups are synchronizing their security state.';
+
+  @override
+  String get deviceRevokeOutcomeUnknown =>
+      'The revocation result is not confirmed yet. Refresh the device list.';
+
+  @override
+  String get deviceRevokeRejected =>
+      'The device could not be revoked. Try again later.';
+
+  @override
+  String get deviceRevokeConfirmTitle => 'Revoke this device?';
+
+  @override
+  String deviceRevokeConfirmDetail(String deviceId) {
+    return 'Revoke $deviceId permanently. It will lose future access, but data already obtained cannot be erased. This action cannot be undone.';
+  }
+
+  @override
+  String get deviceRevokeConfirmAction => 'Revoke permanently';
+
+  @override
+  String get deviceRevokePresenceReason =>
+      'Confirm permanent device revocation';
+
+  @override
+  String get deviceRevokeProtectionHint =>
+      'The current device cannot revoke itself, and the final ready management device is always protected.';
+
+  @override
+  String get deviceRevokeProtected =>
+      'This device is protected or you are not using a ready management device. The current device and final ready management device cannot be revoked.';
+
+  @override
+  String get deviceReviewAction => 'Review and verify';
+
+  @override
+  String get deviceJoinEntry => 'Add this device to an existing account';
+
+  @override
+  String get deviceJoinEntrySubtitle =>
+      'An existing admin device must verify the 6-digit code shown on both devices';
+
+  @override
+  String get deviceJoinTitle => 'Add a new device';
+
+  @override
+  String get deviceJoinHandle => 'Existing Handle';
+
+  @override
+  String get deviceJoinPhone => 'Linked phone number';
+
+  @override
+  String get deviceJoinOtp => 'SMS verification code';
+
+  @override
+  String get deviceJoinSendOtp => 'Send code';
+
+  @override
+  String get deviceJoinStart => 'Start pairing';
+
+  @override
+  String get deviceJoinWaiting => 'Waiting for an admin device';
+
+  @override
+  String get deviceJoinRefresh => 'Refresh status';
+
+  @override
+  String get deviceJoinSasTitle => '6-digit verification code';
+
+  @override
+  String get deviceJoinSasHint =>
+      'Confirm that both devices independently show exactly the same digits. The code is never relayed by the server.';
+
+  @override
+  String get deviceJoinApprovalTitle => 'Confirm new device';
+
+  @override
+  String get deviceJoinSasMatches =>
+      'I confirmed that both devices show the same 6-digit code';
+
+  @override
+  String get deviceJoinRequestReady => 'Ready to start verification';
+
+  @override
+  String get deviceJoinStartVerification => 'Start verification';
+
+  @override
+  String get deviceJoinClaimedByOther =>
+      'Another management device is handling this request';
+
+  @override
+  String get deviceJoinReject => 'Reject request';
+
+  @override
+  String get deviceJoinRejected => 'Device request rejected';
+
+  @override
+  String get deviceJoinSasMismatch => 'Codes do not match';
+
+  @override
+  String deviceJoinFingerprint(String fingerprint) {
+    return 'Key fingerprint: $fingerprint';
+  }
+
+  @override
+  String deviceJoinRequestWindow(String issuedAt, String expiresAt) {
+    return 'Requested $issuedAt; expires $expiresAt';
+  }
+
+  @override
+  String get deviceJoinApprove => 'Confirm and authorize';
+
+  @override
+  String get deviceJoinCancel => 'Cancel pairing';
+
+  @override
+  String get deviceJoinAuthorized => 'Device added';
+
+  @override
+  String get deviceJoinCancelled => 'Device pairing cancelled';
+
+  @override
+  String get deviceJoinExpired => 'Device pairing expired. Start again.';
+
+  @override
+  String get deviceJoinActivating => 'Activating this device...';
+
+  @override
+  String get deviceJoinActivationRetry => 'Retry device activation';
+
+  @override
+  String get deviceJoinUserPresenceReason =>
+      'Confirm authorization of a new device';
+
+  @override
+  String get deviceJoinErrorUnavailable =>
+      'Multi-device support is not available';
+
+  @override
+  String get deviceJoinErrorConflict =>
+      'The state changed. Refresh and try again.';
+
+  @override
+  String get deviceJoinErrorSas =>
+      'The verification code state did not match. Authorization stopped.';
+
+  @override
+  String get deviceJoinErrorPresence =>
+      'System authentication was not completed. The device was not authorized.';
+
+  @override
+  String get deviceJoinErrorNetwork =>
+      'Network connection failed. Try again later.';
+
+  @override
+  String get deviceJoinErrorFailed =>
+      'Device operation failed. Refresh and try again.';
+
+  @override
   String get settingsLanguage => 'Language';
 
   @override
@@ -1036,6 +1288,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get groupRecoveryRetry => 'Retry group recovery';
+
+  @override
+  String get groupEncryptionPreparingTitle => 'Synchronizing group encryption';
+
+  @override
+  String get groupEncryptionPreparingDetail =>
+      'This group is synchronizing its security state. Sending is paused until it completes.';
+
+  @override
+  String get groupEncryptionNeedsRetryTitle => 'Group encryption needs retry';
+
+  @override
+  String get groupEncryptionNeedsRetryDetail =>
+      'Retry the repair on a management device that holds the current group security state.';
+
+  @override
+  String get groupEncryptionReadyTitle => 'Group encryption ready';
+
+  @override
+  String get groupEncryptionReadyDetail =>
+      'This device has independent encryption state for this group and can securely receive new messages.';
+
+  @override
+  String get groupEncryptionUnavailableTitle => 'Group encryption unavailable';
+
+  @override
+  String get groupEncryptionUnavailableDetail =>
+      'This environment does not currently provide the group encryption capability required by this device.';
+
+  @override
+  String get groupEncryptionRetry => 'Retry';
 
   @override
   String get groupFieldName => 'Name';
@@ -1595,6 +1878,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentCopyInstallCommand => 'Copy install command';
 
   @override
+  String get agentSkillCreateInstruction => 'Create Skill Agent instruction';
+
+  @override
+  String get agentSkillInstallTitle => 'Connect a Skill Agent';
+
+  @override
+  String get agentSkillControllerHandle => 'Your Handle';
+
+  @override
+  String get agentSkillAgentHandle => 'Agent Handle';
+
+  @override
+  String get agentSkillCopyInstruction => 'Copy installation instruction';
+
+  @override
+  String get agentSkillRegenerate => 'Generate a new instruction';
+
+  @override
+  String get agentSkillSecretNotice =>
+      'Valid for 30 minutes. The copied instruction contains a one-time secret; share it only with the Agent you want to connect.';
+
+  @override
+  String get agentSkillExpired =>
+      'This instruction has expired or was cleared. Generate a new one.';
+
+  @override
   String get agentCleanupHostTitle => 'Clean up host';
 
   @override
@@ -1788,7 +2097,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'This account has no available Handle, so a daemon install command cannot be created right now.';
 
   @override
-  String get agentErrorMessageAgentDisabled => 'Message Agent is not enabled.';
+  String get agentSkillUnsupportedTenant =>
+      'Skill Agent onboarding is currently available only on awiki.info.';
+
+  @override
+  String get agentSkillInvalidResponse =>
+      'The registration scope returned by the service does not match this account.';
+
+  @override
+  String get agentSkillRequestFailed =>
+      'The Skill Agent instruction could not be generated. Try again.';
+
+  @override
+  String get agentErrorPersonalAgentDisabled =>
+      'Personal Agent is not enabled.';
 
   @override
   String get agentTenantUnsupportedTitle =>
@@ -1818,8 +2140,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'The daemon is currently unreachable and cannot be upgraded yet. Refresh status or reinstall it first.';
 
   @override
-  String get agentErrorMessageAgentMissing =>
-      'This daemon has not created a Message Agent yet.';
+  String get agentErrorPersonalAgentMissing =>
+      'This daemon has not created a Personal Agent yet.';
 
   @override
   String get agentStatusSyncStillWaiting =>
@@ -2001,152 +2323,283 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentDiagnosticActiveSessionCount => 'Active sessions';
 
   @override
-  String get messageAgentSkipped => 'Message Agent skipped this message';
+  String get personalAgentSkipped => 'Personal Agent skipped this message';
 
   @override
-  String get messageAgentFailed => 'Message Agent failed';
+  String get personalAgentFailed => 'Personal Agent failed';
 
   @override
-  String get messageAgentCompleted => 'Message Agent completed';
+  String get personalAgentCompleted => 'Personal Agent completed';
 
   @override
-  String get messageAgentProcessing => 'Message Agent is processing';
+  String get personalAgentProcessing => 'Personal Agent is processing';
 
   @override
-  String get messageAgentReceived => 'Message Agent received the message';
+  String get personalAgentReceived => 'Personal Agent received the message';
 
   @override
-  String get messageAgentResultGenerated => 'Result generated';
+  String get personalAgentResultGenerated => 'Result generated';
 
   @override
-  String get messageAgentDraftApplied => 'Draft inserted into the composer';
+  String get personalAgentDraftApplied => 'Draft inserted into the composer';
 
   @override
-  String get messageAgentAppActionCompleted => 'App action completed';
+  String get personalAgentAppActionCompleted => 'App action completed';
 
   @override
-  String get messageAgentRequestRejected => 'Message Agent request rejected';
+  String get personalAgentRequestRejected => 'Personal Agent request rejected';
 
   @override
-  String get messageAgentAppActionFailed => 'App action failed';
+  String get personalAgentAppActionFailed => 'App action failed';
 
   @override
-  String get messageAgentWaitingConfirmation => 'Waiting for confirmation';
+  String get personalAgentWaitingConfirmation => 'Waiting for confirmation';
 
   @override
-  String get messageAgentUseDraft => 'Use draft';
+  String get personalAgentUseDraft => 'Use draft';
 
   @override
-  String get messageAgentActionCreateDraft => 'Message Agent created a draft';
+  String get personalAgentActionCreateDraft => 'Personal Agent created a draft';
 
   @override
-  String get messageAgentActionSummarize => 'Message Agent created a summary';
+  String get personalAgentActionSummarize => 'Personal Agent created a summary';
 
   @override
-  String get messageAgentActionReadContact =>
-      'Message Agent requests contact access';
+  String get personalAgentActionReadContact =>
+      'Personal Agent requests contact access';
 
   @override
-  String get messageAgentActionUpdateDisplayName =>
-      'Message Agent requests a contact name change';
+  String get personalAgentActionUpdateDisplayName =>
+      'Personal Agent requests a contact name change';
 
   @override
-  String get messageAgentActionUpdateNote =>
-      'Message Agent requests a contact note change';
+  String get personalAgentActionUpdateNote =>
+      'Personal Agent requests a contact note change';
 
   @override
-  String get messageAgentActionGeneric =>
-      'Message Agent requests an app action';
+  String get personalAgentActionGeneric =>
+      'Personal Agent requests an app action';
 
   @override
-  String get messageAgentTitle => 'Message Agent';
+  String get personalAgentTitle => 'Personal Agent';
 
   @override
-  String messageAgentRuntimeSubtitle(Object provider) {
+  String personalAgentRuntimeSubtitle(Object provider) {
     return 'Runs a $provider runtime inside the daemon';
   }
 
   @override
-  String get messageAgentExperimentDisabled => 'Experimental feature disabled';
+  String get personalAgentExperimentDisabled => 'Experimental feature disabled';
 
   @override
-  String get messageAgentReadyToEnable => 'Ready';
+  String get personalAgentReadyToEnable => 'Ready';
 
   @override
-  String get messageAgentNotReady => 'Not ready';
+  String get personalAgentNotReady => 'Not ready';
 
   @override
-  String get messageAgentRunningDaemon => 'Running daemon';
+  String get personalAgentRunningDaemon => 'Running daemon';
 
   @override
-  String get messageAgentEngine => 'Engine';
+  String get personalAgentEngine => 'Engine';
 
   @override
-  String get messageAgentScope => 'Scope';
+  String get personalAgentScope => 'Scope';
 
   @override
-  String get messageAgentAllProcessableConversations =>
+  String get personalAgentAllProcessableConversations =>
       'All processable conversations';
 
   @override
-  String get messageAgentDaemonVersion => 'Daemon version';
+  String get personalAgentDaemonVersion => 'Daemon version';
 
   @override
-  String get messageAgentCapabilities => 'Capabilities';
+  String get personalAgentCapabilities => 'Capabilities';
 
   @override
-  String get messageAgentSecureBootstrap => 'Secure bootstrap';
+  String get personalAgentSecureBootstrap => 'Secure bootstrap';
 
   @override
-  String get messageAgentPublicKeyReported => 'Public key reported';
+  String get personalAgentPublicKeyReported => 'Public key reported';
 
   @override
-  String get messageAgentWaitingStatusRefresh => 'Waiting for status refresh';
+  String get personalAgentWaitingStatusRefresh => 'Waiting for status refresh';
 
   @override
-  String get messageAgentEnable => 'Enable Message Agent';
+  String get personalAgentEnable => 'Enable Personal Agent';
 
   @override
-  String get messageAgentEnabling => 'Enabling';
+  String get personalAgentEnabling => 'Enabling';
 
   @override
-  String get messageAgentPause => 'Pause message processing';
+  String get personalAgentPause => 'Pause message processing';
 
   @override
-  String get messageAgentDelete => 'Delete Message Agent';
+  String get personalAgentDelete => 'Delete Personal Agent';
 
   @override
-  String get messageAgentRevokeAuthorization =>
+  String get personalAgentRevokeAuthorization =>
       'Revoke daemon message authorization';
 
   @override
-  String get messageAgentPermissionSummaryEnabled =>
+  String get personalAgentPermissionSummaryEnabled =>
       'Permission summary: reads regular messages, analyzes and summarizes them, creates drafts, and requests user-confirmed app actions.';
 
   @override
-  String get messageAgentPermissionSummaryDisabled =>
-      'Switch to a tenant on an approved AWiki realm to configure Message Agent.';
+  String get personalAgentPermissionSummaryDisabled =>
+      'Switch to a tenant on an approved AWiki realm to configure Personal Agent.';
 
   @override
-  String get messageAgentPauseTitle => 'Pause message processing';
+  String get personalAgentPauseTitle => 'Pause message processing';
 
   @override
-  String get messageAgentPauseMessage =>
-      'After pausing, the Message Agent stops reading and processing new messages. The runtime and authorization remain and can be enabled again.';
+  String get personalAgentPauseMessage =>
+      'After pausing, the Personal Agent stops reading and processing new messages. The runtime and authorization remain and can be enabled again.';
 
   @override
-  String get messageAgentDeleteTitle => 'Delete Message Agent';
+  String get personalAgentDeleteTitle => 'Delete Personal Agent';
 
   @override
-  String get messageAgentDeleteMessage =>
+  String get personalAgentDeleteMessage =>
       'Deletion pauses message processing first, then archives the runtime. The daemon and authorization are not deleted.';
 
   @override
-  String get messageAgentRevokeTitle => 'Revoke daemon message authorization';
+  String get personalAgentRevokeTitle => 'Revoke daemon message authorization';
 
   @override
-  String get messageAgentRevokeMessage =>
+  String get personalAgentRevokeMessage =>
       'Revocation must remove daemon-key-1 through a signed DID Document update. If the update is not completed, it fails and will not treat pause as a successful revoke.';
+
+  @override
+  String get personalAgentSettingsSubtitle =>
+      'Configure enablement, pause, and daemon message authorization.';
+
+  @override
+  String get personalAgentSettingsDisabledSubtitle =>
+      'Personal Agent is disabled and will not send bootstrap or authorization requests.';
+
+  @override
+  String get personalAgentNoDaemonSelected => 'No running daemon selected';
+
+  @override
+  String personalAgentSelectedDaemon(Object name) {
+    return 'Running daemon: $name';
+  }
+
+  @override
+  String get personalAgentDescription =>
+      'Reads regular direct text, organizes it, and prepares drafts for your confirmation.';
+
+  @override
+  String get personalAgentDisabledDescription =>
+      'This experimental feature is disabled. No bootstrap or authorization request will be sent.';
+
+  @override
+  String get personalAgentDaemonStatus => 'Daemon status';
+
+  @override
+  String get personalAgentAuthorizationStatus => 'Authorization';
+
+  @override
+  String get personalAgentDirectTextScope => 'Regular direct text';
+
+  @override
+  String get personalAgentNotSelected => 'Not selected';
+
+  @override
+  String get personalAgentNoDaemon => 'No daemon available';
+
+  @override
+  String get personalAgentNotBound => 'Not bound';
+
+  @override
+  String personalAgentBound(Object name) {
+    return 'Bound to $name';
+  }
+
+  @override
+  String get personalAgentRefreshDaemonStatus => 'Refresh daemon status';
+
+  @override
+  String get personalAgentSelectDaemon => 'Select running daemon';
+
+  @override
+  String get personalAgentRunsOnSelectedDaemon =>
+      'Personal Agent runs inside the selected daemon.';
+
+  @override
+  String get personalAgentNoDaemons =>
+      'No daemon is available. Create or install one from Agents first.';
+
+  @override
+  String personalAgentSelectDaemonSemantic(Object name) {
+    return 'Select $name';
+  }
+
+  @override
+  String get personalAgentReadyWithPublicKey => 'Ready · public key reported';
+
+  @override
+  String get personalAgentReadyWaitingPublicKey =>
+      'Ready · waiting for bootstrap public key';
+
+  @override
+  String personalAgentDaemonNeedsAttention(Object status) {
+    return '$status · refresh or inspect the daemon';
+  }
+
+  @override
+  String get personalAgentFeatureDisabledNotice =>
+      'AWIKI_AGENT_IM_ENABLED=false. This entry is read-only and sends no bootstrap, binding, or authorization request.';
+
+  @override
+  String get personalAgentNoDaemonNotice =>
+      'No daemon is available. Install and start a daemon first.';
+
+  @override
+  String get personalAgentDaemonNotReadyNotice =>
+      'The selected daemon is not ready. Refresh its status or inspect the daemon.';
+
+  @override
+  String get personalAgentBootstrapKeyMissingNotice =>
+      'The selected daemon has not reported a secure bootstrap public key. Refresh daemon status first.';
+
+  @override
+  String get personalAgentCanEnableNotice => 'Personal Agent can be enabled.';
+
+  @override
+  String get personalAgentSafetyTitle => 'Safety boundaries';
+
+  @override
+  String get personalAgentSafetyPlainText =>
+      'Reads only supported regular direct text and never processes Direct or Group E2EE plaintext.';
+
+  @override
+  String get personalAgentSafetyDraftOnly =>
+      'Creates drafts and confirmation-required actions; it never sends messages automatically.';
+
+  @override
+  String get personalAgentSafetyNoPrimaryKey =>
+      'The runtime never holds the primary DID private key or connects directly to message-service.';
+
+  @override
+  String get personalAgentSafetyFeatureDisabled =>
+      'When disabled, the feature performs no authorization, bootstrap, or delegated-key operation.';
+
+  @override
+  String get personalAgentBusy => 'Working';
+
+  @override
+  String get personalAgentDaemonNotReady => 'Daemon not ready';
+
+  @override
+  String get personalAgentEnabledState => 'Enabled';
+
+  @override
+  String get personalAgentCreated => 'Personal Agent created';
+
+  @override
+  String get personalAgentConfigure => 'Configure Personal Agent';
 
   @override
   String get agentInboxTitle => 'Agent inbox';
@@ -2312,10 +2765,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Activation email sent. Please check your inbox.';
 
   @override
-  String get emailLoginUnsupportedForRegisteredHandle =>
-      'This handle is already registered. Email currently supports new registration only. Use phone verification or import an identity credential to log in.';
-
-  @override
   String get emailNotActivatedClickLink =>
       'The email is not activated yet. Please click the activation link in the email first.';
 
@@ -2472,4 +2921,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatGroupProfileUpdated => 'Group info updated';
+
+  @override
+  String get handleRecoveryUnavailable =>
+      'Handle Recovery is not supported in this version. No identity state was changed.';
+
+  @override
+  String get legacyIdentityUpgradeFailed =>
+      'The legacy identity upgrade failed. Please try again.';
 }

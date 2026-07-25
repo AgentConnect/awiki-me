@@ -1,3 +1,7 @@
+// [INPUT]: One scope-bound AppBootstrap and optional test/provider overrides.
+// [OUTPUT]: Localized AWiki Me widget tree with scoped production providers.
+// [POS]: Top-level provider composition; secrets never enter presentation providers.
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
@@ -10,7 +14,7 @@ import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
 import '../application/models/app_session.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
-import '../data/agent/user_service_message_agent_binding_adapter.dart';
+import '../data/agent/user_service_personal_agent_binding_adapter.dart';
 import '../data/services/authenticated_user_service_rpc_client.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
@@ -62,6 +66,18 @@ class AwikiMeApp extends StatelessWidget {
           identityCorePortProvider.overrideWithValue(
             bootstrap.identityCorePort!,
           ),
+        if (bootstrap.deviceManagementCorePort != null)
+          deviceManagementCorePortProvider.overrideWithValue(
+            bootstrap.deviceManagementCorePort!,
+          ),
+        if (bootstrap.rootKeyTransferPort != null)
+          rootKeyTransferPortProvider.overrideWithValue(
+            bootstrap.rootKeyTransferPort!,
+          ),
+        if (bootstrap.groupEncryptionCorePort != null)
+          groupEncryptionCorePortProvider.overrideWithValue(
+            bootstrap.groupEncryptionCorePort!,
+          ),
         if (bootstrap.onboardingService != null)
           onboardingServiceProvider.overrideWithValue(
             bootstrap.onboardingService!,
@@ -101,10 +117,10 @@ class AwikiMeApp extends StatelessWidget {
             }
             return inventory;
           }),
-        if (bootstrap.messageAgentBindingPort != null)
-          messageAgentBindingPortProvider.overrideWith((ref) {
-            final bindings = bootstrap.messageAgentBindingPort!;
-            if (bindings is UserServiceMessageAgentBindingAdapter &&
+        if (bootstrap.personalAgentBindingPort != null)
+          personalAgentBindingPortProvider.overrideWith((ref) {
+            final bindings = bootstrap.personalAgentBindingPort!;
+            if (bindings is UserServicePersonalAgentBindingAdapter &&
                 bootstrap.appSessionService != null) {
               final sessions = ref.read(appSessionServiceProvider);
               final coordinator = AuthSessionCoordinator(
@@ -139,14 +155,14 @@ class AwikiMeApp extends StatelessWidget {
             final control = bootstrap.agentControlService!;
             if (control is DefaultAgentControlService &&
                 bootstrap.messagingService != null) {
-              final messageAgentBindings =
-                  bootstrap.messageAgentBindingPort == null
+              final personalAgentBindings =
+                  bootstrap.personalAgentBindingPort == null
                   ? null
-                  : ref.watch(messageAgentBindingPortProvider);
+                  : ref.watch(personalAgentBindingPortProvider);
               return DefaultAgentControlService(
                 inventory: ref.watch(agentInventoryPortProvider),
                 messages: bootstrap.messagingService!,
-                messageAgentBindings: messageAgentBindings,
+                personalAgentBindings: personalAgentBindings,
                 identities: bootstrap.identityCorePort == null
                     ? null
                     : ref.watch(identityCorePortProvider),

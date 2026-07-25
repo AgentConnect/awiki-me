@@ -91,7 +91,30 @@ dart run tests/unit/runner.dart tests/unit/agents/agent_inbox_provider_test.dart
 dart run tests/unit/runner.dart tests/unit/conversation_workspace_test.dart
 dart run tests/unit/runner.dart tests/unit/chat_page_test.dart
 dart run tests/unit/runner.dart tests/unit/onboarding_page_test.dart
+flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_test.dart \
+  tests/unit/devices/device_management_service_test.dart \
+  tests/unit/devices/devices_ui_test.dart
 ```
+
+`--case multi-device` 目前是可执行的本地设备入口 E2E：它使用独立临时 Storage Scope、
+production `AppBootstrap` 和 native Core，验证默认组合设备管理 adapter 和 onboarding
+Join 入口，同时 root transfer、revoke、Direct/Group E2EE 仍由独立门禁关闭。它不发送
+OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS 或 Handle Recovery。
+
+`DEVICE-JOIN-E2E-001/002` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
+本地 capability gate。该 suite 只覆盖 App 新设备 + CLI 管理设备和 App 管理设备 + CLI
+新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
+双端 SAS 和场景级 attestation；`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化
+SAS，App 批准要求真实 macOS user-presence。专用账号 allowlist 或执行环境尚未全部就绪时，
+这个入口不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、
+adapter、UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端
+case。
+
+`DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-001/002`、
+`DEVICE-REVOKE-E2E-001` 和 `MLS-MULTI-DEVICE-E2E-001/002` 均为 planned、不可执行边界。
+旧 Root/Revoke/MLS Dart 实现依赖 direct-admin Join，已经删除；第三步或后续版本必须重新
+实现并显式注册 suite。不得把 planning 文档、本地 capability gate、Widget fake 或手工演示
+记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
 图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏
@@ -148,6 +171,98 @@ dart run tests/e2e/runner.dart --case smoke
 native IM Core smoke. It is the default high-frequency E2E gate for a Mac with a
 normal Flutter desktop setup. It does not require test accounts, OTP, a backend,
 or `awiki-cli`.
+
+Run the local multi-device capability gate:
+
+```bash
+dart run tests/e2e/runner.dart --case multi-device
+
+# On this macOS development host, use the audited host config explicitly:
+dart run tests/e2e/runner.dart --case multi-device \
+  --config tests/e2e/configs/e2e.codex-macos-allowed.local.yaml
+```
+
+This suite launches the real production bootstrap/native Core with an
+independent temporary Storage Scope and deletes that root after the run. It
+checks the default device-management composition and public Join entry while
+the independent root-transfer, revoke, Direct, and Group security gates remain
+closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
+providers. The remote Join case remains separate and is not included in this
+suite's pass attestation.
+
+Run the operator-confirmed remote bidirectional App + CLI member Join only
+after the dedicated ali deployment and account have been reviewed:
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
+AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","/home/ecs-user/awiki-space/user-service/.venv/bin/python","/home/ecs-user/awiki-space/user-service/scripts/issue_multi_device_test_otp.py","--apply"]' \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
+dart run tests/e2e/runner.dart \
+  --case multi-device-remote-join \
+  --config <local-awiki-info-config.yaml>
+```
+
+The local YAML supplies only the reviewed `awiki.info` service endpoints, the
+CLI binary, and its exact 40-character source revision. The dedicated phone and
+JSON-argv OTP resolver are environment-only inputs; `otp.code`, a static OTP,
+or a command whose local executable is a shell is never accepted by this suite.
+Every argv item rejects whitespace, newlines, shell metacharacters and
+multi-command strings; a nested `bash`/`sh -c` after `ssh` is also rejected.
+The ali-side services must allow the dedicated phone hash and support the
+message-driven member Join contract. The CLI must be built from exactly the
+configured revision. The macOS operator must complete every real
+LocalAuthentication prompt; the test only counts and delegates those prompts
+and never injects success.
+
+By default the purpose-bound `/user-service/auth/sms-codes` request remains
+strictly 200-only. For the user-authorized synthetic test number, an explicit
+operator-only mode may be added to the command above:
+
+```bash
+AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1
+```
+
+This flag is accepted only with the exact reviewed resolver argv shown above.
+It permits one non-retried HTTP 503 only when the response media type is
+`application/problem+json` and its object contains exactly `type`, `title`,
+`status`, `detail`, and `instance`: `type=about:blank`,
+`title="SMS Service Error"`, integer `status=503`,
+`instance=/user-service/auth/sms-codes`, and `detail` matching the deployed
+`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` shape. The two
+fixed markers must appear exactly once; another channel prefix, provider code,
+additional marker, secret-related word, or standalone six-digit value fails
+before the scoped resolver is invoked. A valid resolver response must contain
+exactly six ASCII digits. Any other status, content type, key, value, resolver
+output, or malformed flag fails closed without recording the response body.
+The normal HTTP 200 delivery path is unchanged and does not require staged mode.
+
+Staged-OTP mode proves only the explicitly reviewed operator test path; it does
+not prove SMS delivery, does not turn the 503 into a product-visible success,
+and changes no production service behavior. The ali SSH key is not yet limited
+by a server-side forced command, which remains tracked security debt. Do not
+replace this mode with an online DEV route, plaintext OTP, mock, or generic
+shell command.
+
+The suite first bootstraps a CLI ready admin and joins a newly generated App
+device through the real onboarding UI and foreground CLI approval contract. It
+then bootstraps an independent App ready admin, receives the CLI request through
+the system-notification projection, starts verification explicitly, and
+approves the requester through the real Devices UI and exactly one macOS
+LocalAuthentication prompt. Both directions compare the independently derived
+six-digit SAS without recording it, authorize only the fixed member role, and
+require both Registries to converge with the new device `active-member` and
+`management_ready=false`. The App-new-device direction also restarts from the
+same pending Core session and rejects persisted SAS. Root transfer, revoke, and
+MLS are not part of this executable suite. Local roots are deleted after the
+run. Because the current public contract has no test-owned remote identity
+delete operation, the
+unique identity/Join side effect is recorded in the runner residual ledger.
+Resolver stdout/stderr, OTPs, tokens, SAS values, DIDs,
+private material, and local secret paths must not enter reports or logs. A
+checked-in implementation or `prepare-only` result is not remote pass evidence;
+while rollout or account prerequisites are unavailable, the suite fails closed
+before claiming success.
 
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:
@@ -241,6 +356,16 @@ App 可见标题断言。
 The remote product suites must point every HTTP/WebSocket/DID domain at
 `awiki.info`; they do not start a local backend.
 
+Local-server verification is a separate target and must use the domains from
+the local deployment configuration. On the current server the primary target
+is `https://agentwiki.info` / `wss://agentwiki.info/im/ws`.
+`agent-connect.cn` is also registered in the local User Service domain allowlist,
+but it is not an App E2E DID target until it publishes its own
+`/.well-known/did.json`. Remote-server setup may be used as a reference for
+Linux, Flutter, and service dependencies, but its HTTP/WebSocket URLs, DID
+domain, Handle domain, certificates, and account pool must not be copied into a
+local-server run.
+
 The full real-backend E2E runner reads local configuration from
 `tests/e2e/configs/e2e.local.yaml` by default. Copy the tracked template first:
 
@@ -248,16 +373,19 @@ The full real-backend E2E runner reads local configuration from
 cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
 ```
 
-Required local values:
+Required configuration values:
 
-- `service.baseUrl`: remote test backend root, `https://awiki.info`.
-- `service.didDomain`: remote DID domain, `awiki.info`.
+- `service.baseUrl`: selected backend root. Use `https://agentwiki.info` on the
+  current local server; `https://awiki.info` is only for an explicitly selected
+  remote compatibility run.
+- `service.didDomain`: selected DID domain. Use `agentwiki.info` on the current
+  local server; use `awiki.info` only for the matching remote compatibility run.
 - `otp.phone` and `otp.code`: the test OTP credential.
 - `accounts.appUser.handle`: App-side test handle.
 - `accounts.cliPeer.handle`: CLI peer test handle.
 - `cliPeer.binary`: `awiki-cli` binary path.
-- `cliPeer.sourceRef`: exact non-zero 40-character commit SHA used to build both
-  the CLI and sibling `awiki_im_core` SDK artifacts.
+- `cliPeer.sourceRef`: exact non-zero 40-character commit SHA embedded in the
+  selected CLI binary. It does not attest the App's SDK artifact revision.
 
 Before identity or message assertions, the runner executes `awiki-cli version`
 and requires `data.commit` to equal `cliPeer.sourceRef`. `unknown`, all-zero,
@@ -281,9 +409,11 @@ timeline ownership, but downloads through the direct peer reference required by
 the remote attachment lookup. A raw `dm:peer-scope:*` storage thread must never
 be sent to the core `thread-attachment-download` capability.
 
-All live product cases are pinned by `tests/e2e/suite_manifest.json` to
-`https://awiki.info` / `wss://awiki.info/im/ws`. They reject localhost,
-`awiki.test`, insecure schemes, and other domains before starting Flutter.
+All live product cases are constrained by `tests/e2e/suite_manifest.json` to an
+explicit allowlist. The selected YAML configuration remains the source of the
+actual target: remote compatibility runs use `awiki.info`, while local-server
+runs use `agentwiki.info`. They reject localhost, `awiki.test`, insecure
+schemes, and other domains before starting Flutter.
 The smoke case has no service dependency. Dry-run only validates orchestration
 and never counts as a real gate.
 
@@ -302,6 +432,7 @@ Supported E2E cases:
 - `direct`: App and CLI peer direct-message flow.
 - `group`: App and CLI peer group-message flow.
 - `attachment`: App and CLI peer attachment flow.
+- `personal-agent`: full App UI Personal Agent real-backend gate.
 - `contacts`: App and CLI peer follow/contact flow，包含从可见联系人行打开 canonical Direct 的发送、restart 和 unread/read 闭环。
 - `restart`: release-only two-Flutter-process cold restart using one isolated App state root; the second process must restore the active identity, canonical Direct/Group rows, exact messages, unread state, and cached display names without in-memory Provider reuse.
 - `full`: all App + CLI peer flows.
@@ -376,6 +507,45 @@ acceptance. Profile editing, directory-wide search, identity switch,
 onboarding, group role/remove/leave flows, and secure-trust UI remain roadmap
 cases until they receive their own case IDs and vertical slices; `full` does
 not imply those features are covered.
+
+Personal Agent UI changes must keep coverage in both active test domains:
+
+- Focused widget/provider/layout coverage under `tests/unit/`, including Settings entry visibility, daemon readiness, missing bootstrap key, and feature-disabled no-op behavior.
+- Durable App flow coverage under `tests/e2e/flutter/app/personal_agent_full_ui_test.dart`, with root `integration_test/personal_agent_full_ui_test.dart` kept as a thin Flutter shim.
+- The fake-backed Personal Agent App shim expects `--dart-define=AWIKI_E2E=true` when tests assert semantics identifiers such as `personal-agent-settings-entry`.
+- The product full chain is owned by `flutter pub run tests/e2e/runner.dart --case personal-agent`; `dart run` is acceptable only in environments where native assets can build through the Dart entrypoint. Selected runs must fail fast when backend, daemon, CLI, OTP, or Hermes prerequisites are missing and must not convert the case into a silent skip.
+- Product gate evidence must include passed attestations for `PERSONALAGENT-E2E-001`, `PERSONALAGENT-E2E-002`, and `PERSONALAGENT-E2E-004`; `uiEnabled`, `runtimeFinalReceived`, and `authorizationRevoked` must be derived from those individual case results, not overall runner success. `PERSONALAGENT-E2E-003` remains planned, and there is no executable `PERSONALAGENT-E2E-005` in the current suite.
+- Treat `status: success` as the first required report condition. Failed Personal Agent reports now keep evidence flags false, so old failed reports with true-looking flags must not be reused as pass evidence.
+
+Run the Personal Agent full UI real-backend gate:
+
+```bash
+flutter pub run tests/e2e/runner.dart \
+  --case personal-agent \
+  --config tests/e2e/configs/e2e.local.yaml
+```
+
+`personal-agent` requires the normal backend/OTP/account/CLI values plus:
+
+- `service.messageServiceUrl`
+- `service.messageServiceWsUrl`
+- `daemon.rustRepo`
+- `daemon.binary`
+- `daemon.stateRoot`
+- `daemon.readyFile`
+- `daemon.fakeHermesGatewayCommand`
+- `personalAgent.runtimeProvider: hermes`
+- `personalAgent.realBackend: true`
+
+When `--case personal-agent` is selected, omitted `personalAgent.realBackend`
+defaults to true. Setting it to false, omitting any required backend/daemon field,
+or using a provider other than `hermes` is a configuration failure. This gate uses
+the real Settings / Personal Agent UI, isolates the product scenario with the
+plain-name `Personal Agent full UI drives real backend daemon and recovery`, sends
+a CLI peer direct text, waits for daemon `runtime_final`, confirms the App draft
+action, checks a redacted `awiki.app.action.result.v1`, and revokes Daemon message
+authorization. Focused fake-backed shim tests can diagnose UI behavior, but they
+are not sufficient release evidence for the product chain.
 
 All E2E runtime state and reports go under `.e2e/` and must remain untracked.
 Local config files named `tests/e2e/configs/*.local.yaml` are also ignored and
@@ -620,14 +790,14 @@ and timestamps. This is the first assertion-evidence layer; one-to-one trace
 from every catalog exact oracle/negative guard to a dedicated assertion ID is
 still required before the conversation-correctness plan is complete.
 
-Message Agent fake Widget coverage is not product acceptance. The optional real
-`message-agent` suite currently attests only implemented vertical slices:
-`MSGAGENT-E2E-001` enable/binding, `MSGAGENT-E2E-002` CLI message plus runtime
-result, and `MSGAGENT-E2E-004` UI revoke plus exact User Service/daemon
-convergence. `MSGAGENT-E2E-003` (visible action/draft confirmation) is planned
-in the catalog but is not in the executable manifest because the current real
-scenario has no such visible action. Missing provider/configuration or any
-non-attested runnable case remains failed/not-run, never passed.
+Personal Agent fake Widget coverage is not product acceptance. The optional real
+`personal-agent` suite currently attests only implemented vertical slices:
+`PERSONALAGENT-E2E-001` enable/binding, `PERSONALAGENT-E2E-002` CLI message plus runtime
+result, and `PERSONALAGENT-E2E-004` UI revoke plus exact User Service/daemon
+convergence. `PERSONALAGENT-E2E-003` (visible action/draft confirmation) is planned
+in the catalog because the supporting action step does not yet have its own
+accepted case attestation. Missing provider/configuration or any non-attested
+runnable case remains failed/not-run, never passed.
 
 ## Maintenance Rules
 

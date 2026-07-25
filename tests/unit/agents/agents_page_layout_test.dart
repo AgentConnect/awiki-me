@@ -7,13 +7,17 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
-import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
@@ -1120,7 +1124,7 @@ void main() {
     expect(control.lastInvocationPolicyAgentDid, isNull);
   });
 
-  testWidgets('message Agent controls are hidden when tenant is unsupported', (
+  testWidgets('personal agent controls are hidden when tenant is unsupported', (
     tester,
   ) async {
     final control = FakeAgentControlService()
@@ -1165,65 +1169,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('当前租户暂不支持智能体'), findsOneWidget);
-    expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
-    expect(find.text('消息处理 Agent'), findsNothing);
-    expect(find.text('启用消息处理 Agent'), findsNothing);
+    expect(
+      find.byKey(const Key('personal-agent-settings-panel')),
+      findsNothing,
+    );
+    expect(find.text('个人助理'), findsNothing);
+    expect(find.text('启用个人助理'), findsNothing);
     expect(find.text('暂停处理消息'), findsNothing);
-    expect(find.text('删除消息处理 Agent'), findsNothing);
+    expect(find.text('删除个人助理'), findsNothing);
     expect(find.text('撤销 Daemon 消息授权'), findsNothing);
     expect(control.lastBootstrapDaemonDid, isNull);
     expect(find.textContaining('自动回复'), findsNothing);
     expect(find.textContaining('代发'), findsNothing);
   });
 
-  testWidgets('message Agent panel is hidden when daemon lacks bootstrap key', (
-    tester,
-  ) async {
-    final control = FakeAgentControlService()
-      ..agents = const <AgentSummary>[
-        AgentSummary(
-          agentDid: 'did:agent:daemon',
-          kind: AgentKind.daemon,
-          handle: 'awiki-daemon-test',
-          displayName: '运行 Daemon 1',
-          activeState: 'active',
-          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
-        ),
-      ];
-    final identities = FakeIdentityCorePort();
+  testWidgets(
+    'personal agent panel is hidden when daemon lacks bootstrap key',
+    (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '运行 Daemon 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+          ),
+        ];
+      final identities = FakeIdentityCorePort();
 
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const AgentsWorkspacePage(),
-        session: const SessionIdentity(
-          did: 'did:human:me',
-          credentialName: 'default',
-          displayName: 'Me',
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+            identityCorePortProvider.overrideWithValue(identities),
+            agentImEnabledProvider.overrideWithValue(true),
+          ],
         ),
-        providerOverrides: <Override>[
-          agentControlServiceProvider.overrideWithValue(control),
-          identityCorePortProvider.overrideWithValue(identities),
-          agentImEnabledProvider.overrideWithValue(true),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('message-agent-settings-panel')), findsNothing);
-    expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsNothing);
-    expect(find.text('等待刷新状态'), findsNothing);
-    expect(find.text('启用消息处理 Agent'), findsNothing);
-    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
-    expect(control.lastBootstrapDaemonDid, isNull);
-    expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
-  });
+      expect(
+        find.byKey(const Key('personal-agent-settings-panel')),
+        findsNothing,
+      );
+      expect(find.text('运行 Daemon 内创建 Hermes runtime'), findsNothing);
+      expect(find.text('等待刷新状态'), findsOneWidget);
+      expect(find.text('启用个人助理'), findsNothing);
+      expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+      expect(control.lastBootstrapDaemonDid, isNull);
+      expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsNothing);
+    },
+  );
 
   testWidgets(
-    'message Agent management panel is hidden with existing runtime',
+    'personal agent management panel is hidden with existing runtime',
     (tester) async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -1254,7 +1265,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-app-default',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -1282,15 +1293,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('message-agent-settings-panel')),
+        find.byKey(const Key('personal-agent-settings-panel')),
         findsNothing,
       );
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('个人助理'), findsOneWidget);
+      expect(
+        find.byKey(const Key('personal-agent-settings-entry-card')),
+        findsOneWidget,
+      );
+      expect(find.text('已创建个人助理'), findsOneWidget);
       expect(find.text('运行 Daemon 1'), findsWidgets);
-      expect(find.text('Hermes Message Agent'), findsWidgets);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('Hermes Personal Agent'), findsWidgets);
+      expect(find.text('启用个人助理'), findsNothing);
       expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('删除个人助理'), findsNothing);
       expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
@@ -1298,8 +1314,7 @@ void main() {
   );
 
   testWidgets('create Agent dialog blocks unavailable handle', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..handleRegistrationStatus = HandleRegistrationStatus.registered;
+    final gateway = FakeAwikiGateway()..handleAlreadyRegistered = true;
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -1955,6 +1970,83 @@ void main() {
   });
 
   testWidgets(
+    'skill onboarding copies a scoped prompt without managing inventory',
+    (tester) async {
+      final control = FakeAgentControlService();
+      final skillPort = _SkillOnboardingPortStub();
+      String? clipboardText;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            final data = call.arguments as Map<Object?, Object?>;
+            clipboardText = data['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:wba:awiki.info:user:alice',
+            credentialName: 'alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.info',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+            awikiEnvironmentConfigProvider.overrideWithValue(
+              AwikiEnvironmentConfig(
+                baseUrl: 'https://awiki.info',
+                didDomain: 'awiki.info',
+              ),
+            ),
+            skillOnboardingPortProvider.overrideWithValue(skillPort),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('agent-skill-onboarding-button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('连接 Skill Agent'), findsOneWidget);
+      expect(find.text('alice.awiki.info'), findsOneWidget);
+      expect(find.text('skill-widget.awiki.info'), findsOneWidget);
+      expect(find.byKey(const Key('agent-skill-copy-button')), findsOneWidget);
+      final prompt = tester
+          .widget<Text>(find.byKey(const Key('agent-skill-instruction-text')))
+          .data!;
+      expect(prompt, contains('AWIKI_SKILL_ONBOARDING_V1'));
+      expect(prompt, contains('awsk1_widget_secret_value'));
+      expect(prompt, isNot(contains('did:wba:awiki.info:user:alice')));
+      expect(control.lastInstallCommand, isNull);
+
+      final copyButton = find.byKey(const Key('agent-skill-copy-button'));
+      await tester.ensureVisible(copyButton);
+      await tester.pumpAndSettle();
+      await tester.tap(copyButton);
+      await tester.pump();
+      expect(clipboardText, prompt);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('agent-skill-regenerate-button')));
+      await tester.pumpAndSettle();
+      expect(skillPort.calls, 2);
+      expect(control.lastInstallCommand, isNull);
+    },
+  );
+
+  testWidgets(
     'refresh status shows pending state then no-response after timeout',
     (tester) async {
       final control = FakeAgentControlService()
@@ -2188,6 +2280,27 @@ void main() {
       expect(find.text('<redacted>'), findsWidgets);
     },
   );
+}
+
+class _SkillOnboardingPortStub implements SkillOnboardingPort {
+  int calls = 0;
+
+  @override
+  Future<SkillOnboardingGrant> issueSkillToken({
+    required String controllerDid,
+    required String controllerHandle,
+    required String clientPlatform,
+  }) async {
+    calls += 1;
+    return SkillOnboardingGrant(
+      token: 'awsk1_widget_secret_value',
+      tokenId: 'agtok_widget_$calls',
+      controllerHandle: controllerHandle,
+      agentHandle: 'skill-widget.awiki.info',
+      serviceOrigin: 'https://awiki.info',
+      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+    );
+  }
 }
 
 Map<String, Object?> _genericCliCapability({

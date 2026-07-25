@@ -5,20 +5,20 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:crypto/crypto.dart';
 
-import 'message_agent_runtime_provider.dart';
+import 'personal_agent_runtime_provider.dart';
 
 const daemonBootstrapSchema = 'awiki.daemon.bootstrap.v1';
 const daemonBootstrapSecureSchema = 'awiki.daemon.bootstrap.secure.v1';
 const userSubkeyPackageSchema = 'awiki.daemon.user_subkey_package.v2';
 const appMessageHandlerRole = 'app_message_handler';
-const appMessageHandlerRuntime = messageAgentProviderHermesRuntime;
-const appMessageHandlerRuntimeProvider = messageAgentProviderHermesId;
+const appMessageHandlerRuntime = personalAgentProviderHermesRuntime;
+const appMessageHandlerRuntimeProvider = personalAgentProviderHermesId;
 const appMessageHandlerRuntimeProfile =
-    messageAgentProviderHermesRuntimeProfile;
+    personalAgentProviderHermesRuntimeProfile;
 const daemonBootstrapDefaultTtl = Duration(minutes: 5);
 const daemonBootstrapKeyDerivationLabel = 'AWIKI daemon bootstrap secure v1';
 
-const defaultMessageAgentActions = <String>[
+const defaultPersonalAgentActions = <String>[
   'message.summarize_plain',
   'message.create_draft',
   'contact.read',
@@ -26,7 +26,7 @@ const defaultMessageAgentActions = <String>[
   'contact.update_note',
 ];
 
-const defaultMessageAgentScopes = <String>[
+const defaultPersonalAgentScopes = <String>[
   'message.inbox.read.plain',
   'message.history.read.plain',
   'message.summarize_plain',
@@ -48,7 +48,7 @@ class UserSubkeyPackage {
     this.keyAlgorithm = 'Ed25519',
     this.privateKeyEncoding = 'pem',
     this.expiresAt,
-    this.allowedScopes = defaultMessageAgentScopes,
+    this.allowedScopes = defaultPersonalAgentScopes,
   }) : privateKeyPem = privateKeyPem ?? privateKeyMultibase ?? '',
        privateKeyMultibase = privateKeyMultibase ?? privateKeyPem ?? '';
 
@@ -95,20 +95,20 @@ class UserSubkeyPackage {
   }
 }
 
-class DesiredMessageAgent {
-  const DesiredMessageAgent({
+class DesiredPersonalAgent {
+  const DesiredPersonalAgent({
     this.role = appMessageHandlerRole,
     this.runtime = appMessageHandlerRuntime,
     this.runtimeProvider = appMessageHandlerRuntimeProvider,
     this.runtimeProfile = appMessageHandlerRuntimeProfile,
-    this.displayName = messageAgentProviderHermesRuntimeDisplayName,
+    this.displayName = personalAgentProviderHermesRuntimeDisplayName,
     required this.preferredLanguage,
     required this.ensureOnceKey,
     this.runtimeRegistrationToken,
     this.autoCreate = true,
     this.plainMessageVisible = true,
     this.e2eeVisible = false,
-    this.allowedActions = defaultMessageAgentActions,
+    this.allowedActions = defaultPersonalAgentActions,
   });
 
   final String role;
@@ -145,7 +145,7 @@ class DesiredMessageAgent {
 
 class AppCapabilityPolicy {
   const AppCapabilityPolicy({
-    this.capabilities = defaultMessageAgentActions,
+    this.capabilities = defaultPersonalAgentActions,
     this.requireConfirmationForWriteActions = true,
   });
 
@@ -171,7 +171,7 @@ class DaemonBootstrapEnvelope {
     this.userHandle,
     this.runId,
     required this.userSubkeyPackage,
-    required this.desiredMessageAgent,
+    required this.desiredPersonalAgent,
     this.capabilityPolicy = const AppCapabilityPolicy(),
   });
 
@@ -182,7 +182,7 @@ class DaemonBootstrapEnvelope {
   final String? userHandle;
   final String? runId;
   final UserSubkeyPackage userSubkeyPackage;
-  final DesiredMessageAgent desiredMessageAgent;
+  final DesiredPersonalAgent desiredPersonalAgent;
   final AppCapabilityPolicy capabilityPolicy;
 
   Map<String, Object?> toJson() {
@@ -224,7 +224,7 @@ class DaemonBootstrapEnvelope {
       if (_nonEmpty(runId) != null) 'run_id': runId!.trim(),
       'user_subkey_package': userSubkeyPackage.toJson(),
       'capability_policy': capabilityPolicy.toJson(),
-      'desired_message_agent': desiredMessageAgent.toJson(),
+      'desired_personal_agent': desiredPersonalAgent.toJson(),
       'sync_policy': <String, Object?>{
         'e2ee_default': 'not_supported_in_mvp',
         'plain_default': 'agent_visible',
@@ -456,7 +456,7 @@ class DaemonSecureBootstrapEncryptor {
       aad: <String, Object?>{
         'human_did': internalEnvelope.controllerDid,
         'daemon_agent_did': recipientDaemonDid,
-        'binding_id': messageAgentEnsureOnceKey(
+        'binding_id': personalAgentEnsureOnceKey(
           userDid: internalEnvelope.userSubkeyPackage.userDid,
           appInstanceId: internalEnvelope.appInstanceId,
         ),
@@ -499,22 +499,22 @@ class DaemonSecureBootstrapEncryptor {
   }
 }
 
-String messageAgentBootstrapId({
+String personalAgentBootstrapId({
   required String userDid,
   required String appInstanceId,
 }) => 'boot_${_stableBootstrapSuffix(userDid, appInstanceId)}';
 
-String messageAgentBootstrapIdempotencyKey({
+String personalAgentBootstrapIdempotencyKey({
   required String userDid,
   required String appInstanceId,
-}) => 'message-agent-bootstrap:$userDid:$appInstanceId';
+}) => 'personal-agent-bootstrap:$userDid:$appInstanceId';
 
-String messageAgentBootstrapAttemptId({
+String personalAgentBootstrapAttemptId({
   required String userDid,
   required String appInstanceId,
   String? runId,
 }) {
-  final base = messageAgentBootstrapId(
+  final base = personalAgentBootstrapId(
     userDid: userDid,
     appInstanceId: appInstanceId,
   );
@@ -522,12 +522,12 @@ String messageAgentBootstrapAttemptId({
   return suffix == null ? base : '${base}_$suffix';
 }
 
-String messageAgentBootstrapAttemptIdempotencyKey({
+String personalAgentBootstrapAttemptIdempotencyKey({
   required String userDid,
   required String appInstanceId,
   String? runId,
 }) {
-  final base = messageAgentBootstrapIdempotencyKey(
+  final base = personalAgentBootstrapIdempotencyKey(
     userDid: userDid,
     appInstanceId: appInstanceId,
   );
@@ -535,10 +535,22 @@ String messageAgentBootstrapAttemptIdempotencyKey({
   return suffix == null ? base : '$base:attempt:$suffix';
 }
 
-String messageAgentEnsureOnceKey({
+String personalAgentEnsureOnceKey({
   required String userDid,
   required String appInstanceId,
-}) => 'app-message-agent:$userDid:$appInstanceId';
+}) => 'app-personal-agent:$userDid:$appInstanceId';
+
+bool isPersonalAgentBootstrapIdempotencyKey(String value) {
+  final normalized = value.trim();
+  return normalized.startsWith('personal-agent-bootstrap:') ||
+      normalized.startsWith('message-agent-bootstrap:');
+}
+
+bool isPersonalAgentEnsureOnceKey(String value) {
+  final normalized = value.trim();
+  return normalized.startsWith('app-personal-agent:') ||
+      normalized.startsWith('app-message-agent:');
+}
 
 String defaultDaemonVerificationMethod(String userDid) =>
     '$userDid#daemon-key-1';

@@ -180,12 +180,32 @@ void main() {
       expect(client.messages.sendConversationTextCalls, 1);
       expect(client.messages.lastConversationId, 'dm:peer-scope:v1:bob');
       expect(client.messages.lastSentText, 'durable hello');
+      expect(
+        client.messages.lastSecurity,
+        core.MessageSecurityMode.defaultPlain,
+      );
       expect(client.messages.lastClientMessageId, 'client-1');
       expect(client.messages.lastIdempotencyKey, 'op-client-1');
       expect(sent.localId, 'client-1');
       expect(sent.conversationId, 'dm:peer-scope:v1:bob');
     },
   );
+
+  test('sendConversationText uses E2EE only when explicitly enabled', () async {
+    final client = _FakeClient(ownerDid: 'did:alice');
+    final adapter = AwikiImCoreMessageAdapter(
+      runtime: _FakeRuntime(client, multiDeviceDirectE2eeEnabled: true),
+    );
+
+    await adapter.sendConversationText(
+      conversation: AppConversationReadRef.fromConversationId(
+        'dm:peer-scope:v1:bob',
+      ),
+      content: 'secure hello',
+    );
+
+    expect(client.messages.lastSecurity, core.MessageSecurityMode.secureDirect);
+  });
 
   test('sendConversationText rejects a different canonical id', () async {
     final client = _FakeClient(ownerDid: 'did:alice');
@@ -228,6 +248,10 @@ void main() {
       expect(client.messages.sendConversationPayloadCalls, 1);
       expect(client.messages.lastConversationId, 'dm:peer-scope:v1:bob');
       expect(client.messages.lastPayloadJson, contains('payload hello'));
+      expect(
+        client.messages.lastSecurity,
+        core.MessageSecurityMode.defaultPlain,
+      );
       expect(client.messages.lastClientMessageId, 'client-payload');
       expect(client.messages.lastIdempotencyKey, 'op-client-payload');
       expect(sent.localId, 'client-payload');
@@ -403,7 +427,10 @@ void main() {
 }
 
 class _FakeRuntime extends AwikiImCoreRuntime {
-  _FakeRuntime(this.client)
+  _FakeRuntime(
+    this.client, {
+    super.multiDeviceDirectE2eeEnabled = false,
+  })
     : super(
         config: const AwikiImCoreEnvironmentConfig(
           serviceBaseUrl: 'https://awiki.info',
@@ -501,6 +528,7 @@ class _FakeMessageApi implements core.MessageApi {
   String? lastPayloadJson;
   String? lastClientMessageId;
   String? lastIdempotencyKey;
+  core.MessageSecurityMode? lastSecurity;
   String? responseConversationId;
 
   void emitConversationTimelinePatch(core.ThreadMessageStorePatch patch) {
@@ -580,6 +608,7 @@ class _FakeMessageApi implements core.MessageApi {
     sendConversationTextCalls += 1;
     lastConversationId = request.conversation.conversationId;
     lastSentText = request.text;
+    lastSecurity = request.security;
     lastClientMessageId = request.clientMessageId;
     lastIdempotencyKey = request.idempotencyKey;
     return core.SendMessageResult(
@@ -601,6 +630,7 @@ class _FakeMessageApi implements core.MessageApi {
     sendConversationPayloadCalls += 1;
     lastConversationId = request.conversation.conversationId;
     lastPayloadJson = request.payloadJson;
+    lastSecurity = request.security;
     lastClientMessageId = request.clientMessageId;
     lastIdempotencyKey = request.idempotencyKey;
     return core.SendMessageResult(

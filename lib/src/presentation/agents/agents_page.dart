@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../app/app_router.dart';
+import '../../app/e2e_semantics.dart';
 import '../../app/app_services.dart';
 import '../../domain/entities/agent/agent_command.dart';
 import '../../domain/entities/agent/agent_invocation_policy.dart';
@@ -15,7 +16,8 @@ import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/agent_summary.dart';
-import '../../domain/entities/agent/message_agent_runtime_provider.dart';
+import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
+import '../../domain/entities/agent/skill_onboarding_instruction.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
@@ -25,6 +27,7 @@ import '../shared/identity_flow.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
+import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -34,11 +37,13 @@ import 'agent_runtime_display.dart';
 import 'agent_status_indicator.dart';
 import 'agent_visual_status.dart';
 import 'agents_provider.dart';
+import 'skill_onboarding_provider.dart';
 
 part 'parts/agents_list_part.dart';
 part 'parts/agents_detail_part.dart';
 part 'parts/agents_access_policy_part.dart';
 part 'parts/agents_dialogs_part.dart';
+part 'personal_agent_settings_page.dart';
 
 class AgentsWorkspacePage extends ConsumerStatefulWidget {
   const AgentsWorkspacePage({super.key, this.listFooter});
@@ -52,12 +57,15 @@ class AgentsWorkspacePage extends ConsumerStatefulWidget {
 
 class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   late final AgentsController _agentsController;
+  late final SkillOnboardingController _skillOnboardingController;
   bool _disposed = false;
+  bool _skillDialogOpen = false;
 
   @override
   void initState() {
     super.initState();
     _agentsController = ref.read(agentsProvider.notifier);
+    _skillOnboardingController = ref.read(skillOnboardingProvider.notifier);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -69,6 +77,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   @override
   void dispose() {
     _disposed = true;
+    scheduleMicrotask(_skillOnboardingController.clear);
     _deferAgentsMutation(
       (controller) => controller.stopInventoryAutoSync(),
       requireMounted: false,
@@ -108,8 +117,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
-    final messageAgentEnabled = ref.watch(agentImEnabledProvider);
-    if (!messageAgentEnabled) {
+    final personalAgentEnabled = ref.watch(agentImEnabledProvider);
+    if (!personalAgentEnabled) {
       return const _AgentsTenantUnsupportedView();
     }
     ref.listen<AgentsState>(agentsProvider, (previous, next) {
@@ -134,8 +143,26 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
         );
       }
     });
+    ref.listen<SkillOnboardingState>(skillOnboardingProvider, (previous, next) {
+      if (next.error != null && previous?.error != next.error) {
+        AwikiMeToast.show(
+          context,
+          _skillOnboardingErrorText(context, next.error!),
+        );
+      }
+      if (next.instruction != null &&
+          previous?.instruction != next.instruction &&
+          !_skillDialogOpen) {
+        _skillDialogOpen = true;
+        _showSkillOnboardingDialog(context, ref).whenComplete(() {
+          _skillDialogOpen = false;
+          _skillOnboardingController.clear();
+        });
+      }
+    });
 
     final state = ref.watch(agentsProvider);
+    final skillState = ref.watch(skillOnboardingProvider);
     final responsive = context.awikiResponsive;
     final pendingAgentDids = ref.watch(pendingAgentDidsProvider);
     final selected = _agentSelectionForLayout(
@@ -152,6 +179,8 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       selectedAgentDid: selectedAgentDidForList,
       onCreateDaemon: () =>
           ref.read(agentsProvider.notifier).createDaemonInstallCommand(),
+      onCreateSkill: () => _skillOnboardingController.generate(),
+      isCreatingSkill: skillState.isLoading,
       onRefreshDaemon: (agent) {
         ref.read(agentsProvider.notifier).refreshDaemonStatus(agent.agentDid);
       },
@@ -179,16 +208,20 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
       onCancelUpgrade: (agent) =>
           ref.read(agentsProvider.notifier).cancelDaemonUpgrade(agent.agentDid),
       onDelete: (agent) => _confirmDeleteAgent(context, ref, agent),
-      messageAgentEnabled: messageAgentEnabled,
-      onBootstrapMessageAgent: (agent) => ref
+      personalAgentEnabled: personalAgentEnabled,
+      onOpenPersonalAgentSettings: (agent) => AppNavigator.push<void>(
+        context,
+        (_) => PersonalAgentSettingsPage(initialDaemonDid: agent.agentDid),
+      ),
+      onBootstrapPersonalAgent: (agent) => ref
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(daemonDid: agent.agentDid),
-      onPauseMessageAgent: (agent) =>
-          _confirmPauseMessageAgent(context, ref, agent),
-      onDeleteMessageAgent: (agent) =>
-          _confirmDeleteMessageAgent(context, ref, agent),
-      onRevokeMessageAgentAuthorization: (agent) =>
-          _confirmRevokeMessageAgentAuthorization(context, ref, agent),
+          .bootstrapPersonalAgent(daemonDid: agent.agentDid),
+      onPausePersonalAgent: (agent) =>
+          _confirmPausePersonalAgent(context, ref, agent),
+      onDeletePersonalAgent: (agent) =>
+          _confirmDeletePersonalAgent(context, ref, agent),
+      onRevokePersonalAgentAuthorization: (agent) =>
+          _confirmRevokePersonalAgentAuthorization(context, ref, agent),
       onSaveInvocationPolicy: (agentDid, policy) => ref
           .read(agentsProvider.notifier)
           .saveInvocationPolicy(agentDid, policy),

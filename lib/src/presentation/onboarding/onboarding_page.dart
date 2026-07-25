@@ -8,15 +8,18 @@ import 'package:awiki_me/l10n/app_localizations.dart';
 import '../../app/app_locale.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/models/onboarding_server_info.dart';
+import '../../application/ports/identity_core_port.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../data/tenant/app_tenant_store.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../devices/device_join_page.dart';
 import '../shared/app_dialog.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -58,6 +61,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.initState();
     emailController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetEmailActivationTarget);
+    handleController.addListener(_resetPhoneOtpTarget);
+    phoneController.addListener(_resetPhoneOtpTarget);
     _runtimeSubscription = ref.listenManual<AppRuntimeState>(
       appRuntimeProvider,
       (_, next) {
@@ -98,6 +103,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     _tenantSubscription?.close();
     emailController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetEmailActivationTarget);
+    handleController.removeListener(_resetPhoneOtpTarget);
+    phoneController.removeListener(_resetPhoneOtpTarget);
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -151,126 +158,155 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       });
     }
     if (responsive.isMacDesktop) {
-      return _MacOnboardingScaffold(
-        onboarding: onboarding,
-        credentials: credentials,
-        phoneController: phoneController,
-        otpController: otpController,
-        emailController: emailController,
-        handleController: handleController,
-        onLogin: runtime.loginWithLocalCredential,
-        onImport: runtime.importCredentialArchive,
-        onRefresh: runtime.refreshLocalCredentials,
-        onModeChanged: _setEntryModeManually,
-        onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
-        onRequestOtp: _requestOtp,
-        onRequestEmailActivation: _requestEmailActivation,
-        onCheckEmailActivation: _checkEmailActivation,
-        onRegisterStepChanged: ref
-            .read(onboardingProvider.notifier)
-            .setRegisterStep,
-        onSubmitRegister: () => _submitRegister(context),
-        activeTenant: activeTenant,
-        localeMode: localeMode,
-        onLanguagePressed: _showLanguageSheet,
-        onTenantPressed: _showTenantManagementDialog,
+      return _withLegacyUpgradeProjection(
+        _MacOnboardingScaffold(
+          onboarding: onboarding,
+          credentials: credentials,
+          phoneController: phoneController,
+          otpController: otpController,
+          emailController: emailController,
+          handleController: handleController,
+          onLogin: _loginWithLocalCredential,
+          onImport: runtime.importCredentialArchive,
+          onRefresh: runtime.refreshLocalCredentials,
+          onModeChanged: _setEntryModeManually,
+          onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
+          onRequestOtp: _requestOtp,
+          onRequestEmailActivation: _requestEmailActivation,
+          onCheckEmailActivation: _checkEmailActivation,
+          onRegisterStepChanged: ref
+              .read(onboardingProvider.notifier)
+              .setRegisterStep,
+          onSubmitRegister: _submitRegister,
+          activeTenant: activeTenant,
+          localeMode: localeMode,
+          onLanguagePressed: _showLanguageSheet,
+          onTenantPressed: _showTenantManagementDialog,
+          onJoinDevice: () => openDeviceJoinPage(context),
+        ),
+        onboarding,
       );
     }
-    return CupertinoPageScaffold(
-      backgroundColor: theme.background,
-      child: AwikiAdaptiveScaffold(
-        alignment: responsive.isPhone ? Alignment.topCenter : Alignment.center,
-        maxWidth: responsive.formMaxWidth,
-        includeBottomSafeArea: true,
-        padding: EdgeInsets.fromLTRB(
-          responsive.isPhone ? 24 : 0,
-          responsive.isPhone ? 40 : 32,
-          responsive.isPhone ? 24 : 0,
-          24,
-        ),
-        child: ListView(
-          controller: _mobileScrollController,
-          children: <Widget>[
-            SizedBox(height: responsive.spacing(responsive.isPhone ? 20 : 8)),
-            Center(
-              child: Container(
-                width: responsive.scaled(126),
-                height: responsive.scaled(126),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: CupertinoColors.white,
-                  borderRadius: BorderRadius.circular(
-                    responsive.radius(responsive.isPhone ? 28 : 24),
-                  ),
-                  boxShadow: const <BoxShadow>[
-                    BoxShadow(
-                      color: Color(0x160B65F8),
-                      blurRadius: 28,
-                      offset: Offset(0, 12),
+    return _withLegacyUpgradeProjection(
+      CupertinoPageScaffold(
+        backgroundColor: theme.background,
+        child: AwikiAdaptiveScaffold(
+          alignment: responsive.isPhone
+              ? Alignment.topCenter
+              : Alignment.center,
+          maxWidth: responsive.formMaxWidth,
+          includeBottomSafeArea: true,
+          padding: EdgeInsets.fromLTRB(
+            responsive.isPhone ? 24 : 0,
+            responsive.isPhone ? 40 : 32,
+            responsive.isPhone ? 24 : 0,
+            24,
+          ),
+          child: ListView(
+            controller: _mobileScrollController,
+            children: <Widget>[
+              SizedBox(height: responsive.spacing(responsive.isPhone ? 20 : 8)),
+              Center(
+                child: Container(
+                  width: responsive.scaled(126),
+                  height: responsive.scaled(126),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.white,
+                    borderRadius: BorderRadius.circular(
+                      responsive.radius(responsive.isPhone ? 28 : 24),
                     ),
-                  ],
-                ),
-                child: Image.asset(
-                  'assets/branding/awiki-me-logo.png',
-                  width: responsive.scaled(92),
-                  height: responsive.scaled(92),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Text(
-                    '@_',
-                    style: TextStyle(
-                      fontSize: responsive.isPhone ? 72 : responsive.scaled(58),
-                      fontWeight: FontWeight.w600,
-                      color: AwikiMePalette.actionBlue,
-                      height: 1,
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x160B65F8),
+                        blurRadius: 28,
+                        offset: Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/branding/awiki-me-logo.png',
+                    width: responsive.scaled(92),
+                    height: responsive.scaled(92),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Text(
+                      '@_',
+                      style: TextStyle(
+                        fontSize: responsive.isPhone
+                            ? 72
+                            : responsive.scaled(58),
+                        fontWeight: FontWeight.w600,
+                        color: AwikiMePalette.actionBlue,
+                        height: 1,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            SizedBox(height: responsive.spacing(responsive.isPhone ? 34 : 30)),
-            _SegmentedPill(
-              value: onboarding.entryMode,
-              options: <String, String>{
-                'register': context.l10n.onboardingRegister,
-                'login': context.l10n.onboardingLogin,
-              },
-              onChanged: _setEntryModeManually,
-            ),
-            SizedBox(height: responsive.spacing(24)),
-            if (onboarding.entryMode == 'login') ...<Widget>[
-              _LocalCredentialsCard(
-                credentials: credentials,
-                onLogin: runtime.loginWithLocalCredential,
+              SizedBox(
+                height: responsive.spacing(responsive.isPhone ? 34 : 30),
               ),
+              _SegmentedPill(
+                value: onboarding.entryMode,
+                options: <String, String>{
+                  'register': context.l10n.onboardingRegister,
+                  'login': context.l10n.onboardingLogin,
+                },
+                onChanged: _setEntryModeManually,
+              ),
+              SizedBox(height: responsive.spacing(24)),
+              if (onboarding.entryMode == 'login') ...<Widget>[
+                _LocalCredentialsCard(
+                  credentials: credentials,
+                  onLogin: _loginWithLocalCredential,
+                ),
+                SizedBox(height: responsive.spacing(16)),
+                _LoginToolRow(
+                  importLabel: context.l10n.onboardingImportCredential,
+                  refreshLabel: context.l10n.onboardingRefreshCredentials,
+                  onImport: runtime.importCredentialArchive,
+                  onRefresh: runtime.refreshLocalCredentials,
+                ),
+              ] else ...<Widget>[
+                ..._buildMobileRegisterWidgets(
+                  context: context,
+                  onboarding: onboarding,
+                  responsive: responsive,
+                  theme: theme,
+                ),
+              ],
               SizedBox(height: responsive.spacing(16)),
-              _LoginToolRow(
-                importLabel: context.l10n.onboardingImportCredential,
-                refreshLabel: context.l10n.onboardingRefreshCredentials,
-                onImport: runtime.importCredentialArchive,
-                onRefresh: runtime.refreshLocalCredentials,
+              AppSecondaryButton(
+                label: context.l10n.deviceJoinEntry,
+                semanticsIdentifier: 'multi-device-join-entry',
+                onPressed: () => openDeviceJoinPage(context),
               ),
-            ] else ...<Widget>[
-              ..._buildMobileRegisterWidgets(
-                context: context,
-                onboarding: onboarding,
-                responsive: responsive,
-                theme: theme,
+              SizedBox(height: responsive.spacing(12)),
+              Text(
+                context.l10n.handleRecoveryUnavailable,
+                key: const Key('handle-recovery-unsupported'),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: theme.secondaryText,
+                  fontSize: responsive.bodySm,
+                ),
+              ),
+              SizedBox(height: responsive.spacing(56)),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _OnboardingUtilityBar(
+                  tenant: activeTenant,
+                  localeMode: localeMode,
+                  fillAvailableWidth: true,
+                  onLanguagePressed: _showLanguageSheet,
+                  onPressed: _showTenantManagementDialog,
+                ),
               ),
             ],
-            SizedBox(height: responsive.spacing(56)),
-            Align(
-              alignment: Alignment.centerRight,
-              child: _OnboardingUtilityBar(
-                tenant: activeTenant,
-                localeMode: localeMode,
-                fillAvailableWidth: true,
-                onLanguagePressed: _showLanguageSheet,
-                onPressed: _showTenantManagementDialog,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
+      onboarding,
     );
   }
 
@@ -355,9 +391,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           child: AppPrimaryButton(
             label: context.l10n.onboardingCompleteRegister,
             semanticsIdentifier: 'e2e-complete-login-button',
-            onPressed: onboarding.isBusy
-                ? null
-                : () => _submitRegister(context),
+            onPressed: onboarding.isBusy ? null : _submitRegister,
           ),
         ),
       ];
@@ -404,6 +438,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ? null
                   : _requestOtp,
             ),
+          ),
+          SizedBox(height: responsive.spacing(14)),
+          AppTextField(
+            controller: handleController,
+            label: context.l10n.onboardingHandle,
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            showLabel: !responsive.isPhone,
+            semanticsIdentifier: 'e2e-handle-input',
           ),
           SizedBox(height: responsive.spacing(14)),
           AppTextField(
@@ -455,9 +497,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 ? AppPrimaryButton(
                     label: context.l10n.onboardingCompleteEmailRegister,
                     semanticsIdentifier: 'e2e-complete-login-button',
-                    onPressed: onboarding.isBusy
-                        ? null
-                        : () => _submitRegister(context),
+                    onPressed: onboarding.isBusy ? null : _submitRegister,
                   )
                 : AppSecondaryButton(
                     label: context.l10n.onboardingCheckActivationStatus,
@@ -502,9 +542,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ? context.l10n.onboardingCompleteRegister
                   : context.l10n.onboardingCompleteEmailRegister,
               semanticsIdentifier: 'e2e-complete-login-button',
-              onPressed: onboarding.isBusy
-                  ? null
-                  : () => _submitRegister(context),
+              onPressed: onboarding.isBusy ? null : _submitRegister,
             ),
           ),
         ],
@@ -524,46 +562,107 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     );
   }
 
-  Future<void> _submitRegister(BuildContext context) async {
+  Future<void> _submitRegister() async {
     final notifier = ref.read(onboardingProvider.notifier);
     final handle = handleController.text.trim();
     final profileMarkdown = '# $handle\n\n';
     final onboarding = ref.read(onboardingProvider);
+    IdentityRegistrationStatus? result;
     if (onboarding.usesNoVerificationRegistration) {
-      await notifier.registerWithoutContactVerification(
+      result = await notifier.registerWithoutContactVerification(
         phone: _normalizedPhone,
         handle: handle,
         nickName: handle,
         profileMarkdown: profileMarkdown,
       );
-      return;
-    }
-    if (onboarding.authMode == 'phone') {
-      await notifier.loginOrRegisterWithPhone(
+    } else if (onboarding.authMode == 'phone') {
+      result = await notifier.registerWithPhone(
         phone: _normalizedPhone,
         otp: otpController.text.trim(),
         handle: handle,
+        handleDomain: ref.read(activeAppTenantProvider).didHost,
         nickName: handle,
         profileMarkdown: profileMarkdown,
       );
-      return;
+    } else {
+      result = await notifier.registerWithEmail(
+        email: emailController.text.trim(),
+        handle: handle,
+        nickName: handle,
+        profileMarkdown: profileMarkdown,
+      );
     }
-    await notifier.registerWithEmail(
-      email: emailController.text.trim(),
-      handle: handle,
-      nickName: handle,
-      profileMarkdown: profileMarkdown,
-    );
+    if (result == IdentityRegistrationStatus.joinRequired && mounted) {
+      await openDeviceJoinPage(context);
+    }
   }
 
   void _requestOtp() {
     if (!awikiE2eEnabled) {
       unawaited(
-        ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+        ref
+            .read(onboardingProvider.notifier)
+            .requestOtp(
+              phone: _normalizedPhone,
+              handle: _normalizedHandle,
+              handleDomain: ref.read(activeAppTenantProvider).didHost,
+            ),
       );
       return;
     }
     _startE2eOtpRequestLoop();
+  }
+
+  Future<void> _loginWithLocalCredential(String credentialName) {
+    return ref
+        .read(onboardingProvider.notifier)
+        .loginWithLocalCredential(credentialName);
+  }
+
+  Widget _withLegacyUpgradeProjection(
+    Widget child,
+    OnboardingState onboarding,
+  ) {
+    return Stack(
+      children: <Widget>[
+        child,
+        if (onboarding.isLegacyUpgradeRunning)
+          const AwikiMeLoadingMask(key: Key('legacy-upgrade-loading-mask')),
+        if (onboarding.isLegacyUpgradeRetryRequired)
+          Positioned.fill(
+            child: ColoredBox(
+              color: CupertinoColors.systemBackground,
+              child: SafeArea(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          context.l10n.legacyIdentityUpgradeFailed,
+                          key: const Key('legacy-upgrade-retry-message'),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        AppPrimaryButton(
+                          label: context.l10n.commonRetry,
+                          semanticsIdentifier: 'legacy-upgrade-retry',
+                          onPressed: () => unawaited(
+                            ref
+                                .read(onboardingProvider.notifier)
+                                .retryLegacyUpgrade(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   void _requestEmailActivation() {
@@ -598,6 +697,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     ref.read(onboardingProvider.notifier).resetEmailActivation();
   }
 
+  void _resetPhoneOtpTarget() {
+    if (!mounted || ref.read(onboardingProvider).authMode != 'phone') return;
+    ref.read(onboardingProvider.notifier).resetPhoneOtpTarget();
+  }
+
   void _startE2eOtpRequestLoop() {
     _stopE2eOtpRequestLoop();
     _e2eOtpAttempts = 0;
@@ -629,7 +733,13 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
     _e2eOtpAttempts += 1;
     unawaited(
-      ref.read(onboardingProvider.notifier).requestOtp(_normalizedPhone),
+      ref
+          .read(onboardingProvider.notifier)
+          .requestOtp(
+            phone: _normalizedPhone,
+            handle: _normalizedHandle,
+            handleDomain: ref.read(activeAppTenantProvider).didHost,
+          ),
     );
   }
 

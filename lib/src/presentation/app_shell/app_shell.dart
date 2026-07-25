@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -57,8 +59,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(appRuntimeProvider.notifier).initialize();
-      ref.read(appUpdateProvider.notifier).initialize();
+      unawaited(ref.read(appRuntimeProvider.notifier).initialize());
+      unawaited(ref.read(appUpdateProvider.notifier).initialize());
     });
   }
 

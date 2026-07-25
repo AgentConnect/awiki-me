@@ -593,6 +593,15 @@ class AwikiImCoreMappers {
     core.RealtimeEvent event, {
     required String ownerDid,
   }) {
+    if (event.isSystemNotificationChanged) {
+      return RealtimeUpdate(
+        systemNotificationChanged: true,
+        syncDirty: event.sync?.syncDirty ?? false,
+        gapDetected: event.sync?.gapDetected ?? false,
+        syncEventSeq: event.sync?.eventSeq,
+        syncEventType: event.sync?.eventType,
+      );
+    }
     final message = event.message;
     if (message == null) {
       if (event.kind == 'group_updated') {

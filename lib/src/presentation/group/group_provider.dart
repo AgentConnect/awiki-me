@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/models/group_collection_page.dart';
 import '../../core/group_display_name.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
@@ -13,32 +14,75 @@ class GroupState {
   const GroupState({
     this.groups = const <GroupSummary>[],
     this.membersByGroup = const <String, List<GroupMemberSummary>>{},
+    this.groupsHasMore = false,
+    this.groupsNextCursor,
+    this.memberPages = const <String, GroupMemberPageState>{},
     this.isLoading = false,
+    this.isLoadingMoreGroups = false,
     this.isResumingRecovery = false,
     this.recoverySummary,
   });
 
   final List<GroupSummary> groups;
   final Map<String, List<GroupMemberSummary>> membersByGroup;
+  final bool groupsHasMore;
+  final String? groupsNextCursor;
+  final Map<String, GroupMemberPageState> memberPages;
   final bool isLoading;
+  final bool isLoadingMoreGroups;
   final bool isResumingRecovery;
   final GroupRebindRecoverySummary? recoverySummary;
 
   GroupState copyWith({
     List<GroupSummary>? groups,
     Map<String, List<GroupMemberSummary>>? membersByGroup,
+    bool? groupsHasMore,
+    String? groupsNextCursor,
+    bool clearGroupsNextCursor = false,
+    Map<String, GroupMemberPageState>? memberPages,
     bool? isLoading,
+    bool? isLoadingMoreGroups,
     bool? isResumingRecovery,
     GroupRebindRecoverySummary? recoverySummary,
   }) {
     return GroupState(
       groups: groups ?? this.groups,
       membersByGroup: membersByGroup ?? this.membersByGroup,
+      groupsHasMore: groupsHasMore ?? this.groupsHasMore,
+      groupsNextCursor: clearGroupsNextCursor
+          ? null
+          : (groupsNextCursor ?? this.groupsNextCursor),
+      memberPages: memberPages ?? this.memberPages,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingMoreGroups: isLoadingMoreGroups ?? this.isLoadingMoreGroups,
       isResumingRecovery: isResumingRecovery ?? this.isResumingRecovery,
       recoverySummary: recoverySummary ?? this.recoverySummary,
     );
   }
+}
+
+class GroupMemberPageState {
+  const GroupMemberPageState({
+    required this.hasMore,
+    this.nextCursor,
+    this.pageGroupDid,
+    this.groupStateVersion,
+    this.isLoadingMore = false,
+  });
+
+  final bool hasMore;
+  final String? nextCursor;
+  final String? pageGroupDid;
+  final String? groupStateVersion;
+  final bool isLoadingMore;
+
+  GroupMemberPageState copyWith({bool? isLoadingMore}) => GroupMemberPageState(
+    hasMore: hasMore,
+    nextCursor: nextCursor,
+    pageGroupDid: pageGroupDid,
+    groupStateVersion: groupStateVersion,
+    isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+  );
 }
 
 class GroupController extends StateNotifier<GroupState> {
@@ -47,27 +91,77 @@ class GroupController extends StateNotifier<GroupState> {
   final Ref ref;
   final Map<String, Future<List<GroupMemberSummary>>> _initialMemberLoads =
       <String, Future<List<GroupMemberSummary>>>{};
-  int _memberLoadGeneration = 0;
+  final Map<String, int> _memberLoadGenerations = <String, int>{};
+  int _groupLoadGeneration = 0;
 
-  Future<void> refresh() async {
-    state = state.copyWith(isLoading: true);
+  Future<void> refresh({int limit = 100}) async {
+    final generation = ++_groupLoadGeneration;
+    state = state.copyWith(isLoading: true, isLoadingMoreGroups: false);
     try {
-      final groups = await ref
+      final page = await ref
           .read(groupApplicationServiceProvider)
-          .listGroups();
+          .listGroups(limit: limit);
+      _validatePageCursor(page);
+      if (!mounted || generation != _groupLoadGeneration) return;
       final merged = _mergeGroupList(
         local: state.groups,
-        incoming: groups,
+        incoming: page.items,
         keepLocalOnly: false,
       );
-      state = state.copyWith(groups: merged, isLoading: false);
+      state = state.copyWith(
+        groups: merged,
+        groupsHasMore: page.hasMore,
+        groupsNextCursor: page.nextCursor,
+        clearGroupsNextCursor: page.nextCursor == null,
+        isLoading: false,
+      );
     } catch (_) {
+      if (!mounted || generation != _groupLoadGeneration) return;
       state = state.copyWith(isLoading: false);
       rethrow;
     }
   }
 
-  Future<List<GroupMemberSummary>> loadGroupMembers(String groupId) async {
+  Future<void> loadMoreGroups({int limit = 100}) async {
+    final cursor = state.groupsNextCursor;
+    if (!state.groupsHasMore || cursor == null || state.isLoadingMoreGroups) {
+      return;
+    }
+    final generation = _groupLoadGeneration;
+    state = state.copyWith(isLoadingMoreGroups: true);
+    try {
+      final page = await ref
+          .read(groupApplicationServiceProvider)
+          .listGroups(limit: limit, cursor: cursor);
+      _validatePageCursor(page, previousCursor: cursor);
+      if (!mounted ||
+          generation != _groupLoadGeneration ||
+          state.groupsNextCursor != cursor) {
+        return;
+      }
+      state = state.copyWith(
+        groups: _mergeGroupList(
+          local: state.groups,
+          incoming: page.items,
+          keepLocalOnly: true,
+        ),
+        groupsHasMore: page.hasMore,
+        groupsNextCursor: page.nextCursor,
+        clearGroupsNextCursor: page.nextCursor == null,
+        isLoadingMoreGroups: false,
+      );
+    } catch (_) {
+      if (mounted && generation == _groupLoadGeneration) {
+        state = state.copyWith(isLoadingMoreGroups: false);
+      }
+      rethrow;
+    }
+  }
+
+  Future<List<GroupMemberSummary>> loadGroupMembers(
+    String groupId, {
+    int limit = 100,
+  }) async {
     final normalizedGroupId = groupId.trim();
     final initialLoad = _initialMemberLoads[normalizedGroupId];
     if (initialLoad != null) {
@@ -77,7 +171,11 @@ class GroupController extends StateNotifier<GroupState> {
         // An explicit refresh must still retry after an initial preload fails.
       }
     }
-    return _loadGroupMembers(normalizedGroupId, hydrateProfiles: true);
+    return _loadGroupMembers(
+      normalizedGroupId,
+      hydrateProfiles: true,
+      limit: limit,
+    );
   }
 
   Future<List<GroupMemberSummary>> ensureGroupMembersLoaded(String groupId) {
@@ -91,8 +189,12 @@ class GroupController extends StateNotifier<GroupState> {
       return active;
     }
     late final Future<List<GroupMemberSummary>> load;
-    load = _loadGroupMembers(normalizedGroupId, hydrateProfiles: false)
-        .whenComplete(() {
+    load =
+        _loadGroupMembers(
+          normalizedGroupId,
+          hydrateProfiles: false,
+          limit: 100,
+        ).whenComplete(() {
           if (identical(_initialMemberLoads[normalizedGroupId], load)) {
             _initialMemberLoads.remove(normalizedGroupId);
           }
@@ -104,33 +206,132 @@ class GroupController extends StateNotifier<GroupState> {
   Future<List<GroupMemberSummary>> _loadGroupMembers(
     String groupId, {
     required bool hydrateProfiles,
+    required int limit,
   }) async {
-    final generation = _memberLoadGeneration;
-    final members = await ref
+    final generation = (_memberLoadGenerations[groupId] ?? 0) + 1;
+    _memberLoadGenerations[groupId] = generation;
+    final currentPage = state.memberPages[groupId];
+    if (currentPage?.isLoadingMore == true) {
+      state = state.copyWith(
+        memberPages: <String, GroupMemberPageState>{
+          ...state.memberPages,
+          groupId: currentPage!.copyWith(isLoadingMore: false),
+        },
+      );
+    }
+    final page = await ref
         .read(groupApplicationServiceProvider)
-        .listMembers(groupId);
-    if (generation != _memberLoadGeneration) {
+        .listMembers(groupId, limit: limit);
+    _validatePageCursor(page);
+    final members = page.items;
+    if (generation != _memberLoadGenerations[groupId]) {
       return members;
     }
-    _publishGroupMembers(groupId, members);
+    if (page.pageGroupDid != groupId || page.groupStateVersion == null) {
+      throw StateError('group_member_page_binding_mismatch');
+    }
+    _publishGroupMembers(groupId, members, page: page);
     if (!hydrateProfiles) {
       return members;
     }
     final hydratedMembers = await _hydrateMemberProfiles(members);
-    if (generation != _memberLoadGeneration) {
+    if (generation != _memberLoadGenerations[groupId]) {
       return hydratedMembers;
     }
     _publishGroupMembers(groupId, hydratedMembers);
     return hydratedMembers;
   }
 
-  void _publishGroupMembers(String groupId, List<GroupMemberSummary> members) {
+  void _publishGroupMembers(
+    String groupId,
+    List<GroupMemberSummary> members, {
+    GroupCollectionPage<GroupMemberSummary>? page,
+  }) {
     state = state.copyWith(
       membersByGroup: <String, List<GroupMemberSummary>>{
         ...state.membersByGroup,
         groupId: members,
       },
+      memberPages: page == null
+          ? state.memberPages
+          : <String, GroupMemberPageState>{
+              ...state.memberPages,
+              groupId: GroupMemberPageState(
+                hasMore: page.hasMore,
+                nextCursor: page.nextCursor,
+                pageGroupDid: page.pageGroupDid,
+                groupStateVersion: page.groupStateVersion,
+              ),
+            },
     );
+  }
+
+  Future<void> loadMoreGroupMembers(String groupId) async {
+    final normalizedGroupId = groupId.trim();
+    final metadata = state.memberPages[normalizedGroupId];
+    final cursor = metadata?.nextCursor;
+    if (metadata == null ||
+        !metadata.hasMore ||
+        cursor == null ||
+        metadata.isLoadingMore) {
+      return;
+    }
+    final generation = _memberLoadGenerations[normalizedGroupId] ?? 0;
+    state = state.copyWith(
+      memberPages: <String, GroupMemberPageState>{
+        ...state.memberPages,
+        normalizedGroupId: metadata.copyWith(isLoadingMore: true),
+      },
+    );
+    try {
+      final page = await ref
+          .read(groupApplicationServiceProvider)
+          .listMembers(normalizedGroupId, cursor: cursor);
+      _validatePageCursor(page, previousCursor: cursor);
+      if (!mounted ||
+          generation != _memberLoadGenerations[normalizedGroupId] ||
+          state.memberPages[normalizedGroupId]?.nextCursor != cursor) {
+        return;
+      }
+      if (page.pageGroupDid != normalizedGroupId ||
+          page.groupStateVersion == null ||
+          metadata.pageGroupDid != normalizedGroupId ||
+          page.groupStateVersion != metadata.groupStateVersion) {
+        _invalidateMemberPage(normalizedGroupId);
+        throw StateError('group_member_page_binding_mismatch');
+      }
+      final combined = _deduplicateMembers(<GroupMemberSummary>[
+        ...?state.membersByGroup[normalizedGroupId],
+        ...page.items,
+      ]);
+      _publishGroupMembers(normalizedGroupId, combined, page: page);
+      final hydrated = await _hydrateMemberProfiles(combined);
+      if (mounted && generation == _memberLoadGenerations[normalizedGroupId]) {
+        _publishGroupMembers(normalizedGroupId, hydrated);
+      }
+    } catch (_) {
+      final current = state.memberPages[normalizedGroupId];
+      if (mounted &&
+          generation == _memberLoadGenerations[normalizedGroupId] &&
+          current != null &&
+          current.isLoadingMore) {
+        state = state.copyWith(
+          memberPages: <String, GroupMemberPageState>{
+            ...state.memberPages,
+            normalizedGroupId: current.copyWith(isLoadingMore: false),
+          },
+        );
+      }
+      rethrow;
+    }
+  }
+
+  void _invalidateMemberPage(String groupId) {
+    final members = <String, List<GroupMemberSummary>>{...state.membersByGroup}
+      ..remove(groupId);
+    final pages = <String, GroupMemberPageState>{...state.memberPages}
+      ..remove(groupId);
+    state = state.copyWith(membersByGroup: members, memberPages: pages);
   }
 
   Future<List<GroupMemberSummary>> _hydrateMemberProfiles(
@@ -284,9 +485,30 @@ class GroupController extends StateNotifier<GroupState> {
   }
 
   void clear() {
-    _memberLoadGeneration += 1;
+    _memberLoadGenerations.clear();
+    _groupLoadGeneration += 1;
     _initialMemberLoads.clear();
     state = const GroupState();
+  }
+}
+
+List<GroupMemberSummary> _deduplicateMembers(List<GroupMemberSummary> members) {
+  final byDid = <String, GroupMemberSummary>{};
+  for (final member in members) {
+    byDid[member.did] = member;
+  }
+  return byDid.values.toList(growable: false);
+}
+
+void _validatePageCursor<T>(
+  GroupCollectionPage<T> page, {
+  String? previousCursor,
+}) {
+  final nextCursor = page.nextCursor?.trim();
+  if ((page.hasMore && (nextCursor == null || nextCursor.isEmpty)) ||
+      (!page.hasMore && nextCursor != null) ||
+      (page.hasMore && nextCursor == previousCursor)) {
+    throw StateError('group_page_cursor_invalid');
   }
 }
 

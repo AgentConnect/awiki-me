@@ -10,6 +10,7 @@ import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revo
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/group_application_service.dart';
@@ -26,6 +27,8 @@ import 'package:awiki_me/src/application/peer_identity_service.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
+import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/product_local_store.dart';
@@ -40,12 +43,13 @@ import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
@@ -328,6 +332,9 @@ List<Override> fakeApplicationServiceOverrides(
         minInterval: Duration.zero,
         failureBackoff: Duration.zero,
       ),
+    ),
+    personalAgentBindingPortProvider.overrideWithValue(
+      FakePersonalAgentBindingPort(),
     ),
     attachmentCacheServiceProvider.overrideWithValue(
       attachmentCacheService ?? FakeAttachmentCacheService(),
@@ -635,8 +642,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool includeLocalPathInSentAttachment = true;
   Duration sendDelay = Duration.zero;
   SessionIdentity? refreshedSession;
-  HandleRegistrationStatus handleRegistrationStatus =
-      HandleRegistrationStatus.notRegistered;
+  bool handleAlreadyRegistered = false;
+  IdentityRegistrationStatus registrationStatus =
+      IdentityRegistrationStatus.registered;
   String? lastFollowedDidOrHandle;
   String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
@@ -697,12 +705,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int sendOtpCalls = 0;
   int sendEmailVerificationCalls = 0;
   int checkEmailVerifiedCalls = 0;
-  int lookupHandleRegistrationCalls = 0;
   int validateHandleCalls = 0;
   int registerHandleCalls = 0;
   int registerHandleWithEmailCalls = 0;
   int registerHandleWithoutContactVerificationCalls = 0;
-  int recoverHandleCalls = 0;
   int resumeGroupRecoveryCalls = 0;
   bool failGroupRecovery = false;
   GroupRebindRecoverySummary groupRecoverySummary =
@@ -1245,31 +1251,6 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     return loginResult!;
   }
 
-  @override
-  Future<SessionIdentity> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    recoverHandleCalls += 1;
-    loginResult = SessionIdentity(
-      did: 'did:wba:awiki.info:$handle:e1_recovered',
-      credentialName: handle,
-      displayName: handle,
-      handle: handle,
-      jwtToken: 'recovered-token',
-    );
-    return loginResult!;
-  }
-
-  @override
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  }) async {
-    lookupHandleRegistrationCalls += 1;
-    return handleRegistrationStatus;
-  }
-
   Future<HandleAvailability> validateHandle({
     required String handle,
     String? domain,
@@ -1277,8 +1258,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
     validateHandleCalls += 1;
     final normalizedHandle = handle.trim().toLowerCase();
     final normalizedDomain = domain?.trim().toLowerCase();
-    final registered =
-        handleRegistrationStatus == HandleRegistrationStatus.registered;
+    final registered = handleAlreadyRegistered;
     return HandleAvailability(
       handle: normalizedHandle,
       domain: normalizedDomain,
@@ -2564,12 +2544,12 @@ class FakeAgentControlService implements AgentControlService {
   String? lastDeletedDaemonDid;
   String? lastDeletedRuntimeDaemonDid;
   String? lastDeletedRuntimeDid;
-  String? lastPausedMessageAgentDaemonDid;
-  String? lastPausedMessageAgentDid;
-  String? lastDeletedMessageAgentDaemonDid;
-  String? lastDeletedMessageAgentDid;
-  String? lastRevokedMessageAgentDaemonDid;
-  String? lastRevokedMessageAgentDid;
+  String? lastPausedPersonalAgentDaemonDid;
+  String? lastPausedPersonalAgentDid;
+  String? lastDeletedPersonalAgentDaemonDid;
+  String? lastDeletedPersonalAgentDid;
+  String? lastRevokedPersonalAgentDaemonDid;
+  String? lastRevokedPersonalAgentDid;
   String? lastRenamedAgentDid;
   String? lastDisplayName;
   String? lastUpgradeDaemonDid;
@@ -2635,7 +2615,7 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<void> ensureMessageAgentBootstrap({
+  Future<void> ensurePersonalAgentBootstrap({
     required String daemonAgentDid,
     required String controllerDid,
     required String appInstanceId,
@@ -2758,47 +2738,47 @@ class FakeAgentControlService implements AgentControlService {
   }
 
   @override
-  Future<MessageAgentBinding> pauseMessageAgent({
+  Future<PersonalAgentBinding> pausePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
-    lastPausedMessageAgentDaemonDid = daemonAgentDid;
-    lastPausedMessageAgentDid = messageAgentDid;
-    return _messageAgentBinding(
+    lastPausedPersonalAgentDaemonDid = daemonAgentDid;
+    lastPausedPersonalAgentDid = personalAgentDid;
+    return _personalAgentBinding(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       status: 'disabled',
     );
   }
 
   @override
-  Future<MessageAgentBinding> deleteMessageAgent({
+  Future<PersonalAgentBinding> deletePersonalAgent({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
-    lastDeletedMessageAgentDaemonDid = daemonAgentDid;
-    lastDeletedMessageAgentDid = messageAgentDid;
-    lastPausedMessageAgentDaemonDid = daemonAgentDid;
-    lastPausedMessageAgentDid = messageAgentDid;
+    lastDeletedPersonalAgentDaemonDid = daemonAgentDid;
+    lastDeletedPersonalAgentDid = personalAgentDid;
+    lastPausedPersonalAgentDaemonDid = daemonAgentDid;
+    lastPausedPersonalAgentDid = personalAgentDid;
     lastDeletedRuntimeDaemonDid = daemonAgentDid;
-    lastDeletedRuntimeDid = messageAgentDid;
-    return _messageAgentBinding(
+    lastDeletedRuntimeDid = personalAgentDid;
+    return _personalAgentBinding(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       status: 'disabled',
     );
   }
 
   @override
-  Future<MessageAgentBinding> revokeMessageAgentAuthorization({
+  Future<PersonalAgentBinding> revokePersonalAgentAuthorization({
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
   }) async {
-    lastRevokedMessageAgentDaemonDid = daemonAgentDid;
-    lastRevokedMessageAgentDid = messageAgentDid;
-    return _messageAgentBinding(
+    lastRevokedPersonalAgentDaemonDid = daemonAgentDid;
+    lastRevokedPersonalAgentDid = personalAgentDid;
+    return _personalAgentBinding(
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       status: 'revoked',
     );
   }
@@ -2959,6 +2939,111 @@ AppTenantRegistry _defaultTestTenantRegistry() {
     activeTenantProfileId: tenant.tenantProfileId,
     tenants: <AppTenantProfile>[tenant],
   );
+}
+
+class FakePersonalAgentBindingPort implements PersonalAgentBindingPort {
+  PersonalAgentBinding? activeBinding;
+  String? lastUserDid;
+  String? lastDaemonAgentDid;
+  String? lastPersonalAgentDid;
+  String? lastRuntimeProvider;
+  Map<String, Object?>? lastRuntimeProfile;
+  String? lastDelegatedKeyVerificationMethod;
+  String? lastDisabledBindingId;
+  String? lastDisabledPersonalAgentDid;
+  String? lastRevokedBindingId;
+  String? lastRevokedPersonalAgentDid;
+  final List<String> calls = <String>[];
+
+  @override
+  Future<PersonalAgentBinding> ensureBinding({
+    required String userDid,
+    required String daemonAgentDid,
+    required String personalAgentDid,
+    required String runtimeProvider,
+    required Map<String, Object?> runtimeProfile,
+    required String delegatedKeyVerificationMethod,
+  }) async {
+    calls.add('ensureBinding');
+    lastUserDid = userDid;
+    lastDaemonAgentDid = daemonAgentDid;
+    lastPersonalAgentDid = personalAgentDid;
+    lastRuntimeProvider = runtimeProvider;
+    lastRuntimeProfile = runtimeProfile;
+    lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
+    return activeBinding = PersonalAgentBinding(
+      id: 'binding_$personalAgentDid',
+      userDid: userDid,
+      daemonAgentDid: daemonAgentDid,
+      personalAgentDid: personalAgentDid,
+      runtimeProvider: runtimeProvider,
+      runtimeProfile: runtimeProfile,
+      delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
+      status: 'active',
+    );
+  }
+
+  @override
+  Future<PersonalAgentBinding?> getActiveBinding() async {
+    calls.add('getActiveBinding');
+    return activeBinding;
+  }
+
+  @override
+  Future<PersonalAgentBinding> disableBinding({
+    String? bindingId,
+    String? personalAgentDid,
+  }) async {
+    calls.add('disableBinding');
+    lastDisabledBindingId = bindingId;
+    lastDisabledPersonalAgentDid = personalAgentDid;
+    final current = activeBinding;
+    final resolved =
+        current ??
+        _personalAgentBinding(
+          daemonAgentDid: 'did:agent:daemon',
+          personalAgentDid: personalAgentDid ?? 'did:agent:message',
+          status: 'active',
+        );
+    return activeBinding = PersonalAgentBinding(
+      id: bindingId ?? resolved.id,
+      userDid: resolved.userDid,
+      daemonAgentDid: resolved.daemonAgentDid,
+      personalAgentDid: personalAgentDid ?? resolved.personalAgentDid,
+      runtimeProvider: resolved.runtimeProvider,
+      runtimeProfile: resolved.runtimeProfile,
+      delegatedKeyVerificationMethod: resolved.delegatedKeyVerificationMethod,
+      status: 'disabled',
+    );
+  }
+
+  @override
+  Future<PersonalAgentBinding> revokeBinding({
+    String? bindingId,
+    String? personalAgentDid,
+  }) async {
+    calls.add('revokeBinding');
+    lastRevokedBindingId = bindingId;
+    lastRevokedPersonalAgentDid = personalAgentDid;
+    final current = activeBinding;
+    final resolved =
+        current ??
+        _personalAgentBinding(
+          daemonAgentDid: 'did:agent:daemon',
+          personalAgentDid: personalAgentDid ?? 'did:agent:message',
+          status: 'active',
+        );
+    return activeBinding = PersonalAgentBinding(
+      id: bindingId ?? resolved.id,
+      userDid: resolved.userDid,
+      daemonAgentDid: resolved.daemonAgentDid,
+      personalAgentDid: personalAgentDid ?? resolved.personalAgentDid,
+      runtimeProvider: resolved.runtimeProvider,
+      runtimeProfile: resolved.runtimeProfile,
+      delegatedKeyVerificationMethod: resolved.delegatedKeyVerificationMethod,
+      status: 'revoked',
+    );
+  }
 }
 
 class FakeProductLocalStore implements ProductLocalStore {
@@ -3303,16 +3388,28 @@ class FakeGroupApplicationService implements GroupApplicationService {
   }
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) {
-    return gateway.listGroups();
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) async {
+    return GroupCollectionPage<GroupSummary>(
+      items: await gateway.listGroups(),
+      hasMore: false,
+    );
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
-  }) {
-    return gateway.listGroupMembers(groupDid);
+    String? cursor,
+  }) async {
+    return GroupCollectionPage<GroupMemberSummary>(
+      items: await gateway.listGroupMembers(groupDid),
+      hasMore: false,
+      pageGroupDid: groupDid,
+      groupStateVersion: '1',
+    );
   }
 
   @override
@@ -3379,37 +3476,45 @@ class FakeOnboardingService implements OnboardingService {
   final FakeAwikiGateway gateway;
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    return _appSessionFromLegacy(
-      await gateway.recoverHandle(phone: phone, otp: otp, handle: handle),
-    );
-  }
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
 
   @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandleWithEmail(
-        email: email,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: _testRegistrationJoinProgress,
+      );
+    }
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _appSessionFromLegacy(
+        await gateway.registerHandleWithEmail(
+          email: email,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
     );
   }
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -3417,37 +3522,65 @@ class FakeOnboardingService implements OnboardingService {
     String? nickName,
     String? profileMarkdown,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandle(
-        phone: phone,
-        otp: otp,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: _testRegistrationJoinProgress,
+      );
+    }
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _appSessionFromLegacy(
+        await gateway.registerHandle(
+          phone: phone,
+          otp: otp,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
     );
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String phone,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
   }) async {
-    return _appSessionFromLegacy(
-      await gateway.registerHandleWithoutContactVerification(
-        phone: phone,
-        handle: handle,
-        inviteCode: inviteCode,
-        nickName: nickName,
-        profileMarkdown: profileMarkdown,
+    if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
+      return IdentityRegistrationResult(
+        status: IdentityRegistrationStatus.joinRequired,
+        joinProgress: _testRegistrationJoinProgress,
+      );
+    }
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: _appSessionFromLegacy(
+        await gateway.registerHandleWithoutContactVerification(
+          phone: phone,
+          handle: handle,
+          inviteCode: inviteCode,
+          nickName: nickName,
+          profileMarkdown: profileMarkdown,
+        ),
       ),
     );
   }
 }
+
+final DeviceJoinProgress _testRegistrationJoinProgress = DeviceJoinProgress(
+  joinSessionId: 'registration-join-1',
+  did: 'did:wba:awiki.ai:alice:e1_registration',
+  protocolDeviceId: 'registration-device-1',
+  side: DeviceJoinSide.newDevice,
+  phase: DeviceJoinPhase.pending,
+  remoteState: DeviceJoinRemoteState.pending,
+  expiresAt: DateTime.utc(2030),
+);
 
 class FakeOnboardingSupportService implements OnboardingSupportService {
   const FakeOnboardingSupportService(this.gateway);
@@ -3468,13 +3601,6 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  }) {
-    return gateway.lookupHandleRegistration(handle: handle);
-  }
-
-  @override
   Future<HandleAvailability> validateHandle({
     required String handle,
     String? domain,
@@ -3492,6 +3618,16 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
 
   @override
   Future<void> sendOtp({required String phone}) {
+    return gateway.sendOtp(phone: phone);
+  }
+
+  @override
+  Future<void> sendRegistrationOtp({
+    required String phone,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) {
     return gateway.sendOtp(phone: phone);
   }
 }
@@ -3560,35 +3696,37 @@ class FakeIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async => defaultSession;
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => defaultSession;
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: defaultSession,
+  );
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => defaultSession;
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: defaultSession,
+  );
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => defaultSession;
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: defaultSession,
+  );
 
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async =>
@@ -3987,18 +4125,18 @@ class TestProfileController extends ProfileController {
   }
 }
 
-MessageAgentBinding _messageAgentBinding({
+PersonalAgentBinding _personalAgentBinding({
   required String daemonAgentDid,
-  required String messageAgentDid,
+  required String personalAgentDid,
   required String status,
 }) {
-  return MessageAgentBinding(
-    id: 'binding_$messageAgentDid',
+  return PersonalAgentBinding(
+    id: 'binding_$personalAgentDid',
     userDid: 'did:human:me',
     daemonAgentDid: daemonAgentDid,
-    messageAgentDid: messageAgentDid,
+    personalAgentDid: personalAgentDid,
     runtimeProvider: 'hermes',
-    runtimeProfile: const <String, Object?>{'profile': 'message_agent'},
+    runtimeProfile: const <String, Object?>{'profile': 'personal_agent'},
     delegatedKeyVerificationMethod: 'did:human:me#daemon-key-1',
     status: status,
   );

@@ -1,6 +1,21 @@
 import '../models/app_session.dart';
 import '../models/daemon_subkey_authorization_revoke_result.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
+import '../../domain/entities/device_management.dart';
+
+enum IdentityRegistrationStatus { registered, joinRequired }
+
+class IdentityRegistrationResult {
+  const IdentityRegistrationResult({
+    required this.status,
+    this.identity,
+    this.joinProgress,
+  });
+
+  final IdentityRegistrationStatus status;
+  final AppSession? identity;
+  final DeviceJoinProgress? joinProgress;
+}
 
 abstract interface class IdentityCorePort {
   Future<List<AppSession>> listLocalIdentities();
@@ -19,7 +34,7 @@ abstract interface class IdentityCorePort {
 
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias);
 
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -27,22 +42,16 @@ abstract interface class IdentityCorePort {
     String? displayName,
   });
 
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? displayName,
   });
 
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
-  });
-
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
   });
 }

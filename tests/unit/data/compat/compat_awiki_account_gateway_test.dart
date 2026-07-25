@@ -1,6 +1,8 @@
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/data/compat/compat_awiki_account_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -139,37 +141,49 @@ class _FakeSessions implements AppSessionService {
 
 class _FakeOnboarding implements OnboardingService {
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async => _session('recovered-id', jwtToken: 'jwt-recovered-id');
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
 
   @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) async => const LegacyIdentityUpgradeStatus.completed();
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
-  }) async => _session('email-id', jwtToken: 'jwt-email-id');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('email-id', jwtToken: 'jwt-email-id'),
+  );
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
-  }) async => _session('phone-id', jwtToken: 'jwt-phone-id');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('phone-id', jwtToken: 'jwt-phone-id'),
+  );
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String phone,
     required String handle,
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
-  }) async => _session('open-id', jwtToken: 'jwt-open-id');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('open-id', jwtToken: 'jwt-open-id'),
+  );
 }
