@@ -311,6 +311,59 @@ void main() {
       expect(messageSyncService.syncReasons, contains('app_resumed'));
     });
 
+    test('前台周期对账弥补丢失的实时提示并在后台停止', () async {
+      final periodicSync = FakeMessageSyncService();
+      final periodicContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: periodicSync,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          appRuntimeProvider.overrideWith(
+            (ref) => AppRuntimeController(
+              ref,
+              foregroundCatchUpInterval: const Duration(milliseconds: 10),
+            ),
+          ),
+        ],
+      );
+      addTearDown(periodicContainer.dispose);
+
+      await periodicContainer
+          .read(appRuntimeProvider.notifier)
+          .activateSession(
+            const SessionIdentity(
+              did: 'did:test:me',
+              credentialName: 'default',
+              displayName: 'Me',
+              handle: 'me',
+              jwtToken: 'token',
+            ),
+          );
+      await pumpEventQueue();
+      periodicSync.syncReasons.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+
+      expect(periodicSync.syncReasons, contains('foreground_catch_up'));
+
+      periodicContainer
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      await pumpEventQueue();
+      periodicSync.syncReasons.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+
+      expect(periodicSync.syncReasons, isEmpty);
+    });
+
     test('恢复前台时不强制刷新已加载的智能体列表', () async {
       final agentControl = _CountingAgentControlService();
       final lifecycleContainer = ProviderContainer(

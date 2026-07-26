@@ -1,6 +1,6 @@
 // [INPUT]: Loopback-authenticated App role checkpoints and transient SAS submissions.
-// [OUTPUT]: In-memory cross-process coordination without persisting OTP, SAS, or proofs.
-// [POS]: Test orchestration only; it never calls AWiki product APIs or advances Join state.
+// [OUTPUT]: In-memory Join/functional coordination and redacted subprocess diagnostics without persisting secrets.
+// [POS]: Test orchestration only; it never calls AWiki product APIs or advances product state.
 
 import 'dart:async';
 import 'dart:convert';
@@ -21,7 +21,68 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'admin\u0000verification_started': <String>{},
   'joiner\u0000authorized': <String>{'adminDeviceId', 'joinedDeviceId'},
   'admin\u0000complete': <String>{},
+  'joiner\u0000functional_ready': <String>{},
+  'admin\u0000functional_agents_created': <String>{
+    'daemonDid',
+    'daemonHandle',
+    'codexDid',
+    'codexHandle',
+    'claudeDid',
+    'claudeHandle',
+  },
+  'joiner\u0000functional_agents_converged': <String>{},
+  'admin\u0000functional_peer_ready': <String>{'peerDid', 'peerHandle'},
+  'admin\u0000functional_outbound_sent': <String>{
+    'conversationId',
+    'messageId',
+  },
+  'joiner\u0000functional_own_sync_visible': <String>{},
+  'admin\u0000functional_reply_sent': <String>{'messageId'},
+  'joiner\u0000functional_reply_visible': <String>{},
 };
+
+String safeCliFailureDiagnostic({
+  required int exitCode,
+  required Object? stdout,
+  required Object? stderr,
+}) {
+  String? errorCode;
+  String? serviceCode;
+  for (final output in <Object?>[stderr, stdout]) {
+    if (output == null || output.toString().trim().isEmpty) continue;
+    Object? decoded;
+    try {
+      decoded = jsonDecode(output.toString());
+    } on FormatException {
+      continue;
+    }
+    if (decoded is! Map || decoded['error'] is! Map) continue;
+    final error = decoded['error'] as Map;
+    final candidateCode = error['code']?.toString();
+    if (_isSafeDiagnosticCode(candidateCode, requireNamespace: false)) {
+      errorCode = candidateCode;
+    }
+    final details = error['details'];
+    final candidateServiceCode = details is Map
+        ? details['service_code']?.toString()
+        : null;
+    if (_isSafeDiagnosticCode(candidateServiceCode, requireNamespace: true)) {
+      serviceCode = candidateServiceCode;
+    }
+    break;
+  }
+  return <String>[
+    'exit=$exitCode',
+    if (errorCode != null) 'code=$errorCode',
+    if (serviceCode != null) 'serviceCode=$serviceCode',
+  ].join(', ');
+}
+
+bool _isSafeDiagnosticCode(String? value, {required bool requireNamespace}) {
+  if (value == null || value.isEmpty || value.length > 96) return false;
+  if (!RegExp(r'^[a-z0-9][a-z0-9._-]*$').hasMatch(value)) return false;
+  return !requireNamespace || value.contains('.');
+}
 
 class AppPairCoordinatorServer {
   AppPairCoordinatorServer._(this._server, this.token);

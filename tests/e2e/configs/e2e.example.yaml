@@ -93,6 +93,8 @@ daemon:
   #   CLAUDE_CODEX_MODEL=gpt-5.4-mini
   #   AWIKI_DAEMON_CLI_ENV_PASSTHROUGH=ANTHROPIC_*,CLAUDE_CODEX_MODEL
   # envFile: .e2e/agent-cli.env
+  # `--case multi-device-app-pair-functional` requires `binary` and `handle`;
+  # its state/ready paths are always generated under the run-owned pair root.
 
 personalAgent:
   enabled: true

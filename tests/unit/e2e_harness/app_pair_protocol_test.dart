@@ -1,5 +1,5 @@
 // [INPUT]: Two loopback App-pair clients, checkpoints, and transient SAS values.
-// [OUTPUT]: Authenticated phase exchange and secret-free SAS match results.
+// [OUTPUT]: Authenticated Join/functional phase exchange and secret-free SAS results.
 // [POS]: Contract test for the dual-App E2E coordinator.
 
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +101,71 @@ void main() {
     );
   });
 
+  test(
+    'functional checkpoints accept only their exact public identifiers',
+    () async {
+      final server = await AppPairCoordinatorServer.start(
+        token: List<String>.filled(48, 't').join(),
+      );
+      addTearDown(server.close);
+      final client = AppPairCoordinatorClient(
+        endpoint: server.endpoint,
+        token: server.token,
+      );
+
+      await client.publish('joiner', 'functional_ready');
+      await client.publish(
+        'admin',
+        'functional_agents_created',
+        data: const <String, Object?>{
+          'daemonDid': 'did:wba:awiki.info:agent:daemon:e1_daemon',
+          'daemonHandle': 'daemon',
+          'codexDid': 'did:wba:awiki.info:agent:runtime:e1_codex',
+          'codexHandle': 'codex',
+          'claudeDid': 'did:wba:awiki.info:agent:runtime:e1_claude',
+          'claudeHandle': 'claude',
+        },
+      );
+      await client.publish('joiner', 'functional_agents_converged');
+      await client.publish(
+        'admin',
+        'functional_peer_ready',
+        data: const <String, Object?>{
+          'peerDid': 'did:wba:awiki.info:e1_peer',
+          'peerHandle': 'peer',
+        },
+      );
+      await client.publish(
+        'admin',
+        'functional_outbound_sent',
+        data: const <String, Object?>{
+          'conversationId': 'conv-1',
+          'messageId': 'msg-1',
+        },
+      );
+      await client.publish('joiner', 'functional_own_sync_visible');
+      await client.publish(
+        'admin',
+        'functional_reply_sent',
+        data: const <String, Object?>{'messageId': 'msg-2'},
+      );
+      await client.publish('joiner', 'functional_reply_visible');
+
+      await expectLater(
+        client.publish(
+          'admin',
+          'functional_outbound_sent',
+          data: const <String, Object?>{
+            'conversationId': 'conv-1',
+            'messageId': 'msg-1',
+            'content': 'not-allowed',
+          },
+        ),
+        throwsA(isA<AppPairProtocolException>()),
+      );
+    },
+  );
+
   test('mismatched SAS returns only a negative comparison', () async {
     final server = await AppPairCoordinatorServer.start(
       token: List<String>.filled(48, 't').join(),
@@ -120,5 +185,40 @@ void main() {
       joiner.submitAndCompareSas('joiner', '654321'),
     ]);
     expect(results, everyElement(isFalse));
+  });
+
+  test('CLI failure diagnostics expose only allowlisted stable codes', () {
+    const secret = 'secret-bearing-service-message';
+    final diagnostic = safeCliFailureDiagnostic(
+      exitCode: 5,
+      stdout: '',
+      stderr:
+          '{"ok":false,"error":{"code":"service_error",'
+          '"message":"$secret","details":'
+          '{"service_code":"anp.device_state_changed",'
+          '"token":"$secret"}}}',
+    );
+
+    expect(
+      diagnostic,
+      'exit=5, code=service_error, '
+      'serviceCode=anp.device_state_changed',
+    );
+    expect(diagnostic, isNot(contains(secret)));
+  });
+
+  test('CLI failure diagnostics reject unstructured or unsafe output', () {
+    const secret = 'Bearer top-secret';
+
+    expect(
+      safeCliFailureDiagnostic(
+        exitCode: 4,
+        stdout: secret,
+        stderr:
+            '{"error":{"code":"permission denied: Bearer top-secret",'
+            '"details":{"service_code":"token.top-secret/value"}}}',
+      ),
+      'exit=4',
+    );
   });
 }

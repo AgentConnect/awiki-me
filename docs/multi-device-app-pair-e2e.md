@@ -1,9 +1,13 @@
 # One-host App↔App E2E mode
 
-`multi-device-app-pair` is the reusable macOS E2E mode for scenarios that need
-two independently runnable AWiki Me processes on one computer. Its first and
-currently only product case is `DEVICE-JOIN-E2E-004`, a real `awiki.info`
-member Join from one App to another App.
+The App-pair harness is the reusable macOS E2E boundary for scenarios that need
+two independently runnable AWiki Me processes on one computer. It exposes two
+separate suites:
+
+- `multi-device-app-pair`: security acceptance for `DEVICE-JOIN-E2E-004`,
+  including one real macOS LocalAuthentication decision;
+- `multi-device-app-pair-functional`: unattended functional acceptance for
+  cross-device Agent inventory and Direct-message convergence.
 
 ## Isolation model
 
@@ -33,7 +37,9 @@ The coordinator may:
 
 - exchange bounded lifecycle checkpoints between the two test roles;
 - compare the two six-digit SAS values in memory and return only
-  `ready/matched`.
+  `ready/matched`;
+- in the functional suite, exchange only public DIDs, Handles, canonical
+  conversation IDs, and message IDs needed for cross-process exact oracles.
 
 It may not:
 
@@ -70,8 +76,8 @@ existing E2E a dual-App test.
 
 ## Run
 
-Use the same reviewed remote account variables as the App↔CLI Join suite, but
-the YAML does not need `cliPeer.binary` or `cliPeer.sourceRef`:
+Use the same reviewed remote account variables as the App↔CLI Join suite. The
+security suite does not need `cliPeer.binary` or `cliPeer.sourceRef`:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
@@ -95,6 +101,54 @@ the pair, because the compiled targets require the ephemeral coordinator of an
 executing run. Flutter is resolved from `PATH` by default; a host whose Flutter
 SDK is not on `PATH` can set `AWIKI_E2E_FLUTTER_BIN` to the absolute executable.
 
+The unattended functional suite uses the same command shape with
+`--case multi-device-app-pair-functional`. Its local YAML additionally requires
+an x86_64 Debug `cliPeer.binary`, the exact 40-character source revision
+embedded in that binary, and an x86_64 Debug `daemon.binary` plus a Daemon
+Handle. It injects an always-confirming `UserPresencePort` only through the
+compiled integration-test provider override. Production code and the security
+suite remain fail-closed and continue to use `LocalAuthUserPresencePort`.
+The independent CLI peer receives the same explicit multi-device Direct E2EE
+rollout as the two App processes; it never relies on inherited parent
+environment.
+
+The functional suite proves:
+
+1. the joining App starts its normal Agents-page inventory observer before the
+   admin App installs one real Daemon and creates Codex and Claude Code runtime
+   Agents;
+2. both Apps converge the same exact Daemon/runtime DID, Handle, runtime kind,
+   and parent topology, and the joining App renders both runtime names without
+   a test-side inventory refresh after creation;
+3. an admin-App outbound Direct message is committed to an independent CLI
+   peer and appears on the joining App as the same canonical `isMine` own-sync
+   message;
+4. a required-secure CLI reply appears under the same conversation on both
+   Apps and is visibly rendered by the joining App.
+
+Realtime and Push remain lossy hints. While an authenticated App is in the
+foreground, App runtime requests a coalesced Core reliable-sync catch-up every
+30 seconds and stops that cadence in the background. This lets a durable
+exact-device Inbox row converge even if its live WebSocket hint is missed;
+the timer never projects a message itself and does not replace Core
+checkpoints.
+
+It does **not** prove operating-system user presence, and it starts only one
+Daemon. The second App observes the account-level Agent Inventory; it must not
+start duplicate runtime processes for the same Daemon-owned Agents.
+
+User Service Inventory remains the Agent-topology source of truth. A committed
+Daemon control event, including one replayed after a subscription is attached,
+is only an invalidation signal on another device: it triggers an authoritative
+Inventory reconciliation but cannot synthesize a new Agent locally. This
+closes the snapshot/subscription race without making realtime payloads a second
+topology source of truth. Because that invalidation hint can also be lost, the
+visible Agents page performs a quiet authoritative Inventory reconciliation
+every 30 seconds while the App is foregrounded and stops it when the page is
+disposed. On the App that accepted a runtime-create intent, the pending intent
+also drives a bounded, quiet Inventory reconciliation until the exact runtime
+appears or the intent deadline expires.
+
 ## Verification evidence
 
 The `awiki.info` run `20260726150342-hkr9m42wlk` passed
@@ -104,3 +158,12 @@ in-memory SAS match, one real macOS user-presence completion, and exact
 two-device Registry convergence. Local state and the coordinator config were
 removed; the remote identity/Join ledger remains `residual` because no public
 remote delete API exists.
+
+The unattended functional runs `20260726223434-hkrm1iagkz`,
+`20260726224138-hkrm8j0eej`, and `20260726225818-hkrmp2b5ac` then passed
+consecutively on `awiki.info`; the last run used the final source state after
+the foreground Inventory reconciliation timer lifecycle was made explicit.
+Each verified `DEVICE-AGENT-SYNC-E2E-001`,
+`DEVICE-MESSAGE-SYNC-E2E-001`, and `DEVICE-MESSAGE-SYNC-E2E-002` with
+schema-v2 case attestation. These runs prove the functional oracles above but,
+by design, do not replace the real-user-presence security attestation.

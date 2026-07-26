@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-26.multi-device-app-pair-v1",
+  "sourceRevision": "2026-07-26.multi-device-app-pair-functional-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -89,6 +89,35 @@
       ],
       "caseIds": [
         "DEVICE-JOIN-E2E-004"
+      ]
+    },
+    "multi-device-app-pair-functional": {
+      "tier": "remote_product_ui",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents+awiki-me-messaging",
+      "estimatedMinutes": 24,
+      "timeoutMinutes": 35,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state",
+        "agent_inventory"
+      ],
+      "caseIds": [
+        "DEVICE-AGENT-SYNC-E2E-001",
+        "DEVICE-MESSAGE-SYNC-E2E-001",
+        "DEVICE-MESSAGE-SYNC-E2E-002"
       ]
     },
     "step4-revoke-mls": {

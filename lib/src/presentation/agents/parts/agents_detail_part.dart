@@ -95,9 +95,7 @@ class _AgentDetailPane extends StatelessWidget {
             agent.latest.needsUpgrade ||
                 agent.latest.status.trim().toLowerCase() == 'needs_upgrade');
     final daemonCanCreateRuntime =
-        !agent.isDaemon ||
-        (!state.statusQueryErrors.containsKey(agent.agentDid) &&
-            (agent.daemonEffectiveStatus?.isActionable ?? true));
+        agent.isDaemon && state.canCreateRuntimeAgent(agent);
     return SafeArea(
       bottom: false,
       child: SelectionArea(

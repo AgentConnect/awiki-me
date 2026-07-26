@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(68));
+      expect(catalog.cases, hasLength(71));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -20,6 +20,9 @@ void main() {
           'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
           'DEVICE-JOIN-E2E-004',
+          'DEVICE-AGENT-SYNC-E2E-001',
+          'DEVICE-MESSAGE-SYNC-E2E-001',
+          'DEVICE-MESSAGE-SYNC-E2E-002',
           'DEVICE-REVOKE-E2E-001',
           'STEP4-GROUP-PAGINATION-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
@@ -35,6 +38,7 @@ void main() {
           'multi-device',
           'multi-device-remote-join',
           'multi-device-app-pair',
+          'multi-device-app-pair-functional',
           'step4-revoke-mls',
           'full',
           'direct',
@@ -57,6 +61,11 @@ void main() {
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',
+      ]);
+      expect(catalog.suiteCaseIds['multi-device-app-pair-functional'], <String>[
+        'DEVICE-AGENT-SYNC-E2E-001',
+        'DEVICE-MESSAGE-SYNC-E2E-001',
+        'DEVICE-MESSAGE-SYNC-E2E-002',
       ]);
       expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
       expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[

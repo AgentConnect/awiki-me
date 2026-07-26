@@ -1,7 +1,8 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
 //          production AppBootstrap/native Core, independent CLI/App or App/App
 //          roots, foreground CLI TTY where used, and loopback App-pair phases.
-// [OUTPUT]: Real notification-driven, member-only Device Join scenarios.
+// [OUTPUT]: Real notification-driven member Join plus isolated App-pair Agent
+//           inventory and Direct-message convergence scenarios.
 // [POS]: Step 2 Join product E2E; no Registry discovery, implicit verification,
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
 
@@ -13,15 +14,24 @@ import 'dart:math';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
+import 'package:awiki_me/src/app/e2e_semantics.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/data/services/local_auth_user_presence_port.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
+import 'package:awiki_me/src/presentation/agents/agents_page.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
@@ -36,6 +46,8 @@ import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,6 +64,9 @@ part 'multi_device_app_pair_ui_test.part.dart';
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
 const String _appPairCaseId = 'DEVICE-JOIN-E2E-004';
+const String _appPairAgentSyncCaseId = 'DEVICE-AGENT-SYNC-E2E-001';
+const String _appPairOutboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-001';
+const String _appPairInboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-002';
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';
@@ -121,7 +136,7 @@ void main() {
       final bootstrapAdminDeviceId = _requireCliReadyBootstrapAdmin(
         initialCliRegistry,
       );
-      await cli.startJoinRequestListener();
+      await cli.startRealtimeListener();
 
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(config),
@@ -1122,7 +1137,15 @@ abstract interface class _RemoteJoinEndpointConfig {
   bool get allowStagedOtpOnSmsError;
 }
 
-class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
+abstract interface class _CliEndpointConfig
+    implements _RemoteJoinEndpointConfig {
+  String get runId;
+  String get cliBin;
+  String get cliSourceRef;
+  bool get multiDeviceDirectE2eeEnabled;
+}
+
+class _AppPairRunConfig implements _CliEndpointConfig {
   const _AppPairRunConfig({
     required this.runId,
     required this.baseUrl,
@@ -1137,8 +1160,20 @@ class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
     required this.adminStateRoot,
     required this.joinerStateRoot,
     required this.coordinator,
+    required this.functional,
+    required this.automatedUserPresence,
+    required this.cliBin,
+    required this.cliSourceRef,
+    required this.cliWorkspace,
+    required this.cliHome,
+    required this.daemonBinary,
+    required this.daemonStateRoot,
+    required this.daemonReadyFile,
+    required this.daemonHandle,
+    required this.daemonEnvFile,
   });
 
+  @override
   final String runId;
   @override
   final String baseUrl;
@@ -1161,6 +1196,21 @@ class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
   final String adminStateRoot;
   final String joinerStateRoot;
   final AppPairCoordinatorClient coordinator;
+  final bool functional;
+  final bool automatedUserPresence;
+  @override
+  bool get multiDeviceDirectE2eeEnabled => functional;
+  @override
+  final String cliBin;
+  @override
+  final String cliSourceRef;
+  final String cliWorkspace;
+  final String cliHome;
+  final String daemonBinary;
+  final String daemonStateRoot;
+  final String daemonReadyFile;
+  final String daemonHandle;
+  final String? daemonEnvFile;
 
   static _AppPairRunConfig load() {
     if (Platform.environment[_activationGate]?.trim() != '1') {
@@ -1182,6 +1232,15 @@ class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
     final admin = _map(apps, 'admin');
     final joiner = _map(apps, 'joiner');
     final coordinator = _map(root, 'coordinator');
+    final functional = root['functional'] is Map
+        ? _stringMap(root['functional'] as Map)
+        : const <String, Object?>{};
+    final cliPeer = functional.isEmpty
+        ? const <String, Object?>{}
+        : _map(functional, 'cliPeer');
+    final daemon = functional.isEmpty
+        ? const <String, Object?>{}
+        : _map(functional, 'daemon');
     final endpoint = Uri.tryParse(_required(coordinator, 'baseUrl'));
     if (endpoint == null ||
         endpoint.scheme != 'http' ||
@@ -1209,6 +1268,19 @@ class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
         endpoint: endpoint,
         token: _required(coordinator, 'token'),
       ),
+      functional: functional.isNotEmpty,
+      automatedUserPresence:
+          functional.isNotEmpty &&
+          _requiredBool(functional, 'automatedUserPresence'),
+      cliBin: functional.isEmpty ? '' : _required(cliPeer, 'binary'),
+      cliSourceRef: functional.isEmpty ? '' : _required(cliPeer, 'sourceRef'),
+      cliWorkspace: functional.isEmpty ? '' : _required(cliPeer, 'workspace'),
+      cliHome: functional.isEmpty ? '' : _required(cliPeer, 'home'),
+      daemonBinary: functional.isEmpty ? '' : _required(daemon, 'binary'),
+      daemonStateRoot: functional.isEmpty ? '' : _required(daemon, 'stateRoot'),
+      daemonReadyFile: functional.isEmpty ? '' : _required(daemon, 'readyFile'),
+      daemonHandle: functional.isEmpty ? '' : _required(daemon, 'handle'),
+      daemonEnvFile: functional.isEmpty ? null : daemon['envFile']?.toString(),
     );
     if (config.didDomain != 'awiki.info' ||
         config.adminStateRoot == config.joinerStateRoot) {
@@ -1226,11 +1298,34 @@ class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
         throw StateError('Remote multi-device service target is not audited.');
       }
     }
+    if (config.functional) {
+      if (!config.automatedUserPresence ||
+          config.cliBin.isEmpty ||
+          config.cliSourceRef.isEmpty ||
+          config.cliWorkspace.isEmpty ||
+          config.cliHome.isEmpty ||
+          config.daemonBinary.isEmpty ||
+          config.daemonStateRoot.isEmpty ||
+          config.daemonReadyFile.isEmpty ||
+          config.daemonHandle.isEmpty) {
+        throw StateError('The App-pair functional config is incomplete.');
+      }
+      final isolatedPaths = <String>[
+        config.adminStateRoot,
+        config.joinerStateRoot,
+        config.cliWorkspace,
+        config.cliHome,
+        config.daemonStateRoot,
+      ];
+      if (isolatedPaths.toSet().length != isolatedPaths.length) {
+        throw StateError('The App-pair functional roots are not isolated.');
+      }
+    }
     return config;
   }
 }
 
-class _RemoteJoinRunConfig implements _RemoteJoinEndpointConfig {
+class _RemoteJoinRunConfig implements _CliEndpointConfig {
   const _RemoteJoinRunConfig({
     required this.runId,
     required this.baseUrl,
@@ -1252,6 +1347,7 @@ class _RemoteJoinRunConfig implements _RemoteJoinEndpointConfig {
     required this.appJoiningStateRoot,
   });
 
+  @override
   final String runId;
   @override
   final String baseUrl;
@@ -1271,8 +1367,12 @@ class _RemoteJoinRunConfig implements _RemoteJoinEndpointConfig {
   final String handlePrefix;
   @override
   final bool allowStagedOtpOnSmsError;
+  @override
   final String cliBin;
+  @override
   final String cliSourceRef;
+  @override
+  bool get multiDeviceDirectE2eeEnabled => false;
   final String cliWorkspace;
   final String cliHome;
   final String cliAdminWorkspace;
@@ -1410,7 +1510,14 @@ class _JoinCli {
     role: 'admin',
   );
 
-  final _RemoteJoinRunConfig config;
+  factory _JoinCli.peer(_AppPairRunConfig config) => _JoinCli._(
+    config: config,
+    workspace: config.cliWorkspace,
+    home: config.cliHome,
+    role: 'peer',
+  );
+
+  final _CliEndpointConfig config;
   final String workspace;
   final String home;
   final String _tenantName;
@@ -1465,9 +1572,32 @@ class _JoinCli {
     return _required(_stringMap(identity), 'did');
   }
 
-  Future<void> startJoinRequestListener() async {
+  Future<String> sendDirectText({
+    required String to,
+    required String text,
+  }) async {
+    final payload = await _run(<String>[
+      '--format',
+      'json',
+      'msg',
+      'send',
+      '--to',
+      to,
+      '--text',
+      text,
+      '--secure',
+      'required',
+    ]);
+    final message = _data(payload, action: null)['message'];
+    if (message is! Map) {
+      fail('The independent CLI send returned no canonical message.');
+    }
+    return _required(_stringMap(message), 'id');
+  }
+
+  Future<void> startRealtimeListener() async {
     if (_joinRequestListener != null) {
-      fail('The Join request listener was started more than once.');
+      fail('The CLI realtime listener was started more than once.');
     }
     await _run(const <String>[
       '--format',
@@ -1528,7 +1658,7 @@ class _JoinCli {
     final deadline = DateTime.now().add(const Duration(seconds: 30));
     while (DateTime.now().isBefore(deadline)) {
       if (await _processExited(process)) {
-        fail('The CLI Join request listener exited before it was ready.');
+        fail('The CLI realtime listener exited before it was ready.');
       }
       final status = await _run(const <String>[
         '--format',
@@ -1557,7 +1687,7 @@ class _JoinCli {
       }
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
-    fail('The CLI Join request listener did not become ready.');
+    fail('The CLI realtime listener did not become ready.');
   }
 
   Future<_JoinProgress> startJoin({
@@ -2258,7 +2388,10 @@ class _JoinCli {
       fail('The independent CLI process did not complete safely.');
     }
     if (result.exitCode != 0) {
-      fail('The independent CLI command failed without exposing output.');
+      fail(
+        'The independent CLI command failed '
+        '(${safeCliFailureDiagnostic(exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr)}).',
+      );
     }
     Object? decoded;
     try {
@@ -2276,6 +2409,8 @@ class _JoinCli {
     final environment = <String, String>{
       'HOME': home,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': workspace,
+      if (config.multiDeviceDirectE2eeEnabled)
+        'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       if (accountVerificationToken != null)
         'AWIKI_ACCOUNT_VERIFICATION_TOKEN': accountVerificationToken,
     };
@@ -2442,6 +2577,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   _RemoteJoinEndpointConfig config, {
   bool enableRootTransfer = false,
   bool enableStep4 = false,
+  bool enableAppPairFunctional = false,
 }) => AwikiEnvironmentConfig(
   baseUrl: config.baseUrl,
   userServiceUrl: config.userServiceUrl,
@@ -2450,9 +2586,9 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   didDomain: config.didDomain,
   anpServiceUrl: config.anpServiceUrl,
   anpServiceDid: config.anpServiceDid,
-  agentImEnabled: false,
+  agentImEnabled: enableAppPairFunctional,
   multiDeviceDeviceRevokeEnabled: enableStep4,
-  multiDeviceDirectE2eeEnabled: enableRootTransfer,
+  multiDeviceDirectE2eeEnabled: enableRootTransfer || enableAppPairFunctional,
   multiDeviceGroupE2eeEnabled: enableStep4,
 );
 

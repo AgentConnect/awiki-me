@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
@@ -20,17 +21,20 @@ import '../../domain/entities/agent/install_command.dart';
 import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../app_shell/providers/app_lifecycle_provider.dart';
 import 'agent_display_name.dart';
 import 'agent_ui_messages.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentRuntimeCreationTimeout = Duration(seconds: 45);
+const agentRuntimeCreationReconcileInterval = Duration(seconds: 2);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
 const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
 const agentListLoadTimeout = Duration(seconds: 15);
 const agentInventoryAutoSyncInterval = Duration(seconds: 4);
 const agentInventoryAutoSyncMaxAttempts = 24;
+const agentInventoryObservationInterval = Duration(seconds: 30);
 const agentLocalCacheReadTimeout = Duration(milliseconds: 1200);
 const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
 const agentStatusRequestSendTimeout = Duration(seconds: 8);
@@ -350,6 +354,11 @@ class AgentsState {
     return AgentDeleteAction.removeFromAccount;
   }
 
+  bool canCreateRuntimeAgent(AgentSummary daemon) {
+    return !statusQueryErrors.containsKey(daemon.agentDid) &&
+        _daemonCanCreateRuntime(daemon);
+  }
+
   bool isStatusQueryPending(String daemonDid) {
     return pendingStatusQueryAtByDaemon.containsKey(daemonDid);
   }
@@ -444,14 +453,20 @@ enum AgentDeleteAction {
 }
 
 class AgentsController extends StateNotifier<AgentsState> {
-  AgentsController(this.ref) : super(const AgentsState());
+  AgentsController(
+    this.ref, {
+    Duration inventoryObservationInterval = agentInventoryObservationInterval,
+  }) : _inventoryObservationInterval = inventoryObservationInterval,
+       super(const AgentsState());
 
   final Ref ref;
+  final Duration _inventoryObservationInterval;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
   final Map<String, Timer> _statusQueryPollTimers = <String, Timer>{};
   final Map<String, String> _statusQueryCommandIds = <String, String>{};
   final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
+  final Map<String, Timer> _runtimeCreationReconcileTimers = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _deletionRefreshTimers = <String, Timer>{};
@@ -461,6 +476,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   final Map<String, Map<String, Object?>> _topologyControlOverlays =
       <String, Map<String, Object?>>{};
   Timer? _inventoryAutoSyncTimer;
+  Timer? _inventoryObservationTimer;
   Future<void>? _loadOperation;
   String? _loadOperationOwner;
   int? _loadOperationEpoch;
@@ -479,6 +495,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stateEpoch += 1;
     _inventoryAutoSyncExhaustedOwner = null;
     _stopInventoryAutoSync();
+    _stopInventoryObservation();
     _cancelStatusTimers();
     _cancelControlEventSubscriptions();
     _topologyControlOverlays.clear();
@@ -595,6 +612,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       _stopInventoryAutoSync();
+      _stopInventoryObservation();
       _cancelControlEventSubscriptions();
       _topologyControlOverlays.clear();
       _inventoryReconcileRequested = false;
@@ -782,6 +800,37 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stopInventoryAutoSync();
   }
 
+  void startInventoryObservation() {
+    if (!_agentsAvailable ||
+        _inventoryObservationInterval <= Duration.zero ||
+        _inventoryObservationTimer != null ||
+        ref.read(sessionProvider).session == null) {
+      return;
+    }
+    _inventoryObservationTimer = Timer.periodic(_inventoryObservationInterval, (
+      _,
+    ) {
+      if (!mounted || ref.read(sessionProvider).session == null) {
+        _stopInventoryObservation();
+        return;
+      }
+      if (ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+        return;
+      }
+      unawaited(
+        syncRemoteInventory(
+          quiet: true,
+          resetAutoSyncExhaustion: false,
+          surfaceError: false,
+        ),
+      );
+    });
+  }
+
+  void stopInventoryObservation() {
+    _stopInventoryObservation();
+  }
+
   Future<void> refreshDaemonStatus(
     String daemonDid, {
     bool fromAutoLoad = false,
@@ -872,10 +921,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     await ensureLoaded();
     final daemon = _agentByDid(daemonDid);
-    if (daemon == null ||
-        !daemon.isDaemon ||
-        state.statusQueryErrors.containsKey(daemonDid) ||
-        !_daemonCanCreateRuntime(daemon)) {
+    if (daemon == null || !state.canCreateRuntimeAgent(daemon)) {
       state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
       return;
     }
@@ -924,7 +970,57 @@ class AgentsController extends StateNotifier<AgentsState> {
           requestId,
         ),
       );
+      unawaited(_reconcilePendingRuntimeCreation(requestId));
     });
+  }
+
+  Future<void> _reconcilePendingRuntimeCreation(String requestId) async {
+    _runtimeCreationReconcileTimers.remove(requestId)?.cancel();
+    if (!mounted) {
+      return;
+    }
+    final pending = _pendingRuntimeCreation(requestId);
+    if (ref.read(sessionProvider).session == null ||
+        pending == null ||
+        !DateTime.now().isBefore(
+          pending.createdAt.add(agentRuntimeCreationTimeout),
+        )) {
+      return;
+    }
+    await syncRemoteInventory(
+      quiet: true,
+      resetAutoSyncExhaustion: false,
+      surfaceError: false,
+    );
+    if (!mounted) {
+      return;
+    }
+    final remaining = _pendingRuntimeCreation(requestId);
+    if (ref.read(sessionProvider).session == null ||
+        remaining == null ||
+        !DateTime.now().isBefore(
+          remaining.createdAt.add(agentRuntimeCreationTimeout),
+        )) {
+      return;
+    }
+    _runtimeCreationReconcileTimers[requestId] = Timer(
+      agentRuntimeCreationReconcileInterval,
+      () {
+        _runtimeCreationReconcileTimers.remove(requestId);
+        if (mounted) {
+          unawaited(_reconcilePendingRuntimeCreation(requestId));
+        }
+      },
+    );
+  }
+
+  PendingRuntimeCreation? _pendingRuntimeCreation(String requestId) {
+    for (final pending in state.pendingRuntimeCreations) {
+      if (pending.requestId == requestId) {
+        return pending;
+      }
+    }
+    return null;
   }
 
   Future<void> bootstrapPersonalAgent({
@@ -1657,6 +1753,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stateEpoch += 1;
     _inventoryAutoSyncExhaustedOwner = null;
     _stopInventoryAutoSync();
+    _stopInventoryObservation();
     _cancelStatusTimers();
     _cancelControlEventSubscriptions();
     _topologyControlOverlays.clear();
@@ -1798,7 +1895,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (matchingPending != null) {
         _topologyControlOverlays[event.deduplicationKey] = payload;
       }
-      return !event.isReplay || matchingPending != null;
+      return true;
     }
     if (command == 'runtime.agent.delete') {
       final runtimeDid =
@@ -2579,6 +2676,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   @override
   void dispose() {
     _stopInventoryAutoSync();
+    _stopInventoryObservation();
     _cancelStatusTimers();
     _cancelControlEventSubscriptions();
     super.dispose();
@@ -2647,6 +2745,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
+  void _stopInventoryObservation() {
+    _inventoryObservationTimer?.cancel();
+    _inventoryObservationTimer = null;
+  }
+
   void _cancelStatusTimers() {
     for (final timer in _statusQueryTimeouts.values) {
       timer.cancel();
@@ -2665,6 +2768,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _runtimeCreationTimeouts.clear();
+    for (final timer in _runtimeCreationReconcileTimers.values) {
+      timer.cancel();
+    }
+    _runtimeCreationReconcileTimers.clear();
     for (final timer in _daemonUpgradeAckTimeouts.values) {
       timer.cancel();
     }

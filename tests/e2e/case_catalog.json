@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-26.multi-device-app-pair-v1",
+  "sourceRevision": "2026-07-26.multi-device-app-pair-functional-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2428,6 +2428,179 @@
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
             "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-SYNC-E2E-001",
+      "feature": "Two joined AWiki Me Apps converge the same account Agent inventory",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated macOS App processes complete member Join against awiki.info; the functional App-pair suite uses an E2E-only user-presence provider and starts one real local Daemon with Codex and Claude Code drivers.",
+      "action": "Open the Agents workspace on the joining App before the admin App installs the Daemon and creates one Codex plus one Claude Code runtime Agent, then wait only on the joining App provider/UI convergence path.",
+      "exactOracles": [
+        "Both Apps project the exact same Daemon DID and Handle from the account-level User Service Agent Inventory.",
+        "Both Apps project the exact same Codex and Claude Code runtime DIDs, Handles, runtime kinds, and parent Daemon DID.",
+        "The joining App renders both runtime display names without the test directly invoking its inventory refresh after creation."
+      ],
+      "negativeChecks": [
+        "A copied App/Core root, a second Daemon installation, a test-side inventory refresh after runtime creation, duplicate Agent rows, mismatched DIDs/Handles/parent topology, or either runtime name not becoming visible prevents pass attestation.",
+        "This case cannot attest macOS LocalAuthentication because the functional suite intentionally uses an E2E-only UserPresencePort."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+          "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected",
+          "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+          "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected",
+          "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected"
+          ],
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected"
+          ],
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+            "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+            "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+          ],
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+            "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-SYNC-E2E-001",
+      "feature": "A Direct message sent on one App appears as own-sync on the joined App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated App devices share one joined account identity, Direct multi-device E2EE is enabled for the focused suite, and an independent fresh CLI identity is available as the remote peer.",
+      "action": "Send one exact Direct text from the admin App product MessagingService to the CLI peer and observe the joining App conversation list, local history, and visible timeline through the normal Core reliable-sync path.",
+      "exactOracles": [
+        "The admin App commits exactly one sent message with the account DID, peer DID, exact content, canonical message ID, and canonical conversation ID.",
+        "The joining App projects exactly one canonical peer conversation with the same conversation ID and latest preview.",
+        "The joining App projects the exact message as sent and isMine=true and renders it in the selected conversation."
+      ],
+      "negativeChecks": [
+        "A direct provider refresh that manufactures the conversation, duplicate body delivery, canonical ID mismatch, wrong direction, wrong peer conversation, missing own-sync semantics, or a non-visible bubble prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-SYNC-E2E-002",
+      "feature": "A remote Direct reply converges on both joined Apps",
+      "layer": "remote_product_ui",
+      "preconditions": "The two-App own-sync case has established the canonical peer conversation and the independent CLI peer can send required-secure Direct messages.",
+      "action": "Send one exact required-secure reply from the CLI peer and observe the same canonical incoming message on both App device histories plus the joining App conversation list and visible timeline.",
+      "exactOracles": [
+        "The admin App receives the exact CLI reply with the CLI DID, account DID, canonical reply ID, sent state, and isMine=false.",
+        "The joining App updates the same peer conversation preview without creating a second conversation.",
+        "The joining App receives the exact incoming reply with the same canonical ID and renders it in the already-open timeline."
+      ],
+      "negativeChecks": [
+        "Plain/insecure fallback, duplicate reply delivery, canonical ID mismatch, wrong direction, a second peer conversation, only one App receiving the reply, or a non-visible reply prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-SYNC-E2E-002:cli_peer_reply_committed",
+          "DEVICE-MESSAGE-SYNC-E2E-002:admin_app_received_exact_reply",
+          "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated",
+          "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
+          "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:cli_peer_reply_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-002:admin_app_received_exact_reply"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:cli_peer_reply_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-002:admin_app_received_exact_reply",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
           ]
         ]
       }

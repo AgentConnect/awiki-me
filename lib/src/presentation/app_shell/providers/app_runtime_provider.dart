@@ -68,7 +68,11 @@ class AppRuntimeState {
 }
 
 class AppRuntimeController extends StateNotifier<AppRuntimeState> {
-  AppRuntimeController(this.ref) : super(const AppRuntimeState()) {
+  AppRuntimeController(
+    this.ref, {
+    Duration foregroundCatchUpInterval = const Duration(seconds: 30),
+  }) : _foregroundCatchUpInterval = foregroundCatchUpInterval,
+       super(const AppRuntimeState()) {
     _lifecycleSubscription = ref.listen<AppLifecycleState>(
       appLifecycleProvider,
       _handleLifecycleChanged,
@@ -85,6 +89,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   final Ref ref;
+  final Duration _foregroundCatchUpInterval;
   static const Duration _requestTimeout = Duration(seconds: 20);
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
@@ -93,6 +98,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   String? _joinedMemberActivationDid;
   Future<void>? _authenticatedRefreshOperation;
   DateTime? _lastAuthenticatedRefreshStartedAt;
+  Timer? _foregroundCatchUpTimer;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
@@ -156,6 +162,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       );
       unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
       _scheduleReliableSync('startup', immediate: true);
+      _startForegroundCatchUp();
       _ensureRealtimeConnected();
     } catch (error, stackTrace) {
       await _rollbackSessionActivationBestEffort();
@@ -304,6 +311,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _clearAuthenticatedUiState() {
+    _stopForegroundCatchUp();
     ref.read(sessionProvider.notifier).clear();
     ref.read(profileProvider.notifier).clear();
     ref.read(agentsProvider.notifier).clear();
@@ -460,6 +468,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (next == AppLifecycleState.paused ||
         next == AppLifecycleState.inactive ||
         next == AppLifecycleState.hidden) {
+      _stopForegroundCatchUp();
       ref.read(chatThreadsProvider.notifier).trimForAppBackground();
       return;
     }
@@ -470,6 +479,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (session == null) {
       return;
     }
+    _startForegroundCatchUp();
     _ensureRealtimeConnected();
     _scheduleReliableSync('app_resumed');
     unawaited(_refreshAuthenticatedDataInBackground());
@@ -516,6 +526,32 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     unawaited(realtime.start().catchError((_) {}));
+  }
+
+  void _startForegroundCatchUp() {
+    _foregroundCatchUpTimer?.cancel();
+    _foregroundCatchUpTimer = null;
+    if (_foregroundCatchUpInterval <= Duration.zero ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null ||
+        ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+      return;
+    }
+    _foregroundCatchUpTimer = Timer.periodic(_foregroundCatchUpInterval, (_) {
+      if (!mounted ||
+          _isLoggingOut ||
+          ref.read(sessionProvider).session == null ||
+          ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+        _stopForegroundCatchUp();
+        return;
+      }
+      _scheduleReliableSync('foreground_catch_up');
+    });
+  }
+
+  void _stopForegroundCatchUp() {
+    _foregroundCatchUpTimer?.cancel();
+    _foregroundCatchUpTimer = null;
   }
 
   Future<void> _recoverRealtimeSession() async {
@@ -801,6 +837,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   @override
   void dispose() {
+    _stopForegroundCatchUp();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
     _realtimeUpdateSubscription.cancel();

@@ -197,6 +197,37 @@ void main() {
       expect(hyphen.e2eCase.runConfigPath, contains('multi-device-app-pair'));
     });
 
+    test('parses unattended isolated App-pair functional case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair-functional',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair_functional',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceAppPairFunctional);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceAppPairFunctional);
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-two-isolated-app-functional',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'DEVICE-AGENT-SYNC-E2E-001',
+        'DEVICE-MESSAGE-SYNC-E2E-001',
+        'DEVICE-MESSAGE-SYNC-E2E-002',
+      ]);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 30));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/multi_device_app_pair_test.dart',
+      );
+    });
+
     test('parses focused Step4 revoke MLS case', () {
       final options = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -389,7 +420,7 @@ void main() {
             'message',
             'Unsupported E2E case "unknown". '
                 'Use smoke, multi-device, multi-device-remote-join, '
-                'multi-device-app-pair, step4-revoke-mls, full, performance, direct, '
+                'multi-device-app-pair, multi-device-app-pair-functional, step4-revoke-mls, full, performance, direct, '
                 'group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
@@ -608,7 +639,48 @@ void main() {
       expect(config.phone, 'dedicated-phone');
       expect(config.handlePrefix, 'apppair');
       expect(config.allowStagedOtpOnSmsError, isFalse);
+      expect(config.functional, isFalse);
     });
+
+    test('functional mode requires audited CLI and daemon inputs', () {
+      const functionalConfig = DesktopE2eFileConfig(
+        path: '/tmp/e2e.local.yaml',
+        platform: DesktopE2ePlatform.macos,
+        serviceBaseUrl: 'https://awiki.info',
+        didDomain: 'awiki.info',
+        cliBin: '/tmp/awiki-cli',
+        cliSourceRef: '1111111111111111111111111111111111111111',
+        daemonBinary: '/tmp/awiki-deamon',
+        daemonHandle: 'pair-daemon',
+      );
+      final config = RemoteMultiDeviceAppPairConfig.from(
+        fileConfig: functionalConfig,
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
+              '["ssh","ali","resolve-otp"]',
+        },
+        functional: true,
+      );
+
+      expect(config.functional, isTrue);
+      expect(config.cliBin, '/tmp/awiki-cli');
+      expect(config.cliSourceRef, '1111111111111111111111111111111111111111');
+      expect(config.daemonBinary, '/tmp/awiki-deamon');
+      expect(config.daemonHandle, 'pair-daemon');
+    });
+  });
+
+  test('App-pair Daemon root keeps the macOS Unix socket path bounded', () {
+    expect(
+      daemonStateRootFitsUnixSocket('/Users/e2e/awiki-me/.e2e/apf/run-1/d'),
+      isTrue,
+    );
+    expect(
+      daemonStateRootFitsUnixSocket('/${List.filled(120, 'x').join()}'),
+      isFalse,
+    );
   });
 
   group('desktopE2eUtf8Locale', () {

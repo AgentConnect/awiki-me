@@ -15,7 +15,9 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/presentation/agents/agent_ui_messages.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -126,6 +128,60 @@ void main() {
     expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
     expect(state.isAutoSyncingInventory, isFalse);
   });
+
+  test(
+    'foreground Agent page observation reconciles Inventory and pauses in background',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        displayName: 'Daemon 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'claude-code',
+        displayName: 'Claude',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final container = _container(
+        control,
+        controllerFactory: (ref) => AgentsController(
+          ref,
+          inventoryObservationInterval: const Duration(milliseconds: 10),
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+      controller.startInventoryObservation();
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await control.waitForListCalls(2);
+      control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains(runtime.agentDid),
+      );
+
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final callsWhenPaused = control.listAgentsCalls;
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+      expect(control.listAgentsCalls, callsWhenPaused);
+    },
+  );
 
   test(
     'auto sync keeps empty state clean when a background poll fails',
@@ -764,6 +820,62 @@ void main() {
   );
 
   test(
+    'accepted local create reconciles authoritative inventory without a control event',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        handle: 'awiki-daemon-test',
+        displayName: '代理 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime-new',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'codex',
+        handle: 'alice-codex',
+        displayName: 'Alice Codex',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final container = _container(control);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+
+      await controller.createRuntimeAgent(
+        daemon.agentDid,
+        options: const RuntimeAgentCreateOptions(
+          kind: RuntimeAgentKind.codex,
+          handle: 'alice-codex',
+          displayName: 'Alice Codex',
+        ),
+      );
+      await control.waitForListCalls(2);
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+      );
+
+      control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        containsAll(<String>[daemon.agentDid, runtime.agentDid]),
+      );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+    },
+  );
+
+  test(
     'committed create replay cannot complete a different pending intent',
     () async {
       final control = FakeAgentControlService()
@@ -826,6 +938,80 @@ void main() {
         container.read(agentsProvider).agents.map((agent) => agent.agentDid),
         isNot(contains('did:agent:runtime-other')),
       );
+    },
+  );
+
+  test(
+    'committed create replay invalidates remote inventory on another device',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        handle: 'awiki-daemon-test',
+        displayName: '代理 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime-remote',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'claude-code',
+        handle: 'remote-claude',
+        displayName: 'Remote Claude',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final events = _StreamingAgentControlStatusStore();
+      final container = _container(control, statusStore: events);
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+
+      events.emit(
+        AgentControlEvent(
+          messageId: 'msg-remote-create',
+          daemonAgentDid: daemon.agentDid,
+          isReplay: true,
+          payload: const <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'event_id': 'evt-remote-create',
+            'status_scope': 'runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'state': 'ready',
+            'result': <String, Object?>{
+              'command': 'runtime.agent.create',
+              'client_request_id': 'request-from-another-device',
+              'runtime_agent_did': 'did:agent:runtime-remote',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'claude-code',
+              'handle': 'remote-claude',
+              'display_name': 'Remote Claude',
+            },
+          },
+        ),
+      );
+
+      await control.waitForListCalls(2);
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        isNot(contains(runtime.agentDid)),
+        reason: 'a replay is an invalidation, not an optimistic projection',
+      );
+      control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        containsAll(<String>[daemon.agentDid, runtime.agentDid]),
+      );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
     },
   );
 
@@ -3554,6 +3740,7 @@ ProviderContainer _container(
   FakeIdentityCorePort? identities,
   PersonalAgentBindingPort? personalAgentBindings,
   AgentControlStatusStore? statusStore,
+  AgentsController Function(Ref ref)? controllerFactory,
   bool agentImEnabled = true,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
@@ -3577,6 +3764,8 @@ ProviderContainer _container(
         ),
       if (statusStore != null)
         agentControlStatusStoreProvider.overrideWithValue(statusStore),
+      if (controllerFactory != null)
+        agentsProvider.overrideWith(controllerFactory),
       agentImEnabledProvider.overrideWithValue(agentImEnabled),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);

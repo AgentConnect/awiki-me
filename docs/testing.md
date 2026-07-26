@@ -117,7 +117,13 @@ root 和 native Core state root。测试只通过加入端 UI、管理端全局 
 realtime/Core 投影和一次系统 user-presence 推进产品状态，不直接调用 inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()`。跨进程 coordinator 仅在 loopback 内交换阶段
 checkpoint，并在内存中返回 SAS 是否匹配；SAS 不进入配置、日志、报告或 attestation。
-该模式当前仅用于多设备 Join，不能替代其他 suite。
+真实系统授权的安全 suite 当前仅用于多设备 Join，不能替代其他 suite。
+
+无人值守的 `multi-device-app-pair-functional` 使用同一双 bundle/双 Core 隔离模型，但只在
+integration-test provider override 中注入自动确认的 `UserPresencePort`。它不修改生产
+授权实现，也不能生成 LocalAuthentication 通过证据。该 suite 覆盖同一账户的 Daemon、
+Codex 和 Claude Code Agent Inventory 跨设备收敛，以及 App A 发出消息后 App B 的
+own-sync 会话/消息、独立 CLI peer 回复后两台 App 的同会话入站收敛。
 
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-001/002`、
 `DEVICE-REVOKE-E2E-001` 和 `MLS-MULTI-DEVICE-E2E-001/002` 均为 planned、不可执行边界。
@@ -271,6 +277,14 @@ cleanup. Failed driver output is bounded to 80 lines and redacted in memory
 before it can enter diagnostics; raw driver output is neither streamed nor
 persisted. See
 [multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
+
+For unattended Agent/message convergence, use
+`--case multi-device-app-pair-functional`. That YAML must additionally provide
+the audited Debug CLI binary/source revision and Debug Daemon binary/Handle.
+The functional suite still executes the real Join protocol, native Core,
+Daemon, User Service Agent Inventory, message service, realtime paths, and two
+visible App UIs; only the final local user-presence decision is replaced by the
+test-scoped port.
 
 Staged-OTP mode proves only the explicitly reviewed operator test path; it does
 not prove SMS delivery, does not turn the 503 into a product-visible success,

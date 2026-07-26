@@ -78,10 +78,10 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
   void dispose() {
     _disposed = true;
     scheduleMicrotask(_skillOnboardingController.clear);
-    _deferAgentsMutation(
-      (controller) => controller.stopInventoryAutoSync(),
-      requireMounted: false,
-    );
+    _deferAgentsMutation((controller) {
+      controller.stopInventoryAutoSync();
+      controller.stopInventoryObservation();
+    }, requireMounted: false);
     super.dispose();
   }
 
@@ -94,6 +94,7 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     if (_disposed || !mounted) {
       return;
     }
+    _agentsController.startInventoryObservation();
     final state = ref.read(agentsProvider);
     if (state.error == null &&
         !state.isLoading &&

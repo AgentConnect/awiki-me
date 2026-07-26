@@ -346,7 +346,16 @@ class AppTestCatalog {
         'loopback coordinator carries only lifecycle checkpoints and compares '
         'transient SAS values in memory; it cannot call product APIs or write '
         'SAS evidence. This mode currently covers only '
-        '`DEVICE-JOIN-E2E-004`, not general messaging or other suites.',
+        '`DEVICE-JOIN-E2E-004` and retains real macOS user presence.',
+      )
+      ..writeln(
+        '- `multi-device-app-pair-functional` reuses the same two isolated '
+        'App processes but injects an E2E-only `UserPresencePort` so Agent '
+        'inventory and Direct-message convergence can run unattended. It '
+        'covers one shared Daemon plus Codex/Claude runtime projection, App A '
+        'outbound own-sync on App B, and one required-secure CLI peer reply '
+        'on both Apps. It does not attest LocalAuthentication and never '
+        'changes the production user-presence implementation.',
       )
       ..writeln(
         '- `DEVICE-JOIN-E2E-003`, `ROOT-TRANSFER-E2E-002`, '

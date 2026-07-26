@@ -11,7 +11,8 @@
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Android/iOS remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
-   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。
+   - Realtime/Push 都只是同步提示；前台会话必须以有界周期触发 Core reliable sync，补偿提示丢失，并在后台停止，不能把 WebSocket 投递当作可靠消息事实源。
+   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`awiki.info`、`anpclaw.com` 时启用。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
    - 平台 runner 变更只触及任务明确要求的平台，避免提交无关生成文件。
@@ -65,6 +66,7 @@ dart run tests/e2e/runner.dart --case multi-device
 # Requires reviewed awiki.info rollout/account env and real macOS user presence:
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 ```
@@ -90,6 +92,10 @@ root 覆盖 Add/Welcome、未来群文本/附件以及精确设备 Remove；实�
 bundle ID、独立 Flutter build root 与独立 native Core state root 的管理端/加入端 App，
 再由两个 driver 并发操作真实 UI。loopback coordinator 只交换生命周期 checkpoint，并在
 内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。当前该模式仅注册
-`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。
+`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。独立的
+`multi-device-app-pair-functional` 只在 integration-test provider override 中自动确认
+user presence，用真实双 App、Daemon、Agent Inventory、CLI peer 和远端消息链路验证
+Daemon/Codex/Claude Agent 跨设备收敛、own-sync 及双端入站消息；它不修改生产授权实现，
+也不提供 LocalAuthentication 安全 attestation。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。
