@@ -266,7 +266,37 @@ void main() {
     });
   });
 
-  group('remote foreground CLI Join approval prompts', () {
+  group('remote foreground CLI Join SAS prompts', () {
+    test(
+      'recognizes the joining-device poll prompt only at its TTY boundary',
+      () {
+        expect(
+          remoteMultiDeviceCliPollSas(
+            utf8.encode("This device's one-time SAS: 482917\r\n"),
+          ),
+          '482917',
+        );
+        expect(
+          remoteMultiDeviceCliPollSas(
+            utf8.encode("This device's one-time SAS: 48291"),
+          ),
+          isNull,
+        );
+        expect(
+          remoteMultiDeviceCliPollSas(
+            utf8.encode("This device's one-time SAS: 4829179\r\n"),
+          ),
+          isNull,
+        );
+        expect(
+          remoteMultiDeviceCliPollSas(
+            utf8.encode('{"remote_state":"response_verified","sas":"482917"}'),
+          ),
+          isNull,
+        );
+      },
+    );
+
     test('recognizes only the exact production prompts', () {
       final transcript = utf8.encode(
         'Compare this one-time SAS with the new device: 482917\r\n'

@@ -1,5 +1,6 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
-//          production AppBootstrap/native Core, and independent CLI/App roots.
+//          production AppBootstrap/native Core, independent CLI/App roots, and
+//          a foreground pseudo-terminal for the CLI-only SAS display boundary.
 // [OUTPUT]: Two real, notification-driven, member-only Device Join scenarios.
 // [POS]: Step 2 Join product E2E; no Registry discovery, implicit verification,
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
@@ -238,7 +239,12 @@ void main() {
       await _pumpUntil(
         tester,
         () {
-          final progress = container.read(devicesProvider).activeJoin;
+          final state = container.read(devicesProvider);
+          _failOnDeviceError(
+            state,
+            'The App failed to finalize the joined member',
+          );
+          final progress = state.activeJoin;
           final authorized = progress?.authorizedDevice;
           return progress?.phase == DeviceJoinPhase.authorized &&
               progress?.remoteState == DeviceJoinRemoteState.consumed &&
@@ -1442,13 +1448,93 @@ class _JoinCli {
         _data(payload, action: 'device_join_poll'),
       );
       _requireJoinIdentity(progress, sessionId, expectedDeviceId);
-      if (progress.remoteState == 'response_verified' &&
-          _validSas(progress.sas ?? '')) {
-        return progress;
+      if (progress.sas != null) {
+        fail('The joining CLI exposed a SAS in structured output.');
+      }
+      if (progress.remoteState == 'response_verified') {
+        final sas = await _readPollSasInForeground(sessionId);
+        return _JoinProgress(
+          joinSessionId: progress.joinSessionId,
+          protocolDeviceId: progress.protocolDeviceId,
+          remoteState: progress.remoteState,
+          sas: sas,
+        );
       }
       await Future<void>.delayed(const Duration(milliseconds: 750));
     }
-    fail('The joining CLI did not derive a SAS in time.');
+    fail('The joining CLI did not reach response_verified in time.');
+  }
+
+  Future<String> _readPollSasInForeground(String sessionId) async {
+    Process? process;
+    final transcript = <int>[];
+    String? sas;
+    var invalidOutput = false;
+    var exitCode = -1;
+    try {
+      process = await Process.start(
+        '/usr/bin/script',
+        <String>[
+          '-q',
+          '/dev/null',
+          config.cliBin,
+          '--format',
+          'json',
+          'id',
+          'device',
+          'join',
+          'poll',
+          '--session',
+          sessionId,
+        ],
+        environment: _environment(),
+        includeParentEnvironment: false,
+        runInShell: false,
+      );
+
+      void consume(List<int> bytes) {
+        if (invalidOutput) return;
+        if (transcript.length + bytes.length > 64 * 1024) {
+          invalidOutput = true;
+          process?.kill(ProcessSignal.sigkill);
+          return;
+        }
+        transcript.addAll(bytes);
+      }
+
+      final outputDone = Future.wait<void>(<Future<void>>[
+        process.stdout.listen(consume).asFuture<void>(),
+        process.stderr.listen(consume).asFuture<void>(),
+      ]);
+      try {
+        exitCode = await process.exitCode.timeout(_remoteTimeout);
+      } on TimeoutException {
+        process.kill(ProcessSignal.sigkill);
+      }
+      await outputDone;
+      if (!invalidOutput && exitCode == 0) {
+        sas = remoteMultiDeviceCliPollSas(transcript);
+      }
+    } on Object {
+      invalidOutput = true;
+    } finally {
+      if (process != null && exitCode < 0) {
+        process.kill(ProcessSignal.sigkill);
+        try {
+          await process.exitCode.timeout(const Duration(seconds: 5));
+        } on Object {
+          // The in-memory transcript is scrubbed below.
+        }
+      }
+      transcript.fillRange(0, transcript.length, 0);
+      transcript.clear();
+    }
+    if (invalidOutput || exitCode != 0 || !_validSas(sas ?? '')) {
+      fail(
+        'The joining CLI did not expose its SAS through the foreground TTY.',
+      );
+    }
+    return sas!;
   }
 
   Future<void> approveAsMemberInForeground({

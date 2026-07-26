@@ -1,5 +1,5 @@
 // [INPUT]: Session identity, Device Registry/Join/revoke services, root-transfer service, and UI intents.
-// [OUTPUT]: Secret-free device list, Join, revoke, and admin-readiness presentation state.
+// [OUTPUT]: Secret-free device list, Join continuity, revoke, and admin-readiness presentation state.
 // [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
 
 import 'dart:async';
@@ -205,7 +205,20 @@ class DevicesController extends StateNotifier<DevicesState> {
     _revokeOperationTargetDeviceId = null;
     _revokeClosedOutcomeCategory = null;
     _revokeRpcCompleted = false;
-    state = const DevicesState();
+    final activeJoin = state.activeJoin;
+    final preservesJoinedMember =
+        previous?.session == null &&
+        next.session?.did == activeJoin?.did &&
+        activeJoin?.side == DeviceJoinSide.newDevice &&
+        activeJoin?.phase == DeviceJoinPhase.authorized &&
+        activeJoin?.remoteState == DeviceJoinRemoteState.consumed &&
+        activeJoin?.sas == null;
+    state = preservesJoinedMember
+        ? DevicesState(
+            activeJoin: activeJoin,
+            localJoins: <DeviceJoinProgress>[activeJoin!],
+          )
+        : const DevicesState();
   }
 
   void _handleLifecycleChanged(

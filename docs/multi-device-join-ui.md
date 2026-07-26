@@ -54,6 +54,12 @@ HTTP pending list、status timer 或 admin poll 发现/推进 Join，只恢复 C
 报告；终态由 Core 投影，重复点击由 service/provider 和 Core 幂等门禁共同拒绝。请求已由
 另一台管理设备处理时只读展示，不能继续验证或批准。
 
+新设备的 `authorized + consumed` 投影通过精确 DID 激活本地 member 会话时，Devices
+provider 只跨这一次“未登录 → 同 DID”切换保留该终态，避免通用 session reset 把成功页
+提前清空；登录其他 DID、退出登录或后续 session 切换仍完整清空设备状态。页面轮询始终由
+widget lifecycle 约束：每个异步边界后重新检查页面是否仍挂载，页面销毁后不得读取
+Riverpod `ref`、激活身份或继续更新 UI。
+
 ## 3. 安全边界
 
 AWiki Me 只持有可展示的设备摘要、Join 阶段和一次性审批句柄。设备签名私钥、设备

@@ -136,6 +136,8 @@ non-admin member in both Registries. The App-new-device direction also restarts
 from the same pending Core session and rejects persisted SAS. The suite fails
 closed unless the dedicated account allowlist, JSON-argv OTP resolver, exact
 CLI source revision, and manual system-auth prerequisites are explicit. The
+joining CLI exposes its SAS only through the foreground TTY prompt; JSON remains
+redacted and is used only for the public `response_verified` state. The
 optional synthetic-number staged-OTP mode is an explicit operator test path
 with fixed resolver argv and an exact deployed
 `[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` RFC7807 gate;

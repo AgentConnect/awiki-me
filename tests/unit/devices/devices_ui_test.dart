@@ -564,8 +564,64 @@ void main() {
     expect(gateway.lastLoginCredentialName, testDid);
     expect(container.read(sessionProvider).session?.did, testDid);
     expect(container.read(appRuntimeProvider).activatedDid, testDid);
+    final terminalJoin = container.read(devicesProvider).activeJoin;
+    expect(terminalJoin?.phase, DeviceJoinPhase.authorized);
+    expect(terminalJoin?.authorizedDevice?.protocolDeviceId, 'member-new');
     expect(find.text('管理设备等待根密钥'), findsNothing);
   });
+
+  testWidgets(
+    'disposing during new-device poll cannot resume page activation',
+    (tester) async {
+      final pollStarted = Completer<void>();
+      final pollResult = Completer<DeviceJoinProgress>();
+      final core = FakeDeviceManagementCore()
+        ..localSessions = <DeviceJoinProgress>[
+          testJoinProgress(
+            side: DeviceJoinSide.newDevice,
+            phase: DeviceJoinPhase.pending,
+            remoteState: DeviceJoinRemoteState.pending,
+            sas: null,
+          ),
+        ]
+        ..pollNewLoader = (joinSessionId) {
+          if (!pollStarted.isCompleted) pollStarted.complete();
+          return pollResult.future;
+        };
+      final gateway = FakeAwikiGateway()
+        ..loginResult = const SessionIdentity(
+          did: testDid,
+          credentialName: 'member-new-local',
+          displayName: 'Alice',
+          handle: 'alice',
+        );
+
+      await tester.pumpWidget(
+        _app(
+          const DeviceJoinPage(autoPoll: false),
+          core,
+          gateway: gateway,
+          session: null,
+        ),
+      );
+      await tester.pump();
+      await pollStarted.future;
+      await tester.pumpWidget(const SizedBox.shrink());
+      pollResult.complete(
+        _authorizedNewDeviceProgress(
+          authorizedDevice: _device(
+            id: 'member-new',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(gateway.loginCalls, 0);
+    },
+  );
 
   testWidgets(
     'restart rehydrates authorized device projection before activation',

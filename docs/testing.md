@@ -104,8 +104,9 @@ OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS �
 `DEVICE-JOIN-E2E-001/002` 由独立的 `multi-device-remote-join` suite 承载；它们不会混入
 本地 capability gate。该 suite 只覆盖 App 新设备 + CLI 管理设备和 App 管理设备 + CLI
 新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
-双端 SAS 和场景级 attestation；`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化
-SAS，App 批准要求真实 macOS user-presence。专用账号 allowlist 或执行环境尚未全部就绪时，
+双端 SAS 和场景级 attestation；加入端 CLI 的 SAS 只从前台 TTY 提示读取，结构化 JSON
+必须保持脱敏。`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化 SAS，App 批准要求
+真实 macOS user-presence。专用账号 allowlist 或执行环境尚未全部就绪时，
 这个入口不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、
 adapter、UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端
 case。

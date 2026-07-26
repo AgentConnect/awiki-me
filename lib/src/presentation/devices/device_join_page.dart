@@ -1,5 +1,5 @@
-// [INPUT]: New-device Join projection, user form input, and secret-free authorized-device summary.
-// [OUTPUT]: OTP/SAS Join UI plus exact-DID member session activation.
+// [INPUT]: New-device Join projection, user form input, widget lifecycle, and authorized-device summary.
+// [OUTPUT]: Lifecycle-safe OTP/SAS polling plus exact-DID member session activation.
 // [POS]: New-device pairing surface; it never persists OTP, SAS, or root material.
 
 import 'dart:async';
@@ -45,14 +45,12 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await ref.read(devicesProvider.notifier).loadNewDevice();
+      if (!mounted) return;
       await _activateAuthorizedMember();
     });
     if (widget.autoPoll) {
-      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-        if (mounted) {
-          await ref.read(devicesProvider.notifier).pollNewDeviceActive();
-          await _activateAuthorizedMember();
-        }
+      _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(_pollAndActivate());
       });
     }
   }
@@ -294,15 +292,21 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           phone: _phoneController.text,
           otp: otp,
         );
+    if (!mounted) return;
     await _activateAuthorizedMember();
   }
 
-  Future<void> _pollNow() async {
+  Future<void> _pollNow() => _pollAndActivate();
+
+  Future<void> _pollAndActivate() async {
+    if (!mounted) return;
     await ref.read(devicesProvider.notifier).pollNewDeviceActive();
+    if (!mounted) return;
     await _activateAuthorizedMember();
   }
 
   Future<void> _activateAuthorizedMember() async {
+    if (!mounted) return;
     var progress = ref.read(devicesProvider).activeJoin;
     if (progress == null ||
         progress.side != DeviceJoinSide.newDevice ||
@@ -320,6 +324,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     try {
       if (progress.authorizedDevice == null) {
         await ref.read(devicesProvider.notifier).pollNewDeviceActive();
+        if (!mounted) return;
         progress = ref.read(devicesProvider).activeJoin;
       }
       final authorized = progress?.authorizedDevice;

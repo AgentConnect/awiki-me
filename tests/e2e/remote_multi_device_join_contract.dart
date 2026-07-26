@@ -1,7 +1,7 @@
 // [INPUT]: Operator-provided OTP resolver argv, redacted SMS response metadata,
-//          and in-memory output from the real foreground CLI approval process.
+//          and in-memory output from real foreground CLI poll/approval processes.
 // [OUTPUT]: Strict, secret-free validation, resolver-continuation decisions,
-//           and exact CLI prompt recognition for remote Join E2E only.
+//           and exact CLI SAS prompt recognition for remote Join E2E only.
 // [POS]: Shared runner/integration-test security gate; rejects provider drift,
 //        extra markers, and secret-like details before invoking the resolver.
 
@@ -10,6 +10,7 @@ import 'dart:convert';
 const String remoteMultiDeviceStagedOtpFlag =
     'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR';
 const String _stagedSmsProviderCode = 'MOBILE_NUMBER_ILLEGAL';
+const String _cliPollSasPrefix = "This device's one-time SAS: ";
 const String _cliApprovalSasPrefix =
     'Compare this one-time SAS with the new device: ';
 const String _cliApprovalSasInputPrompt =
@@ -163,8 +164,14 @@ bool isSixDigitAsciiOtp(String value) {
 /// Extracts the locally derived SAS only from the production CLI's exact
 /// foreground prompt. Callers must keep the transcript in memory and erase it
 /// after the child process exits; this helper never renders or persists it.
-String? remoteMultiDeviceCliApprovalSas(List<int> transcript) {
-  final prefix = _cliApprovalSasPrefix.codeUnits;
+String? remoteMultiDeviceCliPollSas(List<int> transcript) =>
+    _cliSasAfterPrefix(transcript, _cliPollSasPrefix);
+
+String? remoteMultiDeviceCliApprovalSas(List<int> transcript) =>
+    _cliSasAfterPrefix(transcript, _cliApprovalSasPrefix);
+
+String? _cliSasAfterPrefix(List<int> transcript, String promptPrefix) {
+  final prefix = promptPrefix.codeUnits;
   final offset = _indexOfBytes(transcript, prefix);
   if (offset < 0) {
     return null;

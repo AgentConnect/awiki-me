@@ -41,6 +41,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   DeviceJoinProgress? cancelResult;
   Object? registryError;
   Future<DeviceRegistrySnapshot> Function(String selector)? registryLoader;
+  Future<DeviceJoinProgress> Function(String joinSessionId)? pollNewLoader;
   Object? pollError;
   Object? revokeError;
   Future<DeviceRevokeResult> Function({
@@ -221,6 +222,8 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   Future<DeviceJoinProgress> pollNewDeviceJoin(String joinSessionId) async {
     pollCalls += 1;
     if (pollError != null) throw pollError!;
+    final loader = pollNewLoader;
+    if (loader != null) return loader(joinSessionId);
     return pollNewResult ??
         testJoinProgress(
           side: DeviceJoinSide.newDevice,
