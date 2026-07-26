@@ -1,8 +1,12 @@
+import 'dart:async';
+
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -101,6 +105,54 @@ void main() {
       expect(container.read(uiFeedbackProvider), isNull);
     });
 
+    test('会话 Patch 取消挂起时仍会删除本地凭证', () async {
+      const session = SessionIdentity(
+        did: 'did:test:123',
+        credentialName: 'default',
+        displayName: 'Alice',
+        handle: 'alice',
+        jwtToken: 'token-123',
+      );
+      final hangingConversationService = _HangingCancelConversationService(
+        gateway,
+      );
+      final isolatedContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            conversationService: hangingConversationService,
+          ),
+          realtimeGatewayProvider.overrideWithValue(FakeRealtimeGateway()),
+          notificationFacadeProvider.overrideWithValue(
+            FakeNotificationFacade(),
+          ),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      addTearDown(isolatedContainer.dispose);
+      gateway.localCredentials = const <SessionIdentity>[session];
+      isolatedContainer.read(sessionProvider.notifier).setSession(session);
+      isolatedContainer.read(sessionProvider.notifier).setLocalCredentials([
+        session,
+      ]);
+      await isolatedContainer
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+
+      await isolatedContainer
+          .read(appRuntimeProvider.notifier)
+          .deleteCurrentCredential()
+          .timeout(const Duration(seconds: 1));
+
+      expect(hangingConversationService.cancelStarted.isCompleted, isTrue);
+      expect(gateway.deleteLocalCredentialCalls, 1);
+      expect(isolatedContainer.read(sessionProvider).session, isNull);
+      expect(isolatedContainer.read(appRuntimeProvider).isBusy, isFalse);
+    });
+
     test('重新识别本地凭证会刷新列表并写入反馈', () async {
       gateway.localCredentials = const <SessionIdentity>[
         SessionIdentity(
@@ -140,4 +192,28 @@ void main() {
       expect(container.read(uiFeedbackProvider)?.message.value, '1');
     });
   });
+}
+
+class _HangingCancelConversationService extends FakeConversationService {
+  _HangingCancelConversationService(super.gateway) {
+    _controller = StreamController<ConversationListPatch>(
+      onCancel: () {
+        if (!cancelStarted.isCompleted) {
+          cancelStarted.complete();
+        }
+        return _neverCancelled.future;
+      },
+    );
+  }
+
+  final Completer<void> cancelStarted = Completer<void>();
+  final Completer<void> _neverCancelled = Completer<void>();
+  late final StreamController<ConversationListPatch> _controller;
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    return _controller.stream;
+  }
 }

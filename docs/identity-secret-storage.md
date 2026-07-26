@@ -84,6 +84,12 @@ identity 指针并从 UI session 脱离，再调用 Core 的离线 identity-reti
 realtime stop 与 runtime dispose 只做 best-effort 尾部清理，不得阻塞或改变本地删除结果，
 也不得被通用 UI timeout 误报成网络超时。
 
+会话列表、timeline 等 presentation Patch subscription 的取消同样不是 identity-retirement
+事务前置条件。App 可以立即清空内存 UI 投影并在后台取消 subscription，但必须随即进入 Core
+删除；不得等待一个 idle native stream 的 `cancel()` 才开始删除身份。Core 删除成功后再刷新
+本地身份列表，删除失败则以 Core 事务结果为权威，不能用 presentation cleanup 的完成与否
+推断凭证是否仍存在。
+
 Core 负责 registry/default pointer tombstone、身份目录和 exact `identity_id` Vault records
 的顺序、一致性与启动恢复。App 不枚举或删除 Vault records。中途崩溃时 Core open 继续未完成
 阶段；已完成的 identity-ID tombstone 还会清理由删除开始前已进入执行、但稍后才写回的凭证。
@@ -103,6 +109,9 @@ Team/bundle identity、dev/prod service隔离、revision 1持续存在和duplica
 - `tests/unit/data/im_core/awiki_im_core_secret_storage_test.dart`
 - `tests/unit/data/im_core/awiki_im_core_runtime_test.dart`
 - `tests/unit/data/tenant/app_tenant_store_test.dart`
+- `tests/unit/app_runtime_archive_actions_test.dart`
+- `IDENTITY-DELETE-E2E-001`：真实 native Core、idle conversation Patch、删除凭证和独立
+  Flutter 冷启动不恢复身份。
 - `tests/unit/tenant_runtime_transition_test.dart`
 - `tests/e2e/flutter/native/im_core_open_smoke_test.dart`
 - `tests/e2e/flutter/native/secure_storage_smoke_test.dart`

@@ -305,6 +305,7 @@ List<Override> fakeApplicationServiceOverrides(
   FakeRealtimeGateway? realtimeGateway,
   FakeMessageSyncService? messageSyncService,
   FakeMessagingService? messagingService,
+  ConversationService? conversationService,
   AttachmentCacheService? attachmentCacheService,
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
@@ -320,7 +321,7 @@ List<Override> fakeApplicationServiceOverrides(
     ),
     peerIdentityServiceProvider.overrideWithValue(FakePeerIdentityService()),
     conversationServiceProvider.overrideWithValue(
-      FakeConversationService(gateway),
+      conversationService ?? FakeConversationService(gateway),
     ),
     messagingServiceProvider.overrideWithValue(
       messagingService ?? FakeMessagingService(gateway),

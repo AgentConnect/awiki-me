@@ -119,6 +119,7 @@ const List<String> _desktopCliPeerInboundCaseIds = <String>[
 ];
 const List<String> _desktopCliPeerRestartCaseIds = <String>[
   'PROCESS-RESTART-E2E-001',
+  'IDENTITY-DELETE-E2E-001',
 ];
 const List<String> _desktopCliPeerDisplayNameFallbackCaseIds = <String>[
   'AUTH-E2E-001',
@@ -285,6 +286,7 @@ class DesktopE2eRunner {
   late final File failureObservationFile;
   late final File resourceLedgerFile;
   late final File processRestartHandoffFile;
+  late final File credentialDeleteMarkerFile;
   late final DesktopFlutterBuildIsolation flutterBuildIsolation;
   late final DesktopE2eSuiteManifest suiteManifest;
   late final DesktopE2eSuiteDefinition suiteDefinition;
@@ -367,6 +369,9 @@ class DesktopE2eRunner {
     processRestartHandoffFile = File(
       '${reportDir.parent.path}/process_restart_handoff.json',
     );
+    credentialDeleteMarkerFile = File(
+      '${processRestartHandoffFile.path}.credential_deleted.json',
+    );
     _addRuntimeSecret(reportDir.path);
     _addRuntimeSecret(cliWorkspaceDir.path);
     _addRuntimeSecret(cliHomeDir.path);
@@ -387,6 +392,7 @@ class DesktopE2eRunner {
     _addRuntimeSecret(failureObservationFile.path);
     _addRuntimeSecret(resourceLedgerFile.path);
     _addRuntimeSecret(processRestartHandoffFile.path);
+    _addRuntimeSecret(credentialDeleteMarkerFile.path);
     if (!options.dryRun && !options.prepareOnly) {
       if (caseAttestationFile.existsSync()) {
         caseAttestationFile.deleteSync();
@@ -413,6 +419,9 @@ class DesktopE2eRunner {
       }
       if (processRestartHandoffFile.existsSync()) {
         processRestartHandoffFile.deleteSync();
+      }
+      if (credentialDeleteMarkerFile.existsSync()) {
+        credentialDeleteMarkerFile.deleteSync();
       }
     }
     if (!options.dryRun && options.e2eCase.requiresCliPeer) {
@@ -1144,6 +1153,24 @@ class DesktopE2eRunner {
           '--dart-define=AWIKI_E2E=true',
           '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
           'integration_test/desktop_cli_peer_restart_phase_b_test.dart',
+          '-d',
+          peerConfig.platform.name,
+          ..._caseAttestationDartDefines(suiteDefinition.caseIds),
+        ],
+        platform: peerConfig.platform,
+        timeout: _effectiveFlutterTimeout(peerConfig),
+      );
+      if (!options.dryRun && !credentialDeleteMarkerFile.existsSync()) {
+        throw E2eFailure(
+          'Credential-delete phase B did not write its completion evidence.',
+        );
+      }
+      await _runFlutterArgs(
+        <String>[
+          'test',
+          '--dart-define=AWIKI_E2E=true',
+          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+          'integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart',
           '-d',
           peerConfig.platform.name,
           ..._caseAttestationDartDefines(suiteDefinition.caseIds),

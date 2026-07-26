@@ -346,7 +346,8 @@
         "read_state"
       ],
       "caseIds": [
-        "PROCESS-RESTART-E2E-001"
+        "PROCESS-RESTART-E2E-001",
+        "IDENTITY-DELETE-E2E-001"
       ]
     },
     "display-name-fallback": {

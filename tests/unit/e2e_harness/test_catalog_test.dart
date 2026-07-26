@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(66));
+      expect(catalog.cases, hasLength(67));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -24,6 +24,7 @@ void main() {
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+          'IDENTITY-DELETE-E2E-001',
         ]),
       );
       expect(

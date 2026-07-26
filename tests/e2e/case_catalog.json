@@ -1647,6 +1647,53 @@
       "catalogStatus": "active"
     },
     {
+      "caseId": "IDENTITY-DELETE-E2E-001",
+      "feature": "Current credential deletion across idle Patch and cold restart",
+      "layer": "product_ui",
+      "preconditions": "A real native Core identity is active in an isolated App state root, the committed conversation Patch stream is attached and idle, and the runner can launch a third independent Flutter process against that same root.",
+      "action": "After the normal cold-restart conversation assertions, delete the current credential while the conversation Patch stream is idle; then start another Flutter process against the same App state root.",
+      "exactOracles": [
+        "Deletion completes without waiting for presentation-stream cancellation, the native identity is absent, the active identity is not restored after cold start, and onboarding is visible without a persistent loading mask."
+      ],
+      "negativeChecks": [
+        "A hanging Patch cancellation, retained native identity, retained active pointer, automatic relogin, same-process-only reopen, or persistent busy/loading state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-im-core-dart",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/process_restart_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-DELETE-E2E-001:idle_conversation_patch_delete_completed",
+          "IDENTITY-DELETE-E2E-001:native_identity_absent_after_delete",
+          "IDENTITY-DELETE-E2E-001:distinct_flutter_process_same_state_root",
+          "IDENTITY-DELETE-E2E-001:active_identity_not_restored_after_cold_start",
+          "IDENTITY-DELETE-E2E-001:onboarding_visible_without_loading_mask"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-DELETE-E2E-001:native_identity_absent_after_delete",
+            "IDENTITY-DELETE-E2E-001:active_identity_not_restored_after_cold_start",
+            "IDENTITY-DELETE-E2E-001:onboarding_visible_without_loading_mask"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-DELETE-E2E-001:idle_conversation_patch_delete_completed",
+            "IDENTITY-DELETE-E2E-001:native_identity_absent_after_delete",
+            "IDENTITY-DELETE-E2E-001:distinct_flutter_process_same_state_root",
+            "IDENTITY-DELETE-E2E-001:active_identity_not_restored_after_cold_start",
+            "IDENTITY-DELETE-E2E-001:onboarding_visible_without_loading_mask"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "PROCESS-RESTART-E2E-001",
       "feature": "Canonical conversation cold-process restart",
       "layer": "product_ui",

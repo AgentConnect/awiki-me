@@ -242,7 +242,10 @@ void main() {
 
       expect(restart.e2eCase, DesktopE2eCase.restart);
       expect(coldRestart.e2eCase, DesktopE2eCase.restart);
-      expect(restart.e2eCase.caseIds, <String>['PROCESS-RESTART-E2E-001']);
+      expect(restart.e2eCase.caseIds, <String>[
+        'PROCESS-RESTART-E2E-001',
+        'IDENTITY-DELETE-E2E-001',
+      ]);
     });
 
     test('parses App display-name fallback case aliases', () {
@@ -1518,7 +1521,7 @@ cliPeer:
       ]);
     });
 
-    test('process-restart launches two Flutter test processes', () async {
+    test('process-restart launches three Flutter test processes', () async {
       final root = await Directory.systemTemp.createTemp(
         'awiki_process_restart_runner_test_',
       );
@@ -1563,10 +1566,14 @@ cliPeer:
         contains('integration_test/desktop_cli_peer_restart_phase_b_test.dart'),
       );
       expect(
-        RegExp(
-          'desktop_cli_peer_restart_phase_[ab]_test\\.dart',
-        ).allMatches(log),
-        hasLength(2),
+        log,
+        contains(
+          'integration_test/desktop_cli_peer_credential_delete_phase_c_test.dart',
+        ),
+      );
+      expect(
+        RegExp('integration_test/desktop_cli_peer_').allMatches(log),
+        hasLength(3),
       );
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run-restart/reports/timings.json',
@@ -1574,7 +1581,10 @@ cliPeer:
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'restart');
-      expect(decoded['caseIds'], <dynamic>['PROCESS-RESTART-E2E-001']);
+      expect(decoded['caseIds'], <dynamic>[
+        'PROCESS-RESTART-E2E-001',
+        'IDENTITY-DELETE-E2E-001',
+      ]);
     });
 
     test('generates Linux commands and redacts secrets', () async {

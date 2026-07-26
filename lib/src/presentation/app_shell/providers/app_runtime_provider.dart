@@ -282,15 +282,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       _isLoggingOut = true;
       try {
         state = state.copyWith(activatedDid: null);
-        ref.read(sessionProvider.notifier).clear();
-        ref.read(profileProvider.notifier).clear();
-        ref.read(agentsProvider.notifier).clear();
-        ref.read(selectedConversationProvider.notifier).clearSelection();
-        await ref.read(conversationListProvider.notifier).clear();
-        ref.read(chatThreadsProvider.notifier).clear();
-        ref.read(friendsProvider.notifier).clear();
-        ref.read(peerDisplayProfileProvider.notifier).clear();
-        ref.read(groupProvider.notifier).clear();
+        _clearAuthenticatedUiState();
         await ref
             .read(appSessionServiceProvider)
             .deleteLocalIdentity(current.credentialName);

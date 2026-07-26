@@ -43,6 +43,7 @@ import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';

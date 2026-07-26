@@ -1,6 +1,7 @@
 part of '../desktop_cli_peer_e2e.dart';
 
 const String _processRestartCaseId = 'PROCESS-RESTART-E2E-001';
+const String _credentialDeleteCaseId = 'IDENTITY-DELETE-E2E-001';
 
 void runDesktopCliPeerProcessRestartPhaseA() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -373,6 +374,107 @@ void runDesktopCliPeerProcessRestartPhaseB() {
         'group_exact_one_after_cold_start',
         'exact_messages_and_unread_restored',
         'cached_names_visible_without_fallback',
+      ],
+    );
+
+    await robot.container
+        .read(appRuntimeProvider.notifier)
+        .deleteCurrentCredential()
+        .timeout(const Duration(seconds: 15));
+    await tester.pumpAndSettle();
+    expect(robot.container.read(sessionProvider).session, isNull);
+    expect(robot.container.read(appRuntimeProvider).isBusy, isFalse);
+    final identities = await bootstrap.appSessionService!.listLocalIdentities();
+    expect(
+      identities.where((identity) => identity.did == handoff.ownerDid),
+      isEmpty,
+    );
+    final marker = File('$handoffPath.credential_deleted.json');
+    await marker.writeAsString(
+      const JsonEncoder.withIndent(' ').convert(<String, Object?>{
+        'schemaVersion': 1,
+        'runId': config.runId,
+        'phaseBProcessId': pid,
+        'appStateRootDigest': handoff.appStateRootDigest,
+        'ownerDid': handoff.ownerDid,
+      }),
+      flush: true,
+    );
+    await E2eScenarioProgressWriter.record(
+      'credential_delete_phase_b_completed',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap.dispose();
+    disposed = true;
+  });
+}
+
+void runDesktopCliPeerCredentialDeletePhaseC() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('Credential deletion survives a cold App restart', (
+    tester,
+  ) async {
+    final startedAt = DateTime.now().toUtc();
+    final config = _DesktopCliPeerSmokeConfig.load();
+    expect(config.e2eCase, DesktopCliPeerIntegrationCase.processRestart);
+    final handoffPath = config.processRestartHandoffPath?.trim() ?? '';
+    if (handoffPath.isEmpty) {
+      fail('Credential-delete E2E requires processRestart.handoffPath.');
+    }
+    final handoff = _ProcessRestartHandoff.read(File(handoffPath));
+    final markerFile = File('$handoffPath.credential_deleted.json');
+    if (!markerFile.existsSync()) {
+      fail('Credential-delete phase B did not write its completion marker.');
+    }
+    final marker = _stringKeyMap(
+      jsonDecode(await markerFile.readAsString()),
+      path: 'credentialDelete.marker',
+    );
+    expect(marker['schemaVersion'], 1);
+    expect(marker['runId'], config.runId);
+    expect(marker['phaseBProcessId'], isNot(pid));
+    expect(marker['appStateRootDigest'], handoff.appStateRootDigest);
+    expect(marker['ownerDid'], handoff.ownerDid);
+
+    final bootstrap = await AppBootstrap.create(
+      environment: config.environment,
+      appStateRoot: config.appStateRoot,
+    );
+    var disposed = false;
+    addTearDown(() async {
+      if (!disposed) {
+        await bootstrap.dispose();
+      }
+    });
+    expect(await bootstrap.appSessionService!.restoreSession(), isNull);
+    final identities = await bootstrap.appSessionService!.listLocalIdentities();
+    expect(
+      identities.where((identity) => identity.did == handoff.ownerDid),
+      isEmpty,
+    );
+
+    await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppShell), findsOneWidget);
+    expect(find.byType(OnboardingPage), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+    expect(container.read(sessionProvider).session, isNull);
+    expect(container.read(appRuntimeProvider).isBusy, isFalse);
+
+    await E2eCaseAttestationWriter.markPassed(
+      _credentialDeleteCaseId,
+      startedAt: startedAt,
+      phases: const <String>[
+        'idle_conversation_patch_delete_completed',
+        'native_identity_absent_after_delete',
+        'distinct_flutter_process_same_state_root',
+        'active_identity_not_restored_after_cold_start',
+        'onboarding_visible_without_loading_mask',
       ],
     );
 
