@@ -111,6 +111,14 @@ OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS �
 adapter、UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端
 case。
 
+`DEVICE-JOIN-E2E-004` 由 `multi-device-app-pair` suite 承载。它在同一台 macOS 上构建并
+并发驱动两个真实 AWiki Me Debug bundle；两端拥有不同的稳定 bundle ID、Flutter build
+root 和 native Core state root。测试只通过加入端 UI、管理端全局 Join 审批入口、真实
+realtime/Core 投影和一次系统 user-presence 推进产品状态，不直接调用 inbox hydration、
+`requestSync()` 或 `refreshJoinInbox()`。跨进程 coordinator 仅在 loopback 内交换阶段
+checkpoint，并在内存中返回 SAS 是否匹配；SAS 不进入配置、日志、报告或 attestation。
+该模式当前仅用于多设备 Join，不能替代其他 suite。
+
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-001/002`、
 `DEVICE-REVOKE-E2E-001` 和 `MLS-MULTI-DEVICE-E2E-001/002` 均为 planned、不可执行边界。
 旧 Root/Revoke/MLS Dart 实现依赖 direct-admin Join，已经删除；第三步或后续版本必须重新
@@ -237,6 +245,26 @@ before the scoped resolver is invoked. A valid resolver response must contain
 exactly six ASCII digits. Any other status, content type, key, value, resolver
 output, or malformed flag fails closed without recording the response body.
 The normal HTTP 200 delivery path is unchanged and does not require staged mode.
+
+Run the operator-confirmed one-host App + App member Join with the same reviewed
+remote account inputs:
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
+AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=apppair \
+dart run tests/e2e/runner.dart \
+  --case multi-device-app-pair \
+  --config <local-awiki-info-macos-config.yaml>
+```
+
+Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
+binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable
+Debug App construction, while the runner owns the ephemeral loopback
+coordinator, two direct App launches, two concurrent existing-App drivers, and
+cleanup. See
+[multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
 
 Staged-OTP mode proves only the explicitly reviewed operator test path; it does
 not prove SMS delivery, does not turn the 503 into a product-visible success,

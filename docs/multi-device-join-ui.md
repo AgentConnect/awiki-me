@@ -137,3 +137,10 @@ split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为�
 `im.device.join.requested` host event 唤醒，App 管理端等待 AppShell 全局审批入口；测试
 不得直接调用 Message Inbox hydration、`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。
 实现存在不等于远端已通过，仍需独立的 `awiki.info` pass attestation。
+
+App↔App 验证使用独立的 `multi-device-app-pair` suite 和
+`DEVICE-JOIN-E2E-004`。它在同一台 macOS 上运行两个 bundle/build/state 均隔离的真实
+App 进程，管理端仍必须由 `system_notification_changed` → Core typed Join inbox →
+AppShell 全局入口发现请求，加入端仍通过可见 onboarding UI 发起。测试协调器只交换阶段
+checkpoint，并在内存中比较两端 SAS，不得替代产品同步或记录秘密。完整运行边界见
+[One-host App↔App E2E mode](multi-device-app-pair-e2e.md)。

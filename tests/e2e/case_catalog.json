@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-26.agent-control-convergence-v1",
+  "sourceRevision": "2026-07-26.multi-device-app-pair-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2023,6 +2023,65 @@
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
             "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed",
             "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-004",
+      "feature": "Two isolated AWiki Me Apps complete member Join on one macOS host",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; macOS can present real LocalAuthentication; the runner builds two Debug App bundles with distinct stable bundle identifiers, build directories, and fresh native Core state roots; OTPs are resolved through validated fixed argv.",
+      "action": "Launch and concurrently drive one admin App and one joining App, start Join through the joining App UI, require the authenticated admin runtime to expose the listener-delivered global review entry without test-side inbox refresh, explicitly start verification, compare both locally rendered SAS values only in the loopback coordinator memory, approve through one real operating-system user-presence prompt, and wait for both Registry projections.",
+      "exactOracles": [
+        "Two real AWiki Me processes use distinct bundle identifiers, build products, and fresh native Core roots; the joining App remains pending without SAS until the admin user explicitly starts verification from the global Join review entry.",
+        "The two App-rendered six-digit SAS values match only inside the authenticated loopback coordinator, no SAS is written to config, logs, attestation, or reports, and exactly one real user-presence confirmation succeeds.",
+        "Both App Core Registries converge to exactly the same two devices: the original App remains the management-ready admin and the joining App becomes the current active rootless member."
+      ],
+      "negativeChecks": [
+        "A copied/shared state root, shared bundle or build product, fake Core, direct requestSync/refreshJoinInbox calls, pre-opened Devices page, implicit or repeated verification, persisted or reported SAS, mismatched SAS/session/device, approval before explicit SAS confirmation, denied or repeated user presence, admin-role joining result, or either Registry failing exact two-device convergence prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-004:two_isolated_app_processes_bootstrapped",
+          "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
+          "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received",
+          "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
+          "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed",
+          "DEVICE-JOIN-E2E-004:both_app_registries_converged"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-004:two_isolated_app_processes_bootstrapped",
+            "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
+            "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received"
+          ],
+          [
+            "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
+            "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed"
+          ],
+          [
+            "DEVICE-JOIN-E2E-004:both_app_registries_converged"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-004:two_isolated_app_processes_bootstrapped",
+            "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
+            "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received",
+            "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
+            "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed",
+            "DEVICE-JOIN-E2E-004:both_app_registries_converged"
           ]
         ]
       }

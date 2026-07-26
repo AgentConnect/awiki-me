@@ -339,6 +339,16 @@ class AppTestCatalog {
         'account allowlist or operator prerequisites are unavailable.',
       )
       ..writeln(
+        '- `multi-device-app-pair` is the one-host/two-process App↔App mode. '
+        'It builds two Debug bundles with stable distinct bundle identifiers, '
+        'isolated Flutter build directories, and independent native Core '
+        'state roots, then concurrently drives their visible Join UI. The '
+        'loopback coordinator carries only lifecycle checkpoints and compares '
+        'transient SAS values in memory; it cannot call product APIs or write '
+        'SAS evidence. This mode currently covers only '
+        '`DEVICE-JOIN-E2E-004`, not general messaging or other suites.',
+      )
+      ..writeln(
         '- `DEVICE-JOIN-E2E-003`, `ROOT-TRANSFER-E2E-002`, '
         '`DEVICE-REVOKE-E2E-001`, and `MLS-MULTI-DEVICE-E2E-001/002` are '
         'planned, non-executable boundaries. The old Root/Revoke/MLS Dart '

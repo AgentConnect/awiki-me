@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:yaml/yaml.dart';
 
+import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'remote_multi_device_join_contract.dart';
 
@@ -28,6 +30,12 @@ const String _multiDeviceRemoteJoinScenario =
     'multi-device-remote-message-driven-member-join';
 const String _multiDeviceRemoteJoinRunConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
+const String _multiDeviceAppPairScenario =
+    'multi-device-two-isolated-app-member-join';
+const String _multiDeviceAppPairRunConfigPath =
+    '.e2e/multi-device-app-pair/current/run_config.json';
+const String _multiDeviceAppPairTarget =
+    'integration_test/multi_device_app_pair_test.dart';
 const String _multiDeviceRemoteJoinGateEnv =
     'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _multiDeviceRemotePhoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
@@ -77,6 +85,7 @@ const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
 ];
+const List<String> _multiDeviceAppPairCaseIds = <String>['DEVICE-JOIN-E2E-004'];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',
   'DEVICE-REVOKE-E2E-001',
@@ -264,6 +273,7 @@ class DesktopE2eRunner {
   DesktopE2eFileConfig fileConfig = const DesktopE2eFileConfig.empty();
   DesktopCliPeerConfig? config;
   RemoteMultiDeviceJoinConfig? remoteMultiDeviceJoinConfig;
+  RemoteMultiDeviceAppPairConfig? remoteMultiDeviceAppPairConfig;
   late final DesktopE2ePlatform platform;
   late final String runId;
   late final Directory reportDir;
@@ -278,8 +288,13 @@ class DesktopE2eRunner {
   late final Directory appStateRootDir;
   late final Directory multiDeviceAppJoiningStateRootDir;
   late final Directory rootTransferAppAdminStateRootDir;
+  late final Directory appPairAdminStateRootDir;
+  late final Directory appPairJoinerStateRootDir;
+  late final Directory appPairBuildRootDir;
+  late final Directory appPairArtifactRootDir;
   late final File runConfigFile;
   late final File remoteMultiDeviceRunConfigFile;
+  late final File appPairRunConfigFile;
   late final File productTimingsFile;
   late final File caseAttestationFile;
   late final File scenarioProgressFile;
@@ -351,9 +366,24 @@ class DesktopE2eRunner {
     rootTransferAppAdminStateRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/root-transfer-app-admin',
     );
+    appPairAdminStateRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-pair/admin-state',
+    );
+    appPairJoinerStateRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-pair/joiner-state',
+    );
+    appPairBuildRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-pair/build',
+    );
+    appPairArtifactRootDir = Directory(
+      '${root.path}/.e2e/$runScope/$runId/app-pair/artifacts',
+    );
     runConfigFile = File('${root.path}/${options.e2eCase.runConfigPath}');
     remoteMultiDeviceRunConfigFile = File(
       '${root.path}/$_multiDeviceRemoteJoinRunConfigPath',
+    );
+    appPairRunConfigFile = File(
+      '${root.path}/$_multiDeviceAppPairRunConfigPath',
     );
     productTimingsFile = File(
       '${reportDir.path}/$_desktopCliPeerProductTimingsFileName',
@@ -384,8 +414,13 @@ class DesktopE2eRunner {
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(multiDeviceAppJoiningStateRootDir.path);
     _addRuntimeSecret(rootTransferAppAdminStateRootDir.path);
+    _addRuntimeSecret(appPairAdminStateRootDir.path);
+    _addRuntimeSecret(appPairJoinerStateRootDir.path);
+    _addRuntimeSecret(appPairBuildRootDir.path);
+    _addRuntimeSecret(appPairArtifactRootDir.path);
     _addRuntimeSecret(runConfigFile.path);
     _addRuntimeSecret(remoteMultiDeviceRunConfigFile.path);
+    _addRuntimeSecret(appPairRunConfigFile.path);
     _addRuntimeSecret(productTimingsFile.path);
     _addRuntimeSecret(caseAttestationFile.path);
     _addRuntimeSecret(scenarioProgressFile.path);
@@ -442,6 +477,13 @@ class DesktopE2eRunner {
       appIdentityHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
     }
+    if (!options.dryRun &&
+        options.e2eCase == DesktopE2eCase.multiDeviceAppPair) {
+      appPairAdminStateRootDir.createSync(recursive: true);
+      appPairJoinerStateRootDir.createSync(recursive: true);
+      appPairBuildRootDir.createSync(recursive: true);
+      appPairArtifactRootDir.createSync(recursive: true);
+    }
 
     final totalStopwatch = Stopwatch()..start();
     var orchestrationSucceeded = false;
@@ -453,6 +495,8 @@ class DesktopE2eRunner {
           await _runLocalMultiDeviceCapabilityGate();
         case DesktopE2eCase.multiDeviceRemoteJoin:
           await _runRemoteMultiDeviceJoin();
+        case DesktopE2eCase.multiDeviceAppPair:
+          await _runRemoteMultiDeviceAppPair();
         case DesktopE2eCase.step4RevokeMls:
           await _runRemoteMultiDeviceJoin();
         case DesktopE2eCase.full:
@@ -632,6 +676,308 @@ class DesktopE2eRunner {
         caseIds: caseIds ?? options.e2eCase.caseIds,
       );
     });
+  }
+
+  Future<void> _runRemoteMultiDeviceAppPair() async {
+    final flutterBin =
+        Platform.environment['AWIKI_E2E_FLUTTER_BIN']?.trim().isNotEmpty == true
+        ? Platform.environment['AWIKI_E2E_FLUTTER_BIN']!.trim()
+        : 'flutter';
+    final pairConfig = RemoteMultiDeviceAppPairConfig.from(
+      fileConfig: fileConfig,
+      environment: Platform.environment,
+    );
+    remoteMultiDeviceAppPairConfig = pairConfig;
+    _addRuntimeSecret(pairConfig.phone);
+    _addRuntimeSecret(pairConfig.otpCommandJson);
+    if (!options.dryRun && !commands.dryRun) {
+      suiteDefinition.validateRemoteTargetValues(
+        didDomain: pairConfig.didDomain,
+        serviceUrls: <String>[
+          pairConfig.serviceBaseUrl,
+          pairConfig.userServiceUrl,
+          pairConfig.messageServiceUrl,
+        ],
+      );
+    }
+
+    _section('AWiki Desktop isolated App + App multi-device E2E $runId');
+    _line('platform: ${pairConfig.platform.name}');
+    _line('config: ${fileConfig.path ?? '<not found>'}');
+    _line('reports: ${redactor.redact(reportDir.path)}');
+    _line('admin state: ${redactor.redact(appPairAdminStateRootDir.path)}');
+    _line('joiner state: ${redactor.redact(appPairJoinerStateRootDir.path)}');
+    _line('artifacts: ${redactor.redact(appPairArtifactRootDir.path)}');
+    _line('case: ${options.e2eCase.caseName}');
+    _line('service base: ${pairConfig.serviceBaseUrl}');
+
+    await _timed('Checking App-pair tooling and source', () async {
+      if (pairConfig.platform != DesktopE2ePlatform.macos) {
+        throw E2eFailure('The App-pair E2E currently supports only macOS.');
+      }
+      await commands.requireExecutable(flutterBin);
+      await commands.requireExecutable('dart');
+      await commands.requireFile('tool/build_isolated_e2e_app.dart');
+      await commands.requireFile(_multiDeviceAppPairTarget);
+      await commands.requireFile('test_driver/integration_test.dart');
+      _identityPreflight = <String, Object?>{
+        'status': options.dryRun ? 'dry_run' : 'passed',
+        'auditedRemoteTarget': true,
+        'twoIsolatedAppProcesses': true,
+        'containsRawDids': false,
+      };
+    });
+
+    if (options.prepareOnly) {
+      _section('Prepare-only completed');
+      _line(
+        'No App was built or launched because the loopback coordinator is '
+        'created only for an executing pair.',
+      );
+      return;
+    }
+    if (options.dryRun || commands.dryRun) {
+      _line(
+        'would build, launch, and concurrently drive isolated admin and '
+        'joiner Debug Apps',
+      );
+      return;
+    }
+
+    _resourceSideEffectsPossible = true;
+    await _timed('Two isolated Flutter App member-Join lifecycle', () {
+      return _withFlutterExecutionLease(pairConfig.platform, runId, () async {
+        final competingPids = await competingFlutterIntegrationTestPids();
+        if (competingPids.isNotEmpty) {
+          throw E2eFailure(
+            'Another Flutter integration test is already running '
+            '(pids=${competingPids.join(',')}); refusing to share the '
+            'desktop device.',
+          );
+        }
+        final token = _newAppPairToken();
+        _addRuntimeSecret(token);
+        final coordinator = await AppPairCoordinatorServer.start(token: token);
+        _RunningIsolatedApp? adminApp;
+        _RunningIsolatedApp? joinerApp;
+        try {
+          await _writeAppPairRunConfig(pairConfig, coordinator, token);
+          final adminArtifact = await _buildAppPairRole(
+            role: 'admin',
+            bundleId: 'ai.awiki.awikime.dev.e2e.pair.admin',
+            flutterBin: flutterBin,
+          );
+          final joinerArtifact = await _buildAppPairRole(
+            role: 'joiner',
+            bundleId: 'ai.awiki.awikime.dev.e2e.pair.joiner',
+            flutterBin: flutterBin,
+          );
+          if (adminArtifact.bundleId == joinerArtifact.bundleId ||
+              adminArtifact.executable.path == joinerArtifact.executable.path ||
+              appPairAdminStateRootDir.path == appPairJoinerStateRootDir.path) {
+            throw E2eFailure(
+              'The two App roles did not receive independent bundle, '
+              'artifact, and state identities.',
+            );
+          }
+          final productEnvironment = <String, String>{
+            _multiDeviceRemoteJoinGateEnv: '1',
+            _multiDeviceRemotePhoneEnv: pairConfig.phone,
+            _multiDeviceRemoteOtpCommandEnv: pairConfig.otpCommandJson,
+            remoteMultiDeviceStagedOtpFlag: pairConfig.allowStagedOtpOnSmsError
+                ? '1'
+                : '0',
+          };
+          adminApp = await _RunningIsolatedApp.start(
+            role: 'admin',
+            artifact: adminArtifact,
+            environment: productEnvironment,
+          );
+          joinerApp = await _RunningIsolatedApp.start(
+            role: 'joiner',
+            artifact: joinerArtifact,
+            environment: productEnvironment,
+          );
+          await _driveAppPair(
+            adminApp: adminApp,
+            joinerApp: joinerApp,
+            flutterBin: flutterBin,
+            timeout: suiteDefinition.timeout,
+          );
+        } finally {
+          await Future.wait(<Future<void>>[
+            if (adminApp != null) adminApp.close(commands),
+            if (joinerApp != null) joinerApp.close(commands),
+          ]);
+          await coordinator.close();
+          if (appPairRunConfigFile.existsSync()) {
+            appPairRunConfigFile.deleteSync();
+          }
+          await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
+          await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
+        }
+      });
+    });
+  }
+
+  Future<void> _writeAppPairRunConfig(
+    RemoteMultiDeviceAppPairConfig pairConfig,
+    AppPairCoordinatorServer coordinator,
+    String token,
+  ) async {
+    final payload = <String, Object?>{
+      'schemaVersion': 1,
+      'enabled': true,
+      'runId': runId,
+      'service': <String, Object?>{
+        'baseUrl': pairConfig.serviceBaseUrl,
+        'userServiceUrl': pairConfig.userServiceUrl,
+        'messageServiceUrl': pairConfig.messageServiceUrl,
+        'mailServiceUrl': pairConfig.mailServiceUrl,
+        'didDomain': pairConfig.didDomain,
+        'anpServiceUrl': pairConfig.anpServiceUrl,
+        'anpServiceDid': pairConfig.anpServiceDid,
+      },
+      'account': <String, Object?>{
+        'handlePrefix': pairConfig.handlePrefix,
+        'allowStagedOtpOnSmsError': pairConfig.allowStagedOtpOnSmsError,
+      },
+      'coordinator': <String, Object?>{
+        'baseUrl': coordinator.endpoint.toString(),
+        'token': token,
+      },
+      'apps': <String, Object?>{
+        'admin': <String, Object?>{
+          'stateRoot': appPairAdminStateRootDir.path,
+          'bundleId': 'ai.awiki.awikime.dev.e2e.pair.admin',
+        },
+        'joiner': <String, Object?>{
+          'stateRoot': appPairJoinerStateRootDir.path,
+          'bundleId': 'ai.awiki.awikime.dev.e2e.pair.joiner',
+        },
+      },
+      'suite': <String, Object?>{
+        'manifestRevision': suiteManifest.sourceRevision,
+        'tier': suiteDefinition.tier,
+        'cleanupPolicy': suiteDefinition.cleanupPolicy,
+      },
+    };
+    await appPairRunConfigFile.parent.create(recursive: true);
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>[
+        '700',
+        appPairRunConfigFile.parent.path,
+      ]);
+    }
+    await appPairRunConfigFile.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(payload),
+      flush: true,
+    );
+    if (!Platform.isWindows) {
+      await Process.run('chmod', <String>['600', appPairRunConfigFile.path]);
+    }
+  }
+
+  Future<_IsolatedAppArtifact> _buildAppPairRole({
+    required String role,
+    required String bundleId,
+    required String flutterBin,
+  }) async {
+    final roleWorkRoot = Directory('${appPairBuildRootDir.path}/$role');
+    final result = await commands.captureResult('dart', <String>[
+      'tool/build_isolated_e2e_app.dart',
+      '--name=$role',
+      '--target=$_multiDeviceAppPairTarget',
+      '--state-root=${role == 'admin' ? appPairAdminStateRootDir.path : appPairJoinerStateRootDir.path}',
+      '--work-root=${roleWorkRoot.path}',
+      '--artifact-root=${appPairArtifactRootDir.path}',
+      '--bundle-id=$bundleId',
+      '--flutter-bin=$flutterBin',
+      '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=$role',
+      '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG=${appPairRunConfigFile.path}',
+      ..._caseAttestationDartDefines(_multiDeviceAppPairCaseIds),
+    ], timeout: const Duration(minutes: 12));
+    return _IsolatedAppArtifact.fromBuilderOutput(result.output);
+  }
+
+  Future<void> _driveAppPair({
+    required _RunningIsolatedApp adminApp,
+    required _RunningIsolatedApp joinerApp,
+    required String flutterBin,
+    required Duration timeout,
+  }) async {
+    final locale = desktopE2eUtf8Locale(
+      platform: DesktopE2ePlatform.macos,
+      lang: Platform.environment['LANG'],
+      lcAll: Platform.environment['LC_ALL'],
+    );
+    final adminDriver = await _RunningAppPairDriver.start(
+      role: 'admin',
+      flutterBin: flutterBin,
+      vmServiceUri: adminApp.vmServiceUri,
+      root: root,
+      flutterConfigDirectory: Directory(
+        '${appPairBuildRootDir.path}/admin/flutter-config',
+      ),
+      locale: locale,
+    );
+    _RunningAppPairDriver? joinerDriver;
+    try {
+      joinerDriver = await _RunningAppPairDriver.start(
+        role: 'joiner',
+        flutterBin: flutterBin,
+        vmServiceUri: joinerApp.vmServiceUri,
+        root: root,
+        flutterConfigDirectory: Directory(
+          '${appPairBuildRootDir.path}/joiner/flutter-config',
+        ),
+        locale: locale,
+      );
+      final exits = <Future<MapEntry<String, int>>>[
+        adminDriver.exitCode.then(
+          (code) => MapEntry<String, int>('admin', code),
+        ),
+        joinerDriver.exitCode.then(
+          (code) => MapEntry<String, int>('joiner', code),
+        ),
+      ];
+      final deadline = DateTime.now().add(timeout);
+      Duration remaining() {
+        final value = deadline.difference(DateTime.now());
+        return value.isNegative ? Duration.zero : value;
+      }
+
+      final first = await Future.any(exits).timeout(remaining());
+      if (first.value != 0) {
+        throw E2eFailure(
+          'The isolated ${first.key} App integration driver failed.',
+        );
+      }
+      final results = await Future.wait(exits).timeout(remaining());
+      MapEntry<String, int>? failed;
+      for (final result in results) {
+        if (result.value != 0) {
+          failed = result;
+          break;
+        }
+      }
+      if (failed != null) {
+        throw E2eFailure(
+          'The isolated ${failed.key} App integration driver failed.',
+        );
+      }
+    } on TimeoutException {
+      throw DesktopCommandTimeout(
+        executable: 'flutter drive (App pair)',
+        timeout: timeout,
+        terminated: true,
+      );
+    } finally {
+      await Future.wait(<Future<void>>[
+        adminDriver.close(commands),
+        if (joinerDriver != null) joinerDriver.close(commands),
+      ]);
+    }
   }
 
   Future<void> _writeRemoteMultiDeviceJoinRunConfig(
@@ -1698,6 +2044,29 @@ class DesktopE2eRunner {
           'didDomain': remoteMultiDeviceJoinConfig!.didDomain,
         if (remoteMultiDeviceJoinConfig != null)
           'cliSourceRef': remoteMultiDeviceJoinConfig!.cliSourceRef,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'serviceBaseUrl': remoteMultiDeviceAppPairConfig!.serviceBaseUrl,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'userServiceUrl': remoteMultiDeviceAppPairConfig!.userServiceUrl,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'messageServiceUrl':
+              remoteMultiDeviceAppPairConfig!.messageServiceUrl,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'mailServiceUrl': remoteMultiDeviceAppPairConfig!.mailServiceUrl,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'anpServiceUrl': remoteMultiDeviceAppPairConfig!.anpServiceUrl,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'anpServiceDid': '<redacted-service-did>',
+        if (remoteMultiDeviceAppPairConfig != null)
+          'didDomain': remoteMultiDeviceAppPairConfig!.didDomain,
+        if (remoteMultiDeviceAppPairConfig != null)
+          'appPair': const <String, Object?>{
+            'processCount': 2,
+            'bundleIsolation': true,
+            'buildIsolation': true,
+            'stateIsolation': true,
+            'coordinator': 'loopback_in_memory',
+          },
         'identityPreflight': _identityPreflight,
         'resourceLifecycle': <String, Object?>{
           'cleanupPolicy': suiteDefinition.cleanupPolicy,
@@ -1853,7 +2222,9 @@ class DesktopE2eRunner {
   void _writeResourceLedger() {
     reportDir.createSync(recursive: true);
     final targetUrl =
-        config?.serviceBaseUrl ?? remoteMultiDeviceJoinConfig?.serviceBaseUrl;
+        config?.serviceBaseUrl ??
+        remoteMultiDeviceJoinConfig?.serviceBaseUrl ??
+        remoteMultiDeviceAppPairConfig?.serviceBaseUrl;
     final targetHost = targetUrl == null ? null : Uri.tryParse(targetUrl)?.host;
     final sourceRef =
         config?.cliSourceRef ?? remoteMultiDeviceJoinConfig?.cliSourceRef;
@@ -2490,6 +2861,225 @@ class DesktopCommandResult {
   final String output;
 }
 
+class _IsolatedAppArtifact {
+  const _IsolatedAppArtifact({
+    required this.role,
+    required this.bundleId,
+    required this.executable,
+  });
+
+  final String role;
+  final String bundleId;
+  final File executable;
+
+  static _IsolatedAppArtifact fromBuilderOutput(String output) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(output.trim());
+    } on Object {
+      throw E2eFailure(
+        'The isolated App builder returned an invalid artifact manifest.',
+      );
+    }
+    if (decoded is! Map || decoded['schemaVersion'] != 1) {
+      throw E2eFailure(
+        'The isolated App builder returned an unsupported artifact manifest.',
+      );
+    }
+    final role = decoded['name'];
+    final bundleId = decoded['bundleId'];
+    final executablePath = decoded['executablePath'];
+    if (role is! String ||
+        !appPairRoles.contains(role) ||
+        bundleId is! String ||
+        executablePath is! String ||
+        executablePath.trim().isEmpty) {
+      throw E2eFailure('The isolated App artifact manifest is incomplete.');
+    }
+    final executable = File(executablePath);
+    if (!executable.existsSync()) {
+      throw E2eFailure('The isolated App executable was not produced.');
+    }
+    return _IsolatedAppArtifact(
+      role: role,
+      bundleId: bundleId,
+      executable: executable,
+    );
+  }
+}
+
+class _RunningIsolatedApp {
+  _RunningIsolatedApp._({
+    required this.role,
+    required this.vmServiceUri,
+    required this.process,
+    required this.stdoutSubscription,
+    required this.stderrSubscription,
+  });
+
+  final String role;
+  final Uri vmServiceUri;
+  final Process process;
+  final StreamSubscription<String> stdoutSubscription;
+  final StreamSubscription<String> stderrSubscription;
+
+  static Future<_RunningIsolatedApp> start({
+    required String role,
+    required _IsolatedAppArtifact artifact,
+    required Map<String, String> environment,
+  }) async {
+    if (artifact.role != role) {
+      throw E2eFailure('The isolated App role does not match its artifact.');
+    }
+    final process = await Process.start(
+      artifact.executable.path,
+      const <String>['--enable-vm-service=0'],
+      environment: environment,
+      includeParentEnvironment: true,
+      runInShell: false,
+    );
+    final service = Completer<Uri>();
+
+    void inspect(String line) {
+      if (service.isCompleted) {
+        return;
+      }
+      final match = RegExp(r'http://[^\s]+').firstMatch(line);
+      final uri = match == null ? null : Uri.tryParse(match.group(0)!);
+      if (uri != null &&
+          uri.scheme == 'http' &&
+          (uri.host == InternetAddress.loopbackIPv4.address ||
+              uri.host == 'localhost') &&
+          uri.hasPort) {
+        service.complete(uri);
+      }
+    }
+
+    final stdoutSubscription = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(inspect);
+    final stderrSubscription = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(inspect);
+    unawaited(
+      process.exitCode.then((code) {
+        if (!service.isCompleted) {
+          service.completeError(
+            E2eFailure(
+              'The isolated $role App exited before publishing a VM service.',
+            ),
+          );
+        }
+      }),
+    );
+
+    try {
+      final vmServiceUri = await service.future.timeout(
+        const Duration(seconds: 45),
+      );
+      return _RunningIsolatedApp._(
+        role: role,
+        vmServiceUri: vmServiceUri,
+        process: process,
+        stdoutSubscription: stdoutSubscription,
+        stderrSubscription: stderrSubscription,
+      );
+    } on Object {
+      process.kill(ProcessSignal.sigkill);
+      await stdoutSubscription.cancel();
+      await stderrSubscription.cancel();
+      rethrow;
+    }
+  }
+
+  Future<void> close(DesktopCommandRunner commands) async {
+    await commands._terminateProcessTree(process);
+    await stdoutSubscription.cancel();
+    await stderrSubscription.cancel();
+  }
+}
+
+class _RunningAppPairDriver {
+  _RunningAppPairDriver._({
+    required this.process,
+    required this.stdoutSubscription,
+    required this.stderrSubscription,
+  });
+
+  final Process process;
+  final StreamSubscription<List<int>> stdoutSubscription;
+  final StreamSubscription<List<int>> stderrSubscription;
+
+  Future<int> get exitCode => process.exitCode;
+
+  static Future<_RunningAppPairDriver> start({
+    required String role,
+    required String flutterBin,
+    required Uri vmServiceUri,
+    required Directory root,
+    required Directory flutterConfigDirectory,
+    required String locale,
+  }) async {
+    if (!appPairRoles.contains(role)) {
+      throw E2eFailure('The App-pair driver role is invalid.');
+    }
+    final process = await Process.start(
+      flutterBin,
+      <String>[
+        'drive',
+        '--use-existing-app=$vmServiceUri',
+        '--driver=test_driver/integration_test.dart',
+        '--target=$_multiDeviceAppPairTarget',
+        '-d',
+        'macos',
+        '--no-build',
+        '--no-pub',
+        '--no-keep-app-running',
+      ],
+      workingDirectory: root.path,
+      environment: <String, String>{
+        'LANG': locale,
+        'LC_ALL': locale,
+        'XDG_CONFIG_HOME': flutterConfigDirectory.path,
+      },
+      includeParentEnvironment: true,
+      runInShell: false,
+    );
+    return _RunningAppPairDriver._(
+      process: process,
+      stdoutSubscription: process.stdout.listen((_) {}),
+      stderrSubscription: process.stderr.listen((_) {}),
+    );
+  }
+
+  Future<void> close(DesktopCommandRunner commands) async {
+    await commands._terminateProcessTree(process);
+    await stdoutSubscription.cancel();
+    await stderrSubscription.cancel();
+  }
+}
+
+String _newAppPairToken() {
+  final random = Random.secure();
+  return List<int>.generate(
+    32,
+    (_) => random.nextInt(256),
+  ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+}
+
+Future<void> _deleteDirectoryBestEffort(Directory directory) async {
+  try {
+    if (directory.existsSync()) {
+      await directory.delete(recursive: true);
+    }
+  } on FileSystemException {
+    // Remote identities are not deleted here; this only removes isolated
+    // local App state after both product processes have stopped.
+  }
+}
+
 Future<List<int>> competingFlutterIntegrationTestPids() async {
   if (Platform.isWindows) {
     return const <int>[];
@@ -2735,6 +3325,7 @@ Usage:
   dart run tests/e2e/runner.dart --case smoke
   dart run tests/e2e/runner.dart --case multi-device
   dart run tests/e2e/runner.dart --case multi-device-remote-join
+  dart run tests/e2e/runner.dart --case multi-device-app-pair
   dart run tests/e2e/runner.dart --case step4-revoke-mls
   dart run tests/e2e/runner.dart --case full
   dart run tests/e2e/runner.dart --case inbound
@@ -2748,12 +3339,16 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-app-pair|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                operator-confirmed real App/CLI message-driven
                                member Join flow in both directions against
                                awiki.info.
+                               multi-device-app-pair builds and drives two
+                               isolated real macOS App processes on one host;
+                               it currently runs only the remote member Join
+                               flow and requires real macOS user presence.
                                full runs the audited App+CLI peer flow and then
                                one real App-admin/CLI-member Join + root
                                completion lifecycle; it therefore also requires
@@ -2776,8 +3371,8 @@ Options:
   }
 }
 
-class RemoteMultiDeviceJoinConfig {
-  const RemoteMultiDeviceJoinConfig({
+class _RemoteMultiDeviceBaseConfig {
+  const _RemoteMultiDeviceBaseConfig({
     required this.platform,
     required this.serviceBaseUrl,
     required this.userServiceUrl,
@@ -2791,8 +3386,6 @@ class RemoteMultiDeviceJoinConfig {
     required this.otpCommand,
     required this.allowStagedOtpOnSmsError,
     required this.handlePrefix,
-    required this.cliBin,
-    required this.cliSourceRef,
   });
 
   final DesktopE2ePlatform platform;
@@ -2808,10 +3401,8 @@ class RemoteMultiDeviceJoinConfig {
   final List<String> otpCommand;
   final bool allowStagedOtpOnSmsError;
   final String handlePrefix;
-  final String cliBin;
-  final String cliSourceRef;
 
-  static RemoteMultiDeviceJoinConfig from({
+  static _RemoteMultiDeviceBaseConfig from({
     required DesktopE2eFileConfig fileConfig,
     required Map<String, String> environment,
   }) {
@@ -2885,6 +3476,97 @@ class RemoteMultiDeviceJoinConfig {
         'Remote multi-device App Join handle prefix is invalid.',
       );
     }
+    return _RemoteMultiDeviceBaseConfig(
+      platform: platform,
+      serviceBaseUrl: serviceBaseUrl,
+      userServiceUrl: fileConfig.userServiceUrl ?? serviceBaseUrl,
+      messageServiceUrl: fileConfig.messageServiceUrl ?? serviceBaseUrl,
+      mailServiceUrl: fileConfig.mailServiceUrl ?? serviceBaseUrl,
+      didDomain: didDomain,
+      anpServiceUrl: fileConfig.anpServiceUrl ?? '$serviceBaseUrl/anp-im/rpc',
+      anpServiceDid: fileConfig.anpServiceDid ?? 'did:wba:$didDomain',
+      phone: phone,
+      otpCommandJson: otpCommandJson,
+      otpCommand: List<String>.unmodifiable(otpCommand),
+      allowStagedOtpOnSmsError: allowStagedOtpOnSmsError,
+      handlePrefix: handlePrefix,
+    );
+  }
+}
+
+class RemoteMultiDeviceAppPairConfig {
+  const RemoteMultiDeviceAppPairConfig._(this._base);
+
+  final _RemoteMultiDeviceBaseConfig _base;
+
+  DesktopE2ePlatform get platform => _base.platform;
+  String get serviceBaseUrl => _base.serviceBaseUrl;
+  String get userServiceUrl => _base.userServiceUrl;
+  String get messageServiceUrl => _base.messageServiceUrl;
+  String get mailServiceUrl => _base.mailServiceUrl;
+  String get didDomain => _base.didDomain;
+  String get anpServiceUrl => _base.anpServiceUrl;
+  String get anpServiceDid => _base.anpServiceDid;
+  String get phone => _base.phone;
+  String get otpCommandJson => _base.otpCommandJson;
+  bool get allowStagedOtpOnSmsError => _base.allowStagedOtpOnSmsError;
+  String get handlePrefix => _base.handlePrefix;
+
+  static RemoteMultiDeviceAppPairConfig from({
+    required DesktopE2eFileConfig fileConfig,
+    required Map<String, String> environment,
+  }) => RemoteMultiDeviceAppPairConfig._(
+    _RemoteMultiDeviceBaseConfig.from(
+      fileConfig: fileConfig,
+      environment: environment,
+    ),
+  );
+}
+
+class RemoteMultiDeviceJoinConfig {
+  const RemoteMultiDeviceJoinConfig({
+    required this.platform,
+    required this.serviceBaseUrl,
+    required this.userServiceUrl,
+    required this.messageServiceUrl,
+    required this.mailServiceUrl,
+    required this.didDomain,
+    required this.anpServiceUrl,
+    required this.anpServiceDid,
+    required this.phone,
+    required this.otpCommandJson,
+    required this.otpCommand,
+    required this.allowStagedOtpOnSmsError,
+    required this.handlePrefix,
+    required this.cliBin,
+    required this.cliSourceRef,
+  });
+
+  final DesktopE2ePlatform platform;
+  final String serviceBaseUrl;
+  final String userServiceUrl;
+  final String messageServiceUrl;
+  final String mailServiceUrl;
+  final String didDomain;
+  final String anpServiceUrl;
+  final String anpServiceDid;
+  final String phone;
+  final String otpCommandJson;
+  final List<String> otpCommand;
+  final bool allowStagedOtpOnSmsError;
+  final String handlePrefix;
+  final String cliBin;
+  final String cliSourceRef;
+
+  static RemoteMultiDeviceJoinConfig from({
+    required DesktopE2eFileConfig fileConfig,
+    required Map<String, String> environment,
+  }) {
+    final base = _RemoteMultiDeviceBaseConfig.from(
+      fileConfig: fileConfig,
+      environment: environment,
+    );
+    final sourcePath = fileConfig.path ?? '<missing-config>';
     final cliBin = _requiredConfig(
       fileConfig.cliBin,
       'cliPeer.binary',
@@ -2901,19 +3583,19 @@ class RemoteMultiDeviceJoinConfig {
       );
     }
     return RemoteMultiDeviceJoinConfig(
-      platform: platform,
-      serviceBaseUrl: serviceBaseUrl,
-      userServiceUrl: fileConfig.userServiceUrl ?? serviceBaseUrl,
-      messageServiceUrl: fileConfig.messageServiceUrl ?? serviceBaseUrl,
-      mailServiceUrl: fileConfig.mailServiceUrl ?? serviceBaseUrl,
-      didDomain: didDomain,
-      anpServiceUrl: fileConfig.anpServiceUrl ?? '$serviceBaseUrl/anp-im/rpc',
-      anpServiceDid: fileConfig.anpServiceDid ?? 'did:wba:$didDomain',
-      phone: phone,
-      otpCommandJson: otpCommandJson,
-      otpCommand: otpCommand,
-      allowStagedOtpOnSmsError: allowStagedOtpOnSmsError,
-      handlePrefix: handlePrefix,
+      platform: base.platform,
+      serviceBaseUrl: base.serviceBaseUrl,
+      userServiceUrl: base.userServiceUrl,
+      messageServiceUrl: base.messageServiceUrl,
+      mailServiceUrl: base.mailServiceUrl,
+      didDomain: base.didDomain,
+      anpServiceUrl: base.anpServiceUrl,
+      anpServiceDid: base.anpServiceDid,
+      phone: base.phone,
+      otpCommandJson: base.otpCommandJson,
+      otpCommand: base.otpCommand,
+      allowStagedOtpOnSmsError: base.allowStagedOtpOnSmsError,
+      handlePrefix: base.handlePrefix,
       cliBin: cliBin,
       cliSourceRef: cliSourceRef.toLowerCase(),
     );
@@ -3762,6 +4444,7 @@ enum DesktopE2eCase {
   smoke(_desktopSmokeCaseIds),
   multiDevice(_multiDeviceCapabilityGateCaseIds),
   multiDeviceRemoteJoin(_multiDeviceRemoteJoinCaseIds),
+  multiDeviceAppPair(_multiDeviceAppPairCaseIds),
   step4RevokeMls(_step4RevokeMlsCaseIds),
   full(_desktopCliPeerCaseIds),
   performance(_desktopCliPeerPerformanceCaseIds),
@@ -3787,6 +4470,7 @@ enum DesktopE2eCase {
         'integration_test/multi_device_capability_gate_test.dart',
       DesktopE2eCase.multiDeviceRemoteJoin =>
         'integration_test/multi_device_join_ui_test.dart',
+      DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairTarget,
       DesktopE2eCase.step4RevokeMls =>
         'integration_test/multi_device_join_ui_test.dart',
       DesktopE2eCase.full =>
@@ -3824,13 +4508,16 @@ enum DesktopE2eCase {
       DesktopE2eCase.displayNameFallback => 'display-name-fallback',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
+      DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       _ => name,
     };
   }
 
   bool get requiresCliPeer =>
-      this != DesktopE2eCase.smoke && this != DesktopE2eCase.multiDevice;
+      this != DesktopE2eCase.smoke &&
+      this != DesktopE2eCase.multiDevice &&
+      this != DesktopE2eCase.multiDeviceAppPair;
 
   bool get publishesNicknameFixture =>
       this != DesktopE2eCase.performance &&
@@ -3841,6 +4528,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.smoke => 'smoke',
       DesktopE2eCase.multiDevice => 'multi-device',
       DesktopE2eCase.multiDeviceRemoteJoin => 'multi-device-remote-join',
+      DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.step4RevokeMls => 'step4-revoke-mls',
       DesktopE2eCase.personalAgent => 'personal-agent',
       DesktopE2eCase.codexAgent => 'codex-agent',
@@ -3858,6 +4546,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.restart => const Duration(minutes: 10),
       DesktopE2eCase.displayNameFallback => const Duration(minutes: 15),
       DesktopE2eCase.multiDeviceRemoteJoin => const Duration(minutes: 22),
+      DesktopE2eCase.multiDeviceAppPair => const Duration(minutes: 25),
       DesktopE2eCase.step4RevokeMls => const Duration(minutes: 25),
       _ => const Duration(minutes: 5),
     };
@@ -3871,6 +4560,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.performance => _desktopCliPeerPerformanceScenario,
       DesktopE2eCase.multiDevice => _multiDeviceCapabilityGateScenario,
       DesktopE2eCase.multiDeviceRemoteJoin => _multiDeviceRemoteJoinScenario,
+      DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairScenario,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinScenario,
       _ => _desktopCliPeerScenario,
     };
@@ -3883,6 +4573,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.claudeCodeAgent => _claudeCodeAgentRunConfigPath,
       DesktopE2eCase.multiDeviceRemoteJoin =>
         _multiDeviceRemoteJoinRunConfigPath,
+      DesktopE2eCase.multiDeviceAppPair => _multiDeviceAppPairRunConfigPath,
       DesktopE2eCase.step4RevokeMls => _multiDeviceRemoteJoinRunConfigPath,
       _ => _desktopCliPeerRunConfigPath,
     };
@@ -3899,6 +4590,8 @@ enum DesktopE2eCase {
       'multi_device_remote_join' ||
       'remote-multi-device-join' ||
       'remote_multi_device_join' => DesktopE2eCase.multiDeviceRemoteJoin,
+      'multi-device-app-pair' ||
+      'multi_device_app_pair' => DesktopE2eCase.multiDeviceAppPair,
       'step4-revoke-mls' || 'step4_revoke_mls' => DesktopE2eCase.step4RevokeMls,
       'full' => DesktopE2eCase.full,
       'performance' ||
@@ -3957,7 +4650,9 @@ enum DesktopE2eCase {
       'claude_agent' => DesktopE2eCase.claudeCodeAgent,
       _ => throw E2eFailure(
         'Unsupported E2E case "$value". '
-        'Use smoke, multi-device, multi-device-remote-join, step4-revoke-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
+        'Use smoke, multi-device, multi-device-remote-join, '
+        'multi-device-app-pair, step4-revoke-mls, full, performance, direct, '
+        'group, attachment, contacts, inbound, restart, '
         'display-name-fallback, '
         'personal-agent, codex-agent, or claude-code-agent.',
       ),

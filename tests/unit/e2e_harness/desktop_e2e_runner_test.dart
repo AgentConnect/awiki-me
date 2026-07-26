@@ -169,6 +169,34 @@ void main() {
       );
     });
 
+    test('parses isolated App-pair member Join case aliases', () {
+      final hyphen = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi-device-app-pair',
+        '--dry-run',
+      ]);
+      final underscore = DesktopE2eOptions.parse(const <String>[
+        '--case',
+        'multi_device_app_pair',
+        '--dry-run',
+      ]);
+
+      expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceAppPair);
+      expect(underscore.e2eCase, DesktopE2eCase.multiDeviceAppPair);
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(
+        hyphen.e2eCase.scenario,
+        'multi-device-two-isolated-app-member-join',
+      );
+      expect(hyphen.e2eCase.caseIds, <String>['DEVICE-JOIN-E2E-004']);
+      expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 25));
+      expect(
+        hyphen.e2eCase.testFile,
+        'integration_test/multi_device_app_pair_test.dart',
+      );
+      expect(hyphen.e2eCase.runConfigPath, contains('multi-device-app-pair'));
+    });
+
     test('parses focused Step4 revoke MLS case', () {
       final options = DesktopE2eOptions.parse(const <String>[
         '--case',
@@ -360,7 +388,9 @@ void main() {
             (error) => error.message,
             'message',
             'Unsupported E2E case "unknown". '
-                'Use smoke, multi-device, multi-device-remote-join, step4-revoke-mls, full, performance, direct, group, attachment, contacts, inbound, restart, '
+                'Use smoke, multi-device, multi-device-remote-join, '
+                'multi-device-app-pair, step4-revoke-mls, full, performance, direct, '
+                'group, attachment, contacts, inbound, restart, '
                 'display-name-fallback, '
                 'personal-agent, codex-agent, or claude-code-agent.',
           ),
@@ -550,6 +580,34 @@ void main() {
         ),
         throwsA(isA<E2eFailure>()),
       );
+    });
+  });
+
+  group('RemoteMultiDeviceAppPairConfig', () {
+    const fileConfig = DesktopE2eFileConfig(
+      path: '/tmp/e2e.local.yaml',
+      platform: DesktopE2ePlatform.macos,
+      serviceBaseUrl: 'https://awiki.info',
+      didDomain: 'awiki.info',
+    );
+
+    test('uses the audited remote contract without requiring a CLI binary', () {
+      final config = RemoteMultiDeviceAppPairConfig.from(
+        fileConfig: fileConfig,
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
+          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
+              '["ssh","ali","resolve-otp"]',
+          'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX': 'apppair',
+        },
+      );
+
+      expect(config.platform, DesktopE2ePlatform.macos);
+      expect(config.serviceBaseUrl, 'https://awiki.info');
+      expect(config.phone, 'dedicated-phone');
+      expect(config.handlePrefix, 'apppair');
+      expect(config.allowStagedOtpOnSmsError, isFalse);
     });
   });
 

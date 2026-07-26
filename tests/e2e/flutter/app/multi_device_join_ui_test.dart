@@ -1,7 +1,7 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
-//          production AppBootstrap/native Core, independent CLI/App roots, and
-//          a foreground pseudo-terminal for the CLI-only SAS display boundary.
-// [OUTPUT]: Two real, notification-driven, member-only Device Join scenarios.
+//          production AppBootstrap/native Core, independent CLI/App or App/App
+//          roots, foreground CLI TTY where used, and loopback App-pair phases.
+// [OUTPUT]: Real notification-driven, member-only Device Join scenarios.
 // [POS]: Step 2 Join product E2E; no Registry discovery, implicit verification,
 //        copied state, fake Core, static OTP, or secret-bearing evidence.
 
@@ -15,10 +15,12 @@ import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/data/services/local_auth_user_presence_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
@@ -41,17 +43,24 @@ import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../app_pair_protocol.dart';
 import '../../case_attestation.dart';
 import '../../remote_multi_device_join_contract.dart';
 
+part 'multi_device_app_pair_ui_test.part.dart';
+
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
+const String _appPairCaseId = 'DEVICE-JOIN-E2E-004';
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';
 const String _mlsRevokeCaseId = 'MLS-MULTI-DEVICE-E2E-002';
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
+const String _appPairConfigPath = String.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG',
+);
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _phoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
 const String _otpCommandEnv = 'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
@@ -1101,7 +1110,127 @@ bool _invocationExpects(String caseId) {
   return encoded.split(',').map((value) => value.trim()).contains(caseId);
 }
 
-class _RemoteJoinRunConfig {
+abstract interface class _RemoteJoinEndpointConfig {
+  String get baseUrl;
+  String get userServiceUrl;
+  String get messageServiceUrl;
+  String get mailServiceUrl;
+  String get didDomain;
+  String get anpServiceUrl;
+  String get anpServiceDid;
+  String get handlePrefix;
+  bool get allowStagedOtpOnSmsError;
+}
+
+class _AppPairRunConfig implements _RemoteJoinEndpointConfig {
+  const _AppPairRunConfig({
+    required this.runId,
+    required this.baseUrl,
+    required this.userServiceUrl,
+    required this.messageServiceUrl,
+    required this.mailServiceUrl,
+    required this.didDomain,
+    required this.anpServiceUrl,
+    required this.anpServiceDid,
+    required this.handlePrefix,
+    required this.allowStagedOtpOnSmsError,
+    required this.adminStateRoot,
+    required this.joinerStateRoot,
+    required this.coordinator,
+  });
+
+  final String runId;
+  @override
+  final String baseUrl;
+  @override
+  final String userServiceUrl;
+  @override
+  final String messageServiceUrl;
+  @override
+  final String mailServiceUrl;
+  @override
+  final String didDomain;
+  @override
+  final String anpServiceUrl;
+  @override
+  final String anpServiceDid;
+  @override
+  final String handlePrefix;
+  @override
+  final bool allowStagedOtpOnSmsError;
+  final String adminStateRoot;
+  final String joinerStateRoot;
+  final AppPairCoordinatorClient coordinator;
+
+  static _AppPairRunConfig load() {
+    if (Platform.environment[_activationGate]?.trim() != '1') {
+      throw StateError('Remote multi-device Join is not explicitly enabled.');
+    }
+    if (_appPairConfigPath.trim().isEmpty) {
+      throw StateError('The App-pair run config path is missing.');
+    }
+    final decoded = jsonDecode(File(_appPairConfigPath).readAsStringSync());
+    if (decoded is! Map ||
+        decoded['schemaVersion'] != 1 ||
+        decoded['enabled'] != true) {
+      throw StateError('The App-pair run config is invalid.');
+    }
+    final root = _stringMap(decoded);
+    final service = _map(root, 'service');
+    final account = _map(root, 'account');
+    final apps = _map(root, 'apps');
+    final admin = _map(apps, 'admin');
+    final joiner = _map(apps, 'joiner');
+    final coordinator = _map(root, 'coordinator');
+    final endpoint = Uri.tryParse(_required(coordinator, 'baseUrl'));
+    if (endpoint == null ||
+        endpoint.scheme != 'http' ||
+        endpoint.host != InternetAddress.loopbackIPv4.address ||
+        endpoint.port == 0) {
+      throw StateError('The App-pair coordinator is not loopback-only.');
+    }
+    final config = _AppPairRunConfig(
+      runId: _required(root, 'runId'),
+      baseUrl: _required(service, 'baseUrl'),
+      userServiceUrl: _required(service, 'userServiceUrl'),
+      messageServiceUrl: _required(service, 'messageServiceUrl'),
+      mailServiceUrl: _required(service, 'mailServiceUrl'),
+      didDomain: _required(service, 'didDomain'),
+      anpServiceUrl: _required(service, 'anpServiceUrl'),
+      anpServiceDid: _required(service, 'anpServiceDid'),
+      handlePrefix: _required(account, 'handlePrefix'),
+      allowStagedOtpOnSmsError: _requiredBool(
+        account,
+        'allowStagedOtpOnSmsError',
+      ),
+      adminStateRoot: _required(admin, 'stateRoot'),
+      joinerStateRoot: _required(joiner, 'stateRoot'),
+      coordinator: AppPairCoordinatorClient(
+        endpoint: endpoint,
+        token: _required(coordinator, 'token'),
+      ),
+    );
+    if (config.didDomain != 'awiki.info' ||
+        config.adminStateRoot == config.joinerStateRoot) {
+      throw StateError('The App-pair target or state isolation is invalid.');
+    }
+    for (final value in <String>[
+      config.baseUrl,
+      config.userServiceUrl,
+      config.messageServiceUrl,
+      config.mailServiceUrl,
+      config.anpServiceUrl,
+    ]) {
+      final uri = Uri.tryParse(value);
+      if (uri == null || uri.scheme != 'https' || uri.host != 'awiki.info') {
+        throw StateError('Remote multi-device service target is not audited.');
+      }
+    }
+    return config;
+  }
+}
+
+class _RemoteJoinRunConfig implements _RemoteJoinEndpointConfig {
   const _RemoteJoinRunConfig({
     required this.runId,
     required this.baseUrl,
@@ -1124,14 +1253,23 @@ class _RemoteJoinRunConfig {
   });
 
   final String runId;
+  @override
   final String baseUrl;
+  @override
   final String userServiceUrl;
+  @override
   final String messageServiceUrl;
+  @override
   final String mailServiceUrl;
+  @override
   final String didDomain;
+  @override
   final String anpServiceUrl;
+  @override
   final String anpServiceDid;
+  @override
   final String handlePrefix;
+  @override
   final bool allowStagedOtpOnSmsError;
   final String cliBin;
   final String cliSourceRef;
@@ -2301,7 +2439,7 @@ class _CountingRealUserPresencePort implements UserPresencePort {
 }
 
 AwikiEnvironmentConfig _joinOnlyEnvironment(
-  _RemoteJoinRunConfig config, {
+  _RemoteJoinEndpointConfig config, {
   bool enableRootTransfer = false,
   bool enableStep4 = false,
 }) => AwikiEnvironmentConfig(
@@ -2390,7 +2528,7 @@ Future<void> _openDevicesPage(WidgetTester tester) async {
 
 Future<String> _requestAndResolveOtp({
   required http.Client client,
-  required _RemoteJoinRunConfig config,
+  required _RemoteJoinEndpointConfig config,
   required _DedicatedAccount account,
   required String purpose,
   required String handle,
@@ -2498,7 +2636,7 @@ Future<String> _resolveOtp({
 
 Future<String> _exchangeJoinGrant({
   required http.Client client,
-  required _RemoteJoinRunConfig config,
+  required _RemoteJoinEndpointConfig config,
   required _DedicatedAccount account,
   required String handle,
   required String otp,
@@ -2696,6 +2834,27 @@ void _requireAppAdminAndMember(
       member.length != 1) {
     fail('The App Registry did not contain the expected admin/member.');
   }
+}
+
+Future<DeviceRegistrySnapshot> _waitForAppRegistry(
+  DeviceManagementCorePort core, {
+  required String did,
+  required int expectedDeviceCount,
+  Duration timeout = const Duration(seconds: 60),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    try {
+      final registry = await core.identityDeviceRegistry(did);
+      if (registry.devices.length == expectedDeviceCount) {
+        return registry;
+      }
+    } on Object {
+      // Registry convergence remains a read-only remote oracle.
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+  fail('The App Registry did not converge to the expected device count.');
 }
 
 void _requireJoinIdentity(

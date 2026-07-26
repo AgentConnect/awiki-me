@@ -28,7 +28,7 @@
 | `lib/src/presentation/` | Flutter 页面、Riverpod providers、组件、响应式布局和反馈 |
 | `tests/unit/` | 快速确定性 unit/widget/provider/fake-backed tests；line/branch baseline 由 `tests/quality/coverage_baseline.json` 约束 |
 | `tests/e2e/` | audited suite manifest + case catalog/checker、killable runner、schema-v2 case/assertion attestation、首失败脱敏诊断、configs、Flutter implementations、本地 production-bootstrap/native-Core capability gate、真实远端 `awiki.info` App+CLI/backend/device flows与资源台账 |
-| `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/` |
+| `integration_test/` | Flutter tooling 薄 shim； durable scenario 在 `tests/e2e/flutter/`；App-pair shim 由两个隔离 bundle 分别编译 |
 | `scripts/` | packaging/build helper与显式developer/release gate；cleanup默认dry-run，不进入production startup |
 | `docs/` | 产品、架构、测试、Personal Agent、SecretVault、性能和计划文档 |
 | `ios/` | iOS 13+ Runner；使用 `UIScene`、CocoaPods Debug/Profile/Release 配置，并承载 App 自定义 platform channels |
@@ -43,6 +43,7 @@
 - [docs/conversation-presentation-ownership.md](docs/conversation-presentation-ownership.md)：conversation-first 显示与 overlay 边界。
 - [docs/identity-secret-storage.md](docs/identity-secret-storage.md)：App root key provider 与 SecretVault 边界。
 - [docs/multi-device-join-ui.md](docs/multi-device-join-ui.md)：默认关闭的设备列表、SMS Join、双端 6 位 SAS、角色选择与 App/Core 秘密边界。
+- [docs/multi-device-app-pair-e2e.md](docs/multi-device-app-pair-e2e.md)：单机双隔离 App 的构建、驱动、协调与秘密边界。
 - [docs/root-key-transfer-ui.md](docs/root-key-transfer-ui.md)：默认关闭的管理设备根导入、user-presence、management-ready 投影与控制消息过滤边界。
 - [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认关闭的本设备群加密准备/重试/就绪投影与 P6 v2 Core 启用门禁。
 - [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Handle Recovery begin/status/cancel/finalize、独立二次 OTP、secret-free 旧管理设备通知、fresh user-presence 取消与本地-only dismiss 边界。
@@ -63,6 +64,7 @@ dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case multi-device
 # Requires reviewed awiki.info rollout/account env and real macOS user presence:
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
+dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 ```
@@ -83,5 +85,11 @@ backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平�
 `multi-device-remote-mls` 复用同一受审计远端合同，但以真实 App owner 和独立 CLI Core
 root 覆盖 Add/Welcome、未来群文本/附件以及精确设备 Remove；实现可执行不代表已经取得
 远端 pass 证据。
+
+`multi-device-app-pair` 是独立的单机双进程模式：通过通用 Debug 构建脚本生成稳定且不同
+bundle ID、独立 Flutter build root 与独立 native Core state root 的管理端/加入端 App，
+再由两个 driver 并发操作真实 UI。loopback coordinator 只交换生命周期 checkpoint，并在
+内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。当前该模式仅注册
+`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。
