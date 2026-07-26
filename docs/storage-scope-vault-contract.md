@@ -32,6 +32,9 @@ Tenant Profile（App 业务连接配置）
   migration/verification 和私钥/JWT/E2EE secret 正确性。
 - App 不读取 vault record、private PEM、JWT、完整 `SecretRef` 或 ciphertext。
 - App、CLI、daemon 是不同 host，不共享 root key、Keychain account 或本地 scope。
+- 删除单个本地身份由 im-core identity-retirement 事务负责；它不删除 scope
+  Keychain item，也不等价于删除整个 Storage Scope。App 只负责先脱离 active session，
+  realtime/runtime teardown 不能成为该离线事务的网络前置条件。
 
 ## 2. 不可变 ID
 

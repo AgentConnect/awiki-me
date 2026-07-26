@@ -474,14 +474,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           ? await ref
                 .read(onboardingServiceProvider)
                 .legacyUpgradeStatus(identityIdOrAlias)
-                .timeout(_requestTimeout)
           : const LegacyIdentityUpgradeStatus.idle();
       if (status.phase == LegacyIdentityUpgradePhase.idle ||
           status.phase == LegacyIdentityUpgradePhase.running) {
         status = await ref
             .read(onboardingServiceProvider)
-            .upgradeLegacyIdentity(identityIdOrAlias)
-            .timeout(_requestTimeout);
+            .upgradeLegacyIdentity(identityIdOrAlias);
       }
       switch (status.phase) {
         case LegacyIdentityUpgradePhase.completed:
@@ -496,6 +494,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           state = state.copyWith(
             legacyUpgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
               identityId: identityIdOrAlias,
+              failureCode: status.failureCode ?? 'legacy_upgrade_failed',
             ),
           );
       }
@@ -503,6 +502,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       state = state.copyWith(
         legacyUpgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
           identityId: identityIdOrAlias,
+          failureCode: 'legacy_upgrade_failed',
         ),
       );
     }

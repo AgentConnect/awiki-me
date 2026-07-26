@@ -20,6 +20,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart' show Key, ListView, Size, Text;
@@ -82,6 +83,19 @@ void main() {
         find.byKey(const Key('onboarding-mac-credential-mode')),
         findsOneWidget,
       );
+      final fields = find.byType(CupertinoTextField);
+      expect(fields, findsNWidgets(3));
+      await tester.enterText(fields.at(0), '13800138000');
+      await tester.enterText(fields.at(1), 'smoke-otp');
+      await tester.tap(find.text('发送验证码'));
+      await tester.pump();
+      expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
+      expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
+      expect(harness.gateway.lastRegistrationOtpDomain, 'awiki.ai');
+      expect(
+        harness.gateway.lastRegistrationOtpFullHandle,
+        'smoke-otp.awiki.ai',
+      );
     } else {
       expect(find.text('切换身份'), findsWidgets);
     }
@@ -93,6 +107,7 @@ void main() {
         'app_shell_visible',
         'onboarding_visible',
         'onboarding_auth_entry_visible',
+        'mac_phone_otp_handle_scope_preserved',
         'unauthenticated_realtime_disconnected',
       ],
     );

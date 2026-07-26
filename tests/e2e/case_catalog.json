@@ -1703,10 +1703,11 @@
       "exactOracles": [
         "App shell and onboarding are visible exactly once.",
         "The onboarding authentication entry is visible; macOS exposes the single phone, email, and identity-credential method selector.",
+        "On macOS, the phone OTP form submits the same-step handle and its tenant-qualified full handle.",
         "Unauthenticated realtime remains disconnected."
       ],
       "negativeChecks": [
-        "A missing shell/onboarding/authentication-entry surface or an unexpected realtime connection fails the case."
+        "A missing shell/onboarding/authentication-entry surface, a dropped OTP handle scope, or an unexpected realtime connection fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",

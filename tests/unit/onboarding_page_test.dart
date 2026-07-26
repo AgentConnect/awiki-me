@@ -63,9 +63,20 @@ void main() {
       );
       expect(gateway.loginCalls, 0);
 
+      await tester.pump(const Duration(seconds: 21));
+      expect(
+        find.byKey(const Key('legacy-upgrade-loading-mask')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('legacy-upgrade-retry-message')),
+        findsNothing,
+      );
+
       firstUpgrade.complete(
         const LegacyIdentityUpgradeStatus.retryRequired(
           identityId: 'identity-123',
+          failureCode: 'service_error',
         ),
       );
       await tester.pump();
@@ -76,6 +87,7 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('旧身份升级失败，请重试。'), findsOneWidget);
+      expect(find.text('Diagnostic code: service_error'), findsOneWidget);
       expect(find.textContaining('document'), findsNothing);
       expect(find.textContaining('key'), findsNothing);
       expect(find.textContaining('proof'), findsNothing);
@@ -196,6 +208,41 @@ void main() {
     expect(container.read(onboardingProvider).entryMode, 'register');
     expect(container.read(onboardingProvider).authMode, 'phone');
     expect(find.text('发送验证码'), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 手机号发码提交同屏 Handle 作为 OTP 目标', (tester) async {
+    final support = _RecordingOnboardingSupportService(FakeAwikiGateway());
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1120, 820));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        providerOverrides: <Override>[
+          onboardingSupportServiceProvider.overrideWithValue(support),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    expect(fields, findsNWidgets(3));
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice-0714');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+
+    expect(support.phone, '13800138000');
+    expect(support.handle, 'alice-0714');
+    expect(support.domain, 'awiki.ai');
+    expect(support.fullHandle, 'alice-0714.awiki.ai');
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -379,6 +426,10 @@ void main() {
 
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(container.read(onboardingProvider).entryMode, 'login');
+
+    await tester.pump(const Duration(seconds: 21));
+    expect(container.read(appRuntimeProvider).isBusy, isTrue);
+    expect(container.read(uiFeedbackProvider), isNull);
 
     deleteCompleter.complete();
     await deleteFuture;
@@ -1127,6 +1178,28 @@ class _LegacyUpgradeOnboardingService implements OnboardingService {
     String? profileMarkdown,
   }) {
     throw UnsupportedError('not used');
+  }
+}
+
+class _RecordingOnboardingSupportService extends FakeOnboardingSupportService {
+  _RecordingOnboardingSupportService(super.gateway);
+
+  String? phone;
+  String? handle;
+  String? domain;
+  String? fullHandle;
+
+  @override
+  Future<void> sendRegistrationOtp({
+    required String phone,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) async {
+    this.phone = phone;
+    this.handle = handle;
+    this.domain = domain;
+    this.fullHandle = fullHandle;
   }
 }
 

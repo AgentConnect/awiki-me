@@ -650,6 +650,10 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   String? lastRegisteredNickName;
   String? lastRegisteredProfileMarkdown;
   String? lastEmailVerificationHandle;
+  String? lastRegistrationOtpPhone;
+  String? lastRegistrationOtpHandle;
+  String? lastRegistrationOtpDomain;
+  String? lastRegistrationOtpFullHandle;
   String? lastCheckedEmailVerificationHandle;
   String? lastEmailRegisteredNickName;
   String? lastEmailRegisteredProfileMarkdown;
@@ -3639,6 +3643,10 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
     required String domain,
     required String fullHandle,
   }) {
+    gateway.lastRegistrationOtpPhone = phone;
+    gateway.lastRegistrationOtpHandle = handle;
+    gateway.lastRegistrationOtpDomain = domain;
+    gateway.lastRegistrationOtpFullHandle = fullHandle;
     return gateway.sendOtp(phone: phone);
   }
 }

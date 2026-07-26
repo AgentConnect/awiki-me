@@ -186,8 +186,11 @@ class ImCoreAppSessionService implements AppSessionService {
     final current = _current;
     final deletingCurrent =
         current != null && _matchesIdentity(current, selector);
+    Future<void>? realtimeCleanup;
     if (deletingCurrent) {
-      await _realtime?.stop();
+      _current = null;
+      await _activeSessionStore?.clearActiveIdentityId();
+      realtimeCleanup = _stopRealtimeBestEffort();
     }
     final deleted = await _identities.deleteLocalIdentity(identityIdOrAlias);
     if (current != null &&
@@ -198,12 +201,8 @@ class ImCoreAppSessionService implements AppSessionService {
                 _matchesIdentity(current, deleted.localAlias!)) ||
             (deleted.handle != null &&
                 _matchesIdentity(current, deleted.handle!)))) {
-      try {
-        await _activeSessionStore?.clearActiveIdentityId();
-        await _runtime.dispose();
-      } finally {
-        _current = null;
-      }
+      _current = null;
+      unawaited(_cleanupRetiredRuntimeBestEffort(realtimeCleanup));
     } else {
       final activeIdentityId = await _activeSessionStore
           ?.readActiveIdentityId();
@@ -288,6 +287,13 @@ class ImCoreAppSessionService implements AppSessionService {
     } catch (_) {
       return;
     }
+  }
+
+  Future<void> _cleanupRetiredRuntimeBestEffort(
+    Future<void>? realtimeCleanup,
+  ) async {
+    await (realtimeCleanup ?? _stopRealtimeBestEffort());
+    await _disposeRuntimeBestEffort();
   }
 }
 

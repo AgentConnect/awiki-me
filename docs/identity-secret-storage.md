@@ -60,6 +60,12 @@ App、CLI、daemon 是独立 host，不共享 secure-storage item、root key 或
 处理 unavailable、metadata missing/unverified、workspace/device mismatch、record-open 和
 verification failure，不解析 human message，也不执行旧 identity migration。
 
+release/0710 Legacy identity 的显式升级由 Core 拥有完整 transaction deadline、pending
+record 和重试分类。App 等待 `completed|retryRequired` typed status，不再叠加 20 秒通用
+request timeout，因为 Dart timeout 不会取消 native upgrade，反而会在原事务仍执行时开放
+第二次重试。失败页只投影 allowlisted diagnostic code，不展示 document、key、proof、token
+或服务响应正文。
+
 ## 5. Tenant 切换与本地状态
 
 切换顺序是 stop realtime → 等待 active core operations → dispose client/core → close Product
@@ -70,6 +76,18 @@ active identity、im-core state/cache/temp 都从统一 `AwikiStorageScopeLayout
 切换 active tenant 或修改 active tenant route 时先生成未持久化 registry candidate；只有旧
 runtime 已释放且 candidate runtime 已成功打开后，才用 revision CAS 提交 registry。打开或提交
 失败时销毁 candidate，并按旧 registry 重新打开原 scope，避免“UI 回滚但磁盘已切换”的半提交。
+
+### 5.1 单个本地身份删除
+
+“退出并删除本地凭证”不是网络 logout，也不是整个 Storage Scope 删除。App 先清除 active
+identity 指针并从 UI session 脱离，再调用 Core 的离线 identity-retirement 事务；
+realtime stop 与 runtime dispose 只做 best-effort 尾部清理，不得阻塞或改变本地删除结果，
+也不得被通用 UI timeout 误报成网络超时。
+
+Core 负责 registry/default pointer tombstone、身份目录和 exact `identity_id` Vault records
+的顺序、一致性与启动恢复。App 不枚举或删除 Vault records。中途崩溃时 Core open 继续未完成
+阶段；已完成的 identity-ID tombstone 还会清理由删除开始前已进入执行、但稍后才写回的凭证。
+删除一个身份不会删除 scope root key、Product SQLite、attachments 或同 scope 的其他身份。
 
 ## 6. E2E 与发布 Gate
 

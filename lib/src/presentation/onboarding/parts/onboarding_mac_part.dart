@@ -72,8 +72,11 @@ class _MacOnboardingScaffold extends StatelessWidget {
                   final useCompactLayout = constraints.maxWidth < 1080;
                   final footerReserve = useCompactLayout ? 104.0 : 122.0;
                   final cardMaxHeight = constraints.maxHeight - footerReserve;
+                  final boundedCardMaxHeight = cardMaxHeight
+                      .clamp(420.0, 700.0)
+                      .toDouble();
                   final authCard = _MacAuthCard(
-                    maxHeight: cardMaxHeight < 420 ? 420 : cardMaxHeight,
+                    maxHeight: boundedCardMaxHeight,
                     onboarding: onboarding,
                     credentials: credentials,
                     phoneController: phoneController,
@@ -1053,6 +1056,13 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
             prefix: const _MacPhonePrefix(),
+          ),
+          const SizedBox(height: 16),
+          _MacOutlinedField(
+            controller: handleController,
+            label: context.l10n.onboardingHandle,
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            icon: CupertinoIcons.at,
           ),
           const SizedBox(height: 16),
           _MacOutlinedField(

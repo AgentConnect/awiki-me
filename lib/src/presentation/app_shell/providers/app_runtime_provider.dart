@@ -277,7 +277,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (current == null) {
       return;
     }
-    await _runBusy(() async {
+    state = state.copyWith(isBusy: true);
+    try {
       _isLoggingOut = true;
       try {
         state = state.copyWith(activatedDid: null);
@@ -298,7 +299,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       } finally {
         _isLoggingOut = false;
       }
-    });
+    } catch (error) {
+      final message = AppMessage.fromError(error);
+      ref.read(uiFeedbackProvider.notifier).showError(message);
+      if (message == AppMessage.sessionExpiredRelogin()) {
+        await logout();
+      }
+    } finally {
+      state = state.copyWith(isBusy: false);
+    }
   }
 
   void _clearAuthenticatedUiState() {

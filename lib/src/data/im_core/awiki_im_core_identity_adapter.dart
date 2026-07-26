@@ -244,11 +244,27 @@ LegacyIdentityUpgradeStatus _legacyUpgradeStatus(
   return switch (status) {
     core.LegacyUpgradeIdle() => const LegacyIdentityUpgradeStatus.idle(),
     core.LegacyUpgradeRunning() => const LegacyIdentityUpgradeStatus.running(),
-    core.LegacyUpgradeRetryRequired(:final identityId) =>
-      LegacyIdentityUpgradeStatus.retryRequired(identityId: identityId),
+    core.LegacyUpgradeRetryRequired(:final identityId, :final code) =>
+      LegacyIdentityUpgradeStatus.retryRequired(
+        identityId: identityId,
+        failureCode: _safeLegacyUpgradeFailureCode(code),
+      ),
     core.LegacyUpgradeCompleted() =>
       const LegacyIdentityUpgradeStatus.completed(),
   };
+}
+
+String _safeLegacyUpgradeFailureCode(String code) {
+  const allowed = <String>{
+    'auth_required',
+    'legacy_upgrade_failed',
+    'local_state_unavailable',
+    'permission_denied',
+    'service_error',
+    'transport_unavailable',
+  };
+  final normalized = code.trim().toLowerCase();
+  return allowed.contains(normalized) ? normalized : 'legacy_upgrade_failed';
 }
 
 Future<core.IdentitySummary> _resolveIdentity(

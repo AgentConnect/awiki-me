@@ -347,12 +347,53 @@ void main() {
 
         await service.restoreSession();
         final deleted = await service.deleteLocalIdentity('alice-local');
+        await pumpEventQueue();
 
         expect(deleted.identityId, identity.identityId);
         expect(identities.deletedSelectors, ['alice-local']);
         expect(realtime.stopCount, 1);
         expect(runtime.disposeCount, 1);
         expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
+      'deleteLocalIdentity is offline-first when realtime and runtime cleanup are slow',
+      () async {
+        final realtimeStop = Completer<void>();
+        final runtimeDispose = Completer<void>();
+        final runtime = _FakeRuntime(
+          onDispose: () async => runtimeDispose.future,
+        );
+        final realtime = _FakeRealtime(onStop: () async => realtimeStop.future);
+        final identity = _session('id-default');
+        final identities = _FakeIdentities(defaultIdentity: identity);
+        final active = _FakeActiveSessionStore('id-default');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        final deleted = await service
+            .deleteLocalIdentity('alice-local')
+            .timeout(const Duration(seconds: 1));
+
+        expect(deleted.identityId, identity.identityId);
+        expect(identities.deletedSelectors, ['alice-local']);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+        expect(realtime.stopCount, 1);
+        expect(runtime.disposeCount, 0);
+
+        realtimeStop.complete();
+        await pumpEventQueue();
+        expect(runtime.disposeCount, 1);
+        runtimeDispose.complete();
+        await pumpEventQueue();
       },
     );
 
@@ -414,9 +455,10 @@ AppSession _session(String id) {
 }
 
 class _FakeRuntime implements ImCoreRuntimePort {
-  _FakeRuntime({this.vaultError});
+  _FakeRuntime({this.vaultError, this.onDispose});
 
   final Object? vaultError;
+  final Future<void> Function()? onDispose;
   int openCount = 0;
   int disposeCount = 0;
   final List<String> switchedIdentities = <String>[];
@@ -450,6 +492,7 @@ class _FakeRuntime implements ImCoreRuntimePort {
   @override
   Future<void> dispose() async {
     disposeCount += 1;
+    await onDispose?.call();
   }
 }
 

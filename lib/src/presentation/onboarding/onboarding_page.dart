@@ -644,6 +644,19 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                           key: const Key('legacy-upgrade-retry-message'),
                           textAlign: TextAlign.center,
                         ),
+                        if (onboarding.legacyUpgradeStatus.failureCode
+                            case final failureCode?) ...<Widget>[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Diagnostic code: $failureCode',
+                            key: const Key('legacy-upgrade-diagnostic-code'),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         AppPrimaryButton(
                           label: context.l10n.commonRetry,

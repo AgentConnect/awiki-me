@@ -49,6 +49,9 @@ String normalizeAppError(Object error) {
   if (raw.startsWith('ArgumentError: ')) {
     return raw.substring('ArgumentError: '.length);
   }
+  if (raw.startsWith('Invalid argument(s): ')) {
+    return raw.substring('Invalid argument(s): '.length);
+  }
   if (raw.startsWith('Bad state: ')) {
     return raw.substring('Bad state: '.length);
   }
