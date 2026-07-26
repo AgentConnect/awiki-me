@@ -4,6 +4,8 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/device_revoke_outcome.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
@@ -28,6 +30,72 @@ const _session = SessionIdentity(
 );
 
 void main() {
+  testWidgets(
+    'authenticated shell exposes trusted pending Join as an explicit review entry',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: testDid,
+          devices: <DeviceSummary>[
+            DeviceSummary(
+              protocolDeviceId: 'admin-current',
+              signingKeyId: '$testDid#admin-sign',
+              e2eeKeyId: '$testDid#admin-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+          ],
+        )
+        ..joinRequests = <DeviceJoinRequestNotice>[
+          _request(protocolDeviceId: 'device-waiting'),
+        ];
+      final gateway = FakeAwikiGateway()
+        ..myProfile = const UserProfile(
+          did: testDid,
+          nickName: 'Alice',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          handle: 'alice',
+        );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AppShell(),
+          gateway: gateway,
+          session: _session,
+          providerOverrides: <Override>[
+            deviceManagementCorePortProvider.overrideWithValue(core),
+          ],
+        ),
+      );
+      await tester.pump();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+      await container.read(devicesProvider.notifier).loadManagement();
+      await tester.pump();
+
+      final entry = find.bySemanticsIdentifier('device-join-request-entry');
+      expect(entry, findsOneWidget);
+      expect(find.text('device-waiting'), findsOneWidget);
+      expect(core.startVerificationCalls, 0);
+      expect(core.rejectCalls, 0);
+      expect(core.confirmCalls, 0);
+
+      await tester.tap(entry);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.byType(DeviceJoinApprovalSheet), findsOneWidget);
+      expect(core.startVerificationCalls, 0);
+      expect(core.rejectCalls, 0);
+      expect(core.confirmCalls, 0);
+    },
+  );
+
   testWidgets('settings exposes device management by default', (tester) async {
     final core = FakeDeviceManagementCore();
     await tester.pumpWidget(

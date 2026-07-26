@@ -63,7 +63,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'App new device joins after CLI consumes its local notification inbox',
+    'App new device joins after CLI listener emits a host wake',
     (tester) async {
       final config = _RemoteJoinRunConfig.load();
       final account = _DedicatedAccount.fromEnvironment(
@@ -112,6 +112,7 @@ void main() {
       final bootstrapAdminDeviceId = _requireCliReadyBootstrapAdmin(
         initialCliRegistry,
       );
+      await cli.startJoinRequestListener();
 
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(config),
@@ -199,11 +200,9 @@ void main() {
         failure: 'The restarted App did not resume the same pending Join.',
       );
 
-      final notice = await cli.waitForJoinRequest(
+      final notice = await cli.waitForJoinRequestWake(
         expectedSessionId: initialPending.joinSessionId,
         expectedDeviceId: initialPending.protocolDeviceId,
-        expectedState: 'pending',
-        expectedClaimedByCurrentDevice: false,
       );
       final started = await cli.startVerification(notice);
       if (started.remoteState != 'challenge_sent' || started.sas != null) {
@@ -225,7 +224,7 @@ void main() {
         fail('The App projected a malformed Join SAS.');
       }
 
-      await cli.waitForJoinRequest(
+      await cli.waitForJoinRequestProjection(
         expectedSessionId: initialPending.joinSessionId,
         expectedDeviceId: initialPending.protocolDeviceId,
         expectedState: 'response_verified',
@@ -283,6 +282,7 @@ void main() {
           'independent_native_devices_bootstrapped',
           'app_otp_left_join_pending',
           'app_restart_restored_pending_without_sas',
+          'cli_listener_join_wake_received',
           'sas_matched_without_secret_evidence',
           'cli_foreground_member_approval_completed',
           'app_joined_after_authority_reresolution',
@@ -297,7 +297,7 @@ void main() {
   );
 
   testWidgets(
-    'App admin explicitly starts and approves a CLI Join from local inbox',
+    'App admin reviews a listener-delivered CLI Join from the global entry',
     (tester) async {
       final config = _RemoteJoinRunConfig.load();
       final account = _DedicatedAccount.fromEnvironment(
@@ -384,7 +384,6 @@ void main() {
         tester,
         expectedDid: adminSession.did,
       );
-      await _openDevicesPage(tester);
 
       final joinOperationId = 'app-join-${_nonce(10)}';
       final joinOtp = await _requestAndResolveOtp(
@@ -411,10 +410,9 @@ void main() {
         fail('OTP did not leave the joining CLI pending without a SAS.');
       }
 
-      await _syncAppJoinInboxUntil(
-        container,
-        reason: 'e2e_join_requested',
-        condition: () {
+      await _pumpUntil(
+        tester,
+        () {
           final matches = container
               .read(devicesProvider)
               .joinRequests
@@ -429,18 +427,18 @@ void main() {
               matches.single.canStartVerification &&
               !matches.single.claimedByCurrentDevice;
         },
+        timeout: const Duration(seconds: 45),
         failure:
-            'The App did not project the Join request from its local inbox.',
+            'The App listener did not project the Join request from its trusted local inbox.',
       );
-      await _pumpUntil(
-        tester,
-        () => find.text(started.protocolDeviceId).evaluate().length == 1,
-        failure: 'The local Join request was not rendered on Devices.',
+      final joinRequestEntry = find.bySemanticsIdentifier(
+        'device-join-request-entry',
       );
       await _tapOne(
         tester,
-        find.text(started.protocolDeviceId),
-        failure: 'The local Join request could not be opened.',
+        joinRequestEntry,
+        failure:
+            'The listener-delivered Join request did not expose a review entry.',
       );
       await _pumpUntil(
         tester,
@@ -483,10 +481,9 @@ void main() {
         started.joinSessionId,
         expectedDeviceId: started.protocolDeviceId,
       );
-      await _syncAppJoinInboxUntil(
-        container,
-        reason: 'e2e_join_response_verified',
-        condition: () {
+      await _pumpUntil(
+        tester,
+        () {
           final state = container.read(devicesProvider);
           _failOnDeviceError(state, 'The App failed to consume Join response');
           final progress = state.activeJoin;
@@ -497,6 +494,7 @@ void main() {
               progress?.remoteState == DeviceJoinRemoteState.responseVerified &&
               _validSas(progress?.sas ?? '');
         },
+        timeout: const Duration(seconds: 45),
         failure: 'The App did not restore verified progress from local state.',
       );
       await tester.pump();
@@ -587,6 +585,7 @@ void main() {
           phases: const <String>[
             'independent_native_devices_bootstrapped',
             'otp_left_join_pending',
+            'app_global_join_review_entry_received',
             'sas_matched_without_secret_evidence',
             'single_real_user_presence_confirmed',
             'joined_device_active_member_not_admin',
@@ -1277,6 +1276,8 @@ class _JoinCli {
   final String workspace;
   final String home;
   final String _tenantName;
+  Process? _joinRequestListener;
+  String? _hostNotificationPath;
 
   Future<void> initialize() async {
     await Directory(workspace).create(recursive: true);
@@ -1326,6 +1327,101 @@ class _JoinCli {
     return _required(_stringMap(identity), 'did');
   }
 
+  Future<void> startJoinRequestListener() async {
+    if (_joinRequestListener != null) {
+      fail('The Join request listener was started more than once.');
+    }
+    await _run(const <String>[
+      '--format',
+      'json',
+      'runtime',
+      'listener',
+      'config',
+      'set',
+      '--enabled=true',
+      '--auto-install=false',
+      '--auto-start=false',
+    ]);
+    await _run(const <String>[
+      '--format',
+      'json',
+      'runtime',
+      'mode',
+      'set',
+      'websocket',
+    ]);
+    await _run(const <String>[
+      '--format',
+      'json',
+      'runtime',
+      'host-notify',
+      'config',
+      'set',
+      '--sink',
+      'file',
+    ]);
+    final enabled = await _run(const <String>[
+      '--format',
+      'json',
+      'runtime',
+      'host-notify',
+      'enable',
+    ]);
+    final hostNotify = _data(enabled, action: null)['host_notify'];
+    if (hostNotify is! Map) {
+      fail('The CLI returned no host-notification configuration.');
+    }
+    _hostNotificationPath = _required(_stringMap(hostNotify), 'file_path');
+
+    final process = await Process.start(
+      config.cliBin,
+      const <String>['--format', 'json', 'runtime', 'listener', 'run'],
+      environment: <String, String>{
+        ..._environment(),
+        'AWIKI_CLI_INTERNAL_ENTRY': '1',
+      },
+      includeParentEnvironment: false,
+      runInShell: false,
+    );
+    _joinRequestListener = process;
+    unawaited(process.stdout.drain<void>());
+    unawaited(process.stderr.drain<void>());
+
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (DateTime.now().isBefore(deadline)) {
+      if (await _processExited(process)) {
+        fail('The CLI Join request listener exited before it was ready.');
+      }
+      final status = await _run(const <String>[
+        '--format',
+        'json',
+        'runtime',
+        'listener',
+        'status',
+      ]);
+      final listener = _data(status, action: null)['listener'];
+      if (listener is Map) {
+        final listenerData = _stringMap(listener);
+        final sessions = listenerData['sessions'];
+        final host = listenerData['host_notify'];
+        final connected =
+            sessions is List &&
+            sessions.whereType<Map>().any(
+              (session) => session['connected'] == true,
+            );
+        final configured =
+            host is Map &&
+            host['sink'] == 'file' &&
+            host['file_path'] == _hostNotificationPath;
+        if (connected && configured) {
+          return;
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    fail('The CLI Join request listener did not become ready.');
+  }
+
   Future<_JoinProgress> startJoin({
     required String did,
     required String operationId,
@@ -1346,7 +1442,59 @@ class _JoinCli {
     return _JoinProgress.fromData(_data(payload, action: 'device_join_start'));
   }
 
-  Future<_JoinRequest> waitForJoinRequest({
+  Future<_JoinRequest> waitForJoinRequestWake({
+    required String expectedSessionId,
+    required String expectedDeviceId,
+  }) async {
+    final path = _hostNotificationPath;
+    if (path == null || _joinRequestListener == null) {
+      fail('The CLI Join request listener was not active.');
+    }
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final file = File(path);
+      if (await file.exists()) {
+        final lines = await file.readAsLines();
+        for (final line in lines) {
+          Object? decoded;
+          try {
+            decoded = jsonDecode(line);
+          } on Object {
+            fail('The CLI host-notification file contained invalid JSON.');
+          }
+          if (decoded is! Map ||
+              decoded['topic'] != 'im.device.join.requested') {
+            continue;
+          }
+          final data = decoded['data'];
+          if (data is! Map || data['join_session_id'] != expectedSessionId) {
+            continue;
+          }
+          const allowedFields = <String>{
+            'channel',
+            'event_id',
+            'join_session_id',
+            'recipient_did',
+            'issued_at',
+            'expires_at',
+          };
+          if (data.keys.any((key) => !allowedFields.contains(key.toString()))) {
+            fail('The CLI Join wake event contained an unapproved field.');
+          }
+          return waitForJoinRequestProjection(
+            expectedSessionId: expectedSessionId,
+            expectedDeviceId: expectedDeviceId,
+            expectedState: 'pending',
+            expectedClaimedByCurrentDevice: false,
+          );
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    fail('The CLI listener did not emit the expected Join request wake event.');
+  }
+
+  Future<_JoinRequest> waitForJoinRequestProjection({
     required String expectedSessionId,
     required String expectedDeviceId,
     required String expectedState,
@@ -1354,16 +1502,6 @@ class _JoinCli {
   }) async {
     final deadline = DateTime.now().add(const Duration(seconds: 45));
     while (DateTime.now().isBefore(deadline)) {
-      await _run(const <String>[
-        '--format',
-        'json',
-        'msg',
-        'inbox',
-        '--scope',
-        'direct',
-        '--limit',
-        '20',
-      ]);
       final payload = await _run(const <String>[
         '--format',
         'json',
@@ -2021,8 +2159,28 @@ class _JoinCli {
   }
 
   Future<void> deleteLocalState() async {
+    final listener = _joinRequestListener;
+    _joinRequestListener = null;
+    if (listener != null && !await _processExited(listener)) {
+      listener.kill(ProcessSignal.sigterm);
+      try {
+        await listener.exitCode.timeout(const Duration(seconds: 5));
+      } on TimeoutException {
+        listener.kill(ProcessSignal.sigkill);
+        await listener.exitCode;
+      }
+    }
     await _deleteDirectory(workspace);
     await _deleteDirectory(home);
+  }
+}
+
+Future<bool> _processExited(Process process) async {
+  try {
+    await process.exitCode.timeout(Duration.zero);
+    return true;
+  } on TimeoutException {
+    return false;
   }
 }
 
@@ -2228,25 +2386,6 @@ Future<void> _openDevicesPage(WidgetTester tester) async {
     () => find.byType(DevicesPage).evaluate().length == 1,
     failure: 'The App Devices surface did not open.',
   );
-}
-
-Future<void> _syncAppJoinInboxUntil(
-  ProviderContainer container, {
-  required String reason,
-  required bool Function() condition,
-  required String failure,
-  Duration timeout = const Duration(seconds: 45),
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (DateTime.now().isBefore(deadline)) {
-    await container
-        .read(messageSyncCoordinatorProvider.notifier)
-        .requestSync(reason, immediate: true);
-    await container.read(devicesProvider.notifier).refreshJoinInbox();
-    if (condition()) return;
-    await Future<void>.delayed(const Duration(milliseconds: 750));
-  }
-  fail(failure);
 }
 
 Future<String> _requestAndResolveOtp({

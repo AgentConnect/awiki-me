@@ -13,6 +13,7 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
@@ -25,12 +26,14 @@ import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversat
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'devices/device_test_support.dart';
 
 void main() {
   group('AppRuntime notifications', () {
@@ -38,6 +41,7 @@ void main() {
     late FakeRealtimeGateway realtimeGateway;
     late FakeNotificationFacade notificationFacade;
     late FakeMessageSyncService messageSyncService;
+    late FakeDeviceManagementCore deviceCore;
     late ProviderContainer container;
 
     setUp(() {
@@ -45,6 +49,21 @@ void main() {
       realtimeGateway = FakeRealtimeGateway();
       notificationFacade = FakeNotificationFacade();
       messageSyncService = FakeMessageSyncService();
+      deviceCore = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: 'did:test:me',
+          devices: <DeviceSummary>[
+            DeviceSummary(
+              protocolDeviceId: 'admin-current',
+              signingKeyId: 'did:test:me#admin-sign',
+              e2eeKeyId: 'did:test:me#admin-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+          ],
+        );
       gateway.myProfile = const UserProfile(
         did: 'did:test:me',
         nickName: 'Me',
@@ -65,6 +84,7 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
@@ -179,10 +199,26 @@ void main() {
       expect(container.read(appRuntimeProvider).isBusy, isFalse);
     });
 
-    test('系统通知变化只调度可靠同步，不投影成聊天提示', () async {
+    test('系统通知变化独立刷新可信 Join 收件箱，不依赖消息同步成功', () async {
       await activate();
       await pumpEventQueue();
       messageSyncService.syncReasons.clear();
+      final joinRequestCallsBeforeEvent = deviceCore.joinRequestCalls;
+      deviceCore.joinRequests = <DeviceJoinRequestNotice>[
+        DeviceJoinRequestNotice(
+          eventId: 'event-join-1',
+          joinSessionId: 'join-1',
+          did: 'did:test:me',
+          protocolDeviceId: 'device-new',
+          candidateKeyFingerprint: 'sha256:abc123',
+          issuedAt: DateTime.utc(2026, 7, 26, 10),
+          expiresAt: DateTime.utc(2030),
+          state: DeviceJoinRemoteState.pending,
+          claimedByCurrentDevice: false,
+          canStartVerification: true,
+        ),
+      ];
+      messageSyncService.nextDeltaError = StateError('sync unavailable');
       gateway.nextRealtimeUpdate = const RealtimeUpdate(
         systemNotificationChanged: true,
         syncDirty: true,
@@ -196,6 +232,17 @@ void main() {
       expect(
         messageSyncService.syncReasons,
         contains('system_notification_changed'),
+      );
+      expect(
+        deviceCore.joinRequestCalls,
+        greaterThan(joinRequestCallsBeforeEvent),
+      );
+      expect(
+        container
+            .read(devicesProvider)
+            .visibleJoinRequests
+            .map((request) => request.joinSessionId),
+        contains('join-1'),
       );
       expect(notificationFacade.lastInAppTitle, isNull);
       expect(notificationFacade.lastSystemTitle, isNull);

@@ -9,6 +9,7 @@
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
+   - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Android/iOS remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
    - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`awiki.info`、`anpclaw.com` 时启用。
@@ -68,10 +69,12 @@ dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-aw
 
 `multi-device` 当前只证明默认关闭与 Join-only 公共入口，不代表远端 Join/SAS/Root/Recovery
 通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的双向真实 Join suite：
-覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI 新设备，以及管理设备根导入/imported
-ACK/management-ready 和永久 revoke UI 主路径。所有方向均使用独立 native Core root、动态
+覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI 新设备；根导入、永久 revoke 与 MLS
+由各自独立 suite 承担，不属于 Join suite 的通过结论。两个方向均使用独立 native Core root、动态
 OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高风险操作要求真实 macOS
-user-presence。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
+user-presence。Join 请求发现必须分别经过 CLI foreground listener 的专用 host event 与
+App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 Inbox hydration、
+`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
 不证明短信送达。`multi-device-remote-recovery` 使用两个隔离账号/设备根，覆盖 durable 旧
 管理设备通知与真实系统认证取消，以及请求设备真实冷静期、独立二次 OTP 和新 DID 激活；
 它明确拒绝 staged SMS error，必须证明产品发码路径成功。远端 rollout/账号前置条件未就绪

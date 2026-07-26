@@ -5,13 +5,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/e2e_semantics.dart';
+import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
 import '../conversation_list/conversation_provider.dart';
+import '../devices/device_join_approval_sheet.dart';
+import '../devices/devices_provider.dart';
 import '../agents/agents_page.dart';
 import '../friends/friends_workspace_page.dart';
 import '../onboarding/onboarding_page.dart';
@@ -104,6 +108,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     final unreadCount = ref.watch(
       conversationListProvider.select((state) => state.unreadCount),
     );
+    final pendingJoinRequest = ref.watch(
+      devicesProvider.select((state) {
+        if (!state.currentDeviceCanManage) {
+          return null;
+        }
+        final requests = state.visibleJoinRequests;
+        return requests.isEmpty ? null : requests.first;
+      }),
+    );
 
     if (!session.isLoggedIn) {
       return Stack(
@@ -160,6 +173,11 @@ class _AppShellState extends ConsumerState<AppShell> {
             child: SafeArea(bottom: false, child: content),
           ),
         ),
+        if (pendingJoinRequest != null)
+          _DeviceJoinRequestBanner(
+            deviceId: pendingJoinRequest.protocolDeviceId,
+            onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
+          ),
         if (runtime.isBusy)
           AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
         if (_shouldShowRealtimeToast(realtimeStatus))
@@ -175,6 +193,16 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
       ],
     );
+  }
+
+  Future<void> _openDeviceJoinRequest(DeviceJoinRequestNotice request) async {
+    await AppNavigator.push<void>(
+      context,
+      (_) => DeviceJoinApprovalSheet(request: request),
+    );
+    if (mounted) {
+      await ref.read(devicesProvider.notifier).refreshJoinInbox();
+    }
   }
 
   bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
@@ -246,6 +274,96 @@ class _AppShellState extends ConsumerState<AppShell> {
         return ProfileWorkspacePage(listFooter: desktopFooter);
     }
     return ConversationWorkspacePage(listFooter: desktopFooter);
+  }
+}
+
+class _DeviceJoinRequestBanner extends StatelessWidget {
+  const _DeviceJoinRequestBanner({
+    required this.deviceId,
+    required this.onReview,
+  });
+
+  final String deviceId;
+  final VoidCallback onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Positioned(
+      left: 20,
+      right: 20,
+      top: 12,
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Semantics(
+            identifier: 'device-join-request-entry',
+            button: true,
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: onReview,
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 520),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+                decoration: BoxDecoration(
+                  color: theme.surface,
+                  borderRadius: BorderRadius.circular(AwikiMeRadii.lg),
+                  border: Border.all(
+                    color: AwikiMeColors.primary.withValues(alpha: 0.2),
+                  ),
+                  boxShadow: theme.overlayShadow,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    const Icon(
+                      CupertinoIcons.device_phone_portrait,
+                      color: AwikiMeColors.primary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            context.l10n.deviceJoinApprovalTitle,
+                            style: TextStyle(
+                              color: theme.title,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            deviceId,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.secondaryText,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      context.l10n.deviceReviewAction,
+                      style: const TextStyle(
+                        color: AwikiMeColors.primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

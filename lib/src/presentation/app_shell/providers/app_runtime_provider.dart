@@ -21,6 +21,7 @@ import '../../agents/agent_inbox_provider.dart';
 import '../../agents/agents_provider.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
+import '../../devices/devices_provider.dart';
 import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
 import '../../profile/profile_provider.dart';
@@ -584,6 +585,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       },
     );
     final reliableSyncReason = _reliableSyncReasonFor(update);
+    if (update.systemNotificationChanged) {
+      unawaited(
+        ref
+            .read(devicesProvider.notifier)
+            .refreshJoinInbox()
+            .catchError((_) {}),
+      );
+    }
     if (reliableSyncReason != null) {
       _runtimeTrace(
         'reliable_sync.schedule',

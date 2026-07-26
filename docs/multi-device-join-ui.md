@@ -36,10 +36,11 @@ Recovery 服务或远端流程，只显示明确的不支持提示。
   -> authorized / cancelled / expired
 
 已有管理设备：可信 system_notification_changed
-  -> App 只安排 reliable message sync
   -> Core 验证、提交标准 P3 系统通知并形成 local Join inbox
-  -> sync 成功后 App 刷新 local_device_join_requests
-  -> 用户打开请求（只读，不 claim）
+  -> App 立即把该事件作为设备域失效信号，独立刷新 local_device_join_requests
+  -> reliable message sync 仍并行执行，但其失败或退避不阻塞 Join inbox
+  -> AppShell 展示全局“查看并验证”入口
+  -> 用户打开请求（只读，不 claim、不验证、不批准）
   -> 用户明确点击“开始验证”
   -> Core 原子绑定 claimant、生成 challenge 并发送 JoinClaimed
   -> ResponseVerified 后 Core 才向本机投影 6 位 SAS
@@ -72,7 +73,9 @@ JoinRequested / JoinClaimed / JoinResponseVerified 是通用系统通知承载�
 Message Service 按标准 P3 signed message 传输，Core 负责验证可信 service DID、proof、
 audience、expiry 和业务绑定并提交本地投影。AWiki Me 只消费
 `system_notification_changed` 信号和 Core 的 typed local projection，不解析 P3 JSON、
-不验证 proof，也不把通知 title/body 投影成普通聊天 banner、conversation 或 timeline。
+不验证 proof，也不把通知 title/body 投影成普通聊天、conversation 或 timeline。该信号只
+触发设备域读取；全局审批入口完全来自 Core 返回的 typed local Join projection，不能直接
+使用 realtime payload 作为 UI 真相。入口只打开审批页，不会自动执行开始验证、拒绝或批准。
 
 未登录新设备没有 current Core identity，因此不能复用要求已选身份的 Directory adapter。
 onboarding 注册流程不在发送 OTP 或提交注册前用未认证的 public-profile 查询 Handle，
@@ -130,4 +133,7 @@ flutter test tests/unit/app_runtime_notification_test.dart \
 本步骤只接受上述消息驱动 Join focused tests，不执行完整 AWiki Me `full` 或第三步的
 Root/MLS E2E。现有 `multi-device-remote-join` runner 中依赖 Registry pending discovery、
 split claim/admin poll、admin toggle 或旧 root-control 的场景不能作为本步骤通过证据；
-后续测试收口必须保留两个 Join 方向，并把 root transfer/revoke 移到第三步。
+两个 Join 方向必须由真实 listener/system-notification 入口推进：CLI 管理端以专用
+`im.device.join.requested` host event 唤醒，App 管理端等待 AppShell 全局审批入口；测试
+不得直接调用 Message Inbox hydration、`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。
+实现存在不等于远端已通过，仍需独立的 `awiki.info` pass attestation。
