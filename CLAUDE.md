@@ -10,6 +10,7 @@
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - Android/iOS remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
+   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`awiki.info`、`anpclaw.com` 时启用。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
    - 平台 runner 变更只触及任务明确要求的平台，避免提交无关生成文件。

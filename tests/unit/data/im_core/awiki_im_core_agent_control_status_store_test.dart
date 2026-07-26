@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
+import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/ports/message_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_agent_control_status_store.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
@@ -137,6 +140,66 @@ void main() {
 
     expect(payload, isNull);
   });
+
+  test(
+    'watches only daemon status payloads committed by the Core patch stream',
+    () async {
+      final messages = _FakeMessages(const <ChatMessage>[]);
+      final store = AwikiImCoreAgentControlStatusStore(messages: messages);
+      final events = <AgentControlEvent>[];
+      final subscription = store
+          .watchDaemonControlEvents(daemonAgentDid: 'did:daemon')
+          .listen(events.add);
+      addTearDown(subscription.cancel);
+      addTearDown(messages.close);
+
+      final committed = _message(
+        payload: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'event_id': 'evt-create',
+          'status_scope': 'runtime',
+          'daemon_agent_did': 'did:daemon',
+          'state': 'ready',
+        },
+      );
+      messages.emitControlPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.reset,
+          ownerDid: 'did:controller',
+          version: 1,
+          threadKind: 'direct',
+          threadId: 'dm:did:daemon',
+          messages: <ChatMessage>[
+            _message(
+              senderDid: 'did:other-daemon',
+              payload: <String, Object?>{
+                'schema': AgentControlPayloads.statusSchema,
+                'daemon_agent_did': 'did:other-daemon',
+              },
+            ),
+            committed,
+          ],
+        ),
+      );
+      messages.emitControlPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerDid: 'did:controller',
+          version: 2,
+          threadKind: 'direct',
+          threadId: 'dm:did:daemon',
+          message: committed,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(events, hasLength(1));
+      expect(events.single.deduplicationKey, 'evt-create');
+      expect(events.single.daemonAgentDid, 'did:daemon');
+      expect(events.single.isReplay, isTrue);
+      expect(messages.controlThread?.peerDidOrHandle, 'did:daemon');
+    },
+  );
 }
 
 ChatMessage _message({
@@ -173,11 +236,38 @@ class _HistoryRequest {
   final bool includeControlPayloads;
 }
 
-class _FakeMessages implements MessageCorePort {
+class _FakeMessages
+    implements MessageCorePort, ControlThreadPatchMessageCorePort {
   _FakeMessages(this.history);
 
   final List<ChatMessage> history;
   final List<_HistoryRequest> requests = <_HistoryRequest>[];
+  final StreamController<ThreadMessagePatch> _controlPatches =
+      StreamController<ThreadMessagePatch>();
+  AppDirectThreadRef? controlThread;
+
+  void emitControlPatch(ThreadMessagePatch patch) {
+    _controlPatches.add(patch);
+  }
+
+  Future<void> close() => _controlPatches.close();
+
+  @override
+  Stream<ThreadMessagePatch> watchControlThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    controlThread = thread as AppDirectThreadRef;
+    return _controlPatches.stream;
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairControlThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<List<ChatMessage>> loadHistory(

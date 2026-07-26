@@ -604,7 +604,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final controlPayload = update.agentControlPayload;
     if (controlPayload != null) {
-      ref.read(agentsProvider.notifier).applyControlPayload(controlPayload);
       ref.read(agentInboxProvider.notifier).applyControlPayload(controlPayload);
       ref
           .read(chatThreadsProvider.notifier)
@@ -613,7 +612,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .read(chatThreadsProvider.notifier)
           .applyPersonalAgentControlPayload(controlPayload);
       _runtimeTrace(
-        'realtime.control_applied',
+        'realtime.control_hint',
         fields: <String, Object?>{
           'conversation': update.conversation != null,
           'thread_hash': _runtimeSafeHash(update.conversation?.threadId),
@@ -726,6 +725,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   String? _reliableSyncReasonFor(RealtimeUpdate update) {
+    if (update.agentControlPayload != null) {
+      return 'realtime_agent_control';
+    }
     if (update.systemNotificationChanged) {
       return 'system_notification_changed';
     }

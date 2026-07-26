@@ -665,6 +665,220 @@ void main() {
   );
 
   test(
+    'committed create event survives stale inventory and reconciles without manual refresh',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        handle: 'awiki-daemon-test',
+        displayName: '代理 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime-new',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'hermes',
+        handle: 'alice-hermes',
+        displayName: 'Alice Hermes',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final events = _StreamingAgentControlStatusStore();
+      final container = _container(control, statusStore: events);
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+
+      await controller.createHermesRuntime(
+        daemon.agentDid,
+        handle: runtime.handle!,
+        displayName: runtime.displayName,
+      );
+      expect(
+        control.listAgentsCalls,
+        1,
+        reason: 'sending create must not trigger a blind inventory reload',
+      );
+      final pending = container
+          .read(agentsProvider)
+          .pendingRuntimeCreations
+          .single;
+
+      final staleLoad = controller.load(showLoading: false);
+      await control.waitForListCalls(2);
+      events.emit(
+        AgentControlEvent(
+          messageId: 'msg-create-1',
+          daemonAgentDid: daemon.agentDid,
+          isReplay: false,
+          payload: <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'event_id': 'evt-create-1',
+            'status_scope': 'runtime',
+            'daemon_agent_did': daemon.agentDid,
+            'state': 'ready',
+            'result': <String, Object?>{
+              'command': 'runtime.agent.create',
+              'client_request_id': pending.requestId,
+              'runtime_agent_did': runtime.agentDid,
+              'daemon_agent_did': daemon.agentDid,
+              'runtime': runtime.runtime,
+              'handle': runtime.handle,
+              'display_name': runtime.displayName,
+            },
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains(runtime.agentDid),
+      );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+
+      control.completeListCall(2, const <AgentSummary>[daemon]);
+      await staleLoad;
+      await control.waitForListCalls(3);
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains(runtime.agentDid),
+        reason: 'a pre-ACK inventory response must not erase the projection',
+      );
+
+      control.completeListCall(3, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        containsAll(<String>[daemon.agentDid, runtime.agentDid]),
+      );
+    },
+  );
+
+  test(
+    'committed create replay cannot complete a different pending intent',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final events = _StreamingAgentControlStatusStore();
+      final container = _container(control, statusStore: events);
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+      await controller.createHermesRuntime(
+        'did:agent:daemon',
+        handle: 'alice-hermes',
+        displayName: 'Alice Hermes',
+      );
+      final pending = container
+          .read(agentsProvider)
+          .pendingRuntimeCreations
+          .single;
+
+      events.emit(
+        AgentControlEvent(
+          messageId: 'msg-stale-create',
+          daemonAgentDid: 'did:agent:daemon',
+          isReplay: true,
+          payload: <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'event_id': 'evt-stale-create',
+            'status_scope': 'runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'state': 'ready',
+            'result': <String, Object?>{
+              'command': 'runtime.agent.create',
+              'client_request_id': pending.requestId,
+              'runtime_agent_did': 'did:agent:runtime-other',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'handle': 'different-handle',
+              'display_name': 'Different Runtime',
+            },
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations.single.requestId,
+        pending.requestId,
+      );
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        isNot(contains('did:agent:runtime-other')),
+      );
+    },
+  );
+
+  test(
+    'daemon status lookup cannot create an Agent absent from Inventory',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      const statusStore = _StaticAgentControlStatusStore(
+        daemonStatusPayload: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'daemon',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime-status-only',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'codex',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      final container = _container(control, statusStore: statusStore);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+
+      await controller.refreshDaemonStatus('did:agent:daemon');
+      await Future<void>.delayed(
+        agentStatusQueryPollInterval + const Duration(milliseconds: 100),
+      );
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        ['did:agent:daemon'],
+      );
+    },
+  );
+
+  test(
     'loads and saves invocation policy through agent control service',
     () async {
       final control = FakeAgentControlService()
@@ -3372,9 +3586,13 @@ ProviderContainer _container(
 }
 
 class _StaticAgentControlStatusStore implements AgentControlStatusStore {
-  const _StaticAgentControlStatusStore({this.latestDaemonPayload});
+  const _StaticAgentControlStatusStore({
+    this.latestDaemonPayload,
+    this.daemonStatusPayload,
+  });
 
   final Map<String, Object?>? latestDaemonPayload;
+  final Map<String, Object?>? daemonStatusPayload;
 
   @override
   Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
@@ -3388,7 +3606,7 @@ class _StaticAgentControlStatusStore implements AgentControlStatusStore {
     required String daemonAgentDid,
     required String requestId,
   }) async {
-    return null;
+    return daemonStatusPayload;
   }
 
   @override
@@ -3543,6 +3761,81 @@ class _SequencedAgentControlService extends FakeAgentControlService {
     }
     final index = (listAgentsCalls - 1).clamp(0, responses.length - 1);
     return responses[index];
+  }
+}
+
+class _ControlledInventoryAgentControlService extends FakeAgentControlService {
+  final List<Completer<List<AgentSummary>>> _listCalls =
+      <Completer<List<AgentSummary>>>[];
+
+  int get listAgentsCalls => _listCalls.length;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    final completer = Completer<List<AgentSummary>>();
+    _listCalls.add(completer);
+    return completer.future;
+  }
+
+  void completeListCall(int call, List<AgentSummary> agents) {
+    _listCalls[call - 1].complete(agents);
+  }
+
+  Future<void> waitForListCalls(int expected) async {
+    for (var attempt = 0; attempt < 100; attempt += 1) {
+      if (listAgentsCalls >= expected) {
+        return;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    fail(
+      'Timed out waiting for $expected inventory calls; '
+      'observed $listAgentsCalls.',
+    );
+  }
+}
+
+class _StreamingAgentControlStatusStore
+    implements AgentControlStatusStore, AgentControlEventStore {
+  final StreamController<AgentControlEvent> _events =
+      StreamController<AgentControlEvent>.broadcast();
+
+  void emit(AgentControlEvent event) => _events.add(event);
+
+  Future<void> close() => _events.close();
+
+  @override
+  Stream<AgentControlEvent> watchDaemonControlEvents({
+    required String daemonAgentDid,
+  }) {
+    return _events.stream.where(
+      (event) => event.daemonAgentDid == daemonAgentDid,
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
   }
 }
 

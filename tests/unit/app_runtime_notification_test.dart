@@ -12,7 +12,6 @@ import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -1251,12 +1250,22 @@ void main() {
       expect(notificationFacade.lastInAppTitle, 'Hermes');
     });
 
-    test('实时控制状态只更新智能体状态', () async {
+    test('实时控制状态只调度可靠同步，不直接更新智能体投影', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
       await activate();
       await Future<void>.delayed(Duration.zero);
+      messageSyncService.syncReasons.clear();
+      final agentsBeforeHint = container
+          .read(agentsProvider)
+          .agents
+          .map(
+            (agent) =>
+                '${agent.agentDid}|${agent.latest.status}|'
+                '${agent.latest.version ?? ''}',
+          )
+          .toList(growable: false);
 
       gateway.nextRealtimeUpdate = const RealtimeUpdate(
         agentControlPayload: <String, Object?>{
@@ -1281,16 +1290,22 @@ void main() {
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
 
-      final agents = container.read(agentsProvider).agents;
-      final daemon = agents.singleWhere((agent) => agent.isDaemon);
-      final runtime = agents.singleWhere((agent) => agent.isRuntime);
-      expect(daemon.agentDid, 'did:agent:daemon');
-      expect(daemon.latest.status, 'ready');
-      expect(daemon.latest.version, '0.2.0');
-      expect(runtime.agentDid, 'did:agent:runtime');
-      expect(runtime.kind, AgentKind.runtime);
-      expect(runtime.daemonAgentDid, 'did:agent:daemon');
-      expect(runtime.latest.status, 'needs_config');
+      expect(
+        container
+            .read(agentsProvider)
+            .agents
+            .map(
+              (agent) =>
+                  '${agent.agentDid}|${agent.latest.status}|'
+                  '${agent.latest.version ?? ''}',
+            )
+            .toList(growable: false),
+        agentsBeforeHint,
+      );
+      expect(
+        messageSyncService.syncReasons,
+        contains('realtime_agent_control'),
+      );
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(
         container.read(chatThreadProvider('did:agent:daemon')).messages,

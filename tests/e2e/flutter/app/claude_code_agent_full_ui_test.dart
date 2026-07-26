@@ -135,7 +135,6 @@ void main() {
 
         final runtime = await _waitForRuntimeAgentByHandle(
           tester: tester,
-          agents: agents,
           daemonDid: install.daemonDid,
           handle: runtimeHandle,
         );
@@ -456,14 +455,12 @@ Future<void> _waitForDaemonGenericCliCapability({
 
 Future<AgentSummary> _waitForRuntimeAgentByHandle({
   required WidgetTester tester,
-  required AgentsController agents,
   required String daemonDid,
   required String handle,
 }) async {
   Object? lastState;
   final deadline = DateTime.now().add(const Duration(seconds: 60));
   while (DateTime.now().isBefore(deadline)) {
-    await agents.load();
     await _pumpFrame(tester);
     final state = ProviderScope.containerOf(
       tester.element(find.byType(AppShell)),

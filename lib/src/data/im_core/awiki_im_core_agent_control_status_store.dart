@@ -2,13 +2,15 @@ import 'dart:convert';
 
 import '../../application/agent/agent_control_status_store.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/thread_message_patch.dart';
 import '../../application/ports/message_core_port.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
 
 const _defaultControlStatusLookupTimeout = Duration(milliseconds: 1200);
 
-class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
+class AwikiImCoreAgentControlStatusStore
+    implements AgentControlStatusStore, AgentControlEventStore {
   const AwikiImCoreAgentControlStatusStore({
     required MessageCorePort messages,
     Duration lookupTimeout = _defaultControlStatusLookupTimeout,
@@ -17,6 +19,79 @@ class AwikiImCoreAgentControlStatusStore implements AgentControlStatusStore {
 
   final MessageCorePort _messages;
   final Duration _lookupTimeout;
+
+  @override
+  Stream<AgentControlEvent> watchDaemonControlEvents({
+    required String daemonAgentDid,
+  }) async* {
+    final messages = _messages;
+    if (messages is! ControlThreadPatchMessageCorePort) {
+      throw UnsupportedError(
+        'Message core does not expose committed control patches.',
+      );
+    }
+    final controlMessages = messages as ControlThreadPatchMessageCorePort;
+    final seenMessageIds = <String>{};
+    await for (final patch in controlMessages.watchControlThreadPatches(
+      AppThreadRef.direct(daemonAgentDid),
+      limit: 100,
+    )) {
+      final effectivePatch = patch.kind == ThreadMessagePatchKind.repairRequired
+          ? await controlMessages.repairControlThreadStore(
+              AppThreadRef.direct(daemonAgentDid),
+              limit: 100,
+            )
+          : patch;
+      final isReplay =
+          patch.kind == ThreadMessagePatchKind.reset ||
+          patch.kind == ThreadMessagePatchKind.repairRequired;
+      final committedMessages = switch (effectivePatch.kind) {
+        ThreadMessagePatchKind.reset => effectivePatch.messages,
+        ThreadMessagePatchKind.upsert =>
+          effectivePatch.message == null
+              ? const <ChatMessage>[]
+              : <ChatMessage>[effectivePatch.message!],
+        ThreadMessagePatchKind.remove ||
+        ThreadMessagePatchKind.repairRequired => const <ChatMessage>[],
+      };
+      final ordered = [...committedMessages]
+        ..sort((left, right) {
+          final sequenceOrder = (left.serverSequence ?? -1).compareTo(
+            right.serverSequence ?? -1,
+          );
+          return sequenceOrder != 0
+              ? sequenceOrder
+              : left.createdAt.compareTo(right.createdAt);
+        });
+      for (final message in ordered) {
+        if (message.senderDid != daemonAgentDid) {
+          continue;
+        }
+        final remoteId = message.remoteId?.trim();
+        final messageId = remoteId == null || remoteId.isEmpty
+            ? message.localId.trim()
+            : remoteId;
+        if (messageId.isEmpty || !seenMessageIds.add(messageId)) {
+          continue;
+        }
+        final payload = _decodePayload(_controlPayloadJson(message));
+        if (payload == null ||
+            _string(payload['schema']) != AgentControlPayloads.statusSchema ||
+            !_matchesDaemonStatusPayload(
+              payload,
+              daemonAgentDid: daemonAgentDid,
+            )) {
+          continue;
+        }
+        yield AgentControlEvent(
+          messageId: messageId,
+          daemonAgentDid: daemonAgentDid,
+          payload: payload,
+          isReplay: isReplay,
+        );
+      }
+    }
+  }
 
   @override
   Future<Map<String, Object?>?> findLatestDaemonStatusPayload({

@@ -35,6 +35,34 @@ MVP 每一项方案先按以下口径收口：
 - 授权撤销：预留 delegated key revoke / DID Document 移除入口，不能把停用误描述为永久撤销 key。
 - 技术债：协议级 `from: Agent DID`、`on_behalf_of: Human DID`、双 proof 和跨域 delegation 验证后续补齐。
 
+## Agent 管理投影与创建收敛
+
+Agent 页面采用三层投影，而不是把创建命令发送、WebSocket hint 或某一次列表响应
+单独当成最终事实：
+
+```text
+Agent 页面 = User Service Inventory 基线
+           + IM Core committed control overlay
+           + App pending intent
+```
+
+- User Service Inventory 是 daemon/runtime 存在性、owner 和 binding 的 SoT。
+- daemon 发出的 `awiki.agent.status.v1` 必须先由 reliable sync 提交到 IM Core；
+  App 通过 Core thread patch 消费同一已提交控制消息。WebSocket payload 只调度
+  reliable sync，不直接改 Agent 页面。
+- App pending intent 只表示用户刚发起的创建操作。只有
+  `client_request_id + daemon DID + handle + runtime` 与本地 pending 精确匹配时，
+  committed create ACK 才能在 Inventory 确认前生成短期可见卡片。
+- `runtime.agent.create` 在 daemon 完成 registration token exchange、User Service
+  Inventory 事务提交后才返回 ACK。App 收到 committed ACK 后递增 Inventory
+  generation 并启动因果重载；任何在 ACK 前启动的旧列表响应都必须丢弃。
+- 与本地 pending 精确匹配的 create overlay，以及已存在 Agent 的 delete overlay，
+  一直保留到 Inventory 确认对应 DID 已出现/消失，避免旧响应覆盖新拓扑。
+  Inventory 确认后移除 overlay，不建立第二套 durable Agent registry。
+
+因此 Codex、Claude Code、Hermes runtime 创建后必须在 Agent 页面自动收敛；实现不得
+依赖创建后盲目 `load()`、固定 sleep、更短轮询、会话列表推断或 raw SQLite 查询。
+
 ## 核心产品规则
 
 Personal Agent 涉及四类身份和一个 delegated key：
