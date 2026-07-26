@@ -920,6 +920,7 @@ class DesktopE2eRunner {
         '${appPairBuildRootDir.path}/admin/flutter-config',
       ),
       locale: locale,
+      redactor: redactor,
     );
     _RunningAppPairDriver? joinerDriver;
     try {
@@ -932,6 +933,7 @@ class DesktopE2eRunner {
           '${appPairBuildRootDir.path}/joiner/flutter-config',
         ),
         locale: locale,
+        redactor: redactor,
       );
       final exits = <Future<MapEntry<String, int>>>[
         adminDriver.exitCode.then(
@@ -949,8 +951,10 @@ class DesktopE2eRunner {
 
       final first = await Future.any(exits).timeout(remaining());
       if (first.value != 0) {
+        final failedDriver = first.key == 'admin' ? adminDriver : joinerDriver;
         throw E2eFailure(
-          'The isolated ${first.key} App integration driver failed.',
+          'The isolated ${first.key} App integration driver failed.\n'
+          '${failedDriver.diagnosticTail}',
         );
       }
       final results = await Future.wait(exits).timeout(remaining());
@@ -962,8 +966,10 @@ class DesktopE2eRunner {
         }
       }
       if (failed != null) {
+        final failedDriver = failed.key == 'admin' ? adminDriver : joinerDriver;
         throw E2eFailure(
-          'The isolated ${failed.key} App integration driver failed.',
+          'The isolated ${failed.key} App integration driver failed.\n'
+          '${failedDriver.diagnosticTail}',
         );
       }
     } on TimeoutException {
@@ -3006,13 +3012,21 @@ class _RunningAppPairDriver {
     required this.process,
     required this.stdoutSubscription,
     required this.stderrSubscription,
-  });
+    required List<String> diagnosticLines,
+  }) : _diagnosticLines = diagnosticLines;
+
+  static const int _maximumDiagnosticLines = 80;
 
   final Process process;
-  final StreamSubscription<List<int>> stdoutSubscription;
-  final StreamSubscription<List<int>> stderrSubscription;
+  final StreamSubscription<String> stdoutSubscription;
+  final StreamSubscription<String> stderrSubscription;
+  final List<String> _diagnosticLines;
 
   Future<int> get exitCode => process.exitCode;
+
+  String get diagnosticTail => _diagnosticLines.isEmpty
+      ? 'No sanitized driver output.'
+      : _diagnosticLines.join('\n');
 
   static Future<_RunningAppPairDriver> start({
     required String role,
@@ -3021,6 +3035,7 @@ class _RunningAppPairDriver {
     required Directory root,
     required Directory flutterConfigDirectory,
     required String locale,
+    required DesktopSecretRedactor redactor,
   }) async {
     if (!appPairRoles.contains(role)) {
       throw E2eFailure('The App-pair driver role is invalid.');
@@ -3047,10 +3062,32 @@ class _RunningAppPairDriver {
       includeParentEnvironment: true,
       runInShell: false,
     );
+    final diagnosticLines = <String>[];
+    void record(String stream, String line) {
+      final sanitized = sanitizeAppPairDriverDiagnostic(line, redactor).trim();
+      if (sanitized.isEmpty) {
+        return;
+      }
+      diagnosticLines.add('$stream: $sanitized');
+      if (diagnosticLines.length > _maximumDiagnosticLines) {
+        diagnosticLines.removeRange(
+          0,
+          diagnosticLines.length - _maximumDiagnosticLines,
+        );
+      }
+    }
+
     return _RunningAppPairDriver._(
       process: process,
-      stdoutSubscription: process.stdout.listen((_) {}),
-      stderrSubscription: process.stderr.listen((_) {}),
+      stdoutSubscription: process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) => record('stdout', line)),
+      stderrSubscription: process.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((line) => record('stderr', line)),
+      diagnosticLines: diagnosticLines,
     );
   }
 
@@ -4728,6 +4765,18 @@ class DesktopSecretRedactor {
     );
     return output;
   }
+}
+
+String sanitizeAppPairDriverDiagnostic(
+  String input,
+  DesktopSecretRedactor redactor,
+) {
+  return redactor
+      .redact(input)
+      .replaceAll(
+        RegExp(r'(?<![0-9])[0-9]{6}(?![0-9])'),
+        '<redacted-six-digit>',
+      );
 }
 
 class DesktopTimingEntry {

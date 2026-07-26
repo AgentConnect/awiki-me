@@ -1233,6 +1233,25 @@ cliHandle: legacy-cli
       expect(output, isNot(contains('e1_sensitive')));
     });
 
+    test('App-pair driver diagnostics redact runtime secrets and SAS', () {
+      final redactor = DesktopSecretRedactor(const <String>[
+        '15500000000',
+        'runtime-token',
+      ]);
+
+      final output = sanitizeAppPairDriverDiagnostic(
+        'phone=15500000000 token=runtime-token sas=123456 '
+        'elapsed=12345ms',
+        redactor,
+      );
+
+      expect(output, isNot(contains('15500000000')));
+      expect(output, isNot(contains('runtime-token')));
+      expect(output, isNot(contains('123456')));
+      expect(output, contains('<redacted-six-digit>'));
+      expect(output, contains('elapsed=12345ms'));
+    });
+
     test('detects competing Flutter integration tests from ps output', () {
       final pids = competingFlutterIntegrationTestPidsFromPs('''
   101 dart flutter_tools.snapshot test integration_test/app_smoke_test.dart -d macos

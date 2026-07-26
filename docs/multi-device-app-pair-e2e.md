@@ -46,6 +46,11 @@ when the pair stops. Both App state roots are also removed after the processes
 are terminated. Remote test identities and Join side effects remain governed
 by the suite residual ledger.
 
+Driver output is not streamed or persisted. On failure, each driver retains at
+most 80 already-sanitized lines in memory; the runner redacts registered
+runtime secrets, DIDs, phone values, and every standalone six-digit value
+before surfacing that bounded diagnostic.
+
 ## Reusable builder
 
 `tool/build_isolated_e2e_app.dart` is the generic build boundary. It accepts an
@@ -78,8 +83,24 @@ dart run tests/e2e/runner.dart \
   --config <local-awiki-info-macos-config.yaml>
 ```
 
+For the explicitly authorized synthetic test number, also set
+`AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`. This keeps the same
+strict response-shape and exact reviewed-resolver checks documented in
+[testing.md](testing.md); it does not convert arbitrary SMS failures into
+success.
+
 The operator must complete the real macOS user-presence prompt in the admin
 App. `--prepare-only` validates prerequisites but intentionally does not build
 the pair, because the compiled targets require the ephemeral coordinator of an
 executing run. Flutter is resolved from `PATH` by default; a host whose Flutter
 SDK is not on `PATH` can set `AWIKI_E2E_FLUTTER_BIN` to the absolute executable.
+
+## Verification evidence
+
+The `awiki.info` run `20260726150342-hkr9m42wlk` passed
+`DEVICE-JOIN-E2E-004` on 2026-07-26. Its attestation proves both isolated App
+processes, Joiner pending without SAS, listener-delivered Admin review,
+in-memory SAS match, one real macOS user-presence completion, and exact
+two-device Registry convergence. Local state and the coordinator config were
+removed; the remote identity/Join ledger remains `residual` because no public
+remote delete API exists.

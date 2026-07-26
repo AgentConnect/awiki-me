@@ -259,11 +259,17 @@ dart run tests/e2e/runner.dart \
   --config <local-awiki-info-macos-config.yaml>
 ```
 
+When this mode uses the explicitly authorized synthetic test number, add
+`AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`; the same exact
+problem-response and reviewed-resolver restrictions above apply.
+
 Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
 binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable
 Debug App construction, while the runner owns the ephemeral loopback
 coordinator, two direct App launches, two concurrent existing-App drivers, and
-cleanup. See
+cleanup. Failed driver output is bounded to 80 lines and redacted in memory
+before it can enter diagnostics; raw driver output is neither streamed nor
+persisted. See
 [multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
 
 Staged-OTP mode proves only the explicitly reviewed operator test path; it does
