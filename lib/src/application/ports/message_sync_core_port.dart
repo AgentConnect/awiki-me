@@ -32,6 +32,7 @@ class MessageSyncDeltaResult {
     required this.hasMore,
     required this.snapshotRequired,
     this.retentionFloorEventSeq,
+    this.hydrationRequiredConversationIds = const <String>[],
     this.warnings = const <String>[],
   });
 
@@ -41,6 +42,7 @@ class MessageSyncDeltaResult {
   final bool hasMore;
   final bool snapshotRequired;
   final String? retentionFloorEventSeq;
+  final List<String> hydrationRequiredConversationIds;
   final List<String> warnings;
 }
 

@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/message_sync_service.dart';
+import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
+import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -100,6 +103,162 @@ void main() {
       ['prewarmed'],
     );
   });
+
+  test(
+    'sync commit forces a fresh recents read past a blocked pre-sync refresh',
+    () async {
+      final stale = _conversation();
+      final committed = stale.copyWith(
+        lastMessagePreview: 'new unread after identity switch',
+        lastMessageAt: stale.lastMessageAt.add(const Duration(seconds: 1)),
+        unreadCount: 1,
+      );
+      final gateway = _PostCommitConversationGateway(stale);
+      final sync = _PublishingMessageSyncService(
+        gateway: gateway,
+        committed: committed,
+      );
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+      addTearDown(gateway.releaseFirstIfPending);
+
+      final preSyncRefresh = container
+          .read(conversationListProvider.notifier)
+          .refreshFastLocal();
+      await gateway.firstRefreshStarted.future;
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('identity_switch_startup', immediate: true)
+          .timeout(const Duration(seconds: 1));
+
+      expect(gateway.listConversationsCalls, 2);
+      expect(
+        container.read(conversationListProvider).conversations.single,
+        committed,
+      );
+
+      gateway.releaseFirst();
+      await preSyncRefresh.timeout(const Duration(seconds: 1));
+      await pumpEventQueue();
+
+      expect(
+        container.read(conversationListProvider).conversations.single,
+        committed,
+      );
+      expect(container.read(messageSyncCoordinatorProvider).lastError, isNull);
+    },
+  );
+
+  test(
+    'metadata-only identity-switch message hydrates before recents publish',
+    () async {
+      final stale = _conversation();
+      final metadataOnly = stale.copyWith(
+        lastMessageAt: stale.lastMessageAt.add(const Duration(seconds: 1)),
+        unreadCount: 1,
+      );
+      final hydrated = metadataOnly.copyWith(
+        lastMessagePreview: 'new hydrated preview',
+      );
+      final gateway = FakeAwikiGateway()
+        ..conversations = <ConversationSummary>[stale];
+      final sync = _PagedHydrationMessageSyncService(
+        gateway: gateway,
+        metadataOnly: metadataOnly,
+        hydrated: hydrated,
+      );
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('identity_switch_startup', immediate: true);
+
+      expect(sync.conversationAfterRequests, hasLength(2));
+      expect(sync.conversationAfterRequests.first.afterServerSeq, isNull);
+      expect(sync.conversationAfterRequests.last.afterServerSeq, '10');
+      expect(
+        container.read(conversationListProvider).conversations.single,
+        hydrated,
+      );
+      expect(container.read(conversationListProvider).unreadCount, 1);
+      expect(container.read(messageSyncCoordinatorProvider).lastError, isNull);
+    },
+  );
+
+  test(
+    'failed metadata hydration is retried from the next durable sync hint',
+    () async {
+      final stale = _conversation();
+      final metadataOnly = stale.copyWith(
+        lastMessageAt: stale.lastMessageAt.add(const Duration(seconds: 1)),
+        unreadCount: 1,
+      );
+      final hydrated = metadataOnly.copyWith(
+        lastMessagePreview: 'preview after retry',
+      );
+      final gateway = FakeAwikiGateway()
+        ..conversations = <ConversationSummary>[stale];
+      final sync = _RetryingHydrationMessageSyncService(
+        gateway: gateway,
+        metadataOnly: metadataOnly,
+        hydrated: hydrated,
+      );
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      await coordinator.requestSync('startup', immediate: true);
+      expect(sync.conversationAfterRequests, hasLength(1));
+      expect(
+        container
+            .read(conversationListProvider)
+            .conversations
+            .single
+            .lastMessagePreview,
+        stale.lastMessagePreview,
+      );
+      expect(container.read(conversationListProvider).unreadCount, 1);
+
+      await coordinator.requestSync('app_resumed', immediate: true);
+      expect(sync.conversationAfterRequests, hasLength(2));
+      expect(
+        container.read(conversationListProvider).conversations.single,
+        hydrated,
+      );
+    },
+  );
+
+  test(
+    'hydration hint fails closed when conversation sync is unavailable',
+    () async {
+      final conversation = _conversation();
+      final gateway = FakeAwikiGateway()
+        ..conversations = <ConversationSummary>[conversation];
+      final sync = _ThreadOnlyHydrationMessageSyncService(
+        conversation.conversationId,
+      );
+      final container = _container(gateway, sync);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('startup', immediate: true);
+
+      expect(
+        container.read(messageSyncCoordinatorProvider).lastError,
+        isA<UnsupportedError>().having(
+          (error) => error.message,
+          'message',
+          'Reliable message sync requires conversation hydration support.',
+        ),
+      );
+      expect(gateway.listConversationsCalls, 0);
+    },
+  );
 
   test('startup prewarm 不会因为本地尾部是自己发的消息而清掉未读', () async {
     final conversation = _conversation().copyWith(
@@ -291,14 +450,15 @@ void main() {
 
 ProviderContainer _container(
   FakeAwikiGateway gateway,
-  FakeMessageSyncService sync, {
+  MessageSyncService sync, {
   Duration minInterval = Duration.zero,
 }) {
   return ProviderContainer(
     overrides: <Override>[
       awikiGatewayProvider.overrideWithValue(gateway),
       notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
-      ...fakeApplicationServiceOverrides(gateway, messageSyncService: sync),
+      ...fakeApplicationServiceOverrides(gateway),
+      messageSyncServiceProvider.overrideWithValue(sync),
       messageSyncCoordinatorProvider.overrideWith(
         (ref) => MessageSyncCoordinator(
           ref,
@@ -387,6 +547,202 @@ class _QueuedBlockingMessageSyncService extends FakeMessageSyncService {
         hasMore: false,
         snapshotRequired: false,
       ),
+    );
+  }
+}
+
+class _PostCommitConversationGateway extends FakeAwikiGateway {
+  _PostCommitConversationGateway(ConversationSummary stale) {
+    conversations = <ConversationSummary>[stale];
+  }
+
+  final Completer<void> firstRefreshStarted = Completer<void>();
+  final Completer<void> _releaseFirst = Completer<void>();
+  int _calls = 0;
+
+  @override
+  Future<List<ConversationSummary>> listConversations() async {
+    listConversationsCalls += 1;
+    _calls += 1;
+    final result = List<ConversationSummary>.of(conversations);
+    if (_calls == 1) {
+      firstRefreshStarted.complete();
+      await _releaseFirst.future;
+    }
+    return result;
+  }
+
+  void releaseFirst() {
+    if (!_releaseFirst.isCompleted) {
+      _releaseFirst.complete();
+    }
+  }
+
+  void releaseFirstIfPending() => releaseFirst();
+}
+
+class _PublishingMessageSyncService extends FakeMessageSyncService {
+  _PublishingMessageSyncService({
+    required this.gateway,
+    required this.committed,
+  });
+
+  final FakeAwikiGateway gateway;
+  final ConversationSummary committed;
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    gateway.conversations = <ConversationSummary>[committed];
+    return const MessageSyncDeltaResult(
+      eventsApplied: 1,
+      pagesFetched: 1,
+      hasMore: false,
+      snapshotRequired: false,
+    );
+  }
+}
+
+class _PagedHydrationMessageSyncService extends FakeMessageSyncService {
+  _PagedHydrationMessageSyncService({
+    required this.gateway,
+    required this.metadataOnly,
+    required this.hydrated,
+  });
+
+  final FakeAwikiGateway gateway;
+  final ConversationSummary metadataOnly;
+  final ConversationSummary hydrated;
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    gateway.conversations = <ConversationSummary>[metadataOnly];
+    return MessageSyncDeltaResult(
+      eventsApplied: 1,
+      pagesFetched: 1,
+      hasMore: false,
+      snapshotRequired: false,
+      hydrationRequiredConversationIds: <String>[metadataOnly.conversationId],
+    );
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    conversationAfterRequests.add(
+      FakeConversationAfterRequest(
+        conversation: conversation,
+        afterServerSeq: afterServerSeq,
+        limit: limit,
+      ),
+    );
+    if (afterServerSeq == null) {
+      return const MessageSyncThreadAfterResult(
+        messages: <ChatMessage>[],
+        nextAfterServerSeq: '10',
+        hasMore: true,
+      );
+    }
+    gateway.conversations = <ConversationSummary>[hydrated];
+    return const MessageSyncThreadAfterResult(
+      messages: <ChatMessage>[],
+      nextAfterServerSeq: '11',
+      hasMore: false,
+    );
+  }
+}
+
+class _RetryingHydrationMessageSyncService extends FakeMessageSyncService {
+  _RetryingHydrationMessageSyncService({
+    required this.gateway,
+    required this.metadataOnly,
+    required this.hydrated,
+  });
+
+  final FakeAwikiGateway gateway;
+  final ConversationSummary metadataOnly;
+  final ConversationSummary hydrated;
+  var _hydrationAttempts = 0;
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    gateway.conversations = <ConversationSummary>[metadataOnly];
+    return MessageSyncDeltaResult(
+      eventsApplied: 0,
+      pagesFetched: 1,
+      hasMore: false,
+      snapshotRequired: false,
+      hydrationRequiredConversationIds: <String>[metadataOnly.conversationId],
+    );
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    conversationAfterRequests.add(
+      FakeConversationAfterRequest(
+        conversation: conversation,
+        afterServerSeq: afterServerSeq,
+        limit: limit,
+      ),
+    );
+    _hydrationAttempts += 1;
+    if (_hydrationAttempts == 1) {
+      throw StateError('temporary_hydration_failure');
+    }
+    gateway.conversations = <ConversationSummary>[hydrated];
+    return const MessageSyncThreadAfterResult(
+      messages: <ChatMessage>[],
+      hasMore: false,
+    );
+  }
+}
+
+class _ThreadOnlyHydrationMessageSyncService implements MessageSyncService {
+  _ThreadOnlyHydrationMessageSyncService(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    return MessageSyncDeltaResult(
+      eventsApplied: 1,
+      pagesFetched: 1,
+      hasMore: false,
+      snapshotRequired: false,
+      hydrationRequiredConversationIds: <String>[conversationId],
+    );
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncThreadAfter({
+    required AppThreadRef thread,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    return const MessageSyncThreadAfterResult(
+      messages: <ChatMessage>[],
+      hasMore: false,
     );
   }
 }

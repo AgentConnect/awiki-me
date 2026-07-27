@@ -244,7 +244,7 @@ Chat presentation 是单向的：
 Chat presentation 同时是 owner/session-generation scoped：
 
 - `SessionEpoch` 由规范化 owner DID、稳定本机 identity key 和单调 generation 组成。active identity 改变、登出或 clear 都会推进 generation；同一 identity 的 token/profile refresh 不会误伤正在进行的工作。
-- `MessageSyncCoordinator` 只允许同一 epoch 的请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、prewarm timeline 或更新 coordinator state。
+- `MessageSyncCoordinator` 只允许同一 epoch 的请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、prewarm timeline 或更新 coordinator state。`syncDelta` 返回 `hydrationRequiredConversationIds` 时，coordinator 必须按 canonical `conversationId` 完整翻页调用 `syncConversationAfter`，再启动一次确定发生在 Core commit 之后的 fast-local summary read；App 不从空正文或旧预览推断 hydration 状态。单个 conversation 补齐失败不回滚 delta checkpoint，下一次可靠同步依赖 Core 的 durable hint 重试。
 - `ChatThreadsController` 在 epoch 改变时同步取消旧 patch subscriptions 和 timers，清空 pending history/read/repair、thread window、message route cache 与 composer draft。history、conversation-after、patch repair、read ack、text/attachment send 和 retry 都在 await 后再次校验启动时 epoch。
 - Future、stream callback 或 timer 即使无法底层取消，旧 epoch 完成也只能安静结束；不得删除新 epoch 的 active marker、合并到新 timeline、更新新 recents preview、恢复旧 read intent 或显示旧错误。
 
@@ -276,6 +276,7 @@ Timeline merge 必须把“同一条本机发送消息的 durable server row”�
 3. Rust `im-core` 对在线首条 Direct 先按 wire peer DID 完成权威 Handle lookup，并按“verified Persona projection → inbound message commit”的顺序写入；失败或 DID 不匹配时只进入 resolution backlog，不产生 DID conversation。
 4. Rust `im-core` 在 sync/realtime/backfill 成功写入 SQLite local projection 后，runtime store 发 conversation patch 和 conversation timeline patch；realtime row 尚无 thread-local sequence 时使用接收侧时间而非发送方时间作为收敛期排序键。
 5. AWiki Me 收到 patch 后按 canonical `conversationId` 更新 list/detail；alias prewarm 只可作为迁移优化或诊断，不能作为消息归属 correctness 机制。
+6. metadata-only delta 可以先提交活动时间和未读数；Core 通过 durable conversation hydration hint 要求 coordinator 补齐正文。只有补齐结束后的 committed summary read 才发布最终预览，不能等用户打开会话才触发正文恢复。
 
 禁止路径：
 
@@ -368,9 +369,9 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
   - 身份隔离还必须覆盖 A 的 delayed local history、patch repair 和 send completion 在快速 A→B→C 后被丢弃，同时切换当下即清空旧 thread window、patch subscription 和 composer draft。
-- `tests/unit/message_sync_coordinator_test.dart`：除 single-flight、节流和 snapshot-required 外，验证 A active sync 不会 coalesce 或满足 B startup sync，旧 identity 的 delayed request 在快速切换后不会执行。
+- `tests/unit/message_sync_coordinator_test.dart`：除 single-flight、节流和 snapshot-required 外，验证 A active sync 不会 coalesce 或满足 B startup sync，旧 identity 的 delayed request 在快速切换后不会执行；Core sync commit 后必须启动新一代 fast-local read，不能复用提交前仍在运行的旧刷新。
 - `tests/unit/session_provider_test.dart`：固定 clear、A→B 和快速身份替换推进 epoch，同一 identity 的 JWT/profile refresh 保持 epoch。
-- `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state。
+- `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state；同时从 `loginWithLocalCredential` 身份切换入口证明新 session epoch 会自动调度自己的 `startup` reliable sync，并在不由测试手动调用 coordinator、sync service 或 conversation-after 的情况下把 committed unread 和 hydrated preview 发布到会话列表。通知路由只受 session epoch 约束，不能被同身份下并发的列表 refresh generation 误取消。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。

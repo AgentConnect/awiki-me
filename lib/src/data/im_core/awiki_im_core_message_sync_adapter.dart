@@ -34,6 +34,8 @@ class AwikiImCoreMessageSyncAdapter
         hasMore: result.hasMore,
         snapshotRequired: result.snapshotRequired,
         retentionFloorEventSeq: result.retentionFloorEventSeq,
+        hydrationRequiredConversationIds:
+            result.hydrationRequiredConversationIds,
         warnings: result.warnings,
       );
     });

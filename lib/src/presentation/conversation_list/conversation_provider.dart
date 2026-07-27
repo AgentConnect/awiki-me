@@ -209,8 +209,18 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   Future<void> refreshFastLocal() {
-    final reused = _refreshOperation != null;
-    final activeRefresh = _refreshOperation ?? _startRefresh(fastLocal: true);
+    return _refreshFastLocal(requirePostCommitRead: false);
+  }
+
+  Future<void> refreshFastLocalAfterCoreCommit() {
+    return _refreshFastLocal(requirePostCommitRead: true);
+  }
+
+  Future<void> _refreshFastLocal({required bool requirePostCommitRead}) {
+    final reused = !requirePostCommitRead && _refreshOperation != null;
+    final activeRefresh = reused
+        ? _refreshOperation!
+        : _startRefresh(fastLocal: true);
     if (!reused && state.conversations.isEmpty) {
       final session = ref.read(sessionProvider).session;
       final sessionEpoch = ref.read(sessionProvider).activeEpoch;
@@ -229,6 +239,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       'conversation_list.refresh_fast_local.request',
       fields: <String, Object?>{
         'reused': reused,
+        'post_commit': requirePostCommitRead,
         'current': state.conversations.length,
       },
       level: AwikiPerformanceLogLevel.verbose,
@@ -1150,8 +1161,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     String conversationId, {
     SessionEpoch? expectedEpoch,
   }) async {
-    final ownerOperation = _captureOwnerOperation(expectedEpoch: expectedEpoch);
-    if (ownerOperation == null) {
+    final ownerEpoch = _captureOwnerEpoch(expectedEpoch: expectedEpoch);
+    if (ownerEpoch == null) {
       throw StateError('No active awiki session. Please sign in first.');
     }
     final canonicalId = conversationId.trim();
@@ -1166,13 +1177,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _locallyHiddenConversationKeys.remove(canonicalId);
     final conversationService = ref.read(conversationServiceProvider);
     await conversationService.ensureConversationInRecents(
-      ownerDid: ownerOperation.epoch.ownerDid,
+      ownerDid: ownerEpoch.ownerDid,
       conversationId: canonicalId,
     );
-    _requireCurrentOwnerOperation(ownerOperation);
+    _requireCurrentOwnerEpoch(ownerEpoch);
     final conversations = await conversationService
-        .listConversationSummariesFast(ownerDid: ownerOperation.epoch.ownerDid);
-    _requireCurrentOwnerOperation(ownerOperation);
+        .listConversationSummariesFast(ownerDid: ownerEpoch.ownerDid);
+    _requireCurrentOwnerEpoch(ownerEpoch);
     final matches = conversations
         .where((item) => item.conversationId == canonicalId)
         .toList(growable: false);
@@ -1180,12 +1191,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       throw StateError('canonical_conversation_projection_missing');
     }
     final conversation = matches.single;
-    await _loadCachedPeerProfiles(
-      ownerOperation.epoch.ownerDid,
-      <ConversationSummary>[conversation],
-      expectedEpoch: ownerOperation.epoch,
-    );
-    _requireCurrentOwnerOperation(ownerOperation);
+    await _loadCachedPeerProfiles(ownerEpoch.ownerDid, <ConversationSummary>[
+      conversation,
+    ], expectedEpoch: ownerEpoch);
+    _requireCurrentOwnerEpoch(ownerEpoch);
     _upsertConversation(
       conversation,
       source: 'canonical_conversation_committed',
@@ -1515,10 +1524,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   _ConversationOwnerOperation? _captureOwnerOperation({
     SessionEpoch? expectedEpoch,
   }) {
-    final epoch = ref.read(sessionProvider).activeEpoch;
-    if (expectedEpoch != null && epoch != expectedEpoch) {
-      throw sessionEpochChangedError();
-    }
+    final epoch = _captureOwnerEpoch(expectedEpoch: expectedEpoch);
     if (epoch == null) {
       return null;
     }
@@ -1528,16 +1534,24 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     );
   }
 
+  SessionEpoch? _captureOwnerEpoch({SessionEpoch? expectedEpoch}) {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (expectedEpoch != null && epoch != expectedEpoch) {
+      throw sessionEpochChangedError();
+    }
+    return epoch;
+  }
+
+  void _requireCurrentOwnerEpoch(SessionEpoch epoch) {
+    if (!mounted || !epoch.matches(ref.read(sessionProvider))) {
+      throw sessionEpochChangedError();
+    }
+  }
+
   bool _isOwnerOperationCurrent(_ConversationOwnerOperation operation) {
     return mounted &&
         operation.generation == _refreshGeneration &&
         operation.epoch.matches(ref.read(sessionProvider));
-  }
-
-  void _requireCurrentOwnerOperation(_ConversationOwnerOperation operation) {
-    if (!_isOwnerOperationCurrent(operation)) {
-      throw sessionEpochChangedError();
-    }
   }
 
   void _addHiddenKeysFor(

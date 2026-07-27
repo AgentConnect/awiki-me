@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/app_services.dart';
+import '../../../application/message_sync_service.dart';
+import '../../../application/models/app_conversation_read_ref.dart';
 import '../../../core/performance_logger.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
@@ -241,11 +243,20 @@ class MessageSyncCoordinator
           lastError: null,
         );
         if (!result.snapshotRequired) {
+          await _hydrateRequiredConversations(
+            result.hydrationRequiredConversationIds,
+            epoch: epoch,
+          );
+          if (!_isCurrentEpoch(epoch)) {
+            return;
+          }
           _messageSyncTrace(
             'run.refresh_fast_local.start',
             fields: <String, Object?>{'reason': reason},
           );
-          await ref.read(conversationListProvider.notifier).refreshFastLocal();
+          await ref
+              .read(conversationListProvider.notifier)
+              .refreshFastLocalAfterCoreCommit();
           if (!_isCurrentEpoch(epoch)) {
             return;
           }
@@ -324,6 +335,87 @@ class MessageSyncCoordinator
       level: AwikiPerformanceLogLevel.verbose,
     );
     return operation;
+  }
+
+  Future<void> _hydrateRequiredConversations(
+    Iterable<String> conversationIds, {
+    required SessionEpoch epoch,
+  }) async {
+    final normalizedIds = <String>{
+      for (final conversationId in conversationIds)
+        if (conversationId.trim().isNotEmpty) conversationId.trim(),
+    };
+    if (normalizedIds.isEmpty) {
+      return;
+    }
+    final sync = ref.read(messageSyncServiceProvider);
+    if (sync is! ConversationMessageSyncService) {
+      _messageSyncTrace(
+        'run.hydration.unsupported',
+        fields: <String, Object?>{'conversations': normalizedIds.length},
+      );
+      throw UnsupportedError(
+        'Reliable message sync requires conversation hydration support.',
+      );
+    }
+    final conversationSync = sync as ConversationMessageSyncService;
+    _messageSyncTrace(
+      'run.hydration.start',
+      fields: <String, Object?>{'conversations': normalizedIds.length},
+    );
+    var completed = 0;
+    for (final conversationId in normalizedIds) {
+      if (!_isCurrentEpoch(epoch)) {
+        return;
+      }
+      try {
+        await _hydrateConversationUntilCurrent(
+          conversationSync,
+          conversationId,
+          epoch: epoch,
+        );
+        completed += 1;
+      } catch (error) {
+        _messageSyncTrace(
+          'run.hydration.failed',
+          fields: <String, Object?>{
+            'conversation_hash': AwikiPerformanceLogger.safeHash(
+              conversationId,
+            ),
+            'error_type': error.runtimeType,
+          },
+        );
+      }
+    }
+    _messageSyncTrace(
+      'run.hydration.done',
+      fields: <String, Object?>{
+        'conversations': normalizedIds.length,
+        'completed': completed,
+      },
+    );
+  }
+
+  Future<void> _hydrateConversationUntilCurrent(
+    ConversationMessageSyncService sync,
+    String conversationId, {
+    required SessionEpoch epoch,
+  }) async {
+    String? afterServerSeq;
+    while (_isCurrentEpoch(epoch)) {
+      final page = await sync.syncConversationAfter(
+        conversation: AppConversationReadRef.fromConversationId(conversationId),
+        afterServerSeq: afterServerSeq,
+      );
+      if (!page.hasMore) {
+        return;
+      }
+      final next = page.nextAfterServerSeq?.trim();
+      if (next == null || next.isEmpty || next == afterServerSeq) {
+        throw StateError('conversation_hydration_cursor_stalled');
+      }
+      afterServerSeq = next;
+    }
   }
 
   SessionEpoch? _captureCurrentEpoch() {

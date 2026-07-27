@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
@@ -29,8 +30,9 @@ import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -1062,11 +1064,15 @@ void main() {
       );
 
       await activate();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await _pumpUntil(
+        () =>
+            conversations.fastCalls == 2 &&
+            !container.read(messageSyncCoordinatorProvider).isSyncing,
+        reason: 'startup sync post-commit conversation read did not finish',
+      );
 
-      expect(conversations.fastCalls, 1);
-      expect(conversations.enrichCalls, 1);
+      expect(conversations.fastCalls, 2);
+      expect(conversations.enrichCalls, 2);
       expect(
         container.read(conversationListProvider).conversations.single.threadId,
         'dm:1',
@@ -1075,7 +1081,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     });
 
-    test('恢复和重连短时间重复触发时复用同一次后台刷新', () async {
+    test('恢复和重连复用资料刷新但每次 Core 提交都重新读取会话', () async {
       final slowProfile = Completer<void>();
       final sync = FakeMessageSyncService();
       gateway.myProfile = null;
@@ -1110,13 +1116,19 @@ void main() {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await _pumpUntil(
+        () =>
+            sync.syncReasons.contains('startup') &&
+            sync.syncReasons.contains('app_resumed') &&
+            conversations.fastCalls == 3 &&
+            !container.read(messageSyncCoordinatorProvider).isSyncing,
+        reason: 'startup and resume post-commit reads did not finish',
+      );
 
       expect(sync.syncReasons, contains('startup'));
       expect(sync.syncReasons, contains('app_resumed'));
-      expect(conversations.fastCalls, 2);
-      expect(conversations.enrichCalls, 2);
+      expect(conversations.fastCalls, 3);
+      expect(conversations.enrichCalls, 3);
       slowProfile.complete();
       await Future<void>.delayed(Duration.zero);
     });
@@ -1166,6 +1178,74 @@ void main() {
       expect(
         container.read(groupProvider).groups.single.groupId,
         'group-second',
+      );
+    });
+
+    test('本地身份切换后自动为新身份调度 startup 可靠同步', () async {
+      final sessions = _EpochAppSessionService(gateway);
+      messageSyncService = _IdentitySwitchUnreadMessageSyncService(gateway);
+      addTearDown(sessions.completeFirstRefreshIfPending);
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          appSessionServiceProvider.overrideWithValue(sessions),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          desktopShellServiceProvider.overrideWithValue(desktopShell),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      final runtime = container.read(appRuntimeProvider.notifier);
+
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await _pumpUntil(
+        () =>
+            messageSyncService.syncReasons.contains('startup') &&
+            !container.read(messageSyncCoordinatorProvider).isSyncing,
+        reason: 'first identity startup sync did not finish',
+      );
+      final firstEpoch = container.read(sessionProvider).activeEpoch!;
+      messageSyncService.syncReasons.clear();
+
+      await runtime.loginWithLocalCredential('second');
+      await _pumpUntil(
+        () =>
+            messageSyncService.syncReasons.contains('startup') &&
+            !container.read(messageSyncCoordinatorProvider).isSyncing,
+        reason: 'second identity startup sync was not scheduled automatically',
+      );
+
+      final secondEpoch = container.read(sessionProvider).activeEpoch!;
+      expect(container.read(sessionProvider).session?.did, 'did:test:second');
+      expect(secondEpoch.identityKey, 'second');
+      expect(secondEpoch, isNot(equals(firstEpoch)));
+      expect(messageSyncService.syncReasons, <String>['startup']);
+      expect(
+        container.read(messageSyncCoordinatorProvider).lastReason,
+        'startup',
+      );
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations;
+      expect(conversations, hasLength(1));
+      expect(conversations.single.unreadCount, 1);
+      expect(conversations.single.lastMessagePreview, 'new identity unread');
+      expect(messageSyncService.conversationAfterRequests, hasLength(1));
+      expect(
+        messageSyncService
+            .conversationAfterRequests
+            .single
+            .conversation
+            .conversationId,
+        conversations.single.conversationId,
       );
     });
 
@@ -2679,6 +2759,77 @@ class _EpochAppSessionService extends FakeAppSessionService {
   }
 
   void completeLoginIfPending() => completeLogin();
+}
+
+class _IdentitySwitchUnreadMessageSyncService extends FakeMessageSyncService {
+  _IdentitySwitchUnreadMessageSyncService(this.gateway);
+
+  final FakeAwikiGateway gateway;
+  int _calls = 0;
+  static const _conversationId = 'dm:peer-scope:v1:identity-switch-peer';
+
+  @override
+  Future<MessageSyncDeltaResult> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    _calls += 1;
+    if (_calls == 2) {
+      gateway.conversations = <ConversationSummary>[
+        ConversationSummary(
+          threadId: _conversationId,
+          conversationId: _conversationId,
+          displayName: 'First identity',
+          lastMessagePreview: 'previous preview',
+          lastMessageAt: DateTime.utc(2026, 7, 26),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:test:first',
+        ),
+      ];
+    }
+    return MessageSyncDeltaResult(
+      eventsApplied: _calls == 2 ? 1 : 0,
+      pagesFetched: 1,
+      hasMore: false,
+      snapshotRequired: false,
+      hydrationRequiredConversationIds: _calls == 2
+          ? const <String>[_conversationId]
+          : const <String>[],
+    );
+  }
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    conversationAfterRequests.add(
+      FakeConversationAfterRequest(
+        conversation: conversation,
+        afterServerSeq: afterServerSeq,
+        limit: limit,
+      ),
+    );
+    gateway.conversations = <ConversationSummary>[
+      ConversationSummary(
+        threadId: _conversationId,
+        conversationId: _conversationId,
+        displayName: 'First identity',
+        lastMessagePreview: 'new identity unread',
+        lastMessageAt: DateTime.utc(2026, 7, 26),
+        unreadCount: 1,
+        isGroup: false,
+        targetDid: 'did:test:first',
+      ),
+    ];
+    return const MessageSyncThreadAfterResult(
+      messages: <ChatMessage>[],
+      hasMore: false,
+    );
+  }
 }
 
 class _FailingIdentityLoginAppSessionService extends FakeAppSessionService {
