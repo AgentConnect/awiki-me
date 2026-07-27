@@ -108,9 +108,10 @@ embedded in that binary, and an x86_64 Debug `daemon.binary` plus a Daemon
 Handle. It injects an always-confirming `UserPresencePort` only through the
 compiled integration-test provider override. Production code and the security
 suite remain fail-closed and continue to use `LocalAuthUserPresencePort`.
-The independent CLI peer receives the same explicit multi-device Direct E2EE
-rollout as the two App processes; it never relies on inherited parent
-environment.
+The functional suite keeps the production-default Direct E2EE gate disabled.
+Its ordinary Direct texts therefore use P3 Base on every participant; the test
+fails if multi-device synchronization silently creates a P5 session or upgrades
+the message security level.
 
 The functional suite proves:
 
@@ -120,14 +121,17 @@ The functional suite proves:
 2. both Apps converge the same exact Daemon/runtime DID, Handle, runtime kind,
    and parent topology, and the joining App renders both runtime names without
    a test-side inventory refresh after creation;
-3. an admin-App outbound Direct message is committed to an independent CLI
-   peer and appears on the joining App as the same canonical `isMine` own-sync
-   message;
+3. an admin-App default-plain Direct message is committed to an independent CLI
+   peer and appears on the joining App as the same canonical `isMine` sender
+   projection;
 4. the joining App sends a second Direct message through the same conversation
    using its own joined-device signing key; the admin App projects that exact
-   message as canonical `isMine` own-sync;
-5. a required-secure CLI reply appears under the same conversation on both
-   Apps and is visibly rendered by the joining App.
+   default-plain message as canonical `isMine` sender projection;
+5. an ordinary CLI reply appears under the same conversation on both Apps and
+   is visibly rendered by the joining App;
+6. the joining App opens an already-converged runtime Agent through visible UI,
+   sends one default-plain prompt through the real composer, and the admin App
+   renders the same canonical outgoing message.
 
 The runner executes the independent Direct-message checks immediately after
 Join, then starts the Agents-page observer before Daemon/Agent creation. This
@@ -142,9 +146,16 @@ with the first `authentication` entry from the shared DID Document.
 Realtime and Push remain lossy hints. While an authenticated App is in the
 foreground, App runtime requests a coalesced Core reliable-sync catch-up every
 30 seconds and stops that cadence in the background. This lets a durable
-exact-device Inbox row converge even if its live WebSocket hint is missed;
-the timer never projects a message itself and does not replace Core
-checkpoints.
+sender/recipient owner event converge even if its live WebSocket hint is
+missed; the timer never projects a message itself and does not replace Core
+checkpoints. A sender-side `sync.changed` notification contains only a sync
+hint: the App preserves it long enough to schedule Core `sync.delta`, while
+`sync.thread_after` remains the message projection source of truth.
+The stable conversation ID used by the App is only a presentation/storage
+route. Core keeps ordinary Direct history on the immutable
+`direct + peer DID` wire identity before merging it with a sender device's
+local projection; the acceptance path must not turn that presentation ID into
+a `thread` wire identity or weaken conflict detection.
 
 It does **not** prove operating-system user presence, and it starts only one
 Daemon. The second App observes the account-level Agent Inventory; it must not
@@ -155,7 +166,12 @@ Daemon control event, including one replayed after a subscription is attached,
 is only an invalidation signal on another device: it triggers an authoritative
 Inventory reconciliation but cannot synthesize a new Agent locally. This
 closes the snapshot/subscription race without making realtime payloads a second
-topology source of truth. Because that invalidation hint can also be lost, the
+topology source of truth. Before a runtime Agent from that authoritative
+Inventory is published to the UI, the App asks Core Directory to project its
+canonical Direct route. A failed identity projection never invents a Persona;
+the next authoritative Inventory reconciliation retries it. This lets reliable
+sender-side history hydrate an Agent conversation even when that device has
+never opened the chat. Because the invalidation hint can also be lost, the
 visible Agents page performs a quiet authoritative Inventory reconciliation
 every 30 seconds while the App is foregrounded and stops it when the page is
 disposed. On the App that accepted a runtime-create intent, the pending intent
@@ -187,3 +203,13 @@ message with its own device signing material and that the admin App projected
 the exact message as canonical own-sync. These runs prove the functional
 oracles above but, by design, do not replace the real-user-presence security
 attestation.
+
+The `awiki.info` run `20260727162425-hksfj42mww` passed all four functional
+cases after sender-side history hydration was made exact-message aware and
+ordinary Direct history kept `direct + peer DID` as its immutable wire
+identity. Its schema-v2 attestation includes
+`DEVICE-AGENT-MESSAGE-SYNC-E2E-001` in addition to the two Direct-message cases
+and `DEVICE-AGENT-SYNC-E2E-001`; both isolated Debug Apps completed in
+8 minutes 43 seconds. This is the first recorded App↔App acceptance proving a
+prompt sent through the joining App's visible runtime-Agent composer converges
+to the admin App.

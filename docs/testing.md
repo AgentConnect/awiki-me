@@ -122,8 +122,15 @@ checkpoint，并在内存中返回 SAS 是否匹配；SAS 不进入配置、日�
 无人值守的 `multi-device-app-pair-functional` 使用同一双 bundle/双 Core 隔离模型，但只在
 integration-test provider override 中注入自动确认的 `UserPresencePort`。它不修改生产
 授权实现，也不能生成 LocalAuthentication 通过证据。该 suite 覆盖同一账户的 Daemon、
-Codex 和 Claude Code Agent Inventory 跨设备收敛，以及 App A 发出消息后 App B 的
-own-sync 会话/消息、独立 CLI peer 回复后两台 App 的同会话入站收敛。
+Codex 和 Claude Code Agent Inventory 跨设备收敛，以及关闭 Direct E2EE gate 后 App A
+发出的普通 P3 消息通过 sender-side reliable sync 在 App B 投影为 outgoing、独立 CLI peer
+回复后两台 App 的同会话入站收敛，并覆盖加入端从真实 Agent UI 发送普通消息后管理端可见。
+该模式不得为了多设备同步创建 P5 session 或改变原消息安全级别。
+Agent 消息断言必须读取 canonical conversation timeline，不能用 legacy DID history
+adapter 代替；另一设备即使从未打开 Agent 会话，也必须依靠 Inventory 投影的 Core route 和
+sender-side reliable sync 收敛同一 `message_id`。这里的 canonical conversationId
+只是 App 展示/存储路由；Core 仍须把普通 Direct 历史保存为 `direct + peer DID` wire
+identity，再与发送设备的本地投影合并，不能通过放宽 wire-conflict 校验让用例通过。
 
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-001/002`、
 `DEVICE-REVOKE-E2E-001` 和 `MLS-MULTI-DEVICE-E2E-001/002` 均为 planned、不可执行边界。

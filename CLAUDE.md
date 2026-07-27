@@ -12,7 +12,8 @@
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Android/iOS remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
    - Realtime/Push 都只是同步提示；前台会话必须以有界周期触发 Core reliable sync，补偿提示丢失，并在后台停止，不能把 WebSocket 投递当作可靠消息事实源。
-   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
+   - 无业务消息体但携带 Core `sync` hint 的 realtime 事件必须保留为 sync-only `RealtimeUpdate` 并调度 reliable sync；普通 P3 Direct 的兄弟设备 outgoing 投影来自 sender owner 的 `sync.delta` / `sync.thread_after`，不能由 App 构造 plain own-sync 或升级为 P5。App 使用的稳定 conversationId 只是展示/存储路由，普通 Direct 的不可变 wire identity 仍由 Core 保持为 `direct + peer DID`。
+   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。权威 Inventory 中的 runtime Agent 在发布到 UI 前通过 Core Directory 投影 canonical Direct route，失败不伪造 Persona，并由后续 Inventory 对账重试。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`awiki.info`、`anpclaw.com` 时启用。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
    - 平台 runner 变更只触及任务明确要求的平台，避免提交无关生成文件。
@@ -95,6 +96,6 @@ bundle ID、独立 Flutter build root 与独立 native Core state root 的管理
 `DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。独立的
 `multi-device-app-pair-functional` 只在 integration-test provider override 中自动确认
 user presence，用真实双 App、Daemon、Agent Inventory、CLI peer 和远端消息链路验证
-Daemon/Codex/Claude Agent 跨设备收敛、双向 own-sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
+Daemon/Codex/Claude Agent 跨设备收敛、普通 P3 消息的双向 sender-side sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

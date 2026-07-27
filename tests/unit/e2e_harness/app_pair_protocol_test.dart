@@ -128,6 +128,15 @@ void main() {
       );
       await client.publish('joiner', 'functional_agents_converged');
       await client.publish(
+        'joiner',
+        'functional_agent_prompt_sent',
+        data: const <String, Object?>{
+          'conversationId': 'dm:peer-scope:v1:agent',
+          'messageId': 'msg-agent',
+        },
+      );
+      await client.publish('admin', 'functional_agent_prompt_visible');
+      await client.publish(
         'admin',
         'functional_peer_ready',
         data: const <String, Object?>{

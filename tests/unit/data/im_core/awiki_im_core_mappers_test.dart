@@ -903,6 +903,29 @@ void main() {
     expect(update.agentControlPayload, isNull);
   });
 
+  test('unknown notification preserves a reliable sync-only hint', () {
+    const event = core.RealtimeEvent(
+      kind: 'unknown_notification',
+      sync: core.RealtimeSyncHint(
+        syncDirty: true,
+        gapDetected: false,
+        eventSeq: '43',
+        eventType: 'message.created',
+      ),
+    );
+
+    final update = mapper.realtimeUpdateFromCore(event, ownerDid: 'did:me');
+
+    expect(update, isNotNull);
+    expect(update!.needsReliableSync, isTrue);
+    expect(update.syncDirty, isTrue);
+    expect(update.syncEventSeq, '43');
+    expect(update.syncEventType, 'message.created');
+    expect(update.message, isNull);
+    expect(update.conversation, isNull);
+    expect(update.conversationHint, isNull);
+  });
+
   test('realtime control payload is split away from normal updates', () {
     const event = core.RealtimeEvent(
       kind: 'message_received',

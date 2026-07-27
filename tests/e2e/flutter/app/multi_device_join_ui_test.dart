@@ -65,6 +65,8 @@ const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
 const String _appPairCaseId = 'DEVICE-JOIN-E2E-004';
 const String _appPairAgentSyncCaseId = 'DEVICE-AGENT-SYNC-E2E-001';
+const String _appPairAgentMessageSyncCaseId =
+    'DEVICE-AGENT-MESSAGE-SYNC-E2E-001';
 const String _appPairOutboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-001';
 const String _appPairInboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-002';
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
@@ -1199,7 +1201,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
   final bool functional;
   final bool automatedUserPresence;
   @override
-  bool get multiDeviceDirectE2eeEnabled => functional;
+  bool get multiDeviceDirectE2eeEnabled => false;
   @override
   final String cliBin;
   @override
@@ -1585,8 +1587,6 @@ class _JoinCli {
       to,
       '--text',
       text,
-      '--secure',
-      'required',
     ]);
     final message = _data(payload, action: null)['message'];
     if (message is! Map) {
@@ -2588,7 +2588,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   anpServiceDid: config.anpServiceDid,
   agentImEnabled: enableAppPairFunctional,
   multiDeviceDeviceRevokeEnabled: enableStep4,
-  multiDeviceDirectE2eeEnabled: enableRootTransfer || enableAppPairFunctional,
+  multiDeviceDirectE2eeEnabled: enableRootTransfer,
   multiDeviceGroupE2eeEnabled: enableStep4,
 );
 

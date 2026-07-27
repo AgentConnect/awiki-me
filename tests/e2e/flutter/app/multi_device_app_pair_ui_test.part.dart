@@ -601,10 +601,25 @@ Future<void> _runAppPairAdminFunctional({
       conversationId != canonicalConversationId ||
       outbound.sendState != MessageSendState.sent ||
       !outbound.isMine ||
-      outbound.senderDid != adminDid ||
-      outbound.receiverDid != peerDid) {
-    fail('The admin App did not commit the canonical outbound Direct message.');
+      outbound.senderDid != adminDid) {
+    fail(
+      'The admin App did not commit the canonical outbound Direct message '
+      '(remote_id=${outboundId.isNotEmpty}, '
+      'conversation=${conversationId == canonicalConversationId}, '
+      'state=${outbound.sendState.name}, mine=${outbound.isMine}, '
+      'sender=${outbound.senderDid == adminDid}).',
+    );
   }
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: canonicalConversationId,
+    content: outboundText,
+    messageId: outboundId,
+    senderDid: adminDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
   await config.coordinator.publish(
     'admin',
     'functional_outbound_sent',
@@ -627,6 +642,7 @@ Future<void> _runAppPairAdminFunctional({
   final joinedOutboundId = _required(joinedOutbound, 'messageId');
   final joinedOutboundText = _appPairMessage(config.runId, 'joiner-outbound');
   await _waitForAppPairMessage(
+    container: container,
     messaging: bootstrap.messagingService!,
     conversationId: canonicalConversationId,
     content: joinedOutboundText,
@@ -648,6 +664,7 @@ Future<void> _runAppPairAdminFunctional({
   final replyText = _appPairMessage(config.runId, 'reply');
   final replyId = await peer.sendDirectText(to: adminDid, text: replyText);
   await _waitForAppPairMessage(
+    container: container,
     messaging: bootstrap.messagingService!,
     conversationId: canonicalConversationId,
     content: replyText,
@@ -749,6 +766,30 @@ Future<void> _runAppPairAdminFunctional({
     'functional_agents_converged',
     timeout: const Duration(minutes: 2),
   );
+  final agentPrompt = await config.coordinator.waitFor(
+    'joiner',
+    'functional_agent_prompt_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final agentPromptConversationId = _required(agentPrompt, 'conversationId');
+  final agentPromptMessageId = _required(agentPrompt, 'messageId');
+  final agentPromptText = _appPairMessage(config.runId, 'agent-prompt');
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: agentPromptConversationId,
+    content: agentPromptText,
+    messageId: agentPromptMessageId,
+    senderDid: adminDid,
+    receiverDid: codex.agentDid,
+    isMine: true,
+  );
+  await _openAppPairConversation(
+    tester: tester,
+    conversationId: agentPromptConversationId,
+    content: agentPromptText,
+  );
+  await config.coordinator.publish('admin', 'functional_agent_prompt_visible');
 }
 
 Future<void> _runAppPairJoinerFunctional({
@@ -795,6 +836,7 @@ Future<void> _runAppPairJoinerFunctional({
     preview: outboundText,
   );
   await _waitForAppPairMessage(
+    container: container,
     messaging: bootstrap.messagingService!,
     conversationId: conversationId,
     content: outboundText,
@@ -820,10 +862,19 @@ Future<void> _runAppPairJoinerFunctional({
       joinedOutbound.conversationId != conversationId ||
       joinedOutbound.sendState != MessageSendState.sent ||
       !joinedOutbound.isMine ||
-      joinedOutbound.senderDid != accountDid ||
-      joinedOutbound.receiverDid != peerDid) {
+      joinedOutbound.senderDid != accountDid) {
     fail('The joining App did not commit its outbound Direct message.');
   }
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: joinedOutboundText,
+    messageId: joinedOutboundId,
+    senderDid: accountDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
   await config.coordinator.publish(
     'joiner',
     'functional_joiner_outbound_sent',
@@ -861,6 +912,7 @@ Future<void> _runAppPairJoinerFunctional({
     preview: replyText,
   );
   await _waitForAppPairMessage(
+    container: container,
     messaging: bootstrap.messagingService!,
     conversationId: conversationId,
     content: replyText,
@@ -946,6 +998,36 @@ Future<void> _runAppPairJoinerFunctional({
       'same_codex_runtime_projected',
       'same_claude_runtime_projected',
       'both_runtime_agents_visible',
+    ],
+  );
+  final agentPrompt = await _sendAppPairAgentPromptThroughUi(
+    tester: tester,
+    container: container,
+    messaging: bootstrap.messagingService!,
+    agent: codex,
+    accountDid: accountDid,
+    content: _appPairMessage(config.runId, 'agent-prompt'),
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'functional_agent_prompt_sent',
+    data: <String, Object?>{
+      'conversationId': agentPrompt.conversationId!,
+      'messageId': agentPrompt.remoteId!,
+    },
+  );
+  await config.coordinator.waitFor(
+    'admin',
+    'functional_agent_prompt_visible',
+    timeout: const Duration(minutes: 2),
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentMessageSyncCaseId,
+    phases: const <String>[
+      'joining_app_opened_existing_runtime_agent_chat',
+      'joining_app_agent_prompt_committed_default_plain',
+      'admin_app_agent_conversation_projected',
+      'admin_app_agent_own_sync_visible',
     ],
   );
 }
@@ -1262,6 +1344,115 @@ Future<void> _openAppPairAgentsPage(WidgetTester tester) async {
   );
 }
 
+Future<ChatMessage> _sendAppPairAgentPromptThroughUi({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required MessagingService messaging,
+  required AgentSummary agent,
+  required String accountDid,
+  required String content,
+}) async {
+  container.read(agentsProvider.notifier).select(agent.agentDid);
+  await tester.pump(const Duration(milliseconds: 200));
+  final workspace = find.byType(AgentsWorkspacePage);
+  final openChat = find.text(tester.element(workspace).l10n.agentOpenChat);
+  await _tapOne(
+    tester,
+    openChat,
+    failure: 'The joining App runtime Agent chat action was unavailable.',
+  );
+  final input = find.bySemanticsIdentifier('e2e-chat-input');
+  await _pumpUntil(
+    tester,
+    () => input.evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 30),
+    failure: 'The joining App runtime Agent chat input was unavailable.',
+  );
+  await tester.enterText(input, content);
+  await tester.pump(const Duration(milliseconds: 100));
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-chat-send-button'),
+    failure: 'The joining App runtime Agent send action was unavailable.',
+  );
+  late final String conversationId;
+  final conversationDeadline = DateTime.now().add(const Duration(seconds: 30));
+  while (true) {
+    final matches = container
+        .read(conversationListProvider)
+        .conversations
+        .where(
+          (item) =>
+              item.targetDid == agent.agentDid &&
+              item.conversationId.startsWith('dm:peer-scope:v1:'),
+        )
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('The joining App projected duplicate runtime Agent conversations.');
+    }
+    if (matches.length == 1) {
+      conversationId = matches.single.conversationId;
+      break;
+    }
+    if (!DateTime.now().isBefore(conversationDeadline)) {
+      fail(
+        'The joining App did not retain the canonical runtime Agent conversation.',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  if (messaging is! ConversationTimelineMessagingService) {
+    fail('The App-pair messaging service lacks conversation timeline reads.');
+  }
+  final timeline = messaging as ConversationTimelineMessagingService;
+  final conversationRef = AppConversationReadRef.fromConversationId(
+    conversationId,
+  );
+  final deadline = DateTime.now().add(const Duration(seconds: 90));
+  while (DateTime.now().isBefore(deadline)) {
+    final messages = await timeline.loadConversationTimeline(
+      conversationRef,
+      limit: 20,
+    );
+    final matches = messages
+        .where((message) => message.content == content)
+        .toList(growable: false);
+    if (matches.length > 1) {
+      fail('The joining App projected a duplicate runtime Agent prompt.');
+    }
+    if (matches.length == 1) {
+      final message = matches.single;
+      final messageId = message.remoteId?.trim() ?? '';
+      final conversationId = message.conversationId?.trim() ?? '';
+      if (messageId.isNotEmpty &&
+          conversationId.startsWith('dm:peer-scope:v1:') &&
+          message.senderDid == accountDid &&
+          message.receiverDid == agent.agentDid &&
+          message.isMine &&
+          message.sendState == MessageSendState.sent) {
+        await _pumpUntil(
+          tester,
+          () => find
+              .bySemanticsIdentifier(e2eMessageIdentifier(content))
+              .evaluate()
+              .isNotEmpty,
+          timeout: const Duration(seconds: 30),
+          failure:
+              'The joining App did not render its committed runtime Agent prompt.',
+        );
+        return message;
+      }
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 750));
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  fail(
+    'The joining App canonical timeline did not commit its default-plain '
+    'runtime Agent prompt.',
+  );
+}
+
 Future<AgentSummary> _waitForAppPairAgent({
   required WidgetTester tester,
   required ProviderContainer container,
@@ -1446,12 +1637,14 @@ Future<String> _appPairHistoryDiagnostic({
 String _appPairErrorDiagnostic(Object? error) {
   if (error == null) return 'none';
   if (error is core.AwikiImCoreException) {
-    return '${error.runtimeType}:${error.code}:${error.serviceCode ?? 'none'}';
+    return '${error.runtimeType}:${error.code}:${error.serviceCode ?? 'none'}:'
+        '${error.message}';
   }
   return error.runtimeType.toString();
 }
 
 Future<ChatMessage> _waitForAppPairMessage({
+  required ProviderContainer container,
   required MessagingService messaging,
   required String conversationId,
   required String content,
@@ -1468,11 +1661,13 @@ Future<ChatMessage> _waitForAppPairMessage({
     conversationId,
   );
   final deadline = DateTime.now().add(const Duration(seconds: 90));
+  var lastMessages = const <ChatMessage>[];
   while (DateTime.now().isBefore(deadline)) {
     final messages = await timeline.loadConversationTimeline(
       conversation,
       limit: 20,
     );
+    lastMessages = messages;
     final matches = messages
         .where((message) => message.content == content)
         .toList(growable: false);
@@ -1491,7 +1686,23 @@ Future<ChatMessage> _waitForAppPairMessage({
     }
     await Future<void>.delayed(const Duration(milliseconds: 750));
   }
-  fail('The App-pair history did not converge the exact Direct message.');
+  final contentMatches = lastMessages
+      .where((message) => message.content == content)
+      .toList(growable: false);
+  final exact = contentMatches.length == 1 ? contentMatches.single : null;
+  final sync = container.read(messageSyncCoordinatorProvider);
+  fail(
+    'The App-pair history did not converge the exact Direct message '
+    '(messages=${lastMessages.length}, contentMatches=${contentMatches.length}, '
+    'id=${exact?.remoteId == messageId}, '
+    'conversation=${exact?.conversationId == conversationId}, '
+    'sender=${exact?.senderDid == senderDid}, '
+    'receiver=${exact?.receiverDid == receiverDid}, '
+    'mine=${exact?.isMine == isMine}, state=${exact?.sendState.name ?? 'none'}, '
+    'lastSync=${sync.lastReason ?? 'none'}, '
+    'syncError=${_appPairErrorDiagnostic(sync.lastError)}, '
+    'syncing=${sync.isSyncing}).',
+  );
 }
 
 Future<void> _openAppPairConversation({

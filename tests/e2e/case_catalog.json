@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-27.multi-device-joined-outbound-v2",
+  "sourceRevision": "2026-07-27.multi-device-default-plain-agent-message-v3",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2497,15 +2497,65 @@
       }
     },
     {
+      "caseId": "DEVICE-AGENT-MESSAGE-SYNC-E2E-001",
+      "feature": "A joined App sends a default-plain runtime Agent prompt that converges on the other App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated App devices share one joined account identity with the production-default Direct E2EE gate disabled; both Apps have converged the same real Codex runtime Agent and the joining App is displaying the normal Agents workspace.",
+      "action": "On the joining App, select the existing Codex runtime Agent, open its chat through visible UI, send one exact prompt through the real composer, then observe the exact canonical own-sync message on the admin App.",
+      "exactOracles": [
+        "The joining App opens the already-converged runtime Agent chat and commits the exact prompt through the visible composer as a sent default-plain Direct message with the account DID and runtime Agent DID.",
+        "The admin App projects the same canonical conversation and exact message ID as isMine=true and visibly renders the prompt."
+      ],
+      "negativeChecks": [
+        "Enabling Direct E2EE, calling MessagingService directly on the joining App, creating a test-only conversation, duplicate content, canonical ID mismatch, wrong sender or receiver, failed send state, missing own-sync semantics, or a non-visible admin-App message prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_opened_existing_runtime_agent_chat",
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_agent_prompt_committed_default_plain",
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_conversation_projected",
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_own_sync_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_opened_existing_runtime_agent_chat",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_agent_prompt_committed_default_plain"
+          ],
+          [
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_conversation_projected",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_own_sync_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_opened_existing_runtime_agent_chat",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_agent_prompt_committed_default_plain",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_conversation_projected",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_own_sync_visible"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "DEVICE-MESSAGE-SYNC-E2E-001",
       "feature": "Direct messages sent on either joined App converge as own-sync on the other App",
       "layer": "remote_product_ui",
-      "preconditions": "Two isolated App devices share one joined account identity, Direct multi-device E2EE is enabled for the focused suite, and an independent fresh CLI identity is available as the remote peer.",
+      "preconditions": "Two isolated App devices share one joined account identity with the production-default Direct E2EE gate disabled, and an independent fresh CLI identity is available as the remote peer.",
       "action": "Send one exact Direct text from the admin App to the CLI peer and observe it on the joining App, then send a second exact Direct text from the joining App through the same canonical conversation and observe it on the admin App.",
       "exactOracles": [
         "The admin App commits exactly one sent message with the account DID, peer DID, exact content, canonical message ID, and canonical conversation ID.",
         "The joining App projects the first message as one canonical isMine own-sync message and renders it in the selected conversation.",
-        "The joining App signs and commits a second outbound message with its own joined-device signing key and the same account DID and canonical conversation ID.",
+        "The joining App signs and commits a second default-plain outbound message with its own joined-device signing key, the same account DID, and canonical conversation ID.",
         "The admin App projects the second message as the exact canonical isMine own-sync message and renders it under the same conversation."
       ],
       "negativeChecks": [
@@ -2567,15 +2617,15 @@
       "caseId": "DEVICE-MESSAGE-SYNC-E2E-002",
       "feature": "A remote Direct reply converges on both joined Apps",
       "layer": "remote_product_ui",
-      "preconditions": "The two-App own-sync case has established the canonical peer conversation and the independent CLI peer can send required-secure Direct messages.",
-      "action": "Send one exact required-secure reply from the CLI peer and observe the same canonical incoming message on both App device histories plus the joining App conversation list and visible timeline.",
+      "preconditions": "The default-plain two-App own-sync case has established the canonical peer conversation and the independent CLI peer can send an ordinary Direct message.",
+      "action": "Send one exact default-plain reply from the CLI peer and observe the same canonical incoming message on both App device histories plus the joining App conversation list and visible timeline.",
       "exactOracles": [
         "The admin App receives the exact CLI reply with the CLI DID, account DID, canonical reply ID, sent state, and isMine=false.",
         "The joining App updates the same peer conversation preview without creating a second conversation.",
         "The joining App receives the exact incoming reply with the same canonical ID and renders it in the already-open timeline."
       ],
       "negativeChecks": [
-        "Plain/insecure fallback, duplicate reply delivery, canonical ID mismatch, wrong direction, a second peer conversation, only one App receiving the reply, or a non-visible reply prevents pass attestation."
+        "Unexpected secure-mode activation, duplicate reply delivery, canonical ID mismatch, wrong direction, a second peer conversation, only one App receiving the reply, or a non-visible reply prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",

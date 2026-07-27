@@ -31,6 +31,11 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
     'claudeHandle',
   },
   'joiner\u0000functional_agents_converged': <String>{},
+  'joiner\u0000functional_agent_prompt_sent': <String>{
+    'conversationId',
+    'messageId',
+  },
+  'admin\u0000functional_agent_prompt_visible': <String>{},
   'admin\u0000functional_peer_ready': <String>{'peerDid', 'peerHandle'},
   'admin\u0000functional_outbound_sent': <String>{
     'conversationId',

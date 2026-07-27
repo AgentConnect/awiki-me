@@ -32,6 +32,7 @@ const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
 const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
 const agentListLoadTimeout = Duration(seconds: 15);
+const agentIdentityRouteReconcileTimeout = Duration(seconds: 5);
 const agentInventoryAutoSyncInterval = Duration(seconds: 4);
 const agentInventoryAutoSyncMaxAttempts = 24;
 const agentInventoryObservationInterval = Duration(seconds: 30);
@@ -487,6 +488,7 @@ class AgentsController extends StateNotifier<AgentsState> {
   int _inventoryAutoSyncAttempts = 0;
   bool _inventoryAutoSyncInFlight = false;
   String? _inventoryAutoSyncExhaustedOwner;
+  final Map<String, String> _runtimeAgentRouteFingerprints = <String, String>{};
 
   bool get _agentsAvailable => ref.read(agentImEnabledProvider);
 
@@ -657,7 +659,13 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
       _pruneConfirmedTopologyControlOverlays(remoteAgents);
       final agents = _applyTopologyControlOverlays(statusMergedAgents);
-      final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
+      await _reconcileRuntimeAgentIdentityRoutes(cacheOwner, agents);
+      if (!_isCurrentCacheOwner(cacheOwner, epoch: startedEpoch)) {
+        return;
+      }
+      final pendingRuntimeCreations = _pendingCreationsAfterAgents(
+        remoteAgents,
+      );
       final pendingDaemonUpgrades = _pendingDaemonUpgradesAfterAgents(agents);
       final cancellingDaemonUpgrades = _cancellingDaemonUpgradesAfterAgents(
         agents,
@@ -727,6 +735,45 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void clearSelection() {
     state = state.copyWith(clearSelection: true);
+  }
+
+  Future<void> _reconcileRuntimeAgentIdentityRoutes(
+    String ownerDid,
+    List<AgentSummary> agents,
+  ) async {
+    final runtimeAgents = agents
+        .where(
+          (agent) =>
+              agent.isRuntime &&
+              agent.agentDid.trim().startsWith('did:') &&
+              agent.handle?.trim().isNotEmpty == true,
+        )
+        .toList(growable: false);
+    await Future.wait(
+      runtimeAgents.map((agent) async {
+        final agentDid = agent.agentDid.trim();
+        final fingerprint =
+            '$ownerDid|$agentDid|${agent.handle!.trim().toLowerCase()}';
+        if (_runtimeAgentRouteFingerprints[agentDid] == fingerprint) {
+          return;
+        }
+        try {
+          final resolved = await ref
+              .read(directoryApplicationServiceProvider)
+              .resolvePeer(agentDid)
+              .timeout(agentIdentityRouteReconcileTimeout);
+          if (resolved.did.trim() != agentDid ||
+              resolved.conversationId?.trim().startsWith('dm:peer-scope:v1:') !=
+                  true) {
+            return;
+          }
+          _runtimeAgentRouteFingerprints[agentDid] = fingerprint;
+        } catch (_) {
+          // Inventory remains visible; the next authoritative reconciliation
+          // retries projection of the Agent's canonical Direct route.
+        }
+      }),
+    );
   }
 
   Future<void> createDaemonInstallCommand() async {
@@ -3129,28 +3176,47 @@ class AgentsController extends StateNotifier<AgentsState> {
   List<PendingRuntimeCreation> _pendingCreationsAfterAgents(
     List<AgentSummary> agents,
   ) {
-    return _pendingCreationsAfterControlPayloadAndAgents(
-      state.pendingRuntimeCreations,
-      const <String, Object?>{},
-      agents,
-    );
-  }
-
-  List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
-    List<PendingRuntimeCreation> current,
-    Map<String, Object?> payload,
-    List<AgentSummary> agents,
-  ) {
     final retained = <PendingRuntimeCreation>[];
-    for (final pending in current) {
-      if (_controlPayloadMatchesPendingRuntimeCreation(payload, pending) ||
-          _hasMatchingRuntimeAgent(agents, pending)) {
+    for (final pending in state.pendingRuntimeCreations) {
+      if (_hasMatchingRuntimeAgentWithConfirmedRoute(agents, pending)) {
         _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
         continue;
       }
       retained.add(pending);
     }
     return retained;
+  }
+
+  List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
+    List<PendingRuntimeCreation> current,
+    Map<String, Object?> _,
+    List<AgentSummary> _,
+  ) {
+    // Control events accelerate display, but only authoritative Inventory plus
+    // a projected Core route may complete the creation transaction.
+    return current;
+  }
+
+  bool _hasMatchingRuntimeAgentWithConfirmedRoute(
+    List<AgentSummary> agents,
+    PendingRuntimeCreation pending,
+  ) {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      return false;
+    }
+    final owner = _agentCacheOwner(session);
+    return agents.any((agent) {
+      if (!_runtimeAgentMatchesPending(agent, pending)) {
+        return false;
+      }
+      final handle = agent.handle?.trim().toLowerCase();
+      if (handle == null || handle.isEmpty) {
+        return false;
+      }
+      final expected = '$owner|${agent.agentDid.trim()}|$handle';
+      return _runtimeAgentRouteFingerprints[agent.agentDid.trim()] == expected;
+    });
   }
 
   Set<String> _pendingDeletionAfterAgents(List<AgentSummary> agents) {
@@ -3890,22 +3956,20 @@ bool _samePendingRuntimeTarget(
           _normalizedAgentHandle(right.handle);
 }
 
-bool _hasMatchingRuntimeAgent(
-  List<AgentSummary> agents,
+bool _runtimeAgentMatchesPending(
+  AgentSummary agent,
   PendingRuntimeCreation pending,
 ) {
-  return agents.any((agent) {
-    if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
-      return false;
-    }
-    final agentHandle = _normalizedAgentHandle(agent.handle);
-    final pendingHandle = _normalizedAgentHandle(pending.handle);
-    if (agentHandle != null && pendingHandle != null) {
-      return agentHandle == pendingHandle;
-    }
-    final agentName = agent.displayName.trim();
-    return agentName.isNotEmpty && agentName == pending.displayName.trim();
-  });
+  if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
+    return false;
+  }
+  final agentHandle = _normalizedAgentHandle(agent.handle);
+  final pendingHandle = _normalizedAgentHandle(pending.handle);
+  if (agentHandle != null && pendingHandle != null) {
+    return agentHandle == pendingHandle;
+  }
+  final agentName = agent.displayName.trim();
+  return agentName.isNotEmpty && agentName == pending.displayName.trim();
 }
 
 String? _normalizedAgentHandle(String? value) {

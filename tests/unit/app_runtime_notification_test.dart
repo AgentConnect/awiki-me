@@ -587,6 +587,22 @@ void main() {
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
     });
 
+    test('realtime sync-only hint 调度 delta，不直接构造消息', () async {
+      await activate();
+      messageSyncService.syncReasons.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        syncDirty: true,
+        syncEventSeq: '43',
+        syncEventType: 'message.created',
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, contains('realtime_dirty'));
+      expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+    });
+
     test('后台收到消息时触发系统通知', () async {
       gateway.nextRealtimeUpdate = buildUpdate();
       container

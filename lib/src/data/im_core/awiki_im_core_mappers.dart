@@ -613,6 +613,14 @@ class AwikiImCoreMappers {
           syncEventType: event.sync?.eventType,
         );
       }
+      if (event.sync != null) {
+        return RealtimeUpdate(
+          syncDirty: event.sync!.syncDirty,
+          gapDetected: event.sync!.gapDetected,
+          syncEventSeq: event.sync!.eventSeq,
+          syncEventType: event.sync!.eventType,
+        );
+      }
       return null;
     }
     final chatMessage = chatMessageFromCore(message, ownerDid: ownerDid);

@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
+import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/ports/directory_core_port.dart';
 import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -11,6 +13,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart'
 import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/presentation/agents/agent_ui_messages.dart';
@@ -24,6 +27,48 @@ import 'package:flutter_test/flutter_test.dart';
 import '../test_support.dart';
 
 void main() {
+  test(
+    'load projects runtime Agent route before publishing inventory',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'codex',
+            handle: 'runtime-codex',
+            displayName: 'Codex',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final directory = _BlockingDirectoryApplicationService();
+      final container = _container(control, directory: directory);
+      addTearDown(container.dispose);
+
+      final load = container.read(agentsProvider.notifier).load();
+      await directory.resolveStarted.future;
+
+      expect(container.read(agentsProvider).agents, isEmpty);
+      directory.complete(
+        const DirectoryPeerResolution(
+          input: 'did:agent:runtime',
+          did: 'did:agent:runtime',
+          handle: 'runtime-codex.awiki.info',
+          conversationId: 'dm:peer-scope:v1:runtime-codex',
+        ),
+      );
+      await load;
+
+      expect(directory.resolvedPeers, <String>['did:agent:runtime']);
+      expect(
+        container.read(agentsProvider).agents.single.agentDid,
+        'did:agent:runtime',
+      );
+    },
+  );
+
   test(
     'load restores UserService inventory without explicit selection',
     () async {
@@ -654,7 +699,7 @@ void main() {
   });
 
   test(
-    'createHermesRuntime shows pending creation until daemon result returns',
+    'createHermesRuntime keeps pending until authoritative route projection',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -710,7 +755,7 @@ void main() {
       );
 
       final state = container.read(agentsProvider);
-      expect(state.pendingRuntimeCreations, isEmpty);
+      expect(state.pendingRuntimeCreations, hasLength(1));
       final runtime = state.agents.singleWhere(
         (agent) => agent.agentDid == 'did:agent:runtime-new',
       );
@@ -743,7 +788,14 @@ void main() {
       );
       final control = _ControlledInventoryAgentControlService();
       final events = _StreamingAgentControlStatusStore();
-      final container = _container(control, statusStore: events);
+      final directory = _EventuallyAvailableDirectoryApplicationService(
+        failuresBeforeSuccess: 0,
+      );
+      final container = _container(
+        control,
+        statusStore: events,
+        directory: directory,
+      );
       addTearDown(container.dispose);
       addTearDown(events.close);
       final controller = container.read(agentsProvider.notifier);
@@ -799,7 +851,10 @@ void main() {
         container.read(agentsProvider).agents.map((agent) => agent.agentDid),
         contains(runtime.agentDid),
       );
-      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+      );
 
       control.completeListCall(2, const <AgentSummary>[daemon]);
       await staleLoad;
@@ -816,6 +871,7 @@ void main() {
         container.read(agentsProvider).agents.map((agent) => agent.agentDid),
         containsAll(<String>[daemon.agentDid, runtime.agentDid]),
       );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
     },
   );
 
@@ -841,7 +897,8 @@ void main() {
         latest: AgentLatestStatus(status: 'ready'),
       );
       final control = _ControlledInventoryAgentControlService();
-      final container = _container(control);
+      final directory = _EventuallyAvailableDirectoryApplicationService();
+      final container = _container(control, directory: directory);
       addTearDown(container.dispose);
       final controller = container.read(agentsProvider.notifier);
 
@@ -867,6 +924,23 @@ void main() {
       control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
       await pumpEventQueue();
 
+      expect(directory.resolveAttempts, 1);
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+        reason:
+            'inventory presence alone must not complete creation before the '
+            'canonical Direct route is projected',
+      );
+      await Future<void>.delayed(
+        agentRuntimeCreationReconcileInterval +
+            const Duration(milliseconds: 100),
+      );
+      await control.waitForListCalls(3);
+      control.completeListCall(3, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+
+      expect(directory.resolveAttempts, 2);
       expect(
         container.read(agentsProvider).agents.map((agent) => agent.agentDid),
         containsAll(<String>[daemon.agentDid, runtime.agentDid]),
@@ -3740,6 +3814,7 @@ ProviderContainer _container(
   FakeIdentityCorePort? identities,
   PersonalAgentBindingPort? personalAgentBindings,
   AgentControlStatusStore? statusStore,
+  DirectoryApplicationService? directory,
   AgentsController Function(Ref ref)? controllerFactory,
   bool agentImEnabled = true,
   SessionIdentity session = const SessionIdentity(
@@ -3752,6 +3827,8 @@ ProviderContainer _container(
   return ProviderContainer(
     overrides: <Override>[
       agentControlServiceProvider.overrideWithValue(control),
+      if (directory != null)
+        directoryApplicationServiceProvider.overrideWithValue(directory),
       identityCorePortProvider.overrideWithValue(
         identities ?? FakeIdentityCorePort(),
       ),
@@ -3772,6 +3849,71 @@ ProviderContainer _container(
       }),
     ],
   );
+}
+
+class _BlockingDirectoryApplicationService
+    implements DirectoryApplicationService {
+  final Completer<void> resolveStarted = Completer<void>();
+  final Completer<DirectoryPeerResolution> _resolution =
+      Completer<DirectoryPeerResolution>();
+  final List<String> resolvedPeers = <String>[];
+
+  void complete(DirectoryPeerResolution resolution) {
+    _resolution.complete(resolution);
+  }
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    return resolvePeer(handle);
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    resolvedPeers.add(peer);
+    if (!resolveStarted.isCompleted) {
+      resolveStarted.complete();
+    }
+    return _resolution.future;
+  }
+}
+
+class _EventuallyAvailableDirectoryApplicationService
+    implements DirectoryApplicationService {
+  _EventuallyAvailableDirectoryApplicationService({
+    this.failuresBeforeSuccess = 1,
+  });
+
+  final int failuresBeforeSuccess;
+  int resolveAttempts = 0;
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    return resolvePeer(handle);
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) async {
+    resolveAttempts += 1;
+    if (resolveAttempts <= failuresBeforeSuccess) {
+      throw StateError('route not committed yet');
+    }
+    return DirectoryPeerResolution(
+      input: peer,
+      did: peer,
+      handle: 'alice-codex.awiki.info',
+      conversationId: 'dm:peer-scope:v1:alice-codex',
+    );
+  }
 }
 
 class _StaticAgentControlStatusStore implements AgentControlStatusStore {
