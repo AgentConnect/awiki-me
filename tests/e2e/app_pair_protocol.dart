@@ -37,8 +37,11 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
     'messageId',
   },
   'joiner\u0000functional_own_sync_visible': <String>{},
+  'joiner\u0000functional_joiner_outbound_sent': <String>{'messageId'},
+  'admin\u0000functional_joiner_outbound_visible': <String>{},
   'admin\u0000functional_reply_sent': <String>{'messageId'},
   'joiner\u0000functional_reply_visible': <String>{},
+  'joiner\u0000functional_agent_observer_ready': <String>{},
 };
 
 String safeCliFailureDiagnostic({

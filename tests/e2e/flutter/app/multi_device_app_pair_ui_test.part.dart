@@ -559,6 +559,119 @@ Future<void> _runAppPairAdminFunctional({
     timeout: const Duration(minutes: 2),
   );
 
+  final peer = _JoinCli.peer(config);
+  resources.peer = peer;
+  await peer.initialize();
+  final peerHandle = _uniqueHandle(config.handlePrefix);
+  final peerOtp = await _requestAndResolveOtp(
+    client: httpClient,
+    config: config,
+    account: account,
+    purpose: _registrationPurpose,
+    handle: peerHandle,
+  );
+  final peerDid = await peer.registerReadyAdmin(
+    handle: peerHandle,
+    phone: account.phone,
+    otp: peerOtp,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'functional_peer_ready',
+    data: <String, Object?>{'peerDid': peerDid, 'peerHandle': peerHandle},
+  );
+
+  final peerResolution = await bootstrap.directoryApplicationService!
+      .resolvePeer(peerDid);
+  final canonicalConversationId = peerResolution.conversationId?.trim() ?? '';
+  if (peerResolution.did != peerDid ||
+      !canonicalConversationId.startsWith('dm:peer-scope:v1:')) {
+    fail('The admin App did not resolve the peer to a canonical conversation.');
+  }
+  final outboundText = _appPairMessage(config.runId, 'outbound');
+  final outbound = await bootstrap.messagingService!.sendConversationText(
+    conversation: AppConversationReadRef.fromConversationId(
+      canonicalConversationId,
+    ),
+    content: outboundText,
+  );
+  final outboundId = outbound.remoteId?.trim() ?? '';
+  final conversationId = outbound.conversationId?.trim() ?? '';
+  if (outboundId.isEmpty ||
+      conversationId != canonicalConversationId ||
+      outbound.sendState != MessageSendState.sent ||
+      !outbound.isMine ||
+      outbound.senderDid != adminDid ||
+      outbound.receiverDid != peerDid) {
+    fail('The admin App did not commit the canonical outbound Direct message.');
+  }
+  await config.coordinator.publish(
+    'admin',
+    'functional_outbound_sent',
+    data: <String, Object?>{
+      'conversationId': conversationId,
+      'messageId': outboundId,
+    },
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_own_sync_visible',
+    timeout: const Duration(minutes: 2),
+  );
+
+  final joinedOutbound = await config.coordinator.waitFor(
+    'joiner',
+    'functional_joiner_outbound_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final joinedOutboundId = _required(joinedOutbound, 'messageId');
+  final joinedOutboundText = _appPairMessage(config.runId, 'joiner-outbound');
+  await _waitForAppPairMessage(
+    messaging: bootstrap.messagingService!,
+    conversationId: canonicalConversationId,
+    content: joinedOutboundText,
+    messageId: joinedOutboundId,
+    senderDid: adminDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
+  await _openAppPairConversation(
+    tester: tester,
+    conversationId: canonicalConversationId,
+    content: joinedOutboundText,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'functional_joiner_outbound_visible',
+  );
+
+  final replyText = _appPairMessage(config.runId, 'reply');
+  final replyId = await peer.sendDirectText(to: adminDid, text: replyText);
+  await _waitForAppPairMessage(
+    messaging: bootstrap.messagingService!,
+    conversationId: canonicalConversationId,
+    content: replyText,
+    messageId: replyId,
+    senderDid: peerDid,
+    receiverDid: adminDid,
+    isMine: false,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'functional_reply_sent',
+    data: <String, Object?>{'messageId': replyId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_reply_visible',
+    timeout: const Duration(minutes: 2),
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_agent_observer_ready',
+    timeout: const Duration(minutes: 2),
+  );
+
   final install = await _installAppPairDaemon(
     config: config,
     inventory: container.read(agentInventoryPortProvider),
@@ -636,88 +749,6 @@ Future<void> _runAppPairAdminFunctional({
     'functional_agents_converged',
     timeout: const Duration(minutes: 2),
   );
-
-  final peer = _JoinCli.peer(config);
-  resources.peer = peer;
-  await peer.initialize();
-  final peerHandle = _uniqueHandle(config.handlePrefix);
-  final peerOtp = await _requestAndResolveOtp(
-    client: httpClient,
-    config: config,
-    account: account,
-    purpose: _registrationPurpose,
-    handle: peerHandle,
-  );
-  final peerDid = await peer.registerReadyAdmin(
-    handle: peerHandle,
-    phone: account.phone,
-    otp: peerOtp,
-  );
-  await config.coordinator.publish(
-    'admin',
-    'functional_peer_ready',
-    data: <String, Object?>{'peerDid': peerDid, 'peerHandle': peerHandle},
-  );
-
-  final peerResolution = await bootstrap.directoryApplicationService!
-      .resolvePeer(peerDid);
-  final canonicalConversationId = peerResolution.conversationId?.trim() ?? '';
-  if (peerResolution.did != peerDid ||
-      !canonicalConversationId.startsWith('dm:peer-scope:v1:')) {
-    fail('The admin App did not resolve the peer to a canonical conversation.');
-  }
-  final outboundText = _appPairMessage(config.runId, 'outbound');
-  final outbound = await bootstrap.messagingService!.sendConversationText(
-    conversation: AppConversationReadRef.fromConversationId(
-      canonicalConversationId,
-    ),
-    content: outboundText,
-  );
-  final outboundId = outbound.remoteId?.trim() ?? '';
-  final conversationId = outbound.conversationId?.trim() ?? '';
-  if (outboundId.isEmpty ||
-      conversationId != canonicalConversationId ||
-      outbound.sendState != MessageSendState.sent ||
-      !outbound.isMine ||
-      outbound.senderDid != adminDid ||
-      outbound.receiverDid != peerDid) {
-    fail('The admin App did not commit the canonical outbound Direct message.');
-  }
-  await config.coordinator.publish(
-    'admin',
-    'functional_outbound_sent',
-    data: <String, Object?>{
-      'conversationId': conversationId,
-      'messageId': outboundId,
-    },
-  );
-  await config.coordinator.waitFor(
-    'joiner',
-    'functional_own_sync_visible',
-    timeout: const Duration(minutes: 2),
-  );
-
-  final replyText = _appPairMessage(config.runId, 'reply');
-  final replyId = await peer.sendDirectText(to: adminDid, text: replyText);
-  await _waitForAppPairMessage(
-    messaging: bootstrap.messagingService!,
-    conversationId: canonicalConversationId,
-    content: replyText,
-    messageId: replyId,
-    senderDid: peerDid,
-    receiverDid: adminDid,
-    isMine: false,
-  );
-  await config.coordinator.publish(
-    'admin',
-    'functional_reply_sent',
-    data: <String, Object?>{'messageId': replyId},
-  );
-  await config.coordinator.waitFor(
-    'joiner',
-    'functional_reply_visible',
-    timeout: const Duration(minutes: 2),
-  );
 }
 
 Future<void> _runAppPairJoinerFunctional({
@@ -740,8 +771,127 @@ Future<void> _runAppPairJoinerFunctional({
     failure:
         'The joining App realtime listener was not ready for functional sync.',
   );
-  await _openAppPairAgentsPage(tester);
   await config.coordinator.publish('joiner', 'functional_ready');
+
+  final peer = await config.coordinator.waitFor(
+    'admin',
+    'functional_peer_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final peerDid = _required(peer, 'peerDid');
+  final outbound = await config.coordinator.waitFor(
+    'admin',
+    'functional_outbound_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final conversationId = _required(outbound, 'conversationId');
+  final outboundId = _required(outbound, 'messageId');
+  final outboundText = _appPairMessage(config.runId, 'outbound');
+  await _waitForAppPairConversation(
+    tester: tester,
+    container: container,
+    peerDid: peerDid,
+    conversationId: conversationId,
+    preview: outboundText,
+  );
+  await _waitForAppPairMessage(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: outboundText,
+    messageId: outboundId,
+    senderDid: accountDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
+  await _openAppPairConversation(
+    tester: tester,
+    conversationId: conversationId,
+    content: outboundText,
+  );
+  await config.coordinator.publish('joiner', 'functional_own_sync_visible');
+
+  final joinedOutboundText = _appPairMessage(config.runId, 'joiner-outbound');
+  final joinedOutbound = await bootstrap.messagingService!.sendConversationText(
+    conversation: AppConversationReadRef.fromConversationId(conversationId),
+    content: joinedOutboundText,
+  );
+  final joinedOutboundId = joinedOutbound.remoteId?.trim() ?? '';
+  if (joinedOutboundId.isEmpty ||
+      joinedOutbound.conversationId != conversationId ||
+      joinedOutbound.sendState != MessageSendState.sent ||
+      !joinedOutbound.isMine ||
+      joinedOutbound.senderDid != accountDid ||
+      joinedOutbound.receiverDid != peerDid) {
+    fail('The joining App did not commit its outbound Direct message.');
+  }
+  await config.coordinator.publish(
+    'joiner',
+    'functional_joiner_outbound_sent',
+    data: <String, Object?>{'messageId': joinedOutboundId},
+  );
+  await config.coordinator.waitFor(
+    'admin',
+    'functional_joiner_outbound_visible',
+    timeout: const Duration(minutes: 2),
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairOutboundSyncCaseId,
+    phases: const <String>[
+      'admin_app_outbound_committed',
+      'joining_app_conversation_projected',
+      'joining_app_own_sync_history_projected',
+      'joining_app_message_visible',
+      'joining_app_outbound_committed',
+      'admin_app_reverse_own_sync_projected',
+    ],
+  );
+
+  final reply = await config.coordinator.waitFor(
+    'admin',
+    'functional_reply_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final replyId = _required(reply, 'messageId');
+  final replyText = _appPairMessage(config.runId, 'reply');
+  await _waitForAppPairConversation(
+    tester: tester,
+    container: container,
+    peerDid: peerDid,
+    conversationId: conversationId,
+    preview: replyText,
+  );
+  await _waitForAppPairMessage(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: replyText,
+    messageId: replyId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .bySemanticsIdentifier(e2eMessageIdentifier(replyText))
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App did not render the exact peer reply.',
+  );
+  await config.coordinator.publish('joiner', 'functional_reply_visible');
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairInboundSyncCaseId,
+    phases: const <String>[
+      'cli_peer_reply_committed',
+      'admin_app_received_exact_reply',
+      'joining_app_conversation_updated',
+      'joining_app_incoming_history_projected',
+      'joining_app_reply_visible',
+    ],
+  );
+
+  await _openAppPairAgentsPage(tester);
+  await config.coordinator.publish('joiner', 'functional_agent_observer_ready');
   final created = await config.coordinator.waitFor(
     'admin',
     'functional_agents_created',
@@ -796,96 +946,6 @@ Future<void> _runAppPairJoinerFunctional({
       'same_codex_runtime_projected',
       'same_claude_runtime_projected',
       'both_runtime_agents_visible',
-    ],
-  );
-
-  final peer = await config.coordinator.waitFor(
-    'admin',
-    'functional_peer_ready',
-    timeout: const Duration(minutes: 2),
-  );
-  final peerDid = _required(peer, 'peerDid');
-  final outbound = await config.coordinator.waitFor(
-    'admin',
-    'functional_outbound_sent',
-    timeout: const Duration(minutes: 2),
-  );
-  final conversationId = _required(outbound, 'conversationId');
-  final outboundId = _required(outbound, 'messageId');
-  final outboundText = _appPairMessage(config.runId, 'outbound');
-  await _waitForAppPairConversation(
-    tester: tester,
-    container: container,
-    peerDid: peerDid,
-    conversationId: conversationId,
-    preview: outboundText,
-  );
-  await _waitForAppPairMessage(
-    messaging: bootstrap.messagingService!,
-    conversationId: conversationId,
-    content: outboundText,
-    messageId: outboundId,
-    senderDid: accountDid,
-    receiverDid: peerDid,
-    isMine: true,
-  );
-  await _openAppPairConversation(
-    tester: tester,
-    conversationId: conversationId,
-    content: outboundText,
-  );
-  await config.coordinator.publish('joiner', 'functional_own_sync_visible');
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairOutboundSyncCaseId,
-    phases: const <String>[
-      'admin_app_outbound_committed',
-      'joining_app_conversation_projected',
-      'joining_app_own_sync_history_projected',
-      'joining_app_message_visible',
-    ],
-  );
-
-  final reply = await config.coordinator.waitFor(
-    'admin',
-    'functional_reply_sent',
-    timeout: const Duration(minutes: 2),
-  );
-  final replyId = _required(reply, 'messageId');
-  final replyText = _appPairMessage(config.runId, 'reply');
-  await _waitForAppPairConversation(
-    tester: tester,
-    container: container,
-    peerDid: peerDid,
-    conversationId: conversationId,
-    preview: replyText,
-  );
-  await _waitForAppPairMessage(
-    messaging: bootstrap.messagingService!,
-    conversationId: conversationId,
-    content: replyText,
-    messageId: replyId,
-    senderDid: peerDid,
-    receiverDid: accountDid,
-    isMine: false,
-  );
-  await _pumpUntil(
-    tester,
-    () => find
-        .bySemanticsIdentifier(e2eMessageIdentifier(replyText))
-        .evaluate()
-        .isNotEmpty,
-    timeout: const Duration(seconds: 60),
-    failure: 'The joining App did not render the exact peer reply.',
-  );
-  await config.coordinator.publish('joiner', 'functional_reply_visible');
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairInboundSyncCaseId,
-    phases: const <String>[
-      'cli_peer_reply_committed',
-      'admin_app_received_exact_reply',
-      'joining_app_conversation_updated',
-      'joining_app_incoming_history_projected',
-      'joining_app_reply_visible',
     ],
   );
 }

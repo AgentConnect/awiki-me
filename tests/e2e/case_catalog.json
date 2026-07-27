@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-26.multi-device-app-pair-functional-v1",
+  "sourceRevision": "2026-07-27.multi-device-joined-outbound-v2",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2498,17 +2498,19 @@
     },
     {
       "caseId": "DEVICE-MESSAGE-SYNC-E2E-001",
-      "feature": "A Direct message sent on one App appears as own-sync on the joined App",
+      "feature": "Direct messages sent on either joined App converge as own-sync on the other App",
       "layer": "remote_product_ui",
       "preconditions": "Two isolated App devices share one joined account identity, Direct multi-device E2EE is enabled for the focused suite, and an independent fresh CLI identity is available as the remote peer.",
-      "action": "Send one exact Direct text from the admin App product MessagingService to the CLI peer and observe the joining App conversation list, local history, and visible timeline through the normal Core reliable-sync path.",
+      "action": "Send one exact Direct text from the admin App to the CLI peer and observe it on the joining App, then send a second exact Direct text from the joining App through the same canonical conversation and observe it on the admin App.",
       "exactOracles": [
         "The admin App commits exactly one sent message with the account DID, peer DID, exact content, canonical message ID, and canonical conversation ID.",
-        "The joining App projects exactly one canonical peer conversation with the same conversation ID and latest preview.",
-        "The joining App projects the exact message as sent and isMine=true and renders it in the selected conversation."
+        "The joining App projects the first message as one canonical isMine own-sync message and renders it in the selected conversation.",
+        "The joining App signs and commits a second outbound message with its own joined-device signing key and the same account DID and canonical conversation ID.",
+        "The admin App projects the second message as the exact canonical isMine own-sync message and renders it under the same conversation."
       ],
       "negativeChecks": [
-        "A direct provider refresh that manufactures the conversation, duplicate body delivery, canonical ID mismatch, wrong direction, wrong peer conversation, missing own-sync semantics, or a non-visible bubble prevents pass attestation."
+        "A direct provider refresh that manufactures either conversation, duplicate body delivery, canonical ID mismatch, wrong direction, wrong peer conversation, missing own-sync semantics, or a non-visible bubble prevents pass attestation.",
+        "A joined-device outbound rejected because its Origin Proof keyid does not match its device signing private key prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2525,18 +2527,24 @@
           "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed",
           "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
           "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
-          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed",
+          "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
         ],
         "exactOracleAssertions": [
           [
             "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed"
           ],
           [
-            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected"
-          ],
-          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
             "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
             "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
           ]
         ],
         "negativeCheckAssertions": [
@@ -2544,7 +2552,13 @@
             "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed",
             "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
             "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
-            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
           ]
         ]
       }

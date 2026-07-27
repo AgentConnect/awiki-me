@@ -95,7 +95,6 @@ bundle ID、独立 Flutter build root 与独立 native Core state root 的管理
 `DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。独立的
 `multi-device-app-pair-functional` 只在 integration-test provider override 中自动确认
 user presence，用真实双 App、Daemon、Agent Inventory、CLI peer 和远端消息链路验证
-Daemon/Codex/Claude Agent 跨设备收敛、own-sync 及双端入站消息；它不修改生产授权实现，
-也不提供 LocalAuthentication 安全 attestation。
+Daemon/Codex/Claude Agent 跨设备收敛、双向 own-sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

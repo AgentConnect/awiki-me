@@ -123,8 +123,21 @@ The functional suite proves:
 3. an admin-App outbound Direct message is committed to an independent CLI
    peer and appears on the joining App as the same canonical `isMine` own-sync
    message;
-4. a required-secure CLI reply appears under the same conversation on both
+4. the joining App sends a second Direct message through the same conversation
+   using its own joined-device signing key; the admin App projects that exact
+   message as canonical `isMine` own-sync;
+5. a required-secure CLI reply appears under the same conversation on both
    Apps and is visibly rendered by the joining App.
+
+The runner executes the independent Direct-message checks immediately after
+Join, then starts the Agents-page observer before Daemon/Agent creation. This
+keeps an Agent provisioning failure from hiding joined-device messaging
+evidence while preserving the observer-before-create topology oracle.
+
+For every product RPC, Core obtains the device signing private key and its
+verification-method ID as one `KeyMaterialProvider` result. The test fails if a
+joined App signs with its local device private key but labels the Origin Proof
+with the first `authentication` entry from the shared DID Document.
 
 Realtime and Push remain lossy hints. While an authenticated App is in the
 foreground, App runtime requests a coalesced Core reliable-sync catch-up every
@@ -165,5 +178,12 @@ consecutively on `awiki.info`; the last run used the final source state after
 the foreground Inventory reconciliation timer lifecycle was made explicit.
 Each verified `DEVICE-AGENT-SYNC-E2E-001`,
 `DEVICE-MESSAGE-SYNC-E2E-001`, and `DEVICE-MESSAGE-SYNC-E2E-002` with
-schema-v2 case attestation. These runs prove the functional oracles above but,
-by design, do not replace the real-user-presence security attestation.
+schema-v2 case attestation.
+
+The later `awiki.info` run `20260727065349-hkrzswkgbz` passed the same three
+cases after the joined-device Origin Proof regression was added. Its outbound
+attestation additionally proves that the joining App committed a Direct
+message with its own device signing material and that the admin App projected
+the exact message as canonical own-sync. These runs prove the functional
+oracles above but, by design, do not replace the real-user-presence security
+attestation.

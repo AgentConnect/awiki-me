@@ -55,6 +55,11 @@ HTTP pending list、status timer 或 admin poll 发现/推进 Join，只恢复 C
 报告；终态由 Core 投影，重复点击由 service/provider 和 Core 幂等门禁共同拒绝。请求已由
 另一台管理设备处理时只读展示，不能继续验证或批准。
 
+管理设备完成授权后，服务端会消费 Join 请求并把它从待审批 inbox 移除；这不表示本机授权
+终态失效。只要 Core 已返回同一 Join Session 的 `authorized`，审批页就保留“设备已加入”
+直到用户关闭页面。App 不得因为后续 inbox 对账找不到已消费请求，就退回打开页面时缓存的
+`responseVerified` 请求并再次显示“等待管理设备响应”。
+
 新设备的 `authorized + consumed` 投影通过精确 DID 激活本地 member 会话时，Devices
 provider 只跨这一次“未登录 → 同 DID”切换保留该终态，避免通用 session reset 把成功页
 提前清空；登录其他 DID、退出登录或后续 session 切换仍完整清空设备状态。页面轮询始终由

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-26.multi-device-app-pair-functional-v1",
+  "sourceRevision": "2026-07-27.multi-device-joined-outbound-v2",
   "suites": {
     "smoke": {
       "tier": "product_ui",

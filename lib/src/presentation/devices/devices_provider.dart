@@ -337,7 +337,12 @@ class DevicesController extends StateNotifier<DevicesState> {
       if (selectedJoinSessionId != null) {
         final request = _findJoinRequest(requests, selectedJoinSessionId);
         if (request == null || request.isTerminal) {
-          if (activeJoin?.side == DeviceJoinSide.admin &&
+          final preserveAuthorizedCompletion =
+              activeJoin?.side == DeviceJoinSide.admin &&
+              activeJoin?.joinSessionId == selectedJoinSessionId &&
+              activeJoin?.phase == DeviceJoinPhase.authorized;
+          if (!preserveAuthorizedCompletion &&
+              activeJoin?.side == DeviceJoinSide.admin &&
               activeJoin?.joinSessionId == selectedJoinSessionId) {
             activeJoin = null;
             clearActiveJoin = true;

@@ -812,56 +812,64 @@ void main() {
     expect(find.text('完成'), findsNothing);
   });
 
-  testWidgets('approval is member-only and prompts presence exactly once', (
-    tester,
-  ) async {
-    final request = _request(
-      state: DeviceJoinRemoteState.responseVerified,
-      claimedByCurrentDevice: true,
-      canStartVerification: false,
-    );
-    final core = FakeDeviceManagementCore()
-      ..registry = _rootTransferRegistry()
-      ..joinRequests = <DeviceJoinRequestNotice>[request]
-      ..verificationProgress = testJoinProgress();
-    final presence = FakeUserPresence();
-    await tester.pumpWidget(
-      _app(DeviceJoinApprovalSheet(request: request), core, presence: presence),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'approval remains completed after consumed request leaves the inbox',
+    (tester) async {
+      final request = _request(
+        state: DeviceJoinRemoteState.responseVerified,
+        claimedByCurrentDevice: true,
+        canStartVerification: false,
+      );
+      final core = FakeDeviceManagementCore()
+        ..registry = _rootTransferRegistry()
+        ..joinRequests = <DeviceJoinRequestNotice>[request]
+        ..verificationProgress = testJoinProgress();
+      final presence = FakeUserPresence();
+      await tester.pumpWidget(
+        _app(
+          DeviceJoinApprovalSheet(request: request),
+          core,
+          presence: presence,
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('482917'), findsOneWidget);
-    final switches = find.byType(CupertinoSwitch);
-    expect(switches, findsOneWidget);
-    expect(find.byKey(const Key('device-admin-toggle')), findsNothing);
-    expect(find.textContaining('二维码'), findsNothing);
-    expect(find.textContaining('扫码'), findsNothing);
+      expect(find.text('482917'), findsOneWidget);
+      final switches = find.byType(CupertinoSwitch);
+      expect(switches, findsOneWidget);
+      expect(find.byKey(const Key('device-admin-toggle')), findsNothing);
+      expect(find.textContaining('二维码'), findsNothing);
+      expect(find.textContaining('扫码'), findsNothing);
 
-    await tester.tap(switches.first);
-    await tester.pump();
-    await tester.tap(find.text('确认并授权'));
-    await tester.pumpAndSettle();
+      await tester.tap(switches.first);
+      await tester.pump();
+      await tester.tap(find.text('确认并授权'));
+      await tester.pumpAndSettle();
 
-    expect(core.lastPreparedSasConfirmed, isTrue);
-    expect(core.lastPresenceConfirmed, isTrue);
-    expect(presence.calls, 1);
-    expect(find.text('设备已加入'), findsOneWidget);
-    expect(find.text('完成'), findsOneWidget);
-    expect(find.text('确认并授权'), findsNothing);
-    expect(find.text('验证码不一致'), findsNothing);
-    expect(find.text('拒绝设备'), findsNothing);
+      expect(core.lastPreparedSasConfirmed, isTrue);
+      expect(core.lastPresenceConfirmed, isTrue);
+      expect(presence.calls, 1);
+      expect(find.text('设备已加入'), findsOneWidget);
+      expect(find.text('完成'), findsOneWidget);
+      expect(find.text('确认并授权'), findsNothing);
+      expect(find.text('验证码不一致'), findsNothing);
+      expect(find.text('拒绝设备'), findsNothing);
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byKey(const Key('device-join-approval-sheet'))),
-    );
-    await container.read(devicesProvider.notifier).refreshJoinInbox();
-    await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('device-join-approval-sheet'))),
+      );
+      core.joinRequests = const <DeviceJoinRequestNotice>[];
+      await container.read(devicesProvider.notifier).refreshJoinInbox();
+      await tester.pumpAndSettle();
 
-    expect(core.localVerificationCalls, 1);
-    expect(find.byKey(const Key('device-approval-error')), findsNothing);
-    expect(find.text('完成'), findsOneWidget);
-    expect(find.text('拒绝设备'), findsNothing);
-  });
+      expect(core.localVerificationCalls, 1);
+      expect(find.byKey(const Key('device-approval-error')), findsNothing);
+      expect(find.text('设备已加入'), findsOneWidget);
+      expect(find.text('完成'), findsOneWidget);
+      expect(find.text('等待管理设备响应'), findsNothing);
+      expect(find.text('拒绝设备'), findsNothing);
+    },
+  );
 
   testWidgets(
     'just-completed Join prepares before one root-transfer confirmation',

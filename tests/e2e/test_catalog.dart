@@ -352,9 +352,9 @@ class AppTestCatalog {
         '- `multi-device-app-pair-functional` reuses the same two isolated '
         'App processes but injects an E2E-only `UserPresencePort` so Agent '
         'inventory and Direct-message convergence can run unattended. It '
-        'covers one shared Daemon plus Codex/Claude runtime projection, App A '
-        'outbound own-sync on App B, and one required-secure CLI peer reply '
-        'on both Apps. It does not attest LocalAuthentication and never '
+        'covers one shared Daemon plus Codex/Claude runtime projection, '
+        'bidirectional App outbound own-sync, and one required-secure CLI '
+        'peer reply on both Apps. It does not attest LocalAuthentication and never '
         'changes the production user-presence implementation.',
       )
       ..writeln(

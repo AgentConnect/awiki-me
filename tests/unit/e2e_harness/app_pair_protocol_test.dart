@@ -145,11 +145,18 @@ void main() {
       );
       await client.publish('joiner', 'functional_own_sync_visible');
       await client.publish(
+        'joiner',
+        'functional_joiner_outbound_sent',
+        data: const <String, Object?>{'messageId': 'msg-joiner'},
+      );
+      await client.publish('admin', 'functional_joiner_outbound_visible');
+      await client.publish(
         'admin',
         'functional_reply_sent',
         data: const <String, Object?>{'messageId': 'msg-2'},
       );
       await client.publish('joiner', 'functional_reply_visible');
+      await client.publish('joiner', 'functional_agent_observer_ready');
 
       await expectLater(
         client.publish(
