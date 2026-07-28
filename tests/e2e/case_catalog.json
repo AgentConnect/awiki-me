@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-27.multi-device-default-plain-agent-message-v3",
+  "sourceRevision": "2026-07-28.message-sync-v2-online-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2665,6 +2665,115 @@
             "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated",
             "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
             "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001",
+      "feature": "Two online joined AWiki Me replicas converge ordinary Direct messages through sync v2",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated App devices share one joined account identity, AWIKI_SYNC_V2_READ is enabled for the functional App-pair suite, Direct E2EE remains disabled, and an independent CLI identity is available as the remote peer.",
+      "action": "Keep both Apps online, send ordinary Direct messages from each App to the CLI peer, then send one ordinary reply from the CLI peer while both App runtimes consume WebSocket only as a pull trigger.",
+      "exactOracles": [
+        "The admin App outbound message is projected exactly once as outgoing on the joining sibling device.",
+        "The joining App outbound message is projected exactly once as outgoing on the admin sibling device.",
+        "The same incoming CLI reply is projected exactly once on both online App devices under the same canonical conversation."
+      ],
+      "negativeChecks": [
+        "A raw realtime payload directly writing list, timeline, Group state, or notification truth; duplicate event/hint rendering; wrong direction; canonical conversation drift; secure-mode activation; or only one online device receiving the reply prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_device_outgoing_committed",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_sibling_outgoing_projected_once",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_device_outgoing_committed",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_sibling_reverse_outgoing_projected_once",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:both_online_devices_received_incoming_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_sibling_outgoing_projected_once"
+          ],
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_sibling_reverse_outgoing_projected_once"
+          ],
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:both_online_devices_received_incoming_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_sibling_outgoing_projected_once",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_sibling_reverse_outgoing_projected_once",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:both_online_devices_received_incoming_once"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-TAIL-ONLY-E2E-001",
+      "feature": "A newly joined AWiki Me replica bootstraps at the current ordinary-message tail",
+      "layer": "remote_product_ui",
+      "preconditions": "Before Device Join begins, the existing admin App commits one ordinary Direct message to an independent CLI peer; the joining App uses a fresh isolated Core root and AWIKI_SYNC_V2_READ is enabled.",
+      "action": "Complete member Join, allow the joining App startup sync to finish without test-side cursor or sync calls, prove the pre-Join message is absent, then send one post-Join message through the existing App.",
+      "exactOracles": [
+        "The ordinary pre-Join message is committed and visible on the existing App before the new replica is authorized.",
+        "The joining App completes bootstrap without exposing the pre-Join conversation or message.",
+        "A post-Join ordinary message becomes visible exactly once on the joining App, proving bootstrap did not disable future delta."
+      ],
+      "negativeChecks": [
+        "Supplying cursor zero, account, device, replica classification, recovery token, or a test-side sync call; receiving any pre-Join message/history; failing bootstrap; or missing/duplicating the post-Join message prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device"
+          ],
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device"
+          ],
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
           ]
         ]
       }

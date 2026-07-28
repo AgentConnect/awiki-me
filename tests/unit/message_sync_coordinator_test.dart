@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -43,11 +44,10 @@ void main() {
       final gateway = FakeAwikiGateway()
         ..conversations = <ConversationSummary>[_conversation()];
       final sync = FakeMessageSyncService(
-        deltaResult: const MessageSyncDeltaResult(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.recoveryRequired,
           eventsApplied: 0,
           pagesFetched: 1,
-          hasMore: false,
-          snapshotRequired: true,
         ),
       );
       final container = _container(gateway, sync);
@@ -58,7 +58,7 @@ void main() {
           .requestSync('startup', immediate: true);
 
       expect(
-        container.read(messageSyncCoordinatorProvider).snapshotRequired,
+        container.read(messageSyncCoordinatorProvider).recoveryRequired,
         isTrue,
       );
       expect(gateway.listConversationsCalls, 0);
@@ -218,6 +218,148 @@ void main() {
     expect(devices.joinRequestCalls, 1);
   });
 
+  test(
+    'v2 committed live incoming message notifies once by event and message',
+    () async {
+      final message = ChatMessage(
+        localId: 'message-1',
+        remoteId: 'message-1',
+        conversationId: 'dm:peer-scope:v1:peer',
+        threadId: 'dm:peer-scope:v1:peer',
+        senderDid: 'did:test:peer',
+        senderName: 'Peer',
+        receiverDid: 'did:test:me',
+        content: 'committed hello',
+        createdAt: DateTime.utc(2026, 7, 28, 9),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final committed = CommittedIncomingMessage(
+        eventId: 'event-1',
+        logicalMessageId: 'message-1',
+        message: message,
+      );
+      final notifications = FakeNotificationFacade();
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[committed],
+        ),
+      );
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      await coordinator.requestSync('realtime_message', immediate: true);
+      sync.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          CommittedIncomingMessage(
+            eventId: 'event-2',
+            logicalMessageId: 'message-1',
+            message: message,
+          ),
+        ],
+      );
+      await coordinator.requestSync(
+        'realtime_duplicate_message',
+        immediate: true,
+      );
+      sync.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          CommittedIncomingMessage(
+            eventId: 'event-1',
+            logicalMessageId: 'message-2',
+            message: message,
+          ),
+        ],
+      );
+      await coordinator.requestSync(
+        'realtime_duplicate_event',
+        immediate: true,
+      );
+
+      expect(notifications.inAppCalls, 1);
+      expect(notifications.lastInAppTitle, 'Peer');
+      expect(notifications.lastInAppBody, 'committed hello');
+    },
+  );
+
+  test('recovery-required outcome never synthesizes a notification', () async {
+    final notifications = FakeNotificationFacade();
+    final container = _container(
+      FakeAwikiGateway(),
+      FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.recoveryRequired,
+          eventsApplied: 0,
+          pagesFetched: 1,
+        ),
+      ),
+      notifications: notifications,
+      syncV2ReadEnabled: true,
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('startup', immediate: true);
+
+    expect(notifications.inAppCalls, 0);
+    expect(notifications.systemCalls, 0);
+  });
+
+  test(
+    'outgoing bootstrap recovery history and replay outcomes do not notify',
+    () async {
+      final notifications = FakeNotificationFacade();
+      final sync = FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+        ),
+      );
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      for (final reason in <String>[
+        'outgoing',
+        'bootstrap',
+        'recovery',
+        'history',
+        'replay',
+      ]) {
+        await coordinator.requestSync(reason, immediate: true);
+      }
+
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
   test('failed reliable sync does not refresh the Join inbox', () async {
     final gateway = FakeAwikiGateway();
     final devices = FakeDeviceManagementCore();
@@ -246,11 +388,18 @@ ProviderContainer _container(
   FakeMessageSyncService sync, {
   Duration minInterval = Duration.zero,
   FakeDeviceManagementCore? devices,
+  FakeNotificationFacade? notifications,
+  bool syncV2ReadEnabled = false,
 }) {
   return ProviderContainer(
     overrides: <Override>[
       awikiGatewayProvider.overrideWithValue(gateway),
-      notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
+      awikiEnvironmentConfigProvider.overrideWithValue(
+        AwikiEnvironmentConfig(messageSyncV2ReadEnabled: syncV2ReadEnabled),
+      ),
+      notificationFacadeProvider.overrideWithValue(
+        notifications ?? FakeNotificationFacade(),
+      ),
       deviceManagementCorePortProvider.overrideWithValue(
         devices ?? FakeDeviceManagementCore(),
       ),
@@ -292,11 +441,11 @@ ConversationSummary _conversation() {
 }
 
 class _BlockingMessageSyncService extends FakeMessageSyncService {
-  final Completer<MessageSyncDeltaResult> _syncCompleter =
-      Completer<MessageSyncDeltaResult>();
+  final Completer<MessageSyncOutcome> _syncCompleter =
+      Completer<MessageSyncOutcome>();
 
   @override
-  Future<MessageSyncDeltaResult> syncNow({
+  Future<MessageSyncOutcome> syncNow({
     required String reason,
     int limit = 100,
   }) {
@@ -309,11 +458,10 @@ class _BlockingMessageSyncService extends FakeMessageSyncService {
       return;
     }
     _syncCompleter.complete(
-      const MessageSyncDeltaResult(
+      const MessageSyncOutcome(
+        status: MessageSyncStatus.idle,
         eventsApplied: 0,
         pagesFetched: 0,
-        hasMore: false,
-        snapshotRequired: false,
       ),
     );
   }
@@ -321,7 +469,7 @@ class _BlockingMessageSyncService extends FakeMessageSyncService {
 
 class _FailingMessageSyncService extends FakeMessageSyncService {
   @override
-  Future<MessageSyncDeltaResult> syncNow({
+  Future<MessageSyncOutcome> syncNow({
     required String reason,
     int limit = 100,
   }) async {

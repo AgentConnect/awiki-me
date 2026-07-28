@@ -259,6 +259,7 @@ class AppBootstrap {
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
       final messageSyncAdapter = AwikiImCoreMessageSyncAdapter(
         runtime: runtime,
+        syncV2ReadEnabled: effectiveEnvironment.messageSyncV2ReadEnabled,
       );
       final conversationAdapter = AwikiImCoreConversationAdapter(
         runtime: runtime,

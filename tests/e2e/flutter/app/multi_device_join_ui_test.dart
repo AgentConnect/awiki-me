@@ -69,6 +69,8 @@ const String _appPairAgentMessageSyncCaseId =
     'DEVICE-AGENT-MESSAGE-SYNC-E2E-001';
 const String _appPairOutboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-001';
 const String _appPairInboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-002';
+const String _appPairOnlineSyncV2CaseId = 'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001';
+const String _appPairTailOnlySyncV2CaseId = 'DEVICE-MESSAGE-TAIL-ONLY-E2E-001';
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';
@@ -2587,6 +2589,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   anpServiceUrl: config.anpServiceUrl,
   anpServiceDid: config.anpServiceDid,
   agentImEnabled: enableAppPairFunctional,
+  messageSyncV2ReadEnabled: enableAppPairFunctional,
   multiDeviceDeviceRevokeEnabled: enableStep4,
   multiDeviceDirectE2eeEnabled: enableRootTransfer,
   multiDeviceGroupE2eeEnabled: enableStep4,

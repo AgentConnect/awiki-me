@@ -93,6 +93,8 @@ const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-AGENT-MESSAGE-SYNC-E2E-001',
   'DEVICE-MESSAGE-SYNC-E2E-001',
   'DEVICE-MESSAGE-SYNC-E2E-002',
+  'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001',
+  'DEVICE-MESSAGE-TAIL-ONLY-E2E-001',
 ];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',

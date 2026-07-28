@@ -104,6 +104,17 @@ void appPairAdminMain() {
         failure:
             'The admin App realtime listener was not ready before Join began.',
       );
+      if (config.functional) {
+        await _prepareAppPairFunctionalHistory(
+          config: config,
+          account: account,
+          httpClient: httpClient,
+          bootstrap: bootstrap,
+          container: container,
+          adminDid: adminSession.did,
+          resources: functionalResources,
+        );
+      }
       await coordinator.publish(
         'admin',
         'ready',
@@ -529,7 +540,9 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
   final expectsFunctional =
       _invocationExpects(_appPairAgentSyncCaseId) ||
       _invocationExpects(_appPairOutboundSyncCaseId) ||
-      _invocationExpects(_appPairInboundSyncCaseId);
+      _invocationExpects(_appPairInboundSyncCaseId) ||
+      _invocationExpects(_appPairOnlineSyncV2CaseId) ||
+      _invocationExpects(_appPairTailOnlySyncV2CaseId);
   final expectsSecurity = _invocationExpects(_appPairCaseId);
   if (config.functional != expectsFunctional ||
       config.functional == expectsSecurity ||
@@ -559,35 +572,36 @@ Future<void> _runAppPairAdminFunctional({
     timeout: const Duration(minutes: 2),
   );
 
-  final peer = _JoinCli.peer(config);
-  resources.peer = peer;
-  await peer.initialize();
-  final peerHandle = _uniqueHandle(config.handlePrefix);
-  final peerOtp = await _requestAndResolveOtp(
-    client: httpClient,
-    config: config,
-    account: account,
-    purpose: _registrationPurpose,
-    handle: peerHandle,
-  );
-  final peerDid = await peer.registerReadyAdmin(
-    handle: peerHandle,
-    phone: account.phone,
-    otp: peerOtp,
-  );
+  final peer = resources.peer;
+  final peerDid = resources.peerDid;
+  final peerHandle = resources.peerHandle;
+  final canonicalConversationId = resources.conversationId;
+  final historicalMessageId = resources.historicalMessageId;
+  final historicalText = resources.historicalText;
+  if (peer == null ||
+      peerDid == null ||
+      peerHandle == null ||
+      canonicalConversationId == null ||
+      historicalMessageId == null ||
+      historicalText == null) {
+    fail('The functional pre-Join message fixture was not prepared.');
+  }
   await config.coordinator.publish(
     'admin',
     'functional_peer_ready',
-    data: <String, Object?>{'peerDid': peerDid, 'peerHandle': peerHandle},
+    data: <String, Object?>{
+      'peerDid': peerDid,
+      'peerHandle': peerHandle,
+      'conversationId': canonicalConversationId,
+      'historicalMessageId': historicalMessageId,
+      'historicalText': historicalText,
+    },
   );
-
-  final peerResolution = await bootstrap.directoryApplicationService!
-      .resolvePeer(peerDid);
-  final canonicalConversationId = peerResolution.conversationId?.trim() ?? '';
-  if (peerResolution.did != peerDid ||
-      !canonicalConversationId.startsWith('dm:peer-scope:v1:')) {
-    fail('The admin App did not resolve the peer to a canonical conversation.');
-  }
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_tail_only_verified',
+    timeout: const Duration(minutes: 2),
+  );
   final outboundText = _appPairMessage(config.runId, 'outbound');
   final outbound = await bootstrap.messagingService!.sendConversationText(
     conversation: AppConversationReadRef.fromConversationId(
@@ -820,6 +834,42 @@ Future<void> _runAppPairJoinerFunctional({
     timeout: const Duration(minutes: 2),
   );
   final peerDid = _required(peer, 'peerDid');
+  final historicalConversationId = _required(peer, 'conversationId');
+  final historicalMessageId = _required(peer, 'historicalMessageId');
+  final historicalText = _required(peer, 'historicalText');
+  await _pumpUntil(
+    tester,
+    () {
+      final sync = container.read(messageSyncCoordinatorProvider);
+      return !sync.isSyncing &&
+          sync.lastReason != null &&
+          sync.lastStatus != null &&
+          !sync.recoveryRequired;
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joining App did not complete its tail-only bootstrap.',
+  );
+  final historicalConversationVisible = container
+      .read(conversationListProvider)
+      .conversations
+      .any(
+        (conversation) =>
+            conversation.conversationId == historicalConversationId ||
+            conversation.lastMessagePreview == historicalText,
+      );
+  final historicalMessageVisible = container
+      .read(chatThreadProvider(historicalConversationId))
+      .messages
+      .any(
+        (message) =>
+            message.localId == historicalMessageId ||
+            message.remoteId == historicalMessageId ||
+            message.content == historicalText,
+      );
+  if (historicalConversationVisible || historicalMessageVisible) {
+    fail('The joining App received a message committed before device Join.');
+  }
+  await config.coordinator.publish('joiner', 'functional_tail_only_verified');
   final outbound = await config.coordinator.waitFor(
     'admin',
     'functional_outbound_sent',
@@ -896,6 +946,15 @@ Future<void> _runAppPairJoinerFunctional({
       'admin_app_reverse_own_sync_projected',
     ],
   );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairTailOnlySyncV2CaseId,
+    phases: const <String>[
+      'prejoin_message_committed_on_existing_device',
+      'new_replica_bootstrap_completed',
+      'prejoin_message_absent_on_joining_device',
+      'postjoin_message_visible_once',
+    ],
+  );
 
   final reply = await config.coordinator.waitFor(
     'admin',
@@ -939,6 +998,16 @@ Future<void> _runAppPairJoinerFunctional({
       'joining_app_conversation_updated',
       'joining_app_incoming_history_projected',
       'joining_app_reply_visible',
+    ],
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairOnlineSyncV2CaseId,
+    phases: const <String>[
+      'existing_device_outgoing_committed',
+      'joining_sibling_outgoing_projected_once',
+      'joining_device_outgoing_committed',
+      'existing_sibling_reverse_outgoing_projected_once',
+      'both_online_devices_received_incoming_once',
     ],
   );
 
@@ -1099,6 +1168,11 @@ class _AppPairUserPresencePort implements UserPresencePort {
 class _AppPairFunctionalAdminResources {
   _AppPairDaemonProcess? daemon;
   _JoinCli? peer;
+  String? peerDid;
+  String? peerHandle;
+  String? conversationId;
+  String? historicalMessageId;
+  String? historicalText;
 
   Future<void> dispose() async {
     final currentDaemon = daemon;
@@ -1118,6 +1192,69 @@ class _AppPairFunctionalAdminResources {
     peer = null;
     await currentPeer?.deleteLocalState();
   }
+}
+
+Future<void> _prepareAppPairFunctionalHistory({
+  required _AppPairRunConfig config,
+  required _DedicatedAccount account,
+  required http.Client httpClient,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required String adminDid,
+  required _AppPairFunctionalAdminResources resources,
+}) async {
+  final peer = _JoinCli.peer(config);
+  resources.peer = peer;
+  await peer.initialize();
+  final peerHandle = _uniqueHandle(config.handlePrefix);
+  final peerOtp = await _requestAndResolveOtp(
+    client: httpClient,
+    config: config,
+    account: account,
+    purpose: _registrationPurpose,
+    handle: peerHandle,
+  );
+  final peerDid = await peer.registerReadyAdmin(
+    handle: peerHandle,
+    phone: account.phone,
+    otp: peerOtp,
+  );
+  final peerResolution = await bootstrap.directoryApplicationService!
+      .resolvePeer(peerDid);
+  final conversationId = peerResolution.conversationId?.trim() ?? '';
+  if (peerResolution.did != peerDid ||
+      !conversationId.startsWith('dm:peer-scope:v1:')) {
+    fail('The admin App did not resolve the functional peer canonically.');
+  }
+  final historicalText = _appPairMessage(config.runId, 'before-join');
+  final historical = await bootstrap.messagingService!.sendConversationText(
+    conversation: AppConversationReadRef.fromConversationId(conversationId),
+    content: historicalText,
+  );
+  final historicalMessageId = historical.remoteId?.trim() ?? '';
+  if (historicalMessageId.isEmpty ||
+      historical.conversationId != conversationId ||
+      historical.sendState != MessageSendState.sent ||
+      !historical.isMine ||
+      historical.senderDid != adminDid) {
+    fail('The existing App did not commit the pre-Join ordinary message.');
+  }
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: historicalText,
+    messageId: historicalMessageId,
+    senderDid: adminDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
+  resources
+    ..peerDid = peerDid
+    ..peerHandle = peerHandle
+    ..conversationId = conversationId
+    ..historicalMessageId = historicalMessageId
+    ..historicalText = historicalText;
 }
 
 class _AppPairDaemonInstall {

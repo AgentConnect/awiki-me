@@ -3911,16 +3911,15 @@ class FakeLocalePreferenceService extends LocalePreferenceService {
 class FakeMessageSyncService
     implements MessageSyncService, ConversationMessageSyncService {
   FakeMessageSyncService({
-    this.deltaResult = const MessageSyncDeltaResult(
+    this.deltaResult = const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
       eventsApplied: 0,
       pagesFetched: 0,
-      hasMore: false,
-      snapshotRequired: false,
     ),
     this.onConversationAfterPersisted,
   });
 
-  MessageSyncDeltaResult deltaResult;
+  MessageSyncOutcome deltaResult;
   FutureOr<void> Function(String conversationId, List<ChatMessage> messages)?
   onConversationAfterPersisted;
   Object? nextDeltaError;
@@ -3937,7 +3936,7 @@ class FakeMessageSyncService
       <String, List<ChatMessage>>{};
 
   @override
-  Future<MessageSyncDeltaResult> syncNow({
+  Future<MessageSyncOutcome> syncNow({
     required String reason,
     int limit = 100,
   }) async {
@@ -4149,12 +4148,15 @@ class FakeNotificationFacade implements NotificationFacade {
   String? lastSystemTitle;
   String? lastSystemBody;
   int lastBadgeCount = 0;
+  int inAppCalls = 0;
+  int systemCalls = 0;
 
   @override
   Future<void> showSystemNotification({
     required String title,
     required String body,
   }) async {
+    systemCalls += 1;
     lastSystemTitle = title;
     lastSystemBody = body;
   }
@@ -4164,6 +4166,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String title,
     required String body,
   }) async {
+    inAppCalls += 1;
     lastInAppTitle = title;
     lastInAppBody = body;
   }

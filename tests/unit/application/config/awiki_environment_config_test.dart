@@ -33,6 +33,7 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
+    expect(config.messageSyncV2ReadEnabled, isFalse);
   });
 
   test('bundled realm allowlist enables Agent and Daemon capabilities', () {
@@ -101,6 +102,7 @@ void main() {
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
+      messageSyncV2ReadEnabled: true,
     );
 
     expect(config.baseUrl, 'https://anpclaw.com');
@@ -120,6 +122,7 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
+    expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
   test('network route config has no local storage locator', () {
@@ -147,6 +150,21 @@ void main() {
 
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
+    expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
+    expect(container.read(messageSyncV2ReadEnabledProvider), isFalse);
+  });
+
+  test('message sync v2 reader gate is independent and default-off', () {
+    final config = AwikiEnvironmentConfig(messageSyncV2ReadEnabled: true);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(config),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(container.read(messageSyncV2ReadEnabledProvider), isTrue);
+    expect(container.read(multiDeviceDirectE2eeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
   });
 }

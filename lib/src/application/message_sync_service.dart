@@ -5,10 +5,7 @@ import 'models/app_thread_ref.dart';
 import 'ports/message_sync_core_port.dart';
 
 abstract interface class MessageSyncService {
-  Future<MessageSyncDeltaResult> syncNow({
-    required String reason,
-    int limit = 100,
-  });
+  Future<MessageSyncOutcome> syncNow({required String reason, int limit = 100});
 
   Future<MessageSyncThreadAfterResult> syncThreadAfter({
     required AppThreadRef thread,
@@ -33,14 +30,19 @@ class ImCoreMessageSyncService
   final MessageSyncCorePort _sync;
 
   @override
-  Future<MessageSyncDeltaResult> syncNow({
+  Future<MessageSyncOutcome> syncNow({
     required String reason,
     int limit = 100,
   }) {
+    final coreReason = _coreMessageSyncReason(reason);
     return AwikiPerformanceLogger.async(
-      'message_sync.delta',
-      () => _sync.syncDelta(limit: limit, reason: reason),
-      fields: <String, Object?>{'reason': reason, 'limit': limit},
+      'message_sync.now',
+      () => _sync.syncNow(limit: limit, reason: coreReason),
+      fields: <String, Object?>{
+        'reason': reason,
+        'core_reason': coreReason,
+        'limit': limit,
+      },
     );
   }
 
@@ -93,6 +95,27 @@ class ImCoreMessageSyncService
       },
     );
   }
+}
+
+String _coreMessageSyncReason(String reason) {
+  final normalized = reason.trim();
+  return switch (normalized) {
+    'session_start' || 'startup' => 'session_start',
+    'app_resume' || 'app_resumed' => 'app_resume',
+    'websocket_reconnect' || 'realtime_reconnected' => 'websocket_reconnect',
+    'foreground_reconcile' || 'foreground_catch_up' => 'foreground_reconcile',
+    'manual_refresh' => 'manual_refresh',
+    'after_mutation' => 'after_mutation',
+    'websocket_hint' ||
+    'realtime_agent_control' ||
+    'system_notification_changed' ||
+    'realtime_gap' ||
+    'realtime_dirty' ||
+    'realtime_message' ||
+    'realtime_persistent_fact' => 'websocket_hint',
+    _ when normalized.startsWith('realtime_') => 'websocket_hint',
+    _ => 'manual_refresh',
+  };
 }
 
 String? maxServerSequenceForMessages(Iterable<ChatMessage> messages) {

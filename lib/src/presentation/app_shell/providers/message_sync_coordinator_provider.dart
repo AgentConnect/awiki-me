@@ -1,13 +1,24 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
+import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../../app/app_services.dart';
+import '../../../app/app_locale.dart';
+import '../../../application/ports/message_sync_core_port.dart';
 import '../../../core/performance_logger.dart';
+import '../../../domain/entities/chat_message.dart';
+import '../../../l10n/app_message.dart';
+import '../../profile/peer_display_profile_provider.dart';
+import '../../shared/formatters/display_formatters.dart';
+import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
+import 'app_lifecycle_provider.dart';
+import 'session_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
   'AWIKI_MESSAGE_SYNC_TRACE',
@@ -20,21 +31,27 @@ class MessageSyncCoordinatorState {
     this.pendingReason,
     this.lastReason,
     this.lastError,
-    this.snapshotRequired = false,
+    this.lastStatus,
+    this.recoveryRequired = false,
   });
 
   final bool isSyncing;
   final String? pendingReason;
   final String? lastReason;
   final Object? lastError;
-  final bool snapshotRequired;
+  final MessageSyncStatus? lastStatus;
+  final bool recoveryRequired;
+
+  @Deprecated('Use recoveryRequired.')
+  bool get snapshotRequired => recoveryRequired;
 
   MessageSyncCoordinatorState copyWith({
     bool? isSyncing,
     Object? pendingReason = _unset,
     Object? lastReason = _unset,
     Object? lastError = _unset,
-    bool? snapshotRequired,
+    Object? lastStatus = _unset,
+    bool? recoveryRequired,
   }) {
     return MessageSyncCoordinatorState(
       isSyncing: isSyncing ?? this.isSyncing,
@@ -45,7 +62,10 @@ class MessageSyncCoordinatorState {
           ? this.lastReason
           : lastReason as String?,
       lastError: identical(lastError, _unset) ? this.lastError : lastError,
-      snapshotRequired: snapshotRequired ?? this.snapshotRequired,
+      lastStatus: identical(lastStatus, _unset)
+          ? this.lastStatus
+          : lastStatus as MessageSyncStatus?,
+      recoveryRequired: recoveryRequired ?? this.recoveryRequired,
     );
   }
 }
@@ -69,6 +89,8 @@ class MessageSyncCoordinator
   final List<Completer<void>> _pendingCompleters = <Completer<void>>[];
   DateTime? _lastStartedAt;
   DateTime? _lastFailedAt;
+  final Set<String> _notifiedCommittedEventIds = <String>{};
+  final Set<String> _notifiedCommittedMessageIds = <String>{};
   bool _disposed = false;
 
   Future<void> requestSync(String reason, {bool immediate = false}) {
@@ -197,18 +219,38 @@ class MessageSyncCoordinator
           'run.sync_result',
           fields: <String, Object?>{
             'reason': reason,
-            'snapshot_required': result.snapshotRequired,
+            'status': result.status.name,
+            'committed_incoming': result.committedIncomingMessages.length,
           },
         );
         state = state.copyWith(
-          snapshotRequired: result.snapshotRequired,
+          lastStatus: result.status,
+          recoveryRequired: result.recoveryRequired,
           lastError: null,
         );
+        if (result.status == MessageSyncStatus.retryableFailure) {
+          _lastFailedAt = DateTime.now();
+          state = state.copyWith(
+            lastError: MessageSyncCoordinatorFailure(
+              result.errorCode ?? 'message_sync_retryable_failure',
+            ),
+          );
+          return;
+        }
+        if (result.status == MessageSyncStatus.authRevoked) {
+          state = state.copyWith(
+            lastError: MessageSyncCoordinatorFailure(
+              result.errorCode ?? 'message_sync_auth_revoked',
+            ),
+          );
+          return;
+        }
+        _dispatchCommittedIncomingNotifications(result);
         await ref.read(devicesProvider.notifier).refreshJoinInbox();
         if (_disposed) {
           return;
         }
-        if (!result.snapshotRequired) {
+        if (!result.recoveryRequired) {
           _messageSyncTrace(
             'run.refresh_fast_local.start',
             fields: <String, Object?>{'reason': reason},
@@ -291,6 +333,104 @@ class MessageSyncCoordinator
     return operation;
   }
 
+  void _dispatchCommittedIncomingNotifications(MessageSyncOutcome outcome) {
+    if (!ref.read(messageSyncV2ReadEnabledProvider) ||
+        outcome.status != MessageSyncStatus.changed) {
+      return;
+    }
+    for (final committed in outcome.committedIncomingMessages) {
+      final eventId = committed.eventId.trim();
+      final logicalMessageId = committed.logicalMessageId.trim();
+      final message = committed.message;
+      if (eventId.isEmpty ||
+          logicalMessageId.isEmpty ||
+          message.isMine ||
+          !message.hasRenderableContent) {
+        continue;
+      }
+      if (_notifiedCommittedEventIds.contains(eventId) ||
+          _notifiedCommittedMessageIds.contains(logicalMessageId)) {
+        continue;
+      }
+      _rememberNotificationIdentity(
+        eventId: eventId,
+        logicalMessageId: logicalMessageId,
+      );
+      _showCommittedMessageNotification(message);
+    }
+  }
+
+  void _rememberNotificationIdentity({
+    required String eventId,
+    required String logicalMessageId,
+  }) {
+    _notifiedCommittedEventIds.add(eventId);
+    _notifiedCommittedMessageIds.add(logicalMessageId);
+    while (_notifiedCommittedEventIds.length > 512) {
+      _notifiedCommittedEventIds.remove(_notifiedCommittedEventIds.first);
+    }
+    while (_notifiedCommittedMessageIds.length > 512) {
+      _notifiedCommittedMessageIds.remove(_notifiedCommittedMessageIds.first);
+    }
+  }
+
+  void _showCommittedMessageNotification(ChatMessage message) {
+    if (_disposed || ref.read(sessionProvider).session == null) {
+      return;
+    }
+    final l10n = _currentLocalizations();
+    final systemEvent = message.groupSystemEvent;
+    final actorName = systemEvent == null
+        ? null
+        : ref.read(
+            publicIdentityDisplayNameProvider(
+              PublicIdentityDisplayNameRequest(
+                did: systemEvent.actorDid,
+                unknownLabel: l10n.commonUnknown,
+              ),
+            ),
+          );
+    final subjectName = systemEvent == null
+        ? null
+        : ref.read(
+            publicIdentityDisplayNameProvider(
+              PublicIdentityDisplayNameRequest(
+                did: systemEvent.subjectDid,
+                unknownLabel: l10n.commonUnknown,
+              ),
+            ),
+          );
+    final preview = localizeMessagePreview(
+      l10n,
+      message,
+      groupEventActorName: actorName,
+      groupEventSubjectName: subjectName,
+    );
+    final body = preview.isNotEmpty
+        ? preview
+        : AppMessage.newMessageArrived().resolveForFallback();
+    final title = DidDisplayFormatter.compactDisplayName(
+      displayName: message.senderName ?? '',
+      fallbackDid: message.senderDid,
+    ).trim();
+    final resolvedTitle = title.isNotEmpty
+        ? title
+        : AppMessage.newMessageArrived().resolveForFallback();
+    final notifications = ref.read(notificationFacadeProvider);
+    if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
+      notifications.showInAppBanner(title: resolvedTitle, body: body);
+    } else {
+      notifications.showSystemNotification(title: resolvedTitle, body: body);
+    }
+  }
+
+  AppLocalizations _currentLocalizations() {
+    final mode = ref.read(appLocaleModeProvider);
+    final platformLocale = ui.PlatformDispatcher.instance.locale;
+    final effective = resolveEffectiveAppLanguage(mode, platformLocale);
+    return lookupAppLocalizations(effective.locale);
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -304,6 +444,15 @@ class MessageSyncCoordinator
     _pendingCompleters.clear();
     super.dispose();
   }
+}
+
+class MessageSyncCoordinatorFailure implements Exception {
+  const MessageSyncCoordinatorFailure(this.code);
+
+  final String code;
+
+  @override
+  String toString() => code;
 }
 
 void _messageSyncTrace(

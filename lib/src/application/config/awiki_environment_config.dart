@@ -20,6 +20,10 @@ const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED',
   defaultValue: false,
 );
+const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
+  'AWIKI_SYNC_V2_READ',
+  defaultValue: false,
+);
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
   'awiki.ai',
   'anpclaw.com',
@@ -42,6 +46,7 @@ class AwikiEnvironmentConfig {
     bool? multiDeviceDeviceRevokeEnabled,
     bool? multiDeviceDirectE2eeEnabled,
     bool? multiDeviceGroupE2eeEnabled,
+    bool? messageSyncV2ReadEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
       baseUrl,
@@ -93,6 +98,8 @@ class AwikiEnvironmentConfig {
         multiDeviceDirectE2eeEnabled ?? defaultMultiDeviceDirectE2eeEnabled;
     this.multiDeviceGroupE2eeEnabled =
         multiDeviceGroupE2eeEnabled ?? defaultMultiDeviceGroupE2eeEnabled;
+    this.messageSyncV2ReadEnabled =
+        messageSyncV2ReadEnabled ?? defaultMessageSyncV2ReadEnabled;
   }
 
   factory AwikiEnvironmentConfig.fromEnvironment() {
@@ -113,6 +120,7 @@ class AwikiEnvironmentConfig {
   late final bool multiDeviceDeviceRevokeEnabled;
   late final bool multiDeviceDirectE2eeEnabled;
   late final bool multiDeviceGroupE2eeEnabled;
+  late final bool messageSyncV2ReadEnabled;
 }
 
 bool isAgentDaemonTenantRealmAllowed({

@@ -38,6 +38,11 @@ const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
   defaultValue: false,
 );
+const Set<String> _stageTwoPersistentRealtimeEventTypes = <String>{
+  'message.created',
+  'group.member_changed',
+  'group.profile_updated',
+};
 
 const Object _unsetActivatedDid = Object();
 
@@ -661,6 +666,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       );
       return;
     }
+    final v2MessageReadEnabled = ref.read(messageSyncV2ReadEnabledProvider);
+    if (v2MessageReadEnabled && _isStageTwoPersistentRealtimeFact(update)) {
+      _runtimeTrace(
+        'realtime.persistent_fact_pull_only',
+        fields: <String, Object?>{
+          'message': update.message != null,
+          'group': update.group != null,
+          'conversation_hint': update.conversationHint != null,
+          'event_type': update.syncEventType,
+        },
+      );
+      return;
+    }
     if (update.group != null) {
       ref.read(groupProvider.notifier).upsertGroup(update.group!);
     }
@@ -777,7 +795,20 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (update.message != null) {
       return 'realtime_message';
     }
+    if (update.group != null || update.conversationHint != null) {
+      return 'realtime_persistent_fact';
+    }
     return null;
+  }
+
+  bool _isStageTwoPersistentRealtimeFact(RealtimeUpdate update) {
+    final message = update.message;
+    if (message != null) {
+      return !message.isEncrypted;
+    }
+    final eventType = update.syncEventType?.trim();
+    return eventType != null &&
+        _stageTwoPersistentRealtimeEventTypes.contains(eventType);
   }
 
   bool _shouldAcceptRealtimeConversationHint(ConversationSummary conversation) {

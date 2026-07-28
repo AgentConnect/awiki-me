@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -21,6 +23,7 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -846,6 +849,192 @@ void main() {
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
       expect(notificationFacade.lastInAppTitle, 'Peer');
       expect(notificationFacade.lastInAppBody, 'hello group');
+    });
+
+    test('v2 reader普通消息只信 committed 通知且保留 encrypted realtime 旧路径', () async {
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiEnvironmentConfigProvider.overrideWithValue(
+            AwikiEnvironmentConfig(messageSyncV2ReadEnabled: true),
+          ),
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => MessageSyncCoordinator(
+              ref,
+              minInterval: Duration.zero,
+              failureBackoff: Duration.zero,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+
+      final incoming = buildUpdate().message!;
+      messageSyncService.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          CommittedIncomingMessage(
+            eventId: 'event-committed-1',
+            logicalMessageId: incoming.remoteId!,
+            message: incoming,
+          ),
+        ],
+      );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: incoming,
+        conversationHint: buildUpdate().conversationHint,
+        group: GroupSummary(
+          groupId: 'group-persistent',
+          conversationId: 'group:group-persistent',
+          name: 'Persistent Group',
+          description: '',
+          memberCount: 2,
+          lastMessageAt: DateTime.utc(2026, 7, 28),
+          myRole: 'member',
+        ),
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, contains('realtime_message'));
+      expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+      expect(container.read(groupProvider).groups, isEmpty);
+      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.systemCalls, 0);
+
+      messageSyncService.deltaResult = const MessageSyncOutcome(
+        status: MessageSyncStatus.idle,
+        eventsApplied: 0,
+        pagesFetched: 0,
+      );
+      for (final eventType in <String>[
+        'group.member_changed',
+        'group.profile_updated',
+      ]) {
+        gateway.nextRealtimeUpdate = RealtimeUpdate(
+          group: GroupSummary(
+            groupId: 'group-stage-two-state',
+            conversationId: 'group:group-stage-two-state',
+            name: 'Stage Two Group',
+            description: '',
+            memberCount: 2,
+            lastMessageAt: DateTime.utc(2026, 7, 28, 1),
+            myRole: 'member',
+          ),
+          syncDirty: true,
+          syncEventType: eventType,
+        );
+        await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+        await pumpEventQueue();
+      }
+
+      expect(container.read(groupProvider).groups, isEmpty);
+      expect(notificationFacade.inAppCalls, 1);
+
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'encrypted-1',
+          remoteId: 'encrypted-1',
+          threadId: 'dm:encrypted',
+          senderDid: 'did:test:encrypted-peer',
+          senderName: 'Encrypted Peer',
+          receiverDid: 'did:test:me',
+          content: 'existing secure realtime payload',
+          createdAt: DateTime.utc(2026, 7, 28, 1),
+          isMine: false,
+          isEncrypted: true,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'dm:encrypted',
+          conversationId: 'dm:encrypted',
+          displayName: 'Encrypted Peer',
+          lastMessagePreview: 'existing secure realtime payload',
+          lastMessageAt: DateTime.utc(2026, 7, 28, 1),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:test:encrypted-peer',
+        ),
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
+
+      expect(notificationFacade.inAppCalls, 2);
+      expect(notificationFacade.lastInAppTitle, 'Encrypted Peer');
+      expect(
+        notificationFacade.lastInAppBody,
+        'existing secure realtime payload',
+      );
+
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'encrypted-group-control-1',
+          remoteId: 'encrypted-group-control-1',
+          conversationId: 'group:secure-group',
+          threadId: 'group:secure-group',
+          senderDid: 'did:test:encrypted-peer',
+          senderName: 'Encrypted Peer',
+          groupId: 'secure-group',
+          content: 'opaque group control',
+          originalType: 'application/awiki-group-e2ee+json',
+          createdAt: DateTime.utc(2026, 7, 28, 2),
+          isMine: false,
+          isEncrypted: true,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'group:secure-group',
+          conversationId: 'group:secure-group',
+          displayName: 'Secure Group',
+          lastMessagePreview: 'opaque group control',
+          lastMessageAt: DateTime.utc(2026, 7, 28, 2),
+          unreadCount: 1,
+          isGroup: true,
+          groupId: 'secure-group',
+        ),
+        group: GroupSummary(
+          groupId: 'secure-group',
+          conversationId: 'group:secure-group',
+          name: 'Secure Group',
+          description: '',
+          memberCount: 2,
+          lastMessageAt: DateTime.utc(2026, 7, 28, 2),
+          myRole: 'member',
+        ),
+        syncDirty: true,
+        syncEventType: 'group.e2ee.update',
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
+      await pumpEventQueue();
+
+      expect(
+        container.read(groupProvider).groups.single.groupId,
+        'secure-group',
+      );
+      expect(notificationFacade.inAppCalls, 3);
     });
 
     test('实时消息更新最近会话但不会覆盖未读 @ 我状态', () async {

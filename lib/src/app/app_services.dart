@@ -103,6 +103,10 @@ final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
 );
 
+final messageSyncV2ReadEnabledProvider = Provider<bool>(
+  (ref) => ref.watch(awikiEnvironmentConfigProvider).messageSyncV2ReadEnabled,
+);
+
 final groupEncryptionCorePortProvider = Provider<GroupEncryptionCorePort>(
   (ref) => throw StateError('group_encryption_unavailable'),
 );
