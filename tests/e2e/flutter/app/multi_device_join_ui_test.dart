@@ -74,6 +74,26 @@ const String _appPairTailOnlySyncV2CaseId = 'DEVICE-MESSAGE-TAIL-ONLY-E2E-001';
 const String _appPairReadSyncV2CaseId = 'DEVICE-MESSAGE-READ-SYNC-E2E-001';
 const String _appPairOfflineRecoveryV2CaseId =
     'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001';
+const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
+const String _syncRecoveryOperatorModeEnv =
+    'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
+const String _syncRecoveryAccountAllowlistEnv =
+    'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
+const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
+const String _syncRecoveryTarget = 'awiki-info-testing';
+const List<String> _localSyncRecoveryPrepareCommand = <String>[
+  '/usr/bin/python3',
+  '/home/ecs-user/awiki-space/message-service/scripts/'
+      'prepare_sync_v2_recovery_test.py',
+];
+const List<String> _aliSyncRecoveryPrepareCommand = <String>[
+  'ssh',
+  'ali',
+  '--',
+  '/usr/bin/python3',
+  '/home/ecs-user/awiki-space/message-service/scripts/'
+      'prepare_sync_v2_recovery_test.py',
+];
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';

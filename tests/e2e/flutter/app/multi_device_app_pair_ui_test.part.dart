@@ -345,6 +345,7 @@ void appPairAdminMain() {
           container: container,
           adminDid: adminSession.did,
           adminHandle: handle,
+          joinedDeviceId: joinedDeviceId,
           resources: functionalResources,
         );
       } else {
@@ -361,7 +362,7 @@ void appPairAdminMain() {
         );
       }
     },
-    timeout: const Timeout(Duration(minutes: 14)),
+    timeout: const Timeout(Duration(minutes: 20)),
   );
 }
 
@@ -529,10 +530,11 @@ void appPairJoinerMain() {
           bootstrap: bootstrap,
           container: container,
           accountDid: did,
+          joinedDeviceId: pending.protocolDeviceId,
         );
       }
     },
-    timeout: const Timeout(Duration(minutes: 14)),
+    timeout: const Timeout(Duration(minutes: 20)),
   );
 }
 
@@ -565,6 +567,7 @@ Future<void> _runAppPairAdminFunctional({
   required ProviderContainer container,
   required String adminDid,
   required String adminHandle,
+  required String joinedDeviceId,
   required _AppPairFunctionalAdminResources resources,
 }) async {
   await _leaveCompletedAppPairApproval(tester);
@@ -699,6 +702,17 @@ Future<void> _runAppPairAdminFunctional({
     'functional_reply_visible',
     timeout: const Duration(minutes: 2),
   );
+  await _runAppPairAdminReadAndRecovery(
+    tester: tester,
+    config: config,
+    bootstrap: bootstrap,
+    container: container,
+    peer: peer,
+    accountDid: adminDid,
+    peerDid: peerDid,
+    conversationId: canonicalConversationId,
+    joinedDeviceId: joinedDeviceId,
+  );
   await config.coordinator.waitFor(
     'joiner',
     'functional_agent_observer_ready',
@@ -814,6 +828,7 @@ Future<void> _runAppPairJoinerFunctional({
   required AppBootstrap bootstrap,
   required ProviderContainer container,
   required String accountDid,
+  required String joinedDeviceId,
 }) async {
   await _leaveCompletedAppPairJoin(tester);
   await _pumpUntil(
@@ -1013,6 +1028,18 @@ Future<void> _runAppPairJoinerFunctional({
     ],
   );
 
+  await _runAppPairJoinerReadAndRecovery(
+    tester: tester,
+    config: config,
+    bootstrap: bootstrap,
+    container: container,
+    accountDid: accountDid,
+    peerDid: peerDid,
+    conversationId: conversationId,
+    joinedDeviceId: joinedDeviceId,
+    preservedMessageId: outboundId,
+    preservedMessageText: outboundText,
+  );
   await _openAppPairAgentsPage(tester);
   await config.coordinator.publish('joiner', 'functional_agent_observer_ready');
   final created = await config.coordinator.waitFor(
@@ -1655,6 +1682,465 @@ Future<void> _waitForAppPairDaemonDrivers({
     await Future<void>.delayed(const Duration(milliseconds: 750));
   }
   fail('The App-pair daemon did not report Codex and Claude Code drivers.');
+}
+
+Future<void> _runAppPairAdminReadAndRecovery({
+  required WidgetTester tester,
+  required _AppPairRunConfig config,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required _JoinCli peer,
+  required String accountDid,
+  required String peerDid,
+  required String conversationId,
+  required String joinedDeviceId,
+}) async {
+  await _openAppPairAgentsPage(tester);
+  await config.coordinator.publish('admin', 'functional_read_observer_ready');
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_read_observer_ready',
+    timeout: const Duration(minutes: 2),
+  );
+
+  final readText = _appPairMessage(config.runId, 'read-sync');
+  final readMessageId = await peer.sendDirectText(
+    to: accountDid,
+    text: readText,
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: readText,
+    messageId: readMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count > 0,
+    failure: 'The admin App did not project the read-sync message as unread.',
+  );
+  await config.coordinator.publish(
+    'admin',
+    'functional_read_message_sent',
+    data: <String, Object?>{'messageId': readMessageId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_read_unread_visible',
+    timeout: const Duration(minutes: 2),
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_read_committed',
+    timeout: const Duration(minutes: 2),
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count == 0,
+    failure: 'The admin App did not converge the sibling read watermark.',
+  );
+
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.paused);
+  await container.read(realtimeApplicationServiceProvider).stop();
+  await _resumeAppPairAndWaitForSync(
+    tester: tester,
+    container: container,
+    failure: 'The admin App did not finish its duplicate/reconnect sync.',
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count == 0,
+    failure: 'Duplicate sync regressed the admin App read watermark.',
+  );
+  await config.coordinator.publish('admin', 'functional_read_converged');
+
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_offline_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final recoveryText = _appPairMessage(config.runId, 'offline-recovery');
+  final recoveryMessageId = await peer.sendDirectText(
+    to: accountDid,
+    text: recoveryText,
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: recoveryText,
+    messageId: recoveryMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count > 0,
+    failure: 'The admin App did not project the offline message as unread.',
+  );
+  await _openAppPairConversation(
+    tester: tester,
+    conversationId: conversationId,
+    content: recoveryText,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count == 0,
+    failure: 'The admin App did not commit the offline-message read state.',
+  );
+  await _forceAppPairRetentionGap(joinedDeviceId);
+  await config.coordinator.publish(
+    'admin',
+    'functional_recovery_gap_prepared',
+    data: <String, Object?>{'messageId': recoveryMessageId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_recovery_completed',
+    timeout: const Duration(minutes: 3),
+  );
+
+  final postAnchorText = _appPairMessage(config.runId, 'post-anchor');
+  final postAnchorId = await peer.sendDirectText(
+    to: accountDid,
+    text: postAnchorText,
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: postAnchorText,
+    messageId: postAnchorId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'functional_post_anchor_sent',
+    data: <String, Object?>{'messageId': postAnchorId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'functional_post_anchor_visible',
+    timeout: const Duration(minutes: 2),
+  );
+  await _openAppPairAgentsPage(tester);
+}
+
+Future<void> _runAppPairJoinerReadAndRecovery({
+  required WidgetTester tester,
+  required _AppPairRunConfig config,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required String accountDid,
+  required String peerDid,
+  required String conversationId,
+  required String joinedDeviceId,
+  required String preservedMessageId,
+  required String preservedMessageText,
+}) async {
+  await _openAppPairAgentsPage(tester);
+  await config.coordinator.publish('joiner', 'functional_read_observer_ready');
+  await config.coordinator.waitFor(
+    'admin',
+    'functional_read_observer_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final read = await config.coordinator.waitFor(
+    'admin',
+    'functional_read_message_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final readMessageId = _required(read, 'messageId');
+  final readText = _appPairMessage(config.runId, 'read-sync');
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: readText,
+    messageId: readMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count > 0,
+    failure: 'The joining App did not project the read-sync message as unread.',
+  );
+  await config.coordinator.publish('joiner', 'functional_read_unread_visible');
+  await _openAppPairConversation(
+    tester: tester,
+    conversationId: conversationId,
+    content: readText,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count == 0,
+    failure: 'The joining App did not commit its visible read watermark.',
+  );
+  await config.coordinator.publish('joiner', 'functional_read_committed');
+  await config.coordinator.waitFor(
+    'admin',
+    'functional_read_converged',
+    timeout: const Duration(minutes: 2),
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairReadSyncV2CaseId,
+    phases: const <String>[
+      'ordinary_message_unread_on_both_apps',
+      'joining_app_visible_read_committed_by_core',
+      'admin_app_read_watermark_converged',
+      'duplicate_sync_did_not_regress_read',
+    ],
+  );
+
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: preservedMessageText,
+    messageId: preservedMessageId,
+    senderDid: accountDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final sync = container.read(messageSyncCoordinatorProvider);
+      return !sync.isSyncing && sync.pendingReason == null;
+    },
+    timeout: const Duration(seconds: 30),
+    failure: 'The joining App sync queue did not quiesce before going offline.',
+  );
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.paused);
+  await container.read(realtimeApplicationServiceProvider).stop();
+  final stoppedSync = container.read(messageSyncCoordinatorProvider);
+  if (container.read(realtimeApplicationServiceProvider).isRunning ||
+      stoppedSync.isSyncing ||
+      stoppedSync.pendingReason != null) {
+    fail('The joining App realtime transport remained online.');
+  }
+  await config.coordinator.publish('joiner', 'functional_offline_ready');
+  final recovery = await config.coordinator.waitFor(
+    'admin',
+    'functional_recovery_gap_prepared',
+    timeout: const Duration(minutes: 2),
+  );
+  final recoveryMessageId = _required(recovery, 'messageId');
+  final recoveryText = _appPairMessage(config.runId, 'offline-recovery');
+  await _resumeAppPairAndWaitForSync(
+    tester: tester,
+    container: container,
+    timeout: const Duration(minutes: 2),
+    failure: 'The joining App did not finish its Core-owned recovery chain.',
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: recoveryText,
+    messageId: recoveryMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: preservedMessageText,
+    messageId: preservedMessageId,
+    senderDid: accountDid,
+    receiverDid: peerDid,
+    isMine: true,
+  );
+  await _waitForAppPairUnreadCount(
+    tester: tester,
+    container: container,
+    conversationId: conversationId,
+    matches: (count) => count == 0,
+    failure: 'The joining App did not converge the current read state.',
+  );
+  await config.coordinator.publish('joiner', 'functional_recovery_completed');
+  final postAnchor = await config.coordinator.waitFor(
+    'admin',
+    'functional_post_anchor_sent',
+    timeout: const Duration(minutes: 2),
+  );
+  final postAnchorId = _required(postAnchor, 'messageId');
+  final postAnchorText = _appPairMessage(config.runId, 'post-anchor');
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: postAnchorText,
+    messageId: postAnchorId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await config.coordinator.publish('joiner', 'functional_post_anchor_visible');
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairOfflineRecoveryV2CaseId,
+    phases: const <String>[
+      'existing_replica_offline_gap_created',
+      'core_owned_recovery_completed',
+      'recent_plain_messages_converged_once',
+      'older_local_messages_preserved',
+      'current_state_and_post_anchor_delta_converged',
+    ],
+  );
+}
+
+Future<void> _waitForAppPairUnreadCount({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String conversationId,
+  required bool Function(int count) matches,
+  required String failure,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final conversations = container
+          .read(conversationListProvider)
+          .conversations
+          .where((item) => item.conversationId == conversationId)
+          .toList(growable: false);
+      if (conversations.length > 1) {
+        fail('The App-pair projected a duplicate Direct conversation.');
+      }
+      return conversations.length == 1 &&
+          matches(conversations.single.unreadCount);
+    },
+    timeout: const Duration(seconds: 90),
+    failure: failure,
+  );
+}
+
+Future<void> _resumeAppPairAndWaitForSync({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String failure,
+  Duration timeout = const Duration(seconds: 60),
+}) async {
+  var syncStarted = false;
+  final subscription = container.listen<MessageSyncCoordinatorState>(
+    messageSyncCoordinatorProvider,
+    (previous, next) {
+      if (next.isSyncing ||
+          next.recoveryRequired ||
+          next.status == MessageSyncCoordinatorStatus.recovering ||
+          next.pendingReason == 'app_resumed') {
+        syncStarted = true;
+      }
+    },
+  );
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.resumed);
+  try {
+    await _pumpUntil(
+      tester,
+      () => syncStarted,
+      timeout: timeout,
+      failure: '$failure No app-resumed sync was observed.',
+    );
+    await _pumpUntil(
+      tester,
+      () {
+        final sync = container.read(messageSyncCoordinatorProvider);
+        return !sync.isSyncing &&
+            !sync.recoveryRequired &&
+            !sync.isAuthRevoked &&
+            sync.lastError == null &&
+            sync.lastStatus != null;
+      },
+      timeout: timeout,
+      failure: failure,
+    );
+  } finally {
+    subscription.close();
+  }
+}
+
+Future<void> _forceAppPairRetentionGap(String protocolDeviceId) async {
+  final environment = Platform.environment;
+  final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
+  if (environment[_syncRecoveryEnableEnv] != '1' ||
+      environment[_syncRecoveryTargetEnv] != _syncRecoveryTarget ||
+      environment[_syncRecoveryAccountAllowlistEnv]?.trim().isNotEmpty !=
+          true ||
+      (mode != 'local' && mode != 'ali')) {
+    fail('The fixed recovery operator gate is incomplete.');
+  }
+  final command = mode == 'local'
+      ? _localSyncRecoveryPrepareCommand
+      : _aliSyncRecoveryPrepareCommand;
+  final process = await Process.start(
+    command.first,
+    command.skip(1).toList(growable: false),
+    includeParentEnvironment: true,
+    runInShell: false,
+  );
+  final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+  final stderrFuture = process.stderr.drain<void>();
+  process.stdin.write(
+    jsonEncode(<String, String>{
+      'action': 'force_retention_gap',
+      'protocol_device_id': protocolDeviceId,
+    }),
+  );
+  await process.stdin.close();
+  int exitCode;
+  try {
+    exitCode = await process.exitCode.timeout(const Duration(seconds: 30));
+  } on TimeoutException {
+    process.kill();
+    fail('The fixed recovery retention-gap preparation timed out.');
+  }
+  final stdoutText = await stdoutFuture;
+  await stderrFuture;
+  Object? receipt;
+  try {
+    receipt = jsonDecode(stdoutText);
+  } on FormatException {
+    fail('The fixed recovery operator returned no closed receipt.');
+  }
+  if (exitCode != 0 ||
+      receipt is! Map ||
+      receipt.length != 3 ||
+      receipt['affected_streams'] != 1 ||
+      receipt['mode'] != 'retention_gap' ||
+      receipt['prepared'] != true) {
+    fail('The fixed recovery retention-gap preparation failed.');
+  }
 }
 
 Future<AgentSummary> _waitForAppPairRuntime({

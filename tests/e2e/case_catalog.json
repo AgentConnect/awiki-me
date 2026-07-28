@@ -2835,15 +2835,15 @@
       "caseId": "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001",
       "feature": "An existing AWiki Me replica resumes through Core-owned bounded compact recovery",
       "layer": "remote_product_ui",
-      "preconditions": "The joining App is an already bootstrapped sync v2 replica with an isolated persistent Core root; the admin App and CLI peer can create ordinary Direct traffic while that replica is offline.",
-      "action": "Take the existing joining App offline, create ordinary messages and read-state changes, resume it through normal App lifecycle/reconnect triggers, and observe the single high-level syncNow recovery flow without supplying recovery controls from the test or App.",
+      "preconditions": "The joining App is an already bootstrapped sync v2 replica with an isolated persistent Core root; the admin App and CLI peer can create ordinary Direct traffic while that replica is offline; the reviewed fixed operator helper is explicitly enabled for the allowlisted test account.",
+      "action": "Take the existing joining App offline, create one ordinary Direct message and a read-state change, use the fixed operator-only helper to create a retention gap for that exact joined device, then resume it through normal App lifecycle/reconnect triggers and observe the single high-level syncNow recovery flow without supplying any recovery control to the App.",
       "exactOracles": [
         "The coordinator transiently reports recovery-required/recovering or completes recovery within one Core syncNow chain, then returns to idle without exposing cursor, token, cutoff, or count.",
         "Recent ordinary messages converge exactly once from the Core committed projection while previously available older local messages remain available.",
-        "Current read and Group state converge independently of the ordinary-message recovery window, and a post-anchor ordinary message arrives through the following delta."
+        "Current read state converges independently of the ordinary-message recovery window, and a post-anchor ordinary Direct message arrives exactly once through the following delta."
       ],
       "negativeChecks": [
-        "An App recover API, App-supplied cursor/token/cutoff/count, full-history replay, deletion of older local rows, duplicate post-anchor delivery, raw Snapshot merging in Flutter, auth-revoked background retry, or any E2EE/MLS history prevents pass attestation."
+        "An invalid operator receipt, App recover API, App-supplied cursor/token/cutoff/count, full-history replay, deletion of older local rows, duplicate post-anchor delivery, raw Snapshot merging in Flutter, auth-revoked background retry, or any E2EE/MLS history prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",

@@ -108,11 +108,18 @@ class AppTestCatalog {
           '${value.implementationPath}',
         );
       }
+      final implementationSource = _readDartImplementationBundle(
+        implementation,
+      );
       if (value.catalogStatus == 'active' &&
-          !implementation.readAsStringSync().contains(value.caseId)) {
+          value.evidenceType.contains('case_attestation') &&
+          !hasActiveCaseAttestationRegistration(
+            implementationSource,
+            value.caseId,
+          )) {
         throw FormatException(
-          'case ${value.caseId} is not referenced by '
-          '${value.implementationPath}',
+          'active case ${value.caseId} has no executable markPassed '
+          'attestation registration in ${value.implementationPath}',
         );
       }
       parsed.add(value);
@@ -404,6 +411,106 @@ class AppTestCatalog {
       ..writeln('```');
     return buffer.toString();
   }
+}
+
+String _readDartImplementationBundle(File implementation) {
+  return _readDartImplementationBundleFiles(implementation, <String>{});
+}
+
+String _readDartImplementationBundleFiles(
+  File implementation,
+  Set<String> visited,
+) {
+  final resolvedImplementation = File(
+    implementation.resolveSymbolicLinksSync(),
+  );
+  final path = resolvedImplementation.path;
+  if (!visited.add(path)) {
+    return '';
+  }
+  final source = resolvedImplementation.readAsStringSync();
+  if (!resolvedImplementation.path.endsWith('.dart')) {
+    return source;
+  }
+  final buffer = StringBuffer(source);
+  final directory = resolvedImplementation.parent;
+  final ownerMatch = RegExp(
+    r'''^\s*part\s+of\s+['"]([^'"]+)['"]\s*;''',
+    multiLine: true,
+  ).firstMatch(source);
+  if (ownerMatch != null) {
+    final owner = File('${directory.path}/${ownerMatch.group(1)!}');
+    if (!owner.existsSync()) {
+      throw FormatException(
+        'Dart implementation owner does not exist: ${owner.path}',
+      );
+    }
+    buffer
+      ..writeln()
+      ..write(_readDartImplementationBundleFiles(owner, visited));
+  }
+  final parts = RegExp(
+    r'''^\s*part\s+['"]([^'"]+)['"]\s*;''',
+    multiLine: true,
+  ).allMatches(source);
+  for (final match in parts) {
+    final part = File('${directory.path}/${match.group(1)!}');
+    if (!part.existsSync()) {
+      throw FormatException(
+        'Dart implementation part does not exist: ${part.path}',
+      );
+    }
+    buffer
+      ..writeln()
+      ..write(_readDartImplementationBundleFiles(part, visited));
+  }
+  return buffer.toString();
+}
+
+bool hasActiveCaseAttestationRegistration(String source, String caseId) {
+  final escapedCaseId = RegExp.escape(caseId);
+  final direct = RegExp(
+    '''E2eCaseAttestationWriter\\.markPassed\\(\\s*['"]$escapedCaseId['"]\\s*,''',
+    multiLine: true,
+  );
+  if (direct.hasMatch(source)) {
+    return true;
+  }
+
+  final declaration = RegExp(
+    '''(?:const|static\\s+const)\\s+String\\s+([A-Za-z_]\\w*)\\s*=\\s*['"]$escapedCaseId['"]\\s*;''',
+    multiLine: true,
+  );
+  for (final match in declaration.allMatches(source)) {
+    final symbol = RegExp.escape(match.group(1)!);
+    if (RegExp(
+      'E2eCaseAttestationWriter\\.markPassed\\(\\s*$symbol\\s*,',
+      multiLine: true,
+    ).hasMatch(source)) {
+      return true;
+    }
+    if (RegExp(
+          '$symbol\\s*:\\s*(?:const\\s*)?<String>\\s*\\[',
+          multiLine: true,
+        ).hasMatch(source) &&
+        RegExp(
+          r'E2eCaseAttestationWriter\.markPassed\(\s*entry\.key\s*,',
+          multiLine: true,
+        ).hasMatch(source)) {
+      return true;
+    }
+  }
+
+  final registeredPhaseMap = RegExp(
+    '''['"]$escapedCaseId['"]\\s*:\\s*(?:const\\s*)?<String>\\s*\\[''',
+    multiLine: true,
+  );
+  final registeredMapAttestation = RegExp(
+    r'E2eCaseAttestationWriter\.markPassed\(\s*entry\.key\s*,',
+    multiLine: true,
+  );
+  return registeredPhaseMap.hasMatch(source) &&
+      registeredMapAttestation.hasMatch(source);
 }
 
 class AppTestCatalogCase {

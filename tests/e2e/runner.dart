@@ -45,6 +45,13 @@ const String _multiDeviceRemoteOtpCommandEnv =
     'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
 const String _multiDeviceRemoteHandlePrefixEnv =
     'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX';
+const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
+const String _syncRecoveryOperatorModeEnv =
+    'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
+const String _syncRecoveryAccountAllowlistEnv =
+    'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
+const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
+const String _syncRecoveryTarget = 'awiki-info-testing';
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
@@ -750,6 +757,7 @@ class DesktopE2eRunner {
       await commands.requireFile(_multiDeviceAppPairTarget);
       await commands.requireFile('test_driver/integration_test.dart');
       if (pairConfig.functional) {
+        _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
         if (!daemonStateRootFitsUnixSocket(appPairDaemonStateRootDir.path)) {
           throw E2eFailure(
             'The App-pair Daemon state root exceeds the macOS Unix-domain socket path limit.',
@@ -845,6 +853,14 @@ class DesktopE2eRunner {
             remoteMultiDeviceStagedOtpFlag: pairConfig.allowStagedOtpOnSmsError
                 ? '1'
                 : '0',
+            _syncRecoveryEnableEnv:
+                Platform.environment[_syncRecoveryEnableEnv]!,
+            _syncRecoveryOperatorModeEnv:
+                Platform.environment[_syncRecoveryOperatorModeEnv]!,
+            _syncRecoveryAccountAllowlistEnv:
+                Platform.environment[_syncRecoveryAccountAllowlistEnv]!,
+            _syncRecoveryTargetEnv:
+                Platform.environment[_syncRecoveryTargetEnv]!,
           };
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
@@ -2710,6 +2726,22 @@ String cliBuildCommitFromVersionJson(String output) {
 
 String _basename(String path) {
   return path.replaceAll('\\', '/').split('/').last;
+}
+
+void _requireAppPairRecoveryOperatorEnvironment(
+  Map<String, String> environment,
+) {
+  final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
+  if (environment[_syncRecoveryEnableEnv]?.trim() != '1' ||
+      environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
+      environment[_syncRecoveryAccountAllowlistEnv]?.trim().isNotEmpty !=
+          true ||
+      (mode != 'ali' && mode != 'local')) {
+    throw E2eFailure(
+      'The functional App-pair suite requires the reviewed sync-recovery '
+      'operator opt-in, target, mode, and account allowlist.',
+    );
+  }
 }
 
 class DesktopCommandRunner {
