@@ -1790,7 +1790,12 @@ class ChatThreadsController
   }
 
   Future<bool> _drainPendingReadAcks(String threadId) async {
-    while (mounted) {
+    final sessionGeneration = ref.read(sessionProvider).generation;
+    final localHistoryGeneration = _localHistoryGeneration;
+    while (_isCurrentAsyncGeneration(
+      sessionGeneration,
+      localHistoryGeneration,
+    )) {
       final pending = _pendingReadAcksByThreadId[threadId];
       if (pending == null) {
         return true;
@@ -1843,7 +1848,10 @@ class ChatThreadsController
             .read(conversationServiceProvider)
             .markConversationRead(conversationRef, watermark: watermark);
         watch.stop();
-        if (!mounted) {
+        if (!_isCurrentAsyncGeneration(
+          sessionGeneration,
+          localHistoryGeneration,
+        )) {
           return false;
         }
         final effective = result.effectiveWatermark;
@@ -1910,6 +1918,12 @@ class ChatThreadsController
         );
       } catch (error) {
         watch.stop();
+        if (!_isCurrentAsyncGeneration(
+          sessionGeneration,
+          localHistoryGeneration,
+        )) {
+          return false;
+        }
         _requeuePendingReadAck(
           threadId,
           _PendingReadAck(
@@ -1940,7 +1954,11 @@ class ChatThreadsController
     required String displayThreadId,
     AppConversationReadRef? conversationRef,
     bool fallbackToLocalHistory = true,
+    bool Function()? isCurrent,
   }) async {
+    if (isCurrent?.call() == false) {
+      return null;
+    }
     final messaging = ref.read(messagingServiceProvider);
     final effectiveConversationRef =
         conversationRef ??
@@ -1948,6 +1966,9 @@ class ChatThreadsController
         _conversationReadRefFor(conversation);
     if (effectiveConversationRef == null) {
       if (fallbackToLocalHistory) {
+        if (isCurrent?.call() == false) {
+          return null;
+        }
         await _loadLocalHistory(
           conversation,
           intoThreadId: displayThreadId,
@@ -1963,7 +1984,7 @@ class ChatThreadsController
         final patch = await timelineMessaging.repairConversationTimelineStore(
           effectiveConversationRef,
         );
-        if (!mounted) {
+        if (!mounted || isCurrent?.call() == false) {
           return null;
         }
         final ownerDid = ref.read(sessionProvider).session?.did.trim();
@@ -1991,6 +2012,9 @@ class ChatThreadsController
       }
     }
     if (fallbackToLocalHistory) {
+      if (isCurrent?.call() == false) {
+        return null;
+      }
       await _loadLocalHistory(
         conversation,
         intoThreadId: displayThreadId,
@@ -2661,6 +2685,8 @@ class ChatThreadsController
     if (!mounted) {
       return;
     }
+    final sessionGeneration = ref.read(sessionProvider).generation;
+    final localHistoryGeneration = _localHistoryGeneration;
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
     final conversationRef = _conversationReadRefFor(conversation);
     final totalWatch = Stopwatch()..start();
@@ -2707,7 +2733,10 @@ class ChatThreadsController
           },
           level: AwikiPerformanceLogLevel.verbose,
         );
-        if (!mounted) {
+        if (!_isCurrentAsyncGeneration(
+          sessionGeneration,
+          localHistoryGeneration,
+        )) {
           return;
         }
         final repairedVersion = await _repairThreadFromLocalProjection(
@@ -2715,6 +2744,10 @@ class ChatThreadsController
           displayThreadId: targetThreadId,
           conversationRef: syncConversationRef,
           fallbackToLocalHistory: false,
+          isCurrent: () => _isCurrentAsyncGeneration(
+            sessionGeneration,
+            localHistoryGeneration,
+          ),
         );
         final localResult = repairedVersion == null
             ? await _loadLocalHistory(
@@ -2725,13 +2758,22 @@ class ChatThreadsController
                 markLoadedWhenEmpty: false,
               )
             : const _HistoryLoadResult(loadedCount: 0, failed: false);
-        if (!mounted) {
+        if (!_isCurrentAsyncGeneration(
+          sessionGeneration,
+          localHistoryGeneration,
+        )) {
           return;
         }
         if (showLoading) {
           _setThreadLoading(targetThreadId, false);
         }
         await ref.read(conversationListProvider.notifier).refreshFastLocal();
+        if (!_isCurrentAsyncGeneration(
+          sessionGeneration,
+          localHistoryGeneration,
+        )) {
+          return;
+        }
         _flushPendingReadAck(targetThreadId);
         totalWatch.stop();
         AwikiPerformanceLogger.log(
@@ -2756,7 +2798,10 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!mounted) {
+      if (!_isCurrentAsyncGeneration(
+        sessionGeneration,
+        localHistoryGeneration,
+      )) {
         return;
       }
       final repairedVersion = await _repairThreadFromLocalProjection(
@@ -2764,6 +2809,10 @@ class ChatThreadsController
         displayThreadId: targetThreadId,
         conversationRef: conversationRef,
         fallbackToLocalHistory: false,
+        isCurrent: () => _isCurrentAsyncGeneration(
+          sessionGeneration,
+          localHistoryGeneration,
+        ),
       );
       final localResult = repairedVersion == null
           ? await _loadLocalHistory(
@@ -2785,7 +2834,10 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!mounted) {
+      if (!_isCurrentAsyncGeneration(
+        sessionGeneration,
+        localHistoryGeneration,
+      )) {
         return;
       }
       _flushPendingReadAck(targetThreadId);
@@ -2800,7 +2852,10 @@ class ChatThreadsController
         },
       );
     } catch (error) {
-      if (!mounted) {
+      if (!_isCurrentAsyncGeneration(
+        sessionGeneration,
+        localHistoryGeneration,
+      )) {
         return;
       }
       if (showLoading) {
@@ -2812,13 +2867,25 @@ class ChatThreadsController
             .showError(AppMessage.fromError(error));
       }
     } finally {
-      _activeRemoteHistorySyncs.remove(targetThreadId);
-      if (mounted) {
+      if (_isCurrentAsyncGeneration(
+        sessionGeneration,
+        localHistoryGeneration,
+      )) {
+        _activeRemoteHistorySyncs.remove(targetThreadId);
         _flushPendingReadAck(targetThreadId);
         _runPendingHistorySyncIfNeeded(targetThreadId);
         _runPendingVisibleThreadStaleGuardIfNeeded(targetThreadId);
       }
     }
+  }
+
+  bool _isCurrentAsyncGeneration(
+    int sessionGeneration,
+    int localHistoryGeneration,
+  ) {
+    return mounted &&
+        ref.read(sessionProvider).generation == sessionGeneration &&
+        _localHistoryGeneration == localHistoryGeneration;
   }
 
   Future<void> sendMessage({

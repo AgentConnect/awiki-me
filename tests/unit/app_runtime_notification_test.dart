@@ -31,6 +31,7 @@ import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -814,6 +815,112 @@ void main() {
       expect(conversations.enrichCalls, 2);
       slowProfile.complete();
       await Future<void>.delayed(Duration.zero);
+    });
+
+    test('身份切换后延迟完成的旧 profile 不会回填且新身份会补刷新', () async {
+      final firstProfileRelease = Completer<void>();
+      final secondProfileRelease = Completer<void>();
+      final profiles = _SessionSwitchProfileService(
+        firstProfileRelease,
+        secondProfileRelease,
+      );
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+          ),
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .activateSession(
+            const SessionIdentity(
+              did: 'did:test:old',
+              credentialName: 'old',
+              displayName: 'Old',
+              handle: 'old',
+              jwtToken: 'old-token',
+            ),
+          );
+      await profiles.firstStarted.future;
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .activateSession(
+            const SessionIdentity(
+              did: 'did:test:new',
+              credentialName: 'new',
+              displayName: 'New',
+              handle: 'new',
+              jwtToken: 'new-token',
+            ),
+          );
+      await pumpEventQueue();
+      expect(profiles.loadCalls, 1);
+      expect(profiles.secondStarted.isCompleted, isFalse);
+
+      firstProfileRelease.complete();
+      await profiles.secondStarted.future;
+      expect(profiles.loadCalls, 2);
+      expect(container.read(profileProvider).profile, isNull);
+
+      secondProfileRelease.complete();
+      await pumpEventQueue();
+      expect(container.read(sessionProvider).session?.did, 'did:test:new');
+      expect(container.read(profileProvider).profile?.did, 'did:test:new');
+    });
+
+    test('撤权后延迟完成的 profile 刷新不能回填已清理投影', () async {
+      final profileRelease = Completer<void>();
+      final profiles = _BlockingProfileService(profileRelease);
+      final sync = FakeMessageSyncService();
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: sync,
+          ),
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+
+      await activate();
+      await profiles.started.future;
+      sync.deltaResult = const MessageSyncOutcome(
+        status: MessageSyncStatus.authRevoked,
+        eventsApplied: 0,
+        pagesFetched: 1,
+        errorCode: 'device_auth_revoked',
+      );
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('manual_refresh', immediate: true);
+      await pumpEventQueue();
+      expect(container.read(sessionProvider).session, isNull);
+
+      profileRelease.complete();
+      await pumpEventQueue();
+
+      expect(container.read(profileProvider).profile, isNull);
+      expect(container.read(appRuntimeProvider).authRevoked, isTrue);
     });
 
     test('实时附件消息通知使用附件预览', () async {
@@ -1997,9 +2104,13 @@ class _BlockingProfileService implements ProfileApplicationService {
   _BlockingProfileService(this.completer);
 
   final Completer<void> completer;
+  final Completer<void> started = Completer<void>();
 
   @override
   Future<UserProfile> loadMyProfile() async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
     await completer.future;
     return const UserProfile(
       did: 'did:test:me',
@@ -2008,6 +2119,55 @@ class _BlockingProfileService implements ProfileApplicationService {
       tags: <String>[],
       profileMarkdown: '',
       handle: 'me',
+    );
+  }
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) {
+    throw UnimplementedError();
+  }
+}
+
+class _SessionSwitchProfileService implements ProfileApplicationService {
+  _SessionSwitchProfileService(this.firstRelease, this.secondRelease);
+
+  final Completer<void> firstRelease;
+  final Completer<void> secondRelease;
+  final Completer<void> firstStarted = Completer<void>();
+  final Completer<void> secondStarted = Completer<void>();
+  int loadCalls = 0;
+
+  @override
+  Future<UserProfile> loadMyProfile() async {
+    loadCalls += 1;
+    if (loadCalls == 1) {
+      firstStarted.complete();
+      await firstRelease.future;
+      return const UserProfile(
+        did: 'did:test:old',
+        nickName: 'Old',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'old',
+      );
+    }
+    if (!secondStarted.isCompleted) {
+      secondStarted.complete();
+    }
+    await secondRelease.future;
+    return const UserProfile(
+      did: 'did:test:new',
+      nickName: 'New',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'new',
     );
   }
 

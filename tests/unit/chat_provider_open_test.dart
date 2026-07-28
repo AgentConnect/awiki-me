@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
+import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -230,6 +231,74 @@ void main() {
     );
     expect(fencedSync.conversationAfterRequests, isEmpty);
     expect(fencedSync.threadAfterRequests, isEmpty);
+  });
+
+  test('会话切换后丢弃旧会话延迟完成的远端历史投影和收尾副作用', () async {
+    final historyCompleter = Completer<void>();
+    final historyStarted = Completer<void>();
+    final fencedGateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation];
+    final fencedMessaging = FakeMessagingService(fencedGateway);
+    final fencedSync =
+        _BlockingConversationAfterSyncService(historyCompleter, historyStarted)
+          ..conversationAfterMessagesById[conversation.conversationId] =
+              <ChatMessage>[message];
+    fencedSync.onConversationAfterPersisted =
+        (String conversationId, List<ChatMessage> messages) {
+          return fencedMessaging.persistConversationMessages(
+            conversationId,
+            messages,
+          );
+        };
+    final fencedContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(fencedGateway),
+        notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
+        ...fakeApplicationServiceOverrides(
+          fencedGateway,
+          messageSyncService: fencedSync,
+        ),
+        messagingServiceProvider.overrideWithValue(fencedMessaging),
+      ],
+    );
+    addTearDown(fencedContainer.dispose);
+    fencedContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:old',
+            credentialName: 'old.json',
+            displayName: 'Old',
+            handle: 'old',
+          ),
+        );
+
+    await fencedContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await historyStarted.future;
+
+    fencedContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:new',
+            credentialName: 'new.json',
+            displayName: 'New',
+            handle: 'new',
+          ),
+        );
+    fencedContainer.read(chatThreadsProvider.notifier).clear();
+    historyCompleter.complete();
+    await pumpEventQueue();
+
+    expect(
+      fencedContainer
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .messages,
+      isEmpty,
+    );
+    expect(fencedGateway.markConversationReadCalls, 0);
   });
 
   test('本地历史为空时走 conversation-after 回补', () async {
@@ -2942,6 +3011,75 @@ void main() {
         (item) => item?.lastReadThreadSeq,
       ),
       <String?>['5', '6'],
+    );
+  });
+
+  test('会话切换后旧会话延迟完成的已读提交不能覆盖新会话状态', () async {
+    const groupDid = 'did:test:group:stale-read-ack';
+    final latest = ChatMessage(
+      localId: 'stale-read-5',
+      remoteId: 'stale-read-5',
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      senderDid: 'did:member:peer',
+      groupId: groupDid,
+      content: 'old session unread',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 5,
+      sendState: MessageSendState.sent,
+    );
+    final unreadConversation = ConversationSummary(
+      conversationId: 'group:$groupDid',
+      threadId: 'group:$groupDid',
+      displayName: 'Stale read ack',
+      lastMessagePreview: latest.content,
+      lastMessageAt: latest.createdAt,
+      unreadCount: 1,
+      isGroup: true,
+      groupId: groupDid,
+      lastMessageSnapshot: latest,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    final delayedCommit = Completer<void>();
+    gateway.markConversationReadCompleter = delayedCommit;
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      latest,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:new',
+            credentialName: 'new.json',
+            displayName: 'New',
+            handle: 'new',
+          ),
+        );
+    controller.clear();
+    container.read(conversationListProvider.notifier).clear();
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+
+    delayedCommit.complete();
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      1,
     );
   });
 
@@ -7112,4 +7250,28 @@ void _expectLastConversationReadWatermark(
   expect(watermark!.lastReadMessageId, messageId);
   expect(watermark.lastReadThreadSeq, sequence);
   expect(watermark.readAt, isNotNull);
+}
+
+class _BlockingConversationAfterSyncService extends FakeMessageSyncService {
+  _BlockingConversationAfterSyncService(this.completer, this.started);
+
+  final Completer<void> completer;
+  final Completer<void> started;
+
+  @override
+  Future<MessageSyncThreadAfterResult> syncConversationAfter({
+    required AppConversationReadRef conversation,
+    String? afterServerSeq,
+    int limit = 100,
+  }) async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await completer.future;
+    return super.syncConversationAfter(
+      conversation: conversation,
+      afterServerSeq: afterServerSeq,
+      limit: limit,
+    );
+  }
 }

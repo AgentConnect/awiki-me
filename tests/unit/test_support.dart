@@ -3931,6 +3931,9 @@ class FakeMessageSyncService
   Object? nextDeltaError;
   Object? nextThreadAfterError;
   Object? nextConversationAfterError;
+  Completer<void>? syncNowCompleter;
+  int activeSyncNowCalls = 0;
+  int maxActiveSyncNowCalls = 0;
   final List<String> syncReasons = <String>[];
   final List<FakeThreadAfterRequest> threadAfterRequests =
       <FakeThreadAfterRequest>[];
@@ -3947,12 +3950,24 @@ class FakeMessageSyncService
     int limit = 100,
   }) async {
     syncReasons.add(reason);
-    final error = nextDeltaError;
-    if (error != null) {
-      nextDeltaError = null;
-      throw error;
+    activeSyncNowCalls += 1;
+    if (activeSyncNowCalls > maxActiveSyncNowCalls) {
+      maxActiveSyncNowCalls = activeSyncNowCalls;
     }
-    return deltaResult;
+    try {
+      final completer = syncNowCompleter;
+      if (completer != null) {
+        await completer.future;
+      }
+      final error = nextDeltaError;
+      if (error != null) {
+        nextDeltaError = null;
+        throw error;
+      }
+      return deltaResult;
+    } finally {
+      activeSyncNowCalls -= 1;
+    }
   }
 
   @override

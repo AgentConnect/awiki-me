@@ -21,17 +21,27 @@ void main() {
   test('single-flight coalesces concurrent sync requests', () async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[_conversation()];
-    final sync = FakeMessageSyncService();
+    final firstSync = Completer<void>();
+    final sync = FakeMessageSyncService()..syncNowCompleter = firstSync;
     final container = _container(gateway, sync);
     addTearDown(container.dispose);
     final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
 
     final first = coordinator.requestSync('startup', immediate: true);
+    await pumpEventQueue();
     final second = coordinator.requestSync('app_resumed', immediate: true);
+    await pumpEventQueue();
+
+    expect(sync.syncReasons, ['startup']);
+    expect(sync.activeSyncNowCalls, 1);
+    expect(sync.maxActiveSyncNowCalls, 1);
+
+    firstSync.complete();
     await Future.wait(<Future<void>>[first, second]);
     await pumpEventQueue();
 
     expect(sync.syncReasons, ['startup', 'app_resumed']);
+    expect(sync.maxActiveSyncNowCalls, 1);
     expect(
       container.read(conversationListProvider).conversations,
       hasLength(1),

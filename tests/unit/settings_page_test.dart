@@ -220,6 +220,68 @@ void main() {
     expect(gateway.logoutCalls, 1);
   });
 
+  testWidgets('设置页展示消息恢复进度且恢复期间不可重复触发', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:test:recovering',
+          credentialName: 'recovering',
+          displayName: 'Recovering',
+        ),
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.recovering,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步'), findsOneWidget);
+    expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.text('重试'), findsNothing);
+  });
+
+  testWidgets('设置页展示可重试同步失败并调度手动重试', (tester) async {
+    late _FixedMessageSyncCoordinator coordinator;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:test:retryable',
+          credentialName: 'retryable',
+          displayName: 'Retryable',
+        ),
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith((ref) {
+            return coordinator = _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.retryableFailure,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    await tester.pump();
+
+    expect(coordinator.requestReasons, ['manual_refresh']);
+  });
+
   testWidgets('设置页检查更新显示暂未实现普通提示', (tester) async {
     final updateService = FakeUpdateService();
 
@@ -543,5 +605,13 @@ class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
     MessageSyncCoordinatorState initialState,
   ) {
     state = initialState;
+  }
+
+  final List<String> requestReasons = <String>[];
+
+  @override
+  Future<void> requestSync(String reason, {bool immediate = false}) {
+    requestReasons.add(reason);
+    return Future<void>.value();
   }
 }

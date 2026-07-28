@@ -112,6 +112,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<void>? _joinedMemberActivation;
   String? _joinedMemberActivationDid;
   Future<void>? _authenticatedRefreshOperation;
+  int? _authenticatedRefreshOperationSessionGeneration;
+  int? _authenticatedRefreshFollowUpSessionGeneration;
   DateTime? _lastAuthenticatedRefreshStartedAt;
   Timer? _foregroundCatchUpTimer;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
@@ -437,7 +439,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> _refreshAuthenticatedData() async {
     final totalWatch = Stopwatch()..start();
-    if (!_canRefreshAuthenticatedData) {
+    final sessionFence = _AuthenticatedRefreshSessionFence.capture(
+      ref.read(sessionProvider),
+    );
+    if (sessionFence == null || !_isCurrentAuthenticatedRefresh(sessionFence)) {
       return;
     }
 
@@ -448,32 +453,47 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ).catchError((_) {}),
     );
 
-    await AwikiPerformanceLogger.async(
-      'app_refresh.conversation_fast_local',
-      () => ref.read(conversationListProvider.notifier).refreshFastLocal(),
+    final conversationCurrent = await _runAuthenticatedRefreshDomain(
+      sessionFence,
+      label: 'app_refresh.conversation_fast_local',
+      action: () =>
+          ref.read(conversationListProvider.notifier).refreshFastLocal(),
+      clearStale: _clearAuthenticatedProjection,
     );
-    if (!_canRefreshAuthenticatedData) {
+    if (!conversationCurrent) {
       return;
     }
 
-    await Future.wait<void>(<Future<void>>[
-      AwikiPerformanceLogger.async(
-        'app_refresh.profile',
-        () => ref.read(profileProvider.notifier).refresh(),
+    final domainsCurrent = await Future.wait<bool>(<Future<bool>>[
+      _runAuthenticatedRefreshDomain(
+        sessionFence,
+        label: 'app_refresh.profile',
+        action: () => ref.read(profileProvider.notifier).refresh(),
+        clearStale: () => ref.read(profileProvider.notifier).clear(),
       ),
-      AwikiPerformanceLogger.async(
-        'app_refresh.agents',
-        () => ref.read(agentsProvider.notifier).syncRemoteInventory(),
+      _runAuthenticatedRefreshDomain(
+        sessionFence,
+        label: 'app_refresh.agents',
+        action: () => ref.read(agentsProvider.notifier).syncRemoteInventory(),
+        clearStale: () => ref.read(agentsProvider.notifier).clear(),
       ),
-      AwikiPerformanceLogger.async(
-        'app_refresh.friends',
-        () => ref.read(friendsProvider.notifier).refresh(),
+      _runAuthenticatedRefreshDomain(
+        sessionFence,
+        label: 'app_refresh.friends',
+        action: () => ref.read(friendsProvider.notifier).refresh(),
+        clearStale: () => ref.read(friendsProvider.notifier).clear(),
       ),
-      AwikiPerformanceLogger.async(
-        'app_refresh.groups',
-        () => ref.read(groupProvider.notifier).refresh(),
+      _runAuthenticatedRefreshDomain(
+        sessionFence,
+        label: 'app_refresh.groups',
+        action: () => ref.read(groupProvider.notifier).refresh(),
+        clearStale: () => ref.read(groupProvider.notifier).clear(),
       ),
     ]);
+    if (domainsCurrent.any((current) => !current) ||
+        !_isCurrentAuthenticatedRefresh(sessionFence)) {
+      return;
+    }
     totalWatch.stop();
     AwikiPerformanceLogger.log(
       'app_refresh.authenticated_data',
@@ -487,9 +507,38 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       !_syncAuthRevoked &&
       ref.read(sessionProvider).session != null;
 
+  bool _isCurrentAuthenticatedRefresh(_AuthenticatedRefreshSessionFence fence) {
+    return _canRefreshAuthenticatedData &&
+        fence.matches(ref.read(sessionProvider));
+  }
+
+  Future<bool> _runAuthenticatedRefreshDomain(
+    _AuthenticatedRefreshSessionFence fence, {
+    required String label,
+    required Future<void> Function() action,
+    required void Function() clearStale,
+  }) async {
+    if (!_isCurrentAuthenticatedRefresh(fence)) {
+      return false;
+    }
+    try {
+      await AwikiPerformanceLogger.async(label, action);
+    } finally {
+      if (!_isCurrentAuthenticatedRefresh(fence) && mounted) {
+        clearStale();
+      }
+    }
+    return _isCurrentAuthenticatedRefresh(fence);
+  }
+
   Future<void> _refreshAuthenticatedDataInBackground({bool debounce = true}) {
     final active = _authenticatedRefreshOperation;
     if (active != null) {
+      final requestedGeneration = ref.read(sessionProvider).generation;
+      if (requestedGeneration !=
+          _authenticatedRefreshOperationSessionGeneration) {
+        _authenticatedRefreshFollowUpSessionGeneration = requestedGeneration;
+      }
       AwikiPerformanceLogger.log(
         'app_refresh.authenticated_data.request',
         fields: const <String, Object?>{'reused': true},
@@ -501,6 +550,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final delay = debounce && lastStarted != null
         ? _refreshDebounceWindow - now.difference(lastStarted)
         : Duration.zero;
+    final operationSessionGeneration = ref.read(sessionProvider).generation;
     late final Future<void> operation;
     operation =
         (() async {
@@ -513,7 +563,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           }
           _lastAuthenticatedRefreshStartedAt = DateTime.now();
           try {
-            await _refreshAuthenticatedData().timeout(_requestTimeout);
+            await _refreshAuthenticatedData();
           } on TimeoutException {
             return;
           } catch (error) {
@@ -534,12 +584,24 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         })().whenComplete(() {
           if (identical(_authenticatedRefreshOperation, operation)) {
             _authenticatedRefreshOperation = null;
+            _authenticatedRefreshOperationSessionGeneration = null;
           }
           if (mounted && _syncAuthRevoked) {
             _clearAuthenticatedProjection();
           }
+          final followUpGeneration =
+              _authenticatedRefreshFollowUpSessionGeneration;
+          _authenticatedRefreshFollowUpSessionGeneration = null;
+          if (followUpGeneration != null &&
+              mounted &&
+              ref.read(sessionProvider).generation == followUpGeneration &&
+              _canRefreshAuthenticatedData) {
+            unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
+          }
         });
     _authenticatedRefreshOperation = operation;
+    _authenticatedRefreshOperationSessionGeneration =
+        operationSessionGeneration;
     AwikiPerformanceLogger.log(
       'app_refresh.authenticated_data.request',
       fields: <String, Object?>{
@@ -980,6 +1042,42 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _messageSyncSubscription.close();
     _realtimeUpdateSubscription.cancel();
     super.dispose();
+  }
+}
+
+class _AuthenticatedRefreshSessionFence {
+  const _AuthenticatedRefreshSessionFence({
+    required this.generation,
+    required this.ownerIdentityId,
+    required this.accountId,
+    required this.did,
+  });
+
+  static _AuthenticatedRefreshSessionFence? capture(SessionState state) {
+    final session = state.session;
+    if (session == null) {
+      return null;
+    }
+    return _AuthenticatedRefreshSessionFence(
+      generation: state.generation,
+      ownerIdentityId: session.ownerIdentityId,
+      accountId: session.accountId,
+      did: session.did,
+    );
+  }
+
+  final int generation;
+  final String? ownerIdentityId;
+  final String? accountId;
+  final String did;
+
+  bool matches(SessionState state) {
+    final session = state.session;
+    return session != null &&
+        state.generation == generation &&
+        session.ownerIdentityId == ownerIdentityId &&
+        session.accountId == accountId &&
+        session.did == did;
   }
 }
 
