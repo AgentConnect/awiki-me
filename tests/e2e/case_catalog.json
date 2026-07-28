@@ -2777,6 +2777,115 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-READ-SYNC-E2E-001",
+      "feature": "A read watermark committed on one joined App converges monotonically on its sibling App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two independently rooted Apps are authorized for the same account, both have completed sync v2 bootstrap, and an independent CLI peer can send one ordinary Direct message.",
+      "action": "Send one ordinary Direct message from the CLI peer, observe the unread projection on both Apps, open the canonical conversation on the joining App through visible UI, and let normal Core sync/realtime triggers converge the read watermark on the admin App.",
+      "exactOracles": [
+        "Both Apps project the exact incoming ordinary message once and advance the same canonical conversation unread state.",
+        "Opening the joining App conversation commits a Core-owned read watermark without an App-owned checkpoint or direct read-state wire call.",
+        "The admin App eventually projects the same or higher read watermark and its unread count does not regress after reconnect or duplicate sync."
+      ],
+      "negativeChecks": [
+        "A raw App read cursor, direct read-state payload, E2EE or MLS event, lower remote watermark, duplicate message, canonical conversation mismatch, or test-side projection mutation prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps"
+          ],
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core"
+          ],
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001",
+      "feature": "An existing AWiki Me replica resumes through Core-owned bounded compact recovery",
+      "layer": "remote_product_ui",
+      "preconditions": "The joining App is an already bootstrapped sync v2 replica with an isolated persistent Core root; the admin App and CLI peer can create ordinary Direct traffic while that replica is offline.",
+      "action": "Take the existing joining App offline, create ordinary messages and read-state changes, resume it through normal App lifecycle/reconnect triggers, and observe the single high-level syncNow recovery flow without supplying recovery controls from the test or App.",
+      "exactOracles": [
+        "The coordinator transiently reports recovery-required/recovering or completes recovery within one Core syncNow chain, then returns to idle without exposing cursor, token, cutoff, or count.",
+        "Recent ordinary messages converge exactly once from the Core committed projection while previously available older local messages remain available.",
+        "Current read and Group state converge independently of the ordinary-message recovery window, and a post-anchor ordinary message arrives through the following delta."
+      ],
+      "negativeChecks": [
+        "An App recover API, App-supplied cursor/token/cutoff/count, full-history replay, deletion of older local rows, duplicate post-anchor delivery, raw Snapshot merging in Flutter, auth-revoked background retry, or any E2EE/MLS history prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:existing_replica_offline_gap_created",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:core_owned_recovery_completed",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:existing_replica_offline_gap_created",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:core_owned_recovery_completed"
+          ],
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved"
+          ],
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:existing_replica_offline_gap_created",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:core_owned_recovery_completed",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ]
+      }
     }
   ]
 }

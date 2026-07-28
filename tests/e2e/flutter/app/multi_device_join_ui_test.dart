@@ -71,6 +71,9 @@ const String _appPairOutboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-001';
 const String _appPairInboundSyncCaseId = 'DEVICE-MESSAGE-SYNC-E2E-002';
 const String _appPairOnlineSyncV2CaseId = 'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001';
 const String _appPairTailOnlySyncV2CaseId = 'DEVICE-MESSAGE-TAIL-ONLY-E2E-001';
+const String _appPairReadSyncV2CaseId = 'DEVICE-MESSAGE-READ-SYNC-E2E-001';
+const String _appPairOfflineRecoveryV2CaseId =
+    'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001';
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';

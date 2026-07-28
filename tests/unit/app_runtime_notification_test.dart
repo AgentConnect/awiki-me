@@ -202,6 +202,80 @@ void main() {
       expect(container.read(appRuntimeProvider).isBusy, isFalse);
     });
 
+    test(
+      'auth revoked fences realtime timers sync and old projections',
+      () async {
+        gateway.conversations = <ConversationSummary>[
+          ConversationSummary(
+            threadId: 'dm:revoked',
+            conversationId: 'dm:revoked',
+            displayName: 'Old projection',
+            lastMessagePreview: 'must be hidden',
+            lastMessageAt: DateTime.utc(2026, 7, 28),
+            unreadCount: 1,
+            isGroup: false,
+            targetDid: 'did:test:peer',
+          ),
+        ];
+        messageSyncService.deltaResult = const MessageSyncOutcome(
+          status: MessageSyncStatus.authRevoked,
+          eventsApplied: 0,
+          pagesFetched: 1,
+          errorCode: 'device_auth_revoked',
+        );
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.resumed);
+
+        await activate();
+        await pumpEventQueue();
+
+        expect(
+          container.read(messageSyncCoordinatorProvider).status,
+          MessageSyncCoordinatorStatus.authRevoked,
+        );
+        expect(container.read(appRuntimeProvider).authRevoked, isTrue);
+        expect(container.read(sessionProvider).session, isNull);
+        expect(container.read(conversationListProvider).conversations, isEmpty);
+        expect(
+          container.read(chatThreadProvider('dm:revoked')).messages,
+          isEmpty,
+        );
+        expect(realtimeGateway.isConnected, isFalse);
+        expect(gateway.logoutCalls, 1);
+
+        final callsAfterFence = messageSyncService.syncReasons.length;
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.paused);
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.resumed);
+        await container
+            .read(messageSyncCoordinatorProvider.notifier)
+            .requestSync('manual_refresh', immediate: true);
+        await pumpEventQueue();
+
+        expect(messageSyncService.syncReasons, hasLength(callsAfterFence));
+        expect(realtimeGateway.isConnected, isFalse);
+
+        messageSyncService.deltaResult = const MessageSyncOutcome(
+          status: MessageSyncStatus.idle,
+          eventsApplied: 0,
+          pagesFetched: 1,
+        );
+        await activate();
+        await pumpEventQueue();
+
+        expect(container.read(sessionProvider).session, isNotNull);
+        expect(container.read(appRuntimeProvider).authRevoked, isFalse);
+        expect(
+          container.read(messageSyncCoordinatorProvider).status,
+          MessageSyncCoordinatorStatus.idle,
+        );
+      },
+    );
+
     test('系统通知变化独立刷新可信 Join 收件箱，不依赖消息同步成功', () async {
       await activate();
       await pumpEventQueue();

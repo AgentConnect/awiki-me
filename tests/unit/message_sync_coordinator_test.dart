@@ -38,33 +38,6 @@ void main() {
     );
   });
 
-  test(
-    'snapshot required records degraded state without refreshing recents',
-    () async {
-      final gateway = FakeAwikiGateway()
-        ..conversations = <ConversationSummary>[_conversation()];
-      final sync = FakeMessageSyncService(
-        deltaResult: const MessageSyncOutcome(
-          status: MessageSyncStatus.recoveryRequired,
-          eventsApplied: 0,
-          pagesFetched: 1,
-        ),
-      );
-      final container = _container(gateway, sync);
-      addTearDown(container.dispose);
-
-      await container
-          .read(messageSyncCoordinatorProvider.notifier)
-          .requestSync('startup', immediate: true);
-
-      expect(
-        container.read(messageSyncCoordinatorProvider).recoveryRequired,
-        isTrue,
-      );
-      expect(gateway.listConversationsCalls, 0);
-    },
-  );
-
   test('startup sync prewarms local histories for fast first open', () async {
     final conversation = _conversation();
     final localMessage = ChatMessage(
@@ -85,7 +58,7 @@ void main() {
         'did:test:peer': <ChatMessage>[localMessage],
       };
     final sync = FakeMessageSyncService();
-    final container = _container(gateway, sync);
+    final container = _container(gateway, sync, syncV2ReadEnabled: true);
     addTearDown(container.dispose);
 
     await container

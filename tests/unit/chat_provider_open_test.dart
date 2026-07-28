@@ -170,6 +170,68 @@ void main() {
     );
   });
 
+  test('会话切换后丢弃旧会话延迟完成的本地消息投影', () async {
+    final fencedGateway = FakeAwikiGateway();
+    final fencedSync = FakeMessageSyncService();
+    final timelineCompleter = Completer<void>();
+    final fencedMessaging = FakeMessagingService(fencedGateway)
+      ..conversationTimelineCompleter = timelineCompleter;
+    _seedConversationProjection(fencedMessaging, conversation, <ChatMessage>[
+      message,
+    ]);
+    final fencedContainer = ProviderContainer(
+      overrides: <Override>[
+        awikiGatewayProvider.overrideWithValue(fencedGateway),
+        notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
+        ...fakeApplicationServiceOverrides(
+          fencedGateway,
+          messageSyncService: fencedSync,
+        ),
+        messagingServiceProvider.overrideWithValue(fencedMessaging),
+      ],
+    );
+    addTearDown(fencedContainer.dispose);
+    fencedContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:old',
+            credentialName: 'old.json',
+            displayName: 'Old',
+            handle: 'old',
+          ),
+        );
+
+    await fencedContainer
+        .read(chatThreadsProvider.notifier)
+        .openConversation(conversation);
+    await pumpEventQueue();
+    expect(fencedMessaging.conversationTimelineCalls, greaterThanOrEqualTo(1));
+
+    fencedContainer
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:new',
+            credentialName: 'new.json',
+            displayName: 'New',
+            handle: 'new',
+          ),
+        );
+    fencedContainer.read(chatThreadsProvider.notifier).clear();
+    timelineCompleter.complete();
+    await pumpEventQueue();
+
+    expect(
+      fencedContainer
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .messages,
+      isEmpty,
+    );
+    expect(fencedSync.conversationAfterRequests, isEmpty);
+    expect(fencedSync.threadAfterRequests, isEmpty);
+  });
+
   test('本地历史为空时走 conversation-after 回补', () async {
     gateway.localDmHistoryByPeerDid = const <String, List<ChatMessage>>{};
     _seedConversationAfter(messageSyncService, conversation, <ChatMessage>[

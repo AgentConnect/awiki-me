@@ -1835,6 +1835,7 @@ class FakeMessagingService
   int? lastConversationTimelineLimit;
   String? lastConversationTimelineId;
   int conversationTimelineCalls = 0;
+  Completer<void>? conversationTimelineCompleter;
   int sendConversationAttachmentCalls = 0;
   int downloadAttachmentCalls = 0;
   AppThreadRef? lastDownloadedAttachmentThread;
@@ -1938,6 +1939,11 @@ class FakeMessagingService
     conversationTimelineCalls += 1;
     lastConversationTimelineLimit = limit;
     lastConversationTimelineId = conversation.conversationId;
+    final completer = conversationTimelineCompleter;
+    if (completer != null) {
+      await completer.future;
+      conversationTimelineCompleter = null;
+    }
     final configured = conversationTimelineById[conversation.conversationId];
     final messages =
         configured ??

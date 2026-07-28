@@ -542,7 +542,9 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairOutboundSyncCaseId) ||
       _invocationExpects(_appPairInboundSyncCaseId) ||
       _invocationExpects(_appPairOnlineSyncV2CaseId) ||
-      _invocationExpects(_appPairTailOnlySyncV2CaseId);
+      _invocationExpects(_appPairTailOnlySyncV2CaseId) ||
+      _invocationExpects(_appPairReadSyncV2CaseId) ||
+      _invocationExpects(_appPairOfflineRecoveryV2CaseId);
   final expectsSecurity = _invocationExpects(_appPairCaseId);
   if (config.functional != expectsFunctional ||
       config.functional == expectsSecurity ||

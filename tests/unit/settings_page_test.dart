@@ -4,6 +4,8 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
@@ -86,6 +88,7 @@ void main() {
     expect(find.text('退出并删除当前凭证'), findsOneWidget);
     expect(find.text('删除本地凭证：default'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('退出并删除当前凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pumpAndSettle();
 
@@ -155,6 +158,7 @@ void main() {
 
     expect(find.byType(SettingsPage), findsOneWidget);
 
+    await tester.ensureVisible(find.text('退出并删除当前凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除'));
@@ -173,6 +177,47 @@ void main() {
     expect(find.text('下载更新'), findsNothing);
     expect(find.text('立即更新'), findsNothing);
     expect(find.text('消息推送通知'), findsNothing);
+  });
+
+  testWidgets('设置页展示撤权同步状态并进入重新登录', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:revoked',
+      credentialName: 'revoked',
+      displayName: 'Revoked',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.authRevoked,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步'), findsOneWidget);
+    expect(find.text('此设备已不再获得授权，请重新登录后继续。'), findsOneWidget);
+    expect(find.text('重新登录'), findsOneWidget);
+
+    await tester.tap(find.text('重新登录'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(container.read(sessionProvider).session, isNull);
+    expect(gateway.logoutCalls, 1);
   });
 
   testWidgets('设置页检查更新显示暂未实现普通提示', (tester) async {
@@ -490,4 +535,13 @@ void main() {
     expect(control.lastRevokedPersonalAgentDid, 'did:agent:message:two');
     expect(identities.lastRevokedDaemonSubkeySelector, isNull);
   });
+}
+
+class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
+  _FixedMessageSyncCoordinator(
+    super.ref,
+    MessageSyncCoordinatorState initialState,
+  ) {
+    state = initialState;
+  }
 }
