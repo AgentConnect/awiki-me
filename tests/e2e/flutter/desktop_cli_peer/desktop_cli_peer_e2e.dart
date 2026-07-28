@@ -531,6 +531,9 @@ void runDesktopCliPeerE2e({
           robot: robot,
           messaging: faultMessaging!,
           attachmentOpenRecorder: attachmentOpenRecorder,
+          bootstrap: bootstrap,
+          providerOverrides: appProviderOverrides,
+          session: session,
           ownerDid: session.did,
           thread: directThread,
           canonicalCliDid: canonicalCliDid!,
@@ -544,6 +547,7 @@ void runDesktopCliPeerE2e({
           ],
           'ATTACH-E2E-002': const <String>[
             'cli_attachment_sent',
+            'attachment_unread_read_watermark_persisted_after_rebuild',
             'app_attachment_bytes_verified',
           ],
           'ATTACH-REG-001': const <String>[

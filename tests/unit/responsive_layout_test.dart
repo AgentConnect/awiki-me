@@ -142,6 +142,34 @@ void main() {
     expect(responsive?.isCompact, isTrue);
   });
 
+  testWidgets('Android 根布局附加少量系统导航栏间距', (tester) async {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    Future<double> bottomPaddingFor(TargetPlatform platform) async {
+      debugDefaultTargetPlatformOverride = platform;
+      await tester.pumpWidget(
+        CupertinoApp(
+          key: ValueKey<TargetPlatform>(platform),
+          home: const AwikiSystemNavigationClearance(
+            key: Key('system-navigation-clearance'),
+            child: SizedBox.expand(),
+          ),
+        ),
+      );
+      final padding = tester.widget<Padding>(
+        find.descendant(
+          of: find.byKey(const Key('system-navigation-clearance')),
+          matching: find.byType(Padding),
+        ),
+      );
+      return (padding.padding as EdgeInsets).bottom;
+    }
+
+    expect(await bottomPaddingFor(TargetPlatform.android), greaterThan(0));
+    expect(await bottomPaddingFor(TargetPlatform.iOS), 0);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('AwikiPaneLayout 支持拖动调整左栏宽度', (tester) async {
     await tester.pumpWidget(
       CupertinoApp(

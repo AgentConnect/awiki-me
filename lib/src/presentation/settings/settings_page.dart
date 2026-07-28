@@ -145,7 +145,8 @@ class SettingsPage extends ConsumerWidget {
 
     if (embedded && responsive.usesDesktopLayout) {
       return CupertinoPageScaffold(
-        backgroundColor: theme.background,
+        key: const Key('settings-expanded-page-surface'),
+        backgroundColor: theme.surface,
         child: Column(
           children: <Widget>[
             AwikiSidebarHeader(

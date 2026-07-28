@@ -2878,6 +2878,380 @@ void main() {
     );
   });
 
+  test('可见附件会话自身建立持久已读意图且立即清除列表未读', () async {
+    final image = ChatMessage(
+      localId: 'visible-image-23',
+      remoteId: 'visible-image-23',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 6),
+      isMine: false,
+      serverSequence: 23,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'visible-image-attachment',
+        filename: 'visible-image.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: image.previewText,
+      lastMessageAt: image.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: image,
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      image,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+    expect(gateway.markConversationReadCalls, 1);
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: image.remoteId,
+      sequence: image.serverSequence.toString(),
+    );
+  });
+
+  test('附件水位在已读提交期间推进时串行合并且不会丢失', () async {
+    final first = ChatMessage(
+      localId: 'visible-text-24',
+      remoteId: 'visible-text-24',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: 'before image',
+      createdAt: DateTime(2026, 5, 8, 10, 7),
+      isMine: false,
+      serverSequence: 24,
+      sendState: MessageSendState.sent,
+    );
+    final image = ChatMessage(
+      localId: 'visible-image-25',
+      remoteId: 'visible-image-25',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 8),
+      isMine: false,
+      serverSequence: 25,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'coalesced-image-attachment',
+        filename: 'coalesced-image.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final firstUnread = conversation.copyWith(
+      lastMessagePreview: first.previewText,
+      lastMessageAt: first.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: first,
+    );
+    final firstCommit = Completer<void>();
+    gateway.markConversationReadCompleter = firstCommit;
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(firstUnread);
+    controller.debugSeedMessageForTesting(
+      first,
+      threadId: _timelineThreadId(firstUnread),
+    );
+    controller.markConversationVisible(
+      firstUnread,
+      displayThreadId: _timelineThreadId(firstUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    final imageUnread = firstUnread.copyWith(
+      lastMessagePreview: image.previewText,
+      lastMessageAt: image.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: image,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(imageUnread);
+    controller.debugSeedMessageForTesting(
+      image,
+      threadId: _timelineThreadId(imageUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    firstCommit.complete();
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 2);
+    expect(
+      gateway.markConversationReadWatermarks.map(
+        (item) => item?.lastReadThreadSeq,
+      ),
+      <String?>['24', '25'],
+    );
+  });
+
+  test('Core 已提交本地图片水位时接受 pending remote ACK', () async {
+    final image = ChatMessage(
+      localId: 'pending-remote-image-26',
+      remoteId: 'pending-remote-image-26',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 9),
+      isMine: false,
+      serverSequence: 26,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'pending-remote-image-attachment',
+        filename: 'pending-remote-image.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: image.previewText,
+      lastMessageAt: image.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: image,
+    );
+    gateway.markConversationReadResult = const AppConversationReadCommitResult(
+      updatedCount: 1,
+      remoteAcknowledged: false,
+      partial: true,
+      fallbackUsed: false,
+      pendingRemoteAck: true,
+      effectiveWatermark: AppThreadReadWatermark(
+        lastReadMessageId: 'pending-remote-image-26',
+        lastReadThreadSeq: '26',
+      ),
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      image,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+    controller.acknowledgeVisibleConversationRead(
+      unreadConversation,
+      forcePersistentAck: true,
+    );
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, 1);
+  });
+
+  test('Core 有效水位未覆盖图片时保留意图并在后续确认重试', () async {
+    final image = ChatMessage(
+      localId: 'incomplete-image-30',
+      remoteId: 'incomplete-image-30',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 10),
+      isMine: false,
+      serverSequence: 30,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'incomplete-image-attachment',
+        filename: 'incomplete-image.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final unreadConversation = conversation.copyWith(
+      lastMessagePreview: image.previewText,
+      lastMessageAt: image.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: image,
+    );
+    gateway.markConversationReadResult = const AppConversationReadCommitResult(
+      updatedCount: 0,
+      remoteAcknowledged: false,
+      partial: true,
+      fallbackUsed: false,
+      pendingRemoteAck: false,
+      effectiveWatermark: AppThreadReadWatermark(
+        lastReadMessageId: 'older-text-29',
+        lastReadThreadSeq: '29',
+      ),
+    );
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(unreadConversation);
+    controller.debugSeedMessageForTesting(
+      image,
+      threadId: _timelineThreadId(unreadConversation),
+    );
+    controller.markConversationVisible(
+      unreadConversation,
+      displayThreadId: _timelineThreadId(unreadConversation),
+    );
+    await pumpEventQueue();
+    final incompleteCalls = gateway.markConversationReadCalls;
+    expect(incompleteCalls, greaterThanOrEqualTo(1));
+
+    gateway.markConversationReadResult =
+        AppConversationReadCommitResult.acknowledged(
+          AppThreadReadWatermark(
+            lastReadMessageId: image.remoteId,
+            lastReadThreadSeq: image.serverSequence.toString(),
+            readAt: image.createdAt,
+          ),
+        );
+    controller.acknowledgeVisibleConversationRead(
+      unreadConversation,
+      forcePersistentAck: true,
+    );
+    await pumpEventQueue();
+
+    expect(gateway.markConversationReadCalls, greaterThan(incompleteCalls));
+    _expectLastConversationReadWatermark(
+      gateway,
+      messageId: image.remoteId,
+      sequence: image.serverSequence.toString(),
+    );
+  });
+
+  test('身份切换后旧图片已读提交不能覆盖新身份状态', () async {
+    final firstImage = ChatMessage(
+      localId: 'identity-a-image-31',
+      remoteId: 'identity-a-image-31',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:peer',
+      receiverDid: 'did:me',
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 5, 8, 10, 11),
+      isMine: false,
+      serverSequence: 31,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'identity-a-image-attachment',
+        filename: 'identity-a.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final firstUnread = conversation.copyWith(
+      lastMessagePreview: firstImage.previewText,
+      lastMessageAt: firstImage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: firstImage,
+    );
+    final firstCommit = Completer<void>();
+    gateway.markConversationReadCompleter = firstCommit;
+    final controller = container.read(chatThreadsProvider.notifier);
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(firstUnread);
+    controller.debugSeedMessageForTesting(
+      firstImage,
+      threadId: _timelineThreadId(firstUnread),
+    );
+    controller.markConversationVisible(
+      firstUnread,
+      displayThreadId: _timelineThreadId(firstUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 1);
+
+    gateway.markConversationReadCompleter = null;
+    container
+        .read(sessionProvider.notifier)
+        .activateSession(
+          const SessionIdentity(
+            did: 'did:second-owner',
+            credentialName: 'second-owner.json',
+            displayName: 'Second owner',
+          ),
+        );
+    await pumpEventQueue();
+    final secondImage = firstImage.copyWith(
+      remoteId: 'identity-b-image-32',
+      content: '',
+      createdAt: DateTime(2026, 5, 8, 10, 12),
+      serverSequence: 32,
+      attachment: const ChatAttachment(
+        attachmentId: 'identity-b-image-attachment',
+        filename: 'identity-b.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final secondUnread = conversation.copyWith(
+      lastMessagePreview: secondImage.previewText,
+      lastMessageAt: secondImage.createdAt,
+      unreadCount: 1,
+      lastMessageSnapshot: secondImage,
+    );
+    container
+        .read(conversationListProvider.notifier)
+        .upsertConversation(secondUnread);
+    controller.debugSeedMessageForTesting(
+      secondImage,
+      threadId: _timelineThreadId(secondUnread),
+    );
+    controller.markConversationVisible(
+      secondUnread,
+      displayThreadId: _timelineThreadId(secondUnread),
+    );
+    await pumpEventQueue();
+    expect(gateway.markConversationReadCalls, 2);
+
+    firstCommit.complete();
+    await pumpEventQueue();
+
+    final current = container
+        .read(conversationListProvider)
+        .conversations
+        .single;
+    expect(current.lastMessageSnapshot?.remoteId, secondImage.remoteId);
+    expect(current.unreadCount, 0);
+    expect(
+      gateway.markConversationReadWatermarks.map(
+        (item) => item?.lastReadThreadSeq,
+      ),
+      <String?>['31', '32'],
+    );
+  });
+
   test('可见会话收到未读 summary 更新时按 conversationId 补 ACK', () async {
     final visibleMessage = ChatMessage(
       localId: 'remote-visible-summary',
@@ -3322,13 +3696,13 @@ void main() {
       latest,
       threadId: _timelineThreadId(unreadConversation),
     );
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.hidden);
     controller.markConversationVisible(
       unreadConversation,
       displayThreadId: _timelineThreadId(unreadConversation),
     );
-    container
-        .read(appLifecycleProvider.notifier)
-        .setLifecycle(AppLifecycleState.hidden);
     controller.acknowledgeVisibleConversationRead(
       unreadConversation,
       forcePersistentAck: true,
@@ -3777,7 +4151,7 @@ void main() {
     );
   });
 
-  test('打开未读会话时远端 mark-read 不支持也不会抛出或回滚本地可见水位', () async {
+  test('打开未读会话时远端 mark-read 不支持也不会抛出', () async {
     final throwingGateway = _ThrowingMarkReadGateway()
       ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
         'did:peer': <ChatMessage>[message],
@@ -3837,7 +4211,7 @@ void main() {
       expect(conversations.single.unreadCount, 0);
     }
     expect(throwingGateway.markReadCalls, 0);
-    expect(throwingGateway.markConversationReadCalls, 1);
+    expect(throwingGateway.markConversationReadCalls, greaterThanOrEqualTo(1));
   });
 
   test('当前可见会话收到新的可见消息时按 conversationId 上报并清未读', () async {

@@ -131,7 +131,7 @@ void main() {
     );
     final readAt = DateTime.utc(2026, 6, 29, 7, 40);
 
-    await adapter.markConversationRead(
+    final result = await adapter.markConversationRead(
       AppConversationReadRef.fromConversationId('dm:peer-scope:v1:bob'),
       watermark: AppThreadReadWatermark(
         lastReadMessageId: 'remote-42',
@@ -151,6 +151,11 @@ void main() {
     expect(watermark!.lastReadMessageId, 'remote-42');
     expect(watermark.lastReadThreadSeq, '42');
     expect(watermark.readAt, readAt);
+    expect(result.updatedCount, 1);
+    expect(result.remoteAcknowledged, isTrue);
+    expect(result.partial, isFalse);
+    expect(result.pendingRemoteAck, isFalse);
+    expect(result.effectiveWatermark?.lastReadThreadSeq, '42');
   });
 
   test(

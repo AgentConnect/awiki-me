@@ -1706,13 +1706,14 @@ class _FakeReadableConversations extends _FakeConversations
   AppThreadReadWatermark? lastConversationReadWatermark;
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) async {
     markConversationReadCount += 1;
     lastConversationId = conversation.conversationId;
     lastConversationReadWatermark = watermark;
+    return AppConversationReadCommitResult.acknowledged(watermark);
   }
 }
 

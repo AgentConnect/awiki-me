@@ -300,6 +300,28 @@ extension AwikiResponsiveContextX on BuildContext {
   }
 }
 
+class AwikiSystemNavigationClearance extends StatelessWidget {
+  const AwikiSystemNavigationClearance({
+    super.key,
+    required this.child,
+    this.androidAdditionalGap = 4,
+  });
+
+  final Widget child;
+  final double androidAdditionalGap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = defaultTargetPlatform == TargetPlatform.android
+        ? context.awikiResponsive.spacing(androidAdditionalGap)
+        : 0.0;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottom),
+      child: child,
+    );
+  }
+}
+
 class AwikiAdaptiveScaffold extends StatelessWidget {
   const AwikiAdaptiveScaffold({
     super.key,

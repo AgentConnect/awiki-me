@@ -34,6 +34,9 @@ class GroupListPage extends ConsumerWidget {
     final state = ref.watch(groupProvider);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final groupCardHorizontalInset = responsive.supportsTwoPane
+        ? responsive.spacing(18)
+        : 0.0;
     Future<void> refreshGroups() async {
       try {
         await ref.read(groupProvider.notifier).refresh();
@@ -150,8 +153,14 @@ class GroupListPage extends ConsumerWidget {
             else
               ...state.groups.map(
                 (group) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+                  padding: EdgeInsets.fromLTRB(
+                    groupCardHorizontalInset,
+                    0,
+                    groupCardHorizontalInset,
+                    10,
+                  ),
                   child: _GroupCard(
+                    key: Key('group-list-card:${group.groupId}'),
                     group: group,
                     onTap: () => openGroupChat(context, ref, group),
                     onOpenDetail: () async {
@@ -757,6 +766,7 @@ class _GroupDetailIconButton extends StatelessWidget {
 
 class _GroupCard extends StatelessWidget {
   const _GroupCard({
+    super.key,
     required this.group,
     required this.onTap,
     required this.onOpenDetail,

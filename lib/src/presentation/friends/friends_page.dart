@@ -176,9 +176,7 @@ class FriendsPage extends ConsumerWidget {
           : EdgeInsets.zero,
       child: DecoratedBox(
         key: const Key('friends-list-surface'),
-        decoration: BoxDecoration(
-          color: responsive.isCompact ? theme.surface : theme.background,
-        ),
+        decoration: BoxDecoration(color: theme.surface),
         child: ListView(
           padding: embedded
               ? EdgeInsets.zero

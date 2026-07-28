@@ -33,12 +33,12 @@ void main() {
     expect(
       source,
       contains(
-        '<rect key="contentRect" x="335" y="390" width="1180" height="760"/>',
+        '<rect key="contentRect" x="335" y="390" width="1280" height="800"/>',
       ),
     );
     expect(
       source,
-      contains('<rect key="frame" x="0.0" y="0.0" width="1180" height="760"/>'),
+      contains('<rect key="frame" x="0.0" y="0.0" width="1280" height="800"/>'),
     );
   });
 

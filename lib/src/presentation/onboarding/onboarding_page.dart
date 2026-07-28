@@ -120,106 +120,108 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       backgroundColor: theme.surface,
       child: SafeArea(
         bottom: false,
-        child: Column(
-          children: <Widget>[
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: responsive.spacing(18),
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final verticalPadding = responsive.spacing(16);
-                        final minimumGroupHeight =
-                            constraints.maxHeight > verticalPadding * 2
-                            ? constraints.maxHeight - verticalPadding * 2
-                            : 0.0;
-                        return ListView(
-                          key: const Key('onboarding-compact-scroll-view'),
-                          controller: _mobileScrollController,
-                          keyboardDismissBehavior:
-                              ScrollViewKeyboardDismissBehavior.onDrag,
-                          padding: EdgeInsets.symmetric(
-                            vertical: verticalPadding,
-                          ),
-                          children: <Widget>[
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: minimumGroupHeight,
-                              ),
-                              child: Align(
-                                alignment: Alignment.center,
-                                child: _CompactOnboardingCard(
-                                  onboarding: onboarding,
-                                  onAuthModeChanged: ref
-                                      .read(onboardingProvider.notifier)
-                                      .setAuthMode,
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: <Widget>[
-                                      ..._buildMobileRegisterWidgets(
-                                        context: context,
-                                        onboarding: onboarding,
-                                        responsive: responsive,
-                                        theme: theme,
-                                      ),
-                                      if (credentials.isNotEmpty) ...<Widget>[
-                                        SizedBox(
-                                          height: responsive.spacing(22),
+        child: AwikiSystemNavigationClearance(
+          child: Column(
+            children: <Widget>[
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: responsive.spacing(18),
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final verticalPadding = responsive.spacing(16);
+                          final minimumGroupHeight =
+                              constraints.maxHeight > verticalPadding * 2
+                              ? constraints.maxHeight - verticalPadding * 2
+                              : 0.0;
+                          return ListView(
+                            key: const Key('onboarding-compact-scroll-view'),
+                            controller: _mobileScrollController,
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            padding: EdgeInsets.symmetric(
+                              vertical: verticalPadding,
+                            ),
+                            children: <Widget>[
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  minHeight: minimumGroupHeight,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.center,
+                                  child: _CompactOnboardingCard(
+                                    onboarding: onboarding,
+                                    onAuthModeChanged: ref
+                                        .read(onboardingProvider.notifier)
+                                        .setAuthMode,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: <Widget>[
+                                        ..._buildMobileRegisterWidgets(
+                                          context: context,
+                                          onboarding: onboarding,
+                                          responsive: responsive,
+                                          theme: theme,
                                         ),
-                                        _OnboardingLocalIdentitySection(
-                                          credentials: credentials,
-                                          onLogin:
-                                              runtime.loginWithLocalCredential,
-                                        ),
+                                        if (credentials.isNotEmpty) ...<Widget>[
+                                          SizedBox(
+                                            height: responsive.spacing(22),
+                                          ),
+                                          _OnboardingLocalIdentitySection(
+                                            credentials: credentials,
+                                            onLogin: runtime
+                                                .loginWithLocalCredential,
+                                          ),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SafeArea(
-              top: false,
-              minimum: EdgeInsets.only(bottom: responsive.spacing(8)),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: responsive.spacing(18),
-                    ),
-                    child: Container(
-                      key: const Key('onboarding-compact-footer'),
-                      padding: EdgeInsets.only(top: responsive.spacing(8)),
-                      decoration: BoxDecoration(
-                        color: theme.surface,
-                        border: Border(top: BorderSide(color: theme.border)),
-                      ),
-                      child: _OnboardingUtilityBar(
-                        tenant: activeTenant,
-                        localeMode: localeMode,
-                        fillAvailableWidth: true,
-                        onLanguagePressed: _showLanguageSheet,
-                        onPressed: _showTenantManagementDialog,
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+              SafeArea(
+                top: false,
+                minimum: EdgeInsets.only(bottom: responsive.spacing(8)),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: responsive.spacing(18),
+                      ),
+                      child: Container(
+                        key: const Key('onboarding-compact-footer'),
+                        padding: EdgeInsets.only(top: responsive.spacing(8)),
+                        decoration: BoxDecoration(
+                          color: theme.surface,
+                          border: Border(top: BorderSide(color: theme.border)),
+                        ),
+                        child: _OnboardingUtilityBar(
+                          tenant: activeTenant,
+                          localeMode: localeMode,
+                          fillAvailableWidth: true,
+                          onLanguagePressed: _showLanguageSheet,
+                          onPressed: _showTenantManagementDialog,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

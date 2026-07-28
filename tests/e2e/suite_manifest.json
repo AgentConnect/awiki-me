@@ -166,7 +166,8 @@
       ],
       "resourceCategories": [
         "attachments",
-        "direct_messages"
+        "direct_messages",
+        "read_state"
       ],
       "caseIds": [
         "AUTH-E2E-001",

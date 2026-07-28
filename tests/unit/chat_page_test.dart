@@ -2195,6 +2195,85 @@ void main() {
     ]);
   });
 
+  testWidgets('ChatView 打开预热图片会话后列表未读和持久水位同时推进', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final image = ChatMessage(
+      localId: 'prewarmed-visible-image-51',
+      remoteId: 'prewarmed-visible-image-51',
+      conversationId: 'dm:prewarmed-visible-image',
+      threadId: 'dm:prewarmed-visible-image',
+      senderDid: 'did:test:alice',
+      receiverDid: session.did,
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 4, 5, 12, 30),
+      isMine: false,
+      serverSequence: 51,
+      sendState: MessageSendState.sent,
+      attachment: const ChatAttachment(
+        attachmentId: 'prewarmed-visible-image-attachment',
+        filename: 'prewarmed-visible-image.png',
+        mimeType: 'image/png',
+      ),
+    );
+    final conversation = ConversationSummary(
+      threadId: image.threadId,
+      conversationId: image.conversationId!,
+      displayName: 'Alice',
+      lastMessagePreview: image.previewText,
+      lastMessageAt: image.createdAt,
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+      lastMessageSnapshot: image,
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[conversation],
+            ),
+          ),
+          chatThreadsProvider.overrideWith(
+            (ref) =>
+                _StaticChatThreadsController(ref, <String, List<ChatMessage>>{
+                  conversation.conversationId: <ChatMessage>[image],
+                }),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    expect(
+      container.read(conversationListProvider).conversations.single.unreadCount,
+      0,
+    );
+    expect(gateway.markConversationReadCalls, 1);
+    expect(gateway.lastMarkConversationReadWatermark?.lastReadThreadSeq, '51');
+    expect(
+      gateway.lastMarkConversationReadWatermark?.lastReadMessageId,
+      image.remoteId,
+    );
+  });
+
   testWidgets('ChatView switches when thread changes even if target is same', (
     tester,
   ) async {

@@ -111,12 +111,26 @@ class _MacOnboardingScaffold extends StatelessWidget {
                 flex: 11,
                 child: ColoredBox(
                   color: theme.background,
-                  child: const SafeArea(
-                    minimum: EdgeInsets.fromLTRB(64, 48, 56, 40),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _MacOnboardingHero(),
-                    ),
+                  child: Stack(
+                    children: <Widget>[
+                      Positioned.fill(
+                        child: ExcludeSemantics(
+                          child: CustomPaint(
+                            key: const Key('onboarding-desktop-dot-pattern'),
+                            painter: _OnboardingDotPatternPainter(
+                              color: theme.tertiaryText.withValues(alpha: 0.30),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SafeArea(
+                        minimum: EdgeInsets.fromLTRB(64, 48, 56, 40),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _MacOnboardingHero(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -155,6 +169,31 @@ class _MacOnboardingScaffold extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _OnboardingDotPatternPainter extends CustomPainter {
+  const _OnboardingDotPatternPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    const spacing = 24.0;
+    const radius = 1.0;
+    for (var y = spacing / 2; y < size.height; y += spacing) {
+      for (var x = spacing / 2; x < size.width; x += spacing) {
+        canvas.drawCircle(Offset(x, y), radius, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OnboardingDotPatternPainter oldDelegate) {
+    return oldDelegate.color != color;
   }
 }
 

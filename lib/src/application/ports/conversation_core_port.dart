@@ -36,7 +36,7 @@ abstract interface class ConversationCorePort {
 }
 
 abstract interface class ConversationReadCorePort {
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   });

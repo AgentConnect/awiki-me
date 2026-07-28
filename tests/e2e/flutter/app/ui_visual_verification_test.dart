@@ -16,6 +16,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 import 'package:flutter/widgets.dart' show Key, RepaintBoundary, Size, SizedBox;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,6 +68,7 @@ class _StaticFriendsController extends FriendsController {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(_loadGoldenFont);
 
   testWidgets('capture compact and expanded onboarding', (tester) async {
     try {
@@ -92,7 +94,31 @@ void main() {
         find.byKey(const Key('onboarding-expanded-layout')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('onboarding-desktop-dot-pattern')),
+        findsOneWidget,
+      );
       await _captureScreenshot(tester, '02-expanded-onboarding');
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('android compact onboarding clears the system navigation edge', (
+    tester,
+  ) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.android,
+      );
+      await _pumpOnboarding(tester);
+
+      final footerRect = tester.getRect(
+        find.byKey(const Key('onboarding-compact-footer')),
+      );
+      expect(_compactSize.height - footerRect.bottom, greaterThan(10));
     } finally {
       await _resetEnvironment(tester);
     }
@@ -315,6 +341,28 @@ void main() {
       await _resetEnvironment(tester);
     }
   });
+}
+
+Future<void> _loadGoldenFont() async {
+  await Future.wait(<Future<void>>[
+    _loadFont(
+      family: _goldenFontFamily,
+      asset: 'assets/fonts/awiki_golden_cjk.ttf',
+    ),
+    _loadFont(
+      family: 'MaterialIcons',
+      asset: 'fonts/MaterialIcons-Regular.otf',
+    ),
+    _loadFont(
+      family: 'packages/cupertino_icons/CupertinoIcons',
+      asset: 'packages/cupertino_icons/assets/CupertinoIcons.ttf',
+    ),
+  ]);
+}
+
+Future<void> _loadFont({required String family, required String asset}) async {
+  final data = await rootBundle.load(asset);
+  await (FontLoader(family)..addFont(Future.value(data))).load();
 }
 
 Future<void> _prepareEnvironment(

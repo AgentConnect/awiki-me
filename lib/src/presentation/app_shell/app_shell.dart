@@ -223,7 +223,10 @@ class _AppShellState extends ConsumerState<AppShell> {
             child: AwikiMeWidgets.pageBackground(
               key: const Key('app-shell-page-background'),
               color: expanded ? null : context.awikiTheme.surface,
-              child: SafeArea(bottom: false, child: content),
+              child: SafeArea(
+                bottom: false,
+                child: AwikiSystemNavigationClearance(child: content),
+              ),
             ),
           ),
           if (runtime.isBusy)

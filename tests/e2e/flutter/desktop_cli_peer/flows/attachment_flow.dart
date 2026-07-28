@@ -4,6 +4,9 @@ Future<void> _verifyAttachmentRegression({
   required _DesktopAppRobot robot,
   required MessagingService messaging,
   required _RecordingAttachmentOpenService attachmentOpenRecorder,
+  required AppBootstrap bootstrap,
+  required List<Override> providerOverrides,
+  required AppSession session,
   required String ownerDid,
   required AppThreadRef thread,
   required String canonicalCliDid,
@@ -99,6 +102,11 @@ Future<void> _verifyAttachmentRegression({
     appAttachmentDigestB64u,
   );
 
+  await robot.navigateToContacts();
+  final unreadBaseline = robot.container.read(
+    conversationListProvider.select((state) => state.unreadCount),
+  );
+
   final cliAttachmentFilename = 'awiki-e2e-cli-$nonce.txt';
   final cliAttachmentText = 'AWiki E2E CLI attachment ${config.runId} $nonce\n';
   final cliAttachmentBytes = Uint8List.fromList(utf8.encode(cliAttachmentText));
@@ -147,7 +155,21 @@ Future<void> _verifyAttachmentRegression({
     cliAttachmentDigestB64u,
   );
 
-  final cliAttachmentMessage = await _waitForUiMessage(
+  await _waitForUiUnreadClosedLoop(
+    robot: robot,
+    conversationId: conversationId,
+    expectedText: cliAttachmentCaption,
+    expectedConversationUnread: 1,
+    expectedTotalUnread: unreadBaseline + 1,
+  );
+  await robot.navigateToMessages();
+  await robot.expectConversationUnreadBadge(
+    conversationId: conversationId,
+    unreadCount: 1,
+  );
+  await robot.openConversationRow(conversationId);
+
+  var cliAttachmentMessage = await _waitForUiMessage(
     robot: robot,
     conversationId: conversationId,
     content: cliAttachmentCaption,
@@ -164,6 +186,41 @@ Future<void> _verifyAttachmentRegression({
   await robot.expectMessageContentVisible(
     cliAttachmentMessage,
     expectedText: cliAttachmentFilename,
+  );
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversationId,
+    expectedUnread: 0,
+    expectedTotalUnread: unreadBaseline,
+    expectedLastMessage: cliAttachmentCaption,
+  );
+
+  await robot.navigateToContacts();
+  await robot.restart(
+    bootstrap: bootstrap,
+    providerOverrides: providerOverrides,
+    session: session,
+  );
+  await robot.navigateToMessages();
+  await robot.expectConversationUnreadBadge(
+    conversationId: conversationId,
+    unreadCount: 0,
+  );
+  await robot.openConversationRow(conversationId);
+  cliAttachmentMessage = await _waitForUiMessage(
+    robot: robot,
+    conversationId: conversationId,
+    content: cliAttachmentCaption,
+    messageId: cliSentMessageId,
+    senderDid: cliDid,
+    sendState: MessageSendState.sent,
+  );
+  await _waitForUiConversationUnread(
+    robot: robot,
+    conversationId: conversationId,
+    expectedUnread: 0,
+    expectedTotalUnread: unreadBaseline,
+    expectedLastMessage: cliAttachmentCaption,
   );
 
   final openButton = find.byKey(

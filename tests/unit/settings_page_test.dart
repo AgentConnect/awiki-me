@@ -3,6 +3,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:flutter/cupertino.dart';
@@ -96,6 +97,10 @@ void main() {
           .height,
       closeTo(56 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
+    final pageSurface = tester.widget<CupertinoPageScaffold>(
+      find.byKey(const Key('settings-expanded-page-surface')),
+    );
+    expect(pageSurface.backgroundColor, AwikiMeColors.surface);
     final sectionSurface = find
         .descendant(
           of: find.byKey(const Key('settings-general-section')),

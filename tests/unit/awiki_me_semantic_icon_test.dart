@@ -50,7 +50,7 @@ void main() {
     );
     expect(
       AwikiMeIconRegistry.definition(AwikiMeIconRole.agents).opticalScale,
-      lessThan(1),
+      closeTo(0.92, 0.001),
     );
   });
 
@@ -94,7 +94,7 @@ void main() {
     );
 
     final icon = tester.widget<Icon>(find.byType(Icon));
-    expect(icon.icon, CupertinoIcons.square_stack_3d_up);
+    expect(icon.icon, CupertinoIcons.square_stack_3d_up_fill);
     expect(icon.size, 18);
     final transform = tester.widget<Transform>(
       find.descendant(
@@ -102,8 +102,8 @@ void main() {
         matching: find.byType(Transform),
       ),
     );
-    expect(transform.transform.storage[0], closeTo(0.86, 0.001));
-    expect(transform.transform.storage[5], closeTo(0.86, 0.001));
+    expect(transform.transform.storage[0], closeTo(0.92, 0.001));
+    expect(transform.transform.storage[5], closeTo(0.92, 0.001));
     expect(
       tester.getSize(find.byType(AwikiMeSemanticIcon)),
       const Size.square(18),

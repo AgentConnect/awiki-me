@@ -59,6 +59,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-desktop-dot-pattern')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
     expect(
@@ -117,6 +121,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-desktop-dot-pattern')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
     expect(

@@ -469,14 +469,20 @@ class _HistoryLoadResult {
 
 class _PendingReadAck {
   const _PendingReadAck({
+    required this.sessionEpoch,
     required this.conversation,
     this.reason = 'visible',
     this.forcePersistentAck = false,
+    this.requireVisible = true,
+    this.watermark,
   });
 
+  final SessionEpoch sessionEpoch;
   final ConversationSummary conversation;
   final String reason;
   final bool forcePersistentAck;
+  final bool requireVisible;
+  final AppThreadReadWatermark? watermark;
 }
 
 class _ThreadPatchSubscription {
@@ -706,10 +712,12 @@ class ChatThreadsController
   SessionEpoch? _sessionEpoch;
   final Map<String, DateTime> _lastThreadPatchStreamEndAt =
       <String, DateTime>{};
-  final Set<String> _activeReadReceipts = <String>{};
-  final Set<String> _completedReadReceipts = <String>{};
   final Map<String, _PendingReadAck> _pendingReadAcksByThreadId =
       <String, _PendingReadAck>{};
+  final Map<String, Future<void>> _activeReadAckDrainsByThreadId =
+      <String, Future<void>>{};
+  final Map<String, AppThreadReadWatermark> _committedReadWatermarksByThreadId =
+      <String, AppThreadReadWatermark>{};
   int _trimmedMessageCount = 0;
   int _evictedThreadCount = 0;
   int _protectedOverflowCount = 0;
@@ -1677,6 +1685,10 @@ class ChatThreadsController
     bool requireVisible = true,
     bool forcePersistentAck = false,
   }) {
+    final sessionEpoch = _captureSessionEpoch();
+    if (sessionEpoch == null) {
+      return;
+    }
     final requestedThreadId = _displayThreadIdFor(
       conversation,
       displayThreadId,
@@ -1727,92 +1739,305 @@ class ChatThreadsController
       );
       return;
     }
-    if (!_canAcknowledgeVisibleRead) {
-      _chatProviderTrace(
-        'mark_read.skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'reason': 'app_not_foreground',
-          'app_lifecycle': ref.read(appLifecycleProvider).name,
-        },
-      );
-      if (requireVisible && metadata?.isVisible == true) {
-        _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
-          conversation: currentConversation,
-          reason: reason,
-          forcePersistentAck: forcePersistentAck,
-        );
-      }
-      return;
-    }
-    if (_activeLocalHistoryLoads.contains(targetThreadId) ||
-        currentThread.isHydratingLocalHistory ||
-        _activeRemoteHistorySyncs.contains(targetThreadId) ||
-        _shouldLoadHistory(currentThread, currentConversation)) {
-      _chatProviderTrace(
-        'mark_read.defer',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'reason': reason,
-          'active_local': _activeLocalHistoryLoads.contains(targetThreadId),
-          'active_remote': _activeRemoteHistorySyncs.contains(targetThreadId),
-          'hydrating': currentThread.isHydratingLocalHistory,
-          'should_load_history': _shouldLoadHistory(
-            currentThread,
-            currentConversation,
-          ),
-          'messages': currentThread.messages.length,
-          'renderable': _renderableMessageCount(currentThread),
-        },
-      );
-      _pendingReadAcksByThreadId[targetThreadId] = _PendingReadAck(
-        conversation: currentConversation,
-        reason: reason,
-        forcePersistentAck: forcePersistentAck,
-      );
-      return;
-    }
     final watermark = _readWatermarkForVisibleThread(
       currentConversation,
       displayThreadId: targetThreadId,
       useLatestVisibleMessage: forcePersistentAck,
     );
-    if (watermark == null || watermark.isEmpty) {
-      _chatProviderTrace(
-        'mark_read.skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'reason': 'no_visible_watermark',
-          'messages': currentThread.messages.length,
-          'renderable': _renderableMessageCount(currentThread),
-        },
-      );
+    _queuePendingReadAck(
+      targetThreadId,
+      _PendingReadAck(
+        sessionEpoch: sessionEpoch,
+        conversation: currentConversation,
+        reason: reason,
+        forcePersistentAck: forcePersistentAck,
+        requireVisible: requireVisible,
+        watermark: watermark,
+      ),
+    );
+    _chatProviderTrace(
+      'mark_read.intent_queued',
+      fields: <String, Object?>{
+        ...AwikiPerformanceLogger.threadField(targetThreadId),
+        'reason': reason,
+        'foreground': _canAcknowledgeVisibleRead,
+        'active_local': _activeLocalHistoryLoads.contains(targetThreadId),
+        'active_remote': _activeRemoteHistorySyncs.contains(targetThreadId),
+        'hydrating': currentThread.isHydratingLocalHistory,
+        'watermark_seq': watermark?.lastReadThreadSeq,
+      },
+    );
+    _flushPendingReadAck(targetThreadId);
+  }
+
+  void _queuePendingReadAck(String threadId, _PendingReadAck incoming) {
+    if (!_isCurrentSessionEpoch(incoming.sessionEpoch)) {
       return;
     }
-    final readToken = _readReceiptToken(
-      currentConversation,
-      watermark: watermark,
-    );
-    if (_completedReadReceipts.contains(readToken) ||
-        _activeReadReceipts.contains(readToken)) {
-      _chatProviderTrace(
-        'mark_read.skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(targetThreadId),
-          'reason': _completedReadReceipts.contains(readToken)
-              ? 'already_completed'
-              : 'already_active',
-          'read_token': AwikiPerformanceLogger.safeHash(readToken),
-        },
-      );
+    final existing = _pendingReadAcksByThreadId[threadId];
+    if (existing == null || existing.sessionEpoch != incoming.sessionEpoch) {
+      _pendingReadAcksByThreadId[threadId] = incoming;
       return;
     }
-    _markConversationReadBestEffort(
-      currentConversation,
-      readToken: readToken,
-      displayThreadId: targetThreadId,
-      watermark: watermark,
+    _pendingReadAcksByThreadId[threadId] = _PendingReadAck(
+      sessionEpoch: incoming.sessionEpoch,
+      conversation:
+          _conversationAdvancedSinceVisible(
+            incoming.conversation,
+            existing.conversation,
+          )
+          ? incoming.conversation
+          : existing.conversation,
+      reason: incoming.reason,
+      forcePersistentAck:
+          existing.forcePersistentAck || incoming.forcePersistentAck,
+      requireVisible: existing.requireVisible || incoming.requireVisible,
+      watermark: _laterReadWatermark(existing.watermark, incoming.watermark),
     );
+  }
+
+  AppThreadReadWatermark? _targetReadWatermark(
+    String threadId,
+    _PendingReadAck pending,
+  ) {
+    final current = _refreshedConversationFor(pending.conversation);
+    final currentWatermark = _readWatermarkForVisibleThread(
+      current,
+      displayThreadId: threadId,
+      useLatestVisibleMessage: pending.forcePersistentAck,
+    );
+    return _laterReadWatermark(pending.watermark, currentWatermark);
+  }
+
+  bool _readAckDrainBlocked(String threadId, _PendingReadAck pending) {
+    final current = thread(threadId);
+    if (!_canAcknowledgeVisibleRead) {
+      _chatProviderTrace(
+        'mark_read.defer',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': 'app_not_foreground',
+          'app_lifecycle': ref.read(appLifecycleProvider).name,
+        },
+      );
+      return true;
+    }
+    if (pending.requireVisible &&
+        _cacheMetadataByThreadId[threadId]?.isVisible != true) {
+      _chatProviderTrace(
+        'mark_read.defer',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': 'not_visible',
+        },
+      );
+      return true;
+    }
+    final conversation = _refreshedConversationFor(pending.conversation);
+    final blocked =
+        _activeLocalHistoryLoads.contains(threadId) ||
+        current.isHydratingLocalHistory ||
+        _activeRemoteHistorySyncs.contains(threadId) ||
+        _shouldLoadHistory(current, conversation);
+    if (blocked) {
+      _chatProviderTrace(
+        'mark_read.defer',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'reason': pending.reason,
+          'active_local': _activeLocalHistoryLoads.contains(threadId),
+          'active_remote': _activeRemoteHistorySyncs.contains(threadId),
+          'hydrating': current.isHydratingLocalHistory,
+          'should_load_history': _shouldLoadHistory(current, conversation),
+          'messages': current.messages.length,
+          'renderable': _renderableMessageCount(current),
+        },
+      );
+    }
+    return blocked;
+  }
+
+  bool _removePendingReadAckIfCurrent(
+    String threadId,
+    _PendingReadAck pending,
+  ) {
+    if (!identical(_pendingReadAcksByThreadId[threadId], pending)) {
+      return false;
+    }
+    _pendingReadAcksByThreadId.remove(threadId);
+    return true;
+  }
+
+  void _requeuePendingReadAck(String threadId, _PendingReadAck pending) {
+    _queuePendingReadAck(
+      threadId,
+      _PendingReadAck(
+        sessionEpoch: pending.sessionEpoch,
+        conversation: pending.conversation,
+        reason: pending.reason,
+        forcePersistentAck: pending.forcePersistentAck,
+        requireVisible: pending.requireVisible,
+        watermark: pending.watermark,
+      ),
+    );
+  }
+
+  Future<bool> _drainPendingReadAcks(
+    String threadId,
+    SessionEpoch sessionEpoch,
+  ) async {
+    while (_isCurrentSessionEpoch(sessionEpoch)) {
+      final pending = _pendingReadAcksByThreadId[threadId];
+      if (pending == null) {
+        return true;
+      }
+      if (pending.sessionEpoch != sessionEpoch) {
+        _removePendingReadAckIfCurrent(threadId, pending);
+        continue;
+      }
+      if (_readAckDrainBlocked(threadId, pending)) {
+        return false;
+      }
+      final watermark = _targetReadWatermark(threadId, pending);
+      if (watermark == null || watermark.isEmpty) {
+        _chatProviderTrace(
+          'mark_read.defer',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(threadId),
+            'reason': 'no_visible_watermark',
+            'messages': thread(threadId).messages.length,
+            'renderable': _renderableMessageCount(thread(threadId)),
+          },
+        );
+        return false;
+      }
+      final committed = _committedReadWatermarksByThreadId[threadId];
+      if (_readWatermarkCovers(committed, watermark)) {
+        _removePendingReadAckIfCurrent(threadId, pending);
+        continue;
+      }
+      final conversationRef = _conversationReadRefFor(pending.conversation);
+      if (conversationRef == null) {
+        _removePendingReadAckIfCurrent(threadId, pending);
+        _chatProviderTrace(
+          'mark_read.skip_presentation_alias',
+          fields: AwikiPerformanceLogger.threadField(threadId),
+        );
+        continue;
+      }
+      _removePendingReadAckIfCurrent(threadId, pending);
+      final watch = Stopwatch()..start();
+      _chatProviderTrace(
+        'mark_read.core_start',
+        fields: <String, Object?>{
+          ...AwikiPerformanceLogger.threadField(threadId),
+          'conversation_ref': _conversationReadRefDebug(conversationRef),
+          'watermark_seq': watermark.lastReadThreadSeq,
+          'watermark_message_hash': AwikiPerformanceLogger.safeHash(
+            watermark.lastReadMessageId,
+          ),
+        },
+      );
+      try {
+        final result = await ref
+            .read(conversationServiceProvider)
+            .markConversationRead(conversationRef, watermark: watermark);
+        watch.stop();
+        if (!_isCurrentSessionEpoch(sessionEpoch)) {
+          return false;
+        }
+        final effective = result.effectiveWatermark;
+        if (!_readWatermarkCovers(effective, watermark)) {
+          _requeuePendingReadAck(
+            threadId,
+            _PendingReadAck(
+              sessionEpoch: sessionEpoch,
+              conversation: pending.conversation,
+              reason: pending.reason,
+              forcePersistentAck: pending.forcePersistentAck,
+              requireVisible: pending.requireVisible,
+              watermark: watermark,
+            ),
+          );
+          _chatProviderTrace(
+            'mark_read.core_incomplete',
+            fields: <String, Object?>{
+              ...AwikiPerformanceLogger.threadField(threadId),
+              'target_seq': watermark.lastReadThreadSeq,
+              'effective_seq': effective?.lastReadThreadSeq,
+              'updated': result.updatedCount,
+              'pending_remote_ack': result.pendingRemoteAck,
+            },
+          );
+          return false;
+        }
+        _committedReadWatermarksByThreadId[threadId] = _laterReadWatermark(
+          committed,
+          effective,
+        )!;
+        ref
+            .read(conversationListProvider.notifier)
+            .markConversationReadLocal(
+              pending.conversation,
+              watermark: effective,
+            );
+        _restoreVisibleReadIntentIfCurrent(
+          pending.conversation,
+          displayThreadId: threadId,
+        );
+        _chatProviderTrace(
+          'mark_read.core_done',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(threadId),
+            'target_seq': watermark.lastReadThreadSeq,
+            'effective_seq': effective?.lastReadThreadSeq,
+            'updated': result.updatedCount,
+            'remote_ack': result.remoteAcknowledged,
+            'partial': result.partial,
+            'pending_remote_ack': result.pendingRemoteAck,
+            'elapsed_ms': watch.elapsedMilliseconds,
+          },
+        );
+        AwikiPerformanceLogger.log(
+          'chat.mark_read',
+          elapsed: watch.elapsed,
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(
+              pending.conversation.threadId,
+            ),
+            'watermark_seq': effective?.lastReadThreadSeq,
+            'pending_remote_ack': result.pendingRemoteAck,
+          },
+        );
+      } catch (error) {
+        watch.stop();
+        if (!_isCurrentSessionEpoch(sessionEpoch)) {
+          return false;
+        }
+        _requeuePendingReadAck(
+          threadId,
+          _PendingReadAck(
+            sessionEpoch: sessionEpoch,
+            conversation: pending.conversation,
+            reason: pending.reason,
+            forcePersistentAck: pending.forcePersistentAck,
+            requireVisible: pending.requireVisible,
+            watermark: watermark,
+          ),
+        );
+        _chatProviderTrace(
+          'mark_read.core_failed',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(threadId),
+            'watermark_seq': watermark.lastReadThreadSeq,
+            'error_type': error.runtimeType,
+            'elapsed_ms': watch.elapsedMilliseconds,
+          },
+        );
+        return false;
+      }
+    }
+    return false;
   }
 
   Future<int?> _repairThreadFromLocalProjection(
@@ -2271,115 +2496,6 @@ class ChatThreadsController
     }
   }
 
-  void _markConversationReadBestEffort(
-    ConversationSummary conversation, {
-    required String readToken,
-    required String displayThreadId,
-    AppThreadReadWatermark? watermark,
-  }) {
-    final sessionEpoch = _captureSessionEpoch();
-    if (sessionEpoch == null) {
-      return;
-    }
-    try {
-      final conversationRef = _conversationReadRefFor(conversation);
-      if (conversationRef == null) {
-        _chatProviderTrace(
-          'mark_read.skip_presentation_alias',
-          fields: AwikiPerformanceLogger.threadField(displayThreadId),
-        );
-        return;
-      }
-      final currentThread = thread(displayThreadId);
-      _chatProviderTrace(
-        'mark_read.remote_start',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(displayThreadId),
-          'conversation_thread_hash': AwikiPerformanceLogger.safeHash(
-            conversation.threadId,
-          ),
-          'conversation_ref': _conversationReadRefDebug(conversationRef),
-          'read_token': AwikiPerformanceLogger.safeHash(readToken),
-          'watermark_empty': watermark?.isEmpty ?? true,
-          'watermark_seq': watermark?.lastReadThreadSeq,
-          'watermark_message_hash': AwikiPerformanceLogger.safeHash(
-            watermark?.lastReadMessageId,
-          ),
-          'messages': currentThread.messages.length,
-          'renderable': _renderableMessageCount(currentThread),
-        },
-      );
-      final watch = Stopwatch()..start();
-      _activeReadReceipts.add(readToken);
-      final operation = ref
-          .read(conversationServiceProvider)
-          .markConversationRead(conversationRef, watermark: watermark)
-          .then<void>((_) {
-            if (!_isCurrentSessionEpoch(sessionEpoch)) {
-              return;
-            }
-            watch.stop();
-            _activeReadReceipts.remove(readToken);
-            _completedReadReceipts.add(readToken);
-            ref
-                .read(conversationListProvider.notifier)
-                .markConversationReadLocal(conversation, watermark: watermark);
-            _restoreVisibleReadIntentIfCurrent(
-              conversation,
-              displayThreadId: displayThreadId,
-            );
-            _chatProviderTrace(
-              'mark_read.remote_done',
-              fields: <String, Object?>{
-                ...AwikiPerformanceLogger.threadField(displayThreadId),
-                'read_token': AwikiPerformanceLogger.safeHash(readToken),
-                'watermark_seq': watermark?.lastReadThreadSeq,
-                'watermark_message': watermark?.lastReadMessageId != null,
-                'elapsed_ms': watch.elapsedMilliseconds,
-              },
-            );
-            AwikiPerformanceLogger.log(
-              'chat.mark_read',
-              elapsed: watch.elapsed,
-              fields: <String, Object?>{
-                ...AwikiPerformanceLogger.threadField(conversation.threadId),
-                'watermark_seq': watermark?.lastReadThreadSeq,
-                'watermark_message': watermark?.lastReadMessageId != null,
-              },
-            );
-          })
-          .catchError((Object error) {
-            if (!_isCurrentSessionEpoch(sessionEpoch)) {
-              return;
-            }
-            _chatProviderTrace(
-              'mark_read.remote_failed',
-              fields: <String, Object?>{
-                ...AwikiPerformanceLogger.threadField(displayThreadId),
-                'read_token': AwikiPerformanceLogger.safeHash(readToken),
-                'error_type': error.runtimeType,
-              },
-            );
-            _activeReadReceipts.remove(readToken);
-            _restoreVisibleReadIntentIfCurrent(
-              conversation,
-              displayThreadId: displayThreadId,
-            );
-          });
-      unawaited(operation);
-    } catch (error) {
-      _chatProviderTrace(
-        'mark_read.remote_setup_failed',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(displayThreadId),
-          'error_type': error.runtimeType,
-        },
-      );
-      // Thread-level mark-read is best effort. Opening a conversation must
-      // still clear unread locally and continue rendering messages.
-    }
-  }
-
   void _restoreVisibleReadIntentIfCurrent(
     ConversationSummary conversation, {
     required String displayThreadId,
@@ -2410,7 +2526,7 @@ class ChatThreadsController
   }
 
   void _flushPendingReadAck(String threadId) {
-    final pending = _pendingReadAcksByThreadId.remove(threadId);
+    final pending = _pendingReadAcksByThreadId[threadId];
     if (pending == null) {
       _chatProviderTrace(
         'mark_read.flush_skip',
@@ -2421,75 +2537,11 @@ class ChatThreadsController
       );
       return;
     }
-    if (!_canAcknowledgeVisibleRead) {
-      _chatProviderTrace(
-        'mark_read.flush_defer',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(threadId),
-          'reason': 'app_not_foreground',
-          'app_lifecycle': ref.read(appLifecycleProvider).name,
-        },
-      );
-      _pendingReadAcksByThreadId[threadId] = pending;
+    if (!_isCurrentSessionEpoch(pending.sessionEpoch)) {
+      _removePendingReadAckIfCurrent(threadId, pending);
       return;
     }
-    final current = thread(threadId);
-    if (current.isHydratingLocalHistory ||
-        _activeLocalHistoryLoads.contains(threadId) ||
-        _activeRemoteHistorySyncs.contains(threadId) ||
-        _shouldLoadHistory(current, pending.conversation)) {
-      final shouldLoadHistoryNow = _shouldLoadHistory(
-        current,
-        pending.conversation,
-      );
-      _chatProviderTrace(
-        'mark_read.flush_defer',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(threadId),
-          'hydrating': current.isHydratingLocalHistory,
-          'active_local': _activeLocalHistoryLoads.contains(threadId),
-          'active_remote': _activeRemoteHistorySyncs.contains(threadId),
-          'should_load_history': shouldLoadHistoryNow,
-          'messages': current.messages.length,
-          'renderable': _renderableMessageCount(current),
-        },
-      );
-      _pendingReadAcksByThreadId[threadId] = pending;
-      return;
-    }
-    final watermark = _readWatermarkForVisibleThread(
-      pending.conversation,
-      displayThreadId: threadId,
-      useLatestVisibleMessage: pending.forcePersistentAck,
-    );
-    if (watermark == null || watermark.isEmpty) {
-      _chatProviderTrace(
-        'mark_read.flush_skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(threadId),
-          'reason': 'no_visible_watermark',
-          'messages': current.messages.length,
-          'renderable': _renderableMessageCount(current),
-        },
-      );
-      return;
-    }
-    final readToken = _readReceiptToken(
-      pending.conversation,
-      watermark: watermark,
-    );
-    if (_completedReadReceipts.contains(readToken) ||
-        _activeReadReceipts.contains(readToken)) {
-      _chatProviderTrace(
-        'mark_read.flush_skip',
-        fields: <String, Object?>{
-          ...AwikiPerformanceLogger.threadField(threadId),
-          'reason': _completedReadReceipts.contains(readToken)
-              ? 'already_completed'
-              : 'already_active',
-          'read_token': AwikiPerformanceLogger.safeHash(readToken),
-        },
-      );
+    if (_activeReadAckDrainsByThreadId.containsKey(threadId)) {
       return;
     }
     AwikiPerformanceLogger.log(
@@ -2500,12 +2552,21 @@ class ChatThreadsController
       },
       level: AwikiPerformanceLogLevel.verbose,
     );
-    _markConversationReadBestEffort(
-      pending.conversation,
-      readToken: readToken,
-      displayThreadId: threadId,
-      watermark: watermark,
-    );
+    late final Future<void> operation;
+    operation = _drainPendingReadAcks(threadId, pending.sessionEpoch)
+        .then<void>((shouldRestart) {
+          if (!identical(_activeReadAckDrainsByThreadId[threadId], operation)) {
+            return;
+          }
+          _activeReadAckDrainsByThreadId.remove(threadId);
+          if (shouldRestart &&
+              _isCurrentSessionEpoch(pending.sessionEpoch) &&
+              _pendingReadAcksByThreadId.containsKey(threadId)) {
+            _flushPendingReadAck(threadId);
+          }
+        });
+    _activeReadAckDrainsByThreadId[threadId] = operation;
+    unawaited(operation);
   }
 
   Future<_HistoryLoadResult> _loadLocalHistory(
@@ -3646,9 +3707,9 @@ class ChatThreadsController
     _pendingVisibleThreadStaleGuards.clear();
     _activeVisibleThreadStaleGuards.clear();
     _lastThreadPatchStreamEndAt.clear();
-    _activeReadReceipts.clear();
-    _completedReadReceipts.clear();
     _pendingReadAcksByThreadId.clear();
+    _activeReadAckDrainsByThreadId.clear();
+    _committedReadWatermarksByThreadId.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
     _clearMemoryCacheMetadata();
@@ -3661,6 +3722,7 @@ class ChatThreadsController
   }) {
     final currentConversation = _refreshedConversationFor(conversation);
     final threadId = _displayThreadIdFor(currentConversation, displayThreadId);
+    final needsPersistentAck = _hasUnreadConversation(currentConversation);
     if (_canAcknowledgeVisibleRead) {
       _markConversationVisibleForReadEligibility(currentConversation, threadId);
     }
@@ -3677,6 +3739,12 @@ class ChatThreadsController
       currentConversation,
       displayThreadId: threadId,
     );
+    acknowledgeVisibleConversationRead(
+      currentConversation,
+      displayThreadId: threadId,
+      reason: 'visible_state',
+      forcePersistentAck: needsPersistentAck,
+    );
   }
 
   void markConversationHidden(
@@ -3684,6 +3752,7 @@ class ChatThreadsController
     String? displayThreadId,
   }) {
     final threadId = _displayThreadIdFor(conversation, displayThreadId);
+    _pendingReadAcksByThreadId.remove(threadId);
     ref
         .read(conversationListProvider.notifier)
         .markConversationHiddenLocal(conversation);
@@ -6340,6 +6409,16 @@ class ChatThreadsController
     _cacheMetadataByThreadId[displayThreadId] = metadata!.copyWith(
       visibleConversation: needsPersistentAck ? conversation : current,
     );
+    if (needsPersistentAck) {
+      acknowledgeVisibleConversationRead(
+        current,
+        displayThreadId: displayThreadId,
+        reason: 'visible_thread_advanced',
+        forcePersistentAck: true,
+      );
+    } else {
+      _flushPendingReadAck(displayThreadId);
+    }
   }
 
   ChatMessage? _latestRenderableMessageCoveredByConversation(
@@ -6505,20 +6584,95 @@ class ChatThreadsController
   }
 }
 
-String _readReceiptToken(
-  ConversationSummary conversation, {
-  AppThreadReadWatermark? watermark,
-}) {
-  final conversationId = _conversationTimelineKeyFor(conversation);
-  return [
-    conversationId,
-    conversation.lastMessageAt.toUtc().microsecondsSinceEpoch,
-    conversation.unreadCount,
-    conversation.unreadMentionCount,
-    conversation.firstUnreadMentionMessageId ?? '',
-    watermark?.lastReadThreadSeq ?? '',
-    watermark?.lastReadMessageId ?? '',
-  ].join('|');
+AppThreadReadWatermark? _laterReadWatermark(
+  AppThreadReadWatermark? a,
+  AppThreadReadWatermark? b,
+) {
+  if (a == null || a.isEmpty) {
+    return b;
+  }
+  if (b == null || b.isEmpty) {
+    return a;
+  }
+  return _compareReadWatermarks(a, b) >= 0 ? a : b;
+}
+
+bool _readWatermarkCovers(
+  AppThreadReadWatermark? effective,
+  AppThreadReadWatermark target,
+) {
+  if (effective == null || effective.isEmpty) {
+    return false;
+  }
+  final targetSequence = _readWatermarkSequence(target);
+  if (targetSequence != null) {
+    final effectiveSequence = _readWatermarkSequence(effective);
+    if (effectiveSequence != null) {
+      return effectiveSequence >= targetSequence;
+    }
+    return _sameNonEmptyText(
+      effective.lastReadMessageId,
+      target.lastReadMessageId,
+    );
+  }
+  if (_sameNonEmptyText(
+    effective.lastReadMessageId,
+    target.lastReadMessageId,
+  )) {
+    return true;
+  }
+  final targetReadAt = target.readAt;
+  final effectiveReadAt = effective.readAt;
+  if (targetReadAt != null && effectiveReadAt != null) {
+    return !effectiveReadAt.toUtc().isBefore(targetReadAt.toUtc());
+  }
+  return _compareReadWatermarks(effective, target) >= 0;
+}
+
+int _compareReadWatermarks(AppThreadReadWatermark a, AppThreadReadWatermark b) {
+  final aSequence = _readWatermarkSequence(a);
+  final bSequence = _readWatermarkSequence(b);
+  if (aSequence != null || bSequence != null) {
+    if (aSequence == null) {
+      return -1;
+    }
+    if (bSequence == null) {
+      return 1;
+    }
+    final sequenceCompare = aSequence.compareTo(bSequence);
+    if (sequenceCompare != 0) {
+      return sequenceCompare;
+    }
+  }
+  final aReadAt = a.readAt?.toUtc();
+  final bReadAt = b.readAt?.toUtc();
+  if (aReadAt != null || bReadAt != null) {
+    if (aReadAt == null) {
+      return -1;
+    }
+    if (bReadAt == null) {
+      return 1;
+    }
+    final readAtCompare = aReadAt.compareTo(bReadAt);
+    if (readAtCompare != 0) {
+      return readAtCompare;
+    }
+  }
+  return (a.lastReadMessageId ?? '').compareTo(b.lastReadMessageId ?? '');
+}
+
+BigInt? _readWatermarkSequence(AppThreadReadWatermark watermark) {
+  final value = watermark.lastReadThreadSeq?.trim();
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  return BigInt.tryParse(value);
+}
+
+bool _sameNonEmptyText(String? a, String? b) {
+  final left = a?.trim();
+  final right = b?.trim();
+  return left != null && left.isNotEmpty && left == right;
 }
 
 String? _lastMessageIdentity(ChatMessage? message) {

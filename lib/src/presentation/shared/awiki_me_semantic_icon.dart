@@ -66,8 +66,8 @@ class AwikiMeIconRegistry {
           opticalScale: 2.05,
         ),
         AwikiMeIconRole.agents: AwikiMeIconDefinition(
-          fallback: CupertinoIcons.square_stack_3d_up,
-          opticalScale: 0.86,
+          fallback: CupertinoIcons.square_stack_3d_up_fill,
+          opticalScale: 0.92,
         ),
         AwikiMeIconRole.contacts: AwikiMeIconDefinition(
           fallback: CupertinoIcons.person_2,

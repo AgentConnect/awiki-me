@@ -1064,6 +1064,20 @@ void main() {
       expect(find.byType(GroupListPage), findsOneWidget);
       expect(find.text('群聊列表'), findsOneWidget);
       expect(find.text('融资协作群'), findsOneWidget);
+      final pageRect = tester.getRect(find.byType(GroupListPage));
+      final cardRect = tester.getRect(
+        find.byKey(const Key('group-list-card:did:test:group:funding')),
+      );
+      expect(cardRect.left, greaterThan(pageRect.left + 10));
+      expect(cardRect.right, lessThan(pageRect.right - 10));
+
+      final friendsSurface = tester.widget<DecoratedBox>(
+        find.byKey(const Key('friends-list-surface')),
+      );
+      expect(
+        (friendsSurface.decoration as BoxDecoration).color,
+        AwikiMeColors.surface,
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);

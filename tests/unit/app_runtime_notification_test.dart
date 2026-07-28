@@ -2538,10 +2538,10 @@ class _RecordingConversationService implements ConversationService {
   }) async {}
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
-  }) async {}
+  }) async => AppConversationReadCommitResult.acknowledged(watermark);
 
   @override
   Future<ConversationSummary?> normalizeConversationForRecents({

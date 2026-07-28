@@ -77,7 +77,7 @@ abstract interface class ConversationService {
     AppThreadReadWatermark? watermark,
   });
 
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   });
@@ -108,7 +108,7 @@ abstract interface class ConversationService {
 }
 
 abstract interface class ConversationReadService {
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   });
@@ -660,7 +660,7 @@ class ImCoreConversationService
   }
 
   @override
-  Future<void> markConversationRead(
+  Future<AppConversationReadCommitResult> markConversationRead(
     AppConversationReadRef conversation, {
     AppThreadReadWatermark? watermark,
   }) {

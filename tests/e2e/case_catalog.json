@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-24.identity-switch-hydration-v1",
+  "sourceRevision": "2026-07-28.attachment-read-watermark-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -35,10 +35,11 @@
       "action": "Send an attachment from CLI and open/download it through App UI.",
       "exactOracles": [
         "App observes one canonical attachment message.",
+        "While the conversation is closed, the canonical unread count increases by exactly one; opening the row clears it to zero and rebuilding App presentation state preserves zero from Core local read state.",
         "Filename, MIME, size, digest and downloaded bytes match exactly."
       ],
       "negativeChecks": [
-        "Wrong conversation, missing bytes, metadata mismatch, or duplicate render fails."
+        "Wrong conversation, missing bytes, metadata mismatch, duplicate render, stale unread after open, or unread rebound after presentation rebuild fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
