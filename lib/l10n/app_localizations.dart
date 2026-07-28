@@ -284,6 +284,12 @@ abstract class AppLocalizations {
   /// **'错误详情'**
   String get commonErrorDetails;
 
+  /// No description provided for @displayScaleValue.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示比例 {percent}%'**
+  String displayScaleValue(int percent);
+
   /// No description provided for @realtimeStatusConnecting.
   ///
   /// In zh, this message translates to:
@@ -1238,6 +1244,18 @@ abstract class AppLocalizations {
   /// **'群组'**
   String get friendsGroups;
 
+  /// No description provided for @friendsGroupsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'我加入的全部群聊'**
+  String get friendsGroupsSubtitle;
+
+  /// No description provided for @friendsMutualEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂时还没有互相关注的朋友。'**
+  String get friendsMutualEmpty;
+
   /// No description provided for @friendsFollowing.
   ///
   /// In zh, this message translates to:
@@ -1339,6 +1357,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'标签，使用英文逗号分隔'**
   String get profileTagsPlaceholder;
+
+  /// No description provided for @profileHomepageLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'主页'**
+  String get profileHomepageLabel;
 
   /// No description provided for @profileOpenHomepage.
   ///
@@ -4061,19 +4085,19 @@ abstract class AppLocalizations {
   /// No description provided for @relationshipFollowing.
   ///
   /// In zh, this message translates to:
-  /// **'following'**
+  /// **'已关注'**
   String get relationshipFollowing;
 
   /// No description provided for @relationshipFollower.
   ///
   /// In zh, this message translates to:
-  /// **'follower'**
+  /// **'关注了我'**
   String get relationshipFollower;
 
   /// No description provided for @relationshipFriend.
   ///
   /// In zh, this message translates to:
-  /// **'friend'**
+  /// **'朋友'**
   String get relationshipFriend;
 
   /// No description provided for @profileUpdated.

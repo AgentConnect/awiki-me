@@ -8,6 +8,7 @@ import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../chat/chat_provider.dart';
 import '../conversation_list/conversation_provider.dart';
+import '../shared/responsive_layout.dart';
 
 Future<void> openGroupChat(
   BuildContext context,
@@ -33,7 +34,12 @@ Future<void> openGroupChat(
   ref
       .read(selectedConversationProvider.notifier)
       .selectConversation(conversation);
-  ref.read(shellDestinationProvider.notifier).select(ShellDestination.messages);
+  ref
+      .read(shellDestinationProvider.notifier)
+      .selectForLayout(
+        ShellDestination.messages,
+        expanded: context.awikiResponsive.usesDesktopLayout,
+      );
   final navigator = Navigator.of(context);
   if (navigator.canPop()) {
     navigator.popUntil((route) => route.isFirst);

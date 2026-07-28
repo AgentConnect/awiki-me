@@ -9,8 +9,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.emailController,
     required this.handleController,
     required this.onLogin,
-    required this.onRefresh,
-    required this.onModeChanged,
     required this.onAuthModeChanged,
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
@@ -30,8 +28,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
-  final VoidCallback? onRefresh;
-  final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
@@ -64,8 +60,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
             emailController: emailController,
             handleController: handleController,
             onLogin: onLogin,
-            onRefresh: onRefresh,
-            onModeChanged: onModeChanged,
             onAuthModeChanged: onAuthModeChanged,
             onRequestOtp: onRequestOtp,
             onRequestEmailActivation: onRequestEmailActivation,
@@ -346,8 +340,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.emailController,
     required this.handleController,
     required this.onLogin,
-    required this.onRefresh,
-    required this.onModeChanged,
     required this.onAuthModeChanged,
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
@@ -366,8 +358,6 @@ class _MacAuthCard extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
-  final VoidCallback? onRefresh;
-  final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
@@ -377,7 +367,6 @@ class _MacAuthCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final usingCredential = onboarding.entryMode == 'login';
     final theme = context.awikiTheme;
     final radius = framed ? 8.0 : 0.0;
     return Container(
@@ -403,9 +392,7 @@ class _MacAuthCard extends StatelessWidget {
                 const SizedBox(height: 20),
               ],
               Text(
-                usingCredential
-                    ? context.l10n.onboardingLogin
-                    : context.l10n.onboardingRegister,
+                context.l10n.onboardingRegister,
                 textAlign: framed ? TextAlign.center : TextAlign.left,
                 style: TextStyle(
                   color: theme.title,
@@ -417,9 +404,7 @@ class _MacAuthCard extends StatelessWidget {
               ),
               const SizedBox(height: 9),
               Text(
-                usingCredential
-                    ? context.l10n.onboardingCredentialsField
-                    : context.l10n.onboardingLoginRegisterHint,
+                context.l10n.onboardingLoginRegisterHint,
                 textAlign: framed ? TextAlign.center : TextAlign.left,
                 style: TextStyle(
                   color: theme.secondaryText,
@@ -431,7 +416,6 @@ class _MacAuthCard extends StatelessWidget {
               const SizedBox(height: 20),
               _MacAuthMethodSelector(
                 onboarding: onboarding,
-                onModeChanged: onModeChanged,
                 onAuthModeChanged: onAuthModeChanged,
               ),
               const SizedBox(height: 20),
@@ -439,30 +423,23 @@ class _MacAuthCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 180),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                child: usingCredential
-                    ? _MacLoginForm(
-                        key: const ValueKey<String>('mac-login-form'),
-                        credentials: credentials,
-                        onLogin: onLogin,
-                        onRefresh: onRefresh,
-                      )
-                    : _MacRegisterForm(
-                        key: ValueKey<String>(
-                          'mac-register-${onboarding.authMode}-${onboarding.registerStep}',
-                        ),
-                        onboarding: onboarding,
-                        phoneController: phoneController,
-                        otpController: otpController,
-                        emailController: emailController,
-                        handleController: handleController,
-                        onRequestOtp: onRequestOtp,
-                        onRequestEmailActivation: onRequestEmailActivation,
-                        onCheckEmailActivation: onCheckEmailActivation,
-                        onRegisterStepChanged: onRegisterStepChanged,
-                        onSubmitRegister: onSubmitRegister,
-                      ),
+                child: _MacRegisterForm(
+                  key: ValueKey<String>(
+                    'mac-register-${onboarding.authMode}-${onboarding.registerStep}',
+                  ),
+                  onboarding: onboarding,
+                  phoneController: phoneController,
+                  otpController: otpController,
+                  emailController: emailController,
+                  handleController: handleController,
+                  onRequestOtp: onRequestOtp,
+                  onRequestEmailActivation: onRequestEmailActivation,
+                  onCheckEmailActivation: onCheckEmailActivation,
+                  onRegisterStepChanged: onRegisterStepChanged,
+                  onSubmitRegister: onSubmitRegister,
+                ),
               ),
-              if (!usingCredential && credentials.isNotEmpty) ...<Widget>[
+              if (credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _MacLocalIdentityShortcut(
                   credentials: credentials,
@@ -527,18 +504,15 @@ class _MacCompactBrand extends StatelessWidget {
 class _MacAuthMethodSelector extends StatelessWidget {
   const _MacAuthMethodSelector({
     required this.onboarding,
-    required this.onModeChanged,
     required this.onAuthModeChanged,
   });
 
   final OnboardingState onboarding;
-  final ValueChanged<String> onModeChanged;
   final ValueChanged<String> onAuthModeChanged;
 
   @override
   Widget build(BuildContext context) {
     final methods = onboarding.registrationMethods;
-    final usingCredential = onboarding.entryMode == 'login';
     return Container(
       key: const Key('onboarding-mac-auth-method-tabs'),
       height: 48,
@@ -556,24 +530,10 @@ class _MacAuthMethodSelector extends StatelessWidget {
                 key: Key('auth-mode-${method.id.wireName}'),
                 label: _authModeLabel(context, method.id),
                 icon: _macAuthModeIcon(method.id),
-                selected:
-                    !usingCredential &&
-                    onboarding.authMode == method.id.wireName,
-                onTap: () {
-                  onModeChanged('register');
-                  onAuthModeChanged(method.id.wireName);
-                },
+                selected: onboarding.authMode == method.id.wireName,
+                onTap: () => onAuthModeChanged(method.id.wireName),
               ),
             ),
-          Expanded(
-            child: _MacAuthMethodButton(
-              key: const Key('onboarding-mac-credential-mode'),
-              label: context.l10n.onboardingCredentialsField,
-              icon: CupertinoIcons.shield,
-              selected: usingCredential,
-              onTap: () => onModeChanged('login'),
-            ),
-          ),
         ],
       ),
     );
@@ -668,35 +628,6 @@ class _MacAuthMethodButton extends StatelessWidget {
   }
 }
 
-class _MacLoginForm extends StatelessWidget {
-  const _MacLoginForm({
-    super.key,
-    required this.credentials,
-    required this.onLogin,
-    required this.onRefresh,
-  });
-
-  final List<SessionIdentity> credentials;
-  final Future<void> Function(String credentialName) onLogin;
-  final VoidCallback? onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _MacCredentialPicker(credentials: credentials, onLogin: onLogin),
-        const SizedBox(height: 14),
-        _MacSecondaryAction(
-          label: context.l10n.onboardingRefreshCredentials,
-          icon: CupertinoIcons.arrow_clockwise,
-          onPressed: onRefresh,
-        ),
-      ],
-    );
-  }
-}
-
 class _MacLocalIdentityShortcut extends StatelessWidget {
   const _MacLocalIdentityShortcut({
     required this.credentials,
@@ -735,6 +666,9 @@ class _MacLocalIdentityShortcut extends StatelessWidget {
               bottom: identity == credentials.last ? 0 : 10,
             ),
             child: _MacCredentialTile(
+              key: Key(
+                'onboarding-mac-local-credential:${identity.credentialName}',
+              ),
               identity: identity,
               onTap: () => onLogin(identity.credentialName),
             ),
@@ -753,70 +687,12 @@ class _MacDivider extends StatelessWidget {
   }
 }
 
-class _MacCredentialPicker extends StatelessWidget {
-  const _MacCredentialPicker({
-    required this.credentials,
-    required this.onLogin,
-  });
-
-  final List<SessionIdentity> credentials;
-  final Future<void> Function(String credentialName) onLogin;
-
-  @override
-  Widget build(BuildContext context) {
-    if (credentials.isEmpty) {
-      return Container(
-        height: 106,
-        decoration: _macFieldDecoration(),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Icon(
-                  CupertinoIcons.person_crop_circle_badge_exclam,
-                  color: AwikiMePalette.mutedNeutral,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    context.l10n.onboardingNoLocalCredentialSaved,
-                    style: const TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return Column(
-      children: credentials
-          .map(
-            (identity) => Padding(
-              padding: EdgeInsets.only(
-                bottom: identity == credentials.last ? 0 : 10,
-              ),
-              child: _MacCredentialTile(
-                identity: identity,
-                onTap: () => onLogin(identity.credentialName),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
 class _MacCredentialTile extends StatelessWidget {
-  const _MacCredentialTile({required this.identity, required this.onTap});
+  const _MacCredentialTile({
+    super.key,
+    required this.identity,
+    required this.onTap,
+  });
 
   final SessionIdentity identity;
   final VoidCallback onTap;
@@ -1333,10 +1209,9 @@ class _MacPrimaryAction extends StatelessWidget {
 }
 
 class _MacSecondaryAction extends StatelessWidget {
-  const _MacSecondaryAction({required this.label, this.icon, this.onPressed});
+  const _MacSecondaryAction({required this.label, this.onPressed});
 
   final String label;
-  final IconData? icon;
   final VoidCallback? onPressed;
 
   @override
@@ -1369,10 +1244,6 @@ class _MacSecondaryAction extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            if (icon != null) ...<Widget>[
-              Icon(icon, color: AwikiMePalette.inkNeutral, size: 17),
-              const SizedBox(width: 7),
-            ],
             Flexible(
               child: FittedBox(
                 fit: BoxFit.scaleDown,

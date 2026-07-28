@@ -237,7 +237,7 @@ void main() {
     expect(find.text('关注'), findsOneWidget);
   });
 
-  testWidgets('个人资料页以完整 handle 为主并只保留一个 DID 复制入口', (tester) async {
+  testWidgets('个人资料页按显示名称、完整 handle、DID 排列身份信息', (tester) async {
     const profile = UserProfile(
       did: 'did:wba:anpclaw.com:user:elena:e1_full_identity_key',
       nickName: 'Elena',

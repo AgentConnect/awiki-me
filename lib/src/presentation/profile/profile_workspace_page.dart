@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/app_router.dart';
 import '../../l10n/l10n.dart';
+import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
@@ -10,6 +12,42 @@ import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import 'profile_page.dart';
 import 'profile_provider.dart';
+
+Future<void> showCurrentIdentityDialog(BuildContext context) {
+  return AppNavigator.showDialog<void>(
+    context,
+    (dialogContext) => AppDialogScaffold(
+      key: const Key('desktop-current-identity-dialog'),
+      maxWidth: 560,
+      maxHeightFraction: 0.88,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 16, 12),
+            child: AppDialogHeader(
+              title: dialogContext.l10n.profileMeTitle,
+              closeButtonKey: const Key('desktop-current-identity-close'),
+              onClose: () => Navigator.of(dialogContext).pop(),
+            ),
+          ),
+          Container(height: 1, color: dialogContext.awikiTheme.border),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.72,
+            ),
+            child: const ProfilePage(
+              embedded: true,
+              showTitle: false,
+              shrinkWrap: true,
+              bottomInset: 20,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
 class ProfileWorkspacePage extends StatelessWidget {
   const ProfileWorkspacePage({super.key, this.listFooter, this.onCompactBack});

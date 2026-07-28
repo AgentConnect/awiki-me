@@ -4,22 +4,30 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'compact destinations contain exactly the three primary destinations',
+    'compact destinations contain the four ordered primary destinations',
     () {
       expect(compactShellDestinations, const <ShellDestination>[
         ShellDestination.messages,
         ShellDestination.agents,
         ShellDestination.contacts,
+        ShellDestination.profile,
       ]);
     },
   );
 
-  test('expanded destinations contain all seven destinations', () {
-    expect(expandedShellDestinations, ShellDestination.values);
+  test('expanded destinations exclude profile from desktop rail content', () {
+    expect(expandedShellDestinations, const <ShellDestination>[
+      ShellDestination.messages,
+      ShellDestination.agents,
+      ShellDestination.contacts,
+      ShellDestination.tasks,
+      ShellDestination.workbench,
+      ShellDestination.settings,
+    ]);
   });
 
   test(
-    'compact content also allows profile and settings as secondary pages',
+    'compact content includes four primary pages and secondary settings',
     () {
       expect(compactContentDestinations, const <ShellDestination>[
         ShellDestination.messages,
@@ -99,23 +107,38 @@ void main() {
     }
   });
 
-  test(
-    'secondary back returns profile to settings and then to last primary',
-    () {
-      final controller = ShellNavigationController();
-      addTearDown(controller.dispose);
+  test('settings back returns to the compact primary page that opened it', () {
+    final controller = ShellNavigationController();
+    addTearDown(controller.dispose);
 
-      controller.select(ShellDestination.contacts);
-      controller.select(ShellDestination.settings);
-      controller.select(ShellDestination.profile);
+    controller.selectCompact(ShellDestination.contacts);
+    controller.selectCompact(ShellDestination.settings);
 
-      controller.backFromSecondary();
-      expect(_currentDestination(controller), ShellDestination.settings);
+    controller.backFromSecondary();
+    expect(_currentDestination(controller), ShellDestination.contacts);
+  });
 
-      controller.backFromSecondary();
-      expect(_currentDestination(controller), ShellDestination.contacts);
-    },
-  );
+  test('compact profile maps to the last valid desktop content page', () {
+    final controller = ShellNavigationController();
+    addTearDown(controller.dispose);
+
+    controller.selectExpanded(ShellDestination.agents);
+    controller.selectCompact(ShellDestination.profile);
+
+    expect(controller.resolvedFor(true), ShellDestination.agents);
+    controller.reconcileFor(true);
+    expect(_currentDestination(controller), ShellDestination.agents);
+  });
+
+  test('desktop selection cannot select profile as invisible content', () {
+    final controller = ShellNavigationController();
+    addTearDown(controller.dispose);
+
+    controller.selectExpanded(ShellDestination.profile);
+
+    expect(_currentDestination(controller), ShellDestination.messages);
+    expect(controller.lastDesktopDestination, ShellDestination.messages);
+  });
 
   test('provider exposes typed destination state', () {
     final container = ProviderContainer();

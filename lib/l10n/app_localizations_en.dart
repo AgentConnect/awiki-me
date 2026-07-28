@@ -102,6 +102,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonErrorDetails => 'Error details';
 
   @override
+  String displayScaleValue(int percent) {
+    return 'Display scale $percent%';
+  }
+
+  @override
   String get realtimeStatusConnecting => 'Connecting to message service...';
 
   @override
@@ -629,6 +634,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get friendsGroups => 'Groups';
 
   @override
+  String get friendsGroupsSubtitle => 'All group chats you have joined';
+
+  @override
+  String get friendsMutualEmpty => 'No mutual friends yet.';
+
+  @override
   String get friendsFollowing => 'Following';
 
   @override
@@ -679,6 +690,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get profileTagsPlaceholder => 'Tags, separated by commas';
+
+  @override
+  String get profileHomepageLabel => 'Homepage';
 
   @override
   String get profileOpenHomepage => 'Open homepage';
@@ -2232,13 +2246,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get relationshipNone => 'Not following';
 
   @override
-  String get relationshipFollowing => 'following';
+  String get relationshipFollowing => 'Following';
 
   @override
-  String get relationshipFollower => 'follower';
+  String get relationshipFollower => 'Follows you';
 
   @override
-  String get relationshipFriend => 'friend';
+  String get relationshipFriend => 'Friend';
 
   @override
   String get profileUpdated => 'Profile updated';

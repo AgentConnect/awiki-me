@@ -9,6 +9,7 @@ import '../../domain/entities/group_summary.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/app_dialog.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/avatar_badge.dart';
@@ -195,53 +196,71 @@ class GroupListPage extends ConsumerWidget {
     try {
       await AppNavigator.showDialog<void>(
         context,
-        (ctx) => CupertinoAlertDialog(
-          title: Text(context.l10n.groupJoinDialogTitle),
-          content: Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: AppTextField(
-              controller: textController,
-              label: context.l10n.groupJoinDialogTitle,
-              placeholder: context.l10n.groupJoinDialogPlaceholder,
-              keyboardType: TextInputType.text,
+        (ctx) => AppDialogScaffold(
+          maxWidth: 560,
+          avoidViewInsets: true,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                AppDialogHeader(
+                  title: context.l10n.groupJoinDialogTitle,
+                  onClose: () => Navigator.of(ctx).pop(),
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: textController,
+                  label: context.l10n.groupJoinDialogTitle,
+                  placeholder: context.l10n.groupJoinDialogPlaceholder,
+                  keyboardType: TextInputType.text,
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: AppSecondaryButton(
+                        label: context.l10n.commonCancel,
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AppPrimaryButton(
+                        label: context.l10n.commonJoin,
+                        onPressed: () async {
+                          final groupDid = textController.text.trim();
+                          if (groupDid.isEmpty) {
+                            return;
+                          }
+                          Navigator.of(ctx).pop();
+                          try {
+                            final identity = GroupIdentitySelection.handle(
+                              activeHandle ?? '',
+                            );
+                            final group = await ref
+                                .read(groupProvider.notifier)
+                                .joinGroup(groupDid, identity: identity);
+                            await ref
+                                .read(groupProvider.notifier)
+                                .loadGroupMembers(group.groupId);
+                            if (!context.mounted) {
+                              return;
+                            }
+                            await openGroupChat(context, ref, group);
+                          } catch (error) {
+                            ref
+                                .read(uiFeedbackProvider.notifier)
+                                .showError(AppMessage.fromError(error));
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          actions: <Widget>[
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: Text(context.l10n.commonCancel),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () async {
-                final groupDid = textController.text.trim();
-                if (groupDid.isEmpty) {
-                  return;
-                }
-                Navigator.of(ctx).pop();
-                try {
-                  final identity = GroupIdentitySelection.handle(
-                    activeHandle ?? '',
-                  );
-                  final group = await ref
-                      .read(groupProvider.notifier)
-                      .joinGroup(groupDid, identity: identity);
-                  await ref
-                      .read(groupProvider.notifier)
-                      .loadGroupMembers(group.groupId);
-                  if (!context.mounted) {
-                    return;
-                  }
-                  await openGroupChat(context, ref, group);
-                } catch (error) {
-                  ref
-                      .read(uiFeedbackProvider.notifier)
-                      .showError(AppMessage.fromError(error));
-                }
-              },
-              child: Text(context.l10n.commonJoin),
-            ),
-          ],
         ),
       );
     } finally {
@@ -892,38 +911,28 @@ Future<void> showRemoveGroupMemberDialog({
   );
   await AppNavigator.showDialog<void>(
     context,
-    (dialogContext) => CupertinoAlertDialog(
-      title: Text(context.l10n.groupRemoveMember),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(context.l10n.groupRemoveMemberContent(memberTitle)),
-      ),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: Text(context.l10n.commonCancel),
-        ),
-        CupertinoDialogAction(
-          isDestructiveAction: true,
-          onPressed: () async {
-            Navigator.of(dialogContext).pop();
-            try {
-              final updated = await ref
-                  .read(groupProvider.notifier)
-                  .removeGroupMember(
-                    groupId: groupId,
-                    memberRef: _memberProtocolRef(member),
-                  );
-              onGroupUpdated(updated);
-            } catch (error) {
-              ref
-                  .read(uiFeedbackProvider.notifier)
-                  .showError(AppMessage.fromError(error));
-            }
-          },
-          child: Text(context.l10n.groupRemoveMember),
-        ),
-      ],
+    (dialogContext) => AppConfirmationDialog(
+      title: context.l10n.groupRemoveMember,
+      message: context.l10n.groupRemoveMemberContent(memberTitle),
+      confirmLabel: context.l10n.groupRemoveMember,
+      confirmButtonKey: const Key('group-remove-member-confirm-button'),
+      destructive: true,
+      onConfirm: () async {
+        Navigator.of(dialogContext).pop();
+        try {
+          final updated = await ref
+              .read(groupProvider.notifier)
+              .removeGroupMember(
+                groupId: groupId,
+                memberRef: _memberProtocolRef(member),
+              );
+          onGroupUpdated(updated);
+        } catch (error) {
+          ref
+              .read(uiFeedbackProvider.notifier)
+              .showError(AppMessage.fromError(error));
+        }
+      },
     ),
   );
 }

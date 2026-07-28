@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -29,10 +32,12 @@ class AwikiMeApp extends StatelessWidget {
     super.key,
     required this.bootstrap,
     this.providerOverrides = const <Override>[],
+    this.testFontFamily,
   });
 
   final AppBootstrap bootstrap;
   final List<Override> providerOverrides;
+  final String? testFontFamily;
 
   @override
   Widget build(BuildContext context) {
@@ -207,13 +212,15 @@ class AwikiMeApp extends StatelessWidget {
           ),
         ...providerOverrides,
       ],
-      child: const _AwikiMeRoot(),
+      child: _AwikiMeRoot(testFontFamily: testFontFamily),
     );
   }
 }
 
 class _AwikiMeRoot extends ConsumerStatefulWidget {
-  const _AwikiMeRoot();
+  const _AwikiMeRoot({this.testFontFamily});
+
+  final String? testFontFamily;
 
   @override
   ConsumerState<_AwikiMeRoot> createState() => _AwikiMeRootState();
@@ -247,7 +254,10 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
   Widget build(BuildContext context) {
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
-    final appTheme = AwikiMeTheme.current;
+    final appTheme = AwikiMeTheme.forPlatform(
+      defaultTargetPlatform,
+      fontFamilyOverride: widget.testFontFamily,
+    );
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: AwikiMePalette.canvas,
@@ -284,11 +294,18 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
           return AwikiDisplayScaleScope(
             scale: displayScale,
             child: _DisplayScaleShortcuts(
-              onDecrease: () =>
-                  ref.read(displayScaleProvider.notifier).decrease(),
-              onIncrease: () =>
-                  ref.read(displayScaleProvider.notifier).increase(),
-              onReset: () => ref.read(displayScaleProvider.notifier).reset(),
+              onDecrease: () {
+                ref.read(displayScaleProvider.notifier).decrease();
+                return ref.read(displayScaleProvider);
+              },
+              onIncrease: () {
+                ref.read(displayScaleProvider.notifier).increase();
+                return ref.read(displayScaleProvider);
+              },
+              onReset: () {
+                ref.read(displayScaleProvider.notifier).reset();
+                return ref.read(displayScaleProvider);
+              },
               child: _KeyboardDismissScope(
                 child: material.Theme(
                   data: appTheme.materialTheme,
@@ -315,15 +332,20 @@ class _DisplayScaleShortcuts extends StatefulWidget {
   });
 
   final Widget child;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-  final VoidCallback onReset;
+  final double Function() onDecrease;
+  final double Function() onIncrease;
+  final double Function() onReset;
 
   @override
   State<_DisplayScaleShortcuts> createState() => _DisplayScaleShortcutsState();
 }
 
 class _DisplayScaleShortcutsState extends State<_DisplayScaleShortcuts> {
+  static const _indicatorDuration = Duration(milliseconds: 1400);
+
+  Timer? _indicatorTimer;
+  int? _visiblePercent;
+
   @override
   void initState() {
     super.initState();
@@ -332,8 +354,24 @@ class _DisplayScaleShortcutsState extends State<_DisplayScaleShortcuts> {
 
   @override
   void dispose() {
+    _indicatorTimer?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     super.dispose();
+  }
+
+  void _showScale(double scale) {
+    _indicatorTimer?.cancel();
+    setState(() {
+      _visiblePercent = (scale * 100).round();
+    });
+    _indicatorTimer = Timer(_indicatorDuration, () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _visiblePercent = null;
+      });
+    });
   }
 
   bool _handleKeyEvent(KeyEvent event) {
@@ -352,17 +390,17 @@ class _DisplayScaleShortcutsState extends State<_DisplayScaleShortcuts> {
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.minus ||
         key == LogicalKeyboardKey.numpadSubtract) {
-      widget.onDecrease();
+      _showScale(widget.onDecrease());
       return true;
     }
     if (key == LogicalKeyboardKey.equal ||
         key == LogicalKeyboardKey.add ||
         key == LogicalKeyboardKey.numpadAdd) {
-      widget.onIncrease();
+      _showScale(widget.onIncrease());
       return true;
     }
     if (key == LogicalKeyboardKey.digit0 || key == LogicalKeyboardKey.numpad0) {
-      widget.onReset();
+      _showScale(widget.onReset());
       return true;
     }
     return false;
@@ -370,7 +408,80 @@ class _DisplayScaleShortcutsState extends State<_DisplayScaleShortcuts> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.child;
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final animationDuration = disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 140);
+    final percent = _visiblePercent;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        widget.child,
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: IgnorePointer(
+                child: Center(
+                  child: AnimatedSwitcher(
+                    duration: animationDuration,
+                    reverseDuration: animationDuration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 0.96,
+                          end: 1,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: percent == null
+                        ? const SizedBox.shrink()
+                        : Container(
+                            key: const Key('display-scale-indicator'),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AwikiMePalette.inkNeutral.withValues(
+                                alpha: 0.88,
+                              ),
+                              borderRadius: BorderRadius.circular(7),
+                              border: Border.all(
+                                color: CupertinoColors.white.withValues(
+                                  alpha: 0.14,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              AppLocalizations.of(
+                                context,
+                              ).displayScaleValue(percent),
+                              style: const TextStyle(
+                                color: CupertinoColors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

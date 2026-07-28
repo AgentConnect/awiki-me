@@ -355,7 +355,12 @@ Future<void> openDirectConversationForDid(
   ref
       .read(selectedConversationProvider.notifier)
       .selectConversation(conversation);
-  ref.read(shellDestinationProvider.notifier).select(ShellDestination.messages);
+  ref
+      .read(shellDestinationProvider.notifier)
+      .selectForLayout(
+        ShellDestination.messages,
+        expanded: context.awikiResponsive.usesDesktopLayout,
+      );
   final navigator = Navigator.of(context);
   if (navigator.canPop()) {
     navigator.popUntil((route) => route.isFirst);

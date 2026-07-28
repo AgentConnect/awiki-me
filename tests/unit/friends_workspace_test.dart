@@ -70,6 +70,30 @@ void main() {
     expect(find.byType(FriendsPage), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
     expect(find.byType(FriendsWorkspacePage), findsOneWidget);
+    expect(
+      find.byKey(const Key('friends-expanded-list-header')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('friends-expanded-list-header')))
+          .height,
+      56,
+    );
+    final paneRect = tester.getRect(find.byType(AwikiSidebarWorkspace));
+    final titleRect = tester.getRect(
+      find.descendant(
+        of: find.byKey(const Key('friends-expanded-list-header')),
+        matching: find.text('联系人'),
+      ),
+    );
+    final headerContext = tester.element(
+      find.byKey(const Key('friends-expanded-list-header')),
+    );
+    expect(
+      titleRect.left - paneRect.left,
+      closeTo(headerContext.awikiResponsive.spacing(14), 1),
+    );
   });
 
   testWidgets('桌面联系人默认在右侧展示共享完整目录', (tester) async {
@@ -406,7 +430,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Mutual Alice'), findsNWidgets(2));
+    expect(find.text('Mutual Alice'), findsNWidgets(3));
     expect(find.text('我关注的'), findsOneWidget);
     expect(find.text('关注我的'), findsOneWidget);
     expect(find.text('关注'), findsNothing);
@@ -649,9 +673,9 @@ void main() {
 
       await tester.tap(find.text('取消关注'));
       await tester.pump();
-      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.byKey(const Key('confirm-unfollow-button')), findsOneWidget);
 
-      await tester.tap(find.text('取消关注').last);
+      await tester.tap(find.byKey(const Key('confirm-unfollow-button')));
       await tester.pump();
 
       expect(gateway.lastUnfollowedDidOrHandle, 'did:test:alice');

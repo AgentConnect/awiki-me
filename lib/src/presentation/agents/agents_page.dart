@@ -28,6 +28,7 @@ import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
+import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import '../chat/chat_provider.dart';
 import 'agent_rename_dialog.dart';
@@ -200,24 +201,15 @@ class _AgentsWorkspacePageState extends ConsumerState<AgentsWorkspacePage> {
     );
 
     if (responsive.supportsTwoPane) {
-      return DecoratedBox(
+      return AwikiSidebarWorkspace(
         key: const Key('agents-expanded-layout'),
-        decoration: BoxDecoration(color: theme.background),
-        child: Row(
-          children: <Widget>[
-            SizedBox(
-              key: const Key('agents-expanded-list-pane'),
-              width: 272,
-              child: list,
-            ),
-            Container(width: 1, color: theme.border),
-            Expanded(
-              child: KeyedSubtree(
-                key: const Key('agents-expanded-detail-pane'),
-                child: detail,
-              ),
-            ),
-          ],
+        sidebar: SizedBox.expand(
+          key: const Key('agents-expanded-list-pane'),
+          child: list,
+        ),
+        detailPane: KeyedSubtree(
+          key: const Key('agents-expanded-detail-pane'),
+          child: detail,
         ),
       );
     }

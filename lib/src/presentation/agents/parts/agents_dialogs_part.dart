@@ -1407,21 +1407,13 @@ Future<bool> _confirm(
 }) async {
   final result = await AppNavigator.showDialog<bool>(
     context,
-    (dialogContext) => CupertinoAlertDialog(
-      title: Text(title),
-      content: Text(message),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: Text(context.l10n.commonCancel),
-        ),
-        CupertinoDialogAction(
-          isDestructiveAction: destructive,
-          isDefaultAction: !destructive,
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: Text(actionLabel),
-        ),
-      ],
+    (dialogContext) => AppConfirmationDialog(
+      title: title,
+      message: message,
+      confirmLabel: actionLabel,
+      destructive: destructive,
+      onCancel: () => Navigator.of(dialogContext).pop(false),
+      onConfirm: () => Navigator.of(dialogContext).pop(true),
     ),
   );
   return result == true;

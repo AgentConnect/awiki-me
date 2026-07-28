@@ -103,78 +103,79 @@ class _ChatHeader extends StatelessWidget {
         ),
       );
     }
-    return Container(
-      key: const Key('chat-header'),
-      height: responsive.displayScaled(52),
-      padding: EdgeInsets.symmetric(horizontal: responsive.spacing(8)),
-      decoration: BoxDecoration(
-        color: theme.chatSurface,
-        border: Border(
-          bottom: BorderSide(color: theme.border.withValues(alpha: 0.55)),
-        ),
-      ),
-      child: Row(
-        children: <Widget>[
-          SizedBox(
-            width: responsive.displayScaled(44),
-            child: TopBarActionButton(
-              onTap: onBack,
-              semanticsIdentifier: 'e2e-chat-back-button',
-              semanticsLabel: context.l10n.commonBack,
-              child: Padding(
-                padding: EdgeInsets.all(responsive.spacing(8)),
-                child: Icon(
-                  CupertinoIcons.chevron_left,
-                  color: theme.title,
-                  size: responsive.iconMd,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showSourceLabel = constraints.maxWidth >= 350;
+        final sideWidth = responsive.displayScaled(showSourceLabel ? 82 : 44);
+        return Container(
+          key: const Key('chat-header'),
+          height: responsive.displayScaled(52),
+          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(8)),
+          decoration: BoxDecoration(
+            color: theme.surface,
+            border: Border(bottom: BorderSide(color: theme.border)),
+          ),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: sideWidth,
+                child: TopBarActionButton(
+                  key: const Key('chat-back-button'),
+                  onTap: onBack,
+                  semanticsIdentifier: 'e2e-chat-back-button',
+                  semanticsLabel: context.l10n.commonBack,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      AwikiMeSemanticIcon(
+                        role: AwikiMeIconRole.back,
+                        color: theme.primaryDark,
+                        size: responsive.iconSm,
+                      ),
+                      if (showSourceLabel) ...<Widget>[
+                        SizedBox(width: responsive.spacing(3)),
+                        Flexible(
+                          child: Text(
+                            context.l10n.shellNavMessages,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.primaryDark,
+                              fontSize: responsive.bodySm,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: _ChatHeaderIdentityTapTarget(
-              key: const Key('chat-peer-info-avatar-button'),
-              semanticLabel: openInfoLabel,
-              semanticsIdentifier: 'chat-peer-info-avatar-button',
-              onTap: onPeerInfoTap,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Flexible(
-                    child: Text(
-                      compactName,
-                      key: const Key('chat-header-title'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: responsive.displayScaled(16),
-                        fontWeight: FontWeight.w600,
-                        color: theme.title,
-                      ),
+              Expanded(
+                child: _ChatHeaderIdentityTapTarget(
+                  key: const Key('chat-peer-info-avatar-button'),
+                  semanticLabel: openInfoLabel,
+                  semanticsIdentifier: 'chat-peer-info-avatar-button',
+                  onTap: onPeerInfoTap,
+                  child: Text(
+                    compactName,
+                    key: const Key('chat-header-title'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: responsive.displayScaled(16),
+                      fontWeight: FontWeight.w600,
+                      color: theme.title,
                     ),
                   ),
-                  if (agentBadgeLabel != null) ...<Widget>[
-                    SizedBox(width: responsive.spacing(6)),
-                    _ChatAgentPill(
-                      label: agentBadgeLabel,
-                      muted: isDeletedAgentConversation,
-                    ),
-                  ],
-                ],
+                ),
               ),
-            ),
+              SizedBox(width: sideWidth),
+            ],
           ),
-          SizedBox(
-            width: responsive.displayScaled(44),
-            child: showAddGroupMemberButton
-                ? _ChatHeaderAddGroupMemberButton(
-                    onTap: isAddGroupMemberLoading ? null : onAddGroupMemberTap,
-                    isLoading: isAddGroupMemberLoading,
-                  )
-                : null,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

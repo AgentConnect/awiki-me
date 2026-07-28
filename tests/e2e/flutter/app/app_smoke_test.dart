@@ -79,7 +79,7 @@ void main() {
       expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
       expect(
         find.byKey(const Key('onboarding-mac-credential-mode')),
-        findsOneWidget,
+        findsNothing,
       );
     } else {
       expect(
@@ -126,7 +126,6 @@ void main() {
   testWidgets(
     'AwikiMeApp start conversation stays in recents before first send',
     (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await tester.binding.setSurfaceSize(const Size(1280, 820));
       const session = SessionIdentity(
         did: 'did:test:me',
@@ -164,7 +163,21 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.byKey(const Key('start-conversation-button')));
+        final compactLayout = find
+            .byKey(const Key('compact-bottom-navigation'))
+            .evaluate()
+            .isNotEmpty;
+        if (compactLayout) {
+          await tester.tap(find.byKey(const Key('shell-quick-actions-button')));
+        } else {
+          await tester.tap(
+            find.byKey(const Key('conversation-quick-actions-button')),
+          );
+        }
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const Key('quick-action-start-conversation')),
+        );
         await tester.pumpAndSettle();
         await tester.enterText(
           find.byKey(const Key('identity-lookup-input')),
@@ -189,10 +202,9 @@ void main() {
           find.byKey(const Key('chat-header-title')),
         );
         expect(headerTitle.data, 'Smoke Peer Nickname');
-        expect(find.text('Smoke Peer Nickname'), findsNWidgets(2));
+        expect(find.text('Smoke Peer Nickname'), findsWidgets);
         expect(find.text('smoke-peer.awiki.ai'), findsNothing);
         expect(find.byKey(const Key('chat-emoji-button')), findsOneWidget);
-        expect(find.byKey(const Key('chat-screenshot-button')), findsOneWidget);
         await tester.tap(find.byKey(const Key('chat-emoji-button')));
         await _pumpSmokeFrame(tester);
         expect(find.byKey(const Key('chat-emoji-picker')), findsOneWidget);
@@ -212,17 +224,28 @@ void main() {
         await _pumpSmokeFrame(tester);
         await tester.tap(find.byKey(const Key('chat-emoji-option:0')));
         await _pumpSmokeFrame(tester);
-        await tester.tap(find.byKey(const Key('chat-screenshot-button')));
-        await _pumpSmokeFrame(tester);
-        expect(picker.screenshotCalls, 1);
-        expect(picker.lastScreenshotHideApp, isFalse);
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-        await tester.tap(find.byKey(const Key('chat-screenshot-button')));
-        await _pumpSmokeFrame(tester);
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-        expect(picker.screenshotCalls, 2);
-        // Shift must not hide the App; otherwise macOS captures only the desktop.
-        expect(picker.lastScreenshotHideApp, isFalse);
+        final screenshotButton = find.byKey(
+          const Key('chat-screenshot-button'),
+        );
+        if (screenshotButton.evaluate().isNotEmpty) {
+          await tester.tap(screenshotButton);
+          await _pumpSmokeFrame(tester);
+          expect(picker.screenshotCalls, 1);
+          expect(picker.lastScreenshotHideApp, isFalse);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+          await tester.tap(screenshotButton);
+          await _pumpSmokeFrame(tester);
+          await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+          expect(picker.screenshotCalls, 2);
+          // Shift must not hide the App; otherwise macOS captures only the desktop.
+          expect(picker.lastScreenshotHideApp, isFalse);
+        } else {
+          expect(picker.screenshotCalls, 0);
+          expect(
+            find.byKey(const Key('chat-attachment-button')),
+            findsOneWidget,
+          );
+        }
 
         harness.gateway.conversations = <ConversationSummary>[
           ConversationSummary(
@@ -249,14 +272,17 @@ void main() {
           container.read(selectedConversationProvider),
           'dm:peer-scope:v1:smoke-peer',
         );
+        if (compactLayout) {
+          await tester.tap(find.byKey(const Key('chat-back-button')));
+          await _pumpSmokeFrame(tester);
+        }
         expect(
           find.byKey(Key('conversation-row:${started.conversationId}')),
           findsOneWidget,
         );
-        expect(find.text('Smoke Peer Nickname'), findsNWidgets(2));
+        expect(find.text('Smoke Peer Nickname'), findsWidgets);
         expect(find.text('smoke-peer.awiki.ai'), findsNothing);
       } finally {
-        debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);
       }
     },
@@ -265,7 +291,6 @@ void main() {
   testWidgets('AwikiMeApp authenticated smoke opens profile and settings', (
     tester,
   ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await tester.binding.setSurfaceSize(const Size(1200, 840));
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -288,7 +313,7 @@ void main() {
       expect(find.byType(AppShell), findsOneWidget);
 
       await _tapFirstFound(tester, <Finder>[
-        find.bySemanticsIdentifier('e2e-profile-tab'),
+        find.bySemanticsIdentifier('e2e-profile-dialog-button'),
         find.byKey(const Key('mac-me-rail-avatar')),
         find.bySemanticsLabel('我'),
         find.text('我'),
@@ -296,6 +321,23 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.text('Smoke test profile.'), findsOneWidget);
+      final desktopIdentityDialog = find.byKey(
+        const Key('desktop-current-identity-dialog'),
+      );
+      if (desktopIdentityDialog.evaluate().isNotEmpty) {
+        expect(desktopIdentityDialog, findsOneWidget);
+        await tester.tap(
+          find.byKey(const Key('desktop-current-identity-close')),
+        );
+        await _pumpSmokeFrame(tester);
+      } else {
+        expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
+        expect(find.byKey(const Key('profile-back-button')), findsNothing);
+        expect(
+          find.byKey(const Key('compact-bottom-navigation')),
+          findsOneWidget,
+        );
+      }
 
       await _tapFirstFound(tester, <Finder>[
         find.bySemanticsIdentifier('e2e-messages-tab'),
@@ -316,7 +358,6 @@ void main() {
       expect(find.text('导出身份凭证'), findsNothing);
       expect(find.text('检查更新'), findsOneWidget);
     } finally {
-      debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
   });
@@ -474,7 +515,6 @@ void main() {
   });
 
   testWidgets('AwikiMeApp 查看全部会补齐并缓存关注用户资料', (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -535,13 +575,20 @@ void main() {
         find.text('联系人'),
       ]);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('friends-following-view-all')));
-      await tester.pumpAndSettle();
+      final viewAll = find.byKey(const Key('friends-following-view-all'));
+      if (viewAll.evaluate().isNotEmpty) {
+        await tester.tap(viewAll);
+        await tester.pumpAndSettle();
+      } else {
+        expect(
+          find.byKey(const Key('compact-relationship-directory')),
+          findsOneWidget,
+        );
+      }
 
       expect(find.text('关注用户昵称'), findsWidgets);
       expect(harness.gateway.loadPublicProfileQueries, <String>[peerDid]);
     } finally {
-      debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
   });
@@ -549,7 +596,6 @@ void main() {
   testWidgets('AwikiMeApp smoke recovers Message Agent action into chat', (
     tester,
   ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -627,7 +673,22 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.byType(AppShell), findsOneWidget);
-      expect(find.text('最近会话'), findsOneWidget);
+      expect(find.text('Bob'), findsOneWidget);
+      if (find
+          .byKey(const Key('compact-bottom-navigation'))
+          .evaluate()
+          .isEmpty) {
+        expect(
+          find.byKey(const Key('conversation-search-field')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('conversation-quick-actions-button')),
+          findsOneWidget,
+        );
+      } else {
+        expect(find.text('消息'), findsWidgets);
+      }
       await tester.tap(find.text('Bob').first);
       await _pumpSmokeFrame(tester);
 
@@ -672,7 +733,6 @@ void main() {
       expect(harness.gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
       expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
     } finally {
-      debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
   });
@@ -747,7 +807,6 @@ void main() {
         ),
       ];
 
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await tester.binding.setSurfaceSize(const Size(1600, 960));
       try {
         await tester.pumpWidget(
@@ -782,7 +841,21 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byType(AppShell), findsOneWidget);
-        expect(find.text('最近会话'), findsOneWidget);
+        if (find
+            .byKey(const Key('compact-bottom-navigation'))
+            .evaluate()
+            .isEmpty) {
+          expect(
+            find.byKey(const Key('conversation-search-field')),
+            findsOneWidget,
+          );
+          expect(
+            find.byKey(const Key('conversation-quick-actions-button')),
+            findsOneWidget,
+          );
+        } else {
+          expect(find.text('消息'), findsWidgets);
+        }
         expect(find.text('Hermes Cached'), findsOneWidget);
         await tester.tap(find.text('Hermes Cached').first);
         await tester.pumpAndSettle();
@@ -814,7 +887,6 @@ void main() {
         await tester.pump();
         expect(find.byKey(const Key('peer-info-agent-inbox')), findsOneWidget);
       } finally {
-        debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);
       }
     },

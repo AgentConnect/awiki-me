@@ -30,9 +30,10 @@ class _PeerInfoTarget {
 }
 
 class _PeerInfoDialog extends ConsumerStatefulWidget {
-  const _PeerInfoDialog({required this.target});
+  const _PeerInfoDialog({required this.target, this.fullPage = false});
 
   final _PeerInfoTarget target;
+  final bool fullPage;
 
   @override
   ConsumerState<_PeerInfoDialog> createState() => _PeerInfoDialogState();
@@ -67,23 +68,30 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         ? const PeerProfileState(isLoading: false)
         : ref.watch(peerProfileProvider(targetDid));
 
+    final content = Column(
+      mainAxisSize: widget.fullPage ? MainAxisSize.max : MainAxisSize.min,
+      children: <Widget>[
+        _PeerInfoHeader(title: title, fullPage: widget.fullPage),
+        Flexible(
+          child: _buildProfileContent(
+            state,
+            targetDid: targetDid,
+            runtimeAgent: runtimeAgent,
+            maxDialogHeight: maxDialogHeight,
+          ),
+        ),
+      ],
+    );
+    if (widget.fullPage) {
+      return CupertinoPageScaffold(
+        backgroundColor: context.awikiTheme.surface,
+        child: SafeArea(bottom: false, child: content),
+      );
+    }
     return AppDialogScaffold(
       maxWidth: 620,
       borderRadius: BorderRadius.circular(responsive.radius(14)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _PeerInfoHeader(title: title),
-          Flexible(
-            child: _buildProfileContent(
-              state,
-              targetDid: targetDid,
-              runtimeAgent: runtimeAgent,
-              maxDialogHeight: maxDialogHeight,
-            ),
-          ),
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -93,6 +101,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     required AgentSummary? runtimeAgent,
     required double maxDialogHeight,
   }) {
+    final responsive = context.awikiResponsive;
     final profile = state.profile;
     final profileDid = _profileDid(profile, fallbackDid: targetDid);
     final displayName = ref.watch(
@@ -129,8 +138,8 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         : (profile.profileMarkdown.trim().isNotEmpty
               ? profile.profileMarkdown.trim()
               : profile.bio.trim());
-    final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
-      rawProfileContent,
+    final profileContent = profileArticleBody(
+      DidDisplayFormatter.withoutRedundantIdentityMetadata(rawProfileContent),
     );
     final primaryIdentity = displayName;
     final secondaryIdentity = _secondaryIdentityLabel(
@@ -150,6 +159,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final isFollowing = profileDid.startsWith('did:')
         ? ref.watch(friendsProvider).isFollowing(profileDid)
         : false;
+    final relationship = isFollowing ? 'following' : state.relationship;
     final runtimeDisplay = runtimeAgent == null
         ? null
         : agentRuntimeDisplay(runtimeAgent);
@@ -161,182 +171,190 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final canFollowProfile = profileDid.startsWith('did:');
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 20),
+      padding: EdgeInsets.fromLTRB(
+        responsive.spacing(widget.fullPage ? 14 : 18),
+        responsive.spacing(16),
+        responsive.spacing(widget.fullPage ? 14 : 18),
+        responsive.spacing(20),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           SelectionArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    AvatarBadge(
-                      key: const Key('peer-info-avatar'),
-                      seed: displayName,
-                      size: 64,
-                      avatarUri: avatarUri,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  primaryIdentity,
-                                  key: const Key(
-                                    'peer-info-dialog-handle-value',
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: AwikiMePalette.inkNeutral,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              if (runtimeAgent != null) ...<Widget>[
-                                const SizedBox(width: 6),
-                                _AgentRenameIconButton(
-                                  agent: runtimeAgent,
-                                  onRename: _renameAgent,
-                                ),
-                              ],
-                            ],
-                          ),
-                          if (secondaryIdentity.isNotEmpty) ...<Widget>[
-                            const SizedBox(height: 4),
-                            Text(
-                              secondaryIdentity,
-                              key: const Key('peer-info-dialog-display-name'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AwikiMePalette.mutedNeutral,
-                                fontSize: 12,
-                                height: 1.25,
-                              ),
-                            ),
-                          ],
-                          if (showAgentAlias) ...<Widget>[
-                            const SizedBox(height: 3),
-                            Text(
-                              agentAlias,
-                              key: const Key('peer-info-dialog-agent-alias'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AwikiMePalette.messagePreview,
-                                fontSize: 11.5,
-                                height: 1.25,
-                              ),
-                            ),
-                          ],
-                          if (profileDid.isNotEmpty) ...<Widget>[
-                            const SizedBox(height: 8),
-                            CopyableDidLine(
-                              value: profileDid,
-                              displayValue: DidDisplayFormatter.compactDidPath(
-                                profileDid,
-                              ),
-                              maxLines: 2,
-                              copySemanticLabel:
-                                  context.l10n.chatPeerInfoCopyDid,
-                              copiedMessage: context.l10n.chatPeerInfoDidCopied,
-                              textKey: const Key('peer-info-dialog-did-value'),
-                              buttonKey: const Key(
-                                'peer-info-dialog-copy-did-button',
-                              ),
-                              textStyle: const TextStyle(
-                                color: AwikiMePalette.mutedNeutral,
-                                fontSize: 12,
-                                height: 1.25,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    SemanticPill(
-                      label: looksLikeAgent
-                          ? context.l10n.identityTypeAgent
-                          : context.l10n.identityTypeUser,
-                      tone: SemanticPillTone.identity,
-                    ),
-                    if (profile == null && state.isLoading)
-                      SemanticPill(
-                        label: context.l10n.chatPeerInfoProfileLoading,
-                        tone: SemanticPillTone.muted,
-                      )
-                    else if (profile == null && state.hasError)
-                      SemanticPill(
-                        label: context.l10n.chatPeerInfoProfileUnavailable,
-                        tone: SemanticPillTone.muted,
-                      )
-                    else if (!looksLikeAgent && profile != null)
-                      SemanticPill(
-                        label: localizeRelationshipLabel(
-                          context.l10n,
-                          state.relationship,
-                        ),
-                        tone: SemanticPillTone.relationship,
-                      ),
-                    if (runtimeDisplay != null)
-                      SemanticPill(
-                        label: runtimeDisplay.label,
-                        tone: SemanticPillTone.runtime,
-                      )
-                    else if (looksLikeAgent && profile != null)
-                      SemanticPill(
-                        label: localizeRelationshipLabel(
-                          context.l10n,
-                          state.relationship,
-                        ),
-                        tone: SemanticPillTone.relationship,
-                      ),
-                    if (runtimeStatus != null)
-                      SemanticPill(
-                        label: localizeAgentVisualStatus(
-                          context.l10n,
-                          runtimeStatus,
-                        ),
-                        tone: SemanticPillTone.status,
-                      ),
-                  ],
-                ),
-                if (homepageUrl.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 14),
-                  AppInlineLinkRow(
-                    label: homepageUrl,
-                    onTap: () => _openHomepage(homepageUrl),
+            child: IdentityProfileCard(
+              key: const Key('peer-info-identity-card'),
+              header: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  AvatarBadge(
+                    key: const Key('peer-info-avatar'),
+                    seed: displayName,
+                    size: responsive.isPhone ? 58 : 56,
+                    avatarUri: avatarUri,
                   ),
+                  SizedBox(width: responsive.spacing(14)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                primaryIdentity,
+                                key: const Key('peer-info-dialog-handle-value'),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AwikiMePalette.inkNeutral,
+                                  fontSize: responsive.isPhone ? 20 : 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (runtimeAgent != null) ...<Widget>[
+                              SizedBox(width: responsive.spacing(6)),
+                              _AgentRenameIconButton(
+                                agent: runtimeAgent,
+                                onRename: _renameAgent,
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (secondaryIdentity.isNotEmpty) ...<Widget>[
+                          SizedBox(height: responsive.spacing(3)),
+                          Text(
+                            secondaryIdentity,
+                            key: const Key('peer-info-dialog-display-name'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AwikiMePalette.mutedNeutral,
+                              fontSize: responsive.bodySm,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                        if (showAgentAlias) ...<Widget>[
+                          SizedBox(height: responsive.spacing(3)),
+                          Text(
+                            agentAlias,
+                            key: const Key('peer-info-dialog-agent-alias'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AwikiMePalette.messagePreview,
+                              fontSize: responsive.metaSm,
+                              height: 1.25,
+                            ),
+                          ),
+                        ],
+                        SizedBox(height: responsive.spacing(8)),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: <Widget>[
+                            SemanticPill(
+                              label: looksLikeAgent
+                                  ? context.l10n.identityTypeAgent
+                                  : context.l10n.identityTypeUser,
+                              tone: SemanticPillTone.identity,
+                            ),
+                            if (profile == null && state.isLoading)
+                              SemanticPill(
+                                label: context.l10n.chatPeerInfoProfileLoading,
+                                tone: SemanticPillTone.muted,
+                              )
+                            else if (profile == null && state.hasError)
+                              SemanticPill(
+                                label:
+                                    context.l10n.chatPeerInfoProfileUnavailable,
+                                tone: SemanticPillTone.muted,
+                              )
+                            else if (!looksLikeAgent && profile != null)
+                              SemanticPill(
+                                label: localizeRelationshipLabel(
+                                  context.l10n,
+                                  relationship,
+                                ),
+                                tone: SemanticPillTone.relationship,
+                              ),
+                            if (runtimeDisplay != null)
+                              SemanticPill(
+                                label: runtimeDisplay.label,
+                                tone: SemanticPillTone.runtime,
+                              )
+                            else if (looksLikeAgent && profile != null)
+                              SemanticPill(
+                                label: localizeRelationshipLabel(
+                                  context.l10n,
+                                  relationship,
+                                ),
+                                tone: SemanticPillTone.relationship,
+                              ),
+                            if (runtimeStatus != null)
+                              SemanticPill(
+                                label: localizeAgentVisualStatus(
+                                  context.l10n,
+                                  runtimeStatus,
+                                ),
+                                tone: SemanticPillTone.status,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (canFollowProfile) ...<Widget>[
+                    SizedBox(width: responsive.spacing(8)),
+                    _ChatFollowButton(
+                      isFollowing: isFollowing,
+                      compact: responsive.isPhone,
+                      onTap: () => _toggleFollow(profileDid),
+                    ),
+                  ],
                 ],
+              ),
+              metadata: <Widget>[
+                if (profileDid.isNotEmpty)
+                  IdentityProfileMetadataRow(
+                    label: 'DID',
+                    child: CopyableDidLine(
+                      value: profileDid,
+                      displayValue: DidDisplayFormatter.compactDidPath(
+                        profileDid,
+                      ),
+                      maxLines: 2,
+                      copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                      copiedMessage: context.l10n.chatPeerInfoDidCopied,
+                      textKey: const Key('peer-info-dialog-did-value'),
+                      buttonKey: const Key('peer-info-dialog-copy-did-button'),
+                      textStyle: TextStyle(
+                        color: AwikiMePalette.inkNeutral,
+                        fontSize: responsive.bodySm,
+                        height: 1.35,
+                      ),
+                      buttonSize: responsive.displayScaled(30),
+                      iconSize: responsive.displayScaled(14),
+                    ),
+                  ),
+                if (homepageUrl.isNotEmpty)
+                  IdentityProfileMetadataRow(
+                    label: context.l10n.profileHomepageLabel,
+                    child: IdentityProfileLinkValue(
+                      value: homepageUrl,
+                      actionLabel: context.l10n.profileOpenHomepage,
+                      onTap: () => _openHomepage(homepageUrl),
+                    ),
+                  ),
               ],
             ),
           ),
-          if (canFollowProfile) ...<Widget>[
-            const SizedBox(height: 14),
-            _ChatFollowButton(
-              isFollowing: isFollowing,
-              compact: false,
-              onTap: () => _toggleFollow(profileDid),
-            ),
-          ],
           const SizedBox(height: 16),
           SelectionArea(
-            child: _PeerInfoSection(
+            child: IdentityDocumentCard(
+              key: const Key('peer-info-identity-document'),
               title: context.l10n.chatPeerInfoIdentityCard,
               child: profileContent.isEmpty
                   ? _profilePlaceholder(state)
@@ -345,10 +363,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                       selectable: false,
                       styleSheet: _chatMarkdownStyleSheet(
                         context,
-                        const TextStyle(
+                        TextStyle(
                           color: AwikiMePalette.inkNeutral,
-                          fontSize: 13,
-                          height: 1.45,
+                          fontSize: responsive.isPhone ? 15 : 13,
+                          height: 1.5,
                         ),
                       ),
                     ),
@@ -524,13 +542,39 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
 }
 
 class _PeerInfoHeader extends StatelessWidget {
-  const _PeerInfoHeader({required this.title});
+  const _PeerInfoHeader({required this.title, this.fullPage = false});
 
   final String title;
+  final bool fullPage;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    if (fullPage) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AwikiMePalette.content,
+          border: Border(bottom: BorderSide(color: AwikiMePalette.hairline)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: AwikiMeTopBar(
+            title: title,
+            padding: EdgeInsets.zero,
+            leading: TopBarActionButton(
+              key: const Key('peer-info-back-button'),
+              onTap: () => Navigator.of(context).pop(),
+              semanticsLabel: context.l10n.commonBack,
+              child: AwikiMeSemanticIcon(
+                role: AwikiMeIconRole.back,
+                color: context.awikiTheme.primaryDark,
+                size: responsive.iconSm,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return SizedBox(
       height: responsive.displayScaled(58),
       child: DecoratedBox(
@@ -624,10 +668,12 @@ class _GroupInfoDialog extends ConsumerStatefulWidget {
   const _GroupInfoDialog({
     required this.initialGroup,
     required this.onGroupUpdated,
+    this.fullPage = false,
   });
 
   final GroupSummary initialGroup;
   final ValueChanged<GroupSummary> onGroupUpdated;
+  final bool fullPage;
 
   @override
   ConsumerState<_GroupInfoDialog> createState() => _GroupInfoDialogState();
@@ -660,187 +706,197 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
     final members = ref.watch(groupMembersProvider(groupId));
     final currentDid = ref.watch(sessionProvider).session?.did;
     final canManageMembers = canManageGroupMembers(_group);
-    return AppDialogScaffold(
-      maxWidth: 620,
-      borderRadius: BorderRadius.circular(responsive.radius(14)),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          _PeerInfoHeader(title: context.l10n.chatPeerInfoGroupTitle),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                responsive.spacing(18),
-                responsive.spacing(16),
-                responsive.spacing(18),
-                responsive.spacing(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  SelectionArea(
-                    child: _PeerInfoSection(
-                      title: context.l10n.chatPeerInfoGroupSection,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              AvatarBadge(
-                                seed: _group.displayName,
-                                size: responsive.isPhone ? 56 : 64,
-                                avatarUri: _group.avatarUri,
-                              ),
-                              SizedBox(width: responsive.spacing(14)),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      _group.displayName,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: AwikiMePalette.inkNeutral,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 7),
-                                    Text(
-                                      _group.description.isEmpty
-                                          ? context.l10n.groupNoDescription
-                                          : _group.description,
-                                      style: const TextStyle(
-                                        color: AwikiMePalette.mutedNeutral,
-                                        fontSize: 13,
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: <Widget>[
-                              SemanticPill(
-                                label: context.l10n.conversationPeerTypeGroup,
-                                tone: SemanticPillTone.identity,
-                              ),
-                              SemanticPill(
-                                label: context.l10n.groupMemberCount(
-                                  _group.memberCount,
-                                ),
-                                tone: SemanticPillTone.metadata,
-                              ),
-                              SemanticPill(
-                                label: _group.myRole ?? 'member',
-                                tone: SemanticPillTone.relationship,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          CopyableDidLine(
-                            value: groupId,
-                            copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
-                            copiedMessage: context.l10n.chatPeerInfoDidCopied,
-                            textKey: const Key('group-info-dialog-did-value'),
-                            buttonKey: const Key(
-                              'group-info-dialog-copy-did-button',
-                            ),
-                            textStyle: const TextStyle(
-                              color: AwikiMePalette.mutedNeutral,
-                              fontSize: 12,
-                              height: 1.25,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: responsive.spacing(16)),
-                  _PeerInfoSection(
-                    title: context.l10n.groupMembersTitle,
+    final content = Column(
+      mainAxisSize: widget.fullPage ? MainAxisSize.max : MainAxisSize.min,
+      children: <Widget>[
+        _PeerInfoHeader(
+          title: context.l10n.chatPeerInfoGroupTitle,
+          fullPage: widget.fullPage,
+        ),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              responsive.spacing(18),
+              responsive.spacing(16),
+              responsive.spacing(18),
+              responsive.spacing(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SelectionArea(
+                  child: _PeerInfoSection(
+                    title: context.l10n.chatPeerInfoGroupSection,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Row(
                           children: <Widget>[
+                            AvatarBadge(
+                              seed: _group.displayName,
+                              size: responsive.isPhone ? 56 : 64,
+                              avatarUri: _group.avatarUri,
+                            ),
+                            SizedBox(width: responsive.spacing(14)),
                             Expanded(
-                              child: Text(
-                                members.isEmpty
-                                    ? context.l10n.groupMembersEmpty
-                                    : context.l10n.chatPeerInfoMemberCount(
-                                        members.length,
-                                      ),
-                                style: AwikiMeTextStyles.cardSubtitle,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    _group.displayName,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AwikiMePalette.inkNeutral,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  Text(
+                                    _group.description.isEmpty
+                                        ? context.l10n.groupNoDescription
+                                        : _group.description,
+                                    style: const TextStyle(
+                                      color: AwikiMePalette.mutedNeutral,
+                                      fontSize: 13,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                            _GroupInfoIconButton(
-                              key: const Key(
-                                'group-info-dialog-add-member-button',
-                              ),
-                              semanticLabel: context.l10n.groupAddMembers,
-                              icon: CupertinoIcons.person_add,
-                              onTap: canManageMembers
-                                  ? () => _showAddMemberDialog(members)
-                                  : null,
-                            ),
-                            const SizedBox(width: 8),
-                            _GroupInfoIconButton(
-                              key: const Key(
-                                'group-info-dialog-refresh-members-button',
-                              ),
-                              semanticLabel: context.l10n.groupRefreshMembers,
-                              icon: CupertinoIcons.refresh,
-                              isLoading: _isRefreshingMembers,
-                              onTap: _isRefreshingMembers
-                                  ? null
-                                  : _refreshMembers,
                             ),
                           ],
                         ),
-                        if (members.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 14),
-                          ...members.map(
-                            (item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: GroupMemberRow(
-                                item: item,
-                                onRemove:
-                                    canRemoveGroupMember(
-                                      group: _group,
-                                      member: item,
-                                      currentDid: currentDid,
-                                    )
-                                    ? () => _confirmRemoveMember(item)
-                                    : null,
-                                showRemoveButton: true,
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: <Widget>[
+                            SemanticPill(
+                              label: context.l10n.conversationPeerTypeGroup,
+                              tone: SemanticPillTone.identity,
+                            ),
+                            SemanticPill(
+                              label: context.l10n.groupMemberCount(
+                                _group.memberCount,
                               ),
+                              tone: SemanticPillTone.metadata,
                             ),
-                          ),
-                        ],
-                        if (ref.watch(groupProvider).isLoading) ...<Widget>[
-                          const SizedBox(height: 12),
-                          Center(
-                            child: CupertinoActivityIndicator(
-                              color: theme.primary,
+                            SemanticPill(
+                              label: _group.myRole ?? 'member',
+                              tone: SemanticPillTone.relationship,
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        CopyableDidLine(
+                          value: groupId,
+                          copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                          copiedMessage: context.l10n.chatPeerInfoDidCopied,
+                          textKey: const Key('group-info-dialog-did-value'),
+                          buttonKey: const Key(
+                            'group-info-dialog-copy-did-button',
                           ),
-                        ],
+                          textStyle: const TextStyle(
+                            color: AwikiMePalette.mutedNeutral,
+                            fontSize: 12,
+                            height: 1.25,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+                SizedBox(height: responsive.spacing(16)),
+                _PeerInfoSection(
+                  title: context.l10n.groupMembersTitle,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              members.isEmpty
+                                  ? context.l10n.groupMembersEmpty
+                                  : context.l10n.chatPeerInfoMemberCount(
+                                      members.length,
+                                    ),
+                              style: AwikiMeTextStyles.cardSubtitle,
+                            ),
+                          ),
+                          _GroupInfoIconButton(
+                            key: const Key(
+                              'group-info-dialog-add-member-button',
+                            ),
+                            semanticLabel: context.l10n.groupAddMembers,
+                            icon: CupertinoIcons.person_add,
+                            onTap: canManageMembers
+                                ? () => _showAddMemberDialog(members)
+                                : null,
+                          ),
+                          const SizedBox(width: 8),
+                          _GroupInfoIconButton(
+                            key: const Key(
+                              'group-info-dialog-refresh-members-button',
+                            ),
+                            semanticLabel: context.l10n.groupRefreshMembers,
+                            icon: CupertinoIcons.refresh,
+                            isLoading: _isRefreshingMembers,
+                            onTap: _isRefreshingMembers
+                                ? null
+                                : _refreshMembers,
+                          ),
+                        ],
+                      ),
+                      if (members.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 14),
+                        ...members.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: GroupMemberRow(
+                              item: item,
+                              onRemove:
+                                  canRemoveGroupMember(
+                                    group: _group,
+                                    member: item,
+                                    currentDid: currentDid,
+                                  )
+                                  ? () => _confirmRemoveMember(item)
+                                  : null,
+                              showRemoveButton: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (ref.watch(groupProvider).isLoading) ...<Widget>[
+                        const SizedBox(height: 12),
+                        Center(
+                          child: CupertinoActivityIndicator(
+                            color: theme.primary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+    if (widget.fullPage) {
+      return CupertinoPageScaffold(
+        backgroundColor: theme.surface,
+        child: SafeArea(bottom: false, child: content),
+      );
+    }
+    return AppDialogScaffold(
+      maxWidth: 620,
+      borderRadius: BorderRadius.circular(responsive.radius(14)),
+      child: content,
     );
   }
 
@@ -1019,41 +1075,6 @@ class _MacChatPill extends StatelessWidget {
           color: textColor,
           fontSize: responsive.displayScaled(11.5),
           fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
-
-class _ChatAgentPill extends StatelessWidget {
-  const _ChatAgentPill({required this.label, this.muted = false});
-
-  final String label;
-  final bool muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(7),
-        vertical: responsive.displayScaled(3),
-      ),
-      decoration: BoxDecoration(
-        color: muted ? AwikiMePalette.mist : AwikiMePalette.brandAccentSoft,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: muted
-              ? AwikiMePalette.mutedNeutral
-              : AwikiMePalette.brandAccent,
-          fontSize: responsive.displayScaled(10.5),
-          fontWeight: FontWeight.w600,
-          height: 1,
         ),
       ),
     );

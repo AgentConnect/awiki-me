@@ -31,6 +31,14 @@
   "commonLoading": "加载中...",
   "commonError": "错误",
   "commonErrorDetails": "错误详情",
+  "displayScaleValue": "显示比例 {percent}%",
+  "@displayScaleValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "realtimeStatusConnecting": "正在连接消息服务...",
   "realtimeStatusReconnecting": "消息连接中断，正在重连...",
   "realtimeStatusDisconnected": "消息服务已断开，正在尝试恢复",
@@ -222,6 +230,8 @@
   "conversationBackToChat": "返回会话",
   "friendsTitle": "联系人",
   "friendsGroups": "群组",
+  "friendsGroupsSubtitle": "我加入的全部群聊",
+  "friendsMutualEmpty": "暂时还没有互相关注的朋友。",
   "friendsFollowing": "我关注的",
   "friendsFollowers": "关注我的",
   "friendsViewAll": "查看全部",
@@ -239,6 +249,7 @@
   "profileEditTitle": "编辑个人资料",
   "profileBioPlaceholder": "个人简介",
   "profileTagsPlaceholder": "标签，使用英文逗号分隔",
+  "profileHomepageLabel": "主页",
   "profileOpenHomepage": "打开主页",
   "settingsTitle": "设置",
   "settingsLanguage": "语言",
@@ -945,9 +956,9 @@
   "agentInboxQueryFailed": "收件箱查询失败",
   "agentInboxThreadQueryFailed": "线程查询失败",
   "relationshipNone": "未关注",
-  "relationshipFollowing": "following",
-  "relationshipFollower": "follower",
-  "relationshipFriend": "friend",
+  "relationshipFollowing": "已关注",
+  "relationshipFollower": "关注了我",
+  "relationshipFriend": "朋友",
   "profileUpdated": "个人资料已更新",
   "exportedTo": "已导出到 {path}",
   "@exportedTo": {

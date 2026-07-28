@@ -191,20 +191,13 @@ class _TenantManagementDialogState
   Future<void> _deleteTenant(AppTenantProfile tenant) async {
     final confirmed = await AppNavigator.showDialog<bool>(
       context,
-      (dialogContext) => CupertinoAlertDialog(
-        title: Text(dialogContext.l10n.tenantDeleteTitle),
-        content: Text(dialogContext.l10n.tenantDeleteContent(tenant.name)),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(dialogContext.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(dialogContext.l10n.commonDelete),
-          ),
-        ],
+      (dialogContext) => AppConfirmationDialog(
+        title: dialogContext.l10n.tenantDeleteTitle,
+        message: dialogContext.l10n.tenantDeleteContent(tenant.name),
+        confirmLabel: dialogContext.l10n.commonDelete,
+        destructive: true,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
       ),
     );
     if (confirmed != true || !mounted) {

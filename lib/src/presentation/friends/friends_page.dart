@@ -11,11 +11,14 @@ import '../group/group_list_page.dart';
 import '../profile/peer_display_profile_provider.dart';
 import '../profile/peer_profile_page.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/app_dialog.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'friends_provider.dart';
 
@@ -71,6 +74,7 @@ class FriendsPage extends ConsumerWidget {
     final theme = context.awikiTheme;
     final following = state.following.take(_previewLimit).toList();
     final followers = state.followers.take(_previewLimit).toList();
+    final mutualFriends = state.mutualFriends.take(_previewLimit).toList();
     final openGroups =
         onGroupTap ??
         () => AppNavigator.push(context, (_) => const GroupListPage());
@@ -79,8 +83,29 @@ class FriendsPage extends ConsumerWidget {
         padding: EdgeInsets.only(top: responsive.spacing(12)),
         child: _FriendRow.group(
           title: context.l10n.friendsGroups,
+          subtitle: context.l10n.friendsGroupsSubtitle,
           onTap: openGroups,
         ),
+      ),
+      _FriendsSection(
+        title: context.l10n.shellNavFriends,
+        children: mutualFriends.isEmpty
+            ? <Widget>[
+                _FriendsPreviewStatus(message: context.l10n.friendsMutualEmpty),
+              ]
+            : mutualFriends
+                  .map(
+                    (item) => _FriendRow.contact(
+                      rowKey: Key('friend-row:${item.did.trim()}'),
+                      titleKey: Key('friend-row-title:${item.did.trim()}'),
+                      seed: _displayName(ref, item),
+                      title: _displayName(ref, item),
+                      subtitle: _handleLabel(item.handle),
+                      avatarUri: _avatarUri(ref, item),
+                      onTap: () => _openContact(context, item),
+                    ),
+                  )
+                  .toList(),
       ),
       _FriendsSection(
         title: context.l10n.friendsFollowing,
@@ -181,22 +206,42 @@ class FriendsPage extends ConsumerWidget {
       );
     }
 
-    final content = AwikiMeShellTabPage(
-      title: context.l10n.friendsTitle,
-      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: embedded ? bottomInset : 120),
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: theme.background),
-          child: ListView(children: sectionWidgets),
-        ),
+    final list = Padding(
+      padding: EdgeInsets.only(bottom: embedded ? bottomInset : 120),
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: theme.background),
+        child: ListView(children: sectionWidgets),
       ),
     );
 
     if (embedded) {
-      return content;
+      return Column(
+        children: <Widget>[
+          AwikiSidebarHeader(
+            key: const Key('friends-expanded-list-header'),
+            title: context.l10n.friendsTitle,
+            trailing: TopBarActionButton(
+              key: const Key('shell-quick-actions-button'),
+              onTap: () => showCommonQuickActionsMenu(context, ref),
+              semanticsIdentifier: 'e2e-quick-actions-button',
+              semanticsLabel: context.l10n.commonMoreActions,
+              child: AwikiMeSemanticIcon(
+                role: AwikiMeIconRole.add,
+                size: responsive.iconMd,
+                color: theme.secondaryText,
+              ),
+            ),
+          ),
+          Expanded(child: list),
+        ],
+      );
     }
 
+    final content = AwikiMeShellTabPage(
+      title: context.l10n.friendsTitle,
+      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
+      child: list,
+    );
     return AwikiAdaptiveScaffold(
       maxWidth: responsive.supportsTwoPane ? double.infinity : 920,
       child: content,
@@ -239,6 +284,8 @@ class _CompactFriendsDirectory extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = context.awikiTheme;
+    final state = ref.watch(friendsProvider);
+    final mutualFriends = state.mutualFriends.take(_previewLimit).toList();
     final openGroups =
         onGroupTap ??
         () => AppNavigator.push(context, (_) => const GroupListPage());
@@ -251,7 +298,43 @@ class _CompactFriendsDirectory extends ConsumerWidget {
           children: <Widget>[
             _FriendRow.group(
               title: context.l10n.friendsGroups,
+              subtitle: context.l10n.friendsGroupsSubtitle,
               onTap: openGroups,
+            ),
+            _FriendsSection(
+              title: context.l10n.shellNavFriends,
+              children: mutualFriends.isEmpty
+                  ? <Widget>[
+                      _FriendsPreviewStatus(
+                        message: context.l10n.friendsMutualEmpty,
+                      ),
+                    ]
+                  : mutualFriends
+                        .map(
+                          (item) => _FriendRow.contact(
+                            rowKey: Key(
+                              'compact-friend-row:${item.did.trim()}',
+                            ),
+                            titleKey: Key(
+                              'compact-friend-row-title:${item.did.trim()}',
+                            ),
+                            seed: _displayName(ref, item),
+                            title: _displayName(ref, item),
+                            subtitle: _handleLabel(item.handle),
+                            avatarUri: _avatarUri(ref, item),
+                            onTap: () {
+                              if (onContactTap case final callback?) {
+                                callback(item);
+                                return;
+                              }
+                              AppNavigator.push(
+                                context,
+                                (_) => PeerProfilePage(did: item.did),
+                              );
+                            },
+                          ),
+                        )
+                        .toList(),
             ),
             Expanded(
               child: RelationshipDirectoryPage(
@@ -422,14 +505,16 @@ class _FriendRow extends StatelessWidget {
     this.avatarUri,
   }) : isGroup = false;
 
-  const _FriendRow.group({required this.title, required this.onTap})
-    : isGroup = true,
-      rowKey = const Key('friends-groups-row'),
-      titleKey = null,
-      seed = 'group',
-      subtitle = null,
-      trailing = null,
-      avatarUri = null;
+  const _FriendRow.group({
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+  }) : isGroup = true,
+       rowKey = const Key('friends-groups-row'),
+       titleKey = null,
+       seed = 'group',
+       trailing = null,
+       avatarUri = null;
 
   final bool isGroup;
   final Key rowKey;
@@ -530,10 +615,8 @@ class _RelationshipActionButtonInnerState
     final theme = context.awikiTheme;
     final background = widget.destructive
         ? theme.dangerContainer
-        : theme.primary;
-    final foreground = widget.destructive
-        ? theme.danger
-        : theme.primaryForeground;
+        : theme.primary.withValues(alpha: 0.08);
+    final foreground = widget.destructive ? theme.danger : theme.primaryDark;
     return AppPressable(
       onTap: _isBusy
           ? null
@@ -1056,21 +1139,14 @@ Future<void> confirmAndUnfollow(
 ) async {
   final confirmed = await AppNavigator.showDialog<bool>(
     context,
-    (ctx) => CupertinoAlertDialog(
-      title: Text(context.l10n.friendsUnfollowTitle),
-      content: Text(context.l10n.friendsUnfollowMessage),
-      actions: <Widget>[
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: Text(context.l10n.commonCancel),
-        ),
-        CupertinoDialogAction(
-          key: const Key('confirm-unfollow-button'),
-          isDestructiveAction: true,
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: Text(context.l10n.friendsUnfollow),
-        ),
-      ],
+    (ctx) => AppConfirmationDialog(
+      title: context.l10n.friendsUnfollowTitle,
+      message: context.l10n.friendsUnfollowMessage,
+      confirmLabel: context.l10n.friendsUnfollow,
+      confirmButtonKey: const Key('confirm-unfollow-button'),
+      destructive: true,
+      onCancel: () => Navigator.of(ctx).pop(false),
+      onConfirm: () => Navigator.of(ctx).pop(true),
     ),
   );
   if (confirmed != true) {

@@ -142,6 +142,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
         throw StateError(
           _friendlyMessage(error, fallback: 'attachment_picker_failed'),
         );
+      } on FileSystemException {
+        throw StateError('attachment_picker_failed');
       }
     }
     try {
@@ -156,24 +158,28 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
           _readString(result, 'mime_type') ?? 'application/octet-stream';
       final path = _readString(result, 'path');
       final bytes = _readBytes(result['bytes']);
-      final sizeBytes =
-          _readInt(result, 'size_bytes') ??
-          bytes?.length ??
-          _fileSizeIfAvailable(path);
       if ((path == null || path.isEmpty) && bytes == null) {
         throw StateError('attachment_picker_empty_result');
       }
-      return draftFromExternalSource(
+      if (bytes != null) {
+        return draftFromExternalSource(
+          filename: filename,
+          mimeType: mimeType,
+          bytes: bytes,
+          sizeBytes: bytes.length,
+        );
+      }
+      return _draftFromPlatformStagedPath(
+        path: path!,
         filename: filename,
         mimeType: mimeType,
-        path: path,
-        bytes: bytes,
-        sizeBytes: sizeBytes,
       );
     } on PlatformException catch (error) {
       throw StateError(
         _friendlyMessage(error, fallback: 'attachment_picker_failed'),
       );
+    } on FileSystemException {
+      throw StateError('attachment_picker_failed');
     }
   }
 
@@ -368,6 +374,40 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     );
   }
 
+  Future<AttachmentDraft?> _draftFromPlatformStagedPath({
+    required String path,
+    required String filename,
+    required String mimeType,
+  }) async {
+    final stagedPath = _trimToNull(path);
+    if (stagedPath == null) {
+      return null;
+    }
+    final resolvedFilename = _resolvedFilename(
+      explicitFilename: filename,
+      path: stagedPath,
+      mimeType: mimeType,
+    );
+    final resolvedMimeType = _resolvedMimeType(mimeType, resolvedFilename);
+    final stagedFile = File(stagedPath);
+    final stat = await stagedFile.stat();
+    if (stat.type != FileSystemEntityType.file) {
+      return null;
+    }
+    _validateAttachmentSize(stat.size);
+
+    // Native Apple and Android pickers already return an app-owned copy. Its
+    // original modification time may be preserved, so refresh the staging TTL
+    // when Dart accepts ownership instead of copying the file a second time.
+    await stagedFile.setLastModified(DateTime.now());
+    return AttachmentDraft(
+      filename: resolvedFilename,
+      mimeType: resolvedMimeType,
+      localPath: stagedFile.path,
+      sizeBytes: stat.size,
+    );
+  }
+
   @override
   Future<AttachmentDraft?> readClipboardAttachment() async {
     try {
@@ -456,17 +496,6 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  int? _readInt(Map<String, Object?> value, String key) {
-    final raw = value[key];
-    if (raw is int) {
-      return raw;
-    }
-    if (raw is num) {
-      return raw.toInt();
-    }
-    return null;
-  }
-
   Uint8List? _readBytes(Object? raw) {
     if (raw is Uint8List) {
       return raw;
@@ -477,24 +506,16 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     return null;
   }
 
-  int? _fileSizeIfAvailable(String? path) {
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-    try {
-      return File(path).lengthSync();
-    } catch (_) {
-      return null;
-    }
-  }
-
   Future<String> _copyExternalFileToTemporaryDirectory({
     required File sourceFile,
     required String filename,
   }) async {
     final directory = await _attachmentTemporaryDirectoryProvider();
     await directory.create(recursive: true);
-    await _cleanupOldAttachmentTempFiles(directory);
+    await _cleanupOldAttachmentTempFiles(
+      directory,
+      protectedPaths: <String>[sourceFile.absolute.path],
+    );
     final safeName = _sanitizedFileName(filename);
     final destination = File(
       p.join(
@@ -503,7 +524,9 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       ),
     );
     await destination.parent.create(recursive: true);
-    return sourceFile.copy(destination.path).then((file) => file.path);
+    final copied = await sourceFile.copy(destination.path);
+    await copied.setLastModified(DateTime.now());
+    return copied.path;
   }
 
   void _validateAttachmentSize(int sizeBytes) {
@@ -515,10 +538,18 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     }
   }
 
-  Future<void> _cleanupOldAttachmentTempFiles(Directory directory) async {
+  Future<void> _cleanupOldAttachmentTempFiles(
+    Directory directory, {
+    Iterable<String> protectedPaths = const <String>[],
+  }) async {
     final cutoff = DateTime.now().subtract(const Duration(days: 1));
     await for (final entity in directory.list(followLinks: false)) {
       try {
+        if (protectedPaths.any(
+          (protectedPath) => p.equals(protectedPath, entity.path),
+        )) {
+          continue;
+        }
         final stat = await entity.stat();
         if (stat.modified.isBefore(cutoff)) {
           await entity.delete(recursive: true);

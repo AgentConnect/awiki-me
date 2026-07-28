@@ -7,6 +7,7 @@ import '../app_shell/providers/navigation_provider.dart';
 import '../friends/friends_navigation_provider.dart';
 import '../group/create_group_dialog.dart';
 import 'identity_flow.dart';
+import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
 
 Future<void> showCommonQuickActionsMenu(
@@ -19,9 +20,10 @@ Future<void> showCommonQuickActionsMenu(
   await AppNavigator.showSheet<void>(
     context,
     (_) => AppDropMenu(
-      title: l10n.quickActionsTitle.toUpperCase(),
+      title: l10n.quickActionsTitle,
       items: <AppDropMenuItem>[
         AppDropMenuItem(
+          buttonKey: const Key('quick-action-start-conversation'),
           label: l10n.quickActionStartConversation,
           icon: CupertinoIcons.square_pencil,
           semanticsIdentifier: 'e2e-start-conversation-menu-item',
@@ -39,7 +41,10 @@ Future<void> showCommonQuickActionsMenu(
             ref.read(friendsWorkspaceNavigationProvider.notifier).showGroups();
             ref
                 .read(shellDestinationProvider.notifier)
-                .select(ShellDestination.contacts);
+                .selectForLayout(
+                  ShellDestination.contacts,
+                  expanded: rootContext.awikiResponsive.usesDesktopLayout,
+                );
           },
         ),
         if (includeFollowContact)

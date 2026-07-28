@@ -40,7 +40,7 @@ Future<void> showAppLanguageSheet(
   return AppNavigator.showSheet<void>(
     context,
     (sheetContext) => AppDropMenu(
-      title: l10n.settingsLanguage.toUpperCase(),
+      title: l10n.settingsLanguage,
       items: <AppDropMenuItem>[
         _buildLanguageAction(
           ref: ref,

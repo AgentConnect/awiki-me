@@ -866,7 +866,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('公开 Profile 标记为 agent 时移动端头部显示智能体标记', (tester) async {
+  testWidgets('公开 Profile 标记为 agent 时移动端头部保持纯标题', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -914,7 +914,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('远端智能体'), findsOneWidget);
-    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('智能体'), findsNothing);
     expect(find.text('我的智能体'), findsNothing);
     expect(find.text('关注'), findsNothing);
 
@@ -1368,7 +1368,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
-    expect(find.text('已关注'), findsOneWidget);
+    expect(find.text('已关注'), findsWidgets);
     expect(find.byKey(const Key('chat-unfollow-button')), findsOneWidget);
   });
 
@@ -1580,7 +1580,6 @@ void main() {
     await tester.tap(find.byKey(const Key('chat-unfollow-button')));
     await tester.pump();
 
-    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
     expect(gateway.lastUnfollowedDidOrHandle, isNull);
 
     expect(find.byKey(const Key('confirm-unfollow-button')), findsOneWidget);
@@ -7976,7 +7975,7 @@ void main() {
         .openConversation(conversation);
     await tester.pumpAndSettle();
 
-    expect(find.text('智能体已删除'), findsOneWidget);
+    expect(find.text('智能体已删除'), findsNothing);
     expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
     expect(find.text('历史消息仍可查看'), findsOneWidget);
     expect(find.byType(CupertinoTextField), findsNothing);

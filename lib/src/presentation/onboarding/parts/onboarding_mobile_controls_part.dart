@@ -18,23 +18,12 @@ class _CompactOnboardingCard extends StatelessWidget {
     return Container(
       key: const Key('onboarding-compact-auth-card'),
       padding: EdgeInsets.fromLTRB(
-        responsive.spacing(20),
-        responsive.spacing(20),
-        responsive.spacing(20),
+        responsive.spacing(4),
+        responsive.spacing(12),
+        responsive.spacing(4),
         responsive.spacing(22),
       ),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        borderRadius: BorderRadius.circular(responsive.radius(16)),
-        border: Border.all(color: theme.border),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0D17213A),
-            blurRadius: 24,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
+      color: theme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[

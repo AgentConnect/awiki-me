@@ -20,6 +20,7 @@ import '../profile/profile_workspace_page.dart';
 import '../settings/settings_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
@@ -60,6 +61,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   int? _lastFeedbackId;
   final Set<ShellDestination> _retainedDestinations = <ShellDestination>{};
   String? _retainedSessionDid;
+  bool? _previousExpandedLayout;
+  bool _desktopIdentityDialogOpen = false;
 
   @override
   void initState() {
@@ -124,6 +127,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     final expanded = responsive.usesDesktopLayout;
+    final enteredDesktopFromCompactProfile =
+        _previousExpandedLayout == false &&
+        expanded &&
+        selectedDestination == ShellDestination.profile;
+    _previousExpandedLayout = expanded;
     final destination = navigationController.resolvedFor(expanded);
     if (destination != selectedDestination) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -131,6 +139,13 @@ class _AppShellState extends ConsumerState<AppShell> {
           return;
         }
         ref.read(shellDestinationProvider.notifier).reconcileFor(expanded);
+      });
+    }
+    if (enteredDesktopFromCompactProfile) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showDesktopIdentityDialog();
+        }
       });
     }
 
@@ -145,7 +160,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       currentDestination: destination,
       unreadCount: unreadCount,
       onTap: (next) {
-        ref.read(shellDestinationProvider.notifier).select(next);
+        ref.read(shellDestinationProvider.notifier).selectCompact(next);
       },
     );
 
@@ -178,7 +193,8 @@ class _AppShellState extends ConsumerState<AppShell> {
               (state) => state.showsCompactDetail,
             ),
           ),
-          ShellDestination.profile || ShellDestination.settings => true,
+          ShellDestination.settings => true,
+          ShellDestination.profile => false,
           _ => false,
         };
     final content = expanded
@@ -187,8 +203,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             unreadCount: unreadCount,
             session: session.session,
             onTap: (next) {
-              ref.read(shellDestinationProvider.notifier).select(next);
+              ref.read(shellDestinationProvider.notifier).selectExpanded(next);
             },
+            onProfileTap: _showDesktopIdentityDialog,
             child: page,
           )
         : Column(
@@ -225,6 +242,18 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
+  Future<void> _showDesktopIdentityDialog() async {
+    if (!mounted || _desktopIdentityDialogOpen) {
+      return;
+    }
+    _desktopIdentityDialogOpen = true;
+    try {
+      await showCurrentIdentityDialog(context);
+    } finally {
+      _desktopIdentityDialogOpen = false;
+    }
+  }
+
   bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
     return status == RealtimeConnectionStatus.connecting ||
         status == RealtimeConnectionStatus.reconnecting;
@@ -255,9 +284,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       ShellDestination.messages => const ConversationWorkspacePage(),
       ShellDestination.agents => const AgentsWorkspacePage(),
       ShellDestination.contacts => const FriendsWorkspacePage(),
-      ShellDestination.profile => ProfileWorkspacePage(
-        onCompactBack: navigationController.backFromSecondary,
-      ),
+      ShellDestination.profile => const ProfileWorkspacePage(),
       ShellDestination.tasks => _DesktopPlaceholderPage(
         title: context.l10n.shellTasksPlaceholderTitle,
         subtitle: context.l10n.shellTasksPlaceholderSubtitle,
@@ -273,16 +300,16 @@ class _AppShellState extends ConsumerState<AppShell> {
             ? const _DesktopEmbeddedSettingsPage()
             : SettingsPage(
                 onBack: navigationController.backFromSecondary,
-                onProfileTap: () =>
-                    navigationController.select(ShellDestination.profile),
+                onProfileTap: () => navigationController.selectCompact(
+                  ShellDestination.profile,
+                ),
               ),
     };
   }
 }
 
 bool _isCompactSecondaryDestination(ShellDestination destination) {
-  return destination == ShellDestination.profile ||
-      destination == ShellDestination.settings;
+  return destination == ShellDestination.settings;
 }
 
 typedef _ShellPageBuilder = Widget Function(ShellDestination destination);
@@ -345,6 +372,7 @@ class _DesktopShell extends StatelessWidget {
     required this.unreadCount,
     required this.session,
     required this.onTap,
+    required this.onProfileTap,
     required this.child,
   });
 
@@ -352,6 +380,7 @@ class _DesktopShell extends StatelessWidget {
   final int unreadCount;
   final SessionIdentity? session;
   final ValueChanged<ShellDestination> onTap;
+  final VoidCallback onProfileTap;
   final Widget child;
 
   @override
@@ -371,6 +400,7 @@ class _DesktopShell extends StatelessWidget {
             unreadCount: unreadCount,
             session: session,
             onTap: onTap,
+            onProfileTap: onProfileTap,
           ),
         ),
         Container(width: 1, color: context.awikiTheme.border),
@@ -450,12 +480,14 @@ class _DesktopRail extends StatelessWidget {
     required this.unreadCount,
     required this.session,
     required this.onTap,
+    required this.onProfileTap,
   });
 
   final ShellDestination currentDestination;
   final int unreadCount;
   final SessionIdentity? session;
   final ValueChanged<ShellDestination> onTap;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -474,18 +506,17 @@ class _DesktopRail extends StatelessWidget {
                 key: const Key('mac-me-rail-avatar'),
                 seed: avatar.seed,
                 labelOverride: avatar.labelOverride,
-                selected: currentDestination == ShellDestination.profile,
-                onTap: () => onTap(ShellDestination.profile),
+                onTap: onProfileTap,
               ),
-              SizedBox(height: responsive.displayScaled(compact ? 22 : 28)),
+              SizedBox(height: responsive.displayScaled(compact ? 10 : 12)),
               Expanded(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.zero,
                   child: Column(
                     children: <Widget>[
                       _DesktopRailItem(
-                        activeIcon: CupertinoIcons.chat_bubble_2_fill,
-                        inactiveIcon: CupertinoIcons.chat_bubble_2,
+                        key: const Key('desktop-rail-messages'),
+                        role: AwikiMeIconRole.messages,
                         label: context.l10n.shellNavMessages,
                         semanticsIdentifier: 'e2e-messages-tab',
                         selected:
@@ -496,8 +527,8 @@ class _DesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
-                        activeIcon: CupertinoIcons.sparkles,
-                        inactiveIcon: CupertinoIcons.sparkles,
+                        key: const Key('desktop-rail-agents'),
+                        role: AwikiMeIconRole.agents,
                         label: context.l10n.shellNavAgents,
                         selected: currentDestination == ShellDestination.agents,
                         compact: compact,
@@ -506,8 +537,8 @@ class _DesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
-                        activeIcon: CupertinoIcons.person_2_fill,
-                        inactiveIcon: CupertinoIcons.person_2,
+                        key: const Key('desktop-rail-contacts'),
+                        role: AwikiMeIconRole.contacts,
                         label: context.l10n.shellNavContacts,
                         semanticsIdentifier: 'e2e-contacts-tab',
                         selected:
@@ -517,8 +548,8 @@ class _DesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
-                        activeIcon: CupertinoIcons.checkmark_square_fill,
-                        inactiveIcon: CupertinoIcons.checkmark_square,
+                        key: const Key('desktop-rail-tasks'),
+                        role: AwikiMeIconRole.tasks,
                         label: context.l10n.shellNavTasks,
                         selected: currentDestination == ShellDestination.tasks,
                         compact: compact,
@@ -526,8 +557,8 @@ class _DesktopRail extends StatelessWidget {
                       ),
                       SizedBox(height: gap),
                       _DesktopRailItem(
-                        activeIcon: CupertinoIcons.square_grid_2x2_fill,
-                        inactiveIcon: CupertinoIcons.square_grid_2x2,
+                        key: const Key('desktop-rail-workbench'),
+                        role: AwikiMeIconRole.workbench,
                         label: context.l10n.shellNavWorkspace,
                         selected:
                             currentDestination == ShellDestination.workbench,
@@ -539,8 +570,8 @@ class _DesktopRail extends StatelessWidget {
                 ),
               ),
               _DesktopRailItem(
-                activeIcon: CupertinoIcons.gear_alt_fill,
-                inactiveIcon: CupertinoIcons.gear_alt,
+                key: const Key('desktop-rail-settings'),
+                role: AwikiMeIconRole.settings,
                 label: context.l10n.shellNavSettings,
                 semanticsIdentifier: 'e2e-settings-tab',
                 selected: currentDestination == ShellDestination.settings,
@@ -579,20 +610,13 @@ class _DesktopEmbeddedSettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return AwikiPaneLayout(
-      listPaneWidth: 272,
-      minListPaneWidth: 240,
-      minDetailPaneWidth: 360,
-      listPane: SizedBox(
-        key: const Key('mac-settings-list-pane'),
-        child: DecoratedBox(
-          decoration: BoxDecoration(color: theme.background),
-          child: const SettingsPage(embedded: true),
-        ),
+    return AwikiSidebarWorkspace(
+      sidebar: const SizedBox.expand(
+        key: Key('mac-settings-list-pane'),
+        child: SettingsPage(embedded: true),
       ),
       detailPane: DecoratedBox(
-        decoration: BoxDecoration(color: theme.surface),
+        decoration: BoxDecoration(color: context.awikiTheme.surface),
         child: const AwikiWorkspaceEmptyDetail(),
       ),
     );
@@ -601,8 +625,8 @@ class _DesktopEmbeddedSettingsPage extends StatelessWidget {
 
 class _DesktopRailItem extends StatelessWidget {
   const _DesktopRailItem({
-    required this.activeIcon,
-    required this.inactiveIcon,
+    super.key,
+    required this.role,
     required this.label,
     required this.selected,
     required this.compact,
@@ -611,8 +635,7 @@ class _DesktopRailItem extends StatelessWidget {
     this.semanticsIdentifier,
   });
 
-  final IconData activeIcon;
-  final IconData inactiveIcon;
+  final AwikiMeIconRole role;
   final String label;
   final bool selected;
   final bool compact;
@@ -626,9 +649,8 @@ class _DesktopRailItem extends StatelessWidget {
     final foreground = selected
         ? _desktopRailActiveColor
         : _desktopRailInactiveColor;
-    final icon = selected ? activeIcon : inactiveIcon;
     final height = responsive.displayScaled(compact ? 50.0 : 56.0);
-    final width = responsive.displayScaled(58);
+    final width = responsive.displayScaled(54);
     return AppPressable(
       onTap: onTap,
       semanticLabel: label,
@@ -682,11 +704,11 @@ class _DesktopRailItem extends StatelessWidget {
                       width: responsive.displayScaled(30),
                       height: responsive.displayScaled(24),
                       child: Center(
-                        child: Icon(
-                          icon,
+                        child: AwikiMeSemanticIcon(
+                          role: role,
+                          selected: selected,
                           color: foreground,
-                          size: responsive.displayScaled(20),
-                          weight: selected ? 700 : 400,
+                          size: responsive.displayScaled(18),
                         ),
                       ),
                     ),
@@ -755,13 +777,11 @@ class _DesktopRailAvatar extends StatelessWidget {
     super.key,
     required this.seed,
     this.labelOverride,
-    required this.selected,
     required this.onTap,
   });
 
   final String seed;
   final String? labelOverride;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -770,8 +790,7 @@ class _DesktopRailAvatar extends StatelessWidget {
     return AppPressable(
       onTap: onTap,
       semanticLabel: context.l10n.shellNavMe,
-      semanticsIdentifier: 'e2e-profile-tab',
-      selected: selected,
+      semanticsIdentifier: 'e2e-profile-dialog-button',
       scaleOnPress: true,
       pressedScale: 0.96,
       borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
@@ -780,15 +799,9 @@ class _DesktopRailAvatar extends StatelessWidget {
           width: responsive.displayScaled(38),
           height: responsive.displayScaled(38),
           decoration: BoxDecoration(
-            color: selected
-                ? AwikiMePalette.brandAccentSoft
-                : AwikiMePalette.content,
+            color: AwikiMePalette.content,
             borderRadius: BorderRadius.circular(responsive.displayScaled(19)),
-            border: Border.all(
-              color: selected
-                  ? AwikiMePalette.brandAccent
-                  : AwikiMePalette.hairline,
-            ),
+            border: Border.all(color: AwikiMePalette.hairline),
           ),
           child: Center(
             child: AvatarBadge(
@@ -888,10 +901,10 @@ class _BottomNavBar extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: _BottomNavItem(
+                  key: const Key('compact-nav-messages'),
                   label: context.l10n.shellNavMessages,
                   semanticsIdentifier: 'e2e-messages-tab',
-                  activeIcon: CupertinoIcons.chat_bubble_2_fill,
-                  inactiveIcon: CupertinoIcons.chat_bubble_2,
+                  role: AwikiMeIconRole.messages,
                   active: currentDestination == ShellDestination.messages,
                   badge: _formatUnreadBadge(unreadCount),
                   onTap: () => onTap(ShellDestination.messages),
@@ -899,22 +912,32 @@ class _BottomNavBar extends StatelessWidget {
               ),
               Expanded(
                 child: _BottomNavItem(
+                  key: const Key('compact-nav-agents'),
                   label: context.l10n.shellNavAgents,
                   semanticsIdentifier: 'e2e-agents-tab',
-                  activeIcon: CupertinoIcons.sparkles,
-                  inactiveIcon: CupertinoIcons.sparkles,
+                  role: AwikiMeIconRole.agents,
                   active: currentDestination == ShellDestination.agents,
                   onTap: () => onTap(ShellDestination.agents),
                 ),
               ),
               Expanded(
                 child: _BottomNavItem(
+                  key: const Key('compact-nav-contacts'),
                   label: context.l10n.shellNavContacts,
                   semanticsIdentifier: 'e2e-contacts-tab',
-                  activeIcon: CupertinoIcons.person_2_fill,
-                  inactiveIcon: CupertinoIcons.person_2,
+                  role: AwikiMeIconRole.contacts,
                   active: currentDestination == ShellDestination.contacts,
                   onTap: () => onTap(ShellDestination.contacts),
+                ),
+              ),
+              Expanded(
+                child: _BottomNavItem(
+                  key: const Key('compact-nav-profile'),
+                  label: context.l10n.shellNavMe,
+                  semanticsIdentifier: 'e2e-profile-tab',
+                  role: AwikiMeIconRole.profile,
+                  active: currentDestination == ShellDestination.profile,
+                  onTap: () => onTap(ShellDestination.profile),
                 ),
               ),
             ],
@@ -927,10 +950,10 @@ class _BottomNavBar extends StatelessWidget {
 
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
+    super.key,
     required this.label,
     required this.semanticsIdentifier,
-    required this.activeIcon,
-    required this.inactiveIcon,
+    required this.role,
     required this.active,
     required this.onTap,
     this.badge,
@@ -938,8 +961,7 @@ class _BottomNavItem extends StatelessWidget {
 
   final String label;
   final String semanticsIdentifier;
-  final IconData activeIcon;
-  final IconData inactiveIcon;
+  final AwikiMeIconRole role;
   final bool active;
   final VoidCallback onTap;
   final String? badge;
@@ -954,8 +976,9 @@ class _BottomNavItem extends StatelessWidget {
         ? AwikiMePalette.brandAccent
         : AwikiMePalette.mutedNeutral;
     Widget buildNavIcon() {
-      final icon = Icon(
-        active ? activeIcon : inactiveIcon,
+      final icon = AwikiMeSemanticIcon(
+        role: role,
+        selected: active,
         color: foreground,
         size: iconSize,
       );

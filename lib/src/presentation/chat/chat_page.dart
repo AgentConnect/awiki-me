@@ -47,13 +47,17 @@ import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
+import '../profile/profile_markdown.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
+import '../shared/awiki_me_semantic_icon.dart';
+import '../shared/awiki_me_top_bar.dart';
 import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
+import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/semantic_pill.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -1356,6 +1360,16 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _showPeerInfoDialog(ConversationSummary conversation) async {
+    if (context.awikiResponsive.isCompact) {
+      await AppNavigator.push<void>(
+        context,
+        (_) => _PeerInfoDialog(
+          target: _PeerInfoTarget.fromConversation(conversation),
+          fullPage: true,
+        ),
+      );
+      return;
+    }
     await AppNavigator.showDialog<void>(
       context,
       (dialogContext) => _PeerInfoDialog(
@@ -1366,6 +1380,21 @@ class _ChatViewState extends ConsumerState<ChatView> {
 
   Future<void> _showGroupInfoDialog(ConversationSummary conversation) async {
     final displayThreadId = _displayThreadId;
+    if (context.awikiResponsive.isCompact) {
+      await AppNavigator.push<void>(
+        context,
+        (_) => _GroupInfoDialog(
+          initialGroup: _groupSummaryForConversation(conversation),
+          fullPage: true,
+          onGroupUpdated: (updated) => _refreshGroupLocalProjection(
+            conversation,
+            updated,
+            displayThreadId: displayThreadId,
+          ),
+        ),
+      );
+      return;
+    }
     await AppNavigator.showDialog<void>(
       context,
       (dialogContext) => _GroupInfoDialog(

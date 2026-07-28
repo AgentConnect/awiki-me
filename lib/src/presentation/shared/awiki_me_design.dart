@@ -804,27 +804,63 @@ class AwikiMeTheme {
     overlayShadow: AwikiMeShadows.overlay,
   );
 
-  static AwikiMePlatformTheme forPlatform(TargetPlatform platform) =>
-      _platformThemes.putIfAbsent(platform, () => _buildForPlatform(platform));
+  static AwikiMePlatformTheme forPlatform(
+    TargetPlatform platform, {
+    String? fontFamilyOverride,
+  }) {
+    final override = fontFamilyOverride?.trim();
+    if (override != null && override.isNotEmpty) {
+      return _buildForPlatform(platform, fontFamilyOverride: override);
+    }
+    return _platformThemes.putIfAbsent(
+      platform,
+      () => _buildForPlatform(platform),
+    );
+  }
 
-  static AwikiMePlatformTheme _buildForPlatform(TargetPlatform platform) {
-    final isWindows = platform == TargetPlatform.windows;
-    final platformTokens = isWindows ? _windowsTokens() : _baseTokens;
+  static AwikiMePlatformTheme _buildForPlatform(
+    TargetPlatform platform, {
+    String? fontFamilyOverride,
+  }) {
+    final isWindows =
+        platform == TargetPlatform.windows && fontFamilyOverride == null;
+    final fontFamily =
+        fontFamilyOverride ?? (isWindows ? windowsFontFamily : null);
+    final fontFallback = fontFamilyOverride != null
+        ? const <String>[]
+        : (isWindows ? windowsFontFamilyFallback : null);
+    final platformTokens = fontFamilyOverride != null
+        ? _baseTokens.copyWith(
+            compactTypography: _baseTokens.compactTypography.withFont(
+              fontFamily: fontFamilyOverride,
+              fontFamilyFallback: const <String>[],
+            ),
+            expandedTypography: _baseTokens.expandedTypography.withFont(
+              fontFamily: fontFamilyOverride,
+              fontFamilyFallback: const <String>[],
+            ),
+          )
+        : (isWindows ? _windowsTokens() : _baseTokens);
     final baseMaterialTheme = ThemeData(
       useMaterial3: true,
       platform: platform,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
-      fontFamily: isWindows ? windowsFontFamily : null,
-      fontFamilyFallback: isWindows ? windowsFontFamilyFallback : null,
+      fontFamily: fontFamily,
+      fontFamilyFallback: fontFallback,
       extensions: <ThemeExtension<dynamic>>[platformTokens],
     );
     return AwikiMePlatformTheme(
       materialTheme: baseMaterialTheme.copyWith(
-        textTheme: _materialTextThemeFor(baseMaterialTheme.textTheme, platform),
+        textTheme: _materialTextThemeFor(
+          baseMaterialTheme.textTheme,
+          platform,
+          fontFamilyOverride: fontFamilyOverride,
+        ),
         primaryTextTheme: _materialTextThemeFor(
           baseMaterialTheme.primaryTextTheme,
           platform,
+          fontFamilyOverride: fontFamilyOverride,
         ),
       ),
       cupertinoTheme: CupertinoThemeData(
@@ -832,7 +868,10 @@ class AwikiMeTheme {
         primaryColor: colorScheme.primary,
         scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
         barBackgroundColor: colorScheme.surface,
-        textTheme: _cupertinoTextThemeFor(platform),
+        textTheme: _cupertinoTextThemeFor(
+          platform,
+          fontFamilyOverride: fontFamilyOverride,
+        ),
       ),
       tokens: platformTokens,
     );
@@ -861,11 +900,19 @@ class AwikiMeTheme {
 
   static TextTheme _materialTextThemeFor(
     TextTheme base,
-    TargetPlatform platform,
-  ) {
+    TargetPlatform platform, {
+    String? fontFamilyOverride,
+  }) {
     TextStyle? normalize(TextStyle? style) {
       if (style == null) {
         return null;
+      }
+      if (fontFamilyOverride != null) {
+        return style.copyWith(
+          fontFamily: fontFamilyOverride,
+          fontFamilyFallback: const <String>[],
+          letterSpacing: 0,
+        );
       }
       if (platform == TargetPlatform.windows) {
         return style.copyWith(
@@ -897,8 +944,9 @@ class AwikiMeTheme {
   }
 
   static CupertinoTextThemeData _cupertinoTextThemeFor(
-    TargetPlatform platform,
-  ) {
+    TargetPlatform platform, {
+    String? fontFamilyOverride,
+  }) {
     const base = CupertinoTextThemeData(
       primaryColor: AwikiMePalette.brandAccent,
       textStyle: TextStyle(
@@ -907,13 +955,22 @@ class AwikiMeTheme {
         letterSpacing: 0,
       ),
     );
-    TextStyle normalize(TextStyle style) => platform == TargetPlatform.windows
-        ? style.copyWith(
-            fontFamily: windowsFontFamily,
-            fontFamilyFallback: windowsFontFamilyFallback,
-            letterSpacing: 0,
-          )
-        : style.copyWith(letterSpacing: 0);
+    TextStyle normalize(TextStyle style) {
+      if (fontFamilyOverride != null) {
+        return style.copyWith(
+          fontFamily: fontFamilyOverride,
+          fontFamilyFallback: const <String>[],
+          letterSpacing: 0,
+        );
+      }
+      return platform == TargetPlatform.windows
+          ? style.copyWith(
+              fontFamily: windowsFontFamily,
+              fontFamilyFallback: windowsFontFamilyFallback,
+              letterSpacing: 0,
+            )
+          : style.copyWith(letterSpacing: 0);
+    }
 
     return CupertinoTextThemeData(
       primaryColor: colorScheme.primary,

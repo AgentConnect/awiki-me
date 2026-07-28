@@ -508,6 +508,16 @@ void main() {
         272,
       );
       expect(
+        find.byKey(const Key('agents-expanded-list-header')),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .getSize(find.byKey(const Key('agents-expanded-list-header')))
+            .height,
+        56,
+      );
+      expect(
         find.byKey(const Key('agents-persistent-detail-header')),
         findsOneWidget,
       );
@@ -516,6 +526,21 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('创建 Agent'), findsOneWidget);
+
+      final widthBeforeDrag = tester
+          .getSize(find.byKey(const Key('agents-expanded-list-pane')))
+          .width;
+      await tester.drag(
+        find.byKey(const Key('awiki-pane-divider')),
+        const Offset(72, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .getSize(find.byKey(const Key('agents-expanded-list-pane')))
+            .width,
+        greaterThan(widthBeforeDrag),
+      );
     },
   );
 

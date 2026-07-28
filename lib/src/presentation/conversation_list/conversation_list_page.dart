@@ -25,12 +25,12 @@ import '../agents/agent_visual_status.dart';
 import '../group/group_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/formatters/markdown_preview_formatter.dart';
-import '../shared/identity_flow.dart';
 import '../shared/quick_actions.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -122,7 +122,6 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
         onShowActions: () => showCommonQuickActionsMenu(context, ref),
-        onStartConversation: () => showStartConversationDialog(context, ref),
       );
     }
     return AwikiMeShellTabPage(
@@ -133,7 +132,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
               if (AwikiShellNavigationScope.isPresent(context)) {
                 ref
                     .read(shellDestinationProvider.notifier)
-                    .select(ShellDestination.settings);
+                    .selectCompact(ShellDestination.settings);
                 return;
               }
               AppNavigator.pushWithoutAnimation(
@@ -185,20 +184,13 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
   ) async {
     final confirmed = await AppNavigator.showDialog<bool>(
       context,
-      (dialogContext) => CupertinoAlertDialog(
-        title: Text(context.l10n.conversationsDeleteTitle),
-        content: Text(context.l10n.conversationsDeleteContent),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(context.l10n.commonDelete),
-          ),
-        ],
+      (dialogContext) => AppConfirmationDialog(
+        title: context.l10n.conversationsDeleteTitle,
+        message: context.l10n.conversationsDeleteContent,
+        confirmLabel: context.l10n.commonDelete,
+        destructive: true,
+        onCancel: () => Navigator.of(dialogContext).pop(false),
+        onConfirm: () => Navigator.of(dialogContext).pop(true),
       ),
     );
     if (confirmed != true) {
@@ -231,7 +223,6 @@ class _MacConversationList extends ConsumerStatefulWidget {
     required this.onOpen,
     required this.onDelete,
     required this.onShowActions,
-    required this.onStartConversation,
   });
 
   final List<ConversationSummary> conversations;
@@ -243,7 +234,6 @@ class _MacConversationList extends ConsumerStatefulWidget {
   final ValueChanged<ConversationSummary> onOpen;
   final ValueChanged<ConversationSummary> onDelete;
   final VoidCallback onShowActions;
-  final VoidCallback onStartConversation;
 
   @override
   ConsumerState<_MacConversationList> createState() =>
@@ -292,83 +282,63 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
               responsive.displayScaled(12),
               responsive.displayScaled(10),
               responsive.displayScaled(12),
-              responsive.displayScaled(4),
+              responsive.displayScaled(8),
             ),
             child: Row(
               children: <Widget>[
                 Expanded(
-                  child: Text(
-                    context.l10n.conversationsRecentTitle,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: responsive.displayScaled(15),
-                      fontWeight: FontWeight.w600,
+                  child: SizedBox(
+                    height: responsive.displayScaled(32),
+                    child: CupertinoSearchTextField(
+                      key: const Key('conversation-search-field'),
+                      placeholder: context.l10n.conversationsSearchPlaceholder,
+                      onChanged: (value) {
+                        setState(() {
+                          _query = value;
+                        });
+                      },
+                      style: TextStyle(
+                        fontSize: responsive.displayScaled(13),
+                        color: theme.title,
+                      ),
+                      placeholderStyle: TextStyle(
+                        fontSize: responsive.displayScaled(13),
+                        color: theme.tertiaryText,
+                      ),
+                      prefixIcon: Icon(
+                        CupertinoIcons.search,
+                        color: theme.secondaryText,
+                        size: responsive.displayScaled(15),
+                      ),
+                      suffixIcon: Icon(
+                        CupertinoIcons.xmark_circle_fill,
+                        color: theme.tertiaryText,
+                        size: responsive.displayScaled(14),
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.surface,
+                        borderRadius: BorderRadius.circular(
+                          responsive.displayScaled(8),
+                        ),
+                        border: Border.all(color: theme.border),
+                      ),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: responsive.displayScaled(10),
+                        vertical: responsive.displayScaled(6),
+                      ),
                     ),
                   ),
                 ),
+                SizedBox(width: responsive.displayScaled(8)),
                 _MacListIconButton(
                   key: const Key('conversation-quick-actions-button'),
                   semanticLabel: context.l10n.commonMoreActions,
-                  icon: CupertinoIcons.ellipsis,
-                  onTap: widget.onShowActions,
-                ),
-                SizedBox(width: responsive.displayScaled(4)),
-                _MacListIconButton(
-                  key: const Key('start-conversation-button'),
-                  semanticLabel: context.l10n.quickActionStartConversation,
                   icon: CupertinoIcons.plus,
-                  onTap: widget.onStartConversation,
+                  onTap: widget.onShowActions,
                 ),
               ],
             ),
           ),
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(12),
-            ),
-            child: SizedBox(
-              height: responsive.displayScaled(32),
-              child: CupertinoSearchTextField(
-                key: const Key('conversation-search-field'),
-                placeholder: context.l10n.conversationsSearchPlaceholder,
-                onChanged: (value) {
-                  setState(() {
-                    _query = value;
-                  });
-                },
-                style: TextStyle(
-                  fontSize: responsive.displayScaled(13),
-                  color: theme.title,
-                ),
-                placeholderStyle: TextStyle(
-                  fontSize: responsive.displayScaled(13),
-                  color: theme.tertiaryText,
-                ),
-                prefixIcon: Icon(
-                  CupertinoIcons.search,
-                  color: theme.secondaryText,
-                  size: responsive.displayScaled(15),
-                ),
-                suffixIcon: Icon(
-                  CupertinoIcons.xmark_circle_fill,
-                  color: theme.tertiaryText,
-                  size: responsive.displayScaled(14),
-                ),
-                decoration: BoxDecoration(
-                  color: theme.surface,
-                  borderRadius: BorderRadius.circular(
-                    responsive.displayScaled(8),
-                  ),
-                  border: Border.all(color: theme.border),
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: responsive.displayScaled(10),
-                  vertical: responsive.displayScaled(6),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: responsive.displayScaled(8)),
           Expanded(
             child: CustomScrollView(
               slivers: <Widget>[

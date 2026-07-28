@@ -43,34 +43,42 @@ class _DesktopAppRobot {
     String peerHandle, {
     String expectedPrimaryDisplayName = _nicknameFixtureDisplayName,
   }) async {
-    final directButton = find.byKey(const Key('start-conversation-button'));
-    final quickActionsButton = find.bySemanticsIdentifier(
+    final macQuickActionsButton = find.byKey(
+      const Key('conversation-quick-actions-button'),
+    );
+    final adaptiveQuickActionsButton = find.bySemanticsIdentifier(
       'e2e-quick-actions-button',
     );
     await pumpUntil(
       description: 'start conversation entry',
       condition: () {
-        final directCount = directButton.evaluate().length;
-        final quickActionsCount = quickActionsButton.evaluate().length;
-        return (directCount == 1 && quickActionsCount == 0) ||
-            (directCount == 0 && quickActionsCount == 1);
+        final macCount = macQuickActionsButton.evaluate().length;
+        final adaptiveCount = adaptiveQuickActionsButton.evaluate().length;
+        return (macCount == 1 && adaptiveCount == 0) ||
+            (macCount == 0 && adaptiveCount == 1);
       },
     );
     final variant = requireDesktopPlatformVariant(
-      macOSCount: directButton.evaluate().length,
-      otherCount: quickActionsButton.evaluate().length,
+      macOSCount: macQuickActionsButton.evaluate().length,
+      otherCount: adaptiveQuickActionsButton.evaluate().length,
       element: 'start-conversation entry',
     );
     switch (variant) {
       case DesktopPlatformVariant.macOS:
-        await tapOne(directButton, description: 'start conversation button');
-      case DesktopPlatformVariant.other:
-        await tapOne(quickActionsButton, description: 'quick actions button');
         await tapOne(
-          find.bySemanticsIdentifier('e2e-start-conversation-menu-item'),
-          description: 'start conversation menu item',
+          macQuickActionsButton,
+          description: 'conversation quick actions button',
+        );
+      case DesktopPlatformVariant.other:
+        await tapOne(
+          adaptiveQuickActionsButton,
+          description: 'quick actions button',
         );
     }
+    await tapOne(
+      find.bySemanticsIdentifier('e2e-start-conversation-menu-item'),
+      description: 'start conversation menu item',
+    );
     await pumpUntilFinder(
       find.byKey(const Key('identity-lookup-input')),
       description: 'identity lookup input',

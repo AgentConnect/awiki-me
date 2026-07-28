@@ -393,7 +393,7 @@ class _AwikiPaneLayoutState extends State<AwikiPaneLayout> {
           constraints.maxWidth -
               widget.minDetailPaneWidth -
               widget.gap -
-              (widget.enableResize ? _dividerHitWidth : 0),
+              (widget.enableResize ? 1 : 0),
         );
         final resolvedListPaneWidth = _listPaneWidth.clamp(
           widget.minListPaneWidth,
@@ -409,32 +409,38 @@ class _AwikiPaneLayoutState extends State<AwikiPaneLayout> {
             });
           });
         }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        return Stack(
           children: <Widget>[
-            SizedBox(width: resolvedListPaneWidth, child: widget.listPane),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                SizedBox(width: resolvedListPaneWidth, child: widget.listPane),
+                if (widget.enableResize)
+                  Container(width: 1, color: theme.border),
+                if (widget.gap > 0) SizedBox(width: widget.gap),
+                Expanded(child: widget.detailPane),
+              ],
+            ),
             if (widget.enableResize)
-              MouseRegion(
-                cursor: SystemMouseCursors.resizeLeftRight,
-                child: GestureDetector(
-                  key: const Key('awiki-pane-divider'),
-                  behavior: HitTestBehavior.translucent,
-                  onHorizontalDragUpdate: (details) {
-                    setState(() {
-                      _listPaneWidth = (_listPaneWidth + details.delta.dx)
-                          .clamp(widget.minListPaneWidth, maxListPaneWidth);
-                    });
-                  },
-                  child: SizedBox(
-                    width: _dividerHitWidth,
-                    child: Center(
-                      child: Container(width: 1, color: theme.border),
-                    ),
+              Positioned(
+                left: resolvedListPaneWidth - (_dividerHitWidth - 1) / 2,
+                top: 0,
+                bottom: 0,
+                width: _dividerHitWidth,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: GestureDetector(
+                    key: const Key('awiki-pane-divider'),
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragUpdate: (details) {
+                      setState(() {
+                        _listPaneWidth = (_listPaneWidth + details.delta.dx)
+                            .clamp(widget.minListPaneWidth, maxListPaneWidth);
+                      });
+                    },
                   ),
                 ),
               ),
-            if (widget.gap > 0) SizedBox(width: widget.gap),
-            Expanded(child: widget.detailPane),
           ],
         );
       },

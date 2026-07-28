@@ -69,7 +69,8 @@ void main() {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await tester.pump();
 
-      expect(find.text('Identity credentials'), findsWidgets);
+      expect(find.text('Phone'), findsWidgets);
+      expect(find.text('Email'), findsWidgets);
       expect(find.text('Log in or register'), findsWidgets);
     });
 
@@ -84,7 +85,8 @@ void main() {
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
       await tester.pump();
 
-      expect(find.text('身份凭证'), findsWidgets);
+      expect(find.text('手机号'), findsWidgets);
+      expect(find.text('邮箱'), findsWidgets);
       expect(find.text('登录或注册'), findsWidgets);
     });
 
@@ -106,7 +108,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Identity credentials'), findsWidgets);
+      expect(find.text('Phone'), findsWidgets);
+      expect(find.text('Email'), findsWidgets);
       expect(find.text('Log in or register'), findsWidgets);
     });
 
@@ -201,6 +204,11 @@ void main() {
         await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
         await tester.pump();
         expect(AwikiDisplayScaleScope.of(appContext()), greaterThan(1));
+        expect(
+          find.byKey(const Key('display-scale-indicator')),
+          findsOneWidget,
+        );
+        expect(find.text('Display scale 106%'), findsOneWidget);
 
         await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
         await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
@@ -210,6 +218,11 @@ void main() {
           AwikiDisplayScaleScope.of(appContext()),
           AwikiDisplayScale.normal,
         );
+        expect(find.text('Display scale 100%'), findsOneWidget);
+
+        await tester.pump(const Duration(milliseconds: 1401));
+        await tester.pump(const Duration(milliseconds: 150));
+        expect(find.byKey(const Key('display-scale-indicator')), findsNothing);
       },
     );
 

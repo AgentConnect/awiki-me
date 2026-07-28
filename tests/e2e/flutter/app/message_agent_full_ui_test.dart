@@ -249,7 +249,14 @@ void main() {
         await _pumpFrame(tester);
 
         expect(find.byType(AppShell), findsOneWidget);
-        expect(find.text('最近会话'), findsOneWidget);
+        expect(
+          find.byKey(const Key('conversation-search-field')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('conversation-quick-actions-button')),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Bob').first);
         await _pumpFrame(tester);
 

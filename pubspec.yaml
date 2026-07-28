@@ -63,3 +63,7 @@ flutter:
   assets:
     - assets/branding/
     - assets/icons/
+  fonts:
+    - family: AwikiGoldenCjk
+      fonts:
+        - asset: assets/fonts/awiki_golden_cjk.ttf

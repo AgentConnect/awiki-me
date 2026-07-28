@@ -24,23 +24,7 @@ import '../support/fake_app_bootstrap.dart';
 
 const _captureBoundaryKey = Key('ui-visual-verification-boundary');
 const _screenshotsDir = 'docs/ui-optimization-plan/screenshots';
-const _visualScreenshotFiles = <String>{
-  '01-compact-onboarding.png',
-  '02-expanded-onboarding.png',
-  '03-compact-messages.png',
-  '04-compact-chat.png',
-  '05-expanded-messages-chat.png',
-  '06-compact-agents-list.png',
-  '07-compact-agent-detail.png',
-  '08-expanded-agents.png',
-  '09-compact-contacts.png',
-  '10-compact-profile.png',
-  '11-compact-settings.png',
-  '12-expanded-contacts.png',
-  '13-expanded-profile.png',
-  '14-expanded-settings.png',
-  '15-compact-quick-actions.png',
-};
+const _goldenFontFamily = 'AwikiGoldenCjk';
 const _compactSize = Size(393, 852);
 const _expandedSize = Size(1440, 900);
 const _sessionDid = 'did:test:me';
@@ -81,8 +65,6 @@ class _StaticFriendsController extends FriendsController {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
-  setUpAll(_cleanScreenshots);
 
   testWidgets('capture compact and expanded onboarding', (tester) async {
     try {
@@ -201,21 +183,23 @@ void main() {
       expect(find.text('Alice Chen'), findsWidgets);
       await _captureScreenshot(tester, '09-compact-contacts');
 
+      await tester.tap(find.bySemanticsLabel('我'));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('profile-handle-value')), findsOneWidget);
+      expect(find.byKey(const Key('profile-back-button')), findsNothing);
+      expect(
+        find.byKey(const Key('compact-bottom-navigation')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '10-compact-profile');
+
       await tester.tap(find.bySemanticsLabel('消息'));
       await _pumpVisualFrames(tester);
       await tester.tap(find.bySemanticsLabel('设置'));
       await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('settings-profile-row')), findsOneWidget);
+      expect(find.byKey(const Key('settings-tenant-row')), findsNothing);
+      expect(find.byKey(const Key('settings-general-section')), findsOneWidget);
       expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
-      await tester.tap(find.byKey(const Key('settings-profile-row')));
-      await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('profile-handle-value')), findsOneWidget);
-      expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
-      await _captureScreenshot(tester, '10-compact-profile');
-
-      await tester.tap(find.byKey(const Key('profile-back-button')));
-      await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('settings-tenant-row')), findsOneWidget);
       await _captureScreenshot(tester, '11-compact-settings');
 
       await _prepareEnvironment(
@@ -230,8 +214,14 @@ void main() {
 
       await tester.tap(find.bySemanticsLabel('我'));
       await _pumpVisualFrames(tester);
-      expect(find.byKey(const Key('profile-sidebar-summary')), findsOneWidget);
+      expect(
+        find.byKey(const Key('desktop-current-identity-dialog')),
+        findsOneWidget,
+      );
       await _captureScreenshot(tester, '13-expanded-profile');
+
+      await tester.tap(find.byKey(const Key('desktop-current-identity-close')));
+      await _pumpVisualFrames(tester);
 
       await tester.tap(find.bySemanticsLabel('设置'));
       await _pumpVisualFrames(tester);
@@ -254,6 +244,42 @@ void main() {
       await _pumpVisualFrames(tester);
       expect(find.text('发起新消息'), findsOneWidget);
       await _captureScreenshot(tester, '15-compact-quick-actions');
+    } finally {
+      await _resetEnvironment(tester);
+    }
+  });
+
+  testWidgets('capture compact and expanded peer profile', (tester) async {
+    try {
+      await _prepareEnvironment(
+        tester,
+        size: _compactSize,
+        platform: TargetPlatform.iOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(
+        find.byKey(const Key('conversation-row:dm:peer-scope:v1:alice')),
+      );
+      await _pumpVisualFrames(tester);
+      await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('peer-info-identity-card')), findsOneWidget);
+      await _captureScreenshot(tester, '16-compact-peer-profile');
+
+      await _prepareEnvironment(
+        tester,
+        size: _expandedSize,
+        platform: TargetPlatform.macOS,
+      );
+      await _pumpVisualApp(tester, _createVisualHarness());
+      await tester.tap(
+        find.byKey(const Key('conversation-row:dm:peer-scope:v1:alice')),
+      );
+      await _pumpVisualFrames(tester);
+      await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('peer-info-identity-card')), findsOneWidget);
+      await _captureScreenshot(tester, '17-expanded-peer-profile');
     } finally {
       await _resetEnvironment(tester);
     }
@@ -288,6 +314,7 @@ Future<void> _pumpOnboarding(WidgetTester tester) async {
       child: AwikiMeApp(
         bootstrap: harness.bootstrap,
         providerOverrides: harness.providerOverrides,
+        testFontFamily: _goldenFontFamily,
       ),
     ),
   );
@@ -541,24 +568,11 @@ Future<void> _pumpVisualApp(
       child: AwikiMeApp(
         bootstrap: harness.bootstrap,
         providerOverrides: harness.providerOverrides,
+        testFontFamily: _goldenFontFamily,
       ),
     ),
   );
   await _pumpVisualFrames(tester);
-}
-
-Future<void> _cleanScreenshots() async {
-  final directory = Directory(_screenshotsDir);
-  if (!directory.existsSync()) {
-    await directory.create(recursive: true);
-    return;
-  }
-  await for (final entity in directory.list()) {
-    final name = entity.uri.pathSegments.last;
-    if (entity is File && _visualScreenshotFiles.contains(name)) {
-      await entity.delete();
-    }
-  }
 }
 
 Future<void> _captureScreenshot(WidgetTester tester, String name) async {
@@ -568,9 +582,23 @@ Future<void> _captureScreenshot(WidgetTester tester, String name) async {
   );
   final image = await boundary.toImage(pixelRatio: 1);
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-  await File(
-    '$_screenshotsDir/$name.png',
-  ).writeAsBytes(byteData!.buffer.asUint8List(), flush: true);
+  final bytes = byteData!.buffer.asUint8List();
+  final golden = File('$_screenshotsDir/$name.png');
+  if (autoUpdateGoldenFiles) {
+    await golden.parent.create(recursive: true);
+    await golden.writeAsBytes(bytes, flush: true);
+  } else {
+    expect(
+      golden.existsSync(),
+      isTrue,
+      reason: 'Missing visual baseline. Run this test with --update-goldens.',
+    );
+    expect(
+      bytes,
+      orderedEquals(await golden.readAsBytes()),
+      reason: '$name changed. Review it before using --update-goldens.',
+    );
+  }
   image.dispose();
 }
 

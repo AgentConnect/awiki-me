@@ -1483,7 +1483,9 @@ void main() {
 
     expect(find.text('移除成员'), findsNWidgets(2));
     expect(find.text('移除 bob.awiki.ai 后，对方将不能继续在这个群里发送消息。'), findsOneWidget);
-    await tester.tap(find.byType(CupertinoDialogAction).last);
+    await tester.tap(
+      find.byKey(const Key('group-remove-member-confirm-button')),
+    );
     await tester.pumpAndSettle();
 
     expect(gateway.lastRemovedGroupId, groupDid);

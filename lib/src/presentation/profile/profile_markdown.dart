@@ -17,7 +17,7 @@ class ProfileArticle {
       return null;
     }
     final first = blocks.first;
-    if (!first.startsWith('# ')) {
+    if (!RegExp(r'^#{1,6}\s+\S').hasMatch(first)) {
       return null;
     }
     final bodyBlocks = blocks.skip(1).toList();
@@ -27,6 +27,11 @@ class ProfileArticle {
     final body = bodyBlocks.join('\n\n');
     return ProfileArticle(body: body);
   }
+}
+
+String profileArticleBody(String raw) {
+  final normalized = raw.trim();
+  return ProfileArticle.fromMarkdown(normalized)?.body ?? normalized;
 }
 
 bool looksLikeHtmlDocument(String raw) {

@@ -148,25 +148,12 @@ class _AgentListHeader extends StatelessWidget {
       );
     }
 
-    final type = theme.typographyFor(AwikiMeTypographyMode.expanded);
-    return Container(
+    return AwikiSidebarHeader(
       key: const Key('agents-expanded-list-header'),
-      height: responsive.displayScaled(56),
-      padding: EdgeInsets.symmetric(horizontal: responsive.spacing(14)),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        border: Border(bottom: BorderSide(color: theme.border)),
-      ),
-      child: Row(
+      title: context.l10n.agentPageTitle,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Expanded(
-            child: Text(
-              context.l10n.agentPageTitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: type.navTitle.copyWith(color: theme.title),
-            ),
-          ),
           AppIconButton(
             key: const Key('agents-list-refresh-button'),
             onPressed: isLoading ? null : onRefresh,

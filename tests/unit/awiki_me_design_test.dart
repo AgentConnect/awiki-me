@@ -60,6 +60,24 @@ void main() {
     );
   });
 
+  test('visual tests can opt into the deterministic repository CJK font', () {
+    final theme = AwikiMeTheme.forPlatform(
+      TargetPlatform.iOS,
+      fontFamilyOverride: 'AwikiGoldenCjk',
+    );
+
+    expect(theme.tokens.compactTypography.body.fontFamily, 'AwikiGoldenCjk');
+    expect(theme.tokens.expandedTypography.body.fontFamily, 'AwikiGoldenCjk');
+    expect(
+      theme.materialTheme.textTheme.bodyMedium?.fontFamily,
+      'AwikiGoldenCjk',
+    );
+    expect(
+      theme.cupertinoTheme.textTheme.textStyle.fontFamily,
+      'AwikiGoldenCjk',
+    );
+  });
+
   test('semantic light colors match the approved desktop and mobile roles', () {
     final colors = AwikiMeTheme.forPlatform(
       TargetPlatform.macOS,

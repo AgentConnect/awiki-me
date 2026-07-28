@@ -31,6 +31,14 @@
   "commonLoading": "Loading...",
   "commonError": "Error",
   "commonErrorDetails": "Error details",
+  "displayScaleValue": "Display scale {percent}%",
+  "@displayScaleValue": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "realtimeStatusConnecting": "Connecting to message service...",
   "realtimeStatusReconnecting": "Message connection interrupted. Reconnecting...",
   "realtimeStatusDisconnected": "Message service is disconnected. Trying to recover.",
@@ -222,6 +230,8 @@
   "conversationBackToChat": "Back to chat",
   "friendsTitle": "Contacts",
   "friendsGroups": "Groups",
+  "friendsGroupsSubtitle": "All group chats you have joined",
+  "friendsMutualEmpty": "No mutual friends yet.",
   "friendsFollowing": "Following",
   "friendsFollowers": "Followers",
   "friendsViewAll": "View all",
@@ -239,6 +249,7 @@
   "profileEditTitle": "Edit profile",
   "profileBioPlaceholder": "Bio",
   "profileTagsPlaceholder": "Tags, separated by commas",
+  "profileHomepageLabel": "Homepage",
   "profileOpenHomepage": "Open homepage",
   "settingsTitle": "Settings",
   "settingsLanguage": "Language",
@@ -945,9 +956,9 @@
   "agentInboxQueryFailed": "Inbox query failed",
   "agentInboxThreadQueryFailed": "Thread query failed",
   "relationshipNone": "Not following",
-  "relationshipFollowing": "following",
-  "relationshipFollower": "follower",
-  "relationshipFriend": "friend",
+  "relationshipFollowing": "Following",
+  "relationshipFollower": "Follows you",
+  "relationshipFriend": "Friend",
   "profileUpdated": "Profile updated",
   "exportedTo": "Exported to {path}",
   "@exportedTo": {

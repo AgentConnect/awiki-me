@@ -112,6 +112,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!runtime.isInitialized && credentials.isEmpty) {
       return;
     }
+    if (context.awikiResponsive.usesDesktopLayout) {
+      ref.read(onboardingProvider.notifier).setEntryMode('register');
+      return;
+    }
     ref
         .read(onboardingProvider.notifier)
         .setEntryModeFromLocalCredentials(credentials);
@@ -131,7 +135,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final automaticEntryMode = credentials.isEmpty ? 'register' : 'login';
+    final automaticEntryMode = responsive.usesDesktopLayout
+        ? 'register'
+        : credentials.isEmpty
+        ? 'register'
+        : 'login';
     if (_autoEntryModeEnabled && onboarding.entryMode != automaticEntryMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -148,8 +156,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         emailController: emailController,
         handleController: handleController,
         onLogin: runtime.loginWithLocalCredential,
-        onRefresh: runtime.refreshLocalCredentials,
-        onModeChanged: _setEntryModeManually,
         onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
         onRequestOtp: _requestOtp,
         onRequestEmailActivation: _requestEmailActivation,
@@ -165,14 +171,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       );
     }
     return CupertinoPageScaffold(
-      backgroundColor: theme.background,
+      backgroundColor: theme.surface,
       child: AwikiAdaptiveScaffold(
         alignment: responsive.isPhone ? Alignment.topCenter : Alignment.center,
         includeBottomSafeArea: true,
         maxWidth: 440,
         padding: EdgeInsets.fromLTRB(
           responsive.spacing(18),
-          responsive.spacing(20),
+          responsive.spacing(24),
           responsive.spacing(18),
           responsive.spacing(20),
         ),

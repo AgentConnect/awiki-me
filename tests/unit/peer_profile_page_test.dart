@@ -50,7 +50,7 @@ void main() {
     expect(find.text('取消关注'), findsOneWidget);
   });
 
-  testWidgets('私聊资料页以 handle 为主并紧凑显示 DID，复制保留全值', (tester) async {
+  testWidgets('私聊资料页按名称、handle、DID 排列并复制完整 DID', (tester) async {
     const longDid =
         'did:awiki:user:cgw-agent-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
     const profile = UserProfile(
@@ -58,7 +58,7 @@ void main() {
       nickName: 'CGW Agent',
       bio: '融资协作 Agent',
       tags: <String>['Agent'],
-      profileMarkdown: '',
+      profileMarkdown: '## CGW Agent\n\n融资协作 Agent',
       handle: 'cgw.awiki.ai',
     );
     final gateway = FakeAwikiGateway()
@@ -109,6 +109,7 @@ void main() {
           .data,
       'CGW Agent',
     );
+    expect(find.text('CGW Agent'), findsOneWidget);
     expect(find.text('@cgw.awiki.ai'), findsOneWidget);
     expect(
       find.byKey(const Key('peer-profile-copy-did-button')),

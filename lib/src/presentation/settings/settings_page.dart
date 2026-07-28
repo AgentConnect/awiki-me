@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
 import '../../app/app_router.dart';
-import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
@@ -11,12 +10,13 @@ import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/app_dialog.dart';
 import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
-import '../shared/tenant_management_dialog.dart';
+import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -38,13 +38,141 @@ class SettingsPage extends ConsumerWidget {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
-    final activeTenant = ref.watch(activeAppTenantProvider);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    Widget? leading(Widget icon) => responsive.usesDesktopLayout ? null : icon;
+    final sections = <Widget>[
+      if (!embedded && responsive.isCompact && session != null) ...<Widget>[
+        _SettingsSection(
+          key: const Key('settings-profile-section'),
+          children: <Widget>[
+            AppListTile(
+              key: const Key('settings-profile-row'),
+              title: _sessionProfileTitle(session),
+              subtitle: _sessionProfileSubtitle(session),
+              leading: AvatarBadge(
+                seed: _sessionProfileTitle(session),
+                size: responsive.displayScaled(36),
+              ),
+              onTap:
+                  onProfileTap ??
+                  () => AppNavigator.push(
+                    context,
+                    (_) =>
+                        ProfilePage(onBack: () => Navigator.of(context).pop()),
+                  ),
+            ),
+          ],
+        ),
+        SizedBox(height: responsive.spacing(14)),
+      ],
+      _SettingsSection(
+        key: const Key('settings-general-section'),
+        children: <Widget>[
+          AppListTile(
+            title: l10n.settingsCurrentVersion,
+            subtitle: _currentVersionLabel(context, updateState),
+            leading: leading(
+              const _SettingsIcon(icon: CupertinoIcons.info_circle),
+            ),
+            trailing: Text(
+              updateState.currentVersion?.version ?? '--',
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: context.awikiResponsive.bodySm,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const AppSectionDivider(),
+          AppListTile(
+            title: l10n.settingsCheckForUpdates,
+            subtitle: _updateStatusLabel(context, updateState),
+            leading: leading(
+              const _SettingsIcon(role: AwikiMeIconRole.refresh),
+            ),
+            onTap: updateState.status == AppUpdateStatus.checking
+                ? null
+                : () => ref
+                      .read(appUpdateProvider.notifier)
+                      .checkForUpdates(force: true),
+          ),
+          const AppSectionDivider(),
+          AppListTile(
+            title: l10n.settingsLanguage,
+            subtitle: appLocaleModeLabel(context, localeMode),
+            leading: leading(
+              const _SettingsIcon(role: AwikiMeIconRole.language),
+            ),
+            onTap: () => showAppLanguageSheet(context, ref, localeMode),
+          ),
+        ],
+      ),
+      SizedBox(height: responsive.spacing(14)),
+      _SettingsSection(
+        key: const Key('settings-session-section'),
+        children: <Widget>[
+          AppListTile(
+            title: l10n.settingsLogout,
+            subtitle: l10n.settingsLogoutSubtitle,
+            leading: leading(const _SettingsIcon(role: AwikiMeIconRole.logout)),
+            onTap: () => _showLogoutDialog(context, runtime),
+          ),
+          const AppSectionDivider(),
+          AppListTile(
+            title: l10n.settingsDeleteCredential,
+            subtitle: session?.credentialName != null
+                ? l10n.settingsDeleteCurrentCredential(session!.credentialName)
+                : l10n.settingsDeleteCredentialFallback,
+            destructive: true,
+            leading: leading(
+              const _SettingsIcon(
+                role: AwikiMeIconRole.delete,
+                destructive: true,
+              ),
+            ),
+            onTap: session == null
+                ? null
+                : () => _showDeleteCredentialDialog(
+                    context,
+                    runtime,
+                    session.credentialName,
+                  ),
+          ),
+        ],
+      ),
+    ];
+
+    if (embedded && responsive.usesDesktopLayout) {
+      return CupertinoPageScaffold(
+        backgroundColor: theme.background,
+        child: Column(
+          children: <Widget>[
+            AwikiSidebarHeader(
+              key: const Key('settings-expanded-list-header'),
+              title: l10n.settingsTitle,
+            ),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  0,
+                  responsive.spacing(10),
+                  0,
+                  responsive.spacing(24),
+                ),
+                children: sections,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return CupertinoPageScaffold(
       backgroundColor: theme.background,
       child: AwikiAdaptiveScaffold(
         maxWidth: 820,
+        padding: EdgeInsets.zero,
         includeBottomSafeArea: true,
         child: ListView(
           padding: EdgeInsets.fromLTRB(
@@ -54,131 +182,29 @@ class SettingsPage extends ConsumerWidget {
             responsive.spacing(24),
           ),
           children: <Widget>[
-            AwikiMeTopBar(
-              title: l10n.settingsTitle,
-              padding: EdgeInsets.zero,
-              leading: embedded
-                  ? const SizedBox.shrink()
-                  : TopBarActionButton(
-                      key: const Key('settings-back-button'),
-                      onTap: onBack ?? () => Navigator.of(context).pop(),
-                      child: const AwikiAssetIcon(
-                        assetName: 'assets/icons/icon_left.svg',
-                        color: AwikiMeColors.primaryDark,
-                        size: 22,
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: responsive.spacing(8)),
+              child: AwikiMeTopBar(
+                title: l10n.settingsTitle,
+                padding: EdgeInsets.zero,
+                leading: embedded
+                    ? const SizedBox.shrink()
+                    : TopBarActionButton(
+                        key: const Key('settings-back-button'),
+                        onTap: onBack ?? () => Navigator.of(context).pop(),
+                        child: const AwikiAssetIcon(
+                          assetName: 'assets/icons/icon_left.svg',
+                          color: AwikiMeColors.primaryDark,
+                          size: 22,
+                        ),
                       ),
-                    ),
-              trailing: embedded ? const SizedBox(width: 40, height: 40) : null,
+                trailing: embedded
+                    ? const SizedBox(width: 40, height: 40)
+                    : null,
+              ),
             ),
             SizedBox(height: responsive.spacing(10)),
-            if (!embedded &&
-                responsive.isCompact &&
-                session != null) ...<Widget>[
-              _SettingsSection(
-                children: <Widget>[
-                  AppListTile(
-                    key: const Key('settings-profile-row'),
-                    title: _sessionProfileTitle(session),
-                    subtitle: _sessionProfileSubtitle(session),
-                    leading: AvatarBadge(
-                      seed: _sessionProfileTitle(session),
-                      size: responsive.displayScaled(36),
-                    ),
-                    onTap:
-                        onProfileTap ??
-                        () => AppNavigator.push(
-                          context,
-                          (_) => ProfilePage(
-                            onBack: () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                  ),
-                ],
-              ),
-              SizedBox(height: responsive.spacing(14)),
-            ],
-            _SettingsSection(
-              children: <Widget>[
-                AppListTile(
-                  key: const Key('settings-tenant-row'),
-                  title: l10n.tenantManagementTitle,
-                  subtitle:
-                      '${activeTenant.name} · ${activeTenant.backendBaseUrl}',
-                  leading: const _SettingsIcon(icon: CupertinoIcons.globe),
-                  onTap: () => _showTenantDialog(context),
-                ),
-                const AppSectionDivider(),
-                AppListTile(
-                  title: l10n.settingsCurrentVersion,
-                  subtitle: _currentVersionLabel(context, updateState),
-                  leading: const _SettingsIcon(
-                    icon: CupertinoIcons.info_circle,
-                  ),
-                  trailing: Text(
-                    updateState.currentVersion?.version ?? '--',
-                    style: TextStyle(
-                      color: theme.secondaryText,
-                      fontSize: context.awikiResponsive.bodySm,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const AppSectionDivider(),
-                AppListTile(
-                  title: l10n.settingsCheckForUpdates,
-                  subtitle: _updateStatusLabel(context, updateState),
-                  leading: const _SettingsIcon(role: AwikiMeIconRole.refresh),
-                  onTap: updateState.status == AppUpdateStatus.checking
-                      ? null
-                      : () => ref
-                            .read(appUpdateProvider.notifier)
-                            .checkForUpdates(force: true),
-                ),
-              ],
-            ),
-            SizedBox(height: responsive.spacing(14)),
-            _SettingsSection(
-              children: <Widget>[
-                AppListTile(
-                  title: l10n.settingsLanguage,
-                  subtitle: appLocaleModeLabel(context, localeMode),
-                  leading: const _SettingsIcon(role: AwikiMeIconRole.language),
-                  onTap: () => showAppLanguageSheet(context, ref, localeMode),
-                ),
-              ],
-            ),
-            SizedBox(height: responsive.spacing(14)),
-            _SettingsSection(
-              children: <Widget>[
-                AppListTile(
-                  title: l10n.settingsLogout,
-                  subtitle: l10n.settingsLogoutSubtitle,
-                  leading: const _SettingsIcon(role: AwikiMeIconRole.logout),
-                  onTap: () => _showLogoutDialog(context, runtime),
-                ),
-                const AppSectionDivider(),
-                AppListTile(
-                  title: l10n.settingsDeleteCredential,
-                  subtitle: session?.credentialName != null
-                      ? l10n.settingsDeleteCurrentCredential(
-                          session!.credentialName,
-                        )
-                      : l10n.settingsDeleteCredentialFallback,
-                  destructive: true,
-                  leading: const _SettingsIcon(
-                    role: AwikiMeIconRole.delete,
-                    destructive: true,
-                  ),
-                  onTap: session == null
-                      ? null
-                      : () => _showDeleteCredentialDialog(
-                          context,
-                          runtime,
-                          session.credentialName,
-                        ),
-                ),
-              ],
-            ),
+            ...sections,
           ],
         ),
       ),
@@ -208,36 +234,21 @@ class SettingsPage extends ConsumerWidget {
     return l10n.settingsAlreadyLatestVersion;
   }
 
-  Future<void> _showTenantDialog(BuildContext context) {
-    return showTenantManagementDialog(context);
-  }
-
   void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {
     AppNavigator.showDialog<void>(
       context,
-      (ctx) => CupertinoAlertDialog(
-        title: Text(context.l10n.settingsLogoutConfirmTitle),
-        content: Text(context.l10n.settingsLogoutConfirmContent),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              context.l10n.commonCancel,
-              style: TextStyle(color: context.awikiTheme.title),
-            ),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await runtime.logout();
-              if (!embedded && context.mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-            child: Text(context.l10n.settingsLogout),
-          ),
-        ],
+      (ctx) => AppConfirmationDialog(
+        title: context.l10n.settingsLogoutConfirmTitle,
+        message: context.l10n.settingsLogoutConfirmContent,
+        confirmLabel: context.l10n.settingsLogout,
+        destructive: true,
+        onConfirm: () async {
+          Navigator.of(ctx).pop();
+          await runtime.logout();
+          if (!embedded && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        },
       ),
     );
   }
@@ -249,28 +260,20 @@ class SettingsPage extends ConsumerWidget {
   ) {
     AppNavigator.showDialog<void>(
       context,
-      (ctx) => CupertinoAlertDialog(
-        title: Text(context.l10n.settingsDeleteCredentialConfirmTitle),
-        content: Text(
-          context.l10n.settingsDeleteCredentialConfirmContent(credentialName),
+      (ctx) => AppConfirmationDialog(
+        title: context.l10n.settingsDeleteCredentialConfirmTitle,
+        message: context.l10n.settingsDeleteCredentialConfirmContent(
+          credentialName,
         ),
-        actions: <Widget>[
-          CupertinoDialogAction(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(context.l10n.commonCancel),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await runtime.deleteCurrentCredential();
-              if (!embedded && context.mounted) {
-                Navigator.of(context).pop();
-              }
-            },
-            child: Text(context.l10n.settingsDeleteCredentialConfirmAction),
-          ),
-        ],
+        confirmLabel: context.l10n.settingsDeleteCredentialConfirmAction,
+        destructive: true,
+        onConfirm: () async {
+          Navigator.of(ctx).pop();
+          await runtime.deleteCurrentCredential();
+          if (!embedded && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        },
       ),
     );
   }
@@ -297,19 +300,30 @@ String _sessionProfileSubtitle(SessionIdentity session) {
 }
 
 class _SettingsSection extends StatelessWidget {
-  const _SettingsSection({required this.children});
+  const _SettingsSection({super.key, required this.children});
 
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.surface,
-        border: Border.symmetric(horizontal: BorderSide(color: theme.border)),
+    final responsive = context.awikiResponsive;
+    final radius = responsive.radius(responsive.isCompact ? 14 : 8);
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: responsive.spacing(responsive.isCompact ? 10 : 8),
       ),
-      child: Column(children: children),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.surface,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: theme.border),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Column(children: children),
+        ),
+      ),
     );
   }
 }

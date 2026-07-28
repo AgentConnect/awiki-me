@@ -45,6 +45,88 @@ void main() {
     },
   );
 
+  test(
+    'native picker adopts its app-staged old file without a second copy',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-native-picker-staged-test-',
+      );
+      final source = File('${tempDir.path}/native-old-report.md');
+      await source.writeAsString('# Native staged');
+      final oldModifiedAt = DateTime.now().subtract(const Duration(days: 30));
+      await source.setLastModified(oldModifiedAt);
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      const channel = MethodChannel('test.awiki/native-staged-picker');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'pickAttachment');
+            return <String, Object?>{
+              'filename': 'native-old-report.md',
+              'mime_type': 'text/markdown',
+              'size_bytes': await source.length(),
+              'path': source.path,
+            };
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      var dartStagingDirectoryCalls = 0;
+      final service = MethodChannelAttachmentPickerService(
+        channel: channel,
+        windowsPlatform: false,
+        attachmentTemporaryDirectoryProvider: () async {
+          dartStagingDirectoryCalls += 1;
+          return tempDir;
+        },
+      );
+
+      final draft = await service.pickAttachment();
+
+      expect(draft, isNotNull);
+      expect(draft!.localPath, source.path);
+      expect(draft.filename, 'native-old-report.md');
+      expect(draft.mimeType, 'text/markdown');
+      expect(await source.readAsString(), '# Native staged');
+      expect((await source.lastModified()).isAfter(oldModifiedAt), isTrue);
+      expect(dartStagingDirectoryCalls, 0);
+    },
+  );
+
+  test(
+    'external staging cleanup never deletes the source being copied',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'awiki-external-source-cleanup-test-',
+      );
+      final source = File('${tempDir.path}/old-source.md');
+      await source.writeAsString('# External source');
+      await source.setLastModified(
+        DateTime.now().subtract(const Duration(days: 30)),
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final service = MethodChannelAttachmentPickerService(
+        attachmentTemporaryDirectoryProvider: () async => tempDir,
+      );
+
+      final draft = await service.draftFromExternalSource(path: source.path);
+
+      expect(draft, isNotNull);
+      expect(draft!.localPath, isNot(source.path));
+      expect(await source.exists(), isTrue);
+      expect(await File(draft.localPath!).readAsString(), '# External source');
+    },
+  );
+
   test('draftFromExternalSource preserves pasted image bytes', () async {
     final service = MethodChannelAttachmentPickerService();
     final bytes = Uint8List.fromList(<int>[137, 80, 78, 71]);

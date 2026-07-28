@@ -548,9 +548,15 @@ LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/im_core_open_s
 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos
 ```
 
-For UI / visual verification, the screenshot smoke writes PNG evidence under
-`docs/ui-optimization-plan/screenshots/`. If the screenshots are not the intended
-change, restore them before committing.
+UI / visual verification normally compares rendered pixels with the approved
+PNG baselines under `docs/ui-optimization-plan/screenshots/` and never rewrites
+them. The test uses the repository-owned `AwikiGoldenCjk` font so Chinese text
+does not depend on the host font set. After reviewing an intentional visual
+change, update baselines explicitly:
+
+```bash
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 flutter test integration_test/ui_visual_verification_test.dart -d macos --update-goldens
+```
 
 ## Memory Leak Checks
 

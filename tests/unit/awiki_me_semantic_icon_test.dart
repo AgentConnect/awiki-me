@@ -14,24 +14,43 @@ void main() {
     }
   });
 
-  test('selected navigation roles reuse the existing active assets', () {
+  test('selected navigation roles keep the same stable glyph assets', () {
     expect(
       AwikiMeIconRegistry.definition(
         AwikiMeIconRole.messages,
       ).assetFor(selected: true),
-      'assets/icons/message_Active.svg',
+      'assets/icons/message_Inactive.svg',
     );
     expect(
       AwikiMeIconRegistry.definition(
         AwikiMeIconRole.contacts,
       ).assetFor(selected: true),
-      'assets/icons/friend_Active.svg',
+      'assets/icons/friend_Inactive.svg',
     );
     expect(
       AwikiMeIconRegistry.definition(
         AwikiMeIconRole.profile,
       ).assetFor(selected: true),
-      'assets/icons/me_Active.svg',
+      'assets/icons/me_Inactive.svg',
+    );
+  });
+
+  test('navigation optical calibration is centralized in the registry', () {
+    expect(
+      AwikiMeIconRegistry.definition(AwikiMeIconRole.messages).opticalScale,
+      greaterThan(1),
+    );
+    expect(
+      AwikiMeIconRegistry.definition(AwikiMeIconRole.contacts).opticalScale,
+      greaterThan(1),
+    );
+    expect(
+      AwikiMeIconRegistry.definition(AwikiMeIconRole.profile).opticalScale,
+      greaterThan(1),
+    );
+    expect(
+      AwikiMeIconRegistry.definition(AwikiMeIconRole.agents).opticalScale,
+      lessThan(1),
     );
   });
 
@@ -77,5 +96,17 @@ void main() {
     final icon = tester.widget<Icon>(find.byType(Icon));
     expect(icon.icon, CupertinoIcons.square_stack_3d_up);
     expect(icon.size, 18);
+    final transform = tester.widget<Transform>(
+      find.descendant(
+        of: find.byType(AwikiMeSemanticIcon),
+        matching: find.byType(Transform),
+      ),
+    );
+    expect(transform.transform.storage[0], closeTo(0.86, 0.001));
+    expect(transform.transform.storage[5], closeTo(0.86, 0.001));
+    expect(
+      tester.getSize(find.byType(AwikiMeSemanticIcon)),
+      const Size.square(18),
+    );
   });
 }

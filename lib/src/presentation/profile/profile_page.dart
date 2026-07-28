@@ -12,11 +12,14 @@ import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../friends/friends_provider.dart';
+import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'profile_markdown.dart';
@@ -29,6 +32,7 @@ class ProfilePage extends ConsumerStatefulWidget {
     this.embedded = false,
     this.bottomInset = 120,
     this.showTitle = true,
+    this.shrinkWrap = false,
     this.onBack,
   });
 
@@ -36,6 +40,7 @@ class ProfilePage extends ConsumerStatefulWidget {
   final bool embedded;
   final double bottomInset;
   final bool showTitle;
+  final bool shrinkWrap;
   final VoidCallback? onBack;
 
   @override
@@ -62,6 +67,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           embedded: widget.embedded,
           bottomInset: widget.bottomInset,
           showTitle: widget.showTitle,
+          shrinkWrap: widget.shrinkWrap,
           onBack: widget.onBack,
         ),
       );
@@ -74,8 +80,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     _syncHomepage(profile);
     _syncRelationshipCounts();
 
-    final handleLabel = DidDisplayFormatter.profileHandleLabel(profile);
-    final secondaryName = DidDisplayFormatter.secondaryProfileName(profile);
+    final displayName = DidDisplayFormatter.profileName(profile);
+    final handleLabel = DidDisplayFormatter.identityLookupSecondaryHandle(
+      profile,
+    );
     final homepageUrl = ref
         .watch(profileHomepageResolverProvider)
         .homepageUrl(profile);
@@ -87,116 +95,138 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
     final profileBody = SelectionArea(
       child: ListView(
+        shrinkWrap: widget.shrinkWrap,
         padding: EdgeInsets.fromLTRB(
           responsive.tabContentHorizontalPadding,
-          responsive.spacing(26),
+          responsive.spacing(18),
           responsive.tabContentHorizontalPadding,
           widget.embedded ? widget.bottomInset : 120,
         ),
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              AvatarBadge(
-                seed: handleLabel,
-                size: responsive.isPhone ? 54 : 44,
-                avatarUri: profile.avatarUri,
-              ),
-              SizedBox(width: responsive.spacing(16)),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(top: responsive.spacing(8)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              handleLabel,
-                              key: const Key('profile-handle-value'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: responsive.isPhone ? 24 : 21,
-                                fontWeight: FontWeight.w700,
-                                color: theme.title,
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  IdentityProfileCard(
+                    key: const Key('profile-identity-card'),
+                    header: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        AvatarBadge(
+                          seed: handleLabel.isEmpty ? displayName : handleLabel,
+                          size: responsive.isPhone ? 58 : 52,
+                          avatarUri: profile.avatarUri,
+                        ),
+                        SizedBox(width: responsive.spacing(14)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                displayName,
+                                key: const Key('profile-display-name'),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: responsive.isPhone ? 21 : 19,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.title,
+                                ),
                               ),
-                            ),
+                              if (handleLabel.isNotEmpty) ...<Widget>[
+                                SizedBox(height: responsive.spacing(3)),
+                                Text(
+                                  handleLabel,
+                                  key: const Key('profile-handle-value'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: responsive.bodySm,
+                                    color: theme.secondaryText,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          SizedBox(width: responsive.spacing(8)),
-                          SelectionContainer.disabled(
-                            child: TopBarActionButton(
-                              onTap: state.isSaving
-                                  ? null
-                                  : () => _showEditProfileDialog(
-                                      context,
-                                      profile,
-                                    ),
-                              child: Icon(
-                                CupertinoIcons.pencil,
-                                size: responsive.iconMd,
-                                color: theme.primaryDark,
-                              ),
+                        ),
+                        SizedBox(width: responsive.spacing(8)),
+                        SelectionContainer.disabled(
+                          child: AppIconButton(
+                            key: const Key('profile-edit-button'),
+                            onPressed: state.isSaving
+                                ? null
+                                : () =>
+                                      _showEditProfileDialog(context, profile),
+                            semanticLabel: context.l10n.profileEditTitle,
+                            tooltip: context.l10n.profileEditTitle,
+                            size: responsive.displayScaled(36),
+                            backgroundColor: theme.subtleSurface,
+                            borderColor: theme.border,
+                            borderRadius: BorderRadius.circular(
+                              responsive.radius(8),
                             ),
-                          ),
-                        ],
-                      ),
-                      if (secondaryName.isNotEmpty) ...<Widget>[
-                        SizedBox(height: responsive.spacing(3)),
-                        Text(
-                          secondaryName,
-                          key: const Key('profile-display-name'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: responsive.bodyMd,
-                            fontWeight: FontWeight.w500,
-                            color: theme.body,
+                            child: AwikiMeSemanticIcon(
+                              role: AwikiMeIconRole.edit,
+                              size: responsive.iconSm,
+                              color: theme.primaryDark,
+                            ),
                           ),
                         ),
                       ],
-                      SizedBox(height: responsive.spacing(6)),
-                      CopyableDidLine(
-                        value: profile.did,
-                        displayValue: DidDisplayFormatter.compactDidPath(
-                          profile.did,
+                    ),
+                    metadata: <Widget>[
+                      IdentityProfileMetadataRow(
+                        label: 'DID',
+                        child: CopyableDidLine(
+                          value: profile.did,
+                          displayValue: DidDisplayFormatter.compactDidPath(
+                            profile.did,
+                          ),
+                          maxLines: 2,
+                          copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                          copiedMessage: context.l10n.chatPeerInfoDidCopied,
+                          textKey: const Key('profile-did-value'),
+                          buttonKey: const Key('profile-copy-did-button'),
+                          textStyle: TextStyle(
+                            fontSize: responsive.bodySm,
+                            height: 1.35,
+                            color: theme.body,
+                          ),
+                          buttonSize: responsive.displayScaled(30),
+                          iconSize: responsive.displayScaled(14),
                         ),
-                        maxLines: 2,
-                        copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
-                        copiedMessage: context.l10n.chatPeerInfoDidCopied,
-                        textKey: const Key('profile-did-value'),
-                        buttonKey: const Key('profile-copy-did-button'),
-                        textStyle: TextStyle(
-                          fontSize: responsive.bodySm,
-                          height: 1.35,
-                          color: theme.tertiaryText,
-                        ),
-                        buttonSize: responsive.displayScaled(30),
-                        iconSize: responsive.displayScaled(14),
                       ),
+                      if (homepageUrl.isNotEmpty)
+                        IdentityProfileMetadataRow(
+                          label: context.l10n.profileHomepageLabel,
+                          child: IdentityProfileLinkValue(
+                            value: homepageUrl,
+                            actionLabel: context.l10n.profileOpenHomepage,
+                            onTap: () => _openHomepage(homepageUrl),
+                          ),
+                        ),
                     ],
+                    footer: _ProfileStatistics(
+                      followersCount: friendsState.followers.length,
+                      followingCount: friendsState.following.length,
+                    ),
                   ),
-                ),
+                  SizedBox(height: responsive.spacing(14)),
+                  IdentityDocumentCard(
+                    key: const Key('profile-identity-document'),
+                    title: context.l10n.chatPeerInfoIdentityCard,
+                    child: _ProfileContentSection(
+                      content: profileContent,
+                      emptyText: context.l10n.profileEmpty,
+                      tags: profile.tags,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          SizedBox(height: responsive.spacing(28)),
-          _ProfileRelationshipBar(
-            homepageUrl: homepageUrl,
-            followersCount: friendsState.followers.length,
-            followingCount: friendsState.following.length,
-            onHomepageTap: homepageUrl.isEmpty
-                ? null
-                : () async {
-                    await _openHomepage(homepageUrl);
-                  },
-          ),
-          SizedBox(height: responsive.spacing(48)),
-          _ProfileContentSection(
-            content: profileContent,
-            emptyText: context.l10n.profileEmpty,
-            tags: profile.tags,
+            ),
           ),
         ],
       ),
@@ -295,54 +325,23 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     try {
       await AppNavigator.showDialog<void>(
         context,
-        (dialogContext) => CupertinoAlertDialog(
-          title: Text(context.l10n.profileEditTitle),
-          content: Column(
-            children: <Widget>[
-              const SizedBox(height: 12),
-              AppTextField(
-                controller: nickController,
-                label: context.l10n.onboardingNickname,
-                placeholder: context.l10n.onboardingNicknamePlaceholder,
-              ),
-              const SizedBox(height: 8),
-              AppTextField(
-                controller: bioController,
-                label: context.l10n.profileEditTitle,
-                placeholder: context.l10n.profileBioPlaceholder,
-                multiline: true,
-              ),
-              const SizedBox(height: 8),
-              AppTextField(
-                controller: tagsController,
-                label: context.l10n.profileTagsPlaceholder,
-                placeholder: context.l10n.profileTagsPlaceholder,
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            CupertinoDialogAction(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(context.l10n.commonCancel),
-            ),
-            CupertinoDialogAction(
-              isDefaultAction: true,
-              onPressed: () async {
-                final patch = ProfilePatch(
-                  displayName: nickController.text.trim(),
-                  bio: bioController.text.trim(),
-                  tags: tagsController.text
-                      .split(',')
-                      .map((item) => item.trim())
-                      .where((item) => item.isNotEmpty)
-                      .toList(),
-                );
-                Navigator.of(dialogContext).pop();
-                await ref.read(profileProvider.notifier).updateProfile(patch);
-              },
-              child: Text(context.l10n.commonSave),
-            ),
-          ],
+        (dialogContext) => _ProfileEditDialog(
+          nickController: nickController,
+          bioController: bioController,
+          tagsController: tagsController,
+          onSave: () async {
+            final patch = ProfilePatch(
+              displayName: nickController.text.trim(),
+              bio: bioController.text.trim(),
+              tags: tagsController.text
+                  .split(',')
+                  .map((item) => item.trim())
+                  .where((item) => item.isNotEmpty)
+                  .toList(),
+            );
+            Navigator.of(dialogContext).pop();
+            await ref.read(profileProvider.notifier).updateProfile(patch);
+          },
         ),
       );
     } finally {
@@ -353,74 +352,123 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 }
 
-class _ProfileRelationshipBar extends StatelessWidget {
-  const _ProfileRelationshipBar({
-    required this.homepageUrl,
-    required this.followersCount,
-    required this.followingCount,
-    required this.onHomepageTap,
+class _ProfileEditDialog extends StatelessWidget {
+  const _ProfileEditDialog({
+    required this.nickController,
+    required this.bioController,
+    required this.tagsController,
+    required this.onSave,
   });
 
-  final String homepageUrl;
-  final int followersCount;
-  final int followingCount;
-  final VoidCallback? onHomepageTap;
+  final TextEditingController nickController;
+  final TextEditingController bioController;
+  final TextEditingController tagsController;
+  final Future<void> Function() onSave;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stackVertically = constraints.maxWidth < 360;
-        final link = homepageUrl.isEmpty
-            ? null
-            : ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: responsive.isPhone ? 320 : 260,
-                ),
-                child: _ProfileHomepageLink(
-                  homepageUrl: homepageUrl,
-                  onTap: onHomepageTap!,
-                ),
-              );
-        final stats = Row(
+    return AppDialogScaffold(
+      key: const Key('profile-edit-dialog'),
+      maxWidth: 560,
+      maxHeightFraction: 0.9,
+      avoidViewInsets: true,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.spacing(20),
+          responsive.spacing(16),
+          responsive.spacing(20),
+          responsive.spacing(20),
+        ),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            _ProfileStat(
-              value: _formatCount(followersCount),
-              label: context.l10n.profileFollowers,
+            AppDialogHeader(
+              title: context.l10n.profileEditTitle,
+              onClose: () => Navigator.of(context).pop(),
             ),
-            SizedBox(width: responsive.spacing(28)),
-            _ProfileStat(
-              value: _formatCount(followingCount),
-              label: context.l10n.profileFollowing,
+            SizedBox(height: responsive.spacing(16)),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: <Widget>[
+                    AppTextField(
+                      controller: nickController,
+                      label: context.l10n.onboardingNickname,
+                      placeholder: context.l10n.onboardingNicknamePlaceholder,
+                    ),
+                    SizedBox(height: responsive.spacing(10)),
+                    AppTextField(
+                      controller: bioController,
+                      label: context.l10n.profileEditTitle,
+                      placeholder: context.l10n.profileBioPlaceholder,
+                      multiline: true,
+                    ),
+                    SizedBox(height: responsive.spacing(10)),
+                    AppTextField(
+                      controller: tagsController,
+                      label: context.l10n.profileTagsPlaceholder,
+                      placeholder: context.l10n.profileTagsPlaceholder,
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        );
-        if (stackVertically) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (link != null) ...<Widget>[
-                link,
-                SizedBox(height: responsive.spacing(12)),
+            SizedBox(height: responsive.spacing(16)),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: AppSecondaryButton(
+                    label: context.l10n.commonCancel,
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ),
+                SizedBox(width: responsive.spacing(10)),
+                Expanded(
+                  child: AppPrimaryButton(
+                    label: context.l10n.commonSave,
+                    onPressed: onSave,
+                  ),
+                ),
               ],
-              stats,
-            ],
-          );
-        }
-        if (link == null) {
-          return stats;
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            Expanded(child: link),
-            SizedBox(width: responsive.spacing(18)),
-            stats,
+            ),
           ],
-        );
-      },
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileStatistics extends StatelessWidget {
+  const _ProfileStatistics({
+    required this.followersCount,
+    required this.followingCount,
+  });
+
+  final int followersCount;
+  final int followingCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return Row(
+      children: <Widget>[
+        _ProfileStat(
+          value: _formatCount(followersCount),
+          label: context.l10n.profileFollowers,
+        ),
+        Container(
+          width: 1,
+          height: responsive.displayScaled(20),
+          margin: EdgeInsets.symmetric(horizontal: responsive.spacing(16)),
+          color: theme.border,
+        ),
+        _ProfileStat(
+          value: _formatCount(followingCount),
+          label: context.l10n.profileFollowing,
+        ),
+      ],
     );
   }
 
@@ -442,67 +490,6 @@ class _ProfileRelationshipBar extends StatelessWidget {
   }
 }
 
-class _ProfileHomepageLink extends StatelessWidget {
-  const _ProfileHomepageLink({required this.homepageUrl, required this.onTap});
-
-  final String homepageUrl;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    return Container(
-      padding: responsive.scaledInsets(
-        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      ),
-      decoration: BoxDecoration(
-        color: theme.subtleSurface,
-        borderRadius: BorderRadius.circular(responsive.radius(12)),
-      ),
-      child: Row(
-        children: <Widget>[
-          SelectionContainer.disabled(
-            child: Icon(
-              CupertinoIcons.link,
-              color: theme.primaryDark,
-              size: responsive.iconSm,
-            ),
-          ),
-          SizedBox(width: responsive.spacing(8)),
-          Expanded(
-            child: Text(
-              homepageUrl,
-              softWrap: true,
-              style: AwikiMeTextStyles.listSubtitle.copyWith(
-                fontSize: responsive.bodySm,
-                color: theme.primaryDark,
-              ),
-            ),
-          ),
-          SizedBox(width: responsive.spacing(8)),
-          SelectionContainer.disabled(
-            child: AppIconButton(
-              onPressed: onTap,
-              semanticLabel: context.l10n.profileOpenHomepage,
-              tooltip: context.l10n.profileOpenHomepage,
-              size: responsive.compactControlHeight,
-              backgroundColor: theme.surface.withValues(alpha: 0.72),
-              borderColor: theme.border,
-              borderRadius: BorderRadius.circular(responsive.radius(8)),
-              child: Icon(
-                CupertinoIcons.arrow_up_right_square,
-                color: theme.primaryDark,
-                size: responsive.iconSm,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ProfileStat extends StatelessWidget {
   const _ProfileStat({required this.value, required this.label});
 
@@ -513,7 +500,7 @@ class _ProfileStat extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         Text(
@@ -526,14 +513,14 @@ class _ProfileStat extends StatelessWidget {
             color: theme.title,
           ),
         ),
-        SizedBox(height: responsive.spacing(4)),
+        SizedBox(width: responsive.spacing(5)),
         Text(
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: responsive.metaSm,
-            color: theme.primaryDark,
+            color: theme.secondaryText,
           ),
         ),
       ],

@@ -64,7 +64,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('start-conversation-button')));
+    await tester.tap(
+      find.byKey(const Key('conversation-quick-actions-button')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('quick-action-start-conversation')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('identity-lookup-input')),

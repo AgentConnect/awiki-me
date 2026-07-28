@@ -77,10 +77,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('租户'), findsOneWidget);
+    expect(find.byKey(const Key('settings-tenant-row')), findsNothing);
+    expect(find.byType(TenantManagementDialog), findsNothing);
+    expect(find.byKey(const Key('settings-general-section')), findsOneWidget);
+    expect(find.byKey(const Key('settings-session-section')), findsOneWidget);
     expect(find.text('检查更新'), findsOneWidget);
     expect(find.text('语言'), findsOneWidget);
     expect(find.text('退出登录'), findsOneWidget);
+    expect(
+      find.byKey(const Key('settings-expanded-list-header')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-expanded-list-header')))
+          .height,
+      56,
+    );
+    final sectionSurface = find
+        .descendant(
+          of: find.byKey(const Key('settings-general-section')),
+          matching: find.byType(DecoratedBox),
+        )
+        .first;
+    expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(256));
+  });
+
+  testWidgets('紧凑设置页使用单层窄边距扩大设置行宽度', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+
+    await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
+    await tester.pumpAndSettle();
+
+    final sectionSurface = find
+        .descendant(
+          of: find.byKey(const Key('settings-general-section')),
+          matching: find.byType(DecoratedBox),
+        )
+        .first;
+    expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(373));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('设置页退出并删除当前凭证会删除本地凭证而不显示未实现错误', (tester) async {
@@ -217,7 +254,7 @@ void main() {
     );
   });
 
-  testWidgets('设置页复用完整租户管理并可切换到真实租户配置', (tester) async {
+  testWidgets('租户管理组件可切换到真实租户配置', (tester) async {
     final primary = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
     final custom = AppTenantProfile(
       tenantProfileId: TenantProfileId.generate(),
@@ -244,7 +281,7 @@ void main() {
         builder: (context, setState) {
           refresh = setState;
           return buildLocalizedTestApp(
-            home: const SettingsPage(),
+            home: const TenantManagementDialog(),
             providerOverrides: <Override>[
               appTenantRegistryProvider.overrideWithValue(actions.registry),
               activeAppTenantProvider.overrideWithValue(
@@ -260,8 +297,6 @@ void main() {
 
     expect(find.text('租户'), findsOneWidget);
     expect(find.textContaining('AWiki'), findsWidgets);
-    await tester.tap(find.byKey(const Key('settings-tenant-row')));
-    await tester.pumpAndSettle();
     expect(find.byType(TenantManagementDialog), findsOneWidget);
     expect(
       find.byKey(const Key('tenant-management-create-button')),
@@ -276,7 +311,7 @@ void main() {
     expect(actions.registry.activeTenant.id, custom.id);
   });
 
-  testWidgets('设置页租户管理可新建编辑删除并保留本地数据保护', (tester) async {
+  testWidgets('租户管理组件可新建编辑删除并保留本地数据保护', (tester) async {
     final primary = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
     final custom = AppTenantProfile(
       tenantProfileId: TenantProfileId.generate(),
@@ -304,7 +339,7 @@ void main() {
         builder: (context, setState) {
           refresh = setState;
           return buildLocalizedTestApp(
-            home: const SettingsPage(),
+            home: const TenantManagementDialog(),
             providerOverrides: <Override>[
               appTenantRegistryProvider.overrideWithValue(actions.registry),
               activeAppTenantProvider.overrideWithValue(
@@ -316,9 +351,6 @@ void main() {
         },
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('settings-tenant-row')));
     await tester.pumpAndSettle();
 
     expect(find.byType(TenantManagementDialog), findsOneWidget);
@@ -405,7 +437,7 @@ void main() {
     expect(find.text('新加坡归档'), findsNothing);
   });
 
-  testWidgets('设置页不允许删除当前自定义租户', (tester) async {
+  testWidgets('租户管理组件不允许删除当前自定义租户', (tester) async {
     final primary = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
     final custom = AppTenantProfile(
       tenantProfileId: TenantProfileId.generate(),
@@ -428,7 +460,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const TenantManagementDialog(),
         providerOverrides: <Override>[
           appTenantRegistryProvider.overrideWithValue(actions.registry),
           activeAppTenantProvider.overrideWithValue(
@@ -438,9 +470,6 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byKey(const Key('settings-tenant-row')));
     await tester.pumpAndSettle();
 
     final activeRow = find.byKey(Key('settings-tenant-option:${custom.id}'));

@@ -418,10 +418,10 @@ Core cutover 后继续显示 overlay 收尾阶段，完成前不创建业务 Sto
 当前聊天头部不再渲染右上角的资料 / 会话信息入口按钮：
 
 - macOS 聊天头部不显示 `身份卡`、`群聊信息` 和 `会话信息` 按钮。
-- 窄屏 / 移动聊天头部不显示右侧竖向更多按钮。
-- 头像仍是轻量资料入口：直聊打开用户 / 智能体信息弹窗，群聊打开既有群详情路由。
-- 直聊头像弹窗采用 shell-first 渲染：点击后立即基于 `ConversationSummary`、本地 runtime `AgentSummary` 和 DID 展示标题、头像、DID、类型与 Agent 收件箱入口；`peerProfileProvider` 的公开 profile、关系状态和主页 Markdown 返回后再增量补齐昵称、头像、handle、身份卡正文和关系标签。
-- 公开 profile 或后续关系 / 主页 Markdown 加载失败不得阻塞弹窗打开，也不得清空已展示的基础信息；只在身份卡区域内提示资料暂不可用或继续保留已返回的 profile 内容。
+- 窄屏 / 移动聊天头部使用“返回箭头 + 来源页”并保持标题可点击，不显示 Agent 类型、安全协作标签或右侧竖向更多按钮。
+- 移动端点击聊天标题进入完整用户 / 智能体或群聊资料子页；桌面端点击头像或标题打开完整资料 Dialog。两种形态复用同一份 provider 与资料内容组件。
+- 直聊资料采用 shell-first 渲染：点击后立即基于 `ConversationSummary`、本地 runtime `AgentSummary` 和 DID 展示标题、头像、DID、类型与 Agent 收件箱入口；`peerProfileProvider` 的公开 profile、关系状态和主页 Markdown 返回后再增量补齐昵称、头像、handle、身份卡正文和关系标签。
+- 公开 profile 或后续关系 / 主页 Markdown 加载失败不得阻塞资料页或 Dialog 打开，也不得清空已展示的基础信息；只在身份卡区域内提示资料暂不可用或继续保留已返回的 profile 内容。
 - 群详情里的成员刷新能力不属于聊天头部入口，保留在群详情 / 群信息组件内。
 
 相关回归覆盖在：

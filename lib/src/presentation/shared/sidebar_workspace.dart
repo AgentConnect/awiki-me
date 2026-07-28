@@ -40,6 +40,41 @@ class AwikiSidebarWorkspace extends StatelessWidget {
   }
 }
 
+class AwikiSidebarHeader extends StatelessWidget {
+  const AwikiSidebarHeader({super.key, required this.title, this.trailing});
+
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final type = theme.typographyFor(AwikiMeTypographyMode.expanded);
+    return Container(
+      height: responsive.displayScaled(56),
+      padding: EdgeInsets.symmetric(horizontal: responsive.spacing(14)),
+      decoration: BoxDecoration(
+        color: theme.surface,
+        border: Border(bottom: BorderSide(color: theme.border)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: type.navTitle.copyWith(color: theme.title),
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
 class AwikiWorkspaceEmptyDetail extends StatelessWidget {
   const AwikiWorkspaceEmptyDetail({super.key});
 

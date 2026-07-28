@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 
 import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
+import 'awiki_me_semantic_icon.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
 
@@ -107,16 +108,18 @@ class AwikiMeShellTopBar extends StatelessWidget {
       title: title,
       padding: EdgeInsets.zero,
       titleColor: titleColor,
-      titleFontSize: responsive.titleXl - responsive.displayScaled(1),
-      titleFontWeight: FontWeight.w500,
+      titleFontSize: responsive.isPhone
+          ? responsive.displayScaled(16)
+          : responsive.displayScaled(14),
+      titleFontWeight: FontWeight.w600,
       leading: onSettingsTap == null
           ? const SizedBox.shrink()
           : TopBarActionButton(
               onTap: onSettingsTap,
               semanticsIdentifier: 'e2e-settings-button',
               semanticsLabel: context.l10n.settingsTitle,
-              child: AwikiAssetIcon(
-                assetName: 'assets/icons/icon_settings.svg',
+              child: AwikiMeSemanticIcon(
+                role: AwikiMeIconRole.settings,
                 size: responsive.iconLg,
                 color: actionColor,
               ),
@@ -124,11 +127,12 @@ class AwikiMeShellTopBar extends StatelessWidget {
       trailing: onQuickActionsTap == null
           ? const SizedBox.shrink()
           : TopBarActionButton(
+              key: const Key('shell-quick-actions-button'),
               onTap: onQuickActionsTap,
               semanticsIdentifier: 'e2e-quick-actions-button',
               semanticsLabel: context.l10n.commonMoreActions,
-              child: AwikiAssetIcon(
-                assetName: 'assets/icons/icon_add.svg',
+              child: AwikiMeSemanticIcon(
+                role: AwikiMeIconRole.add,
                 size: responsive.iconLg,
                 color: actionColor,
               ),
@@ -154,15 +158,25 @@ class AwikiMeShellTabPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final innerPadding = responsive.tabInnerPadding;
+    final innerPadding = responsive.isPhone
+        ? const EdgeInsets.symmetric(horizontal: 8)
+        : responsive.tabInnerPadding;
     return Column(
       children: <Widget>[
-        Padding(
-          padding: responsive.scaledInsets(innerPadding.copyWith(bottom: 8)),
-          child: AwikiMeShellTopBar(
-            title: title,
-            onSettingsTap: onSettingsTap,
-            onQuickActionsTap: onQuickActionsTap,
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.awikiTheme.surface,
+            border: Border(
+              bottom: BorderSide(color: context.awikiTheme.border),
+            ),
+          ),
+          child: Padding(
+            padding: responsive.scaledInsets(innerPadding),
+            child: AwikiMeShellTopBar(
+              title: title,
+              onSettingsTap: onSettingsTap,
+              onQuickActionsTap: onQuickActionsTap,
+            ),
           ),
         ),
         Expanded(child: child),

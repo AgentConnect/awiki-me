@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 
 import '../../l10n/l10n.dart';
+import 'adaptive_overlays.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
@@ -58,6 +59,16 @@ class AppDialogScaffold extends StatelessWidget {
     final effectiveBorderRadius =
         borderRadius ??
         BorderRadius.circular(responsive.radius(responsive.isCompact ? 14 : 8));
+    if (responsive.isCompact) {
+      return CompactBottomSheet(
+        maxWidth: maxWidth,
+        maxHeightFraction: effectiveHeightFraction,
+        horizontalMargin: horizontalPadding,
+        avoidKeyboard: avoidViewInsets,
+        surfaceColor: surfaceColor,
+        child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+      );
+    }
     return SafeArea(
       minimum: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
@@ -69,9 +80,7 @@ class AppDialogScaffold extends StatelessWidget {
           bottom: viewInsets.bottom,
         ),
         child: Align(
-          alignment: responsive.isCompact
-              ? Alignment.bottomCenter
-              : Alignment.center,
+          alignment: Alignment.center,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxDialogWidth,
@@ -181,6 +190,88 @@ class AppDialogHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class AppConfirmationDialog extends StatelessWidget {
+  const AppConfirmationDialog({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.confirmLabel,
+    required this.onConfirm,
+    this.cancelLabel,
+    this.onCancel,
+    this.destructive = false,
+    this.confirmButtonKey,
+  });
+
+  final String title;
+  final String message;
+  final String confirmLabel;
+  final VoidCallback onConfirm;
+  final String? cancelLabel;
+  final VoidCallback? onCancel;
+  final bool destructive;
+  final Key? confirmButtonKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final cancel = onCancel ?? () => Navigator.of(context).pop();
+    return AppDialogScaffold(
+      maxWidth: 460,
+      maxHeightFraction: 0.8,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.spacing(20),
+          responsive.spacing(16),
+          responsive.spacing(20),
+          responsive.spacing(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            AppDialogHeader(title: title, onClose: cancel),
+            SizedBox(height: responsive.spacing(16)),
+            Text(
+              message,
+              style: TextStyle(
+                color: context.awikiTheme.body,
+                fontSize: responsive.bodySm,
+                height: 1.45,
+              ),
+            ),
+            SizedBox(height: responsive.spacing(20)),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: AppSecondaryButton(
+                    label: cancelLabel ?? context.l10n.commonCancel,
+                    onPressed: cancel,
+                  ),
+                ),
+                SizedBox(width: responsive.spacing(10)),
+                Expanded(
+                  child: destructive
+                      ? AppDangerButton(
+                          key: confirmButtonKey,
+                          label: confirmLabel,
+                          onPressed: onConfirm,
+                        )
+                      : AppPrimaryButton(
+                          key: confirmButtonKey,
+                          label: confirmLabel,
+                          onPressed: onConfirm,
+                        ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

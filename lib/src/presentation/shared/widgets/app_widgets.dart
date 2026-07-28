@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../app/e2e_semantics.dart';
+import '../adaptive_overlays.dart';
 import '../awiki_me_design.dart';
 import '../responsive_layout.dart';
 
@@ -768,6 +769,7 @@ class AppSectionDivider extends StatelessWidget {
 class AppDropMenuItem {
   const AppDropMenuItem({
     required this.label,
+    this.buttonKey,
     this.onTap,
     this.icon,
     this.destructive = false,
@@ -776,6 +778,7 @@ class AppDropMenuItem {
   });
 
   final String label;
+  final Key? buttonKey;
   final FutureOr<void> Function()? onTap;
   final IconData? icon;
   final bool destructive;
@@ -795,15 +798,52 @@ class AppDropMenu extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final compact = responsive.isCompact;
     final radius = responsive.radius(compact ? 14 : 8);
+    final menuContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (title != null && title!.trim().isNotEmpty) ...<Widget>[
+          Padding(
+            padding: responsive.scaledInsets(
+              EdgeInsets.fromLTRB(
+                compact ? 20 : 14,
+                compact ? 16 : 12,
+                compact ? 20 : 14,
+                compact ? 12 : 10,
+              ),
+            ),
+            child: Text(
+              title!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: responsive.metaSm,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+                color: theme.secondaryText,
+              ),
+            ),
+          ),
+          Container(height: 1, color: theme.border),
+        ],
+        for (var index = 0; index < items.length; index++) ...<Widget>[
+          _AppDropMenuButton(item: items[index]),
+          if (index != items.length - 1)
+            Container(height: 1, color: theme.border),
+        ],
+      ],
+    );
+    if (compact) {
+      return CompactActionSheet(
+        key: const Key('compact-action-sheet'),
+        child: menuContent,
+      );
+    }
     return SafeArea(
       child: Align(
-        alignment: compact ? Alignment.bottomCenter : Alignment.center,
+        alignment: Alignment.center,
         child: Padding(
-          padding: responsive.scaledInsets(EdgeInsets.all(compact ? 12 : 20)),
+          padding: responsive.scaledInsets(const EdgeInsets.all(20)),
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: compact ? double.infinity : 340,
-            ),
+            constraints: const BoxConstraints(maxWidth: 340),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: theme.surface,
@@ -812,43 +852,7 @@ class AppDropMenu extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(radius),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    if (title != null && title!.trim().isNotEmpty) ...<Widget>[
-                      Padding(
-                        padding: responsive.scaledInsets(
-                          EdgeInsets.fromLTRB(
-                            compact ? 20 : 14,
-                            compact ? 16 : 12,
-                            compact ? 20 : 14,
-                            compact ? 12 : 10,
-                          ),
-                        ),
-                        child: Text(
-                          title!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: responsive.metaSm,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0,
-                            color: theme.secondaryText,
-                          ),
-                        ),
-                      ),
-                      Container(height: 1, color: theme.border),
-                    ],
-                    for (
-                      var index = 0;
-                      index < items.length;
-                      index++
-                    ) ...<Widget>[
-                      _AppDropMenuButton(item: items[index]),
-                      if (index != items.length - 1)
-                        Container(height: 1, color: theme.border),
-                    ],
-                  ],
-                ),
+                child: menuContent,
               ),
             ),
           ),
@@ -875,6 +879,7 @@ class _AppDropMenuButton extends StatelessWidget {
     }
 
     return AppPressable(
+      key: item.buttonKey,
       onTap: item.onTap == null
           ? null
           : () async {

@@ -102,6 +102,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonErrorDetails => '错误详情';
 
   @override
+  String displayScaleValue(int percent) {
+    return '显示比例 $percent%';
+  }
+
+  @override
   String get realtimeStatusConnecting => '正在连接消息服务...';
 
   @override
@@ -599,6 +604,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get friendsGroups => '群组';
 
   @override
+  String get friendsGroupsSubtitle => '我加入的全部群聊';
+
+  @override
+  String get friendsMutualEmpty => '暂时还没有互相关注的朋友。';
+
+  @override
   String get friendsFollowing => '我关注的';
 
   @override
@@ -648,6 +659,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileTagsPlaceholder => '标签，使用英文逗号分隔';
+
+  @override
+  String get profileHomepageLabel => '主页';
 
   @override
   String get profileOpenHomepage => '打开主页';
@@ -2125,13 +2139,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get relationshipNone => '未关注';
 
   @override
-  String get relationshipFollowing => 'following';
+  String get relationshipFollowing => '已关注';
 
   @override
-  String get relationshipFollower => 'follower';
+  String get relationshipFollower => '关注了我';
 
   @override
-  String get relationshipFriend => 'friend';
+  String get relationshipFriend => '朋友';
 
   @override
   String get profileUpdated => '个人资料已更新';

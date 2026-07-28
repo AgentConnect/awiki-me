@@ -15,6 +15,7 @@ enum AwikiMeIconRole {
   add,
   newConversation,
   more,
+  edit,
   refresh,
   notifications,
   back,
@@ -43,12 +44,14 @@ class AwikiMeIconDefinition {
     this.assetName,
     this.selectedAssetName,
     this.matchTextDirection = false,
+    this.opticalScale = 1,
   });
 
   final IconData fallback;
   final String? assetName;
   final String? selectedAssetName;
   final bool matchTextDirection;
+  final double opticalScale;
 
   String? assetFor({required bool selected}) =>
       selected ? selectedAssetName ?? assetName : assetName;
@@ -60,15 +63,16 @@ class AwikiMeIconRegistry {
         AwikiMeIconRole.messages: AwikiMeIconDefinition(
           fallback: CupertinoIcons.chat_bubble_2,
           assetName: 'assets/icons/message_Inactive.svg',
-          selectedAssetName: 'assets/icons/message_Active.svg',
+          opticalScale: 2.05,
         ),
         AwikiMeIconRole.agents: AwikiMeIconDefinition(
           fallback: CupertinoIcons.square_stack_3d_up,
+          opticalScale: 0.86,
         ),
         AwikiMeIconRole.contacts: AwikiMeIconDefinition(
           fallback: CupertinoIcons.person_2,
           assetName: 'assets/icons/friend_Inactive.svg',
-          selectedAssetName: 'assets/icons/friend_Active.svg',
+          opticalScale: 1.9,
         ),
         AwikiMeIconRole.tasks: AwikiMeIconDefinition(
           fallback: CupertinoIcons.checkmark_square,
@@ -79,7 +83,7 @@ class AwikiMeIconRegistry {
         AwikiMeIconRole.profile: AwikiMeIconDefinition(
           fallback: CupertinoIcons.person,
           assetName: 'assets/icons/me_Inactive.svg',
-          selectedAssetName: 'assets/icons/me_Active.svg',
+          opticalScale: 2.6,
         ),
         AwikiMeIconRole.settings: AwikiMeIconDefinition(
           fallback: CupertinoIcons.gear,
@@ -99,6 +103,9 @@ class AwikiMeIconRegistry {
         AwikiMeIconRole.more: AwikiMeIconDefinition(
           fallback: CupertinoIcons.ellipsis,
           assetName: 'assets/icons/dot_vertical.svg',
+        ),
+        AwikiMeIconRole.edit: AwikiMeIconDefinition(
+          fallback: CupertinoIcons.pencil,
         ),
         AwikiMeIconRole.refresh: AwikiMeIconDefinition(
           fallback: CupertinoIcons.refresh,
@@ -207,26 +214,33 @@ class AwikiMeSemanticIcon extends StatelessWidget {
         IconTheme.of(context).color ??
         context.awikiTheme.secondaryText;
     final assetName = definition.assetFor(selected: selected);
+    final graphic = assetName == null
+        ? Icon(
+            definition.fallback,
+            size: size,
+            color: resolvedColor,
+            semanticLabel: semanticLabel,
+          )
+        : SvgPicture.asset(
+            assetName,
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+            colorFilter: ColorFilter.mode(resolvedColor, BlendMode.srcIn),
+            matchTextDirection: definition.matchTextDirection,
+            semanticsLabel: semanticLabel,
+            excludeFromSemantics: semanticLabel == null,
+          );
 
     return SizedBox.square(
       dimension: size,
-      child: assetName == null
-          ? Icon(
-              definition.fallback,
-              size: size,
-              color: resolvedColor,
-              semanticLabel: semanticLabel,
-            )
-          : SvgPicture.asset(
-              assetName,
-              width: size,
-              height: size,
-              fit: BoxFit.contain,
-              colorFilter: ColorFilter.mode(resolvedColor, BlendMode.srcIn),
-              matchTextDirection: definition.matchTextDirection,
-              semanticsLabel: semanticLabel,
-              excludeFromSemantics: semanticLabel == null,
-            ),
+      child: ClipRect(
+        child: Transform.scale(
+          scale: definition.opticalScale,
+          alignment: Alignment.center,
+          child: graphic,
+        ),
+      ),
     );
   }
 }
