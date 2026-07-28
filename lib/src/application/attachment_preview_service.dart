@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
+import 'dart:typed_data';
 
 export 'attachment_image_dimensions.dart' show AttachmentImageDimensions;
 
@@ -17,6 +18,9 @@ enum _AttachmentPreviewOrigin {
   appCache,
   downloadedLocalSource,
 }
+
+typedef AttachmentPreviewBytesReader =
+    Future<Uint8List> Function(String localPath);
 
 class AttachmentPreviewSnapshot {
   const AttachmentPreviewSnapshot._({
@@ -116,11 +120,14 @@ class AttachmentPreviewService {
   AttachmentPreviewService({
     required this.cache,
     this.imageDimensionProbe = const NoopAttachmentImageDimensionProbe(),
+    AttachmentPreviewBytesReader? bytesReader,
     this.maxRetainedEntries = 512,
-  }) : assert(maxRetainedEntries > 0);
+  }) : _bytesReader = bytesReader ?? _readLocalFileBytes,
+       assert(maxRetainedEntries > 0);
 
   final AttachmentCacheService cache;
   final AttachmentImageDimensionProbe imageDimensionProbe;
+  final AttachmentPreviewBytesReader _bytesReader;
 
   /// Maximum inactive handles retained in memory. Handles with listeners or an
   /// active resolution may temporarily exceed this value; completion and the
@@ -283,6 +290,23 @@ class AttachmentPreviewService {
             });
     handle._inFlight = resolution;
     return resolution;
+  }
+
+  Future<Uint8List> readPreviewBytes(String previewPath) async {
+    final reference = AttachmentResourceReference.parse(previewPath);
+    final localPath = reference.localPath;
+    if (!reference.isLocalFile || localPath == null) {
+      throw const AttachmentUnavailableException();
+    }
+    try {
+      final bytes = await _bytesReader(localPath);
+      if (bytes.isEmpty) {
+        throw StateError('attachment_copy_empty');
+      }
+      return bytes;
+    } on FileSystemException {
+      throw const AttachmentUnavailableException();
+    }
   }
 
   void reportPreviewDecodeFailure({
@@ -465,6 +489,10 @@ class AttachmentPreviewService {
       return file.path;
     }
     return null;
+  }
+
+  static Future<Uint8List> _readLocalFileBytes(String localPath) {
+    return File(localPath).readAsBytes();
   }
 
   String _stableMessageId(ChatMessage message) {

@@ -715,6 +715,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
         ),
         Flexible(
           child: SingleChildScrollView(
+            key: const Key('group-info-dialog-scroll-view'),
             padding: EdgeInsets.fromLTRB(
               responsive.spacing(18),
               responsive.spacing(16),

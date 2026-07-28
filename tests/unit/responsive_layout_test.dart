@@ -54,13 +54,32 @@ void main() {
       displayScale: 1.12,
     );
 
-    expect(larger.displayScale, 1.12);
+    expect(normal.userDisplayScale, AwikiDisplayScale.normal);
+    expect(
+      normal.displayScale,
+      closeTo(AwikiDisplayScale.layoutBaseline, 0.0001),
+    );
+    expect(larger.userDisplayScale, 1.12);
+    expect(
+      larger.displayScale,
+      closeTo(1.12 * AwikiDisplayScale.layoutBaseline, 0.0001),
+    );
     expect(larger.controlHeight, greaterThan(normal.controlHeight));
     expect(larger.avatarSizeMd, greaterThan(normal.avatarSizeMd));
     expect(larger.titleLg, greaterThan(normal.titleLg));
     expect(larger.bodyMd, greaterThan(normal.bodyMd));
     expect(larger.spacing(16), greaterThan(normal.spacing(16)));
-    expect(larger.displayScaled(100), closeTo(112, 0.0001));
+    expect(
+      larger.displayScaled(100),
+      closeTo(112 * AwikiDisplayScale.layoutBaseline, 0.0001),
+    );
+  });
+
+  test('用户 100% 映射到旧版 106% 的实际布局基准', () {
+    final normal = AwikiResponsiveInfo.fromSize(const Size(1280, 800));
+
+    expect(normal.userDisplayScale, 1);
+    expect(normal.displayScaled(100), closeTo(106, 0.0001));
   });
 
   test('显示缩放范围会被限制', () {
@@ -73,8 +92,16 @@ void main() {
       displayScale: 2,
     );
 
-    expect(small.displayScale, AwikiDisplayScale.min);
-    expect(large.displayScale, AwikiDisplayScale.max);
+    expect(small.userDisplayScale, AwikiDisplayScale.min);
+    expect(large.userDisplayScale, AwikiDisplayScale.max);
+    expect(
+      small.displayScale,
+      closeTo(AwikiDisplayScale.min * AwikiDisplayScale.layoutBaseline, 0.0001),
+    );
+    expect(
+      large.displayScale,
+      closeTo(AwikiDisplayScale.max * AwikiDisplayScale.layoutBaseline, 0.0001),
+    );
   });
 
   test('expanded 布局语义在所有平台一致', () {

@@ -760,6 +760,17 @@ void main() {
       );
       final history = <ChatMessage>[
         ChatMessage(
+          localId: 'own-agent-message-1',
+          threadId: 'dm:$runtimeDid',
+          senderDid: session.did,
+          senderName: session.displayName,
+          receiverDid: runtimeDid,
+          content: 'latest user request',
+          createdAt: DateTime(2026, 6, 15, 10, 29),
+          isMine: true,
+          sendState: MessageSendState.sent,
+        ),
+        ChatMessage(
           localId: 'agent-message-1',
           threadId: 'dm:$runtimeDid',
           senderDid: runtimeDid,
@@ -782,6 +793,9 @@ void main() {
       harness.gateway
         ..conversations = <ConversationSummary>[conversation]
         ..dmHistoryByPeerDid = <String, List<ChatMessage>>{runtimeDid: history}
+        ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+          runtimeDid: history,
+        }
         ..publicProfilesByQuery = <String, UserProfile>{runtimeDid: profile};
       final control =
           harness.bootstrap.agentControlService!
@@ -870,6 +884,21 @@ void main() {
           findsNothing,
         );
         expect(find.text('身份卡'), findsNothing);
+
+        await tester.tap(
+          find.byKey(const Key('chat-message-avatar:own-agent-message-1:mine')),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.byKey(const Key('desktop-current-identity-dialog')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
+        await tester.tap(
+          find.byKey(const Key('desktop-current-identity-close')),
+        );
+        await tester.pumpAndSettle();
 
         await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
         await tester.pumpAndSettle();

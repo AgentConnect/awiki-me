@@ -13,6 +13,7 @@ typedef AttachmentProcessRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
 typedef AttachmentTemporaryDirectoryProvider = Future<Directory> Function();
 typedef AttachmentClipboardImageReader = Future<Uint8List?> Function();
+typedef AttachmentClipboardImageWriter = Future<void> Function(Uint8List bytes);
 typedef AttachmentClipboardFilesReader = Future<List<String>> Function();
 typedef AttachmentPlatformFileSelector =
     Future<AttachmentPlatformFile?> Function();
@@ -48,6 +49,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
     AttachmentProcessRunner? processRunner,
     AttachmentTemporaryDirectoryProvider? temporaryDirectoryProvider,
     AttachmentClipboardImageReader? clipboardImageReader,
+    AttachmentClipboardImageWriter? clipboardImageWriter,
     AttachmentClipboardFilesReader? clipboardFilesReader,
     bool? preferClipboardFiles,
     bool? windowsPlatform,
@@ -83,6 +85,8 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
                  : p.join(Directory.systemTemp.path, 'awiki-attachments'),
            )),
        _clipboardImageReader = clipboardImageReader ?? (() => Pasteboard.image),
+       _clipboardImageWriter =
+           clipboardImageWriter ?? ((bytes) => Pasteboard.writeImage(bytes)),
        _clipboardFilesReader = clipboardFilesReader ?? Pasteboard.files,
        _preferClipboardFiles = preferClipboardFiles ?? Platform.isMacOS,
        _windowsFileSelector = windowsFileSelector ?? _selectWindowsFile,
@@ -113,6 +117,7 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
   final AttachmentTemporaryDirectoryProvider
   _attachmentTemporaryDirectoryProvider;
   final AttachmentClipboardImageReader _clipboardImageReader;
+  final AttachmentClipboardImageWriter _clipboardImageWriter;
   final AttachmentClipboardFilesReader _clipboardFilesReader;
   final bool _preferClipboardFiles;
   final AttachmentPlatformFileSelector _windowsFileSelector;
@@ -440,6 +445,23 @@ class MethodChannelAttachmentPickerService implements AttachmentPickerService {
       return null;
     } on MissingPluginException {
       return null;
+    }
+  }
+
+  @override
+  Future<void> copyImage(Uint8List bytes) async {
+    if (bytes.isEmpty) {
+      throw StateError('attachment_copy_empty');
+    }
+    _validateAttachmentSize(bytes.length);
+    try {
+      await _clipboardImageWriter(bytes);
+    } on MissingPluginException {
+      throw StateError('attachment_copy_unsupported');
+    } on PlatformException catch (error) {
+      throw StateError(
+        _friendlyMessage(error, fallback: 'attachment_copy_failed'),
+      );
     }
   }
 

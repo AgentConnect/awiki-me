@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class AwikiDisplayScale {
   const AwikiDisplayScale._();
 
+  // User-facing 100% uses the former 106% layout as the product baseline.
+  static const double layoutBaseline = 1.06;
   static const double min = 0.76;
   static const double max = 1.32;
   static const double step = 0.06;
@@ -11,6 +13,10 @@ class AwikiDisplayScale {
 
   static double normalize(double value) {
     return value.clamp(min, max).toDouble();
+  }
+
+  static double effective(double userScale) {
+    return normalize(userScale) * layoutBaseline;
   }
 }
 

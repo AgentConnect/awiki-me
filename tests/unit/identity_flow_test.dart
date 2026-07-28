@@ -345,7 +345,7 @@ void main() {
     expect(container.read(conversationListProvider).conversations, isEmpty);
   });
 
-  testWidgets('最近会话更多操作菜单使用更多操作标题', (tester) async {
+  testWidgets('桌面最近会话更多操作使用无标题锚定菜单', (tester) async {
     final gateway = FakeAwikiGateway();
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -368,9 +368,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('更多操作'), findsOneWidget);
+    expect(find.byType(AppDropMenu), findsNothing);
+    expect(
+      find.byKey(const Key('quick-action-start-conversation')),
+      findsOneWidget,
+    );
+    expect(find.text('更多操作'), findsNothing);
     expect(find.text('快捷操作'), findsNothing);
 
+    await tester.tapAt(const Offset(1000, 700));
+    await tester.pumpAndSettle();
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });

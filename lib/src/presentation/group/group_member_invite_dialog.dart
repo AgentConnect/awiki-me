@@ -1149,6 +1149,7 @@ class _InviteCandidateList extends StatelessWidget {
       child: CupertinoScrollbar(
         controller: controller,
         child: ListView.separated(
+          key: const Key('group-invite-candidate-list'),
           controller: controller,
           padding: const EdgeInsets.symmetric(vertical: 6),
           itemCount: candidates.length,

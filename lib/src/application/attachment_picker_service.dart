@@ -17,6 +17,8 @@ abstract interface class AttachmentPickerService {
 
   Future<AttachmentDraft?> readClipboardAttachment();
 
+  Future<void> copyImage(Uint8List bytes);
+
   Future<String?> saveAttachment({
     required String filename,
     required String mimeType,

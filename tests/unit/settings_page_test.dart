@@ -3,6 +3,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,7 +93,7 @@ void main() {
       tester
           .getSize(find.byKey(const Key('settings-expanded-list-header')))
           .height,
-      56,
+      closeTo(56 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     final sectionSurface = find
         .descendant(

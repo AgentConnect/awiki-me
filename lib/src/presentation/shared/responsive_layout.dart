@@ -12,7 +12,7 @@ class AwikiResponsiveInfo {
   const AwikiResponsiveInfo({
     required this.size,
     required this.breakpoint,
-    this.displayScale = AwikiDisplayScale.normal,
+    this.userDisplayScale = AwikiDisplayScale.normal,
   });
 
   factory AwikiResponsiveInfo.fromSize(
@@ -22,7 +22,7 @@ class AwikiResponsiveInfo {
     return AwikiResponsiveInfo(
       size: size,
       breakpoint: AwikiBreakpoints.fromSize(size),
-      displayScale: AwikiDisplayScale.normalize(displayScale),
+      userDisplayScale: AwikiDisplayScale.normalize(displayScale),
     );
   }
 
@@ -40,7 +40,9 @@ class AwikiResponsiveInfo {
 
   final Size size;
   final AwikiBreakpoint breakpoint;
-  final double displayScale;
+  final double userDisplayScale;
+
+  double get displayScale => AwikiDisplayScale.effective(userDisplayScale);
 
   double get width => size.width;
 

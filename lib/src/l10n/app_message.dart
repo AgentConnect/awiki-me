@@ -194,6 +194,16 @@ class AppMessage {
   factory AppMessage.attachmentOpenFailed() =>
       const AppMessage._('attachmentOpenFailed');
 
+  factory AppMessage.documentSaveFailed() =>
+      const AppMessage._('documentSaveFailed');
+
+  factory AppMessage.chatImageCopied() => const AppMessage._('chatImageCopied');
+
+  factory AppMessage.chatImageSaved() => const AppMessage._('chatImageSaved');
+
+  factory AppMessage.chatImageCopyFailed() =>
+      const AppMessage._('chatImageCopyFailed');
+
   factory AppMessage.screenshotPermissionRequired() =>
       const AppMessage._('screenshotPermissionRequired');
 
@@ -441,6 +451,12 @@ class AppMessage {
         return l10n.documentSaveFailed;
       case 'attachmentDownloadEmpty':
         return l10n.attachmentDownloadEmpty;
+      case 'chatImageCopied':
+        return l10n.chatImageCopied;
+      case 'chatImageSaved':
+        return l10n.chatImageSaved;
+      case 'chatImageCopyFailed':
+        return l10n.chatImageCopyFailed;
       case 'linkOpenFailed':
         return detail == null || detail!.isEmpty
             ? l10n.linkOpenFailed
@@ -516,6 +532,12 @@ class AppMessage {
         return 'The attachment has expired or is not cached on this device. Ask the sender to send it again.';
       case 'attachmentOpenFailed':
         return 'The attachment cannot be opened. Try again later or save it before opening.';
+      case 'chatImageCopied':
+        return 'Image copied';
+      case 'chatImageSaved':
+        return 'Image saved';
+      case 'chatImageCopyFailed':
+        return "Couldn't copy the image. Please try again.";
       case 'raw':
         return detail ?? 'The operation failed. Please try again later.';
       default:

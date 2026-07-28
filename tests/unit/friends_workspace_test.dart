@@ -12,6 +12,7 @@ import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/sidebar_workspace.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,8 +41,11 @@ const _friendsWorkspaceSession = SessionIdentity(
 
 void main() {
   testWidgets('桌面宽度下联系人页保持左右分栏布局', (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -74,12 +78,6 @@ void main() {
       find.byKey(const Key('friends-expanded-list-header')),
       findsOneWidget,
     );
-    expect(
-      tester
-          .getSize(find.byKey(const Key('friends-expanded-list-header')))
-          .height,
-      56,
-    );
     final paneRect = tester.getRect(find.byType(AwikiSidebarWorkspace));
     final titleRect = tester.getRect(
       find.descendant(
@@ -91,9 +89,47 @@ void main() {
       find.byKey(const Key('friends-expanded-list-header')),
     );
     expect(
+      tester
+          .getSize(find.byKey(const Key('friends-expanded-list-header')))
+          .height,
+      closeTo(headerContext.awikiResponsive.displayScaled(56), 0.01),
+    );
+    expect(
       titleRect.left - paneRect.left,
       closeTo(headerContext.awikiResponsive.spacing(14), 1),
     );
+  });
+
+  testWidgets('桌面联系人右上角快捷操作使用锚定菜单', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsWorkspacePage(),
+        session: _friendsWorkspaceSession,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final trigger = find.byKey(const Key('shell-quick-actions-button'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppDropMenu), findsNothing);
+    final firstItem = find.byKey(const Key('quick-action-start-conversation'));
+    expect(firstItem, findsOneWidget);
+    final triggerRect = tester.getRect(trigger);
+    final firstItemRect = tester.getRect(firstItem);
+    expect(firstItemRect.top, greaterThan(triggerRect.bottom));
+    expect(firstItemRect.left, lessThan(triggerRect.left));
+
+    await tester.tapAt(const Offset(1000, 700));
+    await tester.pumpAndSettle();
+    expect(firstItem, findsNothing);
   });
 
   testWidgets('桌面联系人默认在右侧展示共享完整目录', (tester) async {
@@ -256,6 +292,12 @@ void main() {
   });
 
   testWidgets('联系人页分区展示群组、我关注的和关注我的预览', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(800, 1200);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const FriendsPage(),

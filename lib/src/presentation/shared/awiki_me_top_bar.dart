@@ -97,7 +97,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
 
   final String title;
   final VoidCallback? onSettingsTap;
-  final VoidCallback? onQuickActionsTap;
+  final ValueChanged<BuildContext>? onQuickActionsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -126,15 +126,17 @@ class AwikiMeShellTopBar extends StatelessWidget {
             ),
       trailing: onQuickActionsTap == null
           ? const SizedBox.shrink()
-          : TopBarActionButton(
-              key: const Key('shell-quick-actions-button'),
-              onTap: onQuickActionsTap,
-              semanticsIdentifier: 'e2e-quick-actions-button',
-              semanticsLabel: context.l10n.commonMoreActions,
-              child: AwikiMeSemanticIcon(
-                role: AwikiMeIconRole.add,
-                size: responsive.iconLg,
-                color: actionColor,
+          : Builder(
+              builder: (anchorContext) => TopBarActionButton(
+                key: const Key('shell-quick-actions-button'),
+                onTap: () => onQuickActionsTap!(anchorContext),
+                semanticsIdentifier: 'e2e-quick-actions-button',
+                semanticsLabel: context.l10n.commonMoreActions,
+                child: AwikiMeSemanticIcon(
+                  role: AwikiMeIconRole.add,
+                  size: responsive.iconLg,
+                  color: actionColor,
+                ),
               ),
             ),
     );
@@ -152,7 +154,7 @@ class AwikiMeShellTabPage extends StatelessWidget {
 
   final String title;
   final VoidCallback? onSettingsTap;
-  final VoidCallback? onQuickActionsTap;
+  final ValueChanged<BuildContext>? onQuickActionsTap;
   final Widget child;
 
   @override

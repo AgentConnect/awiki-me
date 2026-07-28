@@ -442,6 +442,44 @@ void main() {
   );
 
   test(
+    'copyImage writes the original encoded bytes to the system clipboard',
+    () async {
+      Uint8List? copiedBytes;
+      final service = MethodChannelAttachmentPickerService(
+        clipboardImageWriter: (bytes) async {
+          copiedBytes = bytes;
+        },
+      );
+      final bytes = Uint8List.fromList(<int>[137, 80, 78, 71]);
+
+      await service.copyImage(bytes);
+
+      expect(copiedBytes, same(bytes));
+    },
+  );
+
+  test('copyImage rejects empty data before invoking the platform', () async {
+    var writes = 0;
+    final service = MethodChannelAttachmentPickerService(
+      clipboardImageWriter: (bytes) async {
+        writes += 1;
+      },
+    );
+
+    await expectLater(
+      service.copyImage(Uint8List(0)),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'attachment_copy_empty',
+        ),
+      ),
+    );
+    expect(writes, 0);
+  });
+
+  test(
     'Windows screenshot uses the native region channel without hiding the app',
     () async {
       final tempDir = await Directory.systemTemp.createTemp(

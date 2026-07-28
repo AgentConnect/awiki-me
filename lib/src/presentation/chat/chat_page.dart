@@ -3,10 +3,27 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
-import 'package:flutter/rendering.dart' show RenderBox, ScrollDirection;
+import 'package:flutter/material.dart'
+    show
+        PopupMenuEntry,
+        PopupMenuItem,
+        RelativeRect,
+        RoundedRectangleBorder,
+        SelectionArea,
+        SelectionContainer,
+        showMenu;
+import 'package:flutter/rendering.dart'
+    show
+        BoxHitTestResult,
+        ContainerBoxParentData,
+        ContainerRenderObjectMixin,
+        PaintingContext,
+        RenderBox,
+        RenderBoxContainerDefaultsMixin,
+        ScrollDirection;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:markdown/markdown.dart' as md;
@@ -48,6 +65,7 @@ import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 import '../profile/profile_markdown.dart';
+import '../profile/profile_workspace_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_semantic_icon.dart';
@@ -652,6 +670,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   bool _isDraggingExternalAttachment = false;
   final Set<String> _requestedGroupRoleIds = <String>{};
   final Set<String> _downloadingAttachmentMessageIds = <String>{};
+  final Set<String> _activeImageAttachmentActions = <String>{};
   static const double _nearBottomExtent = 96;
 
   @override
@@ -1214,14 +1233,35 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                                 message,
                                               )
                                             : null,
+                                        onCopyImage:
+                                            message.attachment != null &&
+                                                _isInlineImageAttachment(
+                                                  message.attachment!,
+                                                )
+                                            ? (path) => _copyImageAttachment(
+                                                message,
+                                                path,
+                                              )
+                                            : null,
+                                        onSaveImage:
+                                            message.attachment != null &&
+                                                _isInlineImageAttachment(
+                                                  message.attachment!,
+                                                )
+                                            ? (path) => _saveImageAttachment(
+                                                message,
+                                                path,
+                                              )
+                                            : null,
                                         isDownloading:
                                             _downloadingAttachmentMessageIds
                                                 .contains(message.localId),
-                                        onPeerInfoTap: _peerInfoTapForMessage(
-                                          currentConversation,
-                                          message,
-                                          senderLabel,
-                                        ),
+                                        onSenderInfoTap:
+                                            _senderInfoTapForMessage(
+                                              currentConversation,
+                                              message,
+                                              senderLabel,
+                                            ),
                                       ),
                                     if (pendingTurns.isNotEmpty) ...<Widget>[
                                       SizedBox(
@@ -1489,11 +1529,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
-  VoidCallback? _peerInfoTapForMessage(
+  VoidCallback? _senderInfoTapForMessage(
     ConversationSummary conversation,
     ChatMessage message,
     String senderLabel,
   ) {
+    if (message.isMine) {
+      return () => showCurrentIdentityDialog(context);
+    }
     final targetDid = conversation.isGroup
         ? message.senderDid.trim()
         : conversation.targetDid?.trim();
@@ -1853,6 +1896,99 @@ class _ChatViewState extends ConsumerState<ChatView> {
               .read(chatThreadsProvider.notifier)
               .downloadAttachment(conversation: conversation, message: message),
         );
+  }
+
+  Future<void> _copyImageAttachment(
+    ChatMessage message,
+    String previewPath,
+  ) async {
+    final actionKey = 'copy:${message.localId}';
+    if (!_activeImageAttachmentActions.add(actionKey)) {
+      return;
+    }
+    final sessionEpoch = ref.read(sessionProvider).activeEpoch;
+    if (sessionEpoch == null) {
+      _activeImageAttachmentActions.remove(actionKey);
+      return;
+    }
+    try {
+      final bytes = await ref
+          .read(attachmentPreviewServiceProvider)
+          .readPreviewBytes(previewPath);
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
+      await ref.read(attachmentPickerServiceProvider).copyImage(bytes);
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(AppMessage.chatImageCopied());
+    } catch (error, stackTrace) {
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(
+            AppMessage.chatImageCopyFailed(),
+            detail: _attachmentOpenErrorDetail(error, stackTrace),
+          );
+    } finally {
+      _activeImageAttachmentActions.remove(actionKey);
+    }
+  }
+
+  Future<void> _saveImageAttachment(
+    ChatMessage message,
+    String previewPath,
+  ) async {
+    final actionKey = 'save:${message.localId}';
+    if (!_activeImageAttachmentActions.add(actionKey)) {
+      return;
+    }
+    final sessionEpoch = ref.read(sessionProvider).activeEpoch;
+    final attachment = message.attachment;
+    if (sessionEpoch == null || attachment == null) {
+      _activeImageAttachmentActions.remove(actionKey);
+      return;
+    }
+    try {
+      final bytes = await ref
+          .read(attachmentPreviewServiceProvider)
+          .readPreviewBytes(previewPath);
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
+      final savedPath = await ref
+          .read(attachmentPickerServiceProvider)
+          .saveAttachment(
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            bytes: bytes,
+          );
+      if (!mounted ||
+          ref.read(sessionProvider).activeEpoch != sessionEpoch ||
+          savedPath == null) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(AppMessage.chatImageSaved());
+    } catch (error, stackTrace) {
+      if (!mounted || ref.read(sessionProvider).activeEpoch != sessionEpoch) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(
+            AppMessage.documentSaveFailed(),
+            detail: _attachmentOpenErrorDetail(error, stackTrace),
+          );
+    } finally {
+      _activeImageAttachmentActions.remove(actionKey);
+    }
   }
 
   AppMessage _attachmentOpenErrorMessage(Object error) {

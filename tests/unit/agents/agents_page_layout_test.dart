@@ -11,7 +11,9 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
@@ -20,6 +22,146 @@ import 'package:flutter_test/flutter_test.dart';
 import '../test_support.dart';
 
 void main() {
+  for (final scenario
+      in <({String label, Size size, Key layoutKey, double dotSize})>[
+        (
+          label: '移动端',
+          size: const Size(390, 844),
+          layoutKey: const Key('agents-compact-layout'),
+          dotSize: 10 * AwikiDisplayScale.layoutBaseline,
+        ),
+        (
+          label: '桌面端',
+          size: const Size(1200, 900),
+          layoutKey: const Key('agents-expanded-layout'),
+          dotSize: 9 * AwikiDisplayScale.layoutBaseline,
+        ),
+      ]) {
+    testWidgets('${scenario.label}智能体列表把状态圆点叠在图标右下角', (tester) async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon:status-layout',
+            kind: AgentKind.daemon,
+            displayName: 'Layout Daemon',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime:status-layout',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon:status-layout',
+            runtime: 'hermes',
+            displayName: 'Layout Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      tester.view.physicalSize = scenario.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AgentsWorkspacePage(),
+          session: const SessionIdentity(
+            did: 'did:human:me',
+            credentialName: 'default',
+            displayName: 'Me',
+          ),
+          providerOverrides: <Override>[
+            agentControlServiceProvider.overrideWithValue(control),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(scenario.layoutKey), findsOneWidget);
+      _expectAgentListStatusAnchoredToIcon(
+        tester,
+        agentDid: 'did:agent:daemon:status-layout',
+        title: 'Layout Daemon',
+        expectedDotSize: scenario.dotSize,
+      );
+      _expectAgentListStatusAnchoredToIcon(
+        tester,
+        agentDid: 'did:agent:runtime:status-layout',
+        title: 'Layout Agent',
+        expectedDotSize: scenario.dotSize,
+      );
+    });
+  }
+
+  testWidgets('创建中的智能体同样把状态圆点叠在临时图标右下角', (tester) async {
+    const daemonDid = 'did:agent:daemon:pending-layout';
+    const requestId = 'pending-layout-request';
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentsProvider.overrideWith(
+            (ref) => _NoopSeededAgentsController(
+              ref,
+              AgentsState(
+                agents: const <AgentSummary>[
+                  AgentSummary(
+                    agentDid: daemonDid,
+                    kind: AgentKind.daemon,
+                    displayName: 'Pending Daemon',
+                    activeState: 'active',
+                    latest: AgentLatestStatus(status: 'ready'),
+                  ),
+                ],
+                pendingRuntimeCreations: <PendingRuntimeCreation>[
+                  PendingRuntimeCreation(
+                    requestId: requestId,
+                    daemonAgentDid: daemonDid,
+                    handle: 'pending-agent',
+                    displayName: 'Pending Agent',
+                    runtime: 'hermes',
+                    createdAt: DateTime(2026, 7, 28, 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final anchor = find.byKey(
+      const Key('agent-list-status-anchor-pending-$requestId'),
+    );
+    final dot = find.descendant(
+      of: anchor,
+      matching: find.byType(AgentStatusDot),
+    );
+    expect(anchor, findsOneWidget);
+    expect(dot, findsOneWidget);
+    expect(
+      tester.widget<AgentStatusDot>(dot).size,
+      10 * AwikiDisplayScale.layoutBaseline,
+    );
+    _expectBottomRightOverlay(tester, anchor: anchor, indicator: dot);
+    expect(
+      tester.getCenter(dot).dx,
+      lessThan(tester.getRect(find.text('Pending Agent')).left),
+    );
+  });
+
   testWidgets('agents workspace shows daemon actions', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -515,7 +657,7 @@ void main() {
         tester
             .getSize(find.byKey(const Key('agents-expanded-list-header')))
             .height,
-        56,
+        closeTo(56 * AwikiDisplayScale.layoutBaseline, 0.01),
       );
       expect(
         find.byKey(const Key('agents-persistent-detail-header')),
@@ -2358,6 +2500,48 @@ Future<_PendingRefreshAgentControlService> _pumpCreateAgentDialog(
   await tester.pumpAndSettle();
 
   return control;
+}
+
+void _expectAgentListStatusAnchoredToIcon(
+  WidgetTester tester, {
+  required String agentDid,
+  required String title,
+  required double expectedDotSize,
+}) {
+  final tile = find.byKey(Key('agent-list-tile-$agentDid'));
+  final anchor = find.byKey(Key('agent-list-status-anchor-$agentDid'));
+  final indicator = find.descendant(
+    of: anchor,
+    matching: find.byType(AgentStatusDot),
+  );
+  final titleFinder = find.descendant(of: tile, matching: find.text(title));
+
+  expect(tile, findsOneWidget);
+  expect(anchor, findsOneWidget);
+  expect(indicator, findsOneWidget);
+  expect(tester.widget<AgentStatusDot>(indicator).size, expectedDotSize);
+  expect(
+    find.descendant(of: tile, matching: find.byType(AgentStatusDot)),
+    findsOneWidget,
+  );
+  _expectBottomRightOverlay(tester, anchor: anchor, indicator: indicator);
+  expect(
+    tester.getCenter(indicator).dx,
+    lessThan(tester.getRect(titleFinder).left),
+  );
+}
+
+void _expectBottomRightOverlay(
+  WidgetTester tester, {
+  required Finder anchor,
+  required Finder indicator,
+}) {
+  final anchorRect = tester.getRect(anchor);
+  final indicatorCenter = tester.getCenter(indicator);
+  expect(indicatorCenter.dx, greaterThan(anchorRect.center.dx));
+  expect(indicatorCenter.dy, greaterThan(anchorRect.center.dy));
+  expect(indicatorCenter.dx, lessThanOrEqualTo(anchorRect.right + 1));
+  expect(indicatorCenter.dy, lessThanOrEqualTo(anchorRect.bottom + 1));
 }
 
 class _CountingRefreshAgentControlService extends FakeAgentControlService {

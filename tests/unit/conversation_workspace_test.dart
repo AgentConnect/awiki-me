@@ -31,6 +31,7 @@ import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
@@ -39,6 +40,8 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/semantics.dart' show SemanticsRole;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -391,6 +394,141 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets('桌面消息快捷操作使用锚定菜单和设计稿图标', (tester) async {
+    final gateway = FakeAwikiGateway()..conversations = <ConversationSummary>[];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 820);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final trigger = find.byKey(const Key('conversation-quick-actions-button'));
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppDropMenu), findsNothing);
+    final firstItem = find.byKey(const Key('quick-action-start-conversation'));
+    expect(firstItem, findsOneWidget);
+    final triggerRect = tester.getRect(trigger);
+    final firstItemRect = tester.getRect(firstItem);
+    expect(firstItemRect.top, greaterThan(triggerRect.bottom));
+    expect(firstItemRect.left, lessThan(triggerRect.left));
+    expect(tester.getSemantics(firstItem).role, SemanticsRole.menuItem);
+
+    const expectedIcons = <(String, IconData)>[
+      ('quick-action-start-conversation', CupertinoIcons.chat_bubble),
+      ('quick-action-create-group', CupertinoIcons.person_2),
+      ('quick-action-join-group', CupertinoIcons.plus),
+      ('quick-action-follow-contact', CupertinoIcons.person_add),
+    ];
+    for (final entry in expectedIcons) {
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(Key(entry.$1)),
+          matching: find.byType(Icon),
+        ),
+      );
+      expect(icon.icon, entry.$2);
+    }
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(firstItem, findsNothing);
+
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    expect(firstItem, findsOneWidget);
+    await tester.tapAt(const Offset(1000, 700));
+    await tester.pumpAndSettle();
+    expect(firstItem, findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('移动消息搜索使用白色表层且快捷操作保留 action sheet', (tester) async {
+    final gateway = FakeAwikiGateway()..conversations = <ConversationSummary>[];
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 852);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      MediaQuery.sizeOf(tester.element(find.byType(ConversationListPage))),
+      const Size(393, 852),
+    );
+
+    final searchSurface = tester.widget<DecoratedBox>(
+      find.byKey(const Key('compact-conversation-search-surface')),
+    );
+    final searchDecoration = searchSurface.decoration as BoxDecoration;
+    expect(searchDecoration.color, AwikiMeColors.surface);
+    final searchBorder = searchDecoration.border as Border;
+    expect(searchBorder.bottom.color, AwikiMeColors.border);
+    expect(searchBorder.bottom.width, 1);
+    final searchField = tester.widget<CupertinoSearchTextField>(
+      find.byKey(const Key('conversation-search-field')),
+    );
+    expect(
+      (searchField.decoration as BoxDecoration).color,
+      AwikiMeColors.subtleSurface,
+    );
+
+    await tester.tap(find.byKey(const Key('shell-quick-actions-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppDropMenu), findsOneWidget);
+    expect(
+      find.byType(CompactActionSheet, skipOffstage: false),
+      findsOneWidget,
+    );
+    const expectedIcons = <(String, IconData)>[
+      ('quick-action-start-conversation', CupertinoIcons.chat_bubble),
+      ('quick-action-create-group', CupertinoIcons.person_2),
+      ('quick-action-join-group', CupertinoIcons.plus),
+      ('quick-action-follow-contact', CupertinoIcons.person_add),
+    ];
+    for (final entry in expectedIcons) {
+      final icon = tester.widget<Icon>(
+        find.descendant(
+          of: find.byKey(Key(entry.$1)),
+          matching: find.byType(Icon),
+        ),
+      );
+      expect(icon.icon, entry.$2);
+    }
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
   testWidgets('macOS 最近会话点击不等待恢复最近列表完成', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
@@ -1460,7 +1598,16 @@ void main() {
     expect(find.text('3 人'), findsOneWidget);
     expect(messagingService.lastConversationTimelineId, 'group:funding');
 
-    await tester.tap(find.bySemanticsLabel('移除成员').last);
+    final removeMemberButton = find.bySemanticsLabel('移除成员').last;
+    await tester.scrollUntilVisible(
+      removeMemberButton,
+      180,
+      scrollable: find.descendant(
+        of: find.byKey(const Key('group-info-dialog-scroll-view')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(removeMemberButton);
     await tester.pumpAndSettle();
     await tester.tap(find.text('移除成员').last);
     await tester.pumpAndSettle();
@@ -2325,9 +2472,12 @@ void main() {
     }
     expect(
       tester.getSize(find.byKey(const Key('desktop-rail-messages'))).width,
-      54,
+      closeTo(54 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
-    expect(railIcon(AwikiMeIconRole.messages).size, 18);
+    expect(
+      railIcon(AwikiMeIconRole.messages).size,
+      closeTo(18 * AwikiDisplayScale.layoutBaseline, 0.01),
+    );
     expect(
       tester.getCenter(find.byKey(const Key('mac-me-rail-avatar'))).dy,
       lessThan(
@@ -2426,11 +2576,11 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const Key('mac-desktop-rail-slot'))).width,
-      closeTo(64 * 1.12, 0.1),
+      closeTo(64 * AwikiDisplayScale.effective(1.12), 0.1),
     );
     expect(
       tester.getSize(find.byKey(const Key('mac-conversation-list-pane'))).width,
-      closeTo(272 * 1.12, 0.1),
+      closeTo(272 * AwikiDisplayScale.effective(1.12), 0.1),
     );
 
     debugDefaultTargetPlatformOverride = null;
@@ -2807,7 +2957,7 @@ void main() {
     expect(find.text('搜索会话'), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
-      32,
+      closeTo(32 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     expect(find.text('搜索会话或 Agent'), findsNothing);
     expect(find.text('Marcus Chen'), findsOneWidget);
@@ -2907,7 +3057,7 @@ void main() {
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
-      36,
+      closeTo(36 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     expect(find.text('Marcus Chen'), findsOneWidget);
     expect(find.text('融资协作群'), findsOneWidget);
@@ -3016,7 +3166,7 @@ void main() {
       ),
     );
     for (final size in iconSlotSizes) {
-      expect(size, const Size.square(23));
+      expect(size, const Size.square(23 * AwikiDisplayScale.layoutBaseline));
     }
     final bottomNavHeight = tester.getSize(navRow).height;
     expect(bottomNavHeight, closeTo(56, 0.1));
@@ -3212,7 +3362,7 @@ void main() {
     final metaRect = tester.getRect(
       find.byKey(const Key('conversation-row-right-meta')),
     );
-    expect(rowRect.height, closeTo(68, 0.1));
+    expect(rowRect.height, closeTo(68 * AwikiDisplayScale.layoutBaseline, 0.1));
     final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
     expect(unreadBadge, findsOneWidget);
     final unreadBadgeRect = tester.getRect(unreadBadge);

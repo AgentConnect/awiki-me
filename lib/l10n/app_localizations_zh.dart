@@ -2303,6 +2303,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachmentDownloadEmpty => '附件下载结果为空。';
 
   @override
+  String get chatImageActionsTitle => '图片';
+
+  @override
+  String get chatCopyImage => '复制图片';
+
+  @override
+  String get chatSaveImageAs => '图片另存为...';
+
+  @override
+  String get chatImageCopied => '图片已复制';
+
+  @override
+  String get chatImageSaved => '图片已保存';
+
+  @override
+  String get chatImageCopyFailed => '无法复制图片，请稍后重试。';
+
+  @override
   String get conversationRemovedFromRecents => '已从最近会话移除';
 
   @override

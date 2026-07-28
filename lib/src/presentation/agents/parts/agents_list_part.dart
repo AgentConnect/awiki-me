@@ -549,23 +549,32 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
           children: <Widget>[
             if (!responsive.isCompact) const _AgentTreeConnector(),
             SizedBox(width: responsive.spacing(8)),
-            Container(
-              width: responsive.displayScaled(responsive.isCompact ? 34 : 28),
-              height: responsive.displayScaled(responsive.isCompact ? 34 : 28),
-              decoration: BoxDecoration(
-                color: theme.primarySoft,
-                shape: BoxShape.circle,
+            AgentStatusIndicatorOverlay(
+              key: ValueKey<String>(
+                'agent-list-status-anchor-pending-${pending.requestId}',
               ),
-              child: Center(
-                child: waiting
-                    ? Icon(
-                        CupertinoIcons.clock,
-                        color: theme.secondaryText,
-                        size: responsive.iconSm,
-                      )
-                    : CupertinoActivityIndicator(
-                        radius: responsive.displayScaled(7),
-                      ),
+              status: visualStatus,
+              dotSize: responsive.displayScaled(responsive.isCompact ? 10 : 9),
+              child: Container(
+                width: responsive.displayScaled(responsive.isCompact ? 34 : 28),
+                height: responsive.displayScaled(
+                  responsive.isCompact ? 34 : 28,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: waiting
+                      ? Icon(
+                          CupertinoIcons.clock,
+                          color: theme.secondaryText,
+                          size: responsive.iconSm,
+                        )
+                      : CupertinoActivityIndicator(
+                          radius: responsive.displayScaled(7),
+                        ),
+                ),
               ),
             ),
             SizedBox(width: responsive.spacing(10)),
@@ -573,23 +582,15 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          pending.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: theme.title,
-                            fontSize: responsive.bodySm,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: responsive.spacing(6)),
-                      AgentStatusDot(status: visualStatus),
-                    ],
+                  Text(
+                    pending.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: theme.title,
+                      fontSize: responsive.bodySm,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   SizedBox(height: responsive.spacing(2)),
                   Text(
@@ -713,35 +714,31 @@ class _AgentListTile extends StatelessWidget {
                   const _AgentTreeConnector(),
                   SizedBox(width: responsive.spacing(8)),
                 ],
-                _AgentKindIcon(agent: agent, isChild: isChild),
+                AgentStatusIndicatorOverlay(
+                  key: ValueKey<String>(
+                    'agent-list-status-anchor-${agent.agentDid}',
+                  ),
+                  status: visualStatus,
+                  dotSize: responsive.displayScaled(
+                    responsive.isCompact ? 10 : 9,
+                  ),
+                  child: _AgentKindIcon(agent: agent, isChild: isChild),
+                ),
                 SizedBox(width: responsive.spacing(10)),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: theme.title,
-                                fontSize: responsive.bodySm,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: responsive.spacing(6)),
-                          AgentStatusDot(
-                            status: visualStatus,
-                            size: responsive.displayScaled(
-                              responsive.isCompact ? 7 : 8,
-                            ),
-                          ),
-                        ],
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.title,
+                          fontSize: responsive.bodySm,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       SizedBox(height: responsive.spacing(2)),
                       Text(

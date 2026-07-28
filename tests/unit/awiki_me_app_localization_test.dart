@@ -20,6 +20,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -191,6 +192,10 @@ void main() {
           AwikiDisplayScaleScope.of(appContext()),
           AwikiDisplayScale.normal,
         );
+        expect(
+          appContext().awikiResponsive.displayScale,
+          closeTo(AwikiDisplayScale.layoutBaseline, 0.0001),
+        );
 
         await tester.tap(find.byType(CupertinoTextField).first);
         await tester.pump();
@@ -205,6 +210,10 @@ void main() {
         await tester.pump();
         expect(AwikiDisplayScaleScope.of(appContext()), greaterThan(1));
         expect(
+          appContext().awikiResponsive.displayScale,
+          closeTo(AwikiDisplayScale.effective(1.06), 0.0001),
+        );
+        expect(
           find.byKey(const Key('display-scale-indicator')),
           findsOneWidget,
         );
@@ -217,6 +226,10 @@ void main() {
         expect(
           AwikiDisplayScaleScope.of(appContext()),
           AwikiDisplayScale.normal,
+        );
+        expect(
+          appContext().awikiResponsive.displayScale,
+          closeTo(AwikiDisplayScale.layoutBaseline, 0.0001),
         );
         expect(find.text('Display scale 100%'), findsOneWidget);
 

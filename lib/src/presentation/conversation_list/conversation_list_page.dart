@@ -121,7 +121,15 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
         onRefresh: refreshConversations,
         onOpen: (item) => _openConversation(context, ref, item),
         onDelete: (item) => _deleteConversationFromRecents(context, ref, item),
-        onShowActions: () => showCommonQuickActionsMenu(context, ref),
+        onShowActions: (anchorContext) {
+          unawaited(
+            showCommonQuickActionsMenu(
+              anchorContext,
+              ref,
+              anchoredToTrigger: true,
+            ),
+          );
+        },
       );
     }
     return AwikiMeShellTabPage(
@@ -141,7 +149,11 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
                 rootNavigator: true,
               );
             },
-      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
+      onQuickActionsTap: (anchorContext) => showCommonQuickActionsMenu(
+        anchorContext,
+        ref,
+        anchoredToTrigger: responsive.isExpanded,
+      ),
       child: _ConversationRefreshView(
         conversations: state.conversations,
         loadState: state.loadState,
@@ -233,7 +245,7 @@ class _MacConversationList extends ConsumerStatefulWidget {
   final Future<void> Function() onRefresh;
   final ValueChanged<ConversationSummary> onOpen;
   final ValueChanged<ConversationSummary> onDelete;
-  final VoidCallback onShowActions;
+  final ValueChanged<BuildContext> onShowActions;
 
   @override
   ConsumerState<_MacConversationList> createState() =>
@@ -330,11 +342,13 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                   ),
                 ),
                 SizedBox(width: responsive.displayScaled(8)),
-                _MacListIconButton(
-                  key: const Key('conversation-quick-actions-button'),
-                  semanticLabel: context.l10n.commonMoreActions,
-                  icon: CupertinoIcons.plus,
-                  onTap: widget.onShowActions,
+                Builder(
+                  builder: (anchorContext) => _MacListIconButton(
+                    key: const Key('conversation-quick-actions-button'),
+                    semanticLabel: context.l10n.commonMoreActions,
+                    icon: CupertinoIcons.plus,
+                    onTap: () => widget.onShowActions(anchorContext),
+                  ),
                 ),
               ],
             ),
@@ -732,45 +746,54 @@ class _CompactConversationSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        responsive.spacing(12),
-        responsive.spacing(8),
-        responsive.spacing(12),
-        responsive.spacing(10),
+    return DecoratedBox(
+      key: const Key('compact-conversation-search-surface'),
+      decoration: BoxDecoration(
+        color: theme.surface,
+        border: responsive.isCompact
+            ? Border(bottom: BorderSide(color: theme.border))
+            : null,
       ),
-      child: SizedBox(
-        height: responsive.displayScaled(36),
-        child: CupertinoSearchTextField(
-          key: const Key('conversation-search-field'),
-          controller: controller,
-          placeholder: context.l10n.conversationsSearchPlaceholder,
-          onChanged: onChanged,
-          style: TextStyle(
-            fontSize: responsive.displayScaled(15),
-            color: theme.title,
-          ),
-          placeholderStyle: TextStyle(
-            fontSize: responsive.displayScaled(15),
-            color: theme.tertiaryText,
-          ),
-          prefixIcon: Icon(
-            CupertinoIcons.search,
-            color: theme.secondaryText,
-            size: responsive.iconSm,
-          ),
-          suffixIcon: Icon(
-            CupertinoIcons.xmark_circle_fill,
-            color: theme.tertiaryText,
-            size: responsive.iconSm,
-          ),
-          decoration: BoxDecoration(
-            color: theme.subtleSurface,
-            borderRadius: BorderRadius.circular(responsive.radius(10)),
-          ),
-          padding: EdgeInsets.symmetric(
-            horizontal: responsive.spacing(10),
-            vertical: responsive.spacing(7),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.spacing(12),
+          responsive.spacing(8),
+          responsive.spacing(12),
+          responsive.spacing(10),
+        ),
+        child: SizedBox(
+          height: responsive.displayScaled(36),
+          child: CupertinoSearchTextField(
+            key: const Key('conversation-search-field'),
+            controller: controller,
+            placeholder: context.l10n.conversationsSearchPlaceholder,
+            onChanged: onChanged,
+            style: TextStyle(
+              fontSize: responsive.displayScaled(15),
+              color: theme.title,
+            ),
+            placeholderStyle: TextStyle(
+              fontSize: responsive.displayScaled(15),
+              color: theme.tertiaryText,
+            ),
+            prefixIcon: Icon(
+              CupertinoIcons.search,
+              color: theme.secondaryText,
+              size: responsive.iconSm,
+            ),
+            suffixIcon: Icon(
+              CupertinoIcons.xmark_circle_fill,
+              color: theme.tertiaryText,
+              size: responsive.iconSm,
+            ),
+            decoration: BoxDecoration(
+              color: theme.subtleSurface,
+              borderRadius: BorderRadius.circular(responsive.radius(10)),
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(10),
+              vertical: responsive.spacing(7),
+            ),
           ),
         ),
       ),
@@ -805,7 +828,7 @@ class _MacListIconButton extends StatelessWidget {
       child: Icon(
         icon,
         color: theme.secondaryText,
-        size: responsive.displayScaled(13),
+        size: responsive.displayScaled(12),
       ),
     );
   }

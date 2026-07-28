@@ -220,15 +220,21 @@ class FriendsPage extends ConsumerWidget {
           AwikiSidebarHeader(
             key: const Key('friends-expanded-list-header'),
             title: context.l10n.friendsTitle,
-            trailing: TopBarActionButton(
-              key: const Key('shell-quick-actions-button'),
-              onTap: () => showCommonQuickActionsMenu(context, ref),
-              semanticsIdentifier: 'e2e-quick-actions-button',
-              semanticsLabel: context.l10n.commonMoreActions,
-              child: AwikiMeSemanticIcon(
-                role: AwikiMeIconRole.add,
-                size: responsive.iconMd,
-                color: theme.secondaryText,
+            trailing: Builder(
+              builder: (anchorContext) => TopBarActionButton(
+                key: const Key('shell-quick-actions-button'),
+                onTap: () => showCommonQuickActionsMenu(
+                  anchorContext,
+                  ref,
+                  anchoredToTrigger: true,
+                ),
+                semanticsIdentifier: 'e2e-quick-actions-button',
+                semanticsLabel: context.l10n.commonMoreActions,
+                child: AwikiMeSemanticIcon(
+                  role: AwikiMeIconRole.add,
+                  size: responsive.iconMd,
+                  color: theme.secondaryText,
+                ),
               ),
             ),
           ),
@@ -239,7 +245,11 @@ class FriendsPage extends ConsumerWidget {
 
     final content = AwikiMeShellTabPage(
       title: context.l10n.friendsTitle,
-      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
+      onQuickActionsTap: (anchorContext) => showCommonQuickActionsMenu(
+        anchorContext,
+        ref,
+        anchoredToTrigger: true,
+      ),
       child: list,
     );
     return AwikiAdaptiveScaffold(
@@ -291,7 +301,8 @@ class _CompactFriendsDirectory extends ConsumerWidget {
         () => AppNavigator.push(context, (_) => const GroupListPage());
     return AwikiMeShellTabPage(
       title: context.l10n.friendsTitle,
-      onQuickActionsTap: () => showCommonQuickActionsMenu(context, ref),
+      onQuickActionsTap: (anchorContext) =>
+          showCommonQuickActionsMenu(anchorContext, ref),
       child: DecoratedBox(
         decoration: BoxDecoration(color: theme.background),
         child: Column(

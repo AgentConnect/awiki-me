@@ -462,12 +462,14 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   bool? lastScreenshotHideApp;
   int externalSourceCalls = 0;
   int clipboardReadCalls = 0;
+  int copyImageCalls = 0;
   int saveCalls = 0;
   String? lastExternalPath;
   String? lastExternalFilename;
   String? lastExternalMimeType;
   int? lastExternalSizeBytes;
   Uint8List? lastExternalBytes;
+  Uint8List? lastCopiedImageBytes;
   String? lastSavedFilename;
   String? lastSavedMimeType;
   Uint8List? lastSavedBytes;
@@ -506,6 +508,12 @@ class FakeAttachmentPickerService implements AttachmentPickerService {
   Future<AttachmentDraft?> readClipboardAttachment() async {
     clipboardReadCalls += 1;
     return nextClipboardAttachment;
+  }
+
+  @override
+  Future<void> copyImage(Uint8List bytes) async {
+    copyImageCalls += 1;
+    lastCopiedImageBytes = bytes;
   }
 
   @override

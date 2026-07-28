@@ -4,12 +4,14 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/attachment_picker_service.dart';
 import 'package:awiki_me/src/application/attachment_preview_service.dart';
 import 'package:awiki_me/src/application/attachment_image_dimensions.dart';
 import 'package:awiki_me/src/application/attachment_open_service.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
+import 'package:awiki_me/src/l10n/app_message.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -34,11 +36,14 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart'
     show FontWeight, InlineSpan, RichText, SelectionArea, TextSpan;
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -410,9 +415,14 @@ Future<ProviderContainer> _pumpScrollableChatView(
   required FakeAwikiGateway gateway,
   required ConversationSummary conversation,
   required List<ChatMessage> messages,
+  UserProfile? profile,
   ChatImageWidgetBuilder? imageBuilder,
   AttachmentImageDimensionProbe? imageDimensionProbe,
+  AttachmentPreviewBytesReader? attachmentPreviewBytesReader,
+  AttachmentPickerService? attachmentPickerService,
+  AttachmentOpenService? attachmentOpenService,
   Size surfaceSize = const Size(390, 640),
+  bool macStyle = false,
 }) async {
   const session = SessionIdentity(
     did: 'did:test:me',
@@ -427,6 +437,7 @@ Future<ProviderContainer> _pumpScrollableChatView(
       : AttachmentPreviewService(
           cache: FakeAttachmentCacheService(),
           imageDimensionProbe: imageDimensionProbe,
+          bytesReader: attachmentPreviewBytesReader,
         );
   if (previewService != null) {
     addTearDown(previewService.dispose);
@@ -438,10 +449,12 @@ Future<ProviderContainer> _pumpScrollableChatView(
           key: ValueKey('chat-view:${conversation.threadId}'),
           conversation: conversation,
           embedded: false,
+          macStyle: macStyle,
         ),
       ),
       gateway: gateway,
       session: session,
+      profile: profile,
       providerOverrides: <Override>[
         chatThreadsProvider.overrideWith(
           (ref) => _StaticChatThreadsController(
@@ -453,6 +466,14 @@ Future<ProviderContainer> _pumpScrollableChatView(
           chatImageWidgetBuilderProvider.overrideWithValue(imageBuilder),
         if (previewService != null)
           attachmentPreviewServiceProvider.overrideWithValue(previewService),
+        if (attachmentPickerService != null)
+          attachmentPickerServiceProvider.overrideWithValue(
+            attachmentPickerService,
+          ),
+        if (attachmentOpenService != null)
+          attachmentOpenServiceProvider.overrideWithValue(
+            attachmentOpenService,
+          ),
       ],
     ),
   );
@@ -518,7 +539,10 @@ void main() {
       (chatSurface.decoration as BoxDecoration).color,
       AwikiMePalette.chatSurface,
     );
-    expect(tester.getSize(find.byKey(const Key('chat-header'))).height, 52);
+    expect(
+      tester.getSize(find.byKey(const Key('chat-header'))).height,
+      closeTo(52 * AwikiDisplayScale.layoutBaseline, 0.01),
+    );
 
     final incomingBubble = find.byKey(
       const Key('chat-message-bubble:compact-incoming'),
@@ -559,7 +583,11 @@ void main() {
       'chat-attachment-button',
       'chat-send-button',
     ]) {
-      expect(tester.getSize(find.byKey(Key(key))).height, 44, reason: key);
+      expect(
+        tester.getSize(find.byKey(Key(key))).height,
+        closeTo(44 * AwikiDisplayScale.layoutBaseline, 0.01),
+        reason: key,
+      );
     }
     expect(
       tester
@@ -593,6 +621,97 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  for (final scenario in <({String label, ConversationSummary conversation})>[
+    (
+      label: '私聊',
+      conversation: ConversationSummary(
+        conversationId: 'dm:own-avatar-direct',
+        threadId: 'dm:own-avatar-direct',
+        displayName: 'Alice',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 28, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:alice',
+      ),
+    ),
+    (
+      label: '群聊',
+      conversation: ConversationSummary(
+        conversationId: 'group:did:test:own-avatar',
+        threadId: 'group:did:test:own-avatar',
+        displayName: 'Project Group',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 28, 10),
+        unreadCount: 0,
+        isGroup: true,
+        groupId: 'did:test:own-avatar',
+      ),
+    ),
+    (
+      label: '智能体会话',
+      conversation: ConversationSummary(
+        conversationId: 'dm:own-avatar-agent',
+        threadId: 'dm:own-avatar-agent',
+        displayName: 'Hermes',
+        lastMessagePreview: 'hello',
+        lastMessageAt: DateTime(2026, 7, 28, 10),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:agent:hermes',
+      ),
+    ),
+  ]) {
+    testWidgets('${scenario.label}中点击自己的消息头像打开当前身份资料', (tester) async {
+      const profile = UserProfile(
+        did: 'did:test:me',
+        displayName: 'Current Identity',
+        bio: 'My profile',
+        tags: <String>[],
+        profileMarkdown: 'My profile',
+        fullHandle: 'me.awiki.ai',
+      );
+      final conversation = scenario.conversation;
+      final message = ChatMessage(
+        localId: 'own-message',
+        remoteId: 'own-message',
+        conversationId: conversation.conversationId,
+        threadId: conversation.threadId,
+        senderDid: profile.did,
+        senderName: profile.displayName,
+        receiverDid: conversation.targetDid,
+        groupId: conversation.groupId,
+        content: 'hello',
+        createdAt: conversation.lastMessageAt,
+        isMine: true,
+        sendState: MessageSendState.sent,
+      );
+
+      await _pumpScrollableChatView(
+        tester,
+        gateway: FakeAwikiGateway(),
+        conversation: conversation,
+        messages: <ChatMessage>[message],
+        profile: profile,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('chat-message-avatar:own-message:mine')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('desktop-current-identity-dialog')),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<Text>(find.byKey(const Key('profile-display-name'))).data,
+        profile.displayName,
+      );
+      expect(find.byKey(const Key('peer-info-identity-card')), findsNothing);
+    });
+  }
 
   testWidgets('macOS 聊天输入条保持发送能力', (tester) async {
     final gateway = FakeAwikiGateway();
@@ -3048,24 +3167,24 @@ void main() {
           (
             id: 'portrait',
             dimensions: AttachmentImageDimensions(
-              pixelWidth: 9,
-              pixelHeight: 16,
+              pixelWidth: 900,
+              pixelHeight: 1600,
             ),
             aspectRatio: 9 / 16,
           ),
           (
             id: 'landscape',
             dimensions: AttachmentImageDimensions(
-              pixelWidth: 16,
-              pixelHeight: 9,
+              pixelWidth: 1600,
+              pixelHeight: 900,
             ),
             aspectRatio: 16 / 9,
           ),
           (
             id: 'square',
             dimensions: AttachmentImageDimensions(
-              pixelWidth: 1,
-              pixelHeight: 1,
+              pixelWidth: 1000,
+              pixelHeight: 1000,
             ),
             aspectRatio: 1,
           ),
@@ -3116,10 +3235,6 @@ void main() {
       expect(finalSize.width, lessThanOrEqualTo(360));
       expect(finalSize.height, lessThanOrEqualTo(360));
       if (testCase.id == 'portrait') {
-        expect(
-          finalSize.height,
-          moreOrLessEquals(placeholderSize.width, epsilon: 0.5),
-        );
         expect(finalSize.width, lessThan(210));
         expect(
           tester
@@ -3128,11 +3243,6 @@ void main() {
               )
               .width,
           moreOrLessEquals(finalSize.width, epsilon: 0.5),
-        );
-      } else {
-        expect(
-          finalSize.width,
-          moreOrLessEquals(placeholderSize.width, epsilon: 0.5),
         );
       }
 
@@ -3162,7 +3272,7 @@ void main() {
         ),
       ],
       imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
-        AttachmentImageDimensions(pixelWidth: 16, pixelHeight: 9),
+        AttachmentImageDimensions(pixelWidth: 1600, pixelHeight: 900),
       ),
       surfaceSize: const Size(260, 640),
     );
@@ -3173,6 +3283,410 @@ void main() {
     expect(size.width, lessThan(260));
     expect(size.width, lessThan(360));
     expect(size.width / size.height, moreOrLessEquals(16 / 9, epsilon: 0.01));
+  });
+
+  testWidgets('低分辨率图片保持自然尺寸，仅补足最小预览尺寸', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:inline-natural-size');
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[
+        _scrollImageMessage(
+          localId: 'natural-size-image',
+          threadId: conversation.conversationId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          createdAt: DateTime(2026, 4, 5, 12, 30),
+          isMine: false,
+        ),
+      ],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 180, pixelHeight: 90),
+      ),
+      imageBuilder: _testImageWidgetBuilder,
+    );
+
+    final naturalSize = tester.getSize(
+      find.byKey(const Key('chat-inline-image-envelope:natural-size-image')),
+    );
+    expect(naturalSize.width, moreOrLessEquals(180, epsilon: 0.5));
+    expect(naturalSize.height, moreOrLessEquals(90, epsilon: 0.5));
+    expect(naturalSize.width, lessThan(300));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    final tinyConversation = _scrollConversation('dm:inline-minimum-size');
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: tinyConversation,
+      messages: <ChatMessage>[
+        _scrollImageMessage(
+          localId: 'minimum-size-image',
+          threadId: tinyConversation.conversationId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          createdAt: DateTime(2026, 4, 5, 12, 31),
+          isMine: false,
+        ),
+      ],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 64, pixelHeight: 32),
+      ),
+      imageBuilder: _testImageWidgetBuilder,
+    );
+
+    final minimumSize = tester.getSize(
+      find.byKey(const Key('chat-inline-image-envelope:minimum-size-image')),
+    );
+    expect(
+      minimumSize.width,
+      moreOrLessEquals(120 * AwikiDisplayScale.layoutBaseline, epsilon: 0.5),
+    );
+    expect(
+      minimumSize.height,
+      moreOrLessEquals(60 * AwikiDisplayScale.layoutBaseline, epsilon: 0.5),
+    );
+    expect(minimumSize.width / minimumSize.height, closeTo(2, 0.01));
+  });
+
+  testWidgets('图片自然尺寸按当前屏幕像素密度换算', (tester) async {
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:inline-density-size');
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[
+        _scrollImageMessage(
+          localId: 'density-size-image',
+          threadId: conversation.conversationId,
+          senderDid: 'did:test:alice',
+          receiverDid: 'did:test:me',
+          createdAt: DateTime(2026, 4, 5, 12, 30),
+          isMine: false,
+        ),
+      ],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 400, pixelHeight: 200),
+      ),
+      imageBuilder: _testImageWidgetBuilder,
+    );
+
+    final size = tester.getSize(
+      find.byKey(const Key('chat-inline-image-envelope:density-size-image')),
+    );
+    expect(size.width, moreOrLessEquals(200, epsilon: 0.5));
+    expect(size.height, moreOrLessEquals(100, epsilon: 0.5));
+  });
+
+  testWidgets('纯图片保留附件卡片边界，短说明不会把图文消息撑满', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway();
+    final conversation = _scrollConversation('dm:inline-card-boundary');
+    final bareImage = _scrollImageMessage(
+      localId: 'bare-image-card',
+      threadId: conversation.conversationId,
+      senderDid: 'did:test:alice',
+      receiverDid: 'did:test:me',
+      createdAt: DateTime(2026, 4, 5, 12, 30),
+      isMine: false,
+    );
+    final captionedBase = _scrollImageMessage(
+      localId: 'captioned-image-card',
+      threadId: conversation.conversationId,
+      senderDid: 'did:test:alice',
+      receiverDid: 'did:test:me',
+      createdAt: DateTime(2026, 4, 5, 12, 31),
+      isMine: false,
+    );
+    final captionedImage = captionedBase.copyWith(
+      content: '12',
+      attachment: captionedBase.attachment!.copyWith(caption: '12'),
+    );
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[bareImage, captionedImage],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 180, pixelHeight: 90),
+      ),
+      imageBuilder: _testImageWidgetBuilder,
+    );
+
+    final bareBubble = tester.widget<Container>(
+      find.byKey(const Key('chat-message-bubble:bare-image-card')),
+    );
+    final bareDecoration = bareBubble.decoration! as BoxDecoration;
+    expect(bareBubble.padding, isNot(EdgeInsets.zero));
+    expect(bareDecoration.color, isNot(CupertinoColors.transparent));
+    expect(bareDecoration.boxShadow, isNotEmpty);
+    expect(
+      find.byKey(const Key('chat-attachment-caption-divider')),
+      findsOneWidget,
+    );
+
+    final imageSize = tester.getSize(
+      find.byKey(const Key('chat-inline-image-envelope:captioned-image-card')),
+    );
+    final contentSize = tester.getSize(
+      find.byKey(const Key('chat-attachment-content:captioned-image-card')),
+    );
+    final bubbleSize = tester.getSize(
+      find.byKey(const Key('chat-message-bubble:captioned-image-card')),
+    );
+    expect(contentSize.width, moreOrLessEquals(imageSize.width, epsilon: 0.5));
+    expect(
+      bubbleSize.width,
+      moreOrLessEquals(
+        imageSize.width + 26 * AwikiDisplayScale.layoutBaseline,
+        epsilon: 1,
+      ),
+    );
+    expect(bubbleSize.width, lessThan(240));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    final desktopConversation = _scrollConversation(
+      'dm:inline-card-boundary-desktop',
+    );
+    final desktopBase = _scrollImageMessage(
+      localId: 'captioned-image-card-desktop',
+      threadId: desktopConversation.conversationId,
+      senderDid: 'did:test:alice',
+      receiverDid: 'did:test:me',
+      createdAt: DateTime(2026, 4, 5, 12, 32),
+      isMine: false,
+    );
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: desktopConversation,
+      messages: <ChatMessage>[
+        desktopBase.copyWith(
+          content: '12',
+          attachment: desktopBase.attachment!.copyWith(caption: '12'),
+        ),
+      ],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 180, pixelHeight: 90),
+      ),
+      imageBuilder: _testImageWidgetBuilder,
+      surfaceSize: const Size(960, 640),
+      macStyle: true,
+    );
+    final desktopImageSize = tester.getSize(
+      find.byKey(
+        const Key('chat-inline-image-envelope:captioned-image-card-desktop'),
+      ),
+    );
+    final desktopContentSize = tester.getSize(
+      find.byKey(
+        const Key('chat-attachment-content:captioned-image-card-desktop'),
+      ),
+    );
+    final desktopBubbleSize = tester.getSize(
+      find.byKey(const Key('chat-message-bubble:captioned-image-card-desktop')),
+    );
+    expect(desktopImageSize.width, moreOrLessEquals(180, epsilon: 0.5));
+    expect(
+      desktopContentSize.width,
+      moreOrLessEquals(desktopImageSize.width, epsilon: 0.5),
+    );
+    expect(
+      desktopBubbleSize.width,
+      moreOrLessEquals(
+        desktopImageSize.width + 26 * AwikiDisplayScale.layoutBaseline,
+        epsilon: 1,
+      ),
+    );
+    expect(desktopBubbleSize.width, lessThan(240));
+  });
+
+  testWidgets('桌面图片右键菜单分别复制图片并另存为', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final imageBytes = _tinyPngBytes();
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()
+      ..nextSavedPath = '/test/saved-image.png';
+    final conversation = _scrollConversation('dm:image-actions-desktop');
+    final base = _scrollImageMessage(
+      localId: 'image-actions-desktop',
+      threadId: conversation.conversationId,
+      senderDid: 'did:test:alice',
+      receiverDid: 'did:test:me',
+      createdAt: DateTime(2026, 4, 5, 12, 30),
+      isMine: false,
+    );
+    final message = base.copyWith(
+      content: '独立的图片说明',
+      attachment: base.attachment!.copyWith(
+        caption: '独立的图片说明',
+        sizeBytes: imageBytes.length,
+      ),
+    );
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 180, pixelHeight: 90),
+      ),
+      attachmentPreviewBytesReader: (_) async => imageBytes,
+      imageBuilder: _testImageWidgetBuilder,
+      attachmentPickerService: picker,
+      surfaceSize: const Size(960, 640),
+      macStyle: true,
+    );
+
+    final interaction = find.byKey(
+      const Key('chat-image-interaction:image-actions-desktop'),
+    );
+    expect(
+      find.descendant(of: interaction, matching: find.text('独立的图片说明')),
+      findsNothing,
+    );
+    expect(
+      find.ancestor(
+        of: find.text('独立的图片说明'),
+        matching: find.byType(SelectionArea),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(of: interaction, matching: find.byType(SelectionArea)),
+      findsNothing,
+    );
+
+    await tester.tap(interaction, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    final copyAction = find.byKey(
+      const Key('chat-image-copy-action:image-actions-desktop'),
+    );
+    final saveAction = find.byKey(
+      const Key('chat-image-save-action:image-actions-desktop'),
+    );
+    expect(copyAction, findsOneWidget);
+    expect(saveAction, findsOneWidget);
+    expect(find.text('复制图片'), findsOneWidget);
+    expect(find.text('图片另存为...'), findsOneWidget);
+
+    await tester.tap(copyAction);
+    await tester.pumpAndSettle();
+    expect(picker.copyImageCalls, 1);
+    expect(picker.lastCopiedImageBytes, imageBytes);
+    expect(
+      container.read(uiFeedbackProvider)?.message,
+      AppMessage.chatImageCopied(),
+    );
+
+    await tester.tap(interaction, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(saveAction);
+    await tester.pumpAndSettle();
+    expect(picker.saveCalls, 1);
+    expect(picker.lastSavedFilename, 'image-actions-desktop.png');
+    expect(picker.lastSavedMimeType, 'image/png');
+    expect(picker.lastSavedBytes, imageBytes);
+    expect(
+      container.read(uiFeedbackProvider)?.message,
+      AppMessage.chatImageSaved(),
+    );
+  });
+
+  testWidgets('移动端长按图片显示独立操作菜单且单击仍预览', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.physicalSize = const Size(393, 700);
+    addTearDown(tester.view.resetPhysicalSize);
+    final imageBytes = _tinyPngBytes();
+    final gateway = FakeAwikiGateway();
+    final picker = FakeAttachmentPickerService()..nextSavedPath = null;
+    final opener = _RecordingAttachmentOpenService();
+    final conversation = _scrollConversation('dm:image-actions-mobile');
+    final base = _scrollImageMessage(
+      localId: 'image-actions-mobile',
+      threadId: conversation.conversationId,
+      senderDid: 'did:test:alice',
+      receiverDid: 'did:test:me',
+      createdAt: DateTime(2026, 4, 5, 12, 30),
+      isMine: false,
+    );
+    final message = base.copyWith(
+      content: '可单独选择的说明',
+      attachment: base.attachment!.copyWith(
+        caption: '可单独选择的说明',
+        sizeBytes: imageBytes.length,
+      ),
+    );
+    final container = await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+      imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
+        AttachmentImageDimensions(pixelWidth: 180, pixelHeight: 90),
+      ),
+      attachmentPreviewBytesReader: (_) async => imageBytes,
+      imageBuilder: _testImageWidgetBuilder,
+      attachmentPickerService: picker,
+      attachmentOpenService: opener,
+      surfaceSize: const Size(393, 700),
+    );
+
+    final interaction = find.byKey(
+      const Key('chat-image-interaction:image-actions-mobile'),
+    );
+    final imageGestureDetector = tester.widget<GestureDetector>(
+      find.descendant(of: interaction, matching: find.byType(GestureDetector)),
+    );
+    expect(imageGestureDetector.onTap, isNotNull);
+    expect(imageGestureDetector.onLongPress, isNotNull);
+    await tester.longPress(interaction);
+    await tester.pumpAndSettle();
+    expect(find.byType(AppDropMenu), findsOneWidget);
+    expect(
+      find.byType(CompactActionSheet, skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.text('图片'), findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-image-copy-action:image-actions-mobile')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('chat-image-save-action:image-actions-mobile')),
+      findsOneWidget,
+    );
+    expect(opener.openedPaths, isEmpty);
+
+    await tester.tap(
+      find.byKey(const Key('chat-image-copy-action:image-actions-mobile')),
+    );
+    await tester.pumpAndSettle();
+    expect(picker.copyImageCalls, 1);
+    expect(picker.lastCopiedImageBytes, imageBytes);
+    final copiedFeedback = container.read(uiFeedbackProvider);
+    expect(copiedFeedback?.message, AppMessage.chatImageCopied());
+
+    await tester.longPress(interaction);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('chat-image-save-action:image-actions-mobile')),
+    );
+    await tester.pumpAndSettle();
+    expect(picker.saveCalls, 1);
+    expect(container.read(uiFeedbackProvider)?.id, copiedFeedback?.id);
+
+    expect(opener.openedPaths, isEmpty);
   });
 
   testWidgets('普通文件卡继续保留最小可操作宽度', (tester) async {
@@ -3215,6 +3729,16 @@ void main() {
           )
           .width,
       greaterThanOrEqualTo(210),
+    );
+    final fileCardRect = tester.getRect(
+      find.byKey(const Key('chat-attachment-file-card:file-card-min-width')),
+    );
+    final previewButtonRect = tester.getRect(
+      find.byKey(const Key('chat-open-attachment:file-card-min-width')),
+    );
+    expect(
+      previewButtonRect.right,
+      moreOrLessEquals(fileCardRect.right, epsilon: 0.5),
     );
   });
 
@@ -3265,7 +3789,7 @@ void main() {
     );
     final envelopeSize = tester.getSize(envelope);
     dimensionProbe.complete(
-      AttachmentImageDimensions(pixelWidth: 9, pixelHeight: 16),
+      AttachmentImageDimensions(pixelWidth: 900, pixelHeight: 1600),
     );
     await tester.pump();
     await tester.pump();
@@ -3348,7 +3872,7 @@ void main() {
     final envelopeSize = tester.getSize(envelope);
 
     dimensionProbe.complete(
-      AttachmentImageDimensions(pixelWidth: 9, pixelHeight: 16),
+      AttachmentImageDimensions(pixelWidth: 900, pixelHeight: 1600),
     );
     await tester.pump();
     await tester.pump();
@@ -5629,7 +6153,7 @@ void main() {
     final previewService = AttachmentPreviewService(
       cache: FakeAttachmentCacheService(),
       imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
-        AttachmentImageDimensions(pixelWidth: 16, pixelHeight: 9),
+        AttachmentImageDimensions(pixelWidth: 1600, pixelHeight: 900),
       ),
     );
     addTearDown(previewService.dispose);
@@ -5689,7 +6213,7 @@ void main() {
     expect(tester.getSize(fileCard).height, lessThan(envelopeSize.height));
   });
 
-  testWidgets('极端长竖图仅在解码失败后扩展为可操作紧凑外框', (tester) async {
+  testWidgets('极端长竖图始终保留可操作外框且解码失败不跳动', (tester) async {
     final gateway = FakeAwikiGateway();
     final conversation = _scrollConversation('dm:extreme-image-fallback');
     final failImage = ValueNotifier<bool>(false);
@@ -5709,7 +6233,7 @@ void main() {
         ),
       ],
       imageDimensionProbe: _FixedAttachmentImageDimensionProbe(
-        AttachmentImageDimensions(pixelWidth: 1, pixelHeight: 64),
+        AttachmentImageDimensions(pixelWidth: 10, pixelHeight: 640),
       ),
       imageBuilder:
           ({
@@ -5734,11 +6258,8 @@ void main() {
       const Key('chat-inline-image-envelope:extreme-broken-image'),
     );
     final readyEnvelopeSize = tester.getSize(envelope);
-    expect(
-      readyEnvelopeSize.width / readyEnvelopeSize.height,
-      moreOrLessEquals(1 / 64, epsilon: 0.001),
-    );
-    expect(readyEnvelopeSize.width, lessThan(44));
+    expect(readyEnvelopeSize.width, greaterThanOrEqualTo(44));
+    expect(readyEnvelopeSize.height, lessThanOrEqualTo(300));
     expect(
       find.byKey(
         const Key('chat-inline-image-compact-fallback:extreme-broken-image'),
@@ -5750,6 +6271,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     final failedEnvelopeSize = tester.getSize(envelope);
+    expect(failedEnvelopeSize, readyEnvelopeSize);
     expect(failedEnvelopeSize.width, greaterThanOrEqualTo(44));
     expect(failedEnvelopeSize.height, greaterThanOrEqualTo(44));
     expect(
@@ -6298,8 +6820,14 @@ void main() {
       'chat-screenshot-button',
     ]) {
       final size = tester.getSize(find.byKey(Key(key)));
-      expect(size.width, lessThanOrEqualTo(30));
-      expect(size.height, lessThanOrEqualTo(30));
+      expect(
+        size.width,
+        lessThanOrEqualTo(30 * AwikiDisplayScale.layoutBaseline),
+      );
+      expect(
+        size.height,
+        lessThanOrEqualTo(30 * AwikiDisplayScale.layoutBaseline),
+      );
     }
 
     debugDefaultTargetPlatformOverride = null;

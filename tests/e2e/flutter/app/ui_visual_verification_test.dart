@@ -10,9 +10,11 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart' show Key, RepaintBoundary, Size, SizedBox;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -118,7 +120,21 @@ void main() {
         find.byKey(const Key('chat-peer-info-avatar-button')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('chat-message-bubble:human-image-1')),
+        findsOneWidget,
+      );
       await _captureScreenshot(tester, '04-compact-chat');
+
+      final compactImage = find.byKey(
+        const Key('chat-image-interaction:human-image-1'),
+      );
+      await tester.longPress(compactImage);
+      await _pumpVisualFrames(tester);
+      expect(find.byKey(const Key('compact-action-sheet')), findsOneWidget);
+      await _captureScreenshot(tester, '18-compact-image-actions');
+      await tester.tapAt(const Offset(20, 20));
+      await _pumpVisualFrames(tester);
 
       await _prepareEnvironment(
         tester,
@@ -132,6 +148,17 @@ void main() {
       await _pumpVisualFrames(tester);
       expect(find.text('product-brief.pdf'), findsOneWidget);
       await _captureScreenshot(tester, '05-expanded-messages-chat');
+
+      final expandedImage = find.byKey(
+        const Key('chat-image-interaction:human-image-1'),
+      );
+      await tester.tap(expandedImage, buttons: kSecondaryMouseButton);
+      await _pumpVisualFrames(tester);
+      expect(
+        find.byKey(const Key('chat-image-copy-action:human-image-1')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '19-expanded-image-actions');
     } finally {
       await _resetEnvironment(tester);
     }
@@ -148,6 +175,8 @@ void main() {
       await tester.tap(find.bySemanticsLabel('智能体'));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('agents-compact-list')), findsOneWidget);
+      _expectAgentListStatusOverlay(tester, _daemonDid);
+      _expectAgentListStatusOverlay(tester, _runtimeDid);
       await _captureScreenshot(tester, '06-compact-agents-list');
 
       await tester.tap(find.text('Hermes UI').first);
@@ -164,6 +193,8 @@ void main() {
       await tester.tap(find.bySemanticsLabel('智能体'));
       await _pumpVisualFrames(tester);
       expect(find.byKey(const Key('agents-expanded-layout')), findsOneWidget);
+      _expectAgentListStatusOverlay(tester, _daemonDid);
+      _expectAgentListStatusOverlay(tester, _runtimeDid);
       await _captureScreenshot(tester, '08-expanded-agents');
     } finally {
       await _resetEnvironment(tester);
@@ -515,6 +546,9 @@ List<ConversationSummary> _visualConversations() {
 }
 
 List<ChatMessage> _visualHistory() {
+  final visualImagePath = File(
+    'assets/branding/awiki-me-logo.png',
+  ).absolute.path;
   return <ChatMessage>[
     ChatMessage(
       localId: 'human-message-1',
@@ -535,6 +569,25 @@ List<ChatMessage> _visualHistory() {
       createdAt: DateTime(2026, 7, 25, 10, 30),
       isMine: false,
       sendState: MessageSendState.sent,
+    ),
+    ChatMessage(
+      localId: 'human-image-1',
+      threadId: 'dm:peer-scope:v1:hermes-ui',
+      senderDid: _session.did,
+      senderName: _session.displayName,
+      content: '',
+      originalType: 'application/anp-attachment-manifest+json',
+      createdAt: DateTime(2026, 7, 25, 10, 31),
+      isMine: true,
+      sendState: MessageSendState.sent,
+      attachment: ChatAttachment(
+        attachmentId: 'att-visual-image',
+        filename: 'awiki-me-logo.png',
+        mimeType: 'image/png',
+        sizeBytes: 194410,
+        localPath: visualImagePath,
+        hasLocalSource: true,
+      ),
     ),
     ChatMessage(
       localId: 'agent-attachment-1',
@@ -573,6 +626,21 @@ Future<void> _pumpVisualApp(
     ),
   );
   await _pumpVisualFrames(tester);
+}
+
+void _expectAgentListStatusOverlay(WidgetTester tester, String agentDid) {
+  final anchor = find.byKey(Key('agent-list-status-anchor-$agentDid'));
+  final indicator = find.descendant(
+    of: anchor,
+    matching: find.byType(AgentStatusDot),
+  );
+  expect(anchor, findsOneWidget);
+  expect(indicator, findsOneWidget);
+
+  final anchorRect = tester.getRect(anchor);
+  final indicatorCenter = tester.getCenter(indicator);
+  expect(indicatorCenter.dx, greaterThan(anchorRect.center.dx));
+  expect(indicatorCenter.dy, greaterThan(anchorRect.center.dy));
 }
 
 Future<void> _captureScreenshot(WidgetTester tester, String name) async {

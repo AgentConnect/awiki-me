@@ -2435,6 +2435,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get attachmentDownloadEmpty => 'Attachment download returned no file.';
 
   @override
+  String get chatImageActionsTitle => 'Image';
+
+  @override
+  String get chatCopyImage => 'Copy Image';
+
+  @override
+  String get chatSaveImageAs => 'Save Image As...';
+
+  @override
+  String get chatImageCopied => 'Image copied';
+
+  @override
+  String get chatImageSaved => 'Image saved';
+
+  @override
+  String get chatImageCopyFailed =>
+      'Couldn\'t copy the image. Please try again.';
+
+  @override
   String get conversationRemovedFromRecents =>
       'Conversation removed from recents.';
 

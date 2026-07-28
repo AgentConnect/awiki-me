@@ -6,6 +6,36 @@ import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
 import 'agent_visual_status.dart';
 
+class AgentStatusIndicatorOverlay extends StatelessWidget {
+  const AgentStatusIndicatorOverlay({
+    super.key,
+    required this.status,
+    required this.child,
+    this.dotSize,
+    this.inset = -1,
+  });
+
+  final AgentVisualStatus status;
+  final Widget child;
+  final double? dotSize;
+  final double inset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        child,
+        Positioned(
+          right: inset,
+          bottom: inset,
+          child: AgentStatusDot(status: status, size: dotSize, showRing: true),
+        ),
+      ],
+    );
+  }
+}
+
 class AgentStatusDot extends StatelessWidget {
   const AgentStatusDot({
     super.key,

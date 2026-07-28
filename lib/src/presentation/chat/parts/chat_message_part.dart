@@ -935,8 +935,10 @@ class _MessageBubble extends StatelessWidget {
     this.onRetry,
     this.onDownload,
     this.onResolveImagePreview,
+    this.onCopyImage,
+    this.onSaveImage,
     this.isDownloading = false,
-    this.onPeerInfoTap,
+    this.onSenderInfoTap,
   });
 
   final ChatMessage message;
@@ -947,8 +949,10 @@ class _MessageBubble extends StatelessWidget {
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onDownload;
   final Future<String> Function()? onResolveImagePreview;
+  final Future<void> Function(String path)? onCopyImage;
+  final Future<void> Function(String path)? onSaveImage;
   final bool isDownloading;
-  final VoidCallback? onPeerInfoTap;
+  final VoidCallback? onSenderInfoTap;
 
   Widget _withE2eMessageSemantics({required Widget child}) {
     return e2eSemantics(
@@ -958,12 +962,12 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _withPeerInfoTap({
+  Widget _withSenderInfoTap({
     required BuildContext context,
     required Widget child,
     required double borderRadius,
   }) {
-    final tap = onPeerInfoTap;
+    final tap = onSenderInfoTap;
     if (tap == null) {
       return child;
     }
@@ -1025,10 +1029,6 @@ class _MessageBubble extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final attachment = message.attachment;
-    final isBareImage =
-        attachment != null &&
-        _isInlineImageAttachment(attachment) &&
-        (attachment.caption?.trim().isEmpty ?? true);
     final textStyle = TextStyle(
       color: isMine ? theme.onOutgoingMessage : theme.title,
       fontSize: responsive.displayScaled(14),
@@ -1047,6 +1047,8 @@ class _MessageBubble extends StatelessWidget {
             macStyle: true,
             onDownload: onDownload,
             onResolveImagePreview: onResolveImagePreview,
+            onCopyImage: onCopyImage,
+            onSaveImage: onSaveImage,
             isDownloading: isDownloading,
           );
     final bubble = Column(
@@ -1064,16 +1066,12 @@ class _MessageBubble extends StatelessWidget {
             constraints: BoxConstraints(
               maxWidth: responsive.displayScaled(420),
             ),
-            padding: isBareImage
-                ? EdgeInsets.zero
-                : EdgeInsets.symmetric(
-                    horizontal: responsive.displayScaled(13),
-                    vertical: responsive.displayScaled(9),
-                  ),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.displayScaled(13),
+              vertical: responsive.displayScaled(9),
+            ),
             decoration: BoxDecoration(
-              color: isBareImage
-                  ? CupertinoColors.transparent
-                  : attachment != null
+              color: attachment != null
                   ? theme.surface
                   : isMine
                   ? theme.outgoingMessage
@@ -1088,7 +1086,7 @@ class _MessageBubble extends StatelessWidget {
                 bottomLeft: Radius.circular(responsive.displayScaled(13)),
                 bottomRight: Radius.circular(responsive.displayScaled(13)),
               ),
-              boxShadow: attachment != null && !isBareImage
+              boxShadow: attachment != null
                   ? const <BoxShadow>[
                       BoxShadow(
                         color: Color(0x0D000000),
@@ -1098,7 +1096,7 @@ class _MessageBubble extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: SelectionArea(child: child),
+            child: attachment == null ? SelectionArea(child: child) : child,
           ),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
@@ -1145,7 +1143,7 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
           if (!isMine) ...<Widget>[
-            _withPeerInfoTap(
+            _withSenderInfoTap(
               context: context,
               borderRadius: responsive.displayScaled(15),
               child: _MessageAvatar(
@@ -1161,11 +1159,15 @@ class _MessageBubble extends StatelessWidget {
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
             SizedBox(width: responsive.displayScaled(8)),
-            _MessageAvatar(
-              messageId: message.localId,
-              label: senderLabel,
-              isMine: true,
-              size: responsive.displayScaled(30),
+            _withSenderInfoTap(
+              context: context,
+              borderRadius: responsive.displayScaled(15),
+              child: _MessageAvatar(
+                messageId: message.localId,
+                label: senderLabel,
+                isMine: true,
+                size: responsive.displayScaled(30),
+              ),
             ),
           ],
         ],
@@ -1177,10 +1179,6 @@ class _MessageBubble extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final attachment = message.attachment;
-    final isBareImage =
-        attachment != null &&
-        _isInlineImageAttachment(attachment) &&
-        (attachment.caption?.trim().isEmpty ?? true);
     final textStyle = TextStyle(
       color: isMine ? theme.onOutgoingMessage : theme.title,
       fontSize: responsive.displayScaled(15),
@@ -1199,6 +1197,8 @@ class _MessageBubble extends StatelessWidget {
             macStyle: false,
             onDownload: onDownload,
             onResolveImagePreview: onResolveImagePreview,
+            onCopyImage: onCopyImage,
+            onSaveImage: onSaveImage,
             isDownloading: isDownloading,
           );
     final bubble = Column(
@@ -1216,16 +1216,12 @@ class _MessageBubble extends StatelessWidget {
             constraints: BoxConstraints(
               maxWidth: responsive.displayScaled(300),
             ),
-            padding: isBareImage
-                ? EdgeInsets.zero
-                : EdgeInsets.symmetric(
-                    horizontal: responsive.displayScaled(13),
-                    vertical: responsive.displayScaled(9),
-                  ),
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.displayScaled(13),
+              vertical: responsive.displayScaled(9),
+            ),
             decoration: BoxDecoration(
-              color: isBareImage
-                  ? CupertinoColors.transparent
-                  : attachment != null
+              color: attachment != null
                   ? theme.surface
                   : isMine
                   ? theme.outgoingMessage
@@ -1240,7 +1236,7 @@ class _MessageBubble extends StatelessWidget {
                 bottomLeft: Radius.circular(responsive.displayScaled(16)),
                 bottomRight: Radius.circular(responsive.displayScaled(16)),
               ),
-              boxShadow: attachment != null && !isBareImage
+              boxShadow: attachment != null
                   ? const <BoxShadow>[
                       BoxShadow(
                         color: Color(0x0D000000),
@@ -1250,7 +1246,7 @@ class _MessageBubble extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: SelectionArea(child: content),
+            child: attachment == null ? SelectionArea(child: content) : content,
           ),
         ),
         if (message.sendState == MessageSendState.failed) ...<Widget>[
@@ -1297,7 +1293,7 @@ class _MessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: <Widget>[
           if (!isMine) ...<Widget>[
-            _withPeerInfoTap(
+            _withSenderInfoTap(
               context: context,
               borderRadius: responsive.displayScaled(16),
               child: _MessageAvatar(
@@ -1313,11 +1309,15 @@ class _MessageBubble extends StatelessWidget {
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
             SizedBox(width: responsive.spacing(8)),
-            _MessageAvatar(
-              messageId: message.localId,
-              label: senderLabel,
-              isMine: true,
-              size: responsive.displayScaled(32),
+            _withSenderInfoTap(
+              context: context,
+              borderRadius: responsive.displayScaled(16),
+              child: _MessageAvatar(
+                messageId: message.localId,
+                label: senderLabel,
+                isMine: true,
+                size: responsive.displayScaled(32),
+              ),
             ),
           ],
         ],
@@ -1452,6 +1452,8 @@ class _AttachmentContent extends ConsumerStatefulWidget {
     required this.macStyle,
     required this.onDownload,
     required this.onResolveImagePreview,
+    required this.onCopyImage,
+    required this.onSaveImage,
     required this.isDownloading,
   });
 
@@ -1459,6 +1461,8 @@ class _AttachmentContent extends ConsumerStatefulWidget {
   final bool macStyle;
   final Future<void> Function()? onDownload;
   final Future<String> Function()? onResolveImagePreview;
+  final Future<void> Function(String path)? onCopyImage;
+  final Future<void> Function(String path)? onSaveImage;
   final bool isDownloading;
 
   @override
@@ -1535,7 +1539,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final attachment = message.attachment!;
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final caption = attachment.caption?.trim();
+    final caption = attachment.caption?.trim() ?? '';
     final titleStyle = TextStyle(
       color: widget.macStyle ? AwikiMePalette.inkNeutral : theme.title,
       fontSize: responsive.displayScaled(13),
@@ -1550,6 +1554,40 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
       fontWeight: FontWeight.w400,
       height: 1.25,
     );
+    final attachmentBody = _buildAttachmentBody(
+      context,
+      attachment: attachment,
+      titleStyle: titleStyle,
+      metaStyle: metaStyle,
+    );
+    final hasCaption = caption.isNotEmpty;
+    final captionGap = widget.macStyle
+        ? responsive.displayScaled(9)
+        : responsive.spacing(9);
+    final content = hasCaption
+        ? _AttachmentCaptionLayout(
+            gap: captionGap,
+            caption: SelectionArea(
+              child: _MessageTextContent(
+                text: caption,
+                mentions: message.mentions,
+                payloadJson: message.payloadJson,
+                style: TextStyle(
+                  color: widget.macStyle
+                      ? AwikiMePalette.inkNeutral
+                      : theme.title,
+                  fontSize: widget.macStyle
+                      ? responsive.displayScaled(14)
+                      : responsive.bodyMd,
+                  height: 1.4,
+                ),
+                renderMarkdown: !message.isMine,
+              ),
+            ),
+            divider: _AttachmentCaptionDivider(macStyle: widget.macStyle),
+            attachment: attachmentBody,
+          )
+        : attachmentBody;
     return ConstrainedBox(
       key: Key('chat-attachment-content:${message.localId}'),
       constraints: BoxConstraints(
@@ -1562,46 +1600,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
             ? responsive.displayScaled(360)
             : responsive.displayScaled(300),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (caption != null && caption.isNotEmpty) ...<Widget>[
-            _MessageTextContent(
-              text: caption,
-              mentions: message.mentions,
-              payloadJson: message.payloadJson,
-              style: TextStyle(
-                color: widget.macStyle
-                    ? AwikiMePalette.inkNeutral
-                    : theme.title,
-                fontSize: widget.macStyle
-                    ? responsive.displayScaled(14)
-                    : responsive.bodyMd,
-                height: 1.4,
-              ),
-              renderMarkdown: !message.isMine,
-            ),
-            SizedBox(
-              height: widget.macStyle
-                  ? responsive.displayScaled(9)
-                  : responsive.spacing(9),
-            ),
-            _AttachmentCaptionDivider(macStyle: widget.macStyle),
-            SizedBox(
-              height: widget.macStyle
-                  ? responsive.displayScaled(9)
-                  : responsive.spacing(9),
-            ),
-          ],
-          _buildAttachmentBody(
-            context,
-            attachment: attachment,
-            titleStyle: titleStyle,
-            metaStyle: metaStyle,
-          ),
-        ],
-      ),
+      child: content,
     );
   }
 
@@ -1613,13 +1612,19 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
   }) {
     final handle = _previewHandle;
     if (handle == null) {
-      return _AttachmentFileCard(
-        message: widget.message,
-        macStyle: widget.macStyle,
-        onDownload: widget.onDownload,
-        isDownloading: widget.isDownloading,
-        titleStyle: titleStyle,
-        metaStyle: metaStyle,
+      final responsive = context.awikiResponsive;
+      return SizedBox(
+        width: widget.macStyle
+            ? responsive.displayScaled(280)
+            : responsive.displayScaled(240),
+        child: _AttachmentFileCard(
+          message: widget.message,
+          macStyle: widget.macStyle,
+          onDownload: widget.onDownload,
+          isDownloading: widget.isDownloading,
+          titleStyle: titleStyle,
+          metaStyle: metaStyle,
+        ),
       );
     }
     return StreamBuilder<AttachmentPreviewSnapshot>(
@@ -1637,6 +1642,8 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
             message: widget.message,
             path: path,
             onOpen: widget.onDownload,
+            onCopy: widget.onCopyImage,
+            onSave: widget.onSaveImage,
             onDecodeFailure: () {
               ref
                   .read(attachmentPreviewServiceProvider)
@@ -1662,8 +1669,6 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
           messageId: widget.message.localId,
           macStyle: widget.macStyle,
           dimensions: snapshot.dimensions,
-          ensureMinimumInteractiveExtent:
-              snapshot.phase == AttachmentPreviewPhase.failed,
           child: content,
         );
       },
@@ -1671,24 +1676,185 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
   }
 }
 
+class _AttachmentCaptionLayout extends MultiChildRenderObjectWidget {
+  _AttachmentCaptionLayout({
+    required this.gap,
+    required Widget caption,
+    required Widget divider,
+    required Widget attachment,
+  }) : super(children: <Widget>[caption, divider, attachment]);
+
+  final double gap;
+
+  @override
+  _RenderAttachmentCaptionLayout createRenderObject(BuildContext context) {
+    return _RenderAttachmentCaptionLayout(gap: gap);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderAttachmentCaptionLayout renderObject,
+  ) {
+    renderObject.gap = gap;
+  }
+}
+
+class _AttachmentCaptionParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderAttachmentCaptionLayout extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _AttachmentCaptionParentData>,
+        RenderBoxContainerDefaultsMixin<
+          RenderBox,
+          _AttachmentCaptionParentData
+        > {
+  _RenderAttachmentCaptionLayout({required double gap}) : _gap = gap;
+
+  double _gap;
+
+  double get gap => _gap;
+
+  set gap(double value) {
+    if (_gap == value) {
+      return;
+    }
+    _gap = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _AttachmentCaptionParentData) {
+      child.parentData = _AttachmentCaptionParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    assert(childCount == 3);
+    final caption = firstChild!;
+    final divider = childAfter(caption)!;
+    final attachment = childAfter(divider)!;
+    final childConstraints = constraints.loosen();
+
+    caption.layout(childConstraints, parentUsesSize: true);
+    attachment.layout(childConstraints, parentUsesSize: true);
+    final contentWidth = caption.size.width > attachment.size.width
+        ? caption.size.width
+        : attachment.size.width;
+    final width = constraints.constrainWidth(contentWidth);
+    divider.layout(
+      BoxConstraints(minWidth: width, maxWidth: width),
+      parentUsesSize: true,
+    );
+
+    final captionParentData =
+        caption.parentData! as _AttachmentCaptionParentData;
+    final dividerParentData =
+        divider.parentData! as _AttachmentCaptionParentData;
+    final attachmentParentData =
+        attachment.parentData! as _AttachmentCaptionParentData;
+    captionParentData.offset = Offset.zero;
+    dividerParentData.offset = Offset(0, caption.size.height + gap);
+    attachmentParentData.offset = Offset(
+      0,
+      caption.size.height + gap + divider.size.height + gap,
+    );
+    size = constraints.constrain(
+      Size(
+        width,
+        caption.size.height +
+            gap +
+            divider.size.height +
+            gap +
+            attachment.size.height,
+      ),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    defaultPaint(context, offset);
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
+}
+
 const double _inlineImageFallbackAspectRatio = 4 / 3;
-const double _minimumInlineImageFailureExtent = 44;
+const double _inlineImageFallbackWidth = 240;
+const double _minimumInlineImagePreviewExtent = 120;
+const double _minimumInlineImageInteractiveExtent = 44;
 
 Size _fitInlineImageEnvelope({
-  required double aspectRatio,
+  required AttachmentImageDimensions? dimensions,
+  required double devicePixelRatio,
+  required double fallbackWidth,
   required double maxWidth,
   required double maxHeight,
+  required double minimumPreviewExtent,
+  required double minimumInteractiveExtent,
 }) {
-  assert(aspectRatio > 0 && aspectRatio.isFinite);
+  assert(devicePixelRatio > 0 && devicePixelRatio.isFinite);
+  assert(fallbackWidth > 0 && fallbackWidth.isFinite);
   assert(maxWidth >= 0 && maxWidth.isFinite);
   assert(maxHeight >= 0 && maxHeight.isFinite);
+  assert(minimumPreviewExtent >= 0 && minimumPreviewExtent.isFinite);
+  assert(minimumInteractiveExtent >= 0 && minimumInteractiveExtent.isFinite);
   if (maxWidth == 0 || maxHeight == 0) {
     return Size.zero;
   }
-  if (maxWidth / maxHeight > aspectRatio) {
-    return Size(maxHeight * aspectRatio, maxHeight);
+
+  final naturalSize = dimensions == null
+      ? Size(fallbackWidth, fallbackWidth / _inlineImageFallbackAspectRatio)
+      : Size(
+          dimensions.pixelWidth / devicePixelRatio,
+          dimensions.pixelHeight / devicePixelRatio,
+        );
+  var scale = 1.0;
+  final widthScale = maxWidth / naturalSize.width;
+  final heightScale = maxHeight / naturalSize.height;
+  if (widthScale < scale) {
+    scale = widthScale;
   }
-  return Size(maxWidth, maxWidth / aspectRatio);
+  if (heightScale < scale) {
+    scale = heightScale;
+  }
+
+  var contentWidth = naturalSize.width * scale;
+  var contentHeight = naturalSize.height * scale;
+  if (dimensions != null) {
+    final longestSide = contentWidth > contentHeight
+        ? contentWidth
+        : contentHeight;
+    if (longestSide < minimumPreviewExtent) {
+      var previewScale = minimumPreviewExtent / longestSide;
+      final maximumWidthScale = maxWidth / contentWidth;
+      final maximumHeightScale = maxHeight / contentHeight;
+      if (maximumWidthScale < previewScale) {
+        previewScale = maximumWidthScale;
+      }
+      if (maximumHeightScale < previewScale) {
+        previewScale = maximumHeightScale;
+      }
+      contentWidth *= previewScale;
+      contentHeight *= previewScale;
+    }
+  }
+
+  final minimumWidth = maxWidth < minimumInteractiveExtent
+      ? maxWidth
+      : minimumInteractiveExtent;
+  final minimumHeight = maxHeight < minimumInteractiveExtent
+      ? maxHeight
+      : minimumInteractiveExtent;
+  return Size(
+    contentWidth < minimumWidth ? minimumWidth : contentWidth,
+    contentHeight < minimumHeight ? minimumHeight : contentHeight,
+  );
 }
 
 class _InlineImageEnvelope extends StatelessWidget {
@@ -1696,14 +1862,12 @@ class _InlineImageEnvelope extends StatelessWidget {
     required this.messageId,
     required this.macStyle,
     required this.dimensions,
-    required this.ensureMinimumInteractiveExtent,
     required this.child,
   });
 
   final String messageId;
   final bool macStyle;
   final AttachmentImageDimensions? dimensions;
-  final bool ensureMinimumInteractiveExtent;
   final Widget child;
 
   @override
@@ -1715,9 +1879,14 @@ class _InlineImageEnvelope extends StatelessWidget {
     final radius = macStyle
         ? responsive.displayScaled(12)
         : responsive.displayScaled(14);
-    final intrinsicAspectRatio = dimensions == null
-        ? _inlineImageFallbackAspectRatio
-        : dimensions!.pixelWidth / dimensions!.pixelHeight;
+    final fallbackWidth = responsive.displayScaled(_inlineImageFallbackWidth);
+    final minimumPreviewExtent = responsive.displayScaled(
+      _minimumInlineImagePreviewExtent,
+    );
+    final minimumInteractiveExtent = responsive.displayScaled(
+      _minimumInlineImageInteractiveExtent,
+    );
+    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = constraints.maxWidth.isFinite
@@ -1732,27 +1901,15 @@ class _InlineImageEnvelope extends StatelessWidget {
         final maxHeight = availableHeight < preferredMaxExtent
             ? availableHeight
             : preferredMaxExtent;
-        final fittedSize = _fitInlineImageEnvelope(
-          aspectRatio: intrinsicAspectRatio,
+        final size = _fitInlineImageEnvelope(
+          dimensions: dimensions,
+          devicePixelRatio: devicePixelRatio,
+          fallbackWidth: fallbackWidth,
           maxWidth: maxExtent,
           maxHeight: maxHeight,
+          minimumPreviewExtent: minimumPreviewExtent,
+          minimumInteractiveExtent: minimumInteractiveExtent,
         );
-        final minimumWidth = maxExtent < _minimumInlineImageFailureExtent
-            ? maxExtent
-            : _minimumInlineImageFailureExtent;
-        final minimumHeight = maxHeight < _minimumInlineImageFailureExtent
-            ? maxHeight
-            : _minimumInlineImageFailureExtent;
-        final size = ensureMinimumInteractiveExtent
-            ? Size(
-                fittedSize.width < minimumWidth
-                    ? minimumWidth
-                    : fittedSize.width,
-                fittedSize.height < minimumHeight
-                    ? minimumHeight
-                    : fittedSize.height,
-              )
-            : fittedSize;
         return SizedBox(
           key: Key('chat-inline-image-envelope:$messageId'),
           width: size.width,
@@ -1854,7 +2011,7 @@ class _InlineImageFileFallback extends StatelessWidget {
                 macStyle: macStyle,
                 isLoading: isDownloading,
                 onTap: open,
-                sizeOverride: _minimumInlineImageFailureExtent,
+                sizeOverride: _minimumInlineImageInteractiveExtent,
               );
         return SizedBox.expand(
           key: Key('chat-inline-image-compact-fallback:${message.localId}'),
@@ -1870,12 +2027,16 @@ class _InlineImagePreview extends ConsumerWidget {
     required this.message,
     required this.path,
     required this.onOpen,
+    required this.onCopy,
+    required this.onSave,
     required this.onDecodeFailure,
   });
 
   final ChatMessage message;
   final String path;
   final Future<void> Function()? onOpen;
+  final Future<void> Function(String path)? onCopy;
+  final Future<void> Function(String path)? onSave;
   final VoidCallback onDecodeFailure;
 
   @override
@@ -1901,15 +2062,218 @@ class _InlineImagePreview extends ConsumerWidget {
         );
       },
     );
-    final open = onOpen;
-    if (open == null) {
-      return preview;
-    }
-    return Semantics(
-      button: true,
-      label: context.l10n.chatViewAttachment,
-      child: GestureDetector(onTap: () => unawaited(open()), child: preview),
+    return SelectionContainer.disabled(
+      child: _InlineImageInteractionRegion(
+        key: Key('chat-image-interaction:${message.localId}'),
+        messageId: message.localId,
+        path: path,
+        onOpen: onOpen,
+        onCopy: onCopy,
+        onSave: onSave,
+        child: preview,
+      ),
     );
+  }
+}
+
+enum _InlineImageAction { copy, save }
+
+class _InlineImageInteractionRegion extends StatefulWidget {
+  const _InlineImageInteractionRegion({
+    super.key,
+    required this.messageId,
+    required this.path,
+    required this.onOpen,
+    required this.onCopy,
+    required this.onSave,
+    required this.child,
+  });
+
+  final String messageId;
+  final String path;
+  final Future<void> Function()? onOpen;
+  final Future<void> Function(String path)? onCopy;
+  final Future<void> Function(String path)? onSave;
+  final Widget child;
+
+  @override
+  State<_InlineImageInteractionRegion> createState() =>
+      _InlineImageInteractionRegionState();
+}
+
+class _InlineImageInteractionRegionState
+    extends State<_InlineImageInteractionRegion> {
+  Offset? _secondaryTapPosition;
+
+  bool get _hasActions => widget.onCopy != null || widget.onSave != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final expanded = context.awikiResponsive.isExpanded;
+    final customActions = <CustomSemanticsAction, VoidCallback>{
+      if (widget.onCopy != null)
+        CustomSemanticsAction(label: context.l10n.chatCopyImage): () {
+          unawaited(_invoke(_InlineImageAction.copy));
+        },
+      if (widget.onSave != null)
+        CustomSemanticsAction(label: context.l10n.chatSaveImageAs): () {
+          unawaited(_invoke(_InlineImageAction.save));
+        },
+    };
+    return Semantics(
+      image: true,
+      button: widget.onOpen != null,
+      label: context.l10n.chatViewAttachment,
+      customSemanticsActions: customActions,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onOpen == null ? null : () => unawaited(widget.onOpen!()),
+        onLongPress: !expanded && _hasActions
+            ? () {
+                unawaited(HapticFeedback.mediumImpact());
+                unawaited(_showCompactMenu());
+              }
+            : null,
+        onSecondaryTapDown: expanded && _hasActions
+            ? (details) {
+                _secondaryTapPosition = details.globalPosition;
+              }
+            : null,
+        onSecondaryTap: expanded && _hasActions
+            ? () => unawaited(_showDesktopMenu())
+            : null,
+        child: widget.child,
+      ),
+    );
+  }
+
+  Future<void> _showCompactMenu() {
+    return AppNavigator.showSheet<void>(
+      context,
+      (_) => AppDropMenu(
+        title: context.l10n.chatImageActionsTitle,
+        items: <AppDropMenuItem>[
+          if (widget.onCopy != null)
+            AppDropMenuItem(
+              buttonKey: Key('chat-image-copy-action:${widget.messageId}'),
+              label: context.l10n.chatCopyImage,
+              icon: CupertinoIcons.doc_on_doc,
+              onTap: () => _invoke(_InlineImageAction.copy),
+            ),
+          if (widget.onSave != null)
+            AppDropMenuItem(
+              buttonKey: Key('chat-image-save-action:${widget.messageId}'),
+              label: context.l10n.chatSaveImageAs,
+              icon: CupertinoIcons.arrow_down_to_line,
+              onTap: () => _invoke(_InlineImageAction.save),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDesktopMenu() async {
+    final overlay = Overlay.of(
+      context,
+      rootOverlay: true,
+    ).context.findRenderObject();
+    final position = _secondaryTapPosition;
+    if (overlay is! RenderBox || position == null) {
+      return;
+    }
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final selected = await showMenu<_InlineImageAction>(
+      context: context,
+      useRootNavigator: true,
+      semanticLabel: context.l10n.chatImageActionsTitle,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(position, position),
+        Offset.zero & overlay.size,
+      ),
+      color: theme.surface,
+      surfaceTintColor: CupertinoColors.transparent,
+      shadowColor: theme.title.withValues(alpha: 0.18),
+      elevation: 12,
+      menuPadding: EdgeInsets.all(responsive.displayScaled(4)),
+      constraints: BoxConstraints.tightFor(
+        width: responsive.displayScaled(200),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
+        side: BorderSide(color: theme.border),
+      ),
+      items: <PopupMenuEntry<_InlineImageAction>>[
+        if (widget.onCopy != null)
+          _desktopMenuItem(
+            action: _InlineImageAction.copy,
+            key: Key('chat-image-copy-action:${widget.messageId}'),
+            label: context.l10n.chatCopyImage,
+            icon: CupertinoIcons.doc_on_doc,
+          ),
+        if (widget.onSave != null)
+          _desktopMenuItem(
+            action: _InlineImageAction.save,
+            key: Key('chat-image-save-action:${widget.messageId}'),
+            label: context.l10n.chatSaveImageAs,
+            icon: CupertinoIcons.arrow_down_to_line,
+          ),
+      ],
+    );
+    if (!mounted || selected == null) {
+      return;
+    }
+    await _invoke(selected);
+  }
+
+  PopupMenuItem<_InlineImageAction> _desktopMenuItem({
+    required _InlineImageAction action,
+    required Key key,
+    required String label,
+    required IconData icon,
+  }) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return PopupMenuItem<_InlineImageAction>(
+      key: key,
+      value: action,
+      height: responsive.displayScaled(38),
+      padding: EdgeInsets.symmetric(horizontal: responsive.displayScaled(10)),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            icon,
+            size: responsive.displayScaled(16),
+            color: theme.secondaryText,
+          ),
+          SizedBox(width: responsive.displayScaled(10)),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: theme.title,
+                fontSize: responsive.displayScaled(13),
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _invoke(_InlineImageAction action) async {
+    switch (action) {
+      case _InlineImageAction.copy:
+        await widget.onCopy?.call(widget.path);
+        return;
+      case _InlineImageAction.save:
+        await widget.onSave?.call(widget.path);
+        return;
+    }
   }
 }
 
@@ -1968,7 +2332,7 @@ class _AttachmentFileCard extends StatelessWidget {
     final theme = context.awikiTheme;
     return Row(
       key: Key('chat-attachment-file-card:${message.localId}'),
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: MainAxisSize.max,
       children: <Widget>[
         Container(
           width: macStyle
@@ -2000,8 +2364,7 @@ class _AttachmentFileCard extends StatelessWidget {
               ? responsive.displayScaled(10)
               : responsive.spacing(10),
         ),
-        Flexible(
-          fit: FlexFit.loose,
+        Expanded(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2409,7 +2772,7 @@ class _AttachmentCaptionDivider extends StatelessWidget {
               : theme.secondaryText.withValues(alpha: 0.24),
           borderRadius: BorderRadius.circular(1),
         ),
-        child: const SizedBox(height: 1, width: double.infinity),
+        child: const SizedBox(height: 1),
       ),
     );
   }

@@ -1062,8 +1062,11 @@ void main() {
     await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
     await tester.pumpAndSettle();
 
+    final candidateList = find.descendant(
+      of: find.byKey(const Key('group-invite-candidate-list')),
+      matching: find.byType(Scrollable),
+    );
     expect(find.text('关注联系人'), findsOneWidget);
-    expect(find.text('最近联系人'), findsOneWidget);
     expect(find.text('测试智能体'), findsOneWidget);
     expect(find.text('不应该出现的群聊'), findsNothing);
     expect(find.text('不应该出现的 Daemon'), findsNothing);
@@ -1077,8 +1080,25 @@ void main() {
       const Size.square(18),
     );
 
+    await tester.scrollUntilVisible(
+      find.text('最近联系人'),
+      100,
+      scrollable: candidateList,
+    );
+    expect(find.text('最近联系人'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('关注联系人'),
+      -100,
+      scrollable: candidateList,
+    );
     await tester.tap(find.text('关注联系人'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('测试智能体'),
+      -100,
+      scrollable: candidateList,
+    );
     await tester.tap(find.text('测试智能体'));
     await tester.pumpAndSettle();
     expect(find.text('确认添加 (2)'), findsOneWidget);

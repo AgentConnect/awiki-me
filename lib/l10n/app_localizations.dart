@@ -4376,6 +4376,42 @@ abstract class AppLocalizations {
   /// **'附件下载结果为空。'**
   String get attachmentDownloadEmpty;
 
+  /// No description provided for @chatImageActionsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片'**
+  String get chatImageActionsTitle;
+
+  /// No description provided for @chatCopyImage.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制图片'**
+  String get chatCopyImage;
+
+  /// No description provided for @chatSaveImageAs.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片另存为...'**
+  String get chatSaveImageAs;
+
+  /// No description provided for @chatImageCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片已复制'**
+  String get chatImageCopied;
+
+  /// No description provided for @chatImageSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片已保存'**
+  String get chatImageSaved;
+
+  /// No description provided for @chatImageCopyFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法复制图片，请稍后重试。'**
+  String get chatImageCopyFailed;
+
   /// No description provided for @conversationRemovedFromRecents.
   ///
   /// In zh, this message translates to:

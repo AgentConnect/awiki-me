@@ -91,6 +91,9 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
       attachmentPickerServiceProvider.overrideWithValue(
         FakeAttachmentPickerService(),
       ),
+      attachmentCacheServiceProvider.overrideWithValue(
+        FakeAttachmentCacheService(),
+      ),
       if (session != null)
         sessionProvider.overrideWith((ref) {
           final controller = SessionController();

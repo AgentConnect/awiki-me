@@ -12,6 +12,89 @@ import 'package:awiki_me/src/data/services/file_attachment_cache_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('readPreviewBytes', () {
+    test(
+      'reads the resolved local preview through the injected reader',
+      () async {
+        String? readPath;
+        final expected = Uint8List.fromList(<int>[1, 2, 3, 4]);
+        final service = AttachmentPreviewService(
+          cache: FileAttachmentCacheService(
+            rootDirectory: () async => Directory.systemTemp,
+          ),
+          bytesReader: (localPath) async {
+            readPath = localPath;
+            return expected;
+          },
+        );
+        addTearDown(service.dispose);
+
+        final bytes = await service.readPreviewBytes('/tmp/awiki-preview.png');
+
+        expect(readPath, '/tmp/awiki-preview.png');
+        expect(bytes, expected);
+      },
+    );
+
+    test('rejects non-local preview references before reading', () async {
+      var readCalls = 0;
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(
+          rootDirectory: () async => Directory.systemTemp,
+        ),
+        bytesReader: (_) async {
+          readCalls += 1;
+          return Uint8List.fromList(<int>[1]);
+        },
+      );
+      addTearDown(service.dispose);
+
+      await expectLater(
+        service.readPreviewBytes('https://example.test/image.png'),
+        throwsA(isA<AttachmentUnavailableException>()),
+      );
+      expect(readCalls, 0);
+    });
+
+    test('rejects an empty local preview', () async {
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(
+          rootDirectory: () async => Directory.systemTemp,
+        ),
+        bytesReader: (_) async => Uint8List(0),
+      );
+      addTearDown(service.dispose);
+
+      await expectLater(
+        service.readPreviewBytes('/tmp/empty.png'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'attachment_copy_empty',
+          ),
+        ),
+      );
+    });
+
+    test('maps local file failures to attachment unavailable', () async {
+      final service = AttachmentPreviewService(
+        cache: FileAttachmentCacheService(
+          rootDirectory: () async => Directory.systemTemp,
+        ),
+        bytesReader: (localPath) async {
+          throw FileSystemException('missing', localPath);
+        },
+      );
+      addTearDown(service.dispose);
+
+      await expectLater(
+        service.readPreviewBytes('/tmp/missing.png'),
+        throwsA(isA<AttachmentUnavailableException>()),
+      );
+    });
+  });
+
   test(
     'previewPathFor opens existing local source without remote download',
     () async {
