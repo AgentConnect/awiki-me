@@ -77,6 +77,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
+import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/app_update_manifest.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -3069,6 +3070,8 @@ class FakeProductLocalStore implements ProductLocalStore {
   final Map<String, LocalUiPreference> preferences =
       <String, LocalUiPreference>{};
   final Map<String, LocalAgentState> agentStates = <String, LocalAgentState>{};
+  final InMemoryAwikiProductLocalStore _accountDomainStore =
+      InMemoryAwikiProductLocalStore();
 
   String _key(String ownerDid, String id) => '$ownerDid::$id';
 
@@ -3081,6 +3084,69 @@ class FakeProductLocalStore implements ProductLocalStore {
     required String agentDid,
   }) async {
     agentStates.remove(_key(ownerDid, agentDid));
+  }
+
+  @override
+  Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
+    required ProductAccountBinding binding,
+    String? legacyOwnerDid,
+  }) async {
+    if (legacyOwnerDid != null) {
+      for (final state in agentStates.values.where(
+        (state) => state.ownerDid == legacyOwnerDid,
+      )) {
+        await _accountDomainStore.saveAgentState(state);
+      }
+    }
+    return _accountDomainStore.loadAgentInventorySnapshot(
+      binding: binding,
+      legacyOwnerDid: legacyOwnerDid,
+    );
+  }
+
+  @override
+  Future<void> replaceAgentInventorySnapshot(
+    ProductAgentInventorySnapshot snapshot,
+  ) {
+    return _accountDomainStore.replaceAgentInventorySnapshot(snapshot);
+  }
+
+  @override
+  Future<ProductAgentStatusSnapshot?> loadAgentStatusSnapshot({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadAgentStatusSnapshot(binding: binding);
+  }
+
+  @override
+  Future<void> replaceAgentStatusSnapshot(ProductAgentStatusSnapshot snapshot) {
+    return _accountDomainStore.replaceAgentStatusSnapshot(snapshot);
+  }
+
+  @override
+  Future<ProductProfileSnapshot?> loadProfileSnapshot({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadProfileSnapshot(binding: binding);
+  }
+
+  @override
+  Future<void> replaceProfileSnapshot(ProductProfileSnapshot snapshot) {
+    return _accountDomainStore.replaceProfileSnapshot(snapshot);
+  }
+
+  @override
+  Future<ProductDeviceRegistrySnapshot?> loadDeviceRegistrySnapshot({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadDeviceRegistrySnapshot(binding: binding);
+  }
+
+  @override
+  Future<void> replaceDeviceRegistrySnapshot(
+    ProductDeviceRegistrySnapshot snapshot,
+  ) {
+    return _accountDomainStore.replaceDeviceRegistrySnapshot(snapshot);
   }
 
   @override
@@ -3680,6 +3746,18 @@ class FakeIdentityCorePort implements IdentityCorePort {
   String? lastRevokedDaemonSubkeySelector;
 
   @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() async {
+    return SessionAccountBinding(
+      ownerIdentityId: defaultSession.identityId,
+      accountId: 'account-${defaultSession.identityId}',
+      currentDid: defaultSession.did,
+      protocolDeviceId: 'protocol-device-${defaultSession.identityId}',
+      identityGeneration: '1',
+      deviceAuthGeneration: '1',
+    );
+  }
+
+  @override
   Future<AppSession?> defaultIdentity() async => defaultSession;
 
   @override
@@ -3766,6 +3844,7 @@ AppSession _appSessionFromLegacy(SessionIdentity session) {
     localAlias: session.credentialName,
     authenticated: session.jwtToken != null,
     jwtToken: session.jwtToken,
+    accountBinding: session.accountBinding,
   );
 }
 

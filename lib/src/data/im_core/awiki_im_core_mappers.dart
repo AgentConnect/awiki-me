@@ -49,6 +49,19 @@ class AwikiImCoreMappers {
     );
   }
 
+  SessionAccountBinding sessionAccountBindingFromCore(
+    core.ActiveSyncAccountBinding binding,
+  ) {
+    return SessionAccountBinding(
+      ownerIdentityId: binding.ownerIdentityId,
+      accountId: binding.accountId,
+      currentDid: binding.currentDid,
+      protocolDeviceId: binding.protocolDeviceId,
+      identityGeneration: binding.identityGeneration,
+      deviceAuthGeneration: binding.deviceAuthGeneration,
+    );
+  }
+
   SessionIdentity legacySessionFromAppSession(AppSession session) {
     return session.toLegacySessionIdentity();
   }

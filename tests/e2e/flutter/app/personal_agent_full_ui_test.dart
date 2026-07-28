@@ -1858,6 +1858,18 @@ class _UiIdentityCorePort implements IdentityCorePort {
   final List<String> calls = <String>[];
 
   @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() async {
+    return const SessionAccountBinding(
+      ownerIdentityId: 'default',
+      accountId: 'account-default',
+      currentDid: 'did:test:me',
+      protocolDeviceId: 'protocol-device-default',
+      identityGeneration: '1',
+      deviceAuthGeneration: '1',
+    );
+  }
+
+  @override
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(
     String identityIdOrAlias,
   ) async {

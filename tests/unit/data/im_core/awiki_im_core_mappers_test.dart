@@ -39,6 +39,26 @@ void main() {
     expect(legacy.jwtToken, 'jwt-123');
   });
 
+  test('active sync account binding maps every typed SDK field', () {
+    const binding = core.ActiveSyncAccountBinding(
+      ownerIdentityId: 'owner-identity-1',
+      accountId: 'account-1',
+      currentDid: 'did:wba:awiki.ai:alice:e1_current',
+      protocolDeviceId: 'protocol-device-1',
+      identityGeneration: '90071992547409931234567890',
+      deviceAuthGeneration: '184467440737095516160',
+    );
+
+    final sessionBinding = mapper.sessionAccountBindingFromCore(binding);
+
+    expect(sessionBinding.ownerIdentityId, binding.ownerIdentityId);
+    expect(sessionBinding.accountId, binding.accountId);
+    expect(sessionBinding.currentDid, binding.currentDid);
+    expect(sessionBinding.protocolDeviceId, binding.protocolDeviceId);
+    expect(sessionBinding.identityGeneration, binding.identityGeneration);
+    expect(sessionBinding.deviceAuthGeneration, binding.deviceAuthGeneration);
+  });
+
   test(
     'identity display name falls back through handle, alias, compact DID',
     () {

@@ -6,7 +6,7 @@
 
 ## 1. 当前结论
 
-`im-core` / Flutter SDK 是 message、conversation identity、canonical `conversationId` read model、read-state、send/outbox、sync/realtime/backfill committed projection 的事实源。AWiki Me 只拥有 product overlay、read presentation waterline、renderability、draft/scroll/loading、短生命周期 UI window 和 widget composition。
+`im-core` / Flutter SDK 是 message、conversation identity、canonical `conversationId` read model、read-state、send/outbox、sync/realtime/backfill committed projection 的事实源。AWiki Me 只拥有 product overlay、User Service 权威账号域的本地展示快照、read presentation waterline、renderability、draft/scroll/loading、短生命周期 UI window 和 widget composition。账号域快照是可丢弃 cache，不是消息、会话、群或 Agent 控制事件的第二事实源。
 
 核心边界：
 
@@ -88,6 +88,9 @@ Rust im-core
 | control payload 会话预览可见性 | `awiki-me` mapper / realtime projection | SDK message 的 `body.text` + `payloadJson` | 只允许带显式可见文本的 control payload 更新 recents 预览；payload-only control 继续隐藏 |
 | `hidden`、`pinned`、`muted` | `awiki-me` `ProductLocalStore` | `ConversationService.setThreadHidden`、`hideConversationFromRecents`、`restoreConversationToRecents` | `ImCoreConversationService` 加载 overlay 后过滤、排序和展示 |
 | Direct `customTitle`、`avatarSeed` | `awiki-me` `ProductLocalStore` | `ProductLocalStore.upsertConversationOverlay` | Direct `customTitle` 只投影为 Persona 级本地备注，不再改写 Core `displayName`；`avatarSeed` 仍为 App overlay |
+| 当前账号 Agent inventory topology | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 版本化完整快照；App 只通过 `replaceAgentInventorySnapshot` 单事务替换 | Agent 页面；topology 不覆盖独立 status，也不替代 Core committed Agent control projection |
+| 当前账号 Agent latest status | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 独立 status version；`replaceAgentStatusSnapshot` 单事务替换 | Agent 页面将 status 按 `agentDid` 叠加到 topology；status 不能改变 `activeState` 或重新激活 Agent |
+| 当前账号 Profile / Device Registry | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | `replaceProfileSnapshot` / `replaceDeviceRegistrySnapshot` 完整快照 + 单调版本 | 当前账号资料和设备管理 UI；不用于推断消息 owner、协议设备或身份绑定 |
 | 本地临时隐藏水位 | `ConversationListController` | `deleteFromRecents` 成功前后维护 memory waterline | snapshot、refresh 和 patch apply 前过滤，旧 patch 不能重新插入 |
 | 用户显式打开的空会话 | Rust `im-core` conversation registry | identity flow 先 `resolve/open`，再 `ensureConversation(conversationId)` | Core list/snapshot/patch 返回 committed row；App 不保留 locally-started bridge，也不构造 fake summary |
 | recents read presentation waterline | `ConversationListController` presentation memory | refresh / fast-local / patch / repair / visible message watermark / read ack | 发布 recents 前统一投影：latest message watermark 只前进，read watermark 只前进；summary-only 更新不能清 unread；read watermark 覆盖的旧 unread 不能重新出现；旧的 0 unread 不能清掉更新消息；可见状态只在严格 canonical conversation 内推进 |
@@ -352,7 +355,7 @@ conversation/profile bundle 必须在发布会话行前把该投影迁入 Person
 若 App 已记录的 DID→Persona route 与后到 route 冲突，App 不移动展示资料也不覆盖
 原 route；绑定冲突只能由 Core 的权威身份投影解析或诊断。
 
-## 12. 不引入 Flutter MMKV 双缓存
+## 12. 不引入消息与会话双缓存
 
 AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，也不引入 MMKV 作为 conversation snapshot 或 presentation truth。
 
@@ -360,8 +363,27 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 
 - `im-core` SQLite 是 message、conversation、group、read-state 的主数据源。
 - `im-core` redb snapshot 已覆盖冷启动 bootstrap 的非权威缓存需求。
-- `ProductLocalStore` 只保存产品 overlay 和 UI preference，避免与 Rust projection 形成双主数据源。
+- `ProductLocalStore` 保存产品 overlay、UI preference，以及 User Service 权威的
+  Agent inventory/status、当前账号 Profile、Device Registry 版本化展示快照；这些账号域 cache
+  不能保存消息、会话、群主数据、read watermark、消息 cursor 或 Core Agent control facts。
 - `ChatThreadsProvider` 的内存 tail 是 UI 状态和 first-paint 加速，不是持久主数据源。
+
+Product local DB v4 的账号域表全部按稳定 `owner_identity_id` 分区，并通过
+`account_domain_sync_state(owner_identity_id, account_id, domain)` 固定账号绑定。App 只能在
+SDK `ActiveSyncAccountBinding` 已可用并通过 session fence 后访问这些表；不得从 DID、Handle、
+JWT、Vault context device ID 或 App installation UUID 推断 `account_id` / Protocol Device ID。
+Session fence 还要求 Protocol Device ID 不得为保留兼容值 `default`，identity/device
+generation 必须是大于 0、无前导零的 canonical positive decimal string。同一
+`owner_identity_id` 已绑定其他 `account_id` 时读写 fail closed。
+
+每个域的 replace 必须在一个 SQLite transaction 中执行“清旧 rows（允许清成空）→ 写完整
+snapshot → 推进 domain version”。Inventory topology 与 latest status 使用不同表和版本：
+topology replacement 不删除 status，status replacement 不修改 config/`activeState`。
+Product cache 的 domain/inventory/status/profile/registry version 与 Registry snapshot
+`auth_generation` 保存为任意精度 canonical non-negative decimal string，允许唯一的零值
+`0`；它们不能转成 Dart number 或 SQLite INTEGER，也不得冒充 Session binding 中必须大于 0
+的 generation。v3 的 `local_agent_states` 只允许在显式稳定 binding 和旧 owner DID 同时给出后
+copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 
 ## 13. 回归测试
 

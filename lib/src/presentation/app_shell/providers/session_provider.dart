@@ -16,6 +16,10 @@ class SessionState {
 
   bool get isLoggedIn => session != null;
 
+  SessionAccountBinding? get accountBinding => session?.accountBinding;
+
+  bool get hasActiveSyncAccountBinding => accountBinding != null;
+
   SessionState copyWith({
     BridgeCapabilities? capabilities,
     SessionIdentity? session,

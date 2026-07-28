@@ -2,6 +2,7 @@ import '../models/app_session.dart';
 import '../models/daemon_subkey_authorization_revoke_result.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
 import '../../domain/entities/device_management.dart';
+import '../../domain/entities/session_identity.dart';
 
 enum IdentityRegistrationStatus { registered, joinRequired }
 
@@ -23,6 +24,8 @@ abstract interface class IdentityCorePort {
   Future<AppSession?> defaultIdentity();
 
   Future<AppSession> resolveIdentity(String identityIdOrAlias);
+
+  Future<SessionAccountBinding> activeSyncAccountBinding();
 
   Future<UserSubkeyPackage> loadDaemonSubkeyPackage(String identityIdOrAlias);
 

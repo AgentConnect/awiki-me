@@ -5,6 +5,7 @@ import '../../application/models/daemon_subkey_authorization_revoke_result.dart'
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
+import '../../domain/entities/session_identity.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_device_management_adapter.dart';
 import 'awiki_im_core_runtime.dart';
@@ -39,6 +40,14 @@ class AwikiImCoreIdentityAdapter
     final coreInstance = await _runtime.coreInstance();
     final identity = await _resolveIdentity(coreInstance, identityIdOrAlias);
     return _mappers.appSessionFromIdentity(identity);
+  }
+
+  @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() {
+    return _runtime.withCurrentClient((client) async {
+      final binding = await client.activeSyncAccountBinding();
+      return _mappers.sessionAccountBindingFromCore(binding);
+    });
   }
 
   @override
