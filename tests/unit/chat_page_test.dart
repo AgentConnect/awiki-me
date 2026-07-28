@@ -576,6 +576,14 @@ void main() {
       tester.getRect(outgoingBubble).right,
       lessThan(tester.getRect(outgoingAvatar).left),
     );
+    expect(
+      tester.getRect(incomingAvatar).top,
+      closeTo(tester.getRect(incomingBubble).top, 0.5),
+    );
+    expect(
+      tester.getRect(outgoingAvatar).top,
+      closeTo(tester.getRect(outgoingBubble).top, 0.5),
+    );
 
     for (final key in const <String>[
       'chat-emoji-button',
@@ -620,6 +628,69 @@ void main() {
       1,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('群聊发送者名称不改变 compact 和 macStyle 的头像气泡顶部基准', (tester) async {
+    final conversation = ConversationSummary(
+      conversationId: 'group:avatar-top-alignment',
+      threadId: 'group:avatar-top-alignment',
+      displayName: 'Project Group',
+      lastMessagePreview: 'group message',
+      lastMessageAt: DateTime(2026, 7, 28, 10),
+      unreadCount: 0,
+      isGroup: true,
+      groupId: 'did:test:avatar-top-alignment',
+    );
+    final message = ChatMessage(
+      localId: 'group-avatar-top-alignment',
+      remoteId: 'group-avatar-top-alignment',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:test:alice',
+      senderName: 'Alice',
+      receiverDid: 'did:test:me',
+      groupId: conversation.groupId,
+      content: 'group message',
+      createdAt: conversation.lastMessageAt,
+      isMine: false,
+      sendState: MessageSendState.sent,
+    );
+
+    void expectTopAligned() {
+      final avatar = find.byKey(
+        const Key('chat-message-avatar:group-avatar-top-alignment:peer'),
+      );
+      final bubble = find.byKey(
+        const Key('chat-message-bubble:group-avatar-top-alignment'),
+      );
+      expect(
+        find.byKey(const Key('chat-message-sender:group-avatar-top-alignment')),
+        findsOneWidget,
+      );
+      expect(
+        tester.getRect(avatar).top,
+        closeTo(tester.getRect(bubble).top, 0.5),
+      );
+    }
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+    );
+    expectTopAligned();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _pumpScrollableChatView(
+      tester,
+      gateway: FakeAwikiGateway(),
+      conversation: conversation,
+      messages: <ChatMessage>[message],
+      surfaceSize: const Size(960, 640),
+      macStyle: true,
+    );
+    expectTopAligned();
   });
 
   for (final scenario in <({String label, ConversationSummary conversation})>[
@@ -696,9 +767,14 @@ void main() {
         profile: profile,
       );
 
-      await tester.tap(
-        find.byKey(const Key('chat-message-avatar:own-message:mine')),
+      final ownAvatar = find.byKey(
+        const Key('chat-message-avatar:own-message:mine'),
       );
+      expect(
+        find.descendant(of: ownAvatar, matching: find.byType(AvatarBadge)),
+        findsOneWidget,
+      );
+      await tester.tap(ownAvatar);
       await tester.pumpAndSettle();
 
       expect(

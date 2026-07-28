@@ -20,6 +20,7 @@ class CopyableDidLine extends StatelessWidget {
     this.gap = 8,
     this.buttonSize = 32,
     this.iconSize = 16,
+    this.showButtonChrome = true,
   });
 
   final String value;
@@ -34,6 +35,7 @@ class CopyableDidLine extends StatelessWidget {
   final double gap;
   final double buttonSize;
   final double iconSize;
+  final bool showButtonChrome;
 
   @override
   Widget build(BuildContext context) {
@@ -65,8 +67,12 @@ class CopyableDidLine extends StatelessWidget {
           semanticLabel: copySemanticLabel,
           tooltip: copySemanticLabel,
           size: buttonSize,
-          backgroundColor: theme.surface,
-          borderColor: theme.border,
+          backgroundColor: showButtonChrome
+              ? theme.surface
+              : CupertinoColors.transparent,
+          borderColor: showButtonChrome
+              ? theme.border
+              : CupertinoColors.transparent,
           borderRadius: BorderRadius.circular(8),
           child: Icon(icon, color: theme.secondaryText, size: iconSize),
         ),

@@ -12,6 +12,7 @@ import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
@@ -86,7 +87,11 @@ void main() {
         find.byKey(const Key('onboarding-compact-auth-card')),
         findsOneWidget,
       );
-      expect(find.byKey(const Key('onboarding-entry-tabs')), findsOneWidget);
+      expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
+      expect(
+        find.byKey(const Key('onboarding-auth-mode-tabs')),
+        findsOneWidget,
+      );
     }
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
@@ -576,15 +581,18 @@ void main() {
       ]);
       await tester.pumpAndSettle();
       final viewAll = find.byKey(const Key('friends-following-view-all'));
-      if (viewAll.evaluate().isNotEmpty) {
-        await tester.tap(viewAll);
-        await tester.pumpAndSettle();
-      } else {
-        expect(
-          find.byKey(const Key('compact-relationship-directory')),
-          findsOneWidget,
-        );
-      }
+      expect(viewAll, findsOneWidget);
+      await tester.tap(viewAll);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RelationshipListPage &&
+              widget.type == FriendsRelationshipListType.following,
+        ),
+        findsOneWidget,
+      );
 
       expect(find.text('关注用户昵称'), findsWidgets);
       expect(harness.gateway.loadPublicProfileQueries, <String>[peerDid]);

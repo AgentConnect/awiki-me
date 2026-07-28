@@ -5,6 +5,7 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
+import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -41,6 +42,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byType(IdentityProfileHeader), findsOneWidget);
+    expect(find.byType(IdentityProfileActionButton), findsOneWidget);
+    expect(find.byType(IdentityDocumentContent), findsOneWidget);
     expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
     await tester.tap(find.byKey(const Key('peer-profile-follow')));
     await tester.pumpAndSettle();

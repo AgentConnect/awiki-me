@@ -193,6 +193,49 @@ void main() {
   });
 
   test(
+    'empty identity registry still protects an existing tenant endpoint',
+    () async {
+      final created = await store.createTenant(
+        const AppTenantCreateInput(
+          name: 'Credential Removed',
+          backendBaseUrl: 'https://old.example.com',
+          didHost: 'old.example.com',
+        ),
+      );
+      final tenant = created.visibleTenants.singleWhere(
+        (item) => !item.isPrimaryTenant,
+      );
+      final layout = await store.layoutForScope(tenant.storageScopeId);
+      final identityRegistry = File(layout.identityRegistryPath);
+      await identityRegistry.parent.create(recursive: true);
+      await identityRegistry.writeAsString(
+        '{"schema_version":1,"identities":[]}',
+        flush: true,
+      );
+
+      expect(await File(layout.defaultIdentityPath).exists(), isFalse);
+      expect(await store.tenantHasData(tenant.id), isTrue);
+      await expectLater(
+        store.updateTenant(
+          AppTenantUpdateInput(
+            id: tenant.id,
+            name: tenant.name,
+            backendBaseUrl: 'https://new.example.com',
+            didHost: tenant.didHost,
+          ),
+        ),
+        throwsA(
+          isA<AppTenantValidationException>().having(
+            (error) => error.code,
+            'code',
+            'tenant_has_data',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'prepared tenant update is not persisted before activation commit',
     () async {
       final created = await store.createTenant(

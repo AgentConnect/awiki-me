@@ -38,6 +38,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversat
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_navigation_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter/widgets.dart';
@@ -187,14 +188,22 @@ void main() {
       );
     }
 
-    test('激活身份时清理上一身份的选中会话', () async {
+    test('激活身份时清理上一身份的会话和联系人详情', () async {
       container
           .read(selectedConversationProvider.notifier)
           .selectConversation(staleSelectedConversation());
+      container
+          .read(friendsWorkspaceNavigationProvider.notifier)
+          .showProfileDid('did:test:old-contact');
 
       await activate();
 
       expect(container.read(selectedConversationProvider), isNull);
+      final friendsNavigation = container.read(
+        friendsWorkspaceNavigationProvider,
+      );
+      expect(friendsNavigation.detail, FriendsWorkspaceDetail.overview);
+      expect(friendsNavigation.selectedDid, isNull);
     });
 
     test(
@@ -507,7 +516,7 @@ void main() {
       },
     );
 
-    test('退出登录时清理当前选中会话', () async {
+    test('退出登录时清理当前会话和联系人详情', () async {
       container
           .read(sessionProvider.notifier)
           .setSession(
@@ -522,10 +531,18 @@ void main() {
       container
           .read(selectedConversationProvider.notifier)
           .selectConversation(staleSelectedConversation());
+      container
+          .read(friendsWorkspaceNavigationProvider.notifier)
+          .showProfileDid('did:test:stale-contact');
 
       await container.read(appRuntimeProvider.notifier).logout();
 
       expect(container.read(selectedConversationProvider), isNull);
+      final friendsNavigation = container.read(
+        friendsWorkspaceNavigationProvider,
+      );
+      expect(friendsNavigation.detail, FriendsWorkspaceDetail.overview);
+      expect(friendsNavigation.selectedDid, isNull);
     });
 
     test('非法通知 payload 只打开消息列表并清理旧选择', () async {

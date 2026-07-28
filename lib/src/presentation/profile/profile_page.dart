@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,7 +14,6 @@ import '../friends/friends_provider.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_semantic_icon.dart';
-import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/display_formatters.dart';
@@ -97,9 +95,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       child: ListView(
         shrinkWrap: widget.shrinkWrap,
         padding: EdgeInsets.fromLTRB(
-          responsive.tabContentHorizontalPadding,
-          responsive.spacing(18),
-          responsive.tabContentHorizontalPadding,
+          IdentityProfileLayout.contentInset(context),
+          responsive.displayScaled(widget.embedded ? 8 : 18),
+          IdentityProfileLayout.contentInset(context),
           widget.embedded ? widget.bottomInset : 120,
         ),
         children: <Widget>[
@@ -112,70 +110,41 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 children: <Widget>[
                   IdentityProfileCard(
                     key: const Key('profile-identity-card'),
-                    header: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: <Widget>[
-                        AvatarBadge(
-                          seed: handleLabel.isEmpty ? displayName : handleLabel,
-                          size: responsive.isPhone ? 58 : 52,
-                          avatarUri: profile.avatarUri,
-                        ),
-                        SizedBox(width: responsive.spacing(14)),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                displayName,
-                                key: const Key('profile-display-name'),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: responsive.isPhone ? 21 : 19,
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.title,
-                                ),
-                              ),
-                              if (handleLabel.isNotEmpty) ...<Widget>[
-                                SizedBox(height: responsive.spacing(3)),
-                                Text(
-                                  handleLabel,
-                                  key: const Key('profile-handle-value'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: responsive.bodySm,
-                                    color: theme.secondaryText,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        SizedBox(width: responsive.spacing(8)),
-                        SelectionContainer.disabled(
-                          child: AppIconButton(
-                            key: const Key('profile-edit-button'),
-                            onPressed: state.isSaving
-                                ? null
-                                : () =>
-                                      _showEditProfileDialog(context, profile),
-                            semanticLabel: context.l10n.profileEditTitle,
-                            tooltip: context.l10n.profileEditTitle,
-                            size: responsive.displayScaled(36),
-                            backgroundColor: theme.subtleSurface,
-                            borderColor: theme.border,
-                            borderRadius: BorderRadius.circular(
-                              responsive.radius(8),
-                            ),
-                            child: AwikiMeSemanticIcon(
-                              role: AwikiMeIconRole.edit,
-                              size: responsive.iconSm,
-                              color: theme.primaryDark,
-                            ),
-                          ),
+                    header: IdentityProfileHeader(
+                      displayName: displayName,
+                      displayNameKey: const Key('profile-display-name'),
+                      avatarSeed: handleLabel.isEmpty
+                          ? displayName
+                          : handleLabel,
+                      avatarUri: profile.avatarUri,
+                      handle: handleLabel,
+                      handleKey: const Key('profile-handle-value'),
+                      badges: <Widget>[
+                        IdentityProfileBadge(
+                          label: context.l10n.identityTypeUser,
                         ),
                       ],
+                      trailing: SelectionContainer.disabled(
+                        child: AppIconButton(
+                          key: const Key('profile-edit-button'),
+                          onPressed: state.isSaving
+                              ? null
+                              : () => _showEditProfileDialog(context, profile),
+                          semanticLabel: context.l10n.profileEditTitle,
+                          tooltip: context.l10n.profileEditTitle,
+                          size: responsive.displayScaled(40),
+                          backgroundColor: theme.subtleSurface,
+                          borderColor: theme.border,
+                          borderRadius: BorderRadius.circular(
+                            responsive.displayScaled(AwikiMeRadii.control),
+                          ),
+                          child: AwikiMeSemanticIcon(
+                            role: AwikiMeIconRole.edit,
+                            size: responsive.iconSm,
+                            color: theme.primaryDark,
+                          ),
+                        ),
+                      ),
                     ),
                     metadata: <Widget>[
                       IdentityProfileMetadataRow(
@@ -191,12 +160,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                           textKey: const Key('profile-did-value'),
                           buttonKey: const Key('profile-copy-did-button'),
                           textStyle: TextStyle(
-                            fontSize: responsive.bodySm,
+                            fontSize: responsive.bodyMd,
                             height: 1.35,
                             color: theme.body,
                           ),
                           buttonSize: responsive.displayScaled(30),
                           iconSize: responsive.displayScaled(14),
+                          showButtonChrome: false,
                         ),
                       ),
                       if (homepageUrl.isNotEmpty)
@@ -218,8 +188,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   IdentityDocumentCard(
                     key: const Key('profile-identity-document'),
                     title: context.l10n.chatPeerInfoIdentityCard,
-                    child: _ProfileContentSection(
-                      content: profileContent,
+                    child: IdentityDocumentContent(
+                      content: profileArticleBody(profileContent),
                       emptyText: context.l10n.profileEmpty,
                       tags: profile.tags,
                     ),
@@ -270,7 +240,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       return AwikiAdaptiveScaffold(maxWidth: 900, child: content);
     }
     return CupertinoPageScaffold(
-      backgroundColor: theme.background,
+      backgroundColor: theme.surface,
       child: SafeArea(bottom: false, child: content),
     );
   }
@@ -451,19 +421,13 @@ class _ProfileStatistics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
     return Row(
       children: <Widget>[
         _ProfileStat(
           value: _formatCount(followersCount),
           label: context.l10n.profileFollowers,
         ),
-        Container(
-          width: 1,
-          height: responsive.displayScaled(20),
-          margin: EdgeInsets.symmetric(horizontal: responsive.spacing(16)),
-          color: theme.border,
-        ),
+        SizedBox(width: responsive.displayScaled(28)),
         _ProfileStat(
           value: _formatCount(followingCount),
           label: context.l10n.profileFollowing,
@@ -524,97 +488,6 @@ class _ProfileStat extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _ProfileContentSection extends StatelessWidget {
-  const _ProfileContentSection({
-    required this.content,
-    required this.emptyText,
-    required this.tags,
-  });
-
-  final String content;
-  final String emptyText;
-  final List<String> tags;
-
-  @override
-  Widget build(BuildContext context) {
-    final article = ProfileArticle.fromMarkdown(content);
-    if (content.trim().isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(emptyText, style: AwikiMeTextStyles.cardSubtitle),
-          _TagWrap(tags: tags),
-        ],
-      );
-    }
-    if (article == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          MarkdownBody(data: content, styleSheet: _markdownStyleSheet(context)),
-          _TagWrap(tags: tags),
-        ],
-      );
-    }
-    if (article.body.trim().isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(emptyText, style: AwikiMeTextStyles.cardSubtitle),
-          _TagWrap(tags: tags),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (article.body.isNotEmpty) ...<Widget>[
-          MarkdownBody(
-            data: article.body,
-            styleSheet: _markdownStyleSheet(context),
-          ),
-        ],
-        _TagWrap(tags: tags),
-      ],
-    );
-  }
-
-  MarkdownStyleSheet _markdownStyleSheet(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final bodyStyle = TextStyle(
-      fontSize: responsive.isPhone ? 16 : 13,
-      height: 1.55,
-      color: theme.body,
-    );
-    return MarkdownStyleSheet(
-      p: bodyStyle,
-      strong: bodyStyle.copyWith(fontWeight: FontWeight.w600),
-    );
-  }
-}
-
-class _TagWrap extends StatelessWidget {
-  const _TagWrap({required this.tags});
-
-  final List<String> tags;
-
-  @override
-  Widget build(BuildContext context) {
-    if (tags.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: EdgeInsets.only(top: context.awikiResponsive.spacing(20)),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: tags.map((tag) => AppPill(label: tag)).toList(),
-      ),
     );
   }
 }

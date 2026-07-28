@@ -33,6 +33,7 @@ class GroupListPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(groupProvider);
     final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
     Future<void> refreshGroups() async {
       try {
         await ref.read(groupProvider.notifier).refresh();
@@ -69,31 +70,35 @@ class GroupListPage extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   TopBarActionButton(
+                    key: const Key('group-list-refresh-button'),
                     onTap: refreshGroups,
+                    semanticsLabel: context.l10n.commonRefresh,
                     child: Icon(
                       CupertinoIcons.refresh,
-                      color: theme.title,
-                      size: 20,
+                      color: theme.secondaryText,
+                      size: responsive.iconMd,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: responsive.displayScaled(2)),
                   TopBarActionButton(
                     key: const Key('group-list-create-button'),
                     semanticsLabel: context.l10n.quickActionCreateGroup,
                     onTap: () => showCreateGroupDialog(context, ref),
                     child: Icon(
-                      CupertinoIcons.person_3_fill,
-                      color: theme.primary,
-                      size: 21,
+                      CupertinoIcons.person_2,
+                      color: theme.secondaryText,
+                      size: responsive.iconMd,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: responsive.displayScaled(2)),
                   TopBarActionButton(
+                    key: const Key('group-list-join-button'),
                     onTap: () => _showJoinDialog(context, ref),
+                    semanticsLabel: context.l10n.quickActionJoinGroup,
                     child: Icon(
-                      CupertinoIcons.link,
-                      color: theme.primary,
-                      size: 21,
+                      CupertinoIcons.plus,
+                      color: theme.secondaryText,
+                      size: responsive.iconMd,
                     ),
                   ),
                 ],

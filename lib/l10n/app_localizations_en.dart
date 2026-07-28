@@ -253,6 +253,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tenantCurrent => 'Current';
 
   @override
+  String get tenantDefaultBadge => 'Default configuration';
+
+  @override
   String get tenantName => 'Tenant name';
 
   @override
@@ -277,6 +280,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tenantEditTitle => 'Edit tenant';
 
   @override
+  String get tenantRenameTitle => 'Rename tenant';
+
+  @override
+  String get tenantSaveName => 'Save name';
+
+  @override
   String get tenantSaving => 'Saving...';
 
   @override
@@ -294,6 +303,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get tenantCannotEditWithData =>
       'This tenant already has local data. You can rename it, but the backend URL and DID host cannot be changed.';
+
+  @override
+  String get tenantDidHostImmutable =>
+      'The DID host is bound to this tenant\'s local identities and storage scope. It cannot be changed for an existing tenant; add a new tenant configuration instead.';
+
+  @override
+  String get tenantDataStateCheckFailed =>
+      'The local data state for this tenant could not be confirmed. To protect existing data, only the name can be changed for now. Try again later.';
 
   @override
   String get tenantCannotDeleteDefault =>
@@ -454,9 +471,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellNavAgents => 'Agents';
-
-  @override
-  String get shellNavFriends => 'Friends';
 
   @override
   String get shellNavContacts => 'Contacts';
@@ -635,9 +649,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get friendsGroupsSubtitle => 'All group chats you have joined';
-
-  @override
-  String get friendsMutualEmpty => 'No mutual friends yet.';
 
   @override
   String get friendsFollowing => 'Following';

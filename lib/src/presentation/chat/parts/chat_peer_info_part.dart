@@ -58,7 +58,6 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
   @override
   Widget build(BuildContext context) {
     final targetDid = widget.target.targetDid;
-    final responsive = context.awikiResponsive;
     final maxDialogHeight = MediaQuery.sizeOf(context).height * 0.86;
     final runtimeAgent = _runtimeAgent();
     final title = runtimeAgent == null
@@ -71,7 +70,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final content = Column(
       mainAxisSize: widget.fullPage ? MainAxisSize.max : MainAxisSize.min,
       children: <Widget>[
-        _PeerInfoHeader(title: title, fullPage: widget.fullPage),
+        _PeerInfoHeader(
+          title: title,
+          fullPage: widget.fullPage,
+          showDivider: false,
+        ),
         Flexible(
           child: _buildProfileContent(
             state,
@@ -89,8 +92,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
       );
     }
     return AppDialogScaffold(
-      maxWidth: 620,
-      borderRadius: BorderRadius.circular(responsive.radius(14)),
+      maxWidth: IdentityProfileLayout.dialogMaxWidth,
+      borderRadius: BorderRadius.circular(
+        IdentityProfileLayout.dialogRadius(context),
+      ),
       child: content,
     );
   }
@@ -160,6 +165,8 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         ? ref.watch(friendsProvider).isFollowing(profileDid)
         : false;
     final relationship = isFollowing ? 'following' : state.relationship;
+    final hasPositiveRelationship =
+        relationship == 'following' || relationship == 'friend';
     final runtimeDisplay = runtimeAgent == null
         ? null
         : agentRuntimeDisplay(runtimeAgent);
@@ -172,10 +179,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        responsive.spacing(widget.fullPage ? 14 : 18),
-        responsive.spacing(16),
-        responsive.spacing(widget.fullPage ? 14 : 18),
-        responsive.spacing(20),
+        IdentityProfileLayout.contentInset(context),
+        0,
+        IdentityProfileLayout.contentInset(context),
+        responsive.displayScaled(20),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -183,138 +190,78 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
           SelectionArea(
             child: IdentityProfileCard(
               key: const Key('peer-info-identity-card'),
-              header: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  AvatarBadge(
-                    key: const Key('peer-info-avatar'),
-                    seed: displayName,
-                    size: responsive.isPhone ? 58 : 56,
-                    avatarUri: avatarUri,
+              header: IdentityProfileHeader(
+                displayName: primaryIdentity,
+                displayNameKey: const Key('peer-info-dialog-handle-value'),
+                avatarSeed: displayName,
+                avatarUri: avatarUri,
+                avatarKey: const Key('peer-info-avatar'),
+                handle: secondaryIdentity,
+                handleKey: const Key('peer-info-dialog-display-name'),
+                supportingText: showAgentAlias ? agentAlias : null,
+                supportingTextKey: const Key('peer-info-dialog-agent-alias'),
+                titleTrailing: runtimeAgent == null
+                    ? null
+                    : _AgentRenameIconButton(
+                        agent: runtimeAgent,
+                        onRename: _renameAgent,
+                      ),
+                badges: <Widget>[
+                  IdentityProfileBadge(
+                    label: looksLikeAgent
+                        ? context.l10n.identityTypeAgent
+                        : context.l10n.identityTypeUser,
                   ),
-                  SizedBox(width: responsive.spacing(14)),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                primaryIdentity,
-                                key: const Key('peer-info-dialog-handle-value'),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: AwikiMePalette.inkNeutral,
-                                  fontSize: responsive.isPhone ? 20 : 18,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            if (runtimeAgent != null) ...<Widget>[
-                              SizedBox(width: responsive.spacing(6)),
-                              _AgentRenameIconButton(
-                                agent: runtimeAgent,
-                                onRename: _renameAgent,
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (secondaryIdentity.isNotEmpty) ...<Widget>[
-                          SizedBox(height: responsive.spacing(3)),
-                          Text(
-                            secondaryIdentity,
-                            key: const Key('peer-info-dialog-display-name'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AwikiMePalette.mutedNeutral,
-                              fontSize: responsive.bodySm,
-                              height: 1.25,
-                            ),
-                          ),
-                        ],
-                        if (showAgentAlias) ...<Widget>[
-                          SizedBox(height: responsive.spacing(3)),
-                          Text(
-                            agentAlias,
-                            key: const Key('peer-info-dialog-agent-alias'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: AwikiMePalette.messagePreview,
-                              fontSize: responsive.metaSm,
-                              height: 1.25,
-                            ),
-                          ),
-                        ],
-                        SizedBox(height: responsive.spacing(8)),
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: <Widget>[
-                            SemanticPill(
-                              label: looksLikeAgent
-                                  ? context.l10n.identityTypeAgent
-                                  : context.l10n.identityTypeUser,
-                              tone: SemanticPillTone.identity,
-                            ),
-                            if (profile == null && state.isLoading)
-                              SemanticPill(
-                                label: context.l10n.chatPeerInfoProfileLoading,
-                                tone: SemanticPillTone.muted,
-                              )
-                            else if (profile == null && state.hasError)
-                              SemanticPill(
-                                label:
-                                    context.l10n.chatPeerInfoProfileUnavailable,
-                                tone: SemanticPillTone.muted,
-                              )
-                            else if (!looksLikeAgent && profile != null)
-                              SemanticPill(
-                                label: localizeRelationshipLabel(
-                                  context.l10n,
-                                  relationship,
-                                ),
-                                tone: SemanticPillTone.relationship,
-                              ),
-                            if (runtimeDisplay != null)
-                              SemanticPill(
-                                label: runtimeDisplay.label,
-                                tone: SemanticPillTone.runtime,
-                              )
-                            else if (looksLikeAgent && profile != null)
-                              SemanticPill(
-                                label: localizeRelationshipLabel(
-                                  context.l10n,
-                                  relationship,
-                                ),
-                                tone: SemanticPillTone.relationship,
-                              ),
-                            if (runtimeStatus != null)
-                              SemanticPill(
-                                label: localizeAgentVisualStatus(
-                                  context.l10n,
-                                  runtimeStatus,
-                                ),
-                                tone: SemanticPillTone.status,
-                              ),
-                          ],
-                        ),
-                      ],
+                  if (profile == null && state.isLoading)
+                    IdentityProfileBadge(
+                      label: context.l10n.chatPeerInfoProfileLoading,
+                      tone: IdentityProfileBadgeTone.muted,
+                    )
+                  else if (profile == null && state.hasError)
+                    IdentityProfileBadge(
+                      label: context.l10n.chatPeerInfoProfileUnavailable,
+                      tone: IdentityProfileBadgeTone.outlined,
+                    )
+                  else if (!looksLikeAgent && profile != null)
+                    IdentityProfileBadge(
+                      label: localizeRelationshipLabel(
+                        context.l10n,
+                        relationship,
+                      ),
+                      tone: hasPositiveRelationship
+                          ? IdentityProfileBadgeTone.success
+                          : IdentityProfileBadgeTone.outlined,
                     ),
-                  ),
-                  if (canFollowProfile) ...<Widget>[
-                    SizedBox(width: responsive.spacing(8)),
-                    _ChatFollowButton(
-                      isFollowing: isFollowing,
-                      compact: responsive.isPhone,
-                      onTap: () => _toggleFollow(profileDid),
+                  if (runtimeDisplay != null)
+                    IdentityProfileBadge(
+                      label: runtimeDisplay.label,
+                      tone: IdentityProfileBadgeTone.runtime,
+                    )
+                  else if (looksLikeAgent && profile != null)
+                    IdentityProfileBadge(
+                      label: localizeRelationshipLabel(
+                        context.l10n,
+                        relationship,
+                      ),
+                      tone: hasPositiveRelationship
+                          ? IdentityProfileBadgeTone.success
+                          : IdentityProfileBadgeTone.outlined,
                     ),
-                  ],
+                  if (runtimeStatus != null)
+                    IdentityProfileBadge(
+                      label: localizeAgentVisualStatus(
+                        context.l10n,
+                        runtimeStatus,
+                      ),
+                      tone: IdentityProfileBadgeTone.status,
+                    ),
                 ],
+                trailing: canFollowProfile
+                    ? _ChatFollowButton(
+                        isFollowing: isFollowing,
+                        onTap: () => _toggleFollow(profileDid),
+                      )
+                    : null,
               ),
               metadata: <Widget>[
                 if (profileDid.isNotEmpty)
@@ -332,11 +279,12 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                       buttonKey: const Key('peer-info-dialog-copy-did-button'),
                       textStyle: TextStyle(
                         color: AwikiMePalette.inkNeutral,
-                        fontSize: responsive.bodySm,
+                        fontSize: responsive.bodyMd,
                         height: 1.35,
                       ),
                       buttonSize: responsive.displayScaled(30),
                       iconSize: responsive.displayScaled(14),
+                      showButtonChrome: false,
                     ),
                   ),
                 if (homepageUrl.isNotEmpty)
@@ -351,25 +299,16 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: IdentityProfileLayout.sectionGap(context)),
           SelectionArea(
             child: IdentityDocumentCard(
               key: const Key('peer-info-identity-document'),
               title: context.l10n.chatPeerInfoIdentityCard,
-              child: profileContent.isEmpty
-                  ? _profilePlaceholder(state)
-                  : MarkdownBody(
-                      data: profileContent,
-                      selectable: false,
-                      styleSheet: _chatMarkdownStyleSheet(
-                        context,
-                        TextStyle(
-                          color: AwikiMePalette.inkNeutral,
-                          fontSize: responsive.isPhone ? 15 : 13,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
+              child: IdentityDocumentContent(
+                content: profileContent,
+                emptyText: context.l10n.chatPeerInfoNoProfile,
+                emptyState: _profilePlaceholder(state),
+              ),
             ),
           ),
           if (runtimeAgent != null &&
@@ -542,19 +481,26 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
 }
 
 class _PeerInfoHeader extends StatelessWidget {
-  const _PeerInfoHeader({required this.title, this.fullPage = false});
+  const _PeerInfoHeader({
+    required this.title,
+    this.fullPage = false,
+    this.showDivider = true,
+  });
 
   final String title;
   final bool fullPage;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     if (fullPage) {
       return DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AwikiMePalette.content,
-          border: Border(bottom: BorderSide(color: AwikiMePalette.hairline)),
+          border: showDivider
+              ? const Border(bottom: BorderSide(color: AwikiMePalette.hairline))
+              : null,
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -578,14 +524,16 @@ class _PeerInfoHeader extends StatelessWidget {
     return SizedBox(
       height: responsive.displayScaled(58),
       child: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: AwikiMePalette.hairline)),
+        decoration: BoxDecoration(
+          border: showDivider
+              ? const Border(bottom: BorderSide(color: AwikiMePalette.hairline))
+              : null,
         ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
-            responsive.spacing(18),
+            responsive.displayScaled(20),
             0,
-            responsive.spacing(12),
+            responsive.displayScaled(16),
             0,
           ),
           child: AppDialogHeader(
@@ -827,7 +775,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                               style: AwikiMeTextStyles.cardSubtitle,
                             ),
                           ),
-                          _GroupInfoIconButton(
+                          _ChatNeutralIconButton(
                             key: const Key(
                               'group-info-dialog-add-member-button',
                             ),
@@ -838,7 +786,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                 : null,
                           ),
                           const SizedBox(width: 8),
-                          _GroupInfoIconButton(
+                          _ChatNeutralIconButton(
                             key: const Key(
                               'group-info-dialog-refresh-members-button',
                             ),
@@ -1010,18 +958,20 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
   }
 }
 
-class _GroupInfoIconButton extends StatelessWidget {
-  const _GroupInfoIconButton({
+class _ChatNeutralIconButton extends StatelessWidget {
+  const _ChatNeutralIconButton({
     super.key,
     required this.semanticLabel,
     required this.icon,
     required this.onTap,
+    this.semanticsIdentifier,
     this.isLoading = false,
   });
 
   final String semanticLabel;
   final IconData icon;
   final VoidCallback? onTap;
+  final String? semanticsIdentifier;
   final bool isLoading;
 
   @override
@@ -1032,6 +982,7 @@ class _GroupInfoIconButton extends StatelessWidget {
     return AppIconButton(
       onPressed: isLoading ? null : onTap,
       semanticLabel: semanticLabel,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: semanticLabel,
       isLoading: isLoading,
       size: responsive.scaled(34),
@@ -1083,14 +1034,9 @@ class _MacChatPill extends StatelessWidget {
 }
 
 class _ChatFollowButton extends StatefulWidget {
-  const _ChatFollowButton({
-    required this.isFollowing,
-    required this.onTap,
-    this.compact = false,
-  });
+  const _ChatFollowButton({required this.isFollowing, required this.onTap});
 
   final bool isFollowing;
-  final bool compact;
   final Future<void> Function() onTap;
 
   @override
@@ -1102,22 +1048,18 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
     final label = widget.isFollowing
         ? context.l10n.followContactAlreadyFollowing
         : context.l10n.friendsFollow;
-    final foreground = widget.isFollowing
-        ? AwikiMePalette.mutedNeutral
-        : theme.primaryForeground;
-    final background = widget.isFollowing
-        ? CupertinoColors.white
-        : theme.primary;
-    return AppPressable(
+    return IdentityProfileActionButton(
       key: Key(
         widget.isFollowing ? 'chat-unfollow-button' : 'chat-follow-button',
       ),
-      onTap: _isBusy
+      label: label,
+      emphasized: !widget.isFollowing,
+      isLoading: _isBusy,
+      progressKey: const Key('chat-relationship-action-progress'),
+      onPressed: _isBusy
           ? null
           : () async {
               setState(() => _isBusy = true);
@@ -1129,55 +1071,6 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
                 }
               }
             },
-      semanticLabel: label,
-      tooltip: label,
-      enabled: !_isBusy,
-      scaleOnPress: true,
-      pressedScale: 0.97,
-      borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-      builder: (context, state, child) {
-        return AnimatedOpacity(
-          opacity: state.pressed
-              ? 0.82
-              : state.hovered || state.focused
-              ? 0.92
-              : 1,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          child: child,
-        );
-      },
-      child: Container(
-        height: responsive.displayScaled(30),
-        constraints: BoxConstraints(
-          minWidth: responsive.displayScaled(widget.compact ? 54 : 66),
-        ),
-        alignment: Alignment.center,
-        padding: EdgeInsets.symmetric(horizontal: responsive.displayScaled(10)),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(responsive.displayScaled(8)),
-          border: Border.all(
-            color: widget.isFollowing ? AwikiMePalette.hairline : theme.primary,
-          ),
-        ),
-        child: _isBusy
-            ? CupertinoActivityIndicator(
-                key: const Key('chat-relationship-action-progress'),
-                radius: responsive.displayScaled(7),
-                color: widget.isFollowing ? AwikiMePalette.mutedNeutral : null,
-              )
-            : Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: responsive.displayScaled(12),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-      ),
     );
   }
 }

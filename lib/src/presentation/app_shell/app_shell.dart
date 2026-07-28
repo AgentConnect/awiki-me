@@ -221,6 +221,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           e2eSemantics(
             identifier: 'e2e-authenticated',
             child: AwikiMeWidgets.pageBackground(
+              key: const Key('app-shell-page-background'),
+              color: expanded ? null : context.awikiTheme.surface,
               child: SafeArea(bottom: false, child: content),
             ),
           ),

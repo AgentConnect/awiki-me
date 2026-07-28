@@ -8,6 +8,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/formatters/display_formatters.dart';
+import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import 'profile_page.dart';
@@ -18,20 +19,22 @@ Future<void> showCurrentIdentityDialog(BuildContext context) {
     context,
     (dialogContext) => AppDialogScaffold(
       key: const Key('desktop-current-identity-dialog'),
-      maxWidth: 560,
+      maxWidth: IdentityProfileLayout.dialogMaxWidth,
       maxHeightFraction: 0.88,
+      borderRadius: BorderRadius.circular(
+        IdentityProfileLayout.dialogRadius(dialogContext),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 16, 12),
+            padding: const EdgeInsets.fromLTRB(20, 14, 16, 4),
             child: AppDialogHeader(
               title: dialogContext.l10n.profileMeTitle,
               closeButtonKey: const Key('desktop-current-identity-close'),
               onClose: () => Navigator.of(dialogContext).pop(),
             ),
           ),
-          Container(height: 1, color: dialogContext.awikiTheme.border),
           ConstrainedBox(
             constraints: BoxConstraints(
               maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.72,
@@ -103,8 +106,9 @@ class _ProfileSidebar extends ConsumerWidget {
                   padding: EdgeInsets.all(responsive.spacing(14)),
                   decoration: BoxDecoration(
                     color: theme.subtleSurface,
-                    borderRadius: BorderRadius.circular(responsive.radius(8)),
-                    border: Border.all(color: theme.border),
+                    borderRadius: BorderRadius.circular(
+                      responsive.displayScaled(AwikiMeRadii.md),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

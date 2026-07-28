@@ -22,6 +22,7 @@ import '../presentation/agents/agents_provider.dart';
 import '../presentation/chat/chat_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
+import '../presentation/shared/widgets/app_widgets.dart';
 import 'app_orientation.dart';
 import 'app_locale.dart';
 import 'app_services.dart';
@@ -511,7 +512,7 @@ class _KeyboardDismissScope extends StatelessWidget {
       if (found) {
         return;
       }
-      if (element.widget is EditableText) {
+      if (element.widget is EditableText || element.widget is AppTextField) {
         final renderObject = element.renderObject;
         if (renderObject is RenderBox && renderObject.attached) {
           final localPosition = renderObject.globalToLocal(globalPosition);

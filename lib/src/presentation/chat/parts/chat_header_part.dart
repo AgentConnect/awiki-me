@@ -191,23 +191,13 @@ class _ChatHeaderAddGroupMemberButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    final theme = context.awikiTheme;
-    return AppIconButton(
+    return _ChatNeutralIconButton(
       key: const Key('chat-header-add-group-member-button'),
-      onPressed: onTap,
       semanticLabel: context.l10n.groupAddMembers,
       semanticsIdentifier: 'e2e-chat-header-add-group-member-button',
+      icon: CupertinoIcons.person_add,
+      onTap: onTap,
       isLoading: isLoading,
-      size: responsive.compactControlHeight,
-      borderRadius: BorderRadius.circular(responsive.radius(10)),
-      backgroundColor: theme.primary.withValues(alpha: 0.06),
-      borderColor: theme.primary.withValues(alpha: 0.12),
-      child: Icon(
-        CupertinoIcons.person_add,
-        size: responsive.iconSm,
-        color: theme.primaryDark,
-      ),
     );
   }
 }

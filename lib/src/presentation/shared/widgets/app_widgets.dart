@@ -416,9 +416,15 @@ class AppPressableTile extends StatelessWidget {
     this.borderRadius,
     this.backgroundColor,
     this.selectedBackgroundColor,
+    this.hoverColor,
+    this.pressedColor,
+    this.selectedBoxShadow,
+    this.hoverBoxShadow,
     this.border,
     this.padding,
     this.duration = const Duration(milliseconds: 140),
+    this.interactionExitDuration,
+    this.animateSelection = true,
   });
 
   final Widget child;
@@ -430,14 +436,26 @@ class AppPressableTile extends StatelessWidget {
   final BorderRadius? borderRadius;
   final Color? backgroundColor;
   final Color? selectedBackgroundColor;
+  final Color? hoverColor;
+  final Color? pressedColor;
+  final List<BoxShadow>? selectedBoxShadow;
+  final List<BoxShadow>? hoverBoxShadow;
   final Border? border;
   final EdgeInsets? padding;
   final Duration duration;
+  final Duration? interactionExitDuration;
+  final bool animateSelection;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final enterDuration = disableAnimations ? Duration.zero : duration;
+    final exitDuration = disableAnimations
+        ? Duration.zero
+        : interactionExitDuration ?? duration;
     final radius = borderRadius ?? BorderRadius.circular(responsive.radius(12));
     return AppPressable(
       onTap: onTap,
@@ -452,39 +470,60 @@ class AppPressableTile extends StatelessWidget {
             ? selectedBackgroundColor ?? theme.primary.withValues(alpha: 0.08)
             : backgroundColor ?? CupertinoColors.transparent;
         final overlay = state.pressed
-            ? theme.primary.withValues(alpha: selected ? 0.12 : 0.08)
+            ? pressedColor ??
+                  theme.primary.withValues(alpha: selected ? 0.12 : 0.08)
             : state.hovered
-            ? theme.primary.withValues(alpha: selected ? 0.08 : 0.04)
+            ? hoverColor ??
+                  theme.primary.withValues(alpha: selected ? 0.08 : 0.04)
             : CupertinoColors.transparent;
-        return AnimatedContainer(
-          duration: duration,
-          curve: Curves.easeOutCubic,
-          padding: padding,
-          decoration: BoxDecoration(
-            color: baseColor,
-            borderRadius: radius,
-            border: state.focused
-                ? Border.all(color: theme.primary.withValues(alpha: 0.38))
-                : border,
-          ),
-          child: Stack(
-            fit: StackFit.passthrough,
-            children: <Widget>[
-              child,
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedContainer(
-                    duration: duration,
-                    curve: Curves.easeOutCubic,
+        final hasHoverVisual =
+            state.hovered &&
+            (overlay.a > 0 || (hoverBoxShadow?.isNotEmpty ?? false));
+        final hasInteractionVisual = state.pressed || hasHoverVisual;
+        final decoration = BoxDecoration(
+          color: baseColor,
+          borderRadius: radius,
+          boxShadow: selected ? selectedBoxShadow : null,
+          border: state.focused
+              ? Border.all(color: theme.primary.withValues(alpha: 0.38))
+              : border,
+        );
+        final content = Stack(
+          fit: StackFit.passthrough,
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned.fill(
+              child: IgnorePointer(
+                // Fade the resolved surface; color interpolation from
+                // transparent black produces a dark frame before light fills.
+                child: AnimatedOpacity(
+                  opacity: hasInteractionVisual ? 1 : 0,
+                  duration: hasInteractionVisual ? enterDuration : exitDuration,
+                  curve: Curves.easeOutCubic,
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: overlay,
                       borderRadius: radius,
+                      boxShadow: hasInteractionVisual ? hoverBoxShadow : null,
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+            if (padding == null)
+              child
+            else
+              Padding(padding: padding!, child: child),
+          ],
+        );
+        if (!animateSelection) {
+          return Container(decoration: decoration, child: content);
+        }
+        return AnimatedContainer(
+          duration: enterDuration,
+          curve: Curves.easeOutCubic,
+          decoration: decoration,
+          child: content,
         );
       },
       child: child,
@@ -932,12 +971,13 @@ class _AppDropMenuButton extends StatelessWidget {
   }
 }
 
-class AppTextField extends StatelessWidget {
+class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
     required this.controller,
     required this.label,
     required this.placeholder,
+    this.focusNode,
     this.enabled = true,
     this.multiline = false,
     this.keyboardType,
@@ -952,6 +992,7 @@ class AppTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String placeholder;
+  final FocusNode? focusNode;
   final bool enabled;
   final bool multiline;
   final TextInputType? keyboardType;
@@ -963,21 +1004,39 @@ class AppTextField extends StatelessWidget {
   final String? semanticsLabel;
 
   @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
+
+class _AppTextFieldState extends State<AppTextField> {
+  FocusNode? _internalFocusNode;
+
+  FocusNode get _effectiveFocusNode =>
+      widget.focusNode ??
+      (_internalFocusNode ??= FocusNode(debugLabel: 'AppTextField'));
+
+  @override
+  void dispose() {
+    _internalFocusNode?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     final rawTextField = CupertinoTextField(
-      controller: controller,
-      placeholder: placeholder,
+      controller: widget.controller,
+      focusNode: _effectiveFocusNode,
+      placeholder: widget.placeholder,
       decoration: null,
-      minLines: multiline ? 3 : 1,
-      maxLines: multiline ? 5 : 1,
+      minLines: widget.multiline ? 3 : 1,
+      maxLines: widget.multiline ? 5 : 1,
       textAlign: TextAlign.left,
-      keyboardType: keyboardType,
-      padding: multiline
+      keyboardType: widget.keyboardType,
+      padding: widget.multiline
           ? EdgeInsets.symmetric(vertical: responsive.spacing(10))
           : EdgeInsets.zero,
-      enabled: enabled,
+      enabled: widget.enabled,
       style: AwikiMeTextStyles.inputText.copyWith(
         fontSize: responsive.bodyMd,
         color: theme.title,
@@ -987,53 +1046,59 @@ class AppTextField extends StatelessWidget {
         color: theme.secondaryText,
       ),
     );
-    final identifier = e2eIdentifier(semanticsIdentifier);
+    final identifier = e2eIdentifier(widget.semanticsIdentifier);
     final textField = identifier == null
         ? rawTextField
         : Semantics(
             identifier: identifier,
-            label: semanticsLabel ?? label,
+            label: widget.semanticsLabel ?? widget.label,
             textField: true,
             child: rawTextField,
           );
-    return AppSurface(
-      color: backgroundColor ?? theme.subtleSurface,
-      padding: responsive.scaledInsets(
-        const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (showLabel) ...<Widget>[
-            Text(
-              label,
-              style: AwikiMeTextStyles.fieldLabel.copyWith(
-                fontSize: responsive.metaSm,
-                color: theme.secondaryText,
-              ),
-            ),
-            SizedBox(height: responsive.spacing(6)),
-          ],
-          if (multiline)
-            textField
-          else
-            SizedBox(
-              height: responsive.compactControlHeight,
-              child: Row(
-                children: <Widget>[
-                  if (prefix != null) ...<Widget>[
-                    prefix!,
-                    SizedBox(width: responsive.spacing(10)),
-                  ],
-                  Expanded(child: Center(child: textField)),
-                  if (suffix != null) ...<Widget>[
-                    SizedBox(width: responsive.spacing(8)),
-                    suffix!,
-                  ],
-                ],
-              ),
-            ),
-        ],
+    return TextFieldTapRegion(
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: widget.enabled ? _effectiveFocusNode.requestFocus : null,
+        child: AppSurface(
+          color: widget.backgroundColor ?? theme.subtleSurface,
+          padding: responsive.scaledInsets(
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (widget.showLabel) ...<Widget>[
+                Text(
+                  widget.label,
+                  style: AwikiMeTextStyles.fieldLabel.copyWith(
+                    fontSize: responsive.metaSm,
+                    color: theme.secondaryText,
+                  ),
+                ),
+                SizedBox(height: responsive.spacing(6)),
+              ],
+              if (widget.multiline)
+                textField
+              else
+                SizedBox(
+                  height: responsive.compactControlHeight,
+                  child: Row(
+                    children: <Widget>[
+                      if (widget.prefix != null) ...<Widget>[
+                        widget.prefix!,
+                        SizedBox(width: responsive.spacing(10)),
+                      ],
+                      Expanded(child: Center(child: textField)),
+                      if (widget.suffix != null) ...<Widget>[
+                        SizedBox(width: responsive.spacing(8)),
+                        widget.suffix!,
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

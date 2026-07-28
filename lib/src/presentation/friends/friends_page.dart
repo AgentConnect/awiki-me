@@ -31,8 +31,6 @@ class FriendsPage extends ConsumerWidget {
     this.onFollowingTap,
     this.onFollowersTap,
     this.onContactTap,
-    this.initialRelationshipType = FriendsRelationshipListType.following,
-    this.onRelationshipTypeChanged,
   });
 
   final bool embedded;
@@ -41,8 +39,6 @@ class FriendsPage extends ConsumerWidget {
   final VoidCallback? onFollowingTap;
   final VoidCallback? onFollowersTap;
   final ValueChanged<RelationshipSummary>? onContactTap;
-  final FriendsRelationshipListType initialRelationshipType;
-  final ValueChanged<FriendsRelationshipListType>? onRelationshipTypeChanged;
 
   Future<void> _openContact(
     BuildContext context,
@@ -59,22 +55,10 @@ class FriendsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final responsive = context.awikiResponsive;
-    if (!responsive.supportsTwoPane) {
-      return _CompactFriendsDirectory(
-        embedded: embedded,
-        bottomInset: bottomInset,
-        onGroupTap: onGroupTap,
-        onContactTap: onContactTap,
-        initialRelationshipType: initialRelationshipType,
-        onRelationshipTypeChanged: onRelationshipTypeChanged,
-      );
-    }
-
     final state = ref.watch(friendsProvider);
     final theme = context.awikiTheme;
     final following = state.following.take(_previewLimit).toList();
     final followers = state.followers.take(_previewLimit).toList();
-    final mutualFriends = state.mutualFriends.take(_previewLimit).toList();
     final openGroups =
         onGroupTap ??
         () => AppNavigator.push(context, (_) => const GroupListPage());
@@ -86,26 +70,6 @@ class FriendsPage extends ConsumerWidget {
           subtitle: context.l10n.friendsGroupsSubtitle,
           onTap: openGroups,
         ),
-      ),
-      _FriendsSection(
-        title: context.l10n.shellNavFriends,
-        children: mutualFriends.isEmpty
-            ? <Widget>[
-                _FriendsPreviewStatus(message: context.l10n.friendsMutualEmpty),
-              ]
-            : mutualFriends
-                  .map(
-                    (item) => _FriendRow.contact(
-                      rowKey: Key('friend-row:${item.did.trim()}'),
-                      titleKey: Key('friend-row-title:${item.did.trim()}'),
-                      seed: _displayName(ref, item),
-                      title: _displayName(ref, item),
-                      subtitle: _handleLabel(item.handle),
-                      avatarUri: _avatarUri(ref, item),
-                      onTap: () => _openContact(context, item),
-                    ),
-                  )
-                  .toList(),
       ),
       _FriendsSection(
         title: context.l10n.friendsFollowing,
@@ -207,10 +171,20 @@ class FriendsPage extends ConsumerWidget {
     }
 
     final list = Padding(
-      padding: EdgeInsets.only(bottom: embedded ? bottomInset : 120),
+      padding: embedded
+          ? EdgeInsets.only(bottom: bottomInset)
+          : EdgeInsets.zero,
       child: DecoratedBox(
-        decoration: BoxDecoration(color: theme.background),
-        child: ListView(children: sectionWidgets),
+        key: const Key('friends-list-surface'),
+        decoration: BoxDecoration(
+          color: responsive.isCompact ? theme.surface : theme.background,
+        ),
+        child: ListView(
+          padding: embedded
+              ? EdgeInsets.zero
+              : EdgeInsets.only(bottom: bottomInset),
+          children: sectionWidgets,
+        ),
       ),
     );
 
@@ -244,6 +218,7 @@ class FriendsPage extends ConsumerWidget {
     }
 
     final content = AwikiMeShellTabPage(
+      key: const Key('friends-page-surface'),
       title: context.l10n.friendsTitle,
       onQuickActionsTap: (anchorContext) => showCommonQuickActionsMenu(
         anchorContext,
@@ -254,6 +229,7 @@ class FriendsPage extends ConsumerWidget {
     );
     return AwikiAdaptiveScaffold(
       maxWidth: responsive.supportsTwoPane ? double.infinity : 920,
+      padding: responsive.isCompact ? EdgeInsets.zero : null,
       child: content,
     );
   }
@@ -271,96 +247,6 @@ class FriendsPage extends ConsumerWidget {
       return;
     }
     AppNavigator.push(context, (_) => RelationshipListPage(type: type));
-  }
-}
-
-class _CompactFriendsDirectory extends ConsumerWidget {
-  const _CompactFriendsDirectory({
-    required this.embedded,
-    required this.bottomInset,
-    required this.onGroupTap,
-    required this.onContactTap,
-    required this.initialRelationshipType,
-    required this.onRelationshipTypeChanged,
-  });
-
-  final bool embedded;
-  final double bottomInset;
-  final VoidCallback? onGroupTap;
-  final ValueChanged<RelationshipSummary>? onContactTap;
-  final FriendsRelationshipListType initialRelationshipType;
-  final ValueChanged<FriendsRelationshipListType>? onRelationshipTypeChanged;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = context.awikiTheme;
-    final state = ref.watch(friendsProvider);
-    final mutualFriends = state.mutualFriends.take(_previewLimit).toList();
-    final openGroups =
-        onGroupTap ??
-        () => AppNavigator.push(context, (_) => const GroupListPage());
-    return AwikiMeShellTabPage(
-      title: context.l10n.friendsTitle,
-      onQuickActionsTap: (anchorContext) =>
-          showCommonQuickActionsMenu(anchorContext, ref),
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: theme.background),
-        child: Column(
-          children: <Widget>[
-            _FriendRow.group(
-              title: context.l10n.friendsGroups,
-              subtitle: context.l10n.friendsGroupsSubtitle,
-              onTap: openGroups,
-            ),
-            _FriendsSection(
-              title: context.l10n.shellNavFriends,
-              children: mutualFriends.isEmpty
-                  ? <Widget>[
-                      _FriendsPreviewStatus(
-                        message: context.l10n.friendsMutualEmpty,
-                      ),
-                    ]
-                  : mutualFriends
-                        .map(
-                          (item) => _FriendRow.contact(
-                            rowKey: Key(
-                              'compact-friend-row:${item.did.trim()}',
-                            ),
-                            titleKey: Key(
-                              'compact-friend-row-title:${item.did.trim()}',
-                            ),
-                            seed: _displayName(ref, item),
-                            title: _displayName(ref, item),
-                            subtitle: _handleLabel(item.handle),
-                            avatarUri: _avatarUri(ref, item),
-                            onTap: () {
-                              if (onContactTap case final callback?) {
-                                callback(item);
-                                return;
-                              }
-                              AppNavigator.push(
-                                context,
-                                (_) => PeerProfilePage(did: item.did),
-                              );
-                            },
-                          ),
-                        )
-                        .toList(),
-            ),
-            Expanded(
-              child: RelationshipDirectoryPage(
-                key: const Key('compact-relationship-directory'),
-                initialType: initialRelationshipType,
-                embedded: true,
-                bottomInset: embedded ? bottomInset : 28,
-                onContactTap: onContactTap,
-                onTypeChanged: onRelationshipTypeChanged,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -687,223 +573,6 @@ class _RelationshipActionButtonInnerState
   }
 }
 
-class RelationshipDirectoryPage extends StatefulWidget {
-  const RelationshipDirectoryPage({
-    super.key,
-    this.initialType = FriendsRelationshipListType.following,
-    this.embedded = false,
-    this.bottomInset = 28,
-    this.onContactTap,
-    this.onTypeChanged,
-  });
-
-  final FriendsRelationshipListType initialType;
-  final bool embedded;
-  final double bottomInset;
-  final ValueChanged<RelationshipSummary>? onContactTap;
-  final ValueChanged<FriendsRelationshipListType>? onTypeChanged;
-
-  @override
-  State<RelationshipDirectoryPage> createState() =>
-      _RelationshipDirectoryPageState();
-}
-
-class _RelationshipDirectoryPageState extends State<RelationshipDirectoryPage> {
-  late FriendsRelationshipListType _selectedType = widget.initialType;
-
-  @override
-  void didUpdateWidget(RelationshipDirectoryPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialType != widget.initialType &&
-        widget.initialType != _selectedType) {
-      _selectedType = widget.initialType;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    final content = Column(
-      children: <Widget>[
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            responsive.tabContentHorizontalPadding,
-            responsive.spacing(12),
-            responsive.tabContentHorizontalPadding,
-            responsive.spacing(8),
-          ),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: _RelationshipDirectorySegment(
-                  selectedType: _selectedType,
-                  onChanged: (value) {
-                    if (_selectedType == value) {
-                      return;
-                    }
-                    setState(() => _selectedType = value);
-                    widget.onTypeChanged?.call(value);
-                  },
-                ),
-              ),
-              SizedBox(width: responsive.spacing(8)),
-              TopBarActionButton(
-                onTap: _refreshSelectedList,
-                semanticsLabel: context.l10n.commonRefresh,
-                child: Icon(
-                  CupertinoIcons.refresh,
-                  color: theme.secondaryText,
-                  size: responsive.iconMd,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: IndexedStack(
-            index: _selectedType == FriendsRelationshipListType.following
-                ? 0
-                : 1,
-            children: <Widget>[
-              RelationshipListPage(
-                key: const PageStorageKey<String>(
-                  'relationship-directory-following',
-                ),
-                type: FriendsRelationshipListType.following,
-                embedded: true,
-                showTopBar: false,
-                bottomInset: widget.bottomInset,
-                onContactTap: widget.onContactTap,
-              ),
-              RelationshipListPage(
-                key: const PageStorageKey<String>(
-                  'relationship-directory-followers',
-                ),
-                type: FriendsRelationshipListType.followers,
-                embedded: true,
-                showTopBar: false,
-                bottomInset: widget.bottomInset,
-                onContactTap: widget.onContactTap,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    if (widget.embedded) {
-      return DecoratedBox(
-        decoration: BoxDecoration(color: theme.background),
-        child: content,
-      );
-    }
-    return CupertinoPageScaffold(
-      backgroundColor: theme.background,
-      child: SafeArea(child: content),
-    );
-  }
-
-  void _refreshSelectedList() {
-    // The list owns pagination and error state; selecting its typed provider
-    // keeps refresh behavior identical in compact and expanded layouts.
-    final container = ProviderScope.containerOf(context, listen: false);
-    container.read(relationshipListProvider(_selectedType).notifier).refresh();
-  }
-}
-
-class _RelationshipDirectorySegment extends StatelessWidget {
-  const _RelationshipDirectorySegment({
-    required this.selectedType,
-    required this.onChanged,
-  });
-
-  final FriendsRelationshipListType selectedType;
-  final ValueChanged<FriendsRelationshipListType> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    return Container(
-      key: const Key('relationship-directory-tabs'),
-      height: responsive.compactControlHeight,
-      padding: EdgeInsets.all(responsive.displayScaled(3)),
-      decoration: BoxDecoration(
-        color: theme.subtleSurface,
-        borderRadius: BorderRadius.circular(responsive.radius(8)),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _RelationshipDirectoryTab(
-              key: const Key('relationship-tab-following'),
-              label: context.l10n.friendsFollowing,
-              selected: selectedType == FriendsRelationshipListType.following,
-              onTap: () => onChanged(FriendsRelationshipListType.following),
-            ),
-          ),
-          Expanded(
-            child: _RelationshipDirectoryTab(
-              key: const Key('relationship-tab-followers'),
-              label: context.l10n.friendsFollowers,
-              selected: selectedType == FriendsRelationshipListType.followers,
-              onTap: () => onChanged(FriendsRelationshipListType.followers),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RelationshipDirectoryTab extends StatelessWidget {
-  const _RelationshipDirectoryTab({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      selected: selected,
-      borderRadius: BorderRadius.circular(responsive.radius(6)),
-      scaleOnPress: true,
-      pressedScale: 0.98,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeOutCubic,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? theme.surface : CupertinoColors.transparent,
-          borderRadius: BorderRadius.circular(responsive.radius(6)),
-          border: selected ? Border.all(color: theme.border) : null,
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: selected ? theme.primary : theme.secondaryText,
-            fontSize: responsive.bodySm,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class RelationshipListPage extends ConsumerStatefulWidget {
   const RelationshipListPage({
     super.key,
@@ -978,7 +647,9 @@ class _RelationshipListPageState extends ConsumerState<RelationshipListPage> {
                     leading: widget.embedded
                         ? const SizedBox.shrink()
                         : TopBarActionButton(
+                            key: const Key('relationship-list-back-button'),
                             onTap: () => Navigator.of(context).pop(),
+                            semanticsLabel: context.l10n.commonBack,
                             child: AwikiAssetIcon(
                               assetName: 'assets/icons/icon_left.svg',
                               color: theme.primaryDark,

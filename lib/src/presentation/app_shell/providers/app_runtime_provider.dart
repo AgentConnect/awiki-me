@@ -24,6 +24,7 @@ import '../../agents/agent_inbox_provider.dart';
 import '../../agents/agents_provider.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
+import '../../friends/friends_navigation_provider.dart';
 import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
@@ -152,6 +153,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         _clearAuthenticatedUiState();
       }
       ref.read(selectedConversationProvider.notifier).clearSelection();
+      ref.read(friendsWorkspaceNavigationProvider.notifier).reset();
       final initialized = await _enqueueE2eeInitialization(
         lease,
         session,
@@ -354,6 +356,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         await ref.read(conversationListProvider.notifier).clear();
         ref.read(chatThreadsProvider.notifier).clear();
         ref.read(friendsProvider.notifier).clear();
+        ref.read(friendsWorkspaceNavigationProvider.notifier).reset();
         ref.read(peerDisplayProfileProvider.notifier).clear();
         ref.invalidate(peerProfileProvider);
         ref.read(groupProvider.notifier).clear();
@@ -379,6 +382,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ref.read(conversationListProvider.notifier).clearLocal();
     ref.read(chatThreadsProvider.notifier).clear();
     ref.read(friendsProvider.notifier).clear();
+    ref.read(friendsWorkspaceNavigationProvider.notifier).reset();
     ref.read(peerDisplayProfileProvider.notifier).clear();
     ref.invalidate(peerProfileProvider);
     ref.read(groupProvider.notifier).clear();

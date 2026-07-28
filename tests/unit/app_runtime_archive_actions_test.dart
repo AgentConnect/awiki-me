@@ -3,6 +3,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/friends/friends_navigation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -89,6 +90,9 @@ void main() {
       gateway.localCredentials = const <SessionIdentity>[session];
       container.read(sessionProvider.notifier).setSession(session);
       container.read(sessionProvider.notifier).setLocalCredentials([session]);
+      container
+          .read(friendsWorkspaceNavigationProvider.notifier)
+          .showProfileDid('did:test:stale-contact');
 
       await container
           .read(appRuntimeProvider.notifier)
@@ -99,6 +103,11 @@ void main() {
       expect(container.read(sessionProvider).session, isNull);
       expect(container.read(sessionProvider).localCredentials, isEmpty);
       expect(container.read(uiFeedbackProvider), isNull);
+      final friendsNavigation = container.read(
+        friendsWorkspaceNavigationProvider,
+      );
+      expect(friendsNavigation.detail, FriendsWorkspaceDetail.overview);
+      expect(friendsNavigation.selectedDid, isNull);
     });
 
     test('重新识别本地凭证会刷新列表并写入反馈', () async {

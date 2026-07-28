@@ -894,33 +894,9 @@ class _MessageAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!isMine) {
-      return KeyedSubtree(
-        key: Key('chat-message-avatar:$messageId:peer'),
-        child: AvatarBadge(seed: label, size: size, avatarUri: avatarUri),
-      );
-    }
-    final normalized = label.trim();
-    final avatarLabel = normalized.isEmpty
-        ? '?'
-        : normalized.substring(0, 1).toUpperCase();
-    return Container(
-      key: Key('chat-message-avatar:$messageId:mine'),
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: context.awikiTheme.primary,
-        borderRadius: BorderRadius.circular(size / 2),
-      ),
-      child: Text(
-        avatarLabel,
-        style: TextStyle(
-          color: context.awikiTheme.surface,
-          fontSize: size / 2.6,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+    return KeyedSubtree(
+      key: Key('chat-message-avatar:$messageId:${isMine ? 'mine' : 'peer'}'),
+      child: AvatarBadge(seed: label, size: size, avatarUri: avatarUri),
     );
   }
 }
@@ -980,13 +956,27 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 
+  ({double fontSize, double bottomSpacing}) _senderLabelMetrics(
+    BuildContext context, {
+    required bool macStyle,
+  }) {
+    final responsive = context.awikiResponsive;
+    return (
+      fontSize: macStyle ? responsive.displayScaled(11.5) : responsive.metaSm,
+      bottomSpacing: macStyle
+          ? responsive.displayScaled(5)
+          : responsive.spacing(5),
+    );
+  }
+
   Widget _buildSenderLabel(BuildContext context, {required bool macStyle}) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    final metrics = _senderLabelMetrics(context, macStyle: macStyle);
     return Padding(
       padding: EdgeInsets.only(
         left: macStyle ? responsive.displayScaled(2) : responsive.spacing(4),
-        bottom: macStyle ? responsive.displayScaled(5) : responsive.spacing(5),
+        bottom: metrics.bottomSpacing,
       ),
       child: Text(
         senderLabel,
@@ -995,13 +985,28 @@ class _MessageBubble extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText,
-          fontSize: macStyle
-              ? responsive.displayScaled(11.5)
-              : responsive.metaSm,
+          fontSize: metrics.fontSize,
           fontWeight: FontWeight.w500,
           height: 1.2,
         ),
       ),
+    );
+  }
+
+  Widget _alignAvatarWithBubbleTop(
+    BuildContext context, {
+    required bool macStyle,
+    required Widget child,
+  }) {
+    if (!showSenderLabel) {
+      return child;
+    }
+    final metrics = _senderLabelMetrics(context, macStyle: macStyle);
+    return Padding(
+      padding: EdgeInsets.only(
+        top: metrics.fontSize * 1.2 + metrics.bottomSpacing,
+      ),
+      child: child,
     );
   }
 
@@ -1140,18 +1145,22 @@ class _MessageBubble extends StatelessWidget {
         mainAxisAlignment: isMine
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           if (!isMine) ...<Widget>[
-            _withSenderInfoTap(
-              context: context,
-              borderRadius: responsive.displayScaled(15),
-              child: _MessageAvatar(
-                messageId: message.localId,
-                label: senderLabel,
-                avatarUri: senderAvatarUri,
-                isMine: false,
-                size: responsive.displayScaled(30),
+            _alignAvatarWithBubbleTop(
+              context,
+              macStyle: true,
+              child: _withSenderInfoTap(
+                context: context,
+                borderRadius: responsive.displayScaled(15),
+                child: _MessageAvatar(
+                  messageId: message.localId,
+                  label: senderLabel,
+                  avatarUri: senderAvatarUri,
+                  isMine: false,
+                  size: responsive.displayScaled(30),
+                ),
               ),
             ),
             SizedBox(width: responsive.displayScaled(8)),
@@ -1159,14 +1168,18 @@ class _MessageBubble extends StatelessWidget {
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
             SizedBox(width: responsive.displayScaled(8)),
-            _withSenderInfoTap(
-              context: context,
-              borderRadius: responsive.displayScaled(15),
-              child: _MessageAvatar(
-                messageId: message.localId,
-                label: senderLabel,
-                isMine: true,
-                size: responsive.displayScaled(30),
+            _alignAvatarWithBubbleTop(
+              context,
+              macStyle: true,
+              child: _withSenderInfoTap(
+                context: context,
+                borderRadius: responsive.displayScaled(15),
+                child: _MessageAvatar(
+                  messageId: message.localId,
+                  label: senderLabel,
+                  isMine: true,
+                  size: responsive.displayScaled(30),
+                ),
               ),
             ),
           ],
@@ -1290,18 +1303,22 @@ class _MessageBubble extends StatelessWidget {
         mainAxisAlignment: isMine
             ? MainAxisAlignment.end
             : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           if (!isMine) ...<Widget>[
-            _withSenderInfoTap(
-              context: context,
-              borderRadius: responsive.displayScaled(16),
-              child: _MessageAvatar(
-                messageId: message.localId,
-                label: senderLabel,
-                avatarUri: senderAvatarUri,
-                isMine: false,
-                size: responsive.displayScaled(32),
+            _alignAvatarWithBubbleTop(
+              context,
+              macStyle: false,
+              child: _withSenderInfoTap(
+                context: context,
+                borderRadius: responsive.displayScaled(16),
+                child: _MessageAvatar(
+                  messageId: message.localId,
+                  label: senderLabel,
+                  avatarUri: senderAvatarUri,
+                  isMine: false,
+                  size: responsive.displayScaled(32),
+                ),
               ),
             ),
             SizedBox(width: responsive.spacing(8)),
@@ -1309,14 +1326,18 @@ class _MessageBubble extends StatelessWidget {
           Flexible(child: bubble),
           if (isMine) ...<Widget>[
             SizedBox(width: responsive.spacing(8)),
-            _withSenderInfoTap(
-              context: context,
-              borderRadius: responsive.displayScaled(16),
-              child: _MessageAvatar(
-                messageId: message.localId,
-                label: senderLabel,
-                isMine: true,
-                size: responsive.displayScaled(32),
+            _alignAvatarWithBubbleTop(
+              context,
+              macStyle: false,
+              child: _withSenderInfoTap(
+                context: context,
+                borderRadius: responsive.displayScaled(16),
+                child: _MessageAvatar(
+                  messageId: message.localId,
+                  label: senderLabel,
+                  isMine: true,
+                  size: responsive.displayScaled(32),
+                ),
               ),
             ),
           ],

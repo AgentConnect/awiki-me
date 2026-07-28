@@ -41,20 +41,6 @@ class FriendsState {
 
   bool get hasRefreshError => followersError != null || followingError != null;
 
-  List<RelationshipSummary> get mutualFriends {
-    final followerDids = followers
-        .map((item) => _normalizeIdentity(item.did))
-        .where((did) => did.isNotEmpty)
-        .toSet();
-    return following
-        .where(
-          (item) =>
-              followerDids.contains(_normalizeIdentity(item.did)) &&
-              isFollowing(item.did),
-        )
-        .toList(growable: false);
-  }
-
   bool isFollowing(String did) {
     final target = _normalizeIdentity(did);
     if (target.isEmpty || notFollowingAliases.contains(target)) {

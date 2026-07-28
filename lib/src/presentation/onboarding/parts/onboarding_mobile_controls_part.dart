@@ -2,13 +2,13 @@ part of '../onboarding_page.dart';
 
 class _CompactOnboardingCard extends StatelessWidget {
   const _CompactOnboardingCard({
-    required this.entryMode,
-    required this.onModeChanged,
+    required this.onboarding,
+    required this.onAuthModeChanged,
     required this.child,
   });
 
-  final String entryMode;
-  final ValueChanged<String> onModeChanged;
+  final OnboardingState onboarding;
+  final ValueChanged<String> onAuthModeChanged;
   final Widget child;
 
   @override
@@ -29,15 +29,14 @@ class _CompactOnboardingCard extends StatelessWidget {
         children: <Widget>[
           const _CompactOnboardingBrand(),
           SizedBox(height: responsive.spacing(20)),
-          _SegmentedPill(
-            value: entryMode,
-            options: <String, String>{
-              'register': context.l10n.onboardingRegister,
-              'login': context.l10n.onboardingLogin,
-            },
-            onChanged: onModeChanged,
-          ),
-          SizedBox(height: responsive.spacing(22)),
+          if (onboarding.hasRegistrationMethods) ...<Widget>[
+            _AuthModeToggle(
+              value: onboarding.authMode,
+              methods: onboarding.registrationMethods,
+              onChanged: onAuthModeChanged,
+            ),
+            SizedBox(height: responsive.spacing(22)),
+          ],
           child,
         ],
       ),
@@ -96,59 +95,6 @@ class _CompactOnboardingBrand extends StatelessWidget {
   }
 }
 
-class _SegmentedPill extends StatelessWidget {
-  const _SegmentedPill({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final String value;
-  final Map<String, String> options;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return Align(
-      alignment: Alignment.center,
-      child: Container(
-        key: const Key('onboarding-entry-tabs'),
-        constraints: BoxConstraints(
-          maxWidth: responsive.isPhone ? 286 : responsive.displayScaled(310),
-        ),
-        padding: responsive.scaledInsets(const EdgeInsets.all(4)),
-        decoration: BoxDecoration(
-          color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.48),
-          borderRadius: BorderRadius.circular(responsive.radius(12)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: options.entries
-              .map(
-                (entry) => Flexible(
-                  fit: FlexFit.loose,
-                  child: _CompactSegmentOption(
-                    label: entry.value,
-                    selected: value == entry.key,
-                    minWidth: responsive.isPhone
-                        ? responsive.displayScaled(124)
-                        : responsive.displayScaled(128),
-                    verticalPadding: responsive.spacing(11),
-                    fontSize: responsive.bodyMd,
-                    selectedColor: AwikiMePalette.actionBlue,
-                    unselectedColor: AwikiMePalette.actionMuted,
-                    onTap: () => onChanged(entry.key),
-                  ),
-                ),
-              )
-              .toList(),
-        ),
-      ),
-    );
-  }
-}
-
 class _AuthModeToggle extends StatelessWidget {
   const _AuthModeToggle({
     required this.value,
@@ -164,32 +110,44 @@ class _AuthModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        key: const Key('onboarding-auth-mode-tabs'),
-        padding: responsive.scaledInsets(const EdgeInsets.all(4)),
-        decoration: BoxDecoration(
-          color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.34),
-          borderRadius: BorderRadius.circular(responsive.radius(12)),
+      alignment: Alignment.center,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: responsive.isPhone
+              ? responsive.displayScaled(286)
+              : responsive.displayScaled(310),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: methods
-              .map(
-                (method) => Padding(
-                  padding: EdgeInsets.only(
-                    right: method == methods.last ? 0 : responsive.spacing(4),
+        child: SizedBox(
+          width: double.infinity,
+          child: Container(
+            key: const Key('onboarding-auth-mode-tabs'),
+            padding: responsive.scaledInsets(const EdgeInsets.all(4)),
+            decoration: BoxDecoration(
+              color: AwikiMePalette.actionBlueBorder.withValues(alpha: 0.34),
+              borderRadius: BorderRadius.circular(responsive.radius(12)),
+            ),
+            child: Row(
+              children: <Widget>[
+                for (
+                  var index = 0;
+                  index < methods.length;
+                  index++
+                ) ...<Widget>[
+                  Expanded(
+                    child: _AuthModeOption(
+                      key: Key('auth-mode-${methods[index].id.wireName}'),
+                      selected: value == methods[index].id.wireName,
+                      assetName: _authModeAssetName(methods[index].id),
+                      label: _authModeLabel(context, methods[index].id),
+                      onTap: () => onChanged(methods[index].id.wireName),
+                    ),
                   ),
-                  child: _AuthModeOption(
-                    key: Key('auth-mode-${method.id.wireName}'),
-                    selected: value == method.id.wireName,
-                    assetName: _authModeAssetName(method.id),
-                    label: _authModeLabel(context, method.id),
-                    onTap: () => onChanged(method.id.wireName),
-                  ),
-                ),
-              )
-              .toList(),
+                  if (index != methods.length - 1)
+                    SizedBox(width: responsive.spacing(4)),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -244,11 +202,6 @@ class _AuthModeOption extends StatelessWidget {
       borderRadius: BorderRadius.circular(responsive.radius(9)),
       child: Container(
         height: buttonHeight,
-        constraints: BoxConstraints(
-          minWidth: responsive.isPhone
-              ? responsive.displayScaled(96)
-              : responsive.displayScaled(96),
-        ),
         padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
         decoration: BoxDecoration(
           color: selected ? CupertinoColors.white : CupertinoColors.transparent,
@@ -283,83 +236,6 @@ class _AuthModeOption extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactSegmentOption extends StatelessWidget {
-  const _CompactSegmentOption({
-    required this.label,
-    required this.selected,
-    required this.minWidth,
-    required this.verticalPadding,
-    required this.fontSize,
-    required this.selectedColor,
-    required this.unselectedColor,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final double minWidth;
-  final double verticalPadding;
-  final double fontSize;
-  final Color selectedColor;
-  final Color unselectedColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final responsive = context.awikiResponsive;
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      selected: selected,
-      scaleOnPress: true,
-      pressedScale: 0.98,
-      borderRadius: BorderRadius.circular(responsive.radius(9)),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        constraints: BoxConstraints(minWidth: minWidth),
-        padding: EdgeInsets.symmetric(
-          horizontal: responsive.spacing(14),
-          vertical: verticalPadding,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? CupertinoColors.white : CupertinoColors.transparent,
-          borderRadius: BorderRadius.circular(responsive.radius(9)),
-          boxShadow: selected
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: CupertinoColors.black.withValues(alpha: 0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            strutStyle: StrutStyle(
-              fontSize: fontSize,
-              height: 1,
-              forceStrutHeight: true,
-            ),
-            style: TextStyle(
-              fontSize: fontSize,
-              height: 1,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              color: selected ? selectedColor : unselectedColor,
-            ),
-          ),
         ),
       ),
     );

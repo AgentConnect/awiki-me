@@ -21,7 +21,6 @@ import 'onboarding_provider.dart';
 
 part 'parts/onboarding_mac_part.dart';
 part 'parts/onboarding_mobile_controls_part.dart';
-part 'parts/onboarding_credentials_part.dart';
 part 'parts/onboarding_tenant_part.dart';
 
 class OnboardingPage extends ConsumerStatefulWidget {
@@ -40,12 +39,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   final emailController = TextEditingController();
   final handleController = TextEditingController();
   final _mobileScrollController = ScrollController();
-  ProviderSubscription<AppRuntimeState>? _runtimeSubscription;
-  ProviderSubscription<SessionState>? _sessionSubscription;
   ProviderSubscription<AppTenantProfile>? _tenantSubscription;
   Timer? _e2eOtpRetryTimer;
   int _e2eOtpAttempts = 0;
-  bool _autoEntryModeEnabled = true;
 
   String get _normalizedPhone => phoneController.text.trim();
   String get _normalizedHandle => handleController.text.trim();
@@ -55,18 +51,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.initState();
     emailController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetEmailActivationTarget);
-    _runtimeSubscription = ref.listenManual<AppRuntimeState>(
-      appRuntimeProvider,
-      (_, next) {
-        _resolveEntryModeFromLocalCredentials();
-      },
-    );
-    _sessionSubscription = ref.listenManual<SessionState>(sessionProvider, (
-      _,
-      next,
-    ) {
-      _resolveEntryModeFromLocalCredentials();
-    });
     _tenantSubscription = ref.listenManual<AppTenantProfile>(
       activeAppTenantProvider,
       (previous, next) {
@@ -83,15 +67,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         return;
       }
       unawaited(ref.read(onboardingProvider.notifier).loadServerInfo());
-      _resolveEntryModeFromLocalCredentials();
     });
   }
 
   @override
   void dispose() {
     _stopE2eOtpRequestLoop();
-    _runtimeSubscription?.close();
-    _sessionSubscription?.close();
     _tenantSubscription?.close();
     emailController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetEmailActivationTarget);
@@ -103,29 +84,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     super.dispose();
   }
 
-  void _resolveEntryModeFromLocalCredentials() {
-    if (!_autoEntryModeEnabled || !mounted) {
-      return;
-    }
-    final runtime = ref.read(appRuntimeProvider);
-    final credentials = ref.read(sessionProvider).localCredentials;
-    if (!runtime.isInitialized && credentials.isEmpty) {
-      return;
-    }
-    if (context.awikiResponsive.usesDesktopLayout) {
-      ref.read(onboardingProvider.notifier).setEntryMode('register');
-      return;
-    }
-    ref
-        .read(onboardingProvider.notifier)
-        .setEntryModeFromLocalCredentials(credentials);
-  }
-
-  void _setEntryModeManually(String value) {
-    _autoEntryModeEnabled = false;
-    ref.read(onboardingProvider.notifier).setEntryMode(value);
-  }
-
   @override
   Widget build(BuildContext context) {
     final onboarding = ref.watch(onboardingProvider);
@@ -135,18 +93,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
-    final automaticEntryMode = responsive.usesDesktopLayout
-        ? 'register'
-        : credentials.isEmpty
-        ? 'register'
-        : 'login';
-    if (_autoEntryModeEnabled && onboarding.entryMode != automaticEntryMode) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _resolveEntryModeFromLocalCredentials();
-        }
-      });
-    }
     if (responsive.usesDesktopLayout) {
       return _MacOnboardingScaffold(
         onboarding: onboarding,
@@ -172,56 +118,105 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
     return CupertinoPageScaffold(
       backgroundColor: theme.surface,
-      child: AwikiAdaptiveScaffold(
-        alignment: responsive.isPhone ? Alignment.topCenter : Alignment.center,
-        includeBottomSafeArea: true,
-        maxWidth: 440,
-        padding: EdgeInsets.fromLTRB(
-          responsive.spacing(18),
-          responsive.spacing(24),
-          responsive.spacing(18),
-          responsive.spacing(20),
-        ),
-        child: ListView(
-          controller: _mobileScrollController,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
           children: <Widget>[
-            _CompactOnboardingCard(
-              entryMode: onboarding.entryMode,
-              onModeChanged: _setEntryModeManually,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: onboarding.entryMode == 'login'
-                    ? <Widget>[
-                        _LocalCredentialsCard(
-                          credentials: credentials,
-                          onLogin: runtime.loginWithLocalCredential,
-                          embedded: true,
-                        ),
-                        SizedBox(height: responsive.spacing(14)),
-                        _LoginToolRow(
-                          refreshLabel:
-                              context.l10n.onboardingRefreshCredentials,
-                          onRefresh: runtime.refreshLocalCredentials,
-                          embedded: true,
-                        ),
-                      ]
-                    : _buildMobileRegisterWidgets(
-                        context: context,
-                        onboarding: onboarding,
-                        responsive: responsive,
-                        theme: theme,
-                      ),
+            Expanded(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsive.spacing(18),
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final verticalPadding = responsive.spacing(16);
+                        final minimumGroupHeight =
+                            constraints.maxHeight > verticalPadding * 2
+                            ? constraints.maxHeight - verticalPadding * 2
+                            : 0.0;
+                        return ListView(
+                          key: const Key('onboarding-compact-scroll-view'),
+                          controller: _mobileScrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.symmetric(
+                            vertical: verticalPadding,
+                          ),
+                          children: <Widget>[
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minHeight: minimumGroupHeight,
+                              ),
+                              child: Align(
+                                alignment: Alignment.center,
+                                child: _CompactOnboardingCard(
+                                  onboarding: onboarding,
+                                  onAuthModeChanged: ref
+                                      .read(onboardingProvider.notifier)
+                                      .setAuthMode,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: <Widget>[
+                                      ..._buildMobileRegisterWidgets(
+                                        context: context,
+                                        onboarding: onboarding,
+                                        responsive: responsive,
+                                        theme: theme,
+                                      ),
+                                      if (credentials.isNotEmpty) ...<Widget>[
+                                        SizedBox(
+                                          height: responsive.spacing(22),
+                                        ),
+                                        _OnboardingLocalIdentitySection(
+                                          credentials: credentials,
+                                          onLogin:
+                                              runtime.loginWithLocalCredential,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
-            SizedBox(height: responsive.spacing(20)),
-            Align(
-              alignment: Alignment.centerRight,
-              child: _OnboardingUtilityBar(
-                tenant: activeTenant,
-                localeMode: localeMode,
-                fillAvailableWidth: true,
-                onLanguagePressed: _showLanguageSheet,
-                onPressed: _showTenantManagementDialog,
+            SafeArea(
+              top: false,
+              minimum: EdgeInsets.only(bottom: responsive.spacing(8)),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: responsive.spacing(18),
+                    ),
+                    child: Container(
+                      key: const Key('onboarding-compact-footer'),
+                      padding: EdgeInsets.only(top: responsive.spacing(8)),
+                      decoration: BoxDecoration(
+                        color: theme.surface,
+                        border: Border(top: BorderSide(color: theme.border)),
+                      ),
+                      child: _OnboardingUtilityBar(
+                        tenant: activeTenant,
+                        localeMode: localeMode,
+                        fillAvailableWidth: true,
+                        onLanguagePressed: _showLanguageSheet,
+                        onPressed: _showTenantManagementDialog,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -269,14 +264,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
     if (onboarding.usesNoVerificationRegistration) {
       return <Widget>[
-        if (onboarding.registrationMethods.length > 1) ...<Widget>[
-          _AuthModeToggle(
-            value: onboarding.authMode,
-            methods: onboarding.registrationMethods,
-            onChanged: ref.read(onboardingProvider.notifier).setAuthMode,
-          ),
-          SizedBox(height: responsive.spacing(18)),
-        ],
         Text(
           context.l10n.onboardingNoVerificationHint,
           style: TextStyle(
@@ -321,14 +308,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
     if (onboarding.registerStep == 1 || onboarding.authMode == 'email') {
       return <Widget>[
-        if (onboarding.registrationMethods.length > 1) ...<Widget>[
-          _AuthModeToggle(
-            value: onboarding.authMode,
-            methods: onboarding.registrationMethods,
-            onChanged: ref.read(onboardingProvider.notifier).setAuthMode,
-          ),
-          SizedBox(height: responsive.spacing(responsive.isPhone ? 32 : 24)),
-        ],
         Text(
           context.l10n.onboardingLoginRegisterHint,
           style: TextStyle(

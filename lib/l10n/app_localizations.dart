@@ -548,6 +548,12 @@ abstract class AppLocalizations {
   /// **'当前'**
   String get tenantCurrent;
 
+  /// No description provided for @tenantDefaultBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认配置'**
+  String get tenantDefaultBadge;
+
   /// No description provided for @tenantName.
   ///
   /// In zh, this message translates to:
@@ -596,6 +602,18 @@ abstract class AppLocalizations {
   /// **'编辑租户'**
   String get tenantEditTitle;
 
+  /// No description provided for @tenantRenameTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'重命名租户'**
+  String get tenantRenameTitle;
+
+  /// No description provided for @tenantSaveName.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存名称'**
+  String get tenantSaveName;
+
   /// No description provided for @tenantSaving.
   ///
   /// In zh, this message translates to:
@@ -625,6 +643,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。'**
   String get tenantCannotEditWithData;
+
+  /// No description provided for @tenantDidHostImmutable.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID Host 与租户的本地身份和存储作用域绑定，已有租户不能修改；如需更换，请添加新的租户配置。'**
+  String get tenantDidHostImmutable;
+
+  /// No description provided for @tenantDataStateCheckFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法确认这个租户的本地数据状态。为保护现有数据，当前只能修改名称，请稍后重试。'**
+  String get tenantDataStateCheckFailed;
 
   /// No description provided for @tenantCannotDeleteDefault.
   ///
@@ -907,12 +937,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'智能体'**
   String get shellNavAgents;
-
-  /// No description provided for @shellNavFriends.
-  ///
-  /// In zh, this message translates to:
-  /// **'朋友'**
-  String get shellNavFriends;
 
   /// No description provided for @shellNavContacts.
   ///
@@ -1249,12 +1273,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'我加入的全部群聊'**
   String get friendsGroupsSubtitle;
-
-  /// No description provided for @friendsMutualEmpty.
-  ///
-  /// In zh, this message translates to:
-  /// **'暂时还没有互相关注的朋友。'**
-  String get friendsMutualEmpty;
 
   /// No description provided for @friendsFollowing.
   ///

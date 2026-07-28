@@ -2945,6 +2945,7 @@ class FakeAppTenantActions implements AppTenantActions {
   int deleteTenantCalls = 0;
   Object? nextCreateError;
   Object? nextUseError;
+  Object? nextTenantHasDataError;
 
   @override
   Future<AppTenantRegistry> createTenant(AppTenantCreateInput input) async {
@@ -3026,6 +3027,11 @@ class FakeAppTenantActions implements AppTenantActions {
 
   @override
   Future<bool> tenantHasData(String tenantId) async {
+    final error = nextTenantHasDataError;
+    if (error != null) {
+      nextTenantHasDataError = null;
+      throw error;
+    }
     return tenantsWithData.contains(tenantId);
   }
 }

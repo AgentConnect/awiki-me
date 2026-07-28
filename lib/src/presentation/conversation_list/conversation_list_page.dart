@@ -883,6 +883,15 @@ class _MacConversationRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(responsive.displayScaled(10)),
           backgroundColor: CupertinoColors.transparent,
           selectedBackgroundColor: theme.surface,
+          hoverColor: isSelected ? CupertinoColors.transparent : theme.surface,
+          pressedColor: theme.subtleSurface,
+          selectedBoxShadow: AwikiMeShadows.selectedListItem,
+          hoverBoxShadow: isSelected
+              ? const <BoxShadow>[]
+              : AwikiMeShadows.hoveredListItem,
+          duration: AwikiMeMotion.instant,
+          interactionExitDuration: Duration.zero,
+          animateSelection: false,
           border: Border.all(color: CupertinoColors.transparent),
           padding: EdgeInsets.symmetric(
             horizontal: responsive.displayScaled(10),
@@ -1071,6 +1080,11 @@ class _ConversationRow extends StatelessWidget {
       borderRadius: BorderRadius.zero,
       backgroundColor: theme.surface,
       selectedBackgroundColor: theme.subtleSurface,
+      hoverColor: theme.subtleSurface,
+      pressedColor: theme.mutedSurface,
+      duration: AwikiMeMotion.instant,
+      interactionExitDuration: Duration.zero,
+      animateSelection: false,
       border: Border(bottom: BorderSide(color: theme.border)),
       padding: EdgeInsets.symmetric(
         horizontal: responsive.spacing(14),
@@ -1829,6 +1843,48 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    if (!embedded) {
+      final theme = context.awikiTheme;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(
+          responsive.spacing(24),
+          responsive.spacing(24),
+          responsive.spacing(24),
+          responsive.spacing(72),
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Column(
+              key: const Key('compact-conversation-inline-empty-state'),
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: AwikiMeTextStyles.sectionTitle.copyWith(
+                    color: theme.secondaryText,
+                    fontSize: responsive.displayScaled(18),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (subtitle.trim().isNotEmpty) ...<Widget>[
+                  SizedBox(height: responsive.spacing(8)),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: AwikiMeTextStyles.cardSubtitle.copyWith(
+                      color: theme.secondaryText,
+                      fontSize: responsive.bodySm,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: responsive.scaledInsets(
         EdgeInsets.fromLTRB(

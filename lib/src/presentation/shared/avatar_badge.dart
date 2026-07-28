@@ -59,18 +59,18 @@ class _FallbackAvatarBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     final normalized = seed.trim();
     final label = labelOverride?.trim().isNotEmpty == true
         ? labelOverride!.trim()
         : normalized.isEmpty
         ? '?'
         : normalized.substring(0, 1).toUpperCase();
-    final palette = _paletteForSeed(context, normalized);
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: palette.$1,
+        color: theme.avatarBackground,
         borderRadius: BorderRadius.circular(size / 2),
       ),
       alignment: Alignment.center,
@@ -78,33 +78,11 @@ class _FallbackAvatarBadge extends StatelessWidget {
         label,
         style: TextStyle(
           fontSize: label.length > 1 ? size / 3.1 : size / 2.4,
-          color: palette.$2,
+          color: theme.avatarForeground,
           fontWeight: FontWeight.w600,
         ),
       ),
     );
-  }
-
-  (Color, Color) _paletteForSeed(BuildContext context, String value) {
-    final theme = context.awikiTheme;
-    final palettes = <(Color, Color)>[
-      (
-        theme.colorScheme.secondaryContainer,
-        theme.colorScheme.onSecondaryContainer,
-      ),
-      (
-        theme.colorScheme.tertiaryContainer,
-        theme.colorScheme.onTertiaryContainer,
-      ),
-      (theme.warningContainer, theme.primaryDark),
-      (theme.subtleSurface, theme.infoAccent),
-      (theme.dangerContainer, theme.danger),
-      (theme.mutedSurface, theme.title),
-    ];
-    final hash = value.isEmpty
-        ? 0
-        : value.codeUnits.fold<int>(0, (a, b) => a + b);
-    return palettes[hash % palettes.length];
   }
 }
 

@@ -17,9 +17,12 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Tooltip;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -176,6 +179,55 @@ void main() {
     jwtToken: 'new-token',
   );
 
+  testWidgets('群列表顶部操作使用统一主题图标和提示', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(900, 720);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(embedded: true),
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final expectedColor = tester
+        .element(find.byType(GroupListPage))
+        .awikiTheme
+        .secondaryText;
+    const actions = <(String, String, IconData)>[
+      ('group-list-refresh-button', '刷新', CupertinoIcons.refresh),
+      ('group-list-create-button', '创建群聊', CupertinoIcons.person_2),
+      ('group-list-join-button', '加入群聊', CupertinoIcons.plus),
+    ];
+    double? iconSize;
+    for (final action in actions) {
+      final button = find.byKey(Key(action.$1));
+      expect(button, findsOneWidget);
+      expect(
+        tester.widget<TopBarActionButton>(button).semanticsLabel,
+        action.$2,
+      );
+
+      final tooltip = tester.widget<Tooltip>(
+        find.descendant(of: button, matching: find.byType(Tooltip)),
+      );
+      expect(tooltip.message, action.$2);
+
+      final icon = tester.widget<Icon>(
+        find.descendant(of: button, matching: find.byType(Icon)),
+      );
+      expect(icon.icon, action.$3);
+      expect(icon.color, expectedColor);
+      iconSize ??= icon.size;
+      expect(icon.size, iconSize);
+    }
+    expect(iconSize, isNotNull);
+  });
+
   testWidgets('macOS 创建群弹窗只填写名称并直接进入群聊', (tester) async {
     final gateway = FakeAwikiGateway()..loginResult = session;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -251,7 +303,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(CupertinoIcons.link));
+      await tester.tap(find.byKey(const Key('group-list-join-button')));
       await tester.pumpAndSettle();
       expect(find.text('入群身份'), findsNothing);
       expect(
@@ -395,7 +447,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(CupertinoIcons.link));
+    await tester.tap(find.byKey(const Key('group-list-join-button')));
     await tester.pumpAndSettle();
 
     await tester.enterText(

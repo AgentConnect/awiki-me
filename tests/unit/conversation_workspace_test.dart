@@ -36,9 +36,11 @@ import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/semantics.dart' show SemanticsRole;
 import 'package:flutter/services.dart';
@@ -497,6 +499,15 @@ void main() {
       (searchField.decoration as BoxDecoration).color,
       AwikiMeColors.subtleSurface,
     );
+    final pageSurface = tester.widget<ColoredBox>(
+      find.byKey(const Key('shell-tab-page-surface')),
+    );
+    expect(pageSurface.color, AwikiMeColors.surface);
+    expect(
+      find.byKey(const Key('compact-conversation-inline-empty-state')),
+      findsOneWidget,
+    );
+    expect(find.byType(EmptyStateCard), findsNothing);
 
     await tester.tap(find.byKey(const Key('shell-quick-actions-button')));
     await tester.pumpAndSettle();
@@ -573,6 +584,150 @@ void main() {
 
     restoreCompleter.complete();
     await tester.pump();
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
+  testWidgets('macOS 最近会话切换时仅新会话选中且底色不交叉动画', (tester) async {
+    final secondConversation = ConversationSummary(
+      threadId: 'dm:did:me:did:second-peer',
+      conversationId: 'dm:did:me:did:second-peer',
+      displayName: 'Ada Lovelace',
+      lastMessagePreview: 'A second conversation.',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 25),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:second-peer',
+    );
+    final thirdConversation = ConversationSummary(
+      threadId: 'dm:did:me:did:third-peer',
+      conversationId: 'dm:did:me:did:third-peer',
+      displayName: 'Grace Hopper',
+      lastMessagePreview: 'A third conversation.',
+      lastMessageAt: DateTime(2026, 3, 28, 10, 26),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:third-peer',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[
+        conversation,
+        secondConversation,
+        thirdConversation,
+      ]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': history,
+        'did:second-peer': const <ChatMessage>[],
+        'did:third-peer': const <ChatMessage>[],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1600, 960));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+
+    await tester.tap(find.text('Marcus Chen'));
+    await tester.pumpAndSettle();
+    expect(
+      container.read(selectedConversationProvider),
+      conversation.conversationId,
+    );
+
+    await tester.tap(find.text('Ada Lovelace'));
+    await tester.pump();
+
+    expect(
+      container.read(selectedConversationProvider),
+      secondConversation.conversationId,
+    );
+    final conversationTiles = tester.widgetList<AppPressableTile>(
+      find.descendant(
+        of: find.byKey(const Key('mac-conversation-list-pane')),
+        matching: find.byType(AppPressableTile),
+      ),
+    );
+    expect(conversationTiles, isNotEmpty);
+    final selectedTile = conversationTiles.singleWhere((tile) => tile.selected);
+    final unselectedTiles = conversationTiles.where((tile) => !tile.selected);
+    expect(conversationTiles.every((tile) => !tile.animateSelection), isTrue);
+    expect(
+      conversationTiles.every((tile) => tile.duration == AwikiMeMotion.instant),
+      isTrue,
+    );
+    expect(
+      conversationTiles.every(
+        (tile) => tile.interactionExitDuration == Duration.zero,
+      ),
+      isTrue,
+    );
+    expect(selectedTile.hoverColor, CupertinoColors.transparent);
+    expect(selectedTile.hoverBoxShadow, isEmpty);
+    expect(selectedTile.selectedBoxShadow, AwikiMeShadows.selectedListItem);
+    expect(
+      unselectedTiles.every((tile) => tile.hoverColor == AwikiMeColors.surface),
+      isTrue,
+    );
+    expect(
+      conversationTiles.every(
+        (tile) => tile.pressedColor == AwikiMeColors.subtleSurface,
+      ),
+      isTrue,
+    );
+    expect(
+      unselectedTiles.every(
+        (tile) => tile.hoverBoxShadow == AwikiMeShadows.hoveredListItem,
+      ),
+      isTrue,
+    );
+
+    Finder interactionLayer(String conversationId) => find.descendant(
+      of: find.byKey(Key('conversation-row:$conversationId')),
+      matching: find.byType(AnimatedOpacity),
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(find.text('Marcus Chen')));
+    await tester.pumpAndSettle();
+    await mouse.moveTo(tester.getCenter(find.text('Grace Hopper')));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            interactionLayer(conversation.conversationId),
+          )
+          .duration,
+      Duration.zero,
+    );
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            interactionLayer(thirdConversation.conversationId),
+          )
+          .duration,
+      AwikiMeMotion.instant,
+    );
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);
@@ -1684,15 +1839,33 @@ void main() {
 
     await tester.tap(find.text('即时邀请群').first);
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const Key('chat-header-add-group-member-button')),
-      findsOneWidget,
+    final headerAddMember = find.byKey(
+      const Key('chat-header-add-group-member-button'),
     );
+    expect(headerAddMember, findsOneWidget);
+    final renderedHeaderButton = find.descendant(
+      of: headerAddMember,
+      matching: find.byType(AppIconButton),
+    );
+    final headerButton = tester.widget<AppIconButton>(renderedHeaderButton);
+    final headerResponsive = tester.element(headerAddMember).awikiResponsive;
+    final headerIcon = tester.widget<Icon>(
+      find.descendant(
+        of: headerAddMember,
+        matching: find.byIcon(CupertinoIcons.person_add),
+      ),
+    );
+    expect(headerButton.backgroundColor, AwikiMePalette.content);
+    expect(headerButton.borderColor, AwikiMePalette.hairline);
+    expect(headerButton.size, closeTo(headerResponsive.scaled(34), 0.01));
+    expect(
+      headerButton.borderRadius,
+      BorderRadius.circular(headerResponsive.radius(8)),
+    );
+    expect(headerIcon.color, AwikiMePalette.mutedNeutral);
 
     gateway.listGroupMembersCompleter = memberRefresh;
-    await tester.tap(
-      find.byKey(const Key('chat-header-add-group-member-button')),
-    );
+    await tester.tap(headerAddMember);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -3128,6 +3301,13 @@ void main() {
     expect(find.text('我'), findsOneWidget);
     expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
     expect(find.text('Agents'), findsNothing);
+    final shellBackground = tester.widget<DecoratedBox>(
+      find.byKey(const Key('app-shell-page-background')),
+    );
+    expect(
+      (shellBackground.decoration as BoxDecoration).color,
+      AwikiMeColors.surface,
+    );
     final navRow = find
         .descendant(
           of: find.byKey(const Key('compact-bottom-navigation')),

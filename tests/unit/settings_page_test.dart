@@ -6,6 +6,7 @@ import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -312,6 +313,132 @@ void main() {
     expect(actions.registry.activeTenant.id, custom.id);
   });
 
+  testWidgets('移动端租户卡片使用扁平操作按钮且无数据租户只锁定 DID Host', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final primary = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
+    final custom = AppTenantProfile(
+      tenantProfileId: TenantProfileId.generate(),
+      storageScopeId: StorageScopeId.generate(),
+      kind: AppTenantKind.custom,
+      name: '新加坡测试',
+      backendBaseUrl: 'https://sg.example.com',
+      didHost: 'sg.example.com',
+      lifecycle: AppTenantLifecycle.active,
+      createdAt: DateTime.utc(2026, 7, 1).toIso8601String(),
+      updatedAt: DateTime.utc(2026, 7, 1).toIso8601String(),
+    );
+    final registry = AppTenantRegistry(
+      revision: 1,
+      activeTenantProfileId: primary.tenantProfileId,
+      tenants: <AppTenantProfile>[primary, custom],
+    );
+    late StateSetter refresh;
+    final actions = FakeAppTenantActions(initialRegistry: registry)
+      ..onChanged = () => refresh(() {});
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) {
+          refresh = setState;
+          return buildLocalizedTestApp(
+            home: const TenantManagementDialog(),
+            providerOverrides: <Override>[
+              appTenantRegistryProvider.overrideWithValue(actions.registry),
+              activeAppTenantProvider.overrideWithValue(
+                actions.registry.activeTenant,
+              ),
+              appTenantActionsProvider.overrideWithValue(actions),
+            ],
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final primaryCard = find.byKey(Key('settings-tenant-option:${primary.id}'));
+    final customCard = find.byKey(Key('settings-tenant-option:${custom.id}'));
+    expect(
+      find.descendant(
+        of: primaryCard,
+        matching: find.byKey(Key('tenant-primary-managed:${primary.id}')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: primaryCard, matching: find.byTooltip('编辑租户')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: primaryCard, matching: find.byTooltip('删除')),
+      findsNothing,
+    );
+    final editVisual = find.byKey(
+      Key('tenant-action-visual-edit:${custom.id}'),
+    );
+    final editVisualSize = tester.getSize(editVisual);
+    expect(editVisualSize.width, greaterThanOrEqualTo(44));
+    expect(editVisualSize.height, lessThan(40));
+    expect(editVisualSize.height, lessThan(editVisualSize.width));
+    expect(tester.getSize(customCard).height, lessThan(128));
+    expect(
+      tester.getRect(customCard).bottom - tester.getRect(editVisual).bottom,
+      lessThanOrEqualTo(9),
+    );
+
+    await tester.tap(
+      find.descendant(of: customCard, matching: find.byTooltip('编辑租户')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('DID Host 与租户的本地身份和存储作用域绑定，已有租户不能修改；如需更换，请添加新的租户配置。'),
+      findsOneWidget,
+    );
+    final nameField = find.descendant(
+      of: find.byKey(const Key('tenant-name-field')),
+      matching: find.byType(CupertinoTextField),
+    );
+    final backendField = find.descendant(
+      of: find.byKey(const Key('tenant-backend-field')),
+      matching: find.byType(CupertinoTextField),
+    );
+    expect(tester.widget<CupertinoTextField>(nameField).enabled, isTrue);
+    expect(tester.widget<CupertinoTextField>(backendField).enabled, isTrue);
+    expect(find.byKey(const Key('tenant-did-host-field')), findsNothing);
+    final didHostReadonly = find.byKey(const Key('tenant-did-host-readonly'));
+    expect(didHostReadonly, findsOneWidget);
+    expect(
+      find.descendant(
+        of: didHostReadonly,
+        matching: find.text('sg.example.com'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: didHostReadonly,
+        matching: find.byType(SelectionArea),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(backendField, 'https://sg-new.example.com');
+    await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
+    await tester.pumpAndSettle();
+
+    expect(actions.updateTenantCalls, 1);
+    final updated = actions.registry.visibleTenants.firstWhere(
+      (tenant) => tenant.id == custom.id,
+    );
+    expect(updated.backendBaseUrl, 'https://sg-new.example.com');
+    expect(updated.didHost, 'sg.example.com');
+  });
+
   testWidgets('租户管理组件可新建编辑删除并保留本地数据保护', (tester) async {
     final primary = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
     final custom = AppTenantProfile(
@@ -355,8 +482,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(TenantManagementDialog), findsOneWidget);
-    expect(find.byTooltip('默认 AWiki 租户不能编辑。接入其他后端请添加租户配置。'), findsOneWidget);
-    expect(find.byTooltip('默认 AWiki 租户不能删除。'), findsOneWidget);
+    final primaryRow = find.byKey(Key('settings-tenant-option:${primary.id}'));
+    expect(
+      find.descendant(
+        of: primaryRow,
+        matching: find.byKey(Key('tenant-primary-managed:${primary.id}')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: primaryRow, matching: find.byTooltip('编辑租户')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: primaryRow, matching: find.byTooltip('删除')),
+      findsNothing,
+    );
 
     await tester.tap(find.byKey(const Key('tenant-management-create-button')));
     await tester.pumpAndSettle();
@@ -396,21 +537,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。'), findsOneWidget);
+    expect(find.text('重命名租户'), findsOneWidget);
+    expect(find.text('保存名称'), findsOneWidget);
     final nameField = find.descendant(
       of: find.byKey(const Key('tenant-name-field')),
       matching: find.byType(CupertinoTextField),
     );
-    final backendField = find.descendant(
-      of: find.byKey(const Key('tenant-backend-field')),
-      matching: find.byType(CupertinoTextField),
-    );
-    final didHostField = find.descendant(
-      of: find.byKey(const Key('tenant-did-host-field')),
-      matching: find.byType(CupertinoTextField),
-    );
     expect(tester.widget<CupertinoTextField>(nameField).enabled, isTrue);
-    expect(tester.widget<CupertinoTextField>(backendField).enabled, isFalse);
-    expect(tester.widget<CupertinoTextField>(didHostField).enabled, isFalse);
+    expect(find.byKey(const Key('tenant-backend-field')), findsNothing);
+    expect(find.byKey(const Key('tenant-did-host-field')), findsNothing);
+    final backendReadonly = find.byKey(const Key('tenant-backend-readonly'));
+    final didHostReadonly = find.byKey(const Key('tenant-did-host-readonly'));
+    expect(backendReadonly, findsOneWidget);
+    expect(didHostReadonly, findsOneWidget);
+    expect(
+      find.descendant(
+        of: backendReadonly,
+        matching: find.text('https://sg.example.com'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: didHostReadonly,
+        matching: find.text('sg.example.com'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.enterText(nameField, '新加坡归档');
     await tester.tap(find.byKey(const Key('tenant-form-submit-button')));
@@ -436,6 +589,60 @@ void main() {
       isFalse,
     );
     expect(find.text('新加坡归档'), findsNothing);
+  });
+
+  testWidgets('租户数据状态检查失败时明确降级为仅重命名', (tester) async {
+    final primary = defaultTenantProfile(now: DateTime.utc(2026, 7, 1));
+    final custom = AppTenantProfile(
+      tenantProfileId: TenantProfileId.generate(),
+      storageScopeId: StorageScopeId.generate(),
+      kind: AppTenantKind.custom,
+      name: '待检查租户',
+      backendBaseUrl: 'https://check.example.com',
+      didHost: 'check.example.com',
+      lifecycle: AppTenantLifecycle.active,
+      createdAt: DateTime.utc(2026, 7, 1).toIso8601String(),
+      updatedAt: DateTime.utc(2026, 7, 1).toIso8601String(),
+    );
+    final actions = FakeAppTenantActions(
+      initialRegistry: AppTenantRegistry(
+        revision: 1,
+        activeTenantProfileId: primary.tenantProfileId,
+        tenants: <AppTenantProfile>[primary, custom],
+      ),
+    )..nextTenantHasDataError = StateError('scope check unavailable');
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const TenantManagementDialog(),
+        providerOverrides: <Override>[
+          appTenantRegistryProvider.overrideWithValue(actions.registry),
+          activeAppTenantProvider.overrideWithValue(
+            actions.registry.activeTenant,
+          ),
+          appTenantActionsProvider.overrideWithValue(actions),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final customRow = find.byKey(Key('settings-tenant-option:${custom.id}'));
+    await tester.tap(
+      find.descendant(of: customRow, matching: find.byTooltip('编辑租户')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('重命名租户'), findsOneWidget);
+    expect(find.text('保存名称'), findsOneWidget);
+    expect(
+      find.text('无法确认这个租户的本地数据状态。为保护现有数据，当前只能修改名称，请稍后重试。'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('tenant-name-field')), findsOneWidget);
+    expect(find.byKey(const Key('tenant-backend-field')), findsNothing);
+    expect(find.byKey(const Key('tenant-did-host-field')), findsNothing);
+    expect(find.byKey(const Key('tenant-backend-readonly')), findsOneWidget);
+    expect(find.byKey(const Key('tenant-did-host-readonly')), findsOneWidget);
   });
 
   testWidgets('租户管理组件不允许删除当前自定义租户', (tester) async {
@@ -473,12 +680,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final primaryRow = find.byKey(Key('settings-tenant-option:${primary.id}'));
+    expect(
+      find.descendant(of: primaryRow, matching: find.byTooltip('使用')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: primaryRow, matching: find.byTooltip('编辑租户')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: primaryRow, matching: find.byTooltip('删除')),
+      findsNothing,
+    );
     final activeRow = find.byKey(Key('settings-tenant-option:${custom.id}'));
     expect(
-      find.descendant(
-        of: activeRow,
-        matching: find.byTooltip('请先切换到其他租户，再删除当前租户。'),
-      ),
+      find.descendant(of: activeRow, matching: find.byTooltip('编辑租户')),
       findsOneWidget,
     );
     expect(

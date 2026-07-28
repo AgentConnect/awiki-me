@@ -2,6 +2,8 @@ import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
@@ -10,6 +12,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets('窄屏我的页面与顶部标题栏使用同一白色表层', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const profile = UserProfile(
+      did: 'did:test:compact-profile-surface',
+      nickName: 'Compact Alice',
+      bio: '',
+      tags: <String>[],
+      handle: 'compact-alice',
+      profileMarkdown: '',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ProfilePage(),
+        gateway: FakeAwikiGateway()..myProfile = profile,
+        profile: profile,
+        homepageMarkdownLoader: (_) async => null,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scaffold = tester.widget<CupertinoPageScaffold>(
+      find.byType(CupertinoPageScaffold),
+    );
+    final tabSurface = tester.widget<ColoredBox>(
+      find.byKey(const Key('shell-tab-page-surface')),
+    );
+    expect(scaffold.backgroundColor, AwikiMeColors.surface);
+    expect(tabSurface.color, AwikiMeColors.surface);
+  });
+
   testWidgets('桌面我的页面使用 272px 摘要栏和完整资料详情', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.binding.setSurfaceSize(const Size(1280, 900));
@@ -260,6 +297,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.byType(SelectionArea), findsOneWidget);
+    expect(find.byType(IdentityProfileHeader), findsOneWidget);
+    expect(find.byType(IdentityProfileBadge), findsOneWidget);
+    expect(find.byType(IdentityDocumentContent), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('profile-handle-value'))).data,
       '@elena.anpclaw.com',

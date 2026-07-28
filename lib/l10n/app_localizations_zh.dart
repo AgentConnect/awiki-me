@@ -242,6 +242,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantCurrent => '当前';
 
   @override
+  String get tenantDefaultBadge => '默认配置';
+
+  @override
   String get tenantName => '租户名称';
 
   @override
@@ -266,6 +269,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tenantEditTitle => '编辑租户';
 
   @override
+  String get tenantRenameTitle => '重命名租户';
+
+  @override
+  String get tenantSaveName => '保存名称';
+
+  @override
   String get tenantSaving => '保存中...';
 
   @override
@@ -282,6 +291,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get tenantCannotEditWithData =>
       '这个租户已经有本地数据，只能修改名称，不能修改后端地址或 DID Host。';
+
+  @override
+  String get tenantDidHostImmutable =>
+      'DID Host 与租户的本地身份和存储作用域绑定，已有租户不能修改；如需更换，请添加新的租户配置。';
+
+  @override
+  String get tenantDataStateCheckFailed =>
+      '无法确认这个租户的本地数据状态。为保护现有数据，当前只能修改名称，请稍后重试。';
 
   @override
   String get tenantCannotDeleteDefault => '默认 AWiki 租户不能删除。';
@@ -427,9 +444,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shellNavAgents => '智能体';
-
-  @override
-  String get shellNavFriends => '朋友';
 
   @override
   String get shellNavContacts => '联系人';
@@ -605,9 +619,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get friendsGroupsSubtitle => '我加入的全部群聊';
-
-  @override
-  String get friendsMutualEmpty => '暂时还没有互相关注的朋友。';
 
   @override
   String get friendsFollowing => '我关注的';

@@ -441,7 +441,7 @@ class _MacAuthCard extends StatelessWidget {
               ),
               if (credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
-                _MacLocalIdentityShortcut(
+                _OnboardingLocalIdentitySection(
                   credentials: credentials,
                   onLogin: onLogin,
                 ),
@@ -628,8 +628,8 @@ class _MacAuthMethodButton extends StatelessWidget {
   }
 }
 
-class _MacLocalIdentityShortcut extends StatelessWidget {
-  const _MacLocalIdentityShortcut({
+class _OnboardingLocalIdentitySection extends StatelessWidget {
+  const _OnboardingLocalIdentitySection({
     required this.credentials,
     required this.onLogin,
   });
@@ -640,11 +640,11 @@ class _MacLocalIdentityShortcut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      key: const Key('onboarding-mac-local-credential-section'),
+      key: const Key('onboarding-local-credential-section'),
       children: <Widget>[
         Row(
           children: <Widget>[
-            const Expanded(child: _MacDivider()),
+            const Expanded(child: _OnboardingIdentityDivider()),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
@@ -656,7 +656,7 @@ class _MacLocalIdentityShortcut extends StatelessWidget {
                 ),
               ),
             ),
-            const Expanded(child: _MacDivider()),
+            const Expanded(child: _OnboardingIdentityDivider()),
           ],
         ),
         const SizedBox(height: 18),
@@ -665,9 +665,9 @@ class _MacLocalIdentityShortcut extends StatelessWidget {
             padding: EdgeInsets.only(
               bottom: identity == credentials.last ? 0 : 10,
             ),
-            child: _MacCredentialTile(
+            child: _OnboardingCredentialTile(
               key: Key(
-                'onboarding-mac-local-credential:${identity.credentialName}',
+                'onboarding-local-credential:${identity.credentialName}',
               ),
               identity: identity,
               onTap: () => onLogin(identity.credentialName),
@@ -678,8 +678,8 @@ class _MacLocalIdentityShortcut extends StatelessWidget {
   }
 }
 
-class _MacDivider extends StatelessWidget {
-  const _MacDivider();
+class _OnboardingIdentityDivider extends StatelessWidget {
+  const _OnboardingIdentityDivider();
 
   @override
   Widget build(BuildContext context) {
@@ -687,8 +687,8 @@ class _MacDivider extends StatelessWidget {
   }
 }
 
-class _MacCredentialTile extends StatelessWidget {
-  const _MacCredentialTile({
+class _OnboardingCredentialTile extends StatelessWidget {
+  const _OnboardingCredentialTile({
     super.key,
     required this.identity,
     required this.onTap,

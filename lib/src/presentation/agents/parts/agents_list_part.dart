@@ -813,23 +813,7 @@ class _AgentKindIcon extends StatelessWidget {
           : 30,
     );
     if (agent.isRuntime) {
-      return Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: theme.primarySoft,
-          shape: BoxShape.circle,
-        ),
-        child: Text(
-          title.isEmpty ? '?' : String.fromCharCode(title.runes.first),
-          style: TextStyle(
-            color: theme.primary,
-            fontSize: responsive.bodySm,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
+      return AvatarBadge(seed: title, size: size);
     }
     return Container(
       width: size,

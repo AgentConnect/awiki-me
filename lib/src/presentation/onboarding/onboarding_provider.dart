@@ -7,7 +7,6 @@ import '../../app/ui_feedback.dart';
 import '../../application/app_session_service.dart';
 import '../../application/models/app_session.dart';
 import '../../application/models/onboarding_server_info.dart';
-import '../../domain/entities/session_identity.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
@@ -19,7 +18,6 @@ enum OnboardingServerInfoStatus { loading, ready, failed }
 
 class OnboardingState {
   const OnboardingState({
-    this.entryMode = 'register',
     this.authMode = 'phone',
     this.registerStep = 1,
     this.emailVerified = false,
@@ -31,7 +29,6 @@ class OnboardingState {
     this.serverInfoError,
   });
 
-  final String entryMode;
   final String authMode;
   final int registerStep;
   final bool emailVerified;
@@ -93,7 +90,6 @@ class OnboardingState {
   }
 
   OnboardingState copyWith({
-    String? entryMode,
     String? authMode,
     int? registerStep,
     bool? emailVerified,
@@ -105,7 +101,6 @@ class OnboardingState {
     Object? serverInfoError = _unset,
   }) {
     return OnboardingState(
-      entryMode: entryMode ?? this.entryMode,
       authMode: authMode ?? this.authMode,
       registerStep: registerStep ?? this.registerStep,
       emailVerified: emailVerified ?? this.emailVerified,
@@ -154,32 +149,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     _otpResendTimer?.cancel();
     _emailResendTimer?.cancel();
     super.dispose();
-  }
-
-  void setEntryMode(String value) {
-    _setEntryMode(value);
-  }
-
-  void setEntryModeFromLocalCredentials(List<SessionIdentity> credentials) {
-    final nextMode = credentials.isEmpty ? 'register' : 'login';
-    if (state.entryMode == nextMode) {
-      return;
-    }
-    _setEntryMode(nextMode);
-  }
-
-  void _setEntryMode(String value) {
-    state = state.copyWith(
-      entryMode: value,
-      registerStep: value == 'login' ? 1 : state.registerStep,
-      emailVerified: value == 'login' ? false : state.emailVerified,
-      otpResendCountdown: value == 'login' ? 0 : state.otpResendCountdown,
-      emailResendCountdown: value == 'login' ? 0 : state.emailResendCountdown,
-    );
-    if (value == 'login') {
-      _cancelOtpResendCountdown();
-      _cancelEmailResendCountdown();
-    }
   }
 
   void setAuthMode(String value) {

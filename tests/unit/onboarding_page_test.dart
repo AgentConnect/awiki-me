@@ -58,10 +58,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(find.byKey(const Key('onboarding-expanded-layout')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-hero-title')), findsOneWidget);
     expect(find.byKey(const Key('onboarding-mac-auth-card')), findsOneWidget);
@@ -76,7 +72,7 @@ void main() {
       findsNothing,
     );
     expect(
-      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      find.byKey(const Key('onboarding-local-credential-section')),
       findsOneWidget,
     );
     expect(find.text('Alice'), findsOneWidget);
@@ -164,16 +160,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(
       find.byKey(const Key('onboarding-mac-credential-mode')),
       findsNothing,
     );
     expect(
-      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      find.byKey(const Key('onboarding-local-credential-section')),
       findsOneWidget,
     );
     expect(find.text('Windows Alice'), findsOneWidget);
@@ -204,12 +196,10 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(container.read(onboardingProvider).authMode, 'phone');
 
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pumpAndSettle();
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(container.read(onboardingProvider).authMode, 'email');
     expect(find.text('发送激活邮件'), findsOneWidget);
 
@@ -220,7 +210,6 @@ void main() {
 
     await tester.tap(find.byKey(const Key('auth-mode-phone')));
     await tester.pumpAndSettle();
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(container.read(onboardingProvider).authMode, 'phone');
     expect(find.text('发送验证码'), findsOneWidget);
 
@@ -258,12 +247,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(
-      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      find.byKey(const Key('onboarding-local-credential-section')),
       findsOneWidget,
     );
     expect(find.text('Alice'), findsOneWidget);
@@ -279,7 +264,7 @@ void main() {
     _resetTestViewSize(tester);
   });
 
-  testWidgets('无本地凭证时默认进入登录或注册 tab', (tester) async {
+  testWidgets('无本地凭证时直接展示手机号和邮箱认证入口', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
@@ -287,14 +272,12 @@ void main() {
 
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).entryMode, 'register');
+    expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
+    expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
+    expect(find.byKey(const Key('auth-mode-email')), findsOneWidget);
   });
 
-  testWidgets('无本地凭证时仍可手动切换到切换身份 tab', (tester) async {
+  testWidgets('移动端没有身份一级 tab 且认证表单始终展示', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));
     _setTestViewSize(tester, const Size(390, 844));
 
@@ -303,16 +286,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('切换身份'));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
+    expect(find.text('切换身份'), findsNothing);
+    expect(find.text('发送验证码'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
-    expect(find.text('重新识别本地凭证'), findsOneWidget);
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).entryMode, 'login');
+    expect(find.text('重新识别本地凭证'), findsNothing);
   });
 
   testWidgets('桌面有本地凭证时直接展示在认证表单下方', (tester) async {
@@ -336,21 +314,16 @@ void main() {
     expect(find.text('导入身份凭证'), findsNothing);
     expect(find.text('重新识别本地凭证'), findsNothing);
     expect(
-      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      find.byKey(const Key('onboarding-local-credential-section')),
       findsOneWidget,
     );
     expect(
       find.byKey(const Key('onboarding-mac-credential-mode')),
       findsNothing,
     );
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).entryMode, 'register');
   });
 
-  testWidgets('Android 和 iOS 有本地凭证时同样默认进入身份选择', (tester) async {
+  testWidgets('Android 和 iOS 有本地凭证时在认证表单下方展示身份', (tester) async {
     final gateway = FakeAwikiGateway()
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
@@ -377,10 +350,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(OnboardingPage)),
+      expect(find.text('发送验证码'), findsOneWidget);
+      expect(
+        find.byKey(const Key('onboarding-local-credential-section')),
+        findsOneWidget,
       );
-      expect(container.read(onboardingProvider).entryMode, 'login');
       expect(find.text('Mobile Alice'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -419,7 +393,84 @@ void main() {
     expect(logoSize.height, lessThanOrEqualTo(40));
   });
 
-  testWidgets('退出登录后立即保留本地凭证并进入切换身份 tab', (tester) async {
+  testWidgets('移动端认证和已有身份始终作为一个整体居中', (tester) async {
+    _setTestViewSize(tester, const Size(390, 844));
+
+    for (final size in const <Size>[
+      Size(360, 780),
+      Size(390, 844),
+      Size(393, 852),
+    ]) {
+      tester.view.physicalSize = size;
+      for (final credentials in <List<SessionIdentity>>[
+        const <SessionIdentity>[],
+        const <SessionIdentity>[
+          SessionIdentity(
+            did: 'did:test:centered-mobile',
+            credentialName: 'centered-mobile',
+            displayName: 'Centered Mobile Identity',
+            handle: 'centered-mobile',
+            jwtToken: 'token-centered-mobile',
+          ),
+        ],
+      ]) {
+        final gateway = FakeAwikiGateway()..localCredentials = credentials;
+        await tester.pumpWidget(
+          buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+        );
+        await tester.pumpAndSettle();
+
+        final scrollRect = tester.getRect(
+          find.byKey(const Key('onboarding-compact-scroll-view')),
+        );
+        final contentRect = tester.getRect(
+          find.byKey(const Key('onboarding-compact-auth-card')),
+        );
+        expect(
+          contentRect.center.dy,
+          moreOrLessEquals(scrollRect.center.dy, epsilon: 0.1),
+        );
+        expect(contentRect.top, greaterThan(scrollRect.top));
+        expect(contentRect.bottom, lessThan(scrollRect.bottom));
+        expect(
+          find.byKey(const Key('onboarding-local-credential-section')),
+          credentials.isEmpty ? findsNothing : findsOneWidget,
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      }
+    }
+  });
+
+  testWidgets('移动端键盘弹出后认证主体保持可滚动且底栏不被遮挡', (tester) async {
+    _setTestViewSize(tester, const Size(390, 844));
+    addTearDown(tester.view.resetViewInsets);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage()),
+    );
+    await tester.pumpAndSettle();
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+    await tester.pumpAndSettle();
+
+    final scrollView = find.byKey(const Key('onboarding-compact-scroll-view'));
+    final footer = find.byKey(const Key('onboarding-compact-footer'));
+    final content = find.byKey(const Key('onboarding-compact-auth-card'));
+    final contentBefore = tester.getRect(content);
+
+    expect(scrollView, findsOneWidget);
+    expect(tester.getRect(footer).bottom, lessThanOrEqualTo(844 - 280));
+
+    await tester.drag(scrollView, const Offset(0, -180));
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(content).top, lessThan(contentBefore.top));
+    expect(tester.getRect(footer).bottom, lessThanOrEqualTo(844 - 280));
+  });
+
+  testWidgets('退出登录后立即保留认证表单和本地身份入口', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:123',
       credentialName: 'default',
@@ -449,16 +500,14 @@ void main() {
     expect(find.byType(OnboardingPage), findsOneWidget);
     expect(find.byType(AwikiMeLoadingMask), findsNothing);
     expect(container.read(appRuntimeProvider).isBusy, isFalse);
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
     expect(find.text('重新识别本地凭证'), findsNothing);
     expect(
-      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      find.byKey(const Key('onboarding-local-credential-section')),
       findsOneWidget,
     );
     expect(gateway.logoutCalls, 1);
-    expect(container.read(onboardingProvider).entryMode, 'register');
   });
 
   testWidgets('退出并删除当前凭证后等待本地凭证刷新再默认进入登录或注册 tab', (tester) async {
@@ -493,14 +542,11 @@ void main() {
     await tester.pump();
 
     expect(find.byType(OnboardingPage), findsOneWidget);
-    expect(container.read(onboardingProvider).entryMode, 'register');
-
     deleteCompleter.complete();
     await deleteFuture;
     await tester.pumpAndSettle();
 
     expect(gateway.deleteLocalCredentialCalls, 1);
-    expect(container.read(onboardingProvider).entryMode, 'register');
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.text('导入身份凭证'), findsNothing);
   });
@@ -556,7 +602,7 @@ void main() {
     expect(actionRect.width, greaterThan(300));
   });
 
-  testWidgets('入口 tab 按登录或注册、切换身份的顺序展示', (tester) async {
+  testWidgets('移动端一级 tab 直接按手机号、邮箱的顺序展示', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));
     _setTestViewSize(tester, const Size(390, 844));
 
@@ -565,13 +611,18 @@ void main() {
     );
     await tester.pump();
 
-    final registerRect = tester.getRect(find.text('登录或注册'));
-    final switchRect = tester.getRect(find.text('切换身份'));
+    final phoneRect = tester.getRect(find.byKey(const Key('auth-mode-phone')));
+    final emailRect = tester.getRect(find.byKey(const Key('auth-mode-email')));
 
-    expect(registerRect.left, lessThan(switchRect.left));
+    expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
+    expect(phoneRect.left, lessThan(emailRect.left));
+    expect(phoneRect.width, moreOrLessEquals(emailRect.width));
+    expect(phoneRect.center.dy, moreOrLessEquals(emailRect.center.dy));
   });
 
-  testWidgets('登录和切换身份页面不再展示底部快捷跳转', (tester) async {
+  testWidgets('移动端认证页不展示旧的身份模式快捷跳转', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
@@ -581,14 +632,9 @@ void main() {
     expect(find.textContaining('已有账号'), findsNothing);
     expect(find.text('去登录或注册'), findsNothing);
     expect(find.text('去登录'), findsNothing);
-
-    await tester.tap(find.text('登录或注册'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('还没有账号'), findsNothing);
-    expect(find.textContaining('已有账号'), findsNothing);
-    expect(find.text('去登录或注册'), findsNothing);
-    expect(find.text('去登录'), findsNothing);
+    expect(find.text('切换身份'), findsNothing);
+    expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
+    expect(find.text('发送验证码'), findsOneWidget);
   });
 
   testWidgets('登录页右下角展示当前租户入口且不再硬编码 awiki.info', (tester) async {
@@ -615,7 +661,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('登录或注册'), findsOneWidget);
+    expect(find.byKey(const Key('auth-mode-phone')), findsOneWidget);
 
     await tester.tap(
       find.byKey(const Key('onboarding-language-switcher-button')),
@@ -630,7 +676,48 @@ void main() {
     expect(localePreferenceService.saveCalls, 1);
     expect(container.read(appLocaleModeProvider), AppLocaleMode.english);
     expect(find.text('EN'), findsOneWidget);
-    expect(find.text('Log in or register'), findsOneWidget);
+    expect(find.text('Phone'), findsOneWidget);
+  });
+
+  testWidgets('移动端语言和租户入口固定在底部且不随认证内容滚动', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = List<SessionIdentity>.generate(
+        6,
+        (index) => SessionIdentity(
+          did: 'did:test:mobile-$index',
+          credentialName: 'mobile-$index',
+          displayName: 'Mobile Identity $index',
+          handle: 'mobile-$index',
+          jwtToken: 'token-$index',
+        ),
+      );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final footer = find.byKey(const Key('onboarding-compact-footer'));
+    final firstIdentity = find.text('Mobile Identity 0');
+    final footerBefore = tester.getRect(footer);
+    final firstIdentityBefore = tester.getRect(firstIdentity);
+    final languageRect = tester.getRect(
+      find.byKey(const Key('onboarding-language-switcher-button')),
+    );
+    final tenantRect = tester.getRect(find.byTooltip('管理租户'));
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -260));
+    await tester.pumpAndSettle();
+
+    final footerAfter = tester.getRect(footer);
+    final firstIdentityAfter = tester.getRect(firstIdentity);
+    expect(footerAfter, footerBefore);
+    expect(firstIdentityAfter.top, lessThan(firstIdentityBefore.top));
+    expect(languageRect.left, lessThan(tenantRect.left));
+    expect(footerAfter.bottom, lessThanOrEqualTo(844));
+    expect(footerAfter.bottom, greaterThan(790));
   });
 
   testWidgets('登录页租户弹窗可添加租户配置且不自动切换', (tester) async {
@@ -747,7 +834,7 @@ void main() {
     expect(find.textContaining('runtime bootstrap failed'), findsOneWidget);
   });
 
-  testWidgets('身份登录只展示真实可用的本地凭证刷新入口', (tester) async {
+  testWidgets('移动端已有身份显示在认证表单下方且不再展示刷新入口', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));
     _setTestViewSize(tester, const Size(390, 844));
     final gateway = FakeAwikiGateway()
@@ -767,11 +854,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('导入身份凭证'), findsNothing);
-    expect(find.text('重新识别本地凭证'), findsOneWidget);
+    expect(find.text('重新识别本地凭证'), findsNothing);
+    expect(find.text('发送验证码'), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-local-credential-section')),
+      findsOneWidget,
+    );
+    expect(find.text('Alice'), findsOneWidget);
     expect(gateway.importCalls, 0);
   });
 
-  testWidgets('切换身份 tab 点击已保存凭证卡片空白区域也能登录', (tester) async {
+  testWidgets('移动端点击表单下方已保存身份卡片空白区域也能登录', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:123',
@@ -796,11 +891,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('onboarding-mac-local-credential-section')),
+      find.byKey(const Key('onboarding-local-credential-section')),
       findsOneWidget,
     );
     final identityTile = find.byKey(
-      const Key('onboarding-mac-local-credential:default'),
+      const Key('onboarding-local-credential:default'),
     );
     await tester.ensureVisible(identityTile);
     await tester.pumpAndSettle();
@@ -871,7 +966,7 @@ void main() {
     _resetTestViewSize(tester);
   });
 
-  testWidgets('全屏登录或注册表单使用紧凑 tab 和右对齐动作按钮', (tester) async {
+  testWidgets('全屏认证表单使用一级认证 tab 和右对齐动作按钮', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));
     _setTestViewSize(tester, const Size(390, 844));
 
@@ -882,9 +977,6 @@ void main() {
 
     final cardRect = tester.getRect(
       find.byKey(const Key('onboarding-compact-auth-card')),
-    );
-    final entryTabsRect = tester.getRect(
-      find.byKey(const Key('onboarding-entry-tabs')),
     );
     final authTabsRect = tester.getRect(
       find.byKey(const Key('onboarding-auth-mode-tabs')),
@@ -898,7 +990,7 @@ void main() {
       ),
     );
 
-    expect(entryTabsRect.width, lessThan(cardRect.width));
+    expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
     expect(authTabsRect.width, lessThan(cardRect.width));
     expect(nextRect.width, lessThan(cardRect.width * 0.5));
     expect(nextRect.right, lessThan(cardRect.right));

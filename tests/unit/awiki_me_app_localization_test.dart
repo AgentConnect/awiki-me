@@ -21,7 +21,9 @@ import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -171,6 +173,69 @@ void main() {
 
       expect(focusNode.hasFocus, isTrue);
     });
+
+    testWidgets(
+      'Android phone input accepts full-field taps across an IME resize',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        tester.view
+          ..devicePixelRatio = 1
+          ..physicalSize = const Size(390, 844);
+        addTearDown(() {
+          debugDefaultTargetPlatformOverride = null;
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+          tester.view.resetViewInsets();
+        });
+
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: bootstrap,
+            providerOverrides: <Override>[
+              appLocaleModeProvider.overrideWith(
+                (ref) => AppLocaleMode.english,
+              ),
+            ],
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('+86'));
+        await tester.pump();
+
+        Finder phoneEditable() => find.descendant(
+          of: find.byType(AppTextField).first,
+          matching: find.byType(EditableText),
+        );
+        final focusNode = tester
+            .widget<EditableText>(phoneEditable())
+            .focusNode;
+        expect(focusNode.hasFocus, isTrue);
+
+        tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+        await tester.pumpAndSettle();
+
+        final resizedFocusNode = tester
+            .widget<EditableText>(phoneEditable())
+            .focusNode;
+        expect(identical(resizedFocusNode, focusNode), isTrue);
+        expect(resizedFocusNode.hasFocus, isTrue);
+
+        await tester.enterText(
+          find.descendant(
+            of: find.byType(AppTextField).first,
+            matching: find.byType(CupertinoTextField),
+          ),
+          '13800138000',
+        );
+        await tester.pump();
+
+        expect(find.text('13800138000'), findsOneWidget);
+        expect(resizedFocusNode.hasFocus, isTrue);
+
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
 
     testWidgets(
       'keyboard shortcuts adjust display scale while input is focused',

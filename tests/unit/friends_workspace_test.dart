@@ -10,11 +10,13 @@ import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/sidebar_workspace.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show JSONMessageCodec;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,8 +41,18 @@ const _friendsWorkspaceSession = SessionIdentity(
   displayName: 'Me',
 );
 
+Future<void> _simulateSystemBack(WidgetTester tester) {
+  return tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    'flutter/navigation',
+    const JSONMessageCodec().encodeMessage(<String, dynamic>{
+      'method': 'popRoute',
+    }),
+    (_) {},
+  );
+}
+
 void main() {
-  testWidgets('桌面宽度下联系人页保持左右分栏布局', (tester) async {
+  testWidgets('桌面联系人概览保持左右分栏并默认留空右侧', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(1280, 900);
@@ -74,6 +86,8 @@ void main() {
     expect(find.byType(FriendsPage), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
     expect(find.byType(FriendsWorkspacePage), findsOneWidget);
+    expect(find.byType(AwikiWorkspaceEmptyDetail), findsOneWidget);
+    expect(find.byType(RelationshipListPage), findsNothing);
     expect(
       find.byKey(const Key('friends-expanded-list-header')),
       findsOneWidget,
@@ -132,7 +146,7 @@ void main() {
     expect(firstItem, findsNothing);
   });
 
-  testWidgets('桌面联系人默认在右侧展示共享完整目录', (tester) async {
+  testWidgets('桌面概览的两个查看全部只在右侧切换对应列表', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(1280, 900);
@@ -141,9 +155,16 @@ void main() {
     final gateway = FakeAwikiGateway()
       ..following = const <RelationshipSummary>[
         RelationshipSummary(
-          did: 'did:test:alice-directory',
-          displayName: 'Directory Alice',
+          did: 'did:test:desktop-following',
+          displayName: 'Desktop Following',
           relationship: 'following',
+        ),
+      ]
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: 'did:test:desktop-follower',
+          displayName: 'Desktop Follower',
+          relationship: 'follower',
         ),
       ];
 
@@ -158,9 +179,16 @@ void main() {
               const FriendsState(
                 following: <RelationshipSummary>[
                   RelationshipSummary(
-                    did: 'did:test:alice-directory',
-                    displayName: 'Directory Alice',
+                    did: 'did:test:desktop-following',
+                    displayName: 'Desktop Following',
                     relationship: 'following',
+                  ),
+                ],
+                followers: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:desktop-follower',
+                    displayName: 'Desktop Follower',
+                    relationship: 'follower',
                   ),
                 ],
               ),
@@ -171,17 +199,35 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(RelationshipDirectoryPage), findsOneWidget);
-    expect(
-      find.byKey(const Key('relationship-directory-tabs')),
-      findsOneWidget,
-    );
-    expect(find.text('Directory Alice'), findsNWidgets(2));
-    expect(find.text('取消关注'), findsOneWidget);
+    expect(find.text('Desktop Following'), findsOneWidget);
+    expect(find.text('Desktop Follower'), findsOneWidget);
+    expect(find.byType(AwikiWorkspaceEmptyDetail), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('friends-following-view-all')));
+    await tester.pumpAndSettle();
+
     expect(find.byType(AwikiWorkspaceEmptyDetail), findsNothing);
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+    expect(
+      tester
+          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+          .type,
+      FriendsRelationshipListType.following,
+    );
+
+    await tester.tap(find.byKey(const Key('friends-followers-view-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+    expect(
+      tester
+          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+          .type,
+      FriendsRelationshipListType.followers,
+    );
   });
 
-  testWidgets('窄屏联系人同页切换完整关注和粉丝列表', (tester) async {
+  testWidgets('窄屏联系人从双预览进入固定列表并返回概览', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -204,27 +250,87 @@ void main() {
       ];
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(home: const FriendsPage(), gateway: gateway),
+      buildLocalizedTestApp(
+        home: const FriendsWorkspacePage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:compact-following',
+                    displayName: 'Compact Following',
+                    relationship: 'following',
+                  ),
+                ],
+                followers: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:compact-follower',
+                    displayName: 'Compact Follower',
+                    relationship: 'follower',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('friends-groups-row')), findsOneWidget);
+    expect(find.byType(FriendsPage), findsOneWidget);
+    expect(find.byType(RelationshipListPage), findsNothing);
+    expect(find.text('Compact Following'), findsOneWidget);
+    expect(find.text('Compact Follower'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('friends-following-view-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FriendsPage), findsNothing);
+    expect(find.byType(RelationshipListPage), findsOneWidget);
     expect(
-      find.byKey(const Key('relationship-directory-tabs')),
-      findsOneWidget,
+      tester
+          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+          .type,
+      FriendsRelationshipListType.following,
     );
     expect(find.text('Compact Following'), findsOneWidget);
     expect(find.text('Compact Follower'), findsNothing);
 
-    await tester.tap(find.byKey(const Key('relationship-tab-followers')));
+    await _simulateSystemBack(tester);
     await tester.pumpAndSettle();
 
+    expect(find.byType(FriendsPage), findsOneWidget);
+    expect(find.byType(RelationshipListPage), findsNothing);
+    expect(find.text('Compact Following'), findsOneWidget);
+    expect(find.text('Compact Follower'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('friends-followers-view-all')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FriendsPage), findsNothing);
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+    expect(
+      tester
+          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+          .type,
+      FriendsRelationshipListType.followers,
+    );
     expect(find.text('Compact Following'), findsNothing);
     expect(find.text('Compact Follower'), findsOneWidget);
-    expect(find.text('关注'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('relationship-list-back-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FriendsPage), findsOneWidget);
+    expect(find.text('Compact Following'), findsOneWidget);
+    expect(find.text('Compact Follower'), findsOneWidget);
   });
 
-  testWidgets('联系人资料跨 compact 和 expanded 断点保持详情与目录分段', (tester) async {
+  testWidgets('窄屏粉丝列表资料跨断点保持返回层级', (tester) async {
     const followerDid = 'did:test:responsive-follower';
     tester.view
       ..devicePixelRatio = 1
@@ -260,12 +366,47 @@ void main() {
       buildLocalizedTestApp(
         home: const FriendsWorkspacePage(),
         gateway: gateway,
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                following: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: 'did:test:responsive-following',
+                    displayName: 'Responsive Following',
+                    relationship: 'following',
+                  ),
+                ],
+                followers: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: followerDid,
+                    displayName: 'Responsive Follower',
+                    relationship: 'follower',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('relationship-tab-followers')));
+    expect(find.text('Responsive Follower'), findsOneWidget);
+    expect(find.text('Responsive Following'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('friends-followers-view-all')));
     await tester.pumpAndSettle();
+
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+    expect(
+      tester
+          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+          .type,
+      FriendsRelationshipListType.followers,
+    );
+    expect(find.text('Responsive Following'), findsNothing);
     await tester.tap(find.byKey(const Key('contact-row:$followerDid')));
     await tester.pumpAndSettle();
 
@@ -283,12 +424,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PeerProfilePage), findsOneWidget);
-    Navigator.of(tester.element(find.byType(PeerProfilePage))).pop();
+    await _simulateSystemBack(tester);
     await tester.pumpAndSettle();
 
     expect(find.byType(PeerProfilePage), findsNothing);
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+    expect(
+      tester
+          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+          .type,
+      FriendsRelationshipListType.followers,
+    );
     expect(find.text('Responsive Follower'), findsOneWidget);
     expect(find.text('Responsive Following'), findsNothing);
+
+    await _simulateSystemBack(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RelationshipListPage), findsNothing);
+    expect(find.text('Responsive Follower'), findsOneWidget);
+    expect(find.text('Responsive Following'), findsOneWidget);
   });
 
   testWidgets('联系人页分区展示群组、我关注的和关注我的预览', (tester) async {
@@ -359,6 +514,46 @@ void main() {
     expect(find.text('Erin'), findsOneWidget);
     expect(find.text('Frank'), findsOneWidget);
     expect(find.text('查看全部'), findsNWidgets(2));
+    expect(find.text('朋友'), findsNothing);
+  });
+
+  testWidgets('窄屏联系人一级页使用全宽连续表面', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const FriendsPage(),
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(ref, const FriendsState()),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pageRect = tester.getRect(
+      find.byKey(const Key('friends-page-surface')),
+    );
+    final listRect = tester.getRect(
+      find.byKey(const Key('friends-list-surface')),
+    );
+    expect(pageRect.left, 0);
+    expect(pageRect.right, 390);
+    expect(listRect.left, pageRect.left);
+    expect(listRect.right, pageRect.right);
+    expect(listRect.bottom, pageRect.bottom);
+    final listSurface = tester.widget<DecoratedBox>(
+      find.byKey(const Key('friends-list-surface')),
+    );
+    expect(
+      (listSurface.decoration as BoxDecoration).color,
+      AwikiMeColors.surface,
+    );
   });
 
   testWidgets('联系人页关注我的预览可直接回关联系人', (tester) async {
@@ -448,11 +643,11 @@ void main() {
     expect(find.text('Erin'), findsOneWidget);
   });
 
-  testWidgets('互相关注联系人同时显示在我关注的和关注我的', (tester) async {
+  testWidgets('互相关注联系人只分别显示在我关注的和关注我的', (tester) async {
     const mutual = RelationshipSummary(
       did: 'did:test:mutual',
       displayName: 'Mutual Alice',
-      relationship: 'mutual',
+      relationship: 'friend',
     );
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -472,9 +667,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Mutual Alice'), findsNWidgets(3));
+    expect(find.text('Mutual Alice'), findsNWidgets(2));
     expect(find.text('我关注的'), findsOneWidget);
     expect(find.text('关注我的'), findsOneWidget);
+    expect(find.text('朋友'), findsNothing);
     expect(find.text('关注'), findsNothing);
   });
 
@@ -707,10 +903,18 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('查看全部'));
+      expect(find.byType(AwikiWorkspaceEmptyDetail), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('friends-following-view-all')));
       await tester.pumpAndSettle();
 
       expect(find.byType(RelationshipListPage), findsOneWidget);
+      expect(
+        tester
+            .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+            .type,
+        FriendsRelationshipListType.following,
+      );
       expect(find.text('取消关注'), findsOneWidget);
 
       await tester.tap(find.text('取消关注'));

@@ -16,6 +16,8 @@ class AwikiMePalette {
   static const Color brandAccent = Color(0xFF0081D3);
   static const Color brandAccentPressed = Color(0xFF006EBA);
   static const Color brandAccentSoft = Color(0xFFE0F0FA);
+  static const Color avatarBackground = Color(0xFFF6E3C9);
+  static const Color avatarForeground = Color(0xFF5E3A05);
   static const Color badgeBlue = Color(0xFF1A8FCF);
   static const Color successGreen = Color(0xFF03A14A);
   static const Color warningGold = Color(0xFFDA950B);
@@ -117,6 +119,16 @@ class AwikiMeMotion {
 }
 
 class AwikiMeShadows {
+  static const List<BoxShadow> selectedListItem = <BoxShadow>[
+    BoxShadow(color: Color(0x0A000000), blurRadius: 1),
+    BoxShadow(color: Color(0x12000000), blurRadius: 10, offset: Offset(0, 2)),
+  ];
+
+  static const List<BoxShadow> hoveredListItem = <BoxShadow>[
+    BoxShadow(color: Color(0x08000000), blurRadius: 1),
+    BoxShadow(color: Color(0x0C000000), blurRadius: 8, offset: Offset(0, 2)),
+  ];
+
   static const List<BoxShadow> card = <BoxShadow>[
     BoxShadow(color: Color(0x0C000000), blurRadius: 18, offset: Offset(0, 8)),
   ];
@@ -296,6 +308,8 @@ class AwikiMeSemanticColors {
     required this.primary,
     required this.primaryPressed,
     required this.primarySoft,
+    required this.avatarBackground,
+    required this.avatarForeground,
     required this.title,
     required this.body,
     required this.secondaryText,
@@ -320,6 +334,8 @@ class AwikiMeSemanticColors {
   final Color primary;
   final Color primaryPressed;
   final Color primarySoft;
+  final Color avatarBackground;
+  final Color avatarForeground;
   final Color title;
   final Color body;
   final Color secondaryText;
@@ -351,6 +367,8 @@ class AwikiMeSemanticColors {
       primary: blend(a.primary, b.primary),
       primaryPressed: blend(a.primaryPressed, b.primaryPressed),
       primarySoft: blend(a.primarySoft, b.primarySoft),
+      avatarBackground: blend(a.avatarBackground, b.avatarBackground),
+      avatarForeground: blend(a.avatarForeground, b.avatarForeground),
       title: blend(a.title, b.title),
       body: blend(a.body, b.body),
       secondaryText: blend(a.secondaryText, b.secondaryText),
@@ -418,6 +436,8 @@ class AwikiMeThemeTokens extends ThemeExtension<AwikiMeThemeTokens> {
   Color get primaryForeground => colorScheme.onPrimary;
   Color get primaryDark => semanticColors.primaryPressed;
   Color get primarySoft => semanticColors.primarySoft;
+  Color get avatarBackground => semanticColors.avatarBackground;
+  Color get avatarForeground => semanticColors.avatarForeground;
   Color get title => semanticColors.title;
   Color get body => semanticColors.body;
   Color get secondaryText => semanticColors.secondaryText;
@@ -554,6 +574,8 @@ class AwikiMeTheme {
     primary: AwikiMePalette.brandAccent,
     primaryPressed: AwikiMePalette.brandAccentPressed,
     primarySoft: AwikiMePalette.brandAccentSoft,
+    avatarBackground: AwikiMePalette.avatarBackground,
+    avatarForeground: AwikiMePalette.avatarForeground,
     title: AwikiMePalette.inkNeutral,
     body: AwikiMePalette.inkNeutral,
     secondaryText: AwikiMePalette.mutedNeutral,
@@ -1053,10 +1075,17 @@ class AwikiMeTextStyles {
 }
 
 class AwikiMeWidgets {
-  static Widget pageBackground({required Widget child}) {
+  static Widget pageBackground({
+    required Widget child,
+    Color? color,
+    Key? key,
+  }) {
     return Builder(
       builder: (context) => DecoratedBox(
-        decoration: BoxDecoration(color: context.awikiTheme.background),
+        key: key,
+        decoration: BoxDecoration(
+          color: color ?? context.awikiTheme.background,
+        ),
         child: child,
       ),
     );

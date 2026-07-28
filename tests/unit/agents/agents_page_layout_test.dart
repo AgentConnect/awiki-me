@@ -13,6 +13,8 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -78,6 +80,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(scenario.layoutKey), findsOneWidget);
+      if (scenario.label == '移动端') {
+        final compactSurface = tester.widget<DecoratedBox>(
+          find.byKey(const Key('agents-compact-layout')),
+        );
+        expect(
+          (compactSurface.decoration as BoxDecoration).color,
+          AwikiMeColors.surface,
+        );
+      }
       _expectAgentListStatusAnchoredToIcon(
         tester,
         agentDid: 'did:agent:daemon:status-layout',
@@ -89,6 +100,17 @@ void main() {
         agentDid: 'did:agent:runtime:status-layout',
         title: 'Layout Agent',
         expectedDotSize: scenario.dotSize,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const Key(
+              'agent-list-status-anchor-did:agent:runtime:status-layout',
+            ),
+          ),
+          matching: find.byType(AvatarBadge),
+        ),
+        findsOneWidget,
       );
     });
   }

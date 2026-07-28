@@ -38,11 +38,10 @@ class _OnboardingUtilityBar extends StatelessWidget {
       );
     }
     return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: <Widget>[
         languageButton,
         SizedBox(width: responsive.spacing(8)),
-        Flexible(
+        Expanded(
           child: Align(alignment: Alignment.centerRight, child: tenantButton),
         ),
       ],

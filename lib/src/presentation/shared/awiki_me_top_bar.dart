@@ -160,29 +160,32 @@ class AwikiMeShellTabPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
     final innerPadding = responsive.isPhone
         ? const EdgeInsets.symmetric(horizontal: 8)
         : responsive.tabInnerPadding;
-    return Column(
-      children: <Widget>[
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.awikiTheme.surface,
-            border: Border(
-              bottom: BorderSide(color: context.awikiTheme.border),
+    return ColoredBox(
+      key: const Key('shell-tab-page-surface'),
+      color: theme.surface,
+      child: Column(
+        children: <Widget>[
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.surface,
+              border: Border(bottom: BorderSide(color: theme.border)),
+            ),
+            child: Padding(
+              padding: responsive.scaledInsets(innerPadding),
+              child: AwikiMeShellTopBar(
+                title: title,
+                onSettingsTap: onSettingsTap,
+                onQuickActionsTap: onQuickActionsTap,
+              ),
             ),
           ),
-          child: Padding(
-            padding: responsive.scaledInsets(innerPadding),
-            child: AwikiMeShellTopBar(
-              title: title,
-              onSettingsTap: onSettingsTap,
-              onQuickActionsTap: onQuickActionsTap,
-            ),
-          ),
-        ),
-        Expanded(child: child),
-      ],
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 }
