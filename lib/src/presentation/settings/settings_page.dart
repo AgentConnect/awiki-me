@@ -8,6 +8,7 @@ import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/message_sync_coordinator_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../agents/agents_page.dart';
 import '../agents/agents_provider.dart';
@@ -28,6 +29,7 @@ class SettingsPage extends ConsumerWidget {
     final l10n = context.l10n;
     final session = ref.watch(sessionProvider).session;
     final runtime = ref.read(appRuntimeProvider.notifier);
+    final messageSync = ref.watch(messageSyncCoordinatorProvider);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final personalAgentEnabled = ref.watch(agentImEnabledProvider);
@@ -65,6 +67,26 @@ class SettingsPage extends ConsumerWidget {
                   onTap: () => AppNavigator.push<void>(
                     context,
                     (_) => const DevicesPage(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (messageSync.status !=
+                MessageSyncCoordinatorStatus.idle) ...<Widget>[
+              AppCardSection(
+                padding: EdgeInsets.zero,
+                child: AppListTile(
+                  title: l10n.messageSyncStatusTitle,
+                  titleKey: const ValueKey<String>('message-sync-status'),
+                  subtitle: _messageSyncStatusLabel(context, messageSync),
+                  trailing: _messageSyncTrailing(context, messageSync),
+                  onTap: _messageSyncAction(
+                    runtime: runtime,
+                    sync: messageSync,
+                    coordinator: ref.read(
+                      messageSyncCoordinatorProvider.notifier,
+                    ),
                   ),
                 ),
               ),
@@ -201,6 +223,69 @@ class SettingsPage extends ConsumerWidget {
       return l10n.settingsUpdateStatusFailed;
     }
     return l10n.settingsAlreadyLatestVersion;
+  }
+
+  String _messageSyncStatusLabel(
+    BuildContext context,
+    MessageSyncCoordinatorState state,
+  ) {
+    return switch (state.status) {
+      MessageSyncCoordinatorStatus.idle => context.l10n.messageSyncStatusIdle,
+      MessageSyncCoordinatorStatus.syncing =>
+        context.l10n.messageSyncStatusSyncing,
+      MessageSyncCoordinatorStatus.recoveryRequired =>
+        context.l10n.messageSyncStatusRecoveryRequired,
+      MessageSyncCoordinatorStatus.recovering =>
+        context.l10n.messageSyncStatusRecovering,
+      MessageSyncCoordinatorStatus.retryableFailure =>
+        context.l10n.messageSyncStatusRetryableFailure,
+      MessageSyncCoordinatorStatus.authRevoked =>
+        context.l10n.messageSyncStatusAuthRevoked,
+    };
+  }
+
+  Widget? _messageSyncTrailing(
+    BuildContext context,
+    MessageSyncCoordinatorState state,
+  ) {
+    return switch (state.status) {
+      MessageSyncCoordinatorStatus.syncing ||
+      MessageSyncCoordinatorStatus.recoveryRequired ||
+      MessageSyncCoordinatorStatus.recovering =>
+        const CupertinoActivityIndicator(radius: 9),
+      MessageSyncCoordinatorStatus.retryableFailure => Text(
+        context.l10n.messageSyncRetryAction,
+        style: const TextStyle(
+          color: AwikiMeColors.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      MessageSyncCoordinatorStatus.authRevoked => Text(
+        context.l10n.messageSyncReauthenticateAction,
+        style: TextStyle(
+          color: context.awikiTheme.danger,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      MessageSyncCoordinatorStatus.idle => null,
+    };
+  }
+
+  VoidCallback? _messageSyncAction({
+    required AppRuntimeController runtime,
+    required MessageSyncCoordinatorState sync,
+    required MessageSyncCoordinator coordinator,
+  }) {
+    return switch (sync.status) {
+      MessageSyncCoordinatorStatus.retryableFailure =>
+        () => coordinator.requestSync('manual_refresh', immediate: true),
+      MessageSyncCoordinatorStatus.authRevoked =>
+        runtime.reauthenticateAfterAuthRevoked,
+      MessageSyncCoordinatorStatus.idle ||
+      MessageSyncCoordinatorStatus.syncing ||
+      MessageSyncCoordinatorStatus.recoveryRequired ||
+      MessageSyncCoordinatorStatus.recovering => null,
+    };
   }
 
   void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {

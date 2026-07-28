@@ -974,6 +974,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsNoCredentialToExport => '当前暂无可导出的登录凭证';
 
   @override
+  String get messageSyncStatusTitle => '消息同步';
+
+  @override
+  String get messageSyncStatusIdle => '已是最新状态';
+
+  @override
+  String get messageSyncStatusSyncing => '正在同步消息…';
+
+  @override
+  String get messageSyncStatusRecoveryRequired => '需要安全恢复消息，正在自动重试…';
+
+  @override
+  String get messageSyncStatusRecovering => '正在恢复近期消息和当前已读状态…';
+
+  @override
+  String get messageSyncStatusRetryableFailure => '消息同步中断，本地数据保持不变。';
+
+  @override
+  String get messageSyncStatusAuthRevoked => '此设备已不再获得授权，请重新登录后继续。';
+
+  @override
+  String get messageSyncRetryAction => '重试';
+
+  @override
+  String get messageSyncReauthenticateAction => '重新登录';
+
+  @override
   String get settingsLogout => '退出登录';
 
   @override

@@ -25,36 +25,51 @@ const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
+enum MessageSyncCoordinatorStatus {
+  idle,
+  syncing,
+  recoveryRequired,
+  recovering,
+  retryableFailure,
+  authRevoked,
+}
+
 class MessageSyncCoordinatorState {
   const MessageSyncCoordinatorState({
-    this.isSyncing = false,
+    this.status = MessageSyncCoordinatorStatus.idle,
     this.pendingReason,
     this.lastReason,
     this.lastError,
     this.lastStatus,
-    this.recoveryRequired = false,
   });
 
-  final bool isSyncing;
+  final MessageSyncCoordinatorStatus status;
   final String? pendingReason;
   final String? lastReason;
   final Object? lastError;
   final MessageSyncStatus? lastStatus;
-  final bool recoveryRequired;
+
+  bool get isSyncing =>
+      status == MessageSyncCoordinatorStatus.syncing ||
+      status == MessageSyncCoordinatorStatus.recovering;
+
+  bool get recoveryRequired =>
+      status == MessageSyncCoordinatorStatus.recoveryRequired;
+
+  bool get isAuthRevoked => status == MessageSyncCoordinatorStatus.authRevoked;
 
   @Deprecated('Use recoveryRequired.')
   bool get snapshotRequired => recoveryRequired;
 
   MessageSyncCoordinatorState copyWith({
-    bool? isSyncing,
+    MessageSyncCoordinatorStatus? status,
     Object? pendingReason = _unset,
     Object? lastReason = _unset,
     Object? lastError = _unset,
     Object? lastStatus = _unset,
-    bool? recoveryRequired,
   }) {
     return MessageSyncCoordinatorState(
-      isSyncing: isSyncing ?? this.isSyncing,
+      status: status ?? this.status,
       pendingReason: identical(pendingReason, _unset)
           ? this.pendingReason
           : pendingReason as String?,
@@ -65,7 +80,6 @@ class MessageSyncCoordinatorState {
       lastStatus: identical(lastStatus, _unset)
           ? this.lastStatus
           : lastStatus as MessageSyncStatus?,
-      recoveryRequired: recoveryRequired ?? this.recoveryRequired,
     );
   }
 }
@@ -91,13 +105,38 @@ class MessageSyncCoordinator
   DateTime? _lastFailedAt;
   final Set<String> _notifiedCommittedEventIds = <String>{};
   final Set<String> _notifiedCommittedMessageIds = <String>{};
+  bool _recoveryRetryPending = false;
+  bool _runningRecoveryRetry = false;
   bool _disposed = false;
 
-  Future<void> requestSync(String reason, {bool immediate = false}) {
+  void resetForSession() {
     if (_disposed) {
+      return;
+    }
+    _pendingTimer?.cancel();
+    _pendingTimer = null;
+    _completePendingWaiters();
+    _recoveryRetryPending = false;
+    _runningRecoveryRetry = false;
+    _lastStartedAt = null;
+    _lastFailedAt = null;
+    _notifiedCommittedEventIds.clear();
+    _notifiedCommittedMessageIds.clear();
+    state = const MessageSyncCoordinatorState();
+  }
+
+  Future<void> requestSync(String reason, {bool immediate = false}) {
+    if (_disposed ||
+        state.status == MessageSyncCoordinatorStatus.authRevoked ||
+        ref.read(sessionProvider).session == null) {
       _messageSyncTrace(
-        'request.ignored_disposed',
-        fields: <String, Object?>{'reason': reason},
+        'request.ignored',
+        fields: <String, Object?>{
+          'reason': reason,
+          'disposed': _disposed,
+          'status': state.status.name,
+          'has_session': ref.read(sessionProvider).session != null,
+        },
       );
       return Future<void>.value();
     }
@@ -197,13 +236,22 @@ class MessageSyncCoordinator
     }
     late final Future<void> operation;
     operation = (() async {
+      final sessionFence = _MessageSyncSessionFence.capture(
+        ref.read(sessionProvider),
+      );
+      if (sessionFence == null) {
+        return;
+      }
+      final recovering = _runningRecoveryRetry;
       _lastStartedAt = DateTime.now();
       _messageSyncTrace(
         'run.start',
-        fields: <String, Object?>{'reason': reason},
+        fields: <String, Object?>{'reason': reason, 'recovering': recovering},
       );
       state = state.copyWith(
-        isSyncing: true,
+        status: recovering
+            ? MessageSyncCoordinatorStatus.recovering
+            : MessageSyncCoordinatorStatus.syncing,
         pendingReason: null,
         lastReason: reason,
         lastError: null,
@@ -212,7 +260,7 @@ class MessageSyncCoordinator
         final result = await ref
             .read(messageSyncServiceProvider)
             .syncNow(reason: reason);
-        if (_disposed) {
+        if (!_isCurrentSession(sessionFence)) {
           return;
         }
         _messageSyncTrace(
@@ -223,14 +271,15 @@ class MessageSyncCoordinator
             'committed_incoming': result.committedIncomingMessages.length,
           },
         );
-        state = state.copyWith(
-          lastStatus: result.status,
-          recoveryRequired: result.recoveryRequired,
-          lastError: null,
-        );
+        state = state.copyWith(lastStatus: result.status, lastError: null);
+        if (result.status != MessageSyncStatus.recoveryRequired) {
+          _runningRecoveryRetry = false;
+          _recoveryRetryPending = false;
+        }
         if (result.status == MessageSyncStatus.retryableFailure) {
           _lastFailedAt = DateTime.now();
           state = state.copyWith(
+            status: MessageSyncCoordinatorStatus.retryableFailure,
             lastError: MessageSyncCoordinatorFailure(
               result.errorCode ?? 'message_sync_retryable_failure',
             ),
@@ -238,57 +287,75 @@ class MessageSyncCoordinator
           return;
         }
         if (result.status == MessageSyncStatus.authRevoked) {
+          _pendingTimer?.cancel();
+          _pendingTimer = null;
+          _completePendingWaiters();
+          _recoveryRetryPending = false;
+          _runningRecoveryRetry = false;
           state = state.copyWith(
+            status: MessageSyncCoordinatorStatus.authRevoked,
+            pendingReason: null,
             lastError: MessageSyncCoordinatorFailure(
               result.errorCode ?? 'message_sync_auth_revoked',
             ),
           );
           return;
         }
-        _dispatchCommittedIncomingNotifications(result);
-        await ref.read(devicesProvider.notifier).refreshJoinInbox();
-        if (_disposed) {
+        if (result.status == MessageSyncStatus.recoveryRequired) {
+          state = state.copyWith(
+            status: MessageSyncCoordinatorStatus.recoveryRequired,
+          );
+          if (!recovering && ref.read(messageSyncV2ReadEnabledProvider)) {
+            _recoveryRetryPending = true;
+            state = state.copyWith(pendingReason: reason);
+          } else {
+            _runningRecoveryRetry = false;
+          }
           return;
         }
-        if (!result.recoveryRequired) {
-          _messageSyncTrace(
-            'run.refresh_fast_local.start',
-            fields: <String, Object?>{'reason': reason},
-          );
-          await ref.read(conversationListProvider.notifier).refreshFastLocal();
-          if (_disposed) {
-            return;
-          }
-          final conversations = ref
-              .read(conversationListProvider)
-              .conversations;
-          if (_disposed) {
-            return;
-          }
-          _messageSyncTrace(
-            'run.prewarm.start',
-            fields: <String, Object?>{
-              'reason': reason,
-              'conversations': conversations.length,
-            },
-          );
-          await ref
-              .read(chatThreadsProvider.notifier)
-              .prewarmLocalHistoryForConversations(conversations);
-          await ref
-              .read(chatThreadsProvider.notifier)
-              .refreshVisibleLocalProjections(force: true);
-          if (_disposed) {
-            return;
-          }
-          _messageSyncTrace(
-            'run.prewarm.done',
-            fields: <String, Object?>{
-              'reason': reason,
-              'conversations': conversations.length,
-            },
-          );
+        _dispatchCommittedIncomingNotifications(result);
+        await ref.read(devicesProvider.notifier).refreshJoinInbox();
+        if (!_isCurrentSession(sessionFence)) {
+          return;
         }
+        _messageSyncTrace(
+          'run.refresh_fast_local.start',
+          fields: <String, Object?>{'reason': reason},
+        );
+        await ref.read(conversationListProvider.notifier).refreshFastLocal();
+        if (!_isCurrentSession(sessionFence)) {
+          return;
+        }
+        final conversations = ref.read(conversationListProvider).conversations;
+        if (!_isCurrentSession(sessionFence)) {
+          return;
+        }
+        _messageSyncTrace(
+          'run.prewarm.start',
+          fields: <String, Object?>{
+            'reason': reason,
+            'conversations': conversations.length,
+          },
+        );
+        await ref
+            .read(chatThreadsProvider.notifier)
+            .prewarmLocalHistoryForConversations(conversations);
+        if (!_isCurrentSession(sessionFence)) {
+          return;
+        }
+        await ref
+            .read(chatThreadsProvider.notifier)
+            .refreshVisibleLocalProjections(force: true);
+        if (!_isCurrentSession(sessionFence)) {
+          return;
+        }
+        _messageSyncTrace(
+          'run.prewarm.done',
+          fields: <String, Object?>{
+            'reason': reason,
+            'conversations': conversations.length,
+          },
+        );
       } catch (error) {
         _lastFailedAt = DateTime.now();
         _messageSyncTrace(
@@ -298,10 +365,15 @@ class MessageSyncCoordinator
             'error_type': error.runtimeType,
           },
         );
-        if (_disposed) {
+        if (!_isCurrentSession(sessionFence)) {
           return;
         }
-        state = state.copyWith(lastError: error);
+        _recoveryRetryPending = false;
+        _runningRecoveryRetry = false;
+        state = state.copyWith(
+          status: MessageSyncCoordinatorStatus.retryableFailure,
+          lastError: error,
+        );
       } finally {
         if (identical(_activeSync, operation)) {
           _activeSync = null;
@@ -311,15 +383,31 @@ class MessageSyncCoordinator
             'run.finish_disposed',
             fields: <String, Object?>{'reason': reason},
           );
-        } else {
-          state = state.copyWith(isSyncing: false);
+        } else if (_isCurrentSession(sessionFence)) {
+          if (state.status == MessageSyncCoordinatorStatus.syncing ||
+              state.status == MessageSyncCoordinatorStatus.recovering) {
+            state = state.copyWith(status: MessageSyncCoordinatorStatus.idle);
+          }
           final pending = state.pendingReason;
           _messageSyncTrace(
             'run.finish',
             fields: <String, Object?>{'reason': reason, 'pending': pending},
           );
           if (pending != null) {
-            unawaited(requestSync(pending));
+            if (_recoveryRetryPending) {
+              _recoveryRetryPending = false;
+              _runningRecoveryRetry = true;
+              unawaited(requestSync(pending, immediate: true));
+            } else if (state.status !=
+                MessageSyncCoordinatorStatus.authRevoked) {
+              unawaited(requestSync(pending));
+            }
+          }
+        } else {
+          final pending = state.pendingReason;
+          if (pending != null &&
+              state.status != MessageSyncCoordinatorStatus.authRevoked) {
+            unawaited(requestSync(pending, immediate: true));
           }
         }
       }
@@ -331,6 +419,10 @@ class MessageSyncCoordinator
       level: AwikiPerformanceLogLevel.verbose,
     );
     return operation;
+  }
+
+  bool _isCurrentSession(_MessageSyncSessionFence fence) {
+    return !_disposed && fence.matches(ref.read(sessionProvider));
   }
 
   void _dispatchCommittedIncomingNotifications(MessageSyncOutcome outcome) {
@@ -436,13 +528,17 @@ class MessageSyncCoordinator
     _disposed = true;
     _pendingTimer?.cancel();
     _pendingTimer = null;
+    _completePendingWaiters();
+    super.dispose();
+  }
+
+  void _completePendingWaiters() {
     for (final waiter in _pendingCompleters) {
       if (!waiter.isCompleted) {
         waiter.complete();
       }
     }
     _pendingCompleters.clear();
-    super.dispose();
   }
 }
 
@@ -453,6 +549,45 @@ class MessageSyncCoordinatorFailure implements Exception {
 
   @override
   String toString() => code;
+}
+
+class _MessageSyncSessionFence {
+  const _MessageSyncSessionFence({
+    required this.generation,
+    required this.ownerIdentityId,
+    required this.accountId,
+    required this.did,
+  });
+
+  factory _MessageSyncSessionFence.from(SessionState sessionState) {
+    final session = sessionState.session!;
+    return _MessageSyncSessionFence(
+      generation: sessionState.generation,
+      ownerIdentityId: session.ownerIdentityId,
+      accountId: session.accountId,
+      did: session.did,
+    );
+  }
+
+  static _MessageSyncSessionFence? capture(SessionState sessionState) {
+    return sessionState.session == null
+        ? null
+        : _MessageSyncSessionFence.from(sessionState);
+  }
+
+  final int generation;
+  final String? ownerIdentityId;
+  final String? accountId;
+  final String did;
+
+  bool matches(SessionState sessionState) {
+    final session = sessionState.session;
+    return session != null &&
+        sessionState.generation == generation &&
+        session.ownerIdentityId == ownerIdentityId &&
+        session.accountId == accountId &&
+        session.did == did;
+  }
 }
 
 void _messageSyncTrace(

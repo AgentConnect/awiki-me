@@ -657,6 +657,7 @@ class ChatThreadsController
   final Map<String, Future<void>> _activeVisibleThreadStaleGuards =
       <String, Future<void>>{};
   final Set<String> _activeLocalHistoryLoads = <String>{};
+  int _localHistoryGeneration = 0;
   final Set<String> _activeRemoteHistorySyncs = <String>{};
   final Map<String, _ThreadPatchSubscription> _threadPatchSubscriptions =
       <String, _ThreadPatchSubscription>{};
@@ -750,6 +751,7 @@ class ChatThreadsController
       );
       return;
     }
+    final sessionGeneration = ref.read(sessionProvider).generation;
     final messaging = ref.read(messagingServiceProvider);
     if (messaging is! ConversationTimelineMessagingService) {
       _chatProviderTrace(
@@ -765,7 +767,9 @@ class ChatThreadsController
     var warmed = 0;
     final totalWatch = Stopwatch()..start();
     for (final conversation in conversations) {
-      if (!mounted || warmed >= maxConversations) {
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration ||
+          warmed >= maxConversations) {
         break;
       }
       final threadId = _displayThreadIdFor(conversation, null);
@@ -810,6 +814,10 @@ class ChatThreadsController
         showHydratingState: false,
         markLoadedWhenEmpty: false,
       );
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration) {
+        break;
+      }
       _chatProviderTrace(
         'local_history.prewarm.item_done',
         fields: <String, Object?>{
@@ -881,6 +889,8 @@ class ChatThreadsController
     if (!mounted) {
       return;
     }
+    final sessionGeneration = ref.read(sessionProvider).generation;
+    final localHistoryGeneration = _localHistoryGeneration;
     final visibleEntries = <MapEntry<String, _ThreadCacheMetadata>>[
       for (final entry in _cacheMetadataByThreadId.entries)
         if (entry.value.isVisible && entry.value.visibleConversation != null)
@@ -890,7 +900,9 @@ class ChatThreadsController
       return;
     }
     for (final entry in visibleEntries) {
-      if (!mounted) {
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration ||
+          _localHistoryGeneration != localHistoryGeneration) {
         break;
       }
       final conversation = entry.value.visibleConversation;
@@ -903,6 +915,11 @@ class ChatThreadsController
         force: force,
         limit: limit,
       );
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration ||
+          _localHistoryGeneration != localHistoryGeneration) {
+        break;
+      }
     }
   }
 
@@ -910,6 +927,7 @@ class ChatThreadsController
     ConversationSummary conversation, {
     required String displayThreadId,
   }) async {
+    final sessionGeneration = ref.read(sessionProvider).generation;
     final aliasWarmCount = _warmDisplayThreadFromConversationAliases(
       conversation,
       displayThreadId: displayThreadId,
@@ -990,7 +1008,7 @@ class ChatThreadsController
               thread(displayThreadId).messages,
             ),
           );
-    if (!mounted) {
+    if (!mounted || ref.read(sessionProvider).generation != sessionGeneration) {
       return;
     }
     unawaited(
@@ -1288,6 +1306,7 @@ class ChatThreadsController
     if (!mounted) {
       return;
     }
+    final sessionGeneration = ref.read(sessionProvider).generation;
     final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
       _chatProviderTrace(
@@ -1332,7 +1351,8 @@ class ChatThreadsController
           afterServerSeq: effectiveAfterServerSeq,
         );
       }
-      if (!mounted) {
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration) {
         return;
       }
       final repairedVersion = await _repairThreadFromLocalProjection(
@@ -1350,7 +1370,8 @@ class ChatThreadsController
               markLoadedWhenEmpty: false,
             )
           : const _HistoryLoadResult(loadedCount: 0, failed: false);
-      if (!mounted) {
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration) {
         return;
       }
       if (repairedVersion == null && !localResult.loadedAny) {
@@ -1366,6 +1387,10 @@ class ChatThreadsController
         return;
       }
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration) {
+        return;
+      }
       _flushPendingReadAck(displayThreadId);
       _chatProviderTrace(
         'conversation_after.done',
@@ -2398,6 +2423,8 @@ class ChatThreadsController
     if (!mounted) {
       return const _HistoryLoadResult(loadedCount: 0, failed: false);
     }
+    final sessionGeneration = ref.read(sessionProvider).generation;
+    final localHistoryGeneration = _localHistoryGeneration;
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
     final totalWatch = Stopwatch()..start();
     _activeLocalHistoryLoads.add(targetThreadId);
@@ -2512,7 +2539,9 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!mounted) {
+      if (!mounted ||
+          ref.read(sessionProvider).generation != sessionGeneration ||
+          _localHistoryGeneration != localHistoryGeneration) {
         return _HistoryLoadResult(
           loadedCount: history.length,
           failed: false,
@@ -2573,10 +2602,14 @@ class ChatThreadsController
           'elapsed_ms': totalWatch.elapsedMilliseconds,
         },
       );
-      if (shouldShowLoading && mounted) {
+      final isCurrentSession =
+          mounted &&
+          ref.read(sessionProvider).generation == sessionGeneration &&
+          _localHistoryGeneration == localHistoryGeneration;
+      if (shouldShowLoading && isCurrentSession) {
         _setThreadLoading(targetThreadId, false);
       }
-      if (mounted && showHydratingState) {
+      if (isCurrentSession && showHydratingState) {
         _setThreadLocalHistoryHydrating(targetThreadId, false);
       }
       totalWatch.stop();
@@ -2587,11 +2620,17 @@ class ChatThreadsController
       );
       return const _HistoryLoadResult(loadedCount: 0, failed: true);
     } finally {
-      _activeLocalHistoryLoads.remove(targetThreadId);
-      if (mounted && showHydratingState) {
+      final isCurrentSession =
+          mounted &&
+          ref.read(sessionProvider).generation == sessionGeneration &&
+          _localHistoryGeneration == localHistoryGeneration;
+      if (_localHistoryGeneration == localHistoryGeneration) {
+        _activeLocalHistoryLoads.remove(targetThreadId);
+      }
+      if (isCurrentSession && showHydratingState) {
         _setThreadLocalHistoryHydrating(targetThreadId, false);
       }
-      if (mounted) {
+      if (isCurrentSession) {
         _chatProviderTrace(
           'local_history.load_finish',
           fields: <String, Object?>{
@@ -3387,6 +3426,7 @@ class ChatThreadsController
   }
 
   void clear() {
+    _localHistoryGeneration += 1;
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();

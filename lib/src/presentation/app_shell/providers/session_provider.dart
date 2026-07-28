@@ -8,11 +8,13 @@ class SessionState {
     this.capabilities,
     this.session,
     this.localCredentials = const <SessionIdentity>[],
+    this.generation = 0,
   });
 
   final BridgeCapabilities? capabilities;
   final SessionIdentity? session;
   final List<SessionIdentity> localCredentials;
+  final int generation;
 
   bool get isLoggedIn => session != null;
 
@@ -25,11 +27,13 @@ class SessionState {
     SessionIdentity? session,
     List<SessionIdentity>? localCredentials,
     bool clearSession = false,
+    bool advanceGeneration = false,
   }) {
     return SessionState(
       capabilities: capabilities ?? this.capabilities,
       session: clearSession ? null : (session ?? this.session),
       localCredentials: localCredentials ?? this.localCredentials,
+      generation: advanceGeneration ? generation + 1 : generation,
     );
   }
 }
@@ -55,13 +59,18 @@ class SessionController extends StateNotifier<SessionState> {
   }
 
   void setSession(SessionIdentity? session) {
-    state = state.copyWith(session: session, clearSession: session == null);
+    state = state.copyWith(
+      session: session,
+      clearSession: session == null,
+      advanceGeneration: true,
+    );
   }
 
   void clear() {
     state = state.copyWith(
       localCredentials: state.localCredentials,
       clearSession: true,
+      advanceGeneration: true,
     );
   }
 }

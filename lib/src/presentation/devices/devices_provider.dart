@@ -310,6 +310,7 @@ class DevicesController extends StateNotifier<DevicesState> {
   }
 
   Future<void> refreshJoinInbox() async {
+    final sessionEpoch = _sessionEpoch;
     final selector = _selector;
     final registry = state.registry;
     if (selector == null) {
@@ -328,7 +329,7 @@ class DevicesController extends StateNotifier<DevicesState> {
     try {
       final service = ref.read(deviceManagementServiceProvider);
       final requests = await service.restoreAdminJoinRequests(selector);
-      if (!mounted) return;
+      if (!mounted || sessionEpoch != _sessionEpoch) return;
       var activeJoin = state.activeJoin;
       var clearActiveJoin = false;
       final selectedJoinSessionId = activeJoin?.side == DeviceJoinSide.admin
@@ -357,7 +358,7 @@ class DevicesController extends StateNotifier<DevicesState> {
             selector: selector,
             joinSessionId: request.joinSessionId,
           );
-          if (!mounted) return;
+          if (!mounted || sessionEpoch != _sessionEpoch) return;
         }
       }
       state = state.copyWith(
@@ -367,7 +368,7 @@ class DevicesController extends StateNotifier<DevicesState> {
         clearError: true,
       );
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || sessionEpoch != _sessionEpoch) return;
       state = state.copyWith(error: _classifyDeviceError(error));
     }
   }

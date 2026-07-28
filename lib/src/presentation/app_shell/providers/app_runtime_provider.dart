@@ -51,16 +51,19 @@ class AppRuntimeState {
     this.isInitialized = false,
     this.isBusy = false,
     this.activatedDid,
+    this.authRevoked = false,
   });
 
   final bool isInitialized;
   final bool isBusy;
   final String? activatedDid;
+  final bool authRevoked;
 
   AppRuntimeState copyWith({
     bool? isInitialized,
     bool? isBusy,
     Object? activatedDid = _unsetActivatedDid,
+    bool? authRevoked,
   }) {
     return AppRuntimeState(
       isInitialized: isInitialized ?? this.isInitialized,
@@ -68,6 +71,7 @@ class AppRuntimeState {
       activatedDid: identical(activatedDid, _unsetActivatedDid)
           ? this.activatedDid
           : activatedDid as String?,
+      authRevoked: authRevoked ?? this.authRevoked,
     );
   }
 }
@@ -87,6 +91,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           realtimeConnectionStatusProvider,
           _handleRealtimeStatusChanged,
         );
+    _messageSyncSubscription = ref.listen<MessageSyncCoordinatorState>(
+      messageSyncCoordinatorProvider,
+      _handleMessageSyncChanged,
+    );
     _realtimeUpdateSubscription = ref
         .read(realtimeApplicationServiceProvider)
         .updates
@@ -99,6 +107,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
   bool _isLoggingOut = false;
+  bool _syncAuthRevoked = false;
+  Future<void>? _authRevocationFenceOperation;
   Future<void>? _joinedMemberActivation;
   String? _joinedMemberActivationDid;
   Future<void>? _authenticatedRefreshOperation;
@@ -107,6 +117,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
+  late final ProviderSubscription<MessageSyncCoordinatorState>
+  _messageSyncSubscription;
   late final StreamSubscription<RealtimeUpdate> _realtimeUpdateSubscription;
 
   Future<void> initialize() async {
@@ -150,11 +162,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> activateSession(SessionIdentity session) async {
+    await _authRevocationFenceOperation;
     final totalWatch = Stopwatch()..start();
     state = state.copyWith(isBusy: true, activatedDid: null);
     try {
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(sessionProvider.notifier).setSession(session);
+      ref.read(messageSyncCoordinatorProvider.notifier).resetForSession();
+      _syncAuthRevoked = false;
       await AwikiPerformanceLogger.async(
         'app_runtime.activate_session.e2ee',
         () => ref.read(e2eeFacadeProvider).initialize(session),
@@ -164,6 +179,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         isBusy: false,
         isInitialized: true,
         activatedDid: session.did,
+        authRevoked: false,
       );
       unawaited(_refreshAuthenticatedDataInBackground(debounce: false));
       _scheduleReliableSync('startup', immediate: true);
@@ -184,11 +200,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> prepareIdentityActivation() async {
     _isLoggingOut = true;
+    _syncAuthRevoked = false;
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: true,
       isInitialized: true,
       activatedDid: null,
+      authRevoked: false,
     );
     try {
       await ref.read(realtimeApplicationServiceProvider).stop();
@@ -272,11 +290,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
     }
     _isLoggingOut = true;
+    _syncAuthRevoked = false;
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: false,
       isInitialized: true,
       activatedDid: null,
+      authRevoked: false,
     );
     try {
       await ref.read(appSessionServiceProvider).logout();
@@ -318,6 +338,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   void _clearAuthenticatedUiState() {
     _stopForegroundCatchUp();
     ref.read(sessionProvider.notifier).clear();
+    _clearAuthenticatedProjection();
+  }
+
+  void _clearAuthenticatedProjection() {
     ref.read(profileProvider.notifier).clear();
     ref.read(agentsProvider.notifier).clear();
     ref.read(selectedConversationProvider.notifier).clearSelection();
@@ -328,12 +352,67 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ref.read(groupProvider.notifier).clear();
   }
 
-  Future<void> _rollbackSessionActivationBestEffort() async {
+  Future<void> reauthenticateAfterAuthRevoked() => logout();
+
+  void _handleMessageSyncChanged(
+    MessageSyncCoordinatorState? previous,
+    MessageSyncCoordinatorState next,
+  ) {
+    if (next.status != MessageSyncCoordinatorStatus.authRevoked ||
+        previous?.status == MessageSyncCoordinatorStatus.authRevoked) {
+      return;
+    }
+    late final Future<void> operation;
+    operation = _fenceAuthRevokedSession().whenComplete(() {
+      if (identical(_authRevocationFenceOperation, operation)) {
+        _authRevocationFenceOperation = null;
+      }
+    });
+    _authRevocationFenceOperation = operation;
+    unawaited(operation);
+  }
+
+  Future<void> _fenceAuthRevokedSession() async {
+    if (_syncAuthRevoked || ref.read(sessionProvider).session == null) {
+      return;
+    }
+    _syncAuthRevoked = true;
+    _stopForegroundCatchUp();
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: false,
       isInitialized: true,
       activatedDid: null,
+      authRevoked: true,
+    );
+    ref
+        .read(uiFeedbackProvider.notifier)
+        .showError(AppMessage.sessionExpiredRelogin());
+    try {
+      await ref.read(realtimeApplicationServiceProvider).stop();
+    } catch (_) {
+      // The local auth fence remains authoritative even if transport teardown
+      // reports a best-effort failure.
+    }
+    try {
+      await ref.read(appSessionServiceProvider).logout();
+    } catch (_) {
+      // The in-memory session and projections are already fenced. A later
+      // explicit sign-in can replace any stale host session pointer.
+    }
+    if (mounted && _syncAuthRevoked) {
+      _clearAuthenticatedProjection();
+    }
+  }
+
+  Future<void> _rollbackSessionActivationBestEffort() async {
+    _syncAuthRevoked = false;
+    _clearAuthenticatedUiState();
+    state = state.copyWith(
+      isBusy: false,
+      isInitialized: true,
+      activatedDid: null,
+      authRevoked: false,
     );
     try {
       await ref.read(appSessionServiceProvider).logout();
@@ -403,7 +482,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   bool get _canRefreshAuthenticatedData =>
-      mounted && !_isLoggingOut && ref.read(sessionProvider).session != null;
+      mounted &&
+      !_isLoggingOut &&
+      !_syncAuthRevoked &&
+      ref.read(sessionProvider).session != null;
 
   Future<void> _refreshAuthenticatedDataInBackground({bool debounce = true}) {
     final active = _authenticatedRefreshOperation;
@@ -438,7 +520,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
             if (!mounted) {
               return;
             }
-            if (_isLoggingOut || ref.read(sessionProvider).session == null) {
+            if (_isLoggingOut ||
+                _syncAuthRevoked ||
+                ref.read(sessionProvider).session == null) {
               return;
             }
             final message = AppMessage.fromError(error);
@@ -450,6 +534,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         })().whenComplete(() {
           if (identical(_authenticatedRefreshOperation, operation)) {
             _authenticatedRefreshOperation = null;
+          }
+          if (mounted && _syncAuthRevoked) {
+            _clearAuthenticatedProjection();
           }
         });
     _authenticatedRefreshOperation = operation;
@@ -480,6 +567,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (next != AppLifecycleState.resumed) {
       return;
     }
+    if (_syncAuthRevoked) {
+      return;
+    }
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       return;
@@ -498,7 +588,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final previousStatus = previous?.valueOrNull;
     if (status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
-      if (_isLoggingOut) {
+      if (_isLoggingOut || _syncAuthRevoked) {
         return;
       }
       final session = ref.read(sessionProvider).session;
@@ -518,12 +608,17 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (ref.read(sessionProvider).session == null) {
       return;
     }
+    if (_syncAuthRevoked) {
+      return;
+    }
     _scheduleReliableSync('realtime_reconnected');
     unawaited(_refreshAuthenticatedDataInBackground());
   }
 
   void _ensureRealtimeConnected() {
-    if (_isLoggingOut || ref.read(sessionProvider).session == null) {
+    if (_isLoggingOut ||
+        _syncAuthRevoked ||
+        ref.read(sessionProvider).session == null) {
       return;
     }
     final realtime = ref.read(realtimeApplicationServiceProvider);
@@ -538,6 +633,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _foregroundCatchUpTimer = null;
     if (_foregroundCatchUpInterval <= Duration.zero ||
         _isLoggingOut ||
+        _syncAuthRevoked ||
         ref.read(sessionProvider).session == null ||
         ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
       return;
@@ -545,6 +641,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _foregroundCatchUpTimer = Timer.periodic(_foregroundCatchUpInterval, (_) {
       if (!mounted ||
           _isLoggingOut ||
+          _syncAuthRevoked ||
           ref.read(sessionProvider).session == null ||
           ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
         _stopForegroundCatchUp();
@@ -560,7 +657,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> _recoverRealtimeSession() async {
-    if (_isLoggingOut || _isRecoveringRealtimeSession) {
+    if (_isLoggingOut || _syncAuthRevoked || _isRecoveringRealtimeSession) {
       return;
     }
     _isRecoveringRealtimeSession = true;
@@ -573,6 +670,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .refreshSession();
       if (!mounted ||
           _isLoggingOut ||
+          _syncAuthRevoked ||
           ref.read(sessionProvider).session == null) {
         return;
       }
@@ -580,10 +678,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         ref
             .read(sessionProvider.notifier)
             .setSession(_legacySessionFromAppSession(refreshed));
+        ref.read(messageSyncCoordinatorProvider.notifier).resetForSession();
       }
       await _refreshAuthenticatedDataInBackground();
       if (!mounted ||
           _isLoggingOut ||
+          _syncAuthRevoked ||
           ref.read(sessionProvider).session == null) {
         return;
       }
@@ -593,6 +693,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     } catch (_) {
       if (mounted &&
           !_isLoggingOut &&
+          !_syncAuthRevoked &&
           ref.read(sessionProvider).session != null) {
         await _refreshAuthenticatedDataInBackground();
       }
@@ -602,7 +703,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _applyRealtimeUpdate(RealtimeUpdate update) {
-    if (_isLoggingOut || ref.read(sessionProvider).session == null) return;
+    if (_isLoggingOut ||
+        _syncAuthRevoked ||
+        ref.read(sessionProvider).session == null) {
+      return;
+    }
     final traceConversation = update.conversation ?? update.conversationHint;
     _runtimeTrace(
       'realtime.update',
@@ -768,6 +873,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   void _scheduleReliableSync(String reason, {bool immediate = false}) {
     if (!mounted ||
         _isLoggingOut ||
+        _syncAuthRevoked ||
         ref.read(sessionProvider).session == null) {
       return;
     }
@@ -871,6 +977,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     _stopForegroundCatchUp();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
+    _messageSyncSubscription.close();
     _realtimeUpdateSubscription.cancel();
     super.dispose();
   }
