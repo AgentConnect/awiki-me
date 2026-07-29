@@ -74,8 +74,8 @@ Rust im-core
 | message、thread、group、conversation base projection | Rust `im-core` SQLite / runtime store | Flutter SDK message/group/sync/read-state API | `ConversationCorePort`、`MessageCorePort`、`ConversationTimelineMessageCorePort`、`AwikiImCore*Adapter` |
 | canonical `conversationId` / identity aliases | Rust `im-core` / SDK DTO | resolver、message upsert、conversation projection migration | App 只消费 `ConversationIdentity` / `ConversationSummary.conversationId`，不自行生成 direct canonical key |
 | conversation snapshot cache | Rust `im-core` redb snapshot cache | `im-core` 从 committed projection 保存 | `ConversationCorePort.loadConversationSnapshot` |
-| conversation patch stream | Rust `im-core` runtime store | committed sync/local write invalidation | `ConversationCorePort.watchConversationPatches` |
-| conversation timeline patch stream | Rust `im-core` runtime store | committed local message projection、sync、realtime incoming | `ConversationTimelineMessageCorePort.watchConversationTimelinePatches` / `ChatThreadsController` |
+| conversation patch stream | Rust `im-core` runtime store | committed sync/local write invalidation；patch 保留 `ownerIdentityId` | `ConversationCorePort.watchConversationPatches`；App 用完整 session/account/auth generation fence 消费 |
+| conversation timeline patch stream | Rust `im-core` runtime store | committed local message projection、sync、realtime incoming；patch 保留 `ownerIdentityId` | `ConversationTimelineMessageCorePort.watchConversationTimelinePatches` / `ChatThreadsController`；同 DID 换 generation 后旧 patch 失效 |
 | unread count、unread mention、read-state 展示事实 | Rust `im-core` local state 和 read-state API | `markConversationRead` / sync apply / local projection | App 只消费 projected count，不拥有 checkpoint 或 read watermark 事实 |
 | text / payload / attachment send/outbox/local echo | Rust `im-core` messages / attachments projection + send state | `sendConversationText` / `sendConversationPayload` / `sendConversationAttachment` / retry result | App 发送 intent 并渲染 core timeline row 的 pending/failed/sent；sending row 连续可见满 3 秒后才显示转圈，明确 send result 只可收敛已由 core patch 暴露的 row；附件可保留本地文件 preview 作为短生命周期 UI 状态，但不得用 memory pending、thread move 或本地 upsert conversation row 决定 correctness |
 | realtime / backfill | Rust `im-core` sync/realtime committed projection | realtime hint 调度 `syncDelta`，conversation-after 补新，projection commit 后 patch | App 不从 realtime typed event 直接写 list/timeline truth；只消费 core patch/read model 并在 gap 时 repair |
@@ -261,6 +261,26 @@ Chat presentation 是单向的：
 7. remote history / thread legacy adapter 只作为迁移兜底；返回消息必须先持久化到 core projection，再通过 conversation timeline load/patch 成为 UI 事实。
 8. 如果 patch key 与当前 window 不一致，应触发 repair/diagnostic，不得用易漂移的 summary 或 alias 规则静默 drop core 已返回的消息。
 
+账号 session 激活后的 patch-ready 顺序固定为：
+
+1. 以 `session generation + ownerIdentityId + accountId + device auth generation + ownerDid`
+   建立 generation-specific committed patch subscription。
+2. Core subscription 的首个 `reset` 从 canonical SQLite projection 生成，同时作为本
+   generation 唯一一次有界 local seed；显式 legacy redb snapshot API 不参与 bound watch
+   的初始 seed。
+3. `preparePatchGeneration()` / `ensurePatchReady()` 完成后，协调器才执行首次可靠
+   bootstrap/delta/reconcile；同 generation 的后续调用复用 ready single-flight，不再次 seed。
+4. seed 期间到达的 patch 在同一 stream 中串行排队，reset 后继续应用，不通过第二次
+   conversation refresh 补偿。
+5. version gap / `repairRequired` 只合并为一次有界 repair；stream error/close 在下一
+   microtask 重建 subscription 并等待新的 reset，避免在 stream callback 内取消自身。
+6. Profile load、repair 和 timeline patch 在异步调用前后都重新校验 fence；即使 DID
+   未变化，只要 session 或 device auth generation 前进，旧 patch 和旧异步结果也必须丢弃。
+
+未带 typed account binding 的 legacy/test session 只保留“先订阅、一次 fast-local
+seed”的兼容屏障；正式 v2 account session 必须走上述完整 fence，不允许从 DID 推断
+`ownerIdentityId` 或 `accountId`。
+
 Timeline merge 必须把“同一条本机发送消息的 durable server row”和“迟到的本地 echo/pending/failed row”视为同一展示实体：如果 mine、thread、sender、可见文本和时间窗口匹配，且其中一条已经是 `sent`，UI window 保留已发送的 server row，不再把迟到的本地失败 echo 渲染成第二个气泡。这个规则只属于 presentation 去重防线，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
 
 发送状态的 UI 降噪规则：core timeline row 进入 `sending` 后，气泡先不显示转圈且不预留左侧空白；同一 row 连续保持 `sending` 满 3 秒才显示 indicator。row 更新为 `sent` 或 `failed` 时 indicator widget 立即销毁。若 `sendConversationText` / `sendConversationPayload` 已返回明确终态，App 只允许用该 SDK 结果收敛当前 timeline 中已经存在、且 message id 或严格 pending match 对应的 core row；不得因此插入新的 memory-only message，也不得触发 full conversation refresh 或 remote history reconcile。
@@ -399,6 +419,8 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
 - `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
+- `tests/unit/conversation_list_provider_test.dart` 还必须验证 patch-ready single-flight、订阅先于 seed、seed 期间 patch 不丢不重、stream error/close 单次重建，以及同 DID auth generation 切换后旧 patch / Profile 异步结果失效。
+- `tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart` 与 `awiki_im_core_message_adapter_test.dart`：验证 conversation/timeline patch 的 `ownerIdentityId` 不在 SDK→App 映射中丢失，并验证产品诊断只映射脱敏 mode/count/domain/retry/time 字段。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。
 - `tests/e2e/flutter/desktop_cli_peer/flows/group_message_flow.dart`：群消息流程必须覆盖 CLI 入站后总未读 `baseline -> baseline + 1`、App 重启后 group row 仍为未读、打开群聊后 Core read watermark 提交并使 conversation unread 与总未读共同收敛回 baseline。

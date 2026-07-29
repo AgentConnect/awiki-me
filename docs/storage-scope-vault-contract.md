@@ -208,6 +208,57 @@ product/schema-upgrades/awiki_me_product_store.pre-v4.sqlite
 
 事务失败时 snapshot rows 与 domain version 都保持原值；不能留下半个账号域快照。
 
+### 4.2 多设备消息同步的本地所有权
+
+普通消息多设备同步沿用同一个 Storage Scope，但不会把可靠状态下放到 Product DB 或
+Flutter provider：
+
+```text
+ActiveSyncAccountBinding.ownerIdentityId
+  -> im-core SQLite owner partition
+    -> account/replica sync state、可靠 cursor、event receipt、recovery state
+    -> canonical message/conversation/read projection
+      -> Core committed patch
+        -> AWiki Me bounded in-memory window
+```
+
+- `owner_identity_id` 是 Core 本地消息、会话、已读和同步状态的稳定分区键；当前 DID、
+  `account_id`、`protocol_device_id` 和 generation 只作为经过验证的绑定与 fencing 字段。
+- 账号流的 raw scan cursor、visible cursor、replica bootstrap/recovery 状态、幂等 receipt
+  和 mutation outbox 只存在 im-core SQLite。AWiki Me 不读取、保存或推进这些 cursor，
+  `awiki_me_product_store.db` 也不得复制它们。
+- AWiki Me 的会话列表和当前消息窗口只是 Core canonical projection 的有界内存投影。
+  App session 激活必须先建立 committed-patch subscription，再完成当前 session generation
+  的一次有界本地 seed，之后才能发起首次可靠同步。同一 generation 的后续 realtime hint、
+  WebSocket 重连和前台对账复用该订阅，不再在每次同步后全量刷新会话或执行 20×50
+  history prewarm。
+- patch generation、session generation、`owner_identity_id`、`account_id`、
+  `device_auth_generation` 或当前 DID 不匹配时，App 必须拒绝旧 patch 和旧同步结果；
+  gap、stream rebuild 或显式 repair 只能重新执行一次有界 seed，不能清空 Core 权威库。
+
+新设备和已有设备的恢复语义不同：
+
+- 新 replica 使用 tail-only bootstrap，从服务端当前流尾开始，不导入加入前的普通消息。
+- 已有 replica 出现 retention gap、epoch mismatch 或长期离线时，由 Core 驱动 compact
+  recovery；服务端按自己的时间同时限制为最近 48 小时且最多 500 条普通逻辑消息。
+- 500 条只统计普通逻辑消息，不统计状态事件或 E2EE/MLS 数据。Snapshot 是 merge：
+  窗口外缺失不表示删除，也不得删除设备本地已经存在的更早普通消息。
+- Agent Inventory、Agent Status、Profile 和 Device Registry 是独立的版本化当前快照，
+  不受普通消息 48h/500 窗口限制，仍只缓存于 Product DB 对应账号域表。
+
+WebSocket 只携带 dirty-domain/wake-up hint；即使提示丢失，startup、前台恢复、重连或周期
+对账仍通过 HTTP 可靠拉取并由 Core 原子提交事实与 cursor。移动 Push 在当前版本明确延期，
+将来启用也只能负责唤醒，不能携带消息事实或替代 HTTP/Core commit。
+
+产品安全诊断只允许暴露 typed `lastSuccessAt`、sync/recovery mode、
+`pendingMutationCount`、dirty domains、retry state 和可选 `nextRetryAt`。普通 state、
+日志和 UI 不得包含 raw cursor/epoch、完整 account/device ID、recovery token、消息正文、
+payload 或认证材料。
+
+当前普通同步明确不包含 Direct E2EE、Group MLS、密钥、密文、加密历史，也不定义普通消息
+编辑、撤回、删除或消息 tombstone。以上数据不得为了“统一存储”进入普通 sync state、
+Product DB cache 或 App diagnostics。
+
 ## 5. Keychain / platform secret locator
 
 Production locator：
