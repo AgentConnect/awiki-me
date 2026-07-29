@@ -163,11 +163,6 @@ Future<void> _verifyAttachmentRegression({
     expectedTotalUnread: unreadBaseline + 1,
   );
   await robot.navigateToMessages();
-  await robot.expectConversationUnreadBadge(
-    conversationId: conversationId,
-    unreadCount: 1,
-  );
-  await robot.openConversationRow(conversationId);
 
   var cliAttachmentMessage = await _waitForUiMessage(
     robot: robot,

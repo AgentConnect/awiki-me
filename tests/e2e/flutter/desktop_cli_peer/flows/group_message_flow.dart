@@ -146,7 +146,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
     'group_empty_member_restart_exact_one',
   );
 
-  await robot.sendText(appGroupText);
+  await robot.sendTextWithKeyboardAction(appGroupText);
   final appGroupMessage = await _waitForUiMessage(
     robot: robot,
     conversationId: conversation.conversationId,

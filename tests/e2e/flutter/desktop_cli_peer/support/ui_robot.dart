@@ -215,6 +215,28 @@ class _DesktopAppRobot {
     await _waitForComposerClear(input, description: 'text send completion');
   }
 
+  Future<void> sendTextWithKeyboardAction(String content) async {
+    final input = find.bySemanticsIdentifier('e2e-chat-input');
+    await pumpUntilFinder(input, description: 'chat input');
+    final inputField = find.descendant(
+      of: input,
+      matching: find.byType(CupertinoTextField),
+    );
+    await pumpUntilFinder(
+      inputField,
+      description: 'enabled chat input',
+      enabled: true,
+    );
+    await _enterExactComposerText(
+      inputField,
+      content,
+      description: 'chat message input',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump();
+    await _waitForComposerClear(input, description: 'text send completion');
+  }
+
   Future<void> retryFailedText() async {
     final retry = find.byWidgetPredicate(
       (widget) =>
@@ -525,10 +547,8 @@ class _DesktopAppRobot {
       '$selectedSurface $suffix',
       description: 'mention message input',
     );
-    await tapOne(
-      find.bySemanticsIdentifier('e2e-chat-send-button'),
-      description: 'mention send button',
-    );
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump();
     await _waitForComposerClear(input, description: 'mention send completion');
     return '$selectedSurface $suffix';
   }
