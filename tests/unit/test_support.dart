@@ -4302,8 +4302,10 @@ class FakeNotificationFacade implements NotificationFacade {
   NotificationActivation? initialNotificationActivation;
   int lastBadgeCount = 0;
   bool disposed = false;
-  int inAppCalls = 0;
-  int systemCalls = 0;
+  int inAppNotificationCount = 0;
+  int systemNotificationCount = 0;
+  int get inAppCalls => inAppNotificationCount;
+  int get systemCalls => systemNotificationCount;
 
   @override
   Stream<NotificationActivation> get activations => _activations.stream;
@@ -4320,9 +4322,9 @@ class FakeNotificationFacade implements NotificationFacade {
   Future<void> showSystemNotification({
     required String title,
     required String body,
-    required NotificationTarget target,
+    NotificationTarget? target,
   }) async {
-    systemCalls += 1;
+    systemNotificationCount += 1;
     lastSystemTitle = title;
     lastSystemBody = body;
     lastSystemTarget = target;
@@ -4333,7 +4335,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String title,
     required String body,
   }) async {
-    inAppCalls += 1;
+    inAppNotificationCount += 1;
     lastInAppTitle = title;
     lastInAppBody = body;
   }

@@ -7,12 +7,15 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -24,7 +27,8 @@ import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
-import 'package:flutter/widgets.dart' show Key, ListView, Size, Text;
+import 'package:flutter/widgets.dart'
+    show AppLifecycleState, Key, ListView, Size, Text;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -145,6 +149,72 @@ void main() {
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsNothing);
+  });
+
+  testWidgets('AwikiMeApp routes background Coding Agent terminal feedback', (
+    tester,
+  ) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    final harness = createFakeAwikiMeAppHarness(session: session);
+
+    await tester.pumpWidget(
+      AwikiMeApp(
+        bootstrap: harness.bootstrap,
+        providerOverrides: harness.providerOverrides,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+      listen: false,
+    );
+    container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.paused);
+    await tester.runAsync(() async {
+      await container
+          .read(appRuntimeProvider.notifier)
+          .activateSession(session);
+    });
+    await tester.pump();
+    harness.gateway.nextRealtimeUpdate = const RealtimeUpdate(
+      ownerDid: 'did:test:me',
+      agentControlPayload: <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'event_id': 'evt_agent_notify_smoke_completed',
+        'run_id': 'run_agent_notify_smoke',
+        'state': 'finished',
+        'business_outcome': 'completed',
+        'summary': '通知 Smoke 已完成',
+        'final_message_id': 'msg_agent_notify_smoke',
+      },
+    );
+    await harness.realtimeGateway.emit(const <String, Object?>{
+      'type': 'status',
+    });
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('个人助理已完成处理: 通知 Smoke 已完成'), findsNothing);
+    expect(harness.notificationFacade.systemNotificationCount, 1);
+    expect(harness.notificationFacade.lastSystemTitle, isNotEmpty);
+    expect(harness.notificationFacade.lastSystemBody, contains('通知 Smoke 已完成'));
+    await E2eCaseAttestationWriter.markPassed(
+      'AGENT-NOTIFY-SMOKE-E2E-001',
+      phases: const <String>[
+        'terminal_status_reached_app_shell',
+        'background_system_notification_used',
+        'background_in_app_toast_not_used',
+      ],
+    );
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets(

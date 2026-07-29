@@ -128,7 +128,7 @@ class AppNotificationFacade implements NotificationFacade {
   Future<void> showSystemNotification({
     required String title,
     required String body,
-    required NotificationTarget target,
+    NotificationTarget? target,
   }) async {
     try {
       await _initialization?.timeout(
@@ -163,7 +163,7 @@ class AppNotificationFacade implements NotificationFacade {
         title: title,
         body: body,
         notificationDetails: details,
-        payload: target.encode(),
+        payload: target?.encode(),
       );
     } catch (error) {
       debugPrint('[awiki_me][system-notification][error] $error');

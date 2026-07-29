@@ -106,6 +106,7 @@ const List<String> _desktopCliPeerCaseIds = <String>[
   'ROOT-TRANSFER-E2E-001',
 ];
 const List<String> _desktopSmokeCaseIds = <String>[
+  'AGENT-NOTIFY-SMOKE-E2E-001',
   'SMOKE-E2E-001',
   'NATIVE-E2E-001',
 ];
@@ -607,7 +608,10 @@ class DesktopE2eRunner {
     await _timed('Flutter App smoke', () {
       return _runFlutterTest(
         'integration_test/app_smoke_test.dart',
-        caseIds: const <String>['SMOKE-E2E-001'],
+        caseIds: const <String>[
+          'AGENT-NOTIFY-SMOKE-E2E-001',
+          'SMOKE-E2E-001',
+        ],
       );
     });
     await _timed('Flutter native IM Core smoke', () {

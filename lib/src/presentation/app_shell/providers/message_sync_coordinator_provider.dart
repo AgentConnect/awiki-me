@@ -15,11 +15,13 @@ import '../../../core/performance_logger.dart';
 import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/notification_target.dart';
 import '../../../l10n/app_message.dart';
+import '../../agents/agents_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
+import 'agent_terminal_notification_provider.dart';
 import 'app_lifecycle_provider.dart';
 import 'session_provider.dart';
 
@@ -694,7 +696,31 @@ class MessageSyncCoordinator
         eventId: eventId,
         logicalMessageId: logicalMessageId,
       );
-      _showCommittedMessageNotification(message);
+      final messageIds = <String?>[
+        logicalMessageId,
+        message.remoteId,
+        message.localId,
+      ];
+      final deduplicator = ref.read(
+        agentTerminalNotificationDeduplicatorProvider,
+      );
+      final isRuntimeAgentMessage = ref
+          .read(agentsProvider)
+          .agents
+          .any(
+            (agent) => agent.isRuntime && agent.agentDid == message.senderDid,
+          );
+      if (isRuntimeAgentMessage) {
+        deduplicator.acceptRuntimeMessageIds(
+          messageIds,
+          releaseNotification: () => _showCommittedMessageNotification(
+            message,
+            suppressWhenForeground: true,
+          ),
+        );
+      } else if (deduplicator.acceptMessageIds(messageIds)) {
+        _showCommittedMessageNotification(message);
+      }
     }
   }
 
@@ -712,7 +738,10 @@ class MessageSyncCoordinator
     }
   }
 
-  void _showCommittedMessageNotification(ChatMessage message) {
+  void _showCommittedMessageNotification(
+    ChatMessage message, {
+    bool suppressWhenForeground = false,
+  }) {
     if (_disposed || ref.read(sessionProvider).session == null) {
       return;
     }
@@ -756,6 +785,9 @@ class MessageSyncCoordinator
         : AppMessage.newMessageArrived().resolveForFallback();
     final notifications = ref.read(notificationFacadeProvider);
     if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
+      if (suppressWhenForeground) {
+        return;
+      }
       notifications.showInAppBanner(title: resolvedTitle, body: body);
     } else {
       final session = ref.read(sessionProvider).session;

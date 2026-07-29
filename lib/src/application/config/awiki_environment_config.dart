@@ -22,7 +22,7 @@ const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
 );
 const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   'AWIKI_SYNC_V2_READ',
-  defaultValue: false,
+  defaultValue: true,
 );
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
   'awiki.ai',

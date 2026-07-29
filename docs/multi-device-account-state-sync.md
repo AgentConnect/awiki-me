@@ -10,6 +10,19 @@ AWiki Me treats User Service as the authority for four account-scoped domains:
 These domains are deliberately separate from ordinary-message synchronization.
 Message Service does not carry their payloads.
 
+## Availability
+
+After a deployment enables multi-device support, ordinary message sync and
+account-state reconciliation are default-on for every authenticated account and
+valid device. AWiki Me does not select an account allowlist, device cohort, or
+percentage rollout. `AWIKI_SYNC_V2_READ=false` is reserved for a global
+emergency rollback; the separate Direct/Group E2EE flags remain default-off and
+do not control this plain synchronization path.
+
+Operator-only recovery fault injection, cleanup, and OTP tooling may still use
+dedicated test-account allowlists. Those controls protect destructive test
+actions and are not product entitlements.
+
 ## Reconciliation contract
 
 For an authenticated session with a typed Core binding, the App captures one

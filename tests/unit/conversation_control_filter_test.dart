@@ -57,6 +57,52 @@ void main() {
     ]);
   });
 
+  test(
+    'skill agent mislabeled as daemon stays visible in recent messages',
+    () async {
+      const skillAgentDid =
+          'did:wba:agent-connect.cn:agent:skill:skill-123:e1_skill';
+      final service = ImCoreConversationService(
+        conversations: _FakeConversations(
+          items: <ConversationSummary>[
+            _conversation('dm:human:skill', targetDid: skillAgentDid),
+            _conversation(
+              'dm:human:daemon',
+              targetDid:
+                  'did:wba:agent-connect.cn:agent:daemon:edgehost_1:e1_owner',
+            ),
+          ],
+        ),
+        localStore: InMemoryAwikiProductLocalStore(),
+        agentInventory: const _FakeAgentInventory(
+          agents: <AgentSummary>[
+            AgentSummary(
+              agentDid: skillAgentDid,
+              kind: AgentKind.daemon,
+              displayName: 'Skill Agent',
+              activeState: 'active',
+              latest: AgentLatestStatus(status: 'ready'),
+            ),
+            AgentSummary(
+              agentDid:
+                  'did:wba:agent-connect.cn:agent:daemon:edgehost_1:e1_owner',
+              kind: AgentKind.daemon,
+              displayName: 'Daemon',
+              activeState: 'active',
+              latest: AgentLatestStatus(status: 'ready'),
+            ),
+          ],
+        ),
+      );
+
+      final conversations = await service.listConversations(
+        ownerDid: 'did:human:me',
+      );
+
+      expect(conversations.map((item) => item.targetDid), [skillAgentDid]);
+    },
+  );
+
   test('inventory failure keeps ordinary conversations visible', () async {
     final service = ImCoreConversationService(
       conversations: _FakeConversations(

@@ -1,7 +1,101 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-29.release0714-account-state-v1",
+  "sourceRevision": "2026-07-29.release0714-account-state+macos-agent-notification-v1",
   "cases": [
+    {
+      "caseId": "AGENT-NOTIFY-E2E-001",
+      "feature": "Real Coding Agent terminal delivery to AWiki Me",
+      "layer": "remote_product_ui",
+      "preconditions": "An isolated non-production App identity, Skill Agent identity, coding-agent runtime, daemon, User Service, Message Service, and macOS notification permission are available on the same approved tenant.",
+      "action": "Send an ordinary final message plus completed, blocked, and action-required terminal statuses through the real CLI/daemon/service path while AWiki Me is foregrounded and backgrounded.",
+      "exactOracles": [
+        "The Skill Agent conversation remains visible, foreground delivery stays quiet, and the matching ordinary final message does not produce a duplicate notification.",
+        "Background delivery renders one semantic macOS notification per run; restart/backfill does not replay an already accepted terminal outcome."
+      ],
+      "negativeChecks": [
+        "Accepted-only service receipts, fake facades, an unexpected foreground banner, duplicate notification, hidden Skill Agent conversation, missing background banner, or manual observation without case attestation cannot pass."
+      ],
+      "environment": "agent_connect_remote",
+      "cleanupPolicy": "isolated_app_cli_daemon_state",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents+awiki-cli-runtime",
+      "implementationPath": "tests/e2e/planned/coding_agent_notification_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "AGENT-NOTIFY-NATIVE-E2E-001",
+      "feature": "macOS native notification authorization and banner",
+      "layer": "native_product_ui",
+      "preconditions": "A macOS runner has an isolated AWiki Me Development bundle, controllable notification authorization, and Notification Center observation support.",
+      "action": "Authorize notifications, background AWiki Me, deliver one terminal event through the production notification facade, and inspect Notification Center.",
+      "exactOracles": [
+        "The Development bundle is authorized and exactly one banner with the localized Coding Agent title/body is visible outside the App."
+      ],
+      "negativeChecks": [
+        "Fake facade calls, API success without visible Notification Center evidence, duplicate banners, wrong bundle identity, or foreground-only Toast evidence cannot pass."
+      ],
+      "environment": "macos_native",
+      "cleanupPolicy": "restore_notification_authorization_and_clear_test_banner",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-platform",
+      "implementationPath": "tests/e2e/planned/coding_agent_notification_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "AGENT-NOTIFY-SMOKE-E2E-001",
+      "feature": "Coding Agent background terminal notification routing",
+      "layer": "product_ui",
+      "preconditions": "Flutter desktop can launch the authenticated fake-bootstrap AWiki Me shell without backend credentials.",
+      "action": "Background the App lifecycle and inject a completed awiki.agent.status.v1 update through the App realtime boundary.",
+      "exactOracles": [
+        "The structured terminal status reaches AppShell and calls the system-notification facade exactly once with the localized completion content.",
+        "Background terminal feedback does not render an in-App Toast."
+      ],
+      "negativeChecks": [
+        "A missing or duplicate system-notification call, wrong localized content, or any background in-App Toast fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "none",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me",
+      "implementationPath": "tests/e2e/flutter/app/app_smoke_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "AGENT-NOTIFY-SMOKE-E2E-001:terminal_status_reached_app_shell",
+          "AGENT-NOTIFY-SMOKE-E2E-001:background_system_notification_used",
+          "AGENT-NOTIFY-SMOKE-E2E-001:background_in_app_toast_not_used"
+        ],
+        "exactOracleAssertions": [
+          [
+            "AGENT-NOTIFY-SMOKE-E2E-001:terminal_status_reached_app_shell",
+            "AGENT-NOTIFY-SMOKE-E2E-001:background_system_notification_used"
+          ],
+          [
+            "AGENT-NOTIFY-SMOKE-E2E-001:background_in_app_toast_not_used"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "AGENT-NOTIFY-SMOKE-E2E-001:terminal_status_reached_app_shell",
+            "AGENT-NOTIFY-SMOKE-E2E-001:background_system_notification_used",
+            "AGENT-NOTIFY-SMOKE-E2E-001:background_in_app_toast_not_used"
+          ]
+        ]
+      }
+    },
     {
       "caseId": "ATTACH-E2E-001",
       "feature": "App to CLI attachment",

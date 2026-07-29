@@ -12,6 +12,8 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/agent_terminal_notification_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -643,6 +645,84 @@ void main() {
       expect(notifications.inAppCalls, 1);
       expect(notifications.lastInAppTitle, 'Peer');
       expect(notifications.lastInAppBody, 'committed hello');
+    },
+  );
+
+  test(
+    'v2 committed Runtime Agent final message shares terminal deduplication',
+    () async {
+      final message = ChatMessage(
+        localId: 'runtime-final-1',
+        remoteId: 'runtime-final-1',
+        conversationId: 'dm:runtime',
+        threadId: 'dm:runtime',
+        senderDid: 'did:agent:runtime',
+        senderName: 'Codex',
+        receiverDid: 'did:test:me',
+        content: 'ordinary final reply',
+        createdAt: DateTime.utc(2026, 7, 29, 9),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final notifications = FakeNotificationFacade();
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[
+            CommittedIncomingMessage(
+              eventId: 'event-runtime-final-1',
+              logicalMessageId: 'runtime-final-1',
+              message: message,
+            ),
+          ],
+        ),
+      );
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'codex',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      container
+          .read(agentTerminalNotificationDeduplicatorProvider)
+          .acceptStatus(const <String, Object?>{
+            'schema': 'awiki.agent.status.v1',
+            'event_id': 'evt_run_terminal:run_1:completed',
+            'run_id': 'run_1',
+            'state': 'finished',
+            'business_outcome': 'completed',
+            'summary': '任务已完成',
+            'final_message_id': 'runtime-final-1',
+          });
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('realtime_agent_control', immediate: true);
+
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 0);
     },
   );
 

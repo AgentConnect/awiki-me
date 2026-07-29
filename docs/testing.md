@@ -125,10 +125,14 @@ OTP，也不声称完成远端 Join、SAS、审批、根导入、撤销、MLS �
 新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
 双端 SAS 和场景级 attestation；加入端 CLI 的 SAS 只从前台 TTY 提示读取，结构化 JSON
 必须保持脱敏。`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化 SAS，App 批准要求
-真实 macOS user-presence。专用账号 allowlist 或执行环境尚未全部就绪时，
+真实 macOS user-presence。专用测试账号、OTP/operator 配置或执行环境尚未全部就绪时，
 这个入口不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、
 adapter、UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端
 case。
+
+这里的专用账号仅用于测试隔离、可重复清理和一次性 OTP，不是产品 allowlist。普通多设备消息
+与账号状态同步对所有账号和有效设备默认开启。`AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED`
+也只是防止自动化误触发真实 Join/user-presence 的测试执行门禁，不控制产品能力。
 
 `DEVICE-JOIN-E2E-004` 由 `multi-device-app-pair` suite 承载。它在同一台 macOS 上构建并
 并发驱动两个真实 AWiki Me Debug bundle；两端拥有不同的稳定 bundle ID、Flutter build
@@ -201,8 +205,13 @@ an equivalent package that exposes `libsqlite3.so`.
 `multi-device-app-pair-functional` 是当前普通消息与账号状态同步的 active App E2E
 边界。这里的 `active` 表示 case 已登记且 runner 可执行，不表示当前工作区已经运行或通过。
 它需要准备好的 macOS operator host、两个隔离 App/Core、远端 `awiki.info`、受审计 CLI
-revision、专用账号/OTP 和测试 scoped user-presence。普通 ECS 静态/单元验证不能生成这些
-UI pass attestations。
+revision、专用测试账号/OTP 和测试 scoped user-presence。最终双 App/真实 user-presence
+验收由发布负责人在 macOS 手工执行，不作为 Linux 自动化退出条件。
+
+Linux 仍必须执行其可运行的真实 App + CLI peer/backend E2E，包括 `direct`、`group`、
+`attachment`、`restart`、`performance` 以及 `full` 中进入真实设备 Join 前的主链路。
+Linux 结果不能冒充 macOS 双 App/user-presence attestation，但 macOS 手工项也不能阻止这些
+Linux 用例独立报告真实通过或失败。
 
 | 阶段 | Active E2E 边界 | 说明 |
 | --- | --- | --- |
@@ -375,9 +384,10 @@ delete operation, the
 unique identity/Join side effect is recorded in the runner residual ledger.
 Resolver stdout/stderr, OTPs, tokens, SAS values, DIDs,
 private material, and local secret paths must not enter reports or logs. A
-checked-in implementation or `prepare-only` result is not remote pass evidence;
-while rollout or account prerequisites are unavailable, the suite fails closed
-before claiming success.
+checked-in implementation or `prepare-only` result is not remote pass evidence.
+When dedicated test-account, OTP, operator, or platform prerequisites are
+unavailable, the suite fails closed before claiming success. Those prerequisites
+protect the test execution and do not imply a product account rollout.
 
 Run real App + CLI peer flows when the `awiki.info` remote test account pool,
 test OTP, and CLI peer are configured:
