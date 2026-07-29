@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-29.account-state-sync-v1-v1",
+  "sourceRevision": "2026-07-29.dirty-hint-v2-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -2883,6 +2883,115 @@
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
             "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-HINT-LOSS-E2E-001",
+      "feature": "A joined AWiki Me replica converges an ordinary message after every realtime hint is lost",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated Apps share one joined awiki.info account, the admin App has completed sync-v2 bootstrap, an independent CLI peer is available, and the App's reliable HTTP sync remains enabled.",
+      "action": "Quiesce sync, pause the admin App and stop its realtime service, commit one ordinary Direct message from the CLI peer while no WebSocket can observe its hint, then resume through the normal App lifecycle.",
+      "exactOracles": [
+        "The realtime service is stopped before the peer message is committed and the local timeline remains unchanged before lifecycle resume.",
+        "App resume starts the normal reliable HTTP reconciliation path and projects the exact canonical peer message once.",
+        "A repeated local timeline read keeps one projection with the same canonical message ID."
+      ],
+      "negativeChecks": [
+        "Using a raw WebSocket payload as message truth, a test-side cursor or sync call, observing the message before resume, missing or duplicating the reliable projection, changing its canonical ID, or relying on Push prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:realtime_hint_channel_stopped_before_commit",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:ordinary_message_committed_while_hint_unobservable",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:foreground_http_reconcile_started",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:reliable_message_projected_once",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:repeat_local_read_kept_single_projection"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:realtime_hint_channel_stopped_before_commit",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:ordinary_message_committed_while_hint_unobservable"
+          ],
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:foreground_http_reconcile_started",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:reliable_message_projected_once"
+          ],
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:repeat_local_read_kept_single_projection"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:realtime_hint_channel_stopped_before_commit",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:ordinary_message_committed_while_hint_unobservable",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:foreground_http_reconcile_started",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:reliable_message_projected_once",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:repeat_local_read_kept_single_projection"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-RECONNECT-E2E-001",
+      "feature": "An active AWiki Me device normally reconnects and pulls its disconnect gap exactly once",
+      "layer": "remote_product_ui",
+      "preconditions": "The joined admin App has an active non-revoked device session, a connected realtime transport, an initialized message-sync cursor, and an independent CLI peer.",
+      "action": "Perform a normal realtime stop, commit one ordinary Direct message during the disconnected interval, resume the App, wait for WebSocket reconnection, and observe reliable HTTP gap reconciliation.",
+      "exactOracles": [
+        "The ordinary WebSocket disconnect completes without revoking the device and the active device reconnects successfully.",
+        "The message committed in the disconnect interval is obtained from reliable HTTP reconciliation.",
+        "The canonical post-reconnect message is projected exactly once and remains exact-one on a repeated read."
+      ],
+      "negativeChecks": [
+        "Treating revoked reconnect denial as normal reconnect evidence, changing device identity, direct projection from a hint, failing to reconnect, missing the disconnect gap, duplicate projection, or Push-based recovery prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:normal_websocket_disconnect_completed",
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:active_device_reconnect_completed",
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:disconnect_gap_pulled_from_reliable_http",
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:post_reconnect_projection_exact_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:normal_websocket_disconnect_completed",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:active_device_reconnect_completed"
+          ],
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:disconnect_gap_pulled_from_reliable_http"
+          ],
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:post_reconnect_projection_exact_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:normal_websocket_disconnect_completed",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:active_device_reconnect_completed",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:disconnect_gap_pulled_from_reliable_http",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:post_reconnect_projection_exact_once"
           ]
         ]
       }

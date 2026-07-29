@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-29.account-state-sync-v1-v1",
+  "sourceRevision": "2026-07-29.dirty-hint-v2-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -124,6 +124,8 @@
         "DEVICE-MESSAGE-TAIL-ONLY-E2E-001",
         "DEVICE-MESSAGE-READ-SYNC-E2E-001",
         "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001",
+        "DEVICE-MESSAGE-HINT-LOSS-E2E-001",
+        "DEVICE-MESSAGE-RECONNECT-E2E-001",
         "DEVICE-AGENT-ADD-SYNC-E2E-001",
         "DEVICE-AGENT-RENAME-SYNC-E2E-001",
         "DEVICE-AGENT-DELETE-SYNC-E2E-001",

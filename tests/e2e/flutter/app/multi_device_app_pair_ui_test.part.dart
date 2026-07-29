@@ -1,5 +1,8 @@
 part of 'multi_device_join_ui_test.dart';
 
+const String _appPairHintLossCaseId = 'DEVICE-MESSAGE-HINT-LOSS-E2E-001';
+const String _appPairReconnectCaseId = 'DEVICE-MESSAGE-RECONNECT-E2E-001';
+
 void appPairAdminMain() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -547,6 +550,8 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairTailOnlySyncV2CaseId) ||
       _invocationExpects(_appPairReadSyncV2CaseId) ||
       _invocationExpects(_appPairOfflineRecoveryV2CaseId) ||
+      _invocationExpects(_appPairHintLossCaseId) ||
+      _invocationExpects(_appPairReconnectCaseId) ||
       _invocationExpects(_appPairAgentAddSyncCaseId) ||
       _invocationExpects(_appPairAgentRenameSyncCaseId) ||
       _invocationExpects(_appPairAgentDeleteSyncCaseId) ||
@@ -2722,6 +2727,17 @@ Future<void> _runAppPairAdminReadAndRecovery({
   );
   await config.coordinator.publish('admin', 'functional_read_converged');
 
+  await _runAppPairAdminHintLossAndReconnect(
+    tester: tester,
+    bootstrap: bootstrap,
+    container: container,
+    peer: peer,
+    accountDid: accountDid,
+    peerDid: peerDid,
+    conversationId: conversationId,
+    runId: config.runId,
+  );
+
   await config.coordinator.waitFor(
     'joiner',
     'functional_offline_ready',
@@ -2799,6 +2815,98 @@ Future<void> _runAppPairAdminReadAndRecovery({
     timeout: const Duration(minutes: 2),
   );
   await _openAppPairAgentsPage(tester);
+}
+
+Future<void> _runAppPairAdminHintLossAndReconnect({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required _JoinCli peer,
+  required String accountDid,
+  required String peerDid,
+  required String conversationId,
+  required String runId,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final sync = container.read(messageSyncCoordinatorProvider);
+      return !sync.isSyncing && sync.pendingReason == null;
+    },
+    timeout: const Duration(seconds: 30),
+    failure: 'The admin App sync queue did not quiesce before hint loss.',
+  );
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.paused);
+  await container.read(realtimeApplicationServiceProvider).stop();
+  if (container.read(realtimeApplicationServiceProvider).isRunning) {
+    fail('The normal WebSocket did not stop before the reconnect gap.');
+  }
+
+  final gapText = _appPairMessage(runId, 'hint-loss-reconnect-gap');
+  final gapMessageId = await peer.sendDirectText(to: accountDid, text: gapText);
+  await tester.pump(const Duration(milliseconds: 750));
+  await _assertAppPairMessageAbsent(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: gapText,
+    messageId: gapMessageId,
+  );
+
+  await _resumeAppPairAndWaitForSync(
+    tester: tester,
+    container: container,
+    failure: 'The active admin App did not run reconnect HTTP reconciliation.',
+  );
+  await _pumpUntil(
+    tester,
+    () => container
+        .read(realtimeConnectionStatusProvider)
+        .maybeWhen(
+          data: (status) => status == RealtimeConnectionStatus.connected,
+          orElse: () => false,
+        ),
+    timeout: const Duration(seconds: 45),
+    failure: 'The active admin App did not reconnect its normal WebSocket.',
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: gapText,
+    messageId: gapMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await _assertAppPairMessageCount(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: gapText,
+    messageId: gapMessageId,
+    expectedCount: 1,
+  );
+
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairHintLossCaseId,
+    phases: const <String>[
+      'realtime_hint_channel_stopped_before_commit',
+      'ordinary_message_committed_while_hint_unobservable',
+      'foreground_http_reconcile_started',
+      'reliable_message_projected_once',
+      'repeat_local_read_kept_single_projection',
+    ],
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairReconnectCaseId,
+    phases: const <String>[
+      'normal_websocket_disconnect_completed',
+      'active_device_reconnect_completed',
+      'disconnect_gap_pulled_from_reliable_http',
+      'post_reconnect_projection_exact_once',
+    ],
+  );
 }
 
 Future<void> _runAppPairJoinerReadAndRecovery({
@@ -3284,6 +3392,53 @@ Future<ChatMessage> _waitForAppPairMessage({
     'syncError=${_appPairErrorDiagnostic(sync.lastError)}, '
     'syncing=${sync.isSyncing}).',
   );
+}
+
+Future<void> _assertAppPairMessageAbsent({
+  required MessagingService messaging,
+  required String conversationId,
+  required String content,
+  required String messageId,
+}) async {
+  if (messaging is! ConversationTimelineMessagingService) {
+    fail('The App-pair messaging service lacks conversation timeline reads.');
+  }
+  final messages = await (messaging as ConversationTimelineMessagingService)
+      .loadConversationTimeline(
+        AppConversationReadRef.fromConversationId(conversationId),
+        limit: 20,
+      );
+  if (messages.any(
+    (message) => message.content == content || message.remoteId == messageId,
+  )) {
+    fail('A message crossed the stopped realtime channel before HTTP pull.');
+  }
+}
+
+Future<void> _assertAppPairMessageCount({
+  required MessagingService messaging,
+  required String conversationId,
+  required String content,
+  required String messageId,
+  required int expectedCount,
+}) async {
+  if (messaging is! ConversationTimelineMessagingService) {
+    fail('The App-pair messaging service lacks conversation timeline reads.');
+  }
+  final messages = await (messaging as ConversationTimelineMessagingService)
+      .loadConversationTimeline(
+        AppConversationReadRef.fromConversationId(conversationId),
+        limit: 20,
+      );
+  final matches = messages
+      .where(
+        (message) =>
+            message.content == content && message.remoteId == messageId,
+      )
+      .length;
+  if (matches != expectedCount) {
+    fail('Reliable HTTP reconciliation did not preserve exact message count.');
+  }
 }
 
 Future<void> _openAppPairConversation({

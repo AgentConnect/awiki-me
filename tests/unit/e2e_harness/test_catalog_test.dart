@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(71));
+      expect(catalog.cases, hasLength(86));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -23,6 +23,8 @@ void main() {
           'DEVICE-AGENT-SYNC-E2E-001',
           'DEVICE-MESSAGE-SYNC-E2E-001',
           'DEVICE-MESSAGE-SYNC-E2E-002',
+          'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
+          'DEVICE-MESSAGE-RECONNECT-E2E-001',
           'DEVICE-REVOKE-E2E-001',
           'STEP4-GROUP-PAGINATION-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
@@ -64,8 +66,23 @@ void main() {
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair-functional'], <String>[
         'DEVICE-AGENT-SYNC-E2E-001',
+        'DEVICE-AGENT-MESSAGE-SYNC-E2E-001',
         'DEVICE-MESSAGE-SYNC-E2E-001',
         'DEVICE-MESSAGE-SYNC-E2E-002',
+        'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001',
+        'DEVICE-MESSAGE-TAIL-ONLY-E2E-001',
+        'DEVICE-MESSAGE-READ-SYNC-E2E-001',
+        'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001',
+        'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
+        'DEVICE-MESSAGE-RECONNECT-E2E-001',
+        'DEVICE-AGENT-ADD-SYNC-E2E-001',
+        'DEVICE-AGENT-RENAME-SYNC-E2E-001',
+        'DEVICE-AGENT-DELETE-SYNC-E2E-001',
+        'DEVICE-AGENT-UNBIND-SYNC-E2E-001',
+        'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001',
+        'DEVICE-PROFILE-SYNC-E2E-001',
+        'DEVICE-REGISTRY-SYNC-E2E-001',
+        'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
       expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[
@@ -384,9 +401,15 @@ Future<Directory> _temporaryCatalogRoot() async {
       },
     }),
   );
-  File(
-    '${e2e.path}/implementation.dart',
-  ).writeAsStringSync("const caseId = 'CASE-001';\n");
+  File('${e2e.path}/implementation.dart').writeAsStringSync('''
+const String caseId = 'CASE-001';
+Future<void> complete() {
+  return E2eCaseAttestationWriter.markPassed(
+    caseId,
+    phases: const <String>['assertion_completed'],
+  );
+}
+''');
   File('${e2e.path}/case_catalog.json').writeAsStringSync(
     jsonEncode(<String, Object?>{
       'schemaVersion': 1,
