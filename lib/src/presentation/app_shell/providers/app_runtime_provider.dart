@@ -1485,6 +1485,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       if (actions.isNotEmpty) {
         await Future.wait(actions);
       }
+      if (!mounted) {
+        return;
+      }
       if (!fence.matches(ref.read(sessionProvider))) {
         _clearRealtimeSyncHints(expectedFence: fence);
         return;

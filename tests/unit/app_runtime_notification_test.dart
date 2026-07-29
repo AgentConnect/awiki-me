@@ -1674,6 +1674,30 @@ void main() {
       expect(accountStateRequests.reasons, <String>['message_available']);
     });
 
+    test('容器销毁后进行中的实时同步 drain 不再读取旧 provider', () async {
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      final inFlightSync = Completer<void>();
+      messageSyncService.syncNowCompleter = inFlightSync;
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        ownerDid: 'did:test:me',
+        domains: <SyncDomain>{SyncDomain.message},
+        reason: 'dispose_during_message_sync',
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+      expect(messageSyncService.activeSyncNowCalls, 1);
+
+      container.dispose();
+      inFlightSync.complete();
+      await pumpEventQueue();
+
+      expect(messageSyncService.activeSyncNowCalls, 0);
+    });
+
     test('旧 owner hint 完成后不能清空或代替新 session 调度', () async {
       await activateBound();
       await pumpEventQueue();
