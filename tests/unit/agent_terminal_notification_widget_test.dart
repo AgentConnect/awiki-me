@@ -1,4 +1,5 @@
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_terminal_notification.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -24,10 +25,24 @@ Future<void> _activateRuntime(
     tester.element(find.byType(AppShell)),
     listen: false,
   );
-  await tester.runAsync(() async {
-    await container.read(appRuntimeProvider.notifier).activateSession(session);
-    await container.read(agentsProvider.notifier).syncRemoteInventory();
-  });
+  final committed = await container
+      .read(appSessionServiceProvider)
+      .activateIdentity(
+        AppSession(
+          did: session.did,
+          identityId: session.credentialName,
+          displayName: session.displayName,
+          handle: session.handle,
+          localAlias: session.credentialName,
+          authenticated: session.jwtToken != null,
+          jwtToken: session.jwtToken,
+          accountBinding: session.accountBinding,
+        ),
+      );
+  await container
+      .read(appRuntimeProvider.notifier)
+      .activateCommittedSession(committed);
+  await container.read(agentsProvider.notifier).syncRemoteInventory();
   await tester.pump();
 }
 
