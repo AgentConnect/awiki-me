@@ -6,7 +6,7 @@
 
 ## 1. 当前结论
 
-`im-core` / Flutter SDK 是 message、conversation identity、canonical `conversationId` read model、read-state、send/outbox、sync/realtime/backfill committed projection 的事实源。AWiki Me 只拥有 product overlay、read presentation waterline、renderability、draft/scroll/loading、短生命周期 UI window 和 widget composition。
+`im-core` / Flutter SDK 是 message、conversation identity、canonical `conversationId` read model、read-state、send/outbox、sync/realtime/backfill committed projection 的事实源。AWiki Me 只拥有 product overlay、User Service 权威账号域的本地展示快照、read presentation waterline、renderability、draft/scroll/loading、短生命周期 UI window 和 widget composition。账号域快照是可丢弃 cache，不是消息、会话、群或 Agent 控制事件的第二事实源。
 
 核心边界：
 
@@ -75,8 +75,8 @@ Rust im-core
 | message、thread、group、conversation base projection | Rust `im-core` SQLite / runtime store | Flutter SDK message/group/sync/read-state API | `ConversationCorePort`、`MessageCorePort`、`ConversationTimelineMessageCorePort`、`AwikiImCore*Adapter` |
 | canonical `conversationId` / identity aliases | Rust `im-core` / SDK DTO | resolver、message upsert、conversation projection migration | App 只消费 `ConversationIdentity` / `ConversationSummary.conversationId`，不自行生成 direct canonical key |
 | conversation snapshot cache | Rust `im-core` redb snapshot cache | `im-core` 从 committed projection 保存 | `ConversationCorePort.loadConversationSnapshot` |
-| conversation patch stream | Rust `im-core` runtime store | committed sync/local write invalidation | `ConversationCorePort.watchConversationPatches` |
-| conversation timeline patch stream | Rust `im-core` runtime store | committed local message projection、sync、realtime incoming | `ConversationTimelineMessageCorePort.watchConversationTimelinePatches` / `ChatThreadsController` |
+| conversation patch stream | Rust `im-core` runtime store | committed sync/local write invalidation；patch 保留 `ownerIdentityId` | `ConversationCorePort.watchConversationPatches`；App 用完整 session/account/auth generation fence 消费 |
+| conversation timeline patch stream | Rust `im-core` runtime store | committed local message projection、sync、realtime incoming；patch 保留 `ownerIdentityId` | `ConversationTimelineMessageCorePort.watchConversationTimelinePatches` / `ChatThreadsController`；同 DID 换 generation 后旧 patch 失效 |
 | unread count、unread mention、read-state 展示事实 | Rust `im-core` local state 和 read-state API | `markConversationRead` / sync apply / local projection | App 只消费 projected count，不拥有 checkpoint 或 read watermark 事实 |
 | text / payload / attachment send/outbox/local echo | Rust `im-core` messages / attachments projection + send state | `sendConversationText` / `sendConversationPayload` / `sendConversationAttachment` / retry result | App 发送 intent 并渲染 core timeline row 的 pending/failed/sent；sending row 连续可见满 3 秒后才显示转圈，明确 send result 只可收敛已由 core patch 暴露的 row；附件可保留本地文件 preview 作为短生命周期 UI 状态，但不得用 memory pending、thread move 或本地 upsert conversation row 决定 correctness |
 | realtime / backfill | Rust `im-core` sync/realtime committed projection | realtime hint 调度 `syncDelta`，conversation-after 补新，projection commit 后 patch | App 不从 realtime typed event 直接写 list/timeline truth；只消费 core patch/read model 并在 gap 时 repair |
@@ -90,6 +90,9 @@ Rust im-core
 | control payload 会话预览可见性 | `awiki-me` mapper / realtime projection | SDK message 的 `body.text` + `payloadJson` | 只允许带显式可见文本的 control payload 更新 recents 预览；payload-only control 继续隐藏 |
 | `hidden`、`pinned`、`muted` | `awiki-me` `ProductLocalStore` | `ConversationService.setThreadHidden`、`hideConversationFromRecents`、`restoreConversationToRecents` | `ImCoreConversationService` 加载 overlay 后过滤、排序和展示 |
 | Direct `customTitle`、`avatarSeed` | `awiki-me` `ProductLocalStore` | `ProductLocalStore.upsertConversationOverlay` | Direct `customTitle` 只投影为 Persona 级本地备注，不再改写 Core `displayName`；`avatarSeed` 仍为 App overlay |
+| 当前账号 Agent inventory topology | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 版本化完整快照；App 只通过 `replaceAgentInventorySnapshot` 单事务替换 | Agent 页面；topology 不覆盖独立 status，也不替代 Core committed Agent control projection |
+| 当前账号 Agent latest status | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | 独立 status version；`replaceAgentStatusSnapshot` 单事务替换 | Agent 页面将 status 按 `agentDid` 叠加到 topology；status 不能改变 `activeState` 或重新激活 Agent |
+| 当前账号 Profile / Device Registry | User Service 权威、AWiki Me `ProductLocalStore` v4 展示 cache | `replaceProfileSnapshot` / `replaceDeviceRegistrySnapshot` 完整快照 + 单调版本 | 当前账号资料和设备管理 UI；不用于推断消息 owner、协议设备或身份绑定 |
 | 本地临时隐藏水位 | `ConversationListController` | `deleteFromRecents` 成功前后维护 memory waterline | snapshot、refresh 和 patch apply 前过滤，旧 patch 不能重新插入 |
 | 用户显式打开的空会话 | Rust `im-core` conversation registry | identity flow 先 `resolve/open`，再 `ensureConversation(conversationId)` | Core list/snapshot/patch 返回 committed row；App 不保留 locally-started bridge，也不构造 fake summary |
 | recents read presentation waterline | `ConversationListController` presentation memory | refresh / fast-local / patch / repair / visible message watermark / read ack | 发布 recents 前统一投影：latest message watermark 只前进，read watermark 只前进；summary-only 更新不能清 unread；read watermark 覆盖的旧 unread 不能重新出现；旧的 0 unread 不能清掉更新消息；可见状态只在严格 canonical conversation 内推进 |
@@ -271,6 +274,26 @@ Chat presentation 同时是 owner/session-generation scoped：
 7. remote history / thread legacy adapter 只作为迁移兜底；返回消息必须先持久化到 core projection，再通过 conversation timeline load/patch 成为 UI 事实。
 8. 如果 patch key 与当前 window 不一致，应触发 repair/diagnostic，不得用易漂移的 summary 或 alias 规则静默 drop core 已返回的消息。
 
+账号 session 激活后的 patch-ready 顺序固定为：
+
+1. 以 `session generation + ownerIdentityId + accountId + device auth generation + ownerDid`
+   建立 generation-specific committed patch subscription。
+2. Core subscription 的首个 `reset` 从 canonical SQLite projection 生成，同时作为本
+   generation 唯一一次有界 local seed；显式 legacy redb snapshot API 不参与 bound watch
+   的初始 seed。
+3. `preparePatchGeneration()` / `ensurePatchReady()` 完成后，协调器才执行首次可靠
+   bootstrap/delta/reconcile；同 generation 的后续调用复用 ready single-flight，不再次 seed。
+4. seed 期间到达的 patch 在同一 stream 中串行排队，reset 后继续应用，不通过第二次
+   conversation refresh 补偿。
+5. version gap / `repairRequired` 只合并为一次有界 repair；stream error/close 在下一
+   microtask 重建 subscription 并等待新的 reset，避免在 stream callback 内取消自身。
+6. Profile load、repair 和 timeline patch 在异步调用前后都重新校验 fence；即使 DID
+   未变化，只要 session 或 device auth generation 前进，旧 patch 和旧异步结果也必须丢弃。
+
+未带 typed account binding 的 legacy/test session 只保留“先订阅、一次 fast-local
+seed”的兼容屏障；正式 v2 account session 必须走上述完整 fence，不允许从 DID 推断
+`ownerIdentityId` 或 `accountId`。
+
 Timeline merge 必须把“同一条本机发送消息的 durable server row”和“迟到的本地 echo/pending/failed row”视为同一展示实体：如果 mine、thread、sender、可见文本和时间窗口匹配，且其中一条已经是 `sent`，UI window 保留已发送的 server row，不再把迟到的本地失败 echo 渲染成第二个气泡。这个规则只属于 presentation 去重防线，不改变 `im-core` 作为 send/outbox/local projection 事实源的职责。
 
 发送状态的 UI 降噪规则：core timeline row 进入 `sending` 后，气泡先不显示转圈且不预留左侧空白；同一 row 连续保持 `sending` 满 3 秒才显示 indicator。row 更新为 `sent` 或 `failed` 时 indicator widget 立即销毁。若 `sendConversationText` / `sendConversationPayload` 已返回明确终态，App 只允许用该 SDK 结果收敛当前 timeline 中已经存在、且 message id 或严格 pending match 对应的 core row；不得因此插入新的 memory-only message，也不得触发 full conversation refresh 或 remote history reconcile。
@@ -367,7 +390,7 @@ conversation/profile bundle 必须在发布会话行前把该投影迁入 Person
 若 App 已记录的 DID→Persona route 与后到 route 冲突，App 不移动展示资料也不覆盖
 原 route；绑定冲突只能由 Core 的权威身份投影解析或诊断。
 
-## 12. 不引入 Flutter MMKV 双缓存
+## 12. 不引入消息与会话双缓存
 
 AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，也不引入 MMKV 作为 conversation snapshot 或 presentation truth。
 
@@ -375,8 +398,27 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 
 - `im-core` SQLite 是 message、conversation、group、read-state 的主数据源。
 - `im-core` redb snapshot 已覆盖冷启动 bootstrap 的非权威缓存需求。
-- `ProductLocalStore` 只保存产品 overlay 和 UI preference，避免与 Rust projection 形成双主数据源。
+- `ProductLocalStore` 保存产品 overlay、UI preference，以及 User Service 权威的
+  Agent inventory/status、当前账号 Profile、Device Registry 版本化展示快照；这些账号域 cache
+  不能保存消息、会话、群主数据、read watermark、消息 cursor 或 Core Agent control facts。
 - `ChatThreadsProvider` 的内存 tail 是 UI 状态和 first-paint 加速，不是持久主数据源。
+
+Product local DB v4 的账号域表全部按稳定 `owner_identity_id` 分区，并通过
+`account_domain_sync_state(owner_identity_id, account_id, domain)` 固定账号绑定。App 只能在
+SDK `ActiveSyncAccountBinding` 已可用并通过 session fence 后访问这些表；不得从 DID、Handle、
+JWT、Vault context device ID 或 App installation UUID 推断 `account_id` / Protocol Device ID。
+Session fence 还要求 Protocol Device ID 不得为保留兼容值 `default`，identity/device
+generation 必须是大于 0、无前导零的 canonical positive decimal string。同一
+`owner_identity_id` 已绑定其他 `account_id` 时读写 fail closed。
+
+每个域的 replace 必须在一个 SQLite transaction 中执行“清旧 rows（允许清成空）→ 写完整
+snapshot → 推进 domain version”。Inventory topology 与 latest status 使用不同表和版本：
+topology replacement 不删除 status，status replacement 不修改 config/`activeState`。
+Product cache 的 domain/inventory/status/profile/registry version 与 Registry snapshot
+`auth_generation` 保存为任意精度 canonical non-negative decimal string，允许唯一的零值
+`0`；它们不能转成 Dart number 或 SQLite INTEGER，也不得冒充 Session binding 中必须大于 0
+的 generation。v3 的 `local_agent_states` 只允许在显式稳定 binding 和旧 owner DID 同时给出后
+copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 
 ## 13. 回归测试
 
@@ -395,6 +437,8 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 - `tests/unit/session_provider_test.dart`：固定 clear、A→B 和快速身份替换推进 epoch，同一 identity 的 JWT/profile refresh 保持 epoch。
 - `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state；同时从 `loginWithLocalCredential` 身份切换入口证明新 session epoch 会自动调度自己的 `startup` reliable sync，并在不由测试手动调用 coordinator、sync service 或 conversation-after 的情况下把 committed unread 和 hydrated preview 发布到会话列表。通知路由只受 session epoch 约束，不能被同身份下并发的列表 refresh generation 误取消。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
+- `tests/unit/conversation_list_provider_test.dart` 还必须验证 patch-ready single-flight、订阅先于 seed、seed 期间 patch 不丢不重、stream error/close 单次重建，以及同 DID auth generation 切换后旧 patch / Profile 异步结果失效。
+- `tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart` 与 `awiki_im_core_message_adapter_test.dart`：验证 conversation/timeline patch 的 `ownerIdentityId` 不在 SDK→App 映射中丢失，并验证产品诊断只映射脱敏 mode/count/domain/retry/time 字段。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation。
 - `tests/e2e/flutter/desktop_cli_peer/flows/attachment_flow.dart`：验证不同客户端账号发送附件时，关闭会话的 unread 精确 `0 -> 1`，从 recents 打开后精确 `1 -> 0`，并在 App presentation 重建后仍从 Core local read state 恢复为 `0`，同时保留 canonical 附件、下载字节和 digest 校验。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。

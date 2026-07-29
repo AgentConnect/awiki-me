@@ -108,6 +108,7 @@ class AwikiImCoreConversationAdapter
       return _patchFromCore(patch, ownerDid: ownerDid) ??
           CoreConversationPatch(
             kind: CoreConversationPatchKind.repairRequired,
+            ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
@@ -194,6 +195,7 @@ class AwikiImCoreConversationAdapter
       case core.ConversationStorePatchKind.reset:
         return CoreConversationPatch(
           kind: CoreConversationPatchKind.reset,
+          ownerIdentityId: patch.ownerIdentityId,
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,
@@ -212,6 +214,7 @@ class AwikiImCoreConversationAdapter
         if (item == null || !_mappers.shouldIncludeSnapshotConversation(item)) {
           return CoreConversationPatch(
             kind: CoreConversationPatchKind.remove,
+            ownerIdentityId: patch.ownerIdentityId,
             ownerDid: patch.ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
@@ -221,6 +224,7 @@ class AwikiImCoreConversationAdapter
         }
         return CoreConversationPatch(
           kind: CoreConversationPatchKind.upsert,
+          ownerIdentityId: patch.ownerIdentityId,
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,
@@ -230,6 +234,7 @@ class AwikiImCoreConversationAdapter
       case core.ConversationStorePatchKind.remove:
         return CoreConversationPatch(
           kind: CoreConversationPatchKind.remove,
+          ownerIdentityId: patch.ownerIdentityId,
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,
@@ -238,6 +243,7 @@ class AwikiImCoreConversationAdapter
       case core.ConversationStorePatchKind.reorder:
         return CoreConversationPatch(
           kind: CoreConversationPatchKind.reorder,
+          ownerIdentityId: patch.ownerIdentityId,
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,
@@ -247,6 +253,7 @@ class AwikiImCoreConversationAdapter
       case core.ConversationStorePatchKind.repairRequired:
         return CoreConversationPatch(
           kind: CoreConversationPatchKind.repairRequired,
+          ownerIdentityId: patch.ownerIdentityId,
           ownerDid: patch.ownerDid,
           version: patch.version,
           unreadTotal: patch.unreadTotal,

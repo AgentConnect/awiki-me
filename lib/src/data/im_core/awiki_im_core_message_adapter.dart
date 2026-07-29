@@ -6,6 +6,7 @@ import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import '../../application/models/attachment_models.dart';
 import '../../application/models/app_conversation_read_ref.dart';
 import '../../application/models/app_thread_ref.dart';
+import '../../application/models/message_sync_diagnostics.dart';
 import '../../application/models/thread_message_patch.dart';
 import '../../application/ports/message_core_port.dart';
 import '../../core/performance_logger.dart';
@@ -20,7 +21,8 @@ class AwikiImCoreMessageAdapter
         LocalHistoryMessageCorePort,
         ThreadPatchMessageCorePort,
         ControlThreadPatchMessageCorePort,
-        ConversationTimelineMessageCorePort {
+        ConversationTimelineMessageCorePort,
+        MessageSyncDiagnosticsCorePort {
   AwikiImCoreMessageAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -31,6 +33,47 @@ class AwikiImCoreMessageAdapter
   final AwikiImCoreMappers _mappers;
   core.AwikiImClient? _ownerDidClient;
   String? _ownerDid;
+
+  @override
+  Future<AppMessageSyncDiagnostics> syncDiagnostics() {
+    return _runtime.withCurrentClient((client) async {
+      final diagnostics = await client.messages.syncDiagnostics();
+      return AppMessageSyncDiagnostics(
+        lastSuccessAt: _parseDiagnosticTimestamp(diagnostics.lastSuccessAt),
+        mode: switch (diagnostics.mode) {
+          core.MessageSyncMode.uninitialized =>
+            AppMessageSyncMode.uninitialized,
+          core.MessageSyncMode.idle => AppMessageSyncMode.idle,
+          core.MessageSyncMode.recovering => AppMessageSyncMode.recovering,
+          core.MessageSyncMode.retryable => AppMessageSyncMode.retryable,
+          core.MessageSyncMode.blocked => AppMessageSyncMode.blocked,
+        },
+        pendingMutationCount: diagnostics.pendingMutationCount,
+        dirtyDomains: diagnostics.dirtyDomains
+            .map(
+              (domain) => switch (domain) {
+                core.MessageSyncDirtyDomain.messages =>
+                  AppMessageSyncDirtyDomain.messages,
+                core.MessageSyncDirtyDomain.readState =>
+                  AppMessageSyncDirtyDomain.readState,
+              },
+            )
+            .toList(growable: false),
+        retryState: switch (diagnostics.retryState) {
+          core.MessageSyncRetryState.none => AppMessageSyncRetryState.none,
+          core.MessageSyncRetryState.pending =>
+            AppMessageSyncRetryState.pending,
+          core.MessageSyncRetryState.inFlight =>
+            AppMessageSyncRetryState.inFlight,
+          core.MessageSyncRetryState.scheduled =>
+            AppMessageSyncRetryState.scheduled,
+          core.MessageSyncRetryState.permanentFailure =>
+            AppMessageSyncRetryState.permanentFailure,
+        },
+        nextRetryAt: _parseDiagnosticTimestamp(diagnostics.nextRetryAt),
+      );
+    });
+  }
 
   @override
   Future<ChatMessage> sendText({
@@ -604,6 +647,7 @@ class AwikiImCoreMessageAdapter
         core.ThreadMessageStorePatchKind.repairRequired =>
           ThreadMessagePatchKind.repairRequired,
       },
+      ownerIdentityId: patch.ownerIdentityId,
       ownerDid: patch.ownerDid,
       version: patch.version,
       threadKind: patch.threadKind,
@@ -685,6 +729,14 @@ String? _firstConversationId(Iterable<ChatMessage> messages) {
     }
   }
   return null;
+}
+
+DateTime? _parseDiagnosticTimestamp(String? value) {
+  final normalized = value?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(normalized)?.toUtc();
 }
 
 core.AttachmentInput _attachmentInputToCore(AttachmentDraft attachment) {

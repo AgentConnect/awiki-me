@@ -10,6 +10,7 @@ import 'package:awiki_me/src/application/ports/profile_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -153,6 +154,11 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   Completer<IdentityRegistrationResult>? registerPhoneCompleter;
   IdentityRegistrationStatus registrationStatus =
       IdentityRegistrationStatus.registered;
+
+  @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() {
+    throw UnsupportedError('unsupported');
+  }
 
   @override
   Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(

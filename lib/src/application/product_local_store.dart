@@ -85,6 +85,8 @@ abstract interface class ProductLocalStore {
     required String key,
   });
 
+  /// Legacy v3 DID-keyed Agent cache. New account-domain reads must use
+  /// [loadAgentInventorySnapshot] with an explicit stable binding.
   Future<List<LocalAgentState>> loadAgentStates({required String ownerDid});
 
   Future<void> saveAgentState(LocalAgentState state);
@@ -93,4 +95,43 @@ abstract interface class ProductLocalStore {
     required String ownerDid,
     required String agentDid,
   });
+
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  });
+
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding});
+
+  /// Loads the stable-owner Inventory snapshot. [legacyOwnerDid] opts into the
+  /// one-way v3 copy-on-read bridge; omitting it never consults DID-keyed rows.
+  Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
+    required ProductAccountBinding binding,
+    String? legacyOwnerDid,
+  });
+
+  Future<void> replaceAgentInventorySnapshot(
+    ProductAgentInventorySnapshot snapshot,
+  );
+
+  Future<ProductAgentStatusSnapshot?> loadAgentStatusSnapshot({
+    required ProductAccountBinding binding,
+  });
+
+  Future<void> replaceAgentStatusSnapshot(ProductAgentStatusSnapshot snapshot);
+
+  Future<ProductProfileSnapshot?> loadProfileSnapshot({
+    required ProductAccountBinding binding,
+  });
+
+  Future<void> replaceProfileSnapshot(ProductProfileSnapshot snapshot);
+
+  Future<ProductDeviceRegistrySnapshot?> loadDeviceRegistrySnapshot({
+    required ProductAccountBinding binding,
+  });
+
+  Future<void> replaceDeviceRegistrySnapshot(
+    ProductDeviceRegistrySnapshot snapshot,
+  );
 }

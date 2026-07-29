@@ -48,7 +48,7 @@ flutter run -d macos \
 | 事件前缀 | 含义 | 用途 |
 |---|---|---|
 | `main.*` / `bootstrap.*` | App 启动、路径解析、bootstrap 创建 | 判断打开软件初始等待是否卡在 App 初始化 |
-| `app_refresh.*` | 登录态后台刷新本地会话、profile、agents、friends、groups 以及 product store warm-up | 判断启动后列表慢是否被后台刷新抢资源；`app_refresh.conversation_fast_local` 应先完成，其他数据并发补齐 |
+| `app_refresh.*` | 登录态 patch-ready 屏障、profile、agents、friends、groups 以及 product store warm-up | 判断启动后列表慢是否被后台工作抢资源；`app_refresh.conversation_patch_ready` 只确认订阅与当前 generation 的一次有界 seed，其他数据并发补齐 |
 | `conversation_list.refresh_fast_local*` / `conversation_list.refresh_enrich*` | 会话列表 provider 的本地 summary 首屏刷新与后台 enrichment merge/badge | 判断首屏 state 更新是否只等本地 summary，Agent/overlay 是否在后台补齐 |
 | `conversation_service.fast_local*` / `conversation_service.enrich*` | im-core summary list、Agent 投影、overlay、过滤排序 | 判断会话列表业务层慢点；`fast_local` 不应等待远端 Agent inventory |
 | `product_store.*` | product overlay SQLite warm-up、路径解析、legacy migration、open database、query/decode | 判断 overlay DB 首次 open/migration 是否仍挤进首屏路径 |
@@ -59,8 +59,8 @@ flutter run -d macos \
 | `chat.local_history.*` / `im_core_messages.local_history*` | legacy local history 日志名或低层兼容入口 | 新链路优先看 canonical conversation timeline；旧名只用于兼容对比 |
 | `chat.remote_history.*` / `im_core_messages.remote_history*` | 后台远端 history reconcile、Dart 映射、merge/sort | 判断远端补齐、E2EE projection 和 native persist/merge 是否仍拖慢进入会话 |
 | `chat.history.*` / `im_core_messages.history*` | 兼容旧日志名的消息历史边界 | 新链路优先看 `conversation_timeline` / `remote_history`；旧名只用于兼容对比 |
-| `message_sync.coordinator.request` | App 侧可靠同步调度请求 | 判断 startup、resume、reconnect、realtime dirty/gap 是否合并为一次 SDK `syncDelta`；该事件是 verbose 级别 |
-| `message_sync.delta` | App 调用 SDK 全局 reliable sync 入口 | 判断 Rust `im-core` 是否完成账号级 delta apply；App 只提供 `reason`/`limit`，不读写 checkpoint |
+| `message_sync.coordinator.request` | App 侧可靠同步调度请求 | 判断 startup、resume、reconnect、realtime dirty/gap 是否合并为一次 SDK `syncNow`；该事件是 verbose 级别 |
+| `message_sync.delta` | App 调用 SDK 全局 reliable sync 入口的兼容日志名 | 判断 Rust `im-core` 是否完成 bootstrap/delta/compact recovery；App 只提供 allowlisted `reason`/`limit`，不读写 checkpoint 或 recovery token |
 | `message_sync.conversation_after` | 打开会话后的 conversation-local 补新 | 判断本地 conversation timeline 首屏后，是否按当前 canonical conversation 的最大 `server_seq` 补齐新消息；不推进全局 checkpoint |
 | `message_sync.thread_after` | legacy thread-local 补新日志名 | 仅用于兼容/低层诊断；AWiki Me display path 应优先看 `message_sync.conversation_after` |
 | `chat.messages.merge_loop` / `chat.messages.merge` | 消息列表 merge、pending 匹配和排序前准备 | `indexed=true` 表示当前 merge 已用 remoteId/localId/pending 索引，避免每条 incoming 反复 `indexWhere` 扫描 current |
@@ -139,15 +139,19 @@ checkpoint 属于 Rust `im-core` / SQLite local state。
 
 App 侧允许做的事情：
 
-- 在启动、恢复前台、realtime 重连、realtime dirty / gap hint 后请求 `syncDelta`。
+- 激活账号 session 后先订阅 Core committed patch，再执行当前 generation 的一次有界
+  local seed；只有 patch-ready 后才能请求首次 `syncNow`。
+- 在启动、恢复前台、realtime 重连、realtime dirty / gap hint 后请求 `syncNow`。
 - 传入诊断用 `reason`，例如 `startup`、`app_resumed`、`realtime_reconnected`、
   `realtime_dirty`、`realtime_gap`。
 - 在打开会话后，用当前 `AppConversationReadRef` 和本地 canonical timeline 的最大
   `server_seq` 调用 `syncConversationAfter`，做 conversation-local 补新；legacy
   `syncThreadAfter(ThreadRef)` 只作为 adapter/debug path。
-- 在 SDK sync 成功后刷新本地 projection，例如重新读取 fast local conversation list。
-- 对 sync/realtime/backfill 返回的消息页，等待或 repair core committed projection/read model；
-  App 不直接把这些返回值 merge 为 UI authoritative truth。
+- 通过 Core committed conversation/timeline patch 增量更新 App 有界窗口；只有 patch gap、
+  stream rebuild、显式 repair 或新的 session generation 才允许一次有界 reseed。
+- 对 sync/realtime/backfill 返回的消息页，等待或 repair Core committed projection/read
+  model；App 不直接把这些返回值 merge 为 UI authoritative truth。
+- best-effort 读取产品安全 diagnostics；诊断失败不能改变已经完成的同步结果。
 
 App 侧禁止做的事情：
 
@@ -155,8 +159,19 @@ App 侧禁止做的事情：
 - 不传入 `since_event_seq`，不手动推进 `next_event_seq`。
 - 不手写 `/im/rpc` 的 `sync.*` payload，不绕过 SDK 拼 wire 请求。
 - 不把 realtime `sync` hint 或 realtime projection 成功视为 checkpoint commit。
-- 不在 `snapshotRequired` / `snapshot_required` 时清空本地 projection；该状态应按
-  SDK 契约 fail-closed，并等待后续 repair / snapshot 方案。
+- 不在每次成功 pull/hint 后调用全量 conversation refresh、20×50 history prewarm 或
+  forced visible projection refresh。
+- 不读取、传递或持久化 Snapshot recovery token/anchor；bootstrap、delta、compact
+  recovery 和 post-anchor delta 由 Core 的一次 `syncNow` 调用闭合。
+
+可靠事实来自 Message Service/User Service 的 HTTP 接口和 Core SQLite commit。WebSocket
+只提供 dirty-domain hint 以降低发现延迟；提示丢失后，前台周期对账或重连仍必须通过 HTTP
+恢复。移动 Push 在首版为 `DEFERRED`，不能记录为已实现可靠通道。
+
+新设备 bootstrap 是 tail-only，不恢复加入前普通消息；已有设备 compact recovery 由服务端
+时间限制为最近 48 小时且最多 500 条普通逻辑消息，Snapshot 只 merge、不删除本地更老消息。
+Agent/Profile/Registry 当前快照不受该消息窗口限制。Direct E2EE、Group MLS、密钥、密文和
+加密历史不进入这条普通同步链；普通消息编辑、撤回、删除和消息 tombstone 当前也不支持。
 
 ## 如何解读
 
@@ -164,13 +179,13 @@ App 侧禁止做的事情：
 2. 如果 `chat.conversation_timeline.*` / `im_core_messages.conversation_timeline*` 很快但 `chat.remote_history.load` / `im_core_messages.remote_history_native` 很慢，说明进入会话首屏已 local-first，剩余慢点在远端 history reconcile、E2EE projection persist 或 native local merge。
 3. 如果 `chat.conversation_timeline.*` 本身慢，优先检查本地 projection 查询、SQLite/WAL、消息数量和 `chat.messages.merge` / `chat.messages.sort`。旧 `chat.local_history.*` 出现在主链路时，应确认它只是 legacy adapter 或日志名兼容。
 4. 如果 `conversation_service.fast_local` 很快但 `conversation_service.enrich`、`conversation_service.agent_projection` 或 `agents.load.*` 很慢，说明首屏已经脱离远端 Agent inventory，慢点在后台补齐链路。
-5. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_fast_local`。
+5. 如果 `product_store.legacy_migration` 或 `product_store.open_database` 很慢，优先看首次 DB open、旧库迁移和 WAL/SHM 拷贝；这些应通过 `app_refresh.product_store_warm_up` 后台预热，不能阻塞 `conversation_patch_ready`。
 6. 如果 `conversation_service.filter_sort`、`conversation_list.refresh_fast_local.merge`、`conversation_list.refresh_enrich.merge` 或 `chat.messages.sort` 很慢，优先看 Dart 侧列表规模、索引命中和排序。`conversation_list.*.merge` 与 `chat.messages.merge_loop` 应带 `indexed=true`，否则说明回归到线性扫描路径。
-7. 如果 `message_sync.delta` 很慢，优先判断是 SDK delta apply、SQLite projection 写入、
-   message-service sync 响应，还是随后 `conversation_list.refresh_fast_local` 读取本地
-   projection 变慢。`message_sync.delta` 的返回诊断可用于判断 `eventsApplied`、
-   `pagesFetched`、`hasMore`、`snapshotRequired` 和 `warnings`，但不能把
-   `lastAppliedEventSeq` 当作 App 可写 checkpoint。
+7. 如果 `message_sync.delta` 很慢，优先判断是 SDK bootstrap/delta/compact recovery、
+   exact hydration、SQLite 原子 projection commit，还是 message-service HTTP 响应。
+   正常成功后不应再出现 coordinator 触发的全 conversation refresh/prewarm。产品安全
+   diagnostics 只能查看 typed mode、pending mutation count、dirty domains 和 retry state；
+   raw cursor/epoch/anchor 不属于 App 性能诊断面。
 8. 如果 `message_sync.conversation_after` 很慢，优先看该 conversation 的远端补新、E2EE projection
    persist 和 projection repair/load。它只按 `afterServerSeq` 做 conversation-local freshness，
    不代表全局 reliable sync 落后。`message_sync.thread_after` 只应作为 legacy adapter/debug 线索。
@@ -182,7 +197,10 @@ App 侧禁止做的事情：
 
 ## 当前性能门禁
 
-- 启动或恢复时，应先看到 `app_refresh.conversation_fast_local` 与 `conversation_list.refresh_fast_local`，再看到 `conversation_list.refresh_enrich`、`app_refresh.agents`、`app_refresh.friends` 和 `app_refresh.groups`。
+- 账号 session 启动时，应先完成 committed-patch subscription 和当前 generation 的一次
+  bounded seed，并看到 `app_refresh.conversation_patch_ready`，之后才允许首次
+  `message_sync.delta`/`syncNow`。恢复前台、realtime hint 和重连不得为同一 generation
+  重复 `conversation_list.refresh_fast_local`。
 - `conversation_service.fast_local` 不应等待 `conversation_service.agent_projection.list_agents`；如果二者耗时同步增长，说明会话首屏又被 Agent RPC 绑定。
 - `product_store.open_database` / `product_store.legacy_migration` 可在后台 warm-up 中出现，但不应成为 `conversation_list.refresh_fast_local` 的直接子链路。
 - 进入已有本地 projection 的会话时，应先看到 `chat.conversation_timeline.*` / `im_core_messages.conversation_timeline*`，消息立即出现；`chat.remote_history.load` 只作为后台 reconcile，失败不应清空已显示的本地消息。
@@ -193,7 +211,12 @@ App 侧禁止做的事情：
 - Performance E2E 必须在 `timings.json` 顶层 `metrics` / `counters` 写入
   `cache.*` 数量指标，并把缓存上限类指标作为 gate；这些字段只记录数量，不记录正文、
   payload、thread id、token 或本地路径。
-- 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK `message_sync.delta`；不能出现 App 自己读写 checkpoint、传 `since_event_seq` 或手写 `sync.*` wire payload 的代码路径。
+- 启动、恢复前台、realtime 重连、realtime dirty / gap 后，App 侧应只调度 SDK
+  `syncNow`（日志可保留 `message_sync.delta` 兼容名）；不能出现 App 自己读写 checkpoint、
+  传 `since_event_seq`、recovery token 或手写 `sync.*` wire payload 的代码路径。
+- 普通同步成功后，性能 trace 中不能出现 coordinator 触发的全 conversation refresh、
+  20×50 history prewarm 或 forced visible refresh；列表和可见 timeline 应由 committed
+  patch 增量收敛。
 - 打开已有本地 projection 的会话时，canonical conversation timeline 应先完成；如需要补新，可随后看到 `message_sync.conversation_after`，该链路不得推进账号级 reliable checkpoint。
 - 打开未读会话时只允许看到一次远端 `chat.remote_history.*` reconcile；`chat.mark_read*` 不应再触发 history 分页。
 - 文本、payload 和附件发送/重试成功后，pending/failed/sent 由 core durable message row 与 `MessageMetadata.send_state` 表达；conversation list/detail 通过 core patch/read model 更新。App 不得本地 upsert conversation row、memory pending 或 thread move 来决定 send correctness。附件本地文件 preview 只能作为上传中的短生命周期 UI 状态，不能作为 durable truth，也不能阻塞 conversation list/detail 首屏等待上传完成。

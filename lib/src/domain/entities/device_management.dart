@@ -53,6 +53,7 @@ class DeviceSummary {
     required this.role,
     required this.managementReady,
     required this.isCurrent,
+    this.authGeneration = '0',
   });
 
   final String protocolDeviceId;
@@ -62,6 +63,7 @@ class DeviceSummary {
   final DeviceRole role;
   final bool managementReady;
   final bool isCurrent;
+  final String authGeneration;
 
   bool get canManageDevices =>
       status == DeviceStatus.active &&
@@ -229,9 +231,14 @@ class DeviceJoinRequestNotice {
 }
 
 class DeviceRegistrySnapshot {
-  const DeviceRegistrySnapshot({required this.did, this.devices = const []});
+  const DeviceRegistrySnapshot({
+    required this.did,
+    this.registryVersion = '0',
+    this.devices = const [],
+  });
 
   final String did;
+  final String registryVersion;
   final List<DeviceSummary> devices;
 
   DeviceSummary? get currentDevice {

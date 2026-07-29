@@ -218,7 +218,7 @@ Future<ConversationSummary> _waitForIdentitySwitchUnread({
     label: 'owner-scoped unread projection',
     action: () async {
       final result = await sync.syncNow(reason: reason, limit: 100);
-      if (result.snapshotRequired) {
+      if (result.recoveryRequired) {
         throw StateError(
           'Reliable sync requested an unavailable snapshot repair.',
         );

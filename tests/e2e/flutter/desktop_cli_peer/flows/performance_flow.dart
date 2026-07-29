@@ -49,8 +49,7 @@ Future<void> _verifyPerformanceRegression({
     fields: <String, Object?>{
       'eventsApplied': warmup.eventsApplied,
       'pagesFetched': warmup.pagesFetched,
-      'snapshotRequired': warmup.snapshotRequired,
-      'hasMore': warmup.hasMore,
+      'recoveryRequired': warmup.recoveryRequired,
       'warnings': warmup.warnings,
     },
   );
@@ -67,12 +66,8 @@ Future<void> _verifyPerformanceRegression({
   recorder.counter('message_sync.warmup_events_applied', warmup.eventsApplied);
   recorder.counter('message_sync.warmup_pages_fetched', warmup.pagesFetched);
   recorder.counter(
-    'message_sync.warmup_snapshot_required_count',
-    warmup.snapshotRequired ? 1 : 0,
-  );
-  recorder.counter(
-    'message_sync.warmup_has_more_count',
-    warmup.hasMore ? 1 : 0,
+    'message_sync.warmup_recovery_required_count',
+    warmup.recoveryRequired ? 1 : 0,
   );
 
   final initialConversations = await recorder.measureList(
@@ -264,19 +259,36 @@ Future<void> _verifyPerformanceRegression({
     cliSendWatch.elapsedMilliseconds,
   );
   final threadAfterWatch = Stopwatch()..start();
-  final threadAfter = await messageSync.syncThreadAfter(
-    thread: thread,
-    limit: 20,
-  );
+  late final int threadAfterItems;
+  late final bool? threadAfterHasMore;
+  late final List<String> threadAfterWarnings;
+  if (config.environment.messageSyncV2ReadEnabled) {
+    expect(messageSync, isA<ConversationMessageSyncService>());
+    final result = await (messageSync as ConversationMessageSyncService)
+        .syncConversationAfter(
+          conversation: AppConversationReadRef.fromConversationId(
+            conversationForCliMessage.conversationId,
+          ),
+          limit: 20,
+        );
+    threadAfterItems = result.messages.length;
+    threadAfterHasMore = result.hasMore;
+    threadAfterWarnings = result.warnings;
+  } else {
+    final messages = await messaging.loadHistory(thread, limit: 20);
+    threadAfterItems = messages.length;
+    threadAfterHasMore = null;
+    threadAfterWarnings = const <String>[];
+  }
   threadAfterWatch.stop();
   recorder.record(
     'message.cli_send_app_thread_after_ms',
     threadAfterWatch.elapsed,
     source: 'app',
     fields: <String, Object?>{
-      'items': threadAfter.messages.length,
-      'hasMore': threadAfter.hasMore,
-      'warnings': threadAfter.warnings,
+      'items': threadAfterItems,
+      'hasMore': threadAfterHasMore,
+      'warnings': threadAfterWarnings,
     },
   );
   await _waitForAppHistory(
@@ -899,14 +911,16 @@ class _E2ePerformanceRecorder {
     final file = File(path);
     await file.parent.create(recursive: true);
     await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
-        'runId': config.runId,
-        'case': config.e2eCase.name,
-        'dataset': _dataset,
-        'metrics': _metrics,
-        'counters': _counters,
-        'appProductTimings': _timings,
-      }),
+      const JsonEncoder.withIndent('  ').convert(
+        buildDesktopE2ePerformanceProductReport(
+          runId: config.runId,
+          caseName: config.e2eCase.name,
+          dataset: _dataset,
+          metrics: _metrics,
+          counters: _counters,
+          appProductTimings: _timings,
+        ),
+      ),
       flush: true,
     );
   }

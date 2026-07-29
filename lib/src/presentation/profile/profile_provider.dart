@@ -1,8 +1,14 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../app/app_services.dart';
+import '../../application/account_state_sync_request_bus.dart';
+import '../../application/models/product_local_models.dart';
+import '../../application/profile_application_service.dart';
 import '../../domain/entities/profile_patch.dart';
+import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
@@ -85,6 +91,12 @@ class ProfileController extends StateNotifier<ProfileState> {
   Future<void> refresh() async {
     final generation = _stateGeneration;
     final epoch = ref.read(sessionProvider).activeEpoch;
+    final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
+    if (accountStateRequests.hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      await accountStateRequests.request('profile_manual_refresh', force: true);
+      return;
+    }
     state = state.copyWith(isLoading: true);
     final profile = await ref
         .read(profileApplicationServiceProvider)
@@ -144,15 +156,78 @@ class ProfileController extends StateNotifier<ProfileState> {
   Future<void> updateProfile(ProfilePatch patch) async {
     final generation = _stateGeneration;
     final epoch = ref.read(sessionProvider).activeEpoch;
+    final sessionBefore = ref.read(sessionProvider);
     state = state.copyWith(isSaving: true);
-    final profile = await ref
-        .read(profileApplicationServiceProvider)
-        .updateProfile(patch);
-    if (!_isOperationCurrent(generation, epoch)) {
+    final profiles = ref.read(profileApplicationServiceProvider);
+    final UserProfile profile;
+    final String? profileVersion;
+    if (profiles is VersionedProfileApplicationService) {
+      final mutation = await (profiles as VersionedProfileApplicationService)
+          .updateProfileVersioned(patch);
+      profile = mutation.profile;
+      profileVersion = mutation.profileVersion;
+    } else {
+      profile = await profiles.updateProfile(patch);
+      profileVersion = profile.profileVersion;
+    }
+    if (!_isOperationCurrent(generation, epoch) ||
+        !_sameProfileProviderSession(
+          sessionBefore,
+          ref.read(sessionProvider),
+        )) {
       return;
     }
     state = _profileStateAfterRefresh(profile, isSaving: false);
+    await ref
+        .read(accountStateSyncRequestBusProvider)
+        .request(
+          'profile_updated',
+          force: true,
+          minimumVersion:
+              profileVersion == null ||
+                  !isCanonicalProductDecimal(profileVersion)
+              ? null
+              : AccountStateVersionFloor(
+                  domain: ProductAccountDomain.profile,
+                  version: profileVersion,
+                ),
+        );
+    if (!_isOperationCurrent(generation, epoch) ||
+        !_sameProfileProviderSession(
+          sessionBefore,
+          ref.read(sessionProvider),
+        )) {
+      return;
+    }
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
+  }
+
+  void applyAccountStateSnapshot(
+    ProductProfileSnapshot snapshot, {
+    required SessionIdentity session,
+  }) {
+    final current = ref.read(sessionProvider).session;
+    if (!mounted || current == null || current.did != session.did) {
+      return;
+    }
+    final payload = snapshot.payloadJson == null
+        ? const <String, Object?>{}
+        : _readJsonObject(snapshot.payloadJson!);
+    final profile = UserProfile(
+      did: session.did,
+      displayName: _optionalString(payload['nick_name']) ?? '',
+      bio: _optionalString(payload['bio']) ?? '',
+      tags: _stringList(payload['tags']),
+      profileMarkdown: _optionalString(payload['profile_md']) ?? '',
+      handle: session.handle,
+      avatarUri: _optionalString(payload['avatar_url']),
+      profileVersion: snapshot.domainVersion,
+    );
+    state = _profileStateAfterRefresh(
+      profile,
+      isLoading: false,
+      isSaving: false,
+    );
   }
 
   void clear() {
@@ -200,6 +275,48 @@ class ProfileController extends StateNotifier<ProfileState> {
   }
 }
 
+bool _sameProfileProviderSession(SessionState before, SessionState after) {
+  final beforeSession = before.session;
+  final afterSession = after.session;
+  final beforeBinding = beforeSession?.accountBinding;
+  final afterBinding = afterSession?.accountBinding;
+  return before.generation == after.generation &&
+      beforeSession != null &&
+      afterSession != null &&
+      beforeSession.did == afterSession.did &&
+      beforeBinding?.ownerIdentityId == afterBinding?.ownerIdentityId &&
+      beforeBinding?.accountId == afterBinding?.accountId &&
+      beforeBinding?.currentDid == afterBinding?.currentDid &&
+      beforeBinding?.protocolDeviceId == afterBinding?.protocolDeviceId &&
+      beforeBinding?.identityGeneration == afterBinding?.identityGeneration &&
+      beforeBinding?.deviceAuthGeneration == afterBinding?.deviceAuthGeneration;
+}
+
 final profileProvider = StateNotifierProvider<ProfileController, ProfileState>(
   (ref) => ProfileController(ref),
 );
+
+Map<String, Object?> _readJsonObject(String value) {
+  final decoded = jsonDecode(value);
+  if (decoded is! Map) {
+    throw const FormatException('account_profile_payload_not_object');
+  }
+  return decoded.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+}
+
+String? _optionalString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  return value
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}

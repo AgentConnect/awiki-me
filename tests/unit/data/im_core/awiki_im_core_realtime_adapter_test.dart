@@ -38,7 +38,7 @@ void main() {
     firstClient.addEvent(_groupUpdate('stale-first'));
     secondClient.addEvent(_groupUpdate('second-live'));
     await pumpEventQueue();
-    expect(updates.map((update) => update.syncEventSeq), <String?>[
+    expect(updates.map((update) => update.reason), <String?>[
       'second-live',
     ]);
 
@@ -49,7 +49,7 @@ void main() {
 
     secondClient.addEvent(_groupUpdate('second-after-old-stop'));
     await pumpEventQueue();
-    expect(updates.map((update) => update.syncEventSeq), <String?>[
+    expect(updates.map((update) => update.reason), <String?>[
       'second-live',
       'second-after-old-stop',
     ]);
@@ -128,7 +128,7 @@ void main() {
     firstClient.addEvent(_groupUpdate('stale-first'));
     secondClient.addEvent(_groupUpdate('second-live'));
     await pumpEventQueue();
-    expect(updates.map((update) => update.syncEventSeq), <String?>[
+    expect(updates.map((update) => update.reason), <String?>[
       'second-live',
     ]);
 
@@ -143,9 +143,10 @@ core.RealtimeEvent _groupUpdate(String eventSequence) {
   return core.RealtimeEvent(
     kind: 'group_updated',
     sync: core.RealtimeSyncHint(
-      eventSeq: eventSequence,
+      reason: eventSequence,
       syncDirty: true,
       gapDetected: false,
+      hasUnknownDomain: false,
     ),
   );
 }

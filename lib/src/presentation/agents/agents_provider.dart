@@ -5,8 +5,11 @@ import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/account_state_sync_request_bus.dart';
+import '../../application/agent/agent_control_service.dart';
 import '../../application/agent/agent_control_status_store.dart';
 import '../../application/models/product_local_models.dart';
+import '../../application/ports/agent_inventory_port.dart';
 import '../../core/app_error_classifier.dart';
 import '../../core/performance_logger.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
@@ -589,6 +592,15 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> load({bool showLoading = true, bool surfaceError = true}) async {
+    final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
+    if (accountStateRequests.hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      await accountStateRequests.request(
+        showLoading ? 'agent_load' : 'agent_background_load',
+        force: showLoading,
+      );
+      return;
+    }
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
@@ -632,6 +644,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     bool resetAutoSyncExhaustion = true,
     bool surfaceError = true,
   }) {
+    final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
+    if (accountStateRequests.hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      return accountStateRequests.request(
+        quiet ? 'agent_background_refresh' : 'agent_manual_refresh',
+        force: !quiet,
+      );
+    }
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return Future<void>.value();
@@ -640,6 +660,58 @@ class AgentsController extends StateNotifier<AgentsState> {
       _inventoryAutoSyncExhaustedOwner = null;
     }
     return load(showLoading: !quiet, surfaceError: surfaceError);
+  }
+
+  Future<void> applyAccountStateSnapshots({
+    required ProductAgentInventorySnapshot inventory,
+    ProductAgentStatusSnapshot? status,
+    required bool Function() isSessionCurrent,
+  }) async {
+    if (!_agentsAvailable || !isSessionCurrent()) {
+      return;
+    }
+    _stopInventoryAutoSync();
+    _stopInventoryObservation();
+    final statusByDid = <String, Map<String, Object?>>{
+      for (final item in status?.statuses ?? const <ProductAgentStatusItem>[])
+        item.agentDid: _accountStateJsonMap(item.payloadJson),
+    };
+    final topology = inventory.agents
+        .map((item) {
+          final payload = _accountStateJsonMap(item.payloadJson);
+          final statusPayload = statusByDid[item.agentDid];
+          return AgentSummary.fromJson(<String, Object?>{
+            ...payload,
+            'agent_did': item.agentDid,
+            'active_state': item.activeState,
+            if (statusPayload != null) 'status': statusPayload,
+          });
+        })
+        .toList(growable: false);
+    if (!isSessionCurrent()) {
+      return;
+    }
+    _pruneConfirmedTopologyControlOverlays(topology);
+    final coreMerged = await _mergeLatestDaemonStatusPayloads(
+      topology,
+      isSessionCurrent: isSessionCurrent,
+    );
+    if (!isSessionCurrent()) {
+      return;
+    }
+    final fullyMerged = _applyTopologyControlOverlays(coreMerged);
+    final visible = fullyMerged
+        .where((agent) => agent.activeState == 'active')
+        .toList(growable: false);
+    state = state.copyWith(
+      agents: visible,
+      selectedAgentDid: _nextSelection(visible),
+      isLoading: false,
+      clearError: true,
+    );
+    _loadedCacheOwner =
+        'account:${inventory.binding.ownerIdentityId}:${inventory.binding.accountId}';
+    _syncControlEventSubscriptions(visible);
   }
 
   Future<void> _load({
@@ -862,6 +934,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     AgentInventoryAutoSyncReason reason =
         AgentInventoryAutoSyncReason.backgroundDiscovery,
   }) {
+    if (ref.read(accountStateSyncRequestBusProvider).hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      _stopInventoryAutoSync();
+      return;
+    }
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
@@ -905,6 +982,11 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   void startInventoryObservation() {
+    if (ref.read(accountStateSyncRequestBusProvider).hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      _stopInventoryObservation();
+      return;
+    }
     if (!_agentsAvailable ||
         _inventoryObservationInterval <= Duration.zero ||
         _inventoryObservationTimer != null ||
@@ -1404,12 +1486,25 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _runAction(AgentActionKeys.unbind(selected.agentDid), (
       operation,
     ) async {
-      await ref
-          .read(agentControlServiceProvider)
-          .unbindAgent(selected.agentDid);
-      if (_isOwnerOperationCurrent(operation)) {
-        await load();
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final AgentInventoryMutationReceipt receipt;
+      if (control is VersionedAgentControlService) {
+        receipt = await (control as VersionedAgentControlService)
+            .unbindAgentVersioned(selected.agentDid);
+      } else {
+        await control.unbindAgent(selected.agentDid);
+        receipt = const AgentInventoryMutationReceipt(inventoryVersion: null);
       }
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
+      }
+      await _reconcileInventoryMutation(
+        reason: 'agent_unbound',
+        inventoryVersion: receipt.inventoryVersion,
+        sessionBefore: before,
+        operation: operation,
+      );
     });
   }
 
@@ -1436,12 +1531,25 @@ class AgentsController extends StateNotifier<AgentsState> {
       await _runAction(AgentActionKeys.unbind(selected.agentDid), (
         operation,
       ) async {
-        await ref
-            .read(agentControlServiceProvider)
-            .unbindAgent(selected.agentDid);
-        if (_isOwnerOperationCurrent(operation)) {
-          await load();
+        final before = ref.read(sessionProvider);
+        final control = ref.read(agentControlServiceProvider);
+        final AgentInventoryMutationReceipt receipt;
+        if (control is VersionedAgentControlService) {
+          receipt = await (control as VersionedAgentControlService)
+              .unbindAgentVersioned(selected.agentDid);
+        } else {
+          await control.unbindAgent(selected.agentDid);
+          receipt = const AgentInventoryMutationReceipt(inventoryVersion: null);
         }
+        if (!_isOwnerOperationCurrent(operation)) {
+          return;
+        }
+        await _reconcileInventoryMutation(
+          reason: 'agent_unbound',
+          inventoryVersion: receipt.inventoryVersion,
+          sessionBefore: before,
+          operation: operation,
+        );
       });
       return;
     }
@@ -1551,10 +1659,22 @@ class AgentsController extends StateNotifier<AgentsState> {
       clearError: true,
     );
     try {
-      final removed = await ref
-          .read(agentControlServiceProvider)
-          .removeAgentFromAccount(selected.agentDid)
-          .timeout(agentActionTimeout);
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final mutation = control is VersionedAgentControlService
+          ? await (control as VersionedAgentControlService)
+                .removeAgentFromAccountVersioned(selected.agentDid)
+                .timeout(agentActionTimeout)
+          : AgentInventoryMutationResult<List<AgentSummary>>(
+              value: await control
+                  .removeAgentFromAccount(selected.agentDid)
+                  .timeout(agentActionTimeout),
+              inventoryVersion: null,
+            );
+      if (!_sameAgentMutationSession(before, ref.read(sessionProvider))) {
+        return;
+      }
+      final removed = mutation.value;
       final removedDids = {
         ...removingDids,
         ...removed.map((agent) => agent.agentDid),
@@ -1571,7 +1691,12 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         clearError: true,
       );
-      unawaited(load(showLoading: false, surfaceError: false));
+      await _reconcileInventoryMutation(
+        reason: 'agent_removed_from_account',
+        inventoryVersion: mutation.inventoryVersion,
+        sessionBefore: before,
+        operation: operation,
+      );
     } catch (error) {
       if (!_isOwnerOperationCurrent(operation)) {
         return;
@@ -1796,15 +1921,30 @@ class AgentsController extends StateNotifier<AgentsState> {
     await _runAction(AgentActionKeys.rename(normalizedAgentDid), (
       operation,
     ) async {
-      await ref
-          .read(agentControlServiceProvider)
-          .updateDisplayName(
-            agentDid: normalizedAgentDid,
-            displayName: normalizedDisplayName,
-          );
-      if (_isOwnerOperationCurrent(operation)) {
-        await load();
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final mutation = control is VersionedAgentControlService
+          ? await (control as VersionedAgentControlService)
+                .updateDisplayNameVersioned(
+                  agentDid: normalizedAgentDid,
+                  displayName: normalizedDisplayName,
+                )
+          : AgentInventoryMutationResult<AgentSummary>(
+              value: await control.updateDisplayName(
+                agentDid: normalizedAgentDid,
+                displayName: normalizedDisplayName,
+              ),
+              inventoryVersion: null,
+            );
+      if (!_isOwnerOperationCurrent(operation)) {
+        return;
       }
+      await _reconcileInventoryMutation(
+        reason: 'agent_display_name_updated',
+        inventoryVersion: mutation.inventoryVersion,
+        sessionBefore: before,
+        operation: operation,
+      );
     });
   }
 
@@ -1891,12 +2031,26 @@ class AgentsController extends StateNotifier<AgentsState> {
       ),
     );
     try {
-      final saved = await ref
-          .read(agentControlServiceProvider)
-          .updateInvocationPolicy(agentDid: normalized, policy: policy);
-      if (!_isOwnerOperationCurrent(operation)) {
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final mutation = control is VersionedAgentControlService
+          ? await (control as VersionedAgentControlService)
+                .updateInvocationPolicyVersioned(
+                  agentDid: normalized,
+                  policy: policy,
+                )
+          : AgentInventoryMutationResult<AgentInvocationPolicy>(
+              value: await control.updateInvocationPolicy(
+                agentDid: normalized,
+                policy: policy,
+              ),
+              inventoryVersion: null,
+            );
+      if (!_isOwnerOperationCurrent(operation) ||
+          !_sameAgentMutationSession(before, ref.read(sessionProvider))) {
         return false;
       }
+      final saved = mutation.value;
       state = state.copyWith(
         invocationPolicies: <String, AgentInvocationPolicy>{
           ...state.invocationPolicies,
@@ -1907,7 +2061,13 @@ class AgentsController extends StateNotifier<AgentsState> {
           normalized,
         ),
       );
-      return true;
+      await _reconcileInventoryMutation(
+        reason: 'agent_invocation_policy_updated',
+        inventoryVersion: mutation.inventoryVersion,
+        sessionBefore: before,
+        operation: operation,
+      );
+      return _isOwnerOperationCurrent(operation);
     } catch (error) {
       if (!_isOwnerOperationCurrent(operation)) {
         return false;
@@ -1924,6 +2084,36 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       return false;
     }
+  }
+
+  Future<void> _reconcileInventoryMutation({
+    required String reason,
+    required String? inventoryVersion,
+    required SessionState sessionBefore,
+    required _AgentsOwnerOperation operation,
+  }) async {
+    if (!_isOwnerOperationCurrent(operation) ||
+        !_sameAgentMutationSession(sessionBefore, ref.read(sessionProvider))) {
+      return;
+    }
+    final requests = ref.read(accountStateSyncRequestBusProvider);
+    if (requests.hasHandler && sessionBefore.session?.accountBinding != null) {
+      await requests.request(
+        reason,
+        force: true,
+        minimumVersion: inventoryVersion == null
+            ? null
+            : AccountStateVersionFloor(
+                domain: ProductAccountDomain.agentInventory,
+                version: inventoryVersion,
+              ),
+      );
+      return;
+    }
+    if (!_isOwnerOperationCurrent(operation)) {
+      return;
+    }
+    await load(showLoading: false, surfaceError: false);
   }
 
   void clearInstallCommand() {
@@ -3209,14 +3399,18 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<List<AgentSummary>> _mergeLatestDaemonStatusPayloads(
-    List<AgentSummary> agents,
-  ) async {
+    List<AgentSummary> agents, {
+    bool Function()? isSessionCurrent,
+  }) async {
     final totalWatch = Stopwatch()..start();
     var merged = _stableAgentOrder(agents);
     final store = ref.read(agentControlStatusStoreProvider);
     var daemonCount = 0;
     var payloadCount = 0;
     for (final daemon in agents.where((agent) => agent.isDaemon)) {
+      if (isSessionCurrent?.call() == false) {
+        return merged;
+      }
       final Map<String, Object?>? payload;
       daemonCount += 1;
       try {
@@ -3230,7 +3424,13 @@ class AgentsController extends StateNotifier<AgentsState> {
           },
         );
       } catch (_) {
+        if (isSessionCurrent?.call() == false) {
+          return merged;
+        }
         continue;
+      }
+      if (isSessionCurrent?.call() == false) {
+        return merged;
       }
       if (payload == null) {
         continue;
@@ -3792,6 +3992,16 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 }
 
+Map<String, Object?> _accountStateJsonMap(String value) {
+  final decoded = jsonDecode(value);
+  if (decoded is! Map) {
+    throw const FormatException('account_agent_payload_not_object');
+  }
+  return decoded.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+}
+
 Set<String> _rememberControlEventId(Set<String> current, String eventId) {
   final remembered = <String>{...current, eventId};
   if (remembered.length <= 200) {
@@ -4325,6 +4535,23 @@ AgentInventoryAutoSyncReason _preferredInventoryAutoSyncReason(
 
 DateTime? _dateTime(Object? value) {
   return parseAgentStatusTimestamp(value);
+}
+
+bool _sameAgentMutationSession(SessionState before, SessionState after) {
+  final beforeSession = before.session;
+  final afterSession = after.session;
+  final beforeBinding = beforeSession?.accountBinding;
+  final afterBinding = afterSession?.accountBinding;
+  return before.generation == after.generation &&
+      beforeSession != null &&
+      afterSession != null &&
+      beforeSession.did == afterSession.did &&
+      beforeBinding?.ownerIdentityId == afterBinding?.ownerIdentityId &&
+      beforeBinding?.accountId == afterBinding?.accountId &&
+      beforeBinding?.currentDid == afterBinding?.currentDid &&
+      beforeBinding?.protocolDeviceId == afterBinding?.protocolDeviceId &&
+      beforeBinding?.identityGeneration == afterBinding?.identityGeneration &&
+      beforeBinding?.deviceAuthGeneration == afterBinding?.deviceAuthGeneration;
 }
 
 String _agentErrorMessage(Object error) {

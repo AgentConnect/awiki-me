@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-29.release0714-merge-v1",
+  "sourceRevision": "2026-07-29.release0714-account-state-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -1796,6 +1796,64 @@
       }
     },
     {
+      "caseId": "MESSAGE-PATCH-RESTART-E2E-001",
+      "feature": "Cold restart closes a message gap committed while Patch subscription is unavailable",
+      "layer": "product_ui",
+      "preconditions": "Phase A has a real bound App/Core session, the runner can stop realtime and launch a distinct Flutter process against the same isolated state root, and the CLI peer is independently authenticated.",
+      "action": "Pause Phase A, stop realtime, destroy its App ProviderContainer and native bootstrap, prove Patch/sync providers are unavailable, then commit one Direct message from the CLI and start Phase B normally.",
+      "exactOracles": [
+        "The gap message is accepted by the real backend only after Phase A realtime and its Patch/recovery coordinator container are destroyed.",
+        "Before Phase B mounts the App, its canonical local timeline lacks the gap; the distinct process then proves subscribe-reset-sync startup order and projects the gap exactly once alongside the pre-existing timeline."
+      ],
+      "negativeChecks": [
+        "Leaving any old Patch/pull/recovery scheduler alive, committing before container disposal, finding the gap before Phase B startup, same-process rebuild, missing startup order evidence, lost/duplicate gap, or duplicate old rows prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/process_restart_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MESSAGE-PATCH-RESTART-E2E-001:phase_a_realtime_stopped_before_gap_commit",
+          "MESSAGE-PATCH-RESTART-E2E-001:phase_a_patch_and_sync_container_disposed_before_gap_commit",
+          "MESSAGE-PATCH-RESTART-E2E-001:gap_message_committed_after_old_process_quiesced",
+          "MESSAGE-PATCH-RESTART-E2E-001:distinct_process_restored_bound_session",
+          "MESSAGE-PATCH-RESTART-E2E-001:gap_absent_before_phase_b_startup_sync",
+          "MESSAGE-PATCH-RESTART-E2E-001:phase_b_startup_order_projected_gap_once",
+          "MESSAGE-PATCH-RESTART-E2E-001:restart_gap_did_not_duplicate_existing_timeline"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_realtime_stopped_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_patch_and_sync_container_disposed_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_message_committed_after_old_process_quiesced"
+          ],
+          [
+            "MESSAGE-PATCH-RESTART-E2E-001:distinct_process_restored_bound_session",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_absent_before_phase_b_startup_sync",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_b_startup_order_projected_gap_once",
+            "MESSAGE-PATCH-RESTART-E2E-001:restart_gap_did_not_duplicate_existing_timeline"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_realtime_stopped_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_patch_and_sync_container_disposed_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_message_committed_after_old_process_quiesced",
+            "MESSAGE-PATCH-RESTART-E2E-001:distinct_process_restored_bound_session",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_absent_before_phase_b_startup_sync",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_b_startup_order_projected_gap_once",
+            "MESSAGE-PATCH-RESTART-E2E-001:restart_gap_did_not_duplicate_existing_timeline"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "SMOKE-E2E-001",
       "feature": "App shell smoke",
       "layer": "product_ui",
@@ -2717,6 +2775,902 @@
             "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated",
             "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
             "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001",
+      "feature": "Two online joined AWiki Me replicas converge ordinary Direct messages through sync v2",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated App devices share one joined account identity, AWIKI_SYNC_V2_READ is enabled for the functional App-pair suite, Direct E2EE remains disabled, and an independent CLI identity is available as the remote peer.",
+      "action": "Keep both Apps online, send ordinary Direct messages from each App to the CLI peer, then send one ordinary reply from the CLI peer while both App runtimes consume WebSocket only as a pull trigger.",
+      "exactOracles": [
+        "The admin App outbound message is projected exactly once as outgoing on the joining sibling device.",
+        "The joining App outbound message is projected exactly once as outgoing on the admin sibling device.",
+        "The same incoming CLI reply is projected exactly once on both online App devices under the same canonical conversation."
+      ],
+      "negativeChecks": [
+        "A raw realtime payload directly writing list, timeline, Group state, or notification truth; duplicate event/hint rendering; wrong direction; canonical conversation drift; secure-mode activation; or only one online device receiving the reply prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_device_outgoing_committed",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_sibling_outgoing_projected_once",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_device_outgoing_committed",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_sibling_reverse_outgoing_projected_once",
+          "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:both_online_devices_received_incoming_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_sibling_outgoing_projected_once"
+          ],
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_sibling_reverse_outgoing_projected_once"
+          ],
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:both_online_devices_received_incoming_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_sibling_outgoing_projected_once",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:joining_device_outgoing_committed",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:existing_sibling_reverse_outgoing_projected_once",
+            "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001:both_online_devices_received_incoming_once"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-TAIL-ONLY-E2E-001",
+      "feature": "A newly joined AWiki Me replica bootstraps at the current ordinary-message tail",
+      "layer": "remote_product_ui",
+      "preconditions": "Before Device Join begins, the existing admin App commits one ordinary Direct message to an independent CLI peer; the joining App uses a fresh isolated Core root and AWIKI_SYNC_V2_READ is enabled.",
+      "action": "Complete member Join, allow the joining App startup sync to finish without test-side cursor or sync calls, prove the pre-Join message is absent, then send one post-Join message through the existing App.",
+      "exactOracles": [
+        "The ordinary pre-Join message is committed and visible on the existing App before the new replica is authorized.",
+        "The joining App completes bootstrap without exposing the pre-Join conversation or message.",
+        "A post-Join ordinary message becomes visible exactly once on the joining App, proving bootstrap did not disable future delta."
+      ],
+      "negativeChecks": [
+        "Supplying cursor zero, account, device, replica classification, recovery token, or a test-side sync call; receiving any pre-Join message/history; failing bootstrap; or missing/duplicating the post-Join message prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+          "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device"
+          ],
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device"
+          ],
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_committed_on_existing_device",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:new_replica_bootstrap_completed",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:prejoin_message_absent_on_joining_device",
+            "DEVICE-MESSAGE-TAIL-ONLY-E2E-001:postjoin_message_visible_once"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-READ-SYNC-E2E-001",
+      "feature": "A read watermark committed on one joined App converges monotonically on its sibling App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two independently rooted Apps are authorized for the same account, both have completed sync v2 bootstrap, and an independent CLI peer can send one ordinary Direct message.",
+      "action": "Send one ordinary Direct message from the CLI peer, observe the unread projection on both Apps, open the canonical conversation on the joining App through visible UI, and let normal Core sync/realtime triggers converge the read watermark on the admin App.",
+      "exactOracles": [
+        "Both Apps project the exact incoming ordinary message once and advance the same canonical conversation unread state.",
+        "Opening the joining App conversation commits a Core-owned read watermark without an App-owned checkpoint or direct read-state wire call.",
+        "The admin App eventually projects the same or higher read watermark and its unread count does not regress after reconnect or duplicate sync."
+      ],
+      "negativeChecks": [
+        "A raw App read cursor, direct read-state payload, E2EE or MLS event, lower remote watermark, duplicate message, canonical conversation mismatch, or test-side projection mutation prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+          "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps"
+          ],
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core"
+          ],
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:ordinary_message_unread_on_both_apps",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:joining_app_visible_read_committed_by_core",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:admin_app_read_watermark_converged",
+            "DEVICE-MESSAGE-READ-SYNC-E2E-001:duplicate_sync_did_not_regress_read"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001",
+      "feature": "An existing AWiki Me replica resumes through Core-owned bounded compact recovery",
+      "layer": "remote_product_ui",
+      "preconditions": "The joining App is an already bootstrapped sync v2 replica with an isolated persistent Core root; the admin App and CLI peer can create ordinary Direct traffic while that replica is offline; the reviewed fixed operator helper is explicitly enabled for the allowlisted test account.",
+      "action": "Take the existing joining App offline, create one ordinary Direct message and a read-state change, use the fixed operator-only helper to create a retention gap for that exact joined device, then resume it through normal App lifecycle/reconnect triggers and observe the single high-level syncNow recovery flow without supplying any recovery control to the App.",
+      "exactOracles": [
+        "The coordinator transiently reports recovery-required/recovering or completes recovery within one Core syncNow chain, then returns to idle without exposing cursor, token, cutoff, or count.",
+        "Recent ordinary messages converge exactly once from the Core committed projection while previously available older local messages remain available.",
+        "Current read state converges independently of the ordinary-message recovery window, and a post-anchor ordinary Direct message arrives exactly once through the following delta."
+      ],
+      "negativeChecks": [
+        "An invalid operator receipt, App recover API, App-supplied cursor/token/cutoff/count, full-history replay, deletion of older local rows, duplicate post-anchor delivery, raw Snapshot merging in Flutter, auth-revoked background retry, or any E2EE/MLS history prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:existing_replica_offline_gap_created",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:core_owned_recovery_completed",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
+          "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:existing_replica_offline_gap_created",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:core_owned_recovery_completed"
+          ],
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved"
+          ],
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:existing_replica_offline_gap_created",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:core_owned_recovery_completed",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:recent_plain_messages_converged_once",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:older_local_messages_preserved",
+            "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001:current_state_and_post_anchor_delta_converged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-HINT-LOSS-E2E-001",
+      "feature": "A joined AWiki Me replica converges an ordinary message after every realtime hint is lost",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated Apps share one joined awiki.info account, the admin App has completed sync-v2 bootstrap, an independent CLI peer is available, and the App's reliable HTTP sync remains enabled.",
+      "action": "Quiesce sync, pause the admin App and stop its realtime service, commit one ordinary Direct message from the CLI peer while no WebSocket can observe its hint, then resume through the normal App lifecycle.",
+      "exactOracles": [
+        "The realtime service is stopped before the peer message is committed and the local timeline remains unchanged before lifecycle resume.",
+        "App resume starts the normal reliable HTTP reconciliation path and projects the exact canonical peer message once.",
+        "A repeated local timeline read keeps one projection with the same canonical message ID."
+      ],
+      "negativeChecks": [
+        "Using a raw WebSocket payload as message truth, a test-side cursor or sync call, observing the message before resume, missing or duplicating the reliable projection, changing its canonical ID, or relying on Push prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:realtime_hint_channel_stopped_before_commit",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:ordinary_message_committed_while_hint_unobservable",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:foreground_http_reconcile_started",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:reliable_message_projected_once",
+          "DEVICE-MESSAGE-HINT-LOSS-E2E-001:repeat_local_read_kept_single_projection"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:realtime_hint_channel_stopped_before_commit",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:ordinary_message_committed_while_hint_unobservable"
+          ],
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:foreground_http_reconcile_started",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:reliable_message_projected_once"
+          ],
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:repeat_local_read_kept_single_projection"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:realtime_hint_channel_stopped_before_commit",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:ordinary_message_committed_while_hint_unobservable",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:foreground_http_reconcile_started",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:reliable_message_projected_once",
+            "DEVICE-MESSAGE-HINT-LOSS-E2E-001:repeat_local_read_kept_single_projection"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-RECONNECT-E2E-001",
+      "feature": "An active AWiki Me device normally reconnects and pulls its disconnect gap exactly once",
+      "layer": "remote_product_ui",
+      "preconditions": "The joined admin App has an active non-revoked device session, a connected realtime transport, an initialized message-sync cursor, and an independent CLI peer.",
+      "action": "Perform a normal realtime stop, commit one ordinary Direct message during the disconnected interval, resume the App, wait for WebSocket reconnection, and observe reliable HTTP gap reconciliation.",
+      "exactOracles": [
+        "The ordinary WebSocket disconnect completes without revoking the device and the active device reconnects successfully.",
+        "The message committed in the disconnect interval is obtained from reliable HTTP reconciliation.",
+        "The canonical post-reconnect message is projected exactly once and remains exact-one on a repeated read."
+      ],
+      "negativeChecks": [
+        "Treating revoked reconnect denial as normal reconnect evidence, changing device identity, direct projection from a hint, failing to reconnect, missing the disconnect gap, duplicate projection, or Push-based recovery prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:normal_websocket_disconnect_completed",
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:active_device_reconnect_completed",
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:disconnect_gap_pulled_from_reliable_http",
+          "DEVICE-MESSAGE-RECONNECT-E2E-001:post_reconnect_projection_exact_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:normal_websocket_disconnect_completed",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:active_device_reconnect_completed"
+          ],
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:disconnect_gap_pulled_from_reliable_http"
+          ],
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:post_reconnect_projection_exact_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:normal_websocket_disconnect_completed",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:active_device_reconnect_completed",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:disconnect_gap_pulled_from_reliable_http",
+            "DEVICE-MESSAGE-RECONNECT-E2E-001:post_reconnect_projection_exact_once"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-PATCH-READY-E2E-001",
+      "feature": "Bound App startup establishes committed Patch readiness before reliable pull",
+      "layer": "remote_product_ui",
+      "preconditions": "A freshly joined App has a real native Core root, stable account binding, tail-only bootstrap, and the production committed conversation Patch stream.",
+      "action": "Complete normal App activation, inspect the product-owned payload-free startup ordering observation without calling the barrier from the test, receive the first post-Join sibling message, then repeat reliable HTTP sync.",
+      "exactOracles": [
+        "The normal bound startup records Patch subscription start, committed reset readiness, and first reliable sync start in that strict order without a test-owned barrier call, cursor, or projection.",
+        "The first post-startup committed sibling message appears exactly once and a repeated reliable pull keeps exactly one canonical message."
+      ],
+      "negativeChecks": [
+        "A post-bootstrap test call to ensurePatchReady, unbound session, test-owned checkpoint, direct cache write, missing or reordered startup observation, duplicate projection, or repeat full-refresh substitute prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_patch_subscription_started",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_committed_reset_ready_before_first_pull",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:first_reliable_sync_started_after_patch_ready",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:post_startup_message_projected_once",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:repeat_reliable_pull_kept_exact_one"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_patch_subscription_started",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_committed_reset_ready_before_first_pull",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:first_reliable_sync_started_after_patch_ready"
+          ],
+          [
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:post_startup_message_projected_once",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:repeat_reliable_pull_kept_exact_one"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_patch_subscription_started",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_committed_reset_ready_before_first_pull",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:first_reliable_sync_started_after_patch_ready",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:post_startup_message_projected_once",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:repeat_reliable_pull_kept_exact_one"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001",
+      "feature": "Real recovery exposes only typed product-safe sync diagnostics",
+      "layer": "remote_product_ui",
+      "preconditions": "An existing joined replica enters the reviewed real compact-recovery flow through normal App lifecycle resume.",
+      "action": "Observe the product coordinator across recovery, then inspect only its typed diagnostics projection after the reliable chain completes.",
+      "exactOracles": [
+        "Recovery-required, recovering, or Core recovering mode is observed and the coordinator returns to a successful idle state.",
+        "Diagnostics expose a non-negative pending mutation count, closed dirty-domain/retry values, and last-success time.",
+        "The product refresh attempt and success sequences both advance after recovery, are equal, and mark the serialized observation current.",
+        "The E2E-safe diagnostics projection contains no cursor, epoch, account/device identifier, recovery token, message content, or payload field."
+      ],
+      "negativeChecks": [
+        "A test-created allowlist map, stale diagnostics retained after refresh failure, reading raw SQLite, serializing IDs/cursors/content, accepting a negative count, or treating catalog text as runtime evidence prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery"
+          ],
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync"
+          ],
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery"
+          ],
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001",
+      "feature": "Same-DID revoked device is auth-fenced from later reliable sync",
+      "layer": "remote_product_ui",
+      "preconditions": "The joining App is an active real device for the same DID until the admin revokes that exact protocol device as the final shared-account action.",
+      "action": "Capture the exact joined-device account/auth binding, revoke that device, commit a new ordinary Direct message for the account, verify the original local binding remains in place, then trigger one normal reliable pull.",
+      "exactOracles": [
+        "The real Registry mutation revokes the exact same-DID device after the E2E captured its original account and device-auth binding, before the post-revoke message is committed.",
+        "The revoked App does not project the post-revoke committed message before or after its subsequent reliable pull, and that pull ends in product auth fencing."
+      ],
+      "negativeChecks": [
+        "Claiming direct stale-Patch injection, forging a binding, projecting the post-revoke message, allowing the revoked token to pull, revoking a different device, or running another shared-account case afterward prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging+awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_binding_captured_before_revoke",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:same_did_exact_device_revoked",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:post_revoke_message_committed_for_account",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_message_not_projected",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_reliable_pull_auth_fenced"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_binding_captured_before_revoke",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:same_did_exact_device_revoked",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:post_revoke_message_committed_for_account"
+          ],
+          [
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_message_not_projected",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_reliable_pull_auth_fenced"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_binding_captured_before_revoke",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:same_did_exact_device_revoked",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:post_revoke_message_committed_for_account",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_message_not_projected",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_reliable_pull_auth_fenced"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-ADD-SYNC-E2E-001",
+      "feature": "A runtime Agent added on one App converges to the joined sibling App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated macOS Apps are joined to the same awiki.info account, the Account State v1 target capability is declared, and the admin App controls one real local Daemon.",
+      "action": "Create Codex and Claude Code runtime Agents through the admin App product controller, then let the joining App reconcile only through its Account State coordinator.",
+      "exactOracles": [
+        "The joining App consumes a higher Agent Inventory version and projects the exact Daemon/runtime parent topology.",
+        "Each added runtime DID appears exactly once with the expected Handle, runtime kind, and display name."
+      ],
+      "negativeChecks": [
+        "Copied local state, a direct test-side cache write, duplicate Agent rows, mismatched parent topology, or attestation before the joining App projection converges prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-ADD-SYNC-E2E-001:admin_app_created_runtime_agents",
+          "DEVICE-AGENT-ADD-SYNC-E2E-001:joining_app_pulled_new_inventory_version",
+          "DEVICE-AGENT-ADD-SYNC-E2E-001:joining_app_projected_exact_added_agents_once"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-ADD-SYNC-E2E-001:admin_app_created_runtime_agents",
+            "DEVICE-AGENT-ADD-SYNC-E2E-001:joining_app_pulled_new_inventory_version"
+          ],
+          [
+            "DEVICE-AGENT-ADD-SYNC-E2E-001:joining_app_projected_exact_added_agents_once"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-ADD-SYNC-E2E-001:admin_app_created_runtime_agents",
+            "DEVICE-AGENT-ADD-SYNC-E2E-001:joining_app_pulled_new_inventory_version",
+            "DEVICE-AGENT-ADD-SYNC-E2E-001:joining_app_projected_exact_added_agents_once"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-RENAME-SYNC-E2E-001",
+      "feature": "A runtime Agent rename converges independently across Apps",
+      "layer": "remote_product_ui",
+      "preconditions": "The same-account App pair already projects one exact active runtime Agent through Account State v1.",
+      "action": "Rename that runtime through the admin App product controller and reconcile the joining App.",
+      "exactOracles": [
+        "The joining App Agent Inventory version increases and the same Agent DID retains its topology while exposing the exact new display name.",
+        "The joining App renders exactly one renamed Agent."
+      ],
+      "negativeChecks": [
+        "A changed Agent DID, duplicate row, stale old name, direct cache mutation, or a name-only assertion without the higher Inventory version prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-RENAME-SYNC-E2E-001:admin_app_renamed_exact_runtime_agent",
+          "DEVICE-AGENT-RENAME-SYNC-E2E-001:joining_app_pulled_higher_inventory_version",
+          "DEVICE-AGENT-RENAME-SYNC-E2E-001:joining_app_rendered_exact_new_name_without_duplicate"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-RENAME-SYNC-E2E-001:admin_app_renamed_exact_runtime_agent",
+            "DEVICE-AGENT-RENAME-SYNC-E2E-001:joining_app_pulled_higher_inventory_version"
+          ],
+          [
+            "DEVICE-AGENT-RENAME-SYNC-E2E-001:joining_app_rendered_exact_new_name_without_duplicate"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-RENAME-SYNC-E2E-001:admin_app_renamed_exact_runtime_agent",
+            "DEVICE-AGENT-RENAME-SYNC-E2E-001:joining_app_pulled_higher_inventory_version",
+            "DEVICE-AGENT-RENAME-SYNC-E2E-001:joining_app_rendered_exact_new_name_without_duplicate"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-UNBIND-SYNC-E2E-001",
+      "feature": "Agent unbind converges as an inactive topology fact",
+      "layer": "remote_product_ui",
+      "preconditions": "Both Apps project the same active Claude runtime Agent under one real Daemon.",
+      "action": "Unbind the exact runtime through the admin App product controller, then reconcile the joining App.",
+      "exactOracles": [
+        "The joining App durable Inventory snapshot retains exactly one inactive row for the unbound Agent DID at a higher version.",
+        "The joining App visible Agent projection removes that inactive Agent."
+      ],
+      "negativeChecks": [
+        "Physical disappearance from the durable snapshot, a still-visible inactive Agent, duplicate rows, or inferring unbind only from the writing App prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-UNBIND-SYNC-E2E-001:admin_app_unbound_exact_runtime_agent",
+          "DEVICE-AGENT-UNBIND-SYNC-E2E-001:joining_app_cached_authoritative_inactive_row",
+          "DEVICE-AGENT-UNBIND-SYNC-E2E-001:joining_app_removed_inactive_agent_from_visible_projection"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-UNBIND-SYNC-E2E-001:admin_app_unbound_exact_runtime_agent",
+            "DEVICE-AGENT-UNBIND-SYNC-E2E-001:joining_app_cached_authoritative_inactive_row"
+          ],
+          [
+            "DEVICE-AGENT-UNBIND-SYNC-E2E-001:joining_app_removed_inactive_agent_from_visible_projection"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-UNBIND-SYNC-E2E-001:admin_app_unbound_exact_runtime_agent",
+            "DEVICE-AGENT-UNBIND-SYNC-E2E-001:joining_app_cached_authoritative_inactive_row",
+            "DEVICE-AGENT-UNBIND-SYNC-E2E-001:joining_app_removed_inactive_agent_from_visible_projection"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-DELETE-SYNC-E2E-001",
+      "feature": "A real runtime delete completes on the writing App and converges to its sibling",
+      "layer": "remote_product_ui",
+      "preconditions": "Both Apps project the same active Codex runtime and the real Daemon reports an actionable control channel.",
+      "action": "Submit runtime deletion through the admin App controller and wait for the service-backed terminal reconcile before accepting sibling completion.",
+      "exactOracles": [
+        "The admin App submits the real runtime delete and removes the target only after authoritative reconcile.",
+        "The joining App confirms terminal convergence for the exact Agent DID."
+      ],
+      "negativeChecks": [
+        "Local optimistic removal alone, a Daemon command failure, a retained visible runtime, or treating a UI disappearance without sibling confirmation as delete success prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_submitted_real_runtime_delete",
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_removed_deleted_runtime_after_authoritative_reconcile",
+          "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_submitted_real_runtime_delete",
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_removed_deleted_runtime_after_authoritative_reconcile"
+          ],
+          [
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_submitted_real_runtime_delete",
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:admin_app_removed_deleted_runtime_after_authoritative_reconcile",
+            "DEVICE-AGENT-DELETE-SYNC-E2E-001:joining_app_confirmed_terminal_inventory_convergence"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001",
+      "feature": "A daemon-backed runtime delete archives an independent Agent across Apps",
+      "layer": "remote_product_ui",
+      "preconditions": "The admin App has created a third independent runtime through the real daemon and both Apps have converged it as active.",
+      "action": "Select that runtime in the product Agents controller and execute the normal daemon-backed runtime delete, whose authoritative remote lifecycle result is archived, then reconcile the sibling App.",
+      "exactOracles": [
+        "The independent runtime is created through the product daemon path and is visible as active on the sibling before deletion.",
+        "The writing App submits the daemon-backed runtime delete rather than a test operator, direct storage write, or reuse of the separate Codex deletion.",
+        "The durable full Inventory snapshot contains exactly one archived row for the archived Agent DID at the higher version.",
+        "The visible Agents projection excludes the archived row."
+      ],
+      "negativeChecks": [
+        "A test-only operator, direct storage mutation, reuse of the separate Codex deletion, physical row loss, visible archived Agent, duplicate row, or writing-side-only assertion prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:independent_runtime_created_through_product",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_converged_runtime_active",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:admin_app_submitted_daemon_backed_runtime_delete",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_cached_archived_row_at_higher_inventory_version",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_runtime_from_visible_projection"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:independent_runtime_created_through_product",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_converged_runtime_active"
+          ],
+          [
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:admin_app_submitted_daemon_backed_runtime_delete"
+          ],
+          [
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_cached_archived_row_at_higher_inventory_version"
+          ],
+          [
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_runtime_from_visible_projection"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:independent_runtime_created_through_product",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_converged_runtime_active",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:admin_app_submitted_daemon_backed_runtime_delete",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_cached_archived_row_at_higher_inventory_version",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_runtime_from_visible_projection"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-PROFILE-SYNC-E2E-001",
+      "feature": "A Profile mutation converges through the independent Profile domain",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated Apps share one stable account binding and both have completed Account State bootstrap.",
+      "action": "Update nickname and bio through the admin App Profile controller, then reconcile the joining App through Account State v1.",
+      "exactOracles": [
+        "The joining App Profile version increases and its visible Profile projection matches the exact nickname and bio.",
+        "Agent Inventory and Device Registry versions remain unchanged by the Profile-only mutation."
+      ],
+      "negativeChecks": [
+        "Timestamp conflict resolution, legacy unversioned Profile refresh, unrelated domain version amplification, stale Profile UI, or accepting only the writing-device response prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-PROFILE-SYNC-E2E-001:admin_app_committed_profile_mutation",
+          "DEVICE-PROFILE-SYNC-E2E-001:joining_app_profile_version_advanced",
+          "DEVICE-PROFILE-SYNC-E2E-001:joining_app_rendered_exact_profile_snapshot",
+          "DEVICE-PROFILE-SYNC-E2E-001:inventory_and_registry_versions_did_not_advance"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-PROFILE-SYNC-E2E-001:admin_app_committed_profile_mutation",
+            "DEVICE-PROFILE-SYNC-E2E-001:joining_app_profile_version_advanced",
+            "DEVICE-PROFILE-SYNC-E2E-001:joining_app_rendered_exact_profile_snapshot"
+          ],
+          [
+            "DEVICE-PROFILE-SYNC-E2E-001:inventory_and_registry_versions_did_not_advance"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-PROFILE-SYNC-E2E-001:admin_app_committed_profile_mutation",
+            "DEVICE-PROFILE-SYNC-E2E-001:joining_app_profile_version_advanced",
+            "DEVICE-PROFILE-SYNC-E2E-001:joining_app_rendered_exact_profile_snapshot",
+            "DEVICE-PROFILE-SYNC-E2E-001:inventory_and_registry_versions_did_not_advance"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001",
+      "feature": "One failed User domain does not block Profile or ordinary message convergence",
+      "layer": "remote_product_ui",
+      "preconditions": "The reviewed awiki-info-testing target declares Account State v1 and enables the fixed exact-account/exact-device one-shot Inventory failpoint with a bounded allowlist and TTL.",
+      "action": "Arm one Inventory read failure for the joining device, mutate Agent Inventory and Profile, send an ordinary Direct message, reconcile once, then retry normally.",
+      "exactOracles": [
+        "The first reconcile reports only Agent Inventory as failed while Profile advances and renders the exact new value.",
+        "The ordinary Direct message converges exactly while Inventory is failed, proving message sync is not blocked by a User domain.",
+        "The prior Inventory snapshot remains visible until a later retry pulls the higher version and clears the domain error."
+      ],
+      "negativeChecks": [
+        "A wildcard or reusable failpoint, operator receipt used as a business oracle, cleared prior cache, blocked Profile/message sync, more than one failed domain, or pass before the normal retry converges prevents attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:exact_joining_device_inventory_failpoint_consumed_once",
+          "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:profile_domain_converged_while_inventory_failed",
+          "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:ordinary_message_sync_converged_while_inventory_failed",
+          "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:previous_inventory_snapshot_was_preserved",
+          "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:inventory_retry_converged_and_cleared_domain_error"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:exact_joining_device_inventory_failpoint_consumed_once",
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:profile_domain_converged_while_inventory_failed"
+          ],
+          [
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:ordinary_message_sync_converged_while_inventory_failed"
+          ],
+          [
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:previous_inventory_snapshot_was_preserved",
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:inventory_retry_converged_and_cleared_domain_error"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:exact_joining_device_inventory_failpoint_consumed_once",
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:profile_domain_converged_while_inventory_failed",
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:ordinary_message_sync_converged_while_inventory_failed",
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:previous_inventory_snapshot_was_preserved",
+            "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001:inventory_retry_converged_and_cleared_domain_error"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-REGISTRY-SYNC-E2E-001",
+      "feature": "Device Registry revoke converges to the active sibling and fences the revoked App",
+      "layer": "remote_product_ui",
+      "preconditions": "The admin and member Apps are joined, the admin is management-ready, real device revoke is enabled, and all other functional cases are complete.",
+      "action": "Load a fresh security Registry on the admin App, revoke the exact joined member with E2E-only user-presence, reconcile the admin display cache, then make the revoked App issue a product Registry request.",
+      "exactOracles": [
+        "The still-active admin observes one exact revoked device in both the fresh Core Registry and a higher-version Account State display cache.",
+        "The revoked App's subsequent Registry request is rejected by generation/token fencing."
+      ],
+      "negativeChecks": [
+        "Authorizing from the display cache, revoking the current admin, a different target device, no Registry version advance, successful use of the revoked token, or running further shared-account cases after revoke prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-REGISTRY-SYNC-E2E-001:admin_security_path_loaded_fresh_registry",
+          "DEVICE-REGISTRY-SYNC-E2E-001:admin_revoked_exact_active_sibling_with_user_presence",
+          "DEVICE-REGISTRY-SYNC-E2E-001:active_admin_registry_cache_converged_higher_version",
+          "DEVICE-REGISTRY-SYNC-E2E-001:revoked_sibling_product_request_was_fenced"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-REGISTRY-SYNC-E2E-001:admin_security_path_loaded_fresh_registry",
+            "DEVICE-REGISTRY-SYNC-E2E-001:admin_revoked_exact_active_sibling_with_user_presence",
+            "DEVICE-REGISTRY-SYNC-E2E-001:active_admin_registry_cache_converged_higher_version"
+          ],
+          [
+            "DEVICE-REGISTRY-SYNC-E2E-001:revoked_sibling_product_request_was_fenced"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-REGISTRY-SYNC-E2E-001:admin_security_path_loaded_fresh_registry",
+            "DEVICE-REGISTRY-SYNC-E2E-001:admin_revoked_exact_active_sibling_with_user_presence",
+            "DEVICE-REGISTRY-SYNC-E2E-001:active_admin_registry_cache_converged_higher_version",
+            "DEVICE-REGISTRY-SYNC-E2E-001:revoked_sibling_product_request_was_fenced"
           ]
         ]
       }

@@ -2528,6 +2528,122 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('macOS 会话切到联系人后新消息保持未读', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final initialAt = DateTime(2026, 7, 29, 10);
+    final initial = ConversationSummary(
+      threadId: 'dm:peer-scope:v1:tab-hidden',
+      conversationId: 'dm:peer-scope:v1:tab-hidden',
+      displayName: 'Marcus Chen',
+      lastMessagePreview: 'sent before switching tabs',
+      lastMessageAt: initialAt,
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+      lastMessageSnapshot: ChatMessage(
+        localId: 'message-before-tab-switch',
+        remoteId: 'message-before-tab-switch',
+        threadId: 'dm:peer-scope:v1:tab-hidden',
+        senderDid: session.did,
+        content: 'sent before switching tabs',
+        createdAt: initialAt,
+        isMine: true,
+        serverSequence: 1,
+        sendState: MessageSendState.sent,
+      ),
+    );
+    final incomingAt = initialAt.add(const Duration(seconds: 1));
+    final incoming = initial.copyWith(
+      lastMessagePreview: 'received while contacts are visible',
+      lastMessageAt: incomingAt,
+      unreadCount: 1,
+      lastMessageSnapshot: ChatMessage(
+        localId: 'message-after-tab-switch',
+        remoteId: 'message-after-tab-switch',
+        threadId: initial.threadId,
+        senderDid: 'did:test:peer',
+        content: 'received while contacts are visible',
+        createdAt: incomingAt,
+        isMine: false,
+        serverSequence: 2,
+        sendState: MessageSendState.sent,
+      ),
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[initial]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:peer': <ChatMessage>[initial.lastMessageSnapshot!],
+      };
+    late _StaticConversationListController controller;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.binding.setSurfaceSize(null);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            controller = _StaticConversationListController(
+              ref,
+              gateway.conversations,
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(Key('conversation-row:${initial.conversationId}')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatView), findsOneWidget);
+
+    await tester.tap(find.text('联系人'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatView), findsNothing);
+    expect(find.text('朋友'), findsOneWidget);
+
+    controller.upsertConversation(incoming);
+    await tester.pumpAndSettle();
+
+    expect(controller.state.unreadCount, 1);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('mac-messages-unread-badge')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('消息'));
+    await tester.pumpAndSettle();
+    final row = find.byKey(Key('conversation-row:${initial.conversationId}'));
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.text('received while contacts are visible'),
+      ),
+      findsOneWidget,
+    );
+
+    debugDefaultTargetPlatformOverride = null;
+    await tester.binding.setSurfaceSize(null);
+  });
+
   testWidgets('macOS 主导航智能体标签跟随语言', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',

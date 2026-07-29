@@ -9,6 +9,8 @@ import '../application/desktop_shell_service.dart';
 import '../application/attachment_cache_service.dart';
 import '../application/attachment_open_service.dart';
 import '../application/attachment_preview_service.dart';
+import '../application/account_state_sync_request_bus.dart';
+import '../application/account_state_sync_service.dart';
 import '../application/app_session_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
@@ -23,6 +25,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/account_state_sync_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
@@ -103,6 +106,10 @@ final multiDeviceDirectE2eeEnabledProvider = Provider<bool>(
 final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
+);
+
+final messageSyncV2ReadEnabledProvider = Provider<bool>(
+  (ref) => ref.watch(awikiEnvironmentConfigProvider).messageSyncV2ReadEnabled,
 );
 
 final groupEncryptionCorePortProvider = Provider<GroupEncryptionCorePort>(
@@ -224,6 +231,23 @@ final realtimeApplicationServiceProvider = Provider<RealtimeApplicationService>(
 final productLocalStoreProvider = Provider<ProductLocalStore>(
   (ref) =>
       throw UnimplementedError('productLocalStoreProvider must be overridden'),
+);
+
+final accountStateSyncPortProvider = Provider<AccountStateSyncPort>(
+  (ref) => throw UnimplementedError(
+    'accountStateSyncPortProvider must be overridden',
+  ),
+);
+
+final accountStateSyncServiceProvider = Provider<AccountStateSyncService>(
+  (ref) => AccountStateSyncService(
+    remote: ref.watch(accountStateSyncPortProvider),
+    local: ref.watch(productLocalStoreProvider),
+  ),
+);
+
+final accountStateSyncRequestBusProvider = Provider<AccountStateSyncRequestBus>(
+  (ref) => AccountStateSyncRequestBus(),
 );
 
 final notificationFacadeProvider = Provider<NotificationFacade>(

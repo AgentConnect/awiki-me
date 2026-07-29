@@ -1058,6 +1058,37 @@ class AppLocalizationsEn extends AppLocalizations {
       'No signed-in credential available to export';
 
   @override
+  String get messageSyncStatusTitle => 'Message sync';
+
+  @override
+  String get messageSyncStatusIdle => 'Up to date';
+
+  @override
+  String get messageSyncStatusSyncing => 'Syncing messages…';
+
+  @override
+  String get messageSyncStatusRecoveryRequired =>
+      'A safe message recovery is required. Retrying automatically…';
+
+  @override
+  String get messageSyncStatusRecovering =>
+      'Recovering recent messages and current read state…';
+
+  @override
+  String get messageSyncStatusRetryableFailure =>
+      'Message sync was interrupted. Your local data was kept unchanged.';
+
+  @override
+  String get messageSyncStatusAuthRevoked =>
+      'This device is no longer authorized. Sign in again to continue.';
+
+  @override
+  String get messageSyncRetryAction => 'Retry';
+
+  @override
+  String get messageSyncReauthenticateAction => 'Sign in again';
+
+  @override
   String get settingsLogout => 'Log out';
 
   @override

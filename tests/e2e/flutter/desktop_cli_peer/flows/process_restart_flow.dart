@@ -1,6 +1,7 @@
 part of '../desktop_cli_peer_e2e.dart';
 
 const String _processRestartCaseId = 'PROCESS-RESTART-E2E-001';
+const String _patchRestartCaseId = 'MESSAGE-PATCH-RESTART-E2E-001';
 const String _credentialDeleteCaseId = 'IDENTITY-DELETE-E2E-001';
 
 void runDesktopCliPeerProcessRestartPhaseA() {
@@ -32,10 +33,10 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       config,
     );
     await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
-    await robot.activate(session);
+    await robot.awaitRestoredSession(session);
 
     final canonicalCliDid = await _currentCliDid(config);
     final nonce = _messageNonce();
@@ -155,6 +156,41 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       expectedTotalUnread: totalUnreadBaseline + 2,
       expectedLastMessage: directCliText,
     );
+    robot.container
+        .read(appLifecycleProvider.notifier)
+        .setLifecycle(AppLifecycleState.paused);
+    await bootstrap.realtimeApplicationService!.stop();
+    if (bootstrap.realtimeApplicationService!.isRunning) {
+      fail('Process-restart phase A did not stop its realtime transport.');
+    }
+    final oldContainer = robot.container;
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await bootstrap.dispose();
+    disposed = true;
+    var patchContainerUnavailable = false;
+    var syncCoordinatorUnavailable = false;
+    try {
+      oldContainer.read(conversationListProvider);
+    } on Object {
+      patchContainerUnavailable = true;
+    }
+    try {
+      oldContainer.read(messageSyncCoordinatorProvider);
+    } on Object {
+      syncCoordinatorUnavailable = true;
+    }
+    if (!patchContainerUnavailable || !syncCoordinatorUnavailable) {
+      fail(
+        'Process-restart phase A did not destroy its Patch and sync '
+        'coordinator container before the gap commit.',
+      );
+    }
+    final restartGapText = 'restart gap direct ${config.runId} $nonce';
+    final restartGapMessageId = await _cliSendDirectText(
+      config: config,
+      text: restartGapText,
+    );
     final handoff = _ProcessRestartHandoff(
       runId: config.runId,
       phaseAProcessId: pid,
@@ -168,6 +204,8 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       directAppText: directAppText,
       directCliMessageId: directCliMessageId,
       directCliText: directCliText,
+      restartGapMessageId: restartGapMessageId,
+      restartGapText: restartGapText,
       groupConversationId: group.conversationId,
       groupDid: groupDid,
       groupName: groupName,
@@ -187,13 +225,8 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     );
     await E2eScenarioProgressWriter.record('process_restart_phase_a_persisted');
 
-    // Do not call logout: a real process exit preserves the active identity.
-    // Explicitly dispose native/runtime resources so phase B can open the same
-    // scope from a different Flutter process without sharing memory.
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await bootstrap.dispose();
-    disposed = true;
+    // Do not call logout: the already-disposed runtime preserves the active
+    // identity while preventing any post-gap Patch, pull, or recovery work.
   });
 }
 
@@ -233,25 +266,55 @@ void runDesktopCliPeerProcessRestartPhaseB() {
       fail('The second Flutter process could not restore the active identity.');
     }
     expect(restored.did, handoff.ownerDid);
+    final preStartupMessaging = bootstrap.messagingService;
+    if (preStartupMessaging is! ConversationTimelineMessagingService) {
+      fail(
+        'Process-restart E2E requires canonical conversation timeline reads.',
+      );
+    }
+    final preStartupTimeline =
+        await (preStartupMessaging as ConversationTimelineMessagingService)
+            .loadConversationTimeline(
+              AppConversationReadRef.fromConversationId(
+                handoff.directConversationId,
+              ),
+            );
+    if (preStartupTimeline.any(
+      (message) =>
+          message.remoteId == handoff.restartGapMessageId ||
+          message.content == handoff.restartGapText,
+    )) {
+      fail('The restart gap was present before the Phase B startup sync.');
+    }
 
     await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
-    await robot.activate(restored);
+    await robot.awaitRestoredSession(restored);
+    final startupPatchObservation = robot.container
+        .read(conversationListProvider.notifier)
+        .patchStartupObservation;
+    if (startupPatchObservation == null ||
+        !startupPatchObservation.provesSubscribeBeforeFirstReliableSync) {
+      fail(
+        'Phase B did not prove Patch subscription and reset before startup '
+        'reliable sync.',
+      );
+    }
 
     await _waitForUiConversationUnread(
       robot: robot,
       conversationId: handoff.directConversationId,
-      expectedUnread: 1,
-      expectedTotalUnread: handoff.totalUnreadBaseline + 2,
-      expectedLastMessage: handoff.directCliText,
+      expectedUnread: 2,
+      expectedTotalUnread: handoff.totalUnreadBaseline + 3,
+      expectedLastMessage: handoff.restartGapText,
     );
     await _waitForUiConversationUnread(
       robot: robot,
       conversationId: handoff.groupConversationId,
       expectedUnread: 1,
-      expectedTotalUnread: handoff.totalUnreadBaseline + 2,
+      expectedTotalUnread: handoff.totalUnreadBaseline + 3,
       expectedLastMessage: handoff.groupCliText,
     );
     final conversations = robot.container
@@ -261,8 +324,8 @@ void runDesktopCliPeerProcessRestartPhaseB() {
       conversations: conversations,
       conversationId: handoff.directConversationId,
       peerPersonaId: handoff.directPeerPersonaId,
-      unreadCount: 1,
-      lastMessage: handoff.directCliText,
+      unreadCount: 2,
+      lastMessage: handoff.restartGapText,
     );
     requireExactlyOneGroupConversation(
       conversations: conversations,
@@ -274,8 +337,8 @@ void runDesktopCliPeerProcessRestartPhaseB() {
     await robot.expectConversationRowPresentation(
       conversationId: handoff.directConversationId,
       expectedTitle: handoff.directDisplayName,
-      expectedPreview: handoff.directCliText,
-      unreadCount: 1,
+      expectedPreview: handoff.restartGapText,
+      unreadCount: 2,
     );
     await robot.expectConversationRowPresentation(
       conversationId: handoff.groupConversationId,
@@ -303,6 +366,12 @@ void runDesktopCliPeerProcessRestartPhaseB() {
           conversationId: handoff.directConversationId,
           senderDid: handoff.directPeerDid,
         ),
+        ExactMessageExpectation(
+          canonicalId: handoff.restartGapMessageId,
+          content: handoff.restartGapText,
+          conversationId: handoff.directConversationId,
+          senderDid: handoff.directPeerDid,
+        ),
       ],
     );
     await _waitForUiConversationUnread(
@@ -310,7 +379,7 @@ void runDesktopCliPeerProcessRestartPhaseB() {
       conversationId: handoff.directConversationId,
       expectedUnread: 0,
       expectedTotalUnread: handoff.totalUnreadBaseline + 1,
-      expectedLastMessage: handoff.directCliText,
+      expectedLastMessage: handoff.restartGapText,
     );
 
     await robot.openConversationRowWithFirstVisibleTitle(
@@ -374,6 +443,19 @@ void runDesktopCliPeerProcessRestartPhaseB() {
         'group_exact_one_after_cold_start',
         'exact_messages_and_unread_restored',
         'cached_names_visible_without_fallback',
+      ],
+    );
+    await E2eCaseAttestationWriter.markPassed(
+      _patchRestartCaseId,
+      startedAt: startedAt,
+      phases: const <String>[
+        'phase_a_realtime_stopped_before_gap_commit',
+        'phase_a_patch_and_sync_container_disposed_before_gap_commit',
+        'gap_message_committed_after_old_process_quiesced',
+        'distinct_process_restored_bound_session',
+        'gap_absent_before_phase_b_startup_sync',
+        'phase_b_startup_order_projected_gap_once',
+        'restart_gap_did_not_duplicate_existing_timeline',
       ],
     );
 
@@ -502,6 +584,8 @@ class _ProcessRestartHandoff {
     required this.directAppText,
     required this.directCliMessageId,
     required this.directCliText,
+    required this.restartGapMessageId,
+    required this.restartGapText,
     required this.groupConversationId,
     required this.groupDid,
     required this.groupName,
@@ -520,7 +604,7 @@ class _ProcessRestartHandoff {
     }
     final decoded = jsonDecode(file.readAsStringSync());
     final map = _stringKeyMap(decoded, path: 'processRestart.handoff');
-    if (map['schemaVersion'] != 1) {
+    if (map['schemaVersion'] != 2) {
       throw StateError('Unsupported process-restart handoff schema.');
     }
     String requiredString(String key) =>
@@ -546,6 +630,8 @@ class _ProcessRestartHandoff {
       directAppText: requiredString('directAppText'),
       directCliMessageId: requiredString('directCliMessageId'),
       directCliText: requiredString('directCliText'),
+      restartGapMessageId: requiredString('restartGapMessageId'),
+      restartGapText: requiredString('restartGapText'),
       groupConversationId: requiredString('groupConversationId'),
       groupDid: requiredString('groupDid'),
       groupName: requiredString('groupName'),
@@ -571,6 +657,8 @@ class _ProcessRestartHandoff {
   final String directAppText;
   final String directCliMessageId;
   final String directCliText;
+  final String restartGapMessageId;
+  final String restartGapText;
   final String groupConversationId;
   final String groupDid;
   final String groupName;
@@ -583,7 +671,7 @@ class _ProcessRestartHandoff {
   final int totalUnreadBaseline;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'schemaVersion': 1,
+    'schemaVersion': 2,
     'runId': runId,
     'phaseAProcessId': phaseAProcessId,
     'appStateRootDigest': appStateRootDigest,
@@ -596,6 +684,8 @@ class _ProcessRestartHandoff {
     'directAppText': directAppText,
     'directCliMessageId': directCliMessageId,
     'directCliText': directCliText,
+    'restartGapMessageId': restartGapMessageId,
+    'restartGapText': restartGapText,
     'groupConversationId': groupConversationId,
     'groupDid': groupDid,
     'groupName': groupName,

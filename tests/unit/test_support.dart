@@ -78,6 +78,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
+import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/app_update_manifest.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -1912,6 +1913,7 @@ class FakeMessagingService
   int? lastConversationTimelineLimit;
   String? lastConversationTimelineId;
   int conversationTimelineCalls = 0;
+  Completer<void>? conversationTimelineCompleter;
   int sendConversationAttachmentCalls = 0;
   int downloadAttachmentCalls = 0;
   AppThreadRef? lastDownloadedAttachmentThread;
@@ -2015,6 +2017,11 @@ class FakeMessagingService
     conversationTimelineCalls += 1;
     lastConversationTimelineLimit = limit;
     lastConversationTimelineId = conversation.conversationId;
+    final completer = conversationTimelineCompleter;
+    if (completer != null) {
+      await completer.future;
+      conversationTimelineCompleter = null;
+    }
     final configured = conversationTimelineById[conversation.conversationId];
     final messages =
         configured ??
@@ -3153,6 +3160,8 @@ class FakeProductLocalStore implements ProductLocalStore {
   final Map<String, LocalUiPreference> preferences =
       <String, LocalUiPreference>{};
   final Map<String, LocalAgentState> agentStates = <String, LocalAgentState>{};
+  final InMemoryAwikiProductLocalStore _accountDomainStore =
+      InMemoryAwikiProductLocalStore();
 
   String _key(String ownerDid, String id) => '$ownerDid::$id';
 
@@ -3165,6 +3174,86 @@ class FakeProductLocalStore implements ProductLocalStore {
     required String agentDid,
   }) async {
     agentStates.remove(_key(ownerDid, agentDid));
+  }
+
+  @override
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  }) {
+    return _accountDomainStore.loadDomainSyncState(
+      binding: binding,
+      domain: domain,
+    );
+  }
+
+  @override
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding}) {
+    return _accountDomainStore.loadDomainSyncStates(binding: binding);
+  }
+
+  @override
+  Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
+    required ProductAccountBinding binding,
+    String? legacyOwnerDid,
+  }) async {
+    if (legacyOwnerDid != null) {
+      for (final state in agentStates.values.where(
+        (state) => state.ownerDid == legacyOwnerDid,
+      )) {
+        await _accountDomainStore.saveAgentState(state);
+      }
+    }
+    return _accountDomainStore.loadAgentInventorySnapshot(
+      binding: binding,
+      legacyOwnerDid: legacyOwnerDid,
+    );
+  }
+
+  @override
+  Future<void> replaceAgentInventorySnapshot(
+    ProductAgentInventorySnapshot snapshot,
+  ) {
+    return _accountDomainStore.replaceAgentInventorySnapshot(snapshot);
+  }
+
+  @override
+  Future<ProductAgentStatusSnapshot?> loadAgentStatusSnapshot({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadAgentStatusSnapshot(binding: binding);
+  }
+
+  @override
+  Future<void> replaceAgentStatusSnapshot(ProductAgentStatusSnapshot snapshot) {
+    return _accountDomainStore.replaceAgentStatusSnapshot(snapshot);
+  }
+
+  @override
+  Future<ProductProfileSnapshot?> loadProfileSnapshot({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadProfileSnapshot(binding: binding);
+  }
+
+  @override
+  Future<void> replaceProfileSnapshot(ProductProfileSnapshot snapshot) {
+    return _accountDomainStore.replaceProfileSnapshot(snapshot);
+  }
+
+  @override
+  Future<ProductDeviceRegistrySnapshot?> loadDeviceRegistrySnapshot({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadDeviceRegistrySnapshot(binding: binding);
+  }
+
+  @override
+  Future<void> replaceDeviceRegistrySnapshot(
+    ProductDeviceRegistrySnapshot snapshot,
+  ) {
+    return _accountDomainStore.replaceDeviceRegistrySnapshot(snapshot);
   }
 
   @override
@@ -3791,6 +3880,18 @@ class FakeIdentityCorePort implements IdentityCorePort {
   String? lastRevokedDaemonSubkeySelector;
 
   @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() async {
+    return SessionAccountBinding(
+      ownerIdentityId: defaultSession.identityId,
+      accountId: 'account-${defaultSession.identityId}',
+      currentDid: defaultSession.did,
+      protocolDeviceId: 'protocol-device-${defaultSession.identityId}',
+      identityGeneration: '1',
+      deviceAuthGeneration: '1',
+    );
+  }
+
+  @override
   Future<AppSession?> defaultIdentity() async => defaultSession;
 
   @override
@@ -3877,6 +3978,7 @@ AppSession _appSessionFromLegacy(SessionIdentity session) {
     localAlias: session.credentialName,
     authenticated: session.jwtToken != null,
     jwtToken: session.jwtToken,
+    accountBinding: session.accountBinding,
   );
 }
 
@@ -3943,21 +4045,23 @@ class FakeLocalePreferenceService extends LocalePreferenceService {
 class FakeMessageSyncService
     implements MessageSyncService, ConversationMessageSyncService {
   FakeMessageSyncService({
-    this.deltaResult = const MessageSyncDeltaResult(
+    this.deltaResult = const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
       eventsApplied: 0,
       pagesFetched: 0,
-      hasMore: false,
-      snapshotRequired: false,
     ),
     this.onConversationAfterPersisted,
   });
 
-  MessageSyncDeltaResult deltaResult;
+  MessageSyncOutcome deltaResult;
   FutureOr<void> Function(String conversationId, List<ChatMessage> messages)?
   onConversationAfterPersisted;
   Object? nextDeltaError;
   Object? nextThreadAfterError;
   Object? nextConversationAfterError;
+  Completer<void>? syncNowCompleter;
+  int activeSyncNowCalls = 0;
+  int maxActiveSyncNowCalls = 0;
   final List<String> syncReasons = <String>[];
   final List<FakeThreadAfterRequest> threadAfterRequests =
       <FakeThreadAfterRequest>[];
@@ -3969,17 +4073,29 @@ class FakeMessageSyncService
       <String, List<ChatMessage>>{};
 
   @override
-  Future<MessageSyncDeltaResult> syncNow({
+  Future<MessageSyncOutcome> syncNow({
     required String reason,
     int limit = 100,
   }) async {
     syncReasons.add(reason);
-    final error = nextDeltaError;
-    if (error != null) {
-      nextDeltaError = null;
-      throw error;
+    activeSyncNowCalls += 1;
+    if (activeSyncNowCalls > maxActiveSyncNowCalls) {
+      maxActiveSyncNowCalls = activeSyncNowCalls;
     }
-    return deltaResult;
+    try {
+      final completer = syncNowCompleter;
+      if (completer != null) {
+        await completer.future;
+      }
+      final error = nextDeltaError;
+      if (error != null) {
+        nextDeltaError = null;
+        throw error;
+      }
+      return deltaResult;
+    } finally {
+      activeSyncNowCalls -= 1;
+    }
   }
 
   @override
@@ -4186,6 +4302,8 @@ class FakeNotificationFacade implements NotificationFacade {
   NotificationActivation? initialNotificationActivation;
   int lastBadgeCount = 0;
   bool disposed = false;
+  int inAppCalls = 0;
+  int systemCalls = 0;
 
   @override
   Stream<NotificationActivation> get activations => _activations.stream;
@@ -4204,6 +4322,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String body,
     required NotificationTarget target,
   }) async {
+    systemCalls += 1;
     lastSystemTitle = title;
     lastSystemBody = body;
     lastSystemTarget = target;
@@ -4214,6 +4333,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String title,
     required String body,
   }) async {
+    inAppCalls += 1;
     lastInAppTitle = title;
     lastInAppBody = body;
   }

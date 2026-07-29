@@ -7,6 +7,7 @@ import 'ports/identity_core_port.dart';
 import 'ports/im_core_runtime_port.dart';
 import 'ports/realtime_core_port.dart';
 import '../core/app_error_classifier.dart';
+import '../domain/entities/session_identity.dart';
 
 abstract interface class AppSessionService {
   AppSessionTransition beginSessionTransition();
@@ -332,25 +333,36 @@ class ImCoreAppSessionService
     _requireCurrentTransition(transition);
     await _runtime.switchIdentity(identity.identityId);
     _requireCurrentTransition(transition);
+    late final SessionAccountBinding accountBinding;
+    try {
+      accountBinding = await _identities.activeSyncAccountBinding();
+      _requireCurrentTransition(transition);
+      _assertActiveSyncAccountBinding(identity, accountBinding);
+    } catch (error, stackTrace) {
+      _requireCurrentTransition(transition);
+      await _clearFailedActivationState();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+    final boundIdentity = identity.copyWith(accountBinding: accountBinding);
     late final AppSession candidate;
     try {
       final auth = await _auth.ensureSession();
       _requireCurrentTransition(transition);
-      candidate = identity.copyWith(
+      candidate = boundIdentity.copyWith(
         authenticated: auth.authenticated,
         expiresAt: auth.expiresAt,
         jwtToken: auth.bearerToken,
       );
     } catch (error) {
+      _requireCurrentTransition(transition);
       if (!isTransientNetworkAppError(error)) {
-        _current = null;
+        await _clearFailedActivationState();
         rethrow;
       }
-      _requireCurrentTransition(transition);
-      candidate = identity.copyWith(
+      candidate = boundIdentity.copyWith(
         authenticated: false,
-        expiresAt: null,
-        jwtToken: null,
+        clearExpiresAt: true,
+        clearJwtToken: true,
       );
     }
     if (initializeIdentitySession != null) {
@@ -644,6 +656,15 @@ class ImCoreAppSessionService
     await (realtimeCleanup ?? _stopRealtimeBestEffort());
     await _disposeRuntimeBestEffort();
   }
+
+  Future<void> _clearFailedActivationState() async {
+    _current = null;
+    try {
+      await _activeSessionStore?.clearActiveIdentityId();
+    } catch (_) {
+      // The activation failure remains authoritative.
+    }
+  }
 }
 
 class AppSessionTransitionSuperseded implements Exception {
@@ -705,4 +726,58 @@ String? _didDomain(String did) {
   }
   final domain = segments[2].trim().toLowerCase();
   return domain.isEmpty ? null : domain;
+}
+
+void _assertActiveSyncAccountBinding(
+  AppSession identity,
+  SessionAccountBinding binding,
+) {
+  _requireExactBindingValue(
+    binding.ownerIdentityId,
+    'active_sync_account_binding_owner_unavailable',
+  );
+  _requireExactBindingValue(
+    binding.accountId,
+    'active_sync_account_binding_account_unavailable',
+  );
+  _requireExactBindingValue(
+    binding.currentDid,
+    'active_sync_account_binding_did_unavailable',
+  );
+  _requireExactBindingValue(
+    binding.protocolDeviceId,
+    'active_sync_account_binding_device_unavailable',
+  );
+  if (binding.ownerIdentityId != identity.identityId ||
+      binding.currentDid != identity.did) {
+    throw StateError('active_sync_account_binding_identity_mismatch');
+  }
+  if (binding.protocolDeviceId == 'default') {
+    throw StateError('active_sync_account_binding_device_reserved');
+  }
+  if (!_isCanonicalPositiveDecimal(binding.identityGeneration) ||
+      !_isCanonicalPositiveDecimal(binding.deviceAuthGeneration)) {
+    throw StateError('active_sync_account_binding_generation_invalid');
+  }
+}
+
+void _requireExactBindingValue(String value, String code) {
+  if (value.isEmpty || value.trim() != value) {
+    throw StateError(code);
+  }
+}
+
+bool _isCanonicalPositiveDecimal(String value) {
+  if (value.isEmpty ||
+      value.codeUnitAt(0) < 0x31 ||
+      value.codeUnitAt(0) > 0x39) {
+    return false;
+  }
+  for (var index = 1; index < value.length; index += 1) {
+    final codeUnit = value.codeUnitAt(index);
+    if (codeUnit < 0x30 || codeUnit > 0x39) {
+      return false;
+    }
+  }
+  return true;
 }

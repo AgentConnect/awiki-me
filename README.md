@@ -177,6 +177,7 @@ See the [Security Model Overview](docs/security-overview.md) and [SECURITY.md](S
 | [Testing Strategy](docs/testing.md) | Unit, Smoke E2E, and real App + CLI E2E. |
 | [Identity Secret Storage](docs/identity-secret-storage.md) | Authoritative app-side SecretVault boundaries. |
 | [Multi-device Join UI](docs/multi-device-join-ui.md) | Message-driven member Join, six-digit SAS flow, and App/Core security boundary. |
+| [Multi-device account-state sync](docs/multi-device-account-state-sync.md) | Versioned Profile, Agent, and display-only Device Registry reconciliation. |
 | [Storage Scope and Vault Contract](docs/storage-scope-vault-contract.md) | Stable Storage Scope, Keychain locator, and release/0710 upgrade contract. |
 | [Conversation Presentation Ownership](docs/conversation-presentation-ownership.md) | Canonical conversation identity and App/Core presentation ownership. |
 

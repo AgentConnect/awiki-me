@@ -1992,6 +1992,60 @@ abstract class AppLocalizations {
   /// **'当前暂无可导出的登录凭证'**
   String get settingsNoCredentialToExport;
 
+  /// No description provided for @messageSyncStatusTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息同步'**
+  String get messageSyncStatusTitle;
+
+  /// No description provided for @messageSyncStatusIdle.
+  ///
+  /// In zh, this message translates to:
+  /// **'已是最新状态'**
+  String get messageSyncStatusIdle;
+
+  /// No description provided for @messageSyncStatusSyncing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在同步消息…'**
+  String get messageSyncStatusSyncing;
+
+  /// No description provided for @messageSyncStatusRecoveryRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要安全恢复消息，正在自动重试…'**
+  String get messageSyncStatusRecoveryRequired;
+
+  /// No description provided for @messageSyncStatusRecovering.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在恢复近期消息和当前已读状态…'**
+  String get messageSyncStatusRecovering;
+
+  /// No description provided for @messageSyncStatusRetryableFailure.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息同步中断，本地数据保持不变。'**
+  String get messageSyncStatusRetryableFailure;
+
+  /// No description provided for @messageSyncStatusAuthRevoked.
+  ///
+  /// In zh, this message translates to:
+  /// **'此设备已不再获得授权，请重新登录后继续。'**
+  String get messageSyncStatusAuthRevoked;
+
+  /// No description provided for @messageSyncRetryAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get messageSyncRetryAction;
+
+  /// No description provided for @messageSyncReauthenticateAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新登录'**
+  String get messageSyncReauthenticateAction;
+
   /// No description provided for @settingsLogout.
   ///
   /// In zh, this message translates to:

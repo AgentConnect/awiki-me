@@ -41,3 +41,46 @@ abstract interface class AgentInventoryPort {
     Map<String, Object?>? driverConfig,
   });
 }
+
+class AgentInventoryMutationReceipt {
+  const AgentInventoryMutationReceipt({required this.inventoryVersion});
+
+  /// Canonical decimal for version-aware adapters; null only for a legacy
+  /// implementation that cannot expose the committed domain version.
+  final String? inventoryVersion;
+}
+
+class AgentInventoryMutationResult<T> extends AgentInventoryMutationReceipt {
+  const AgentInventoryMutationResult({
+    required this.value,
+    required super.inventoryVersion,
+  });
+
+  final T value;
+}
+
+/// Optional version-preserving mutation boundary.
+///
+/// Legacy adapters can keep implementing [AgentInventoryPort]. The production
+/// User Service adapter implements this interface so its committed account
+/// domain version is not discarded at the App boundary.
+abstract interface class VersionedAgentInventoryMutationPort {
+  Future<AgentInventoryMutationResult<AgentSummary>>
+  updateDisplayNameVersioned({
+    required String agentDid,
+    required String displayName,
+  });
+
+  Future<AgentInventoryMutationReceipt> unbindAgentVersioned({
+    required String agentDid,
+  });
+
+  Future<AgentInventoryMutationResult<List<AgentSummary>>>
+  removeAgentFromAccountVersioned({required String agentDid});
+
+  Future<AgentInventoryMutationResult<AgentInvocationPolicy>>
+  updateInvocationPolicyVersioned({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  });
+}

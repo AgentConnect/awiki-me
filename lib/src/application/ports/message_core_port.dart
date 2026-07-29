@@ -3,6 +3,7 @@ import '../../domain/entities/chat_mention.dart';
 import '../models/attachment_models.dart';
 import '../models/app_conversation_read_ref.dart';
 import '../models/app_thread_ref.dart';
+import '../models/message_sync_diagnostics.dart';
 import '../models/thread_message_patch.dart';
 
 abstract interface class MessageCorePort {
@@ -126,4 +127,8 @@ abstract interface class ConversationTimelineMessageCorePort {
     AppConversationReadRef conversation, {
     int limit = 100,
   });
+}
+
+abstract interface class MessageSyncDiagnosticsCorePort {
+  Future<AppMessageSyncDiagnostics> syncDiagnostics();
 }

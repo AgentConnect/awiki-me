@@ -46,6 +46,17 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'admin\u0000functional_joiner_outbound_visible': <String>{},
   'admin\u0000functional_reply_sent': <String>{'messageId'},
   'joiner\u0000functional_reply_visible': <String>{},
+  'admin\u0000functional_read_observer_ready': <String>{},
+  'joiner\u0000functional_read_observer_ready': <String>{},
+  'admin\u0000functional_read_message_sent': <String>{'messageId'},
+  'joiner\u0000functional_read_unread_visible': <String>{},
+  'joiner\u0000functional_read_committed': <String>{},
+  'admin\u0000functional_read_converged': <String>{},
+  'joiner\u0000functional_offline_ready': <String>{},
+  'admin\u0000functional_recovery_gap_prepared': <String>{'messageId'},
+  'joiner\u0000functional_recovery_completed': <String>{},
+  'admin\u0000functional_post_anchor_sent': <String>{'messageId'},
+  'joiner\u0000functional_post_anchor_visible': <String>{},
   'joiner\u0000functional_agent_observer_ready': <String>{},
 };
 

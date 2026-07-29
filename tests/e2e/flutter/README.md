@@ -153,10 +153,11 @@ behavior. See
 contract and command.
 
 Root transfer, exact-device revoke, and MLS are not executable from the Step 2
-runner. `ROOT-TRANSFER-E2E-001/002`, `DEVICE-REVOKE-E2E-001`, and
-`MLS-MULTI-DEVICE-E2E-001/002` remain planned for Step 3 or a later version.
-Their old Dart implementations depended on direct-admin Join and have been
-deleted; a catalog entry or planning document is not remote pass evidence.
+runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
+`ROOT-TRANSFER-E2E-001` is active in its dedicated suite, while
+`DEVICE-REVOKE-E2E-001` and `MLS-MULTI-DEVICE-E2E-002` are active in
+`step4-revoke-mls`; their scenario-owned attestations, not catalog text, are
+required remote pass evidence.
 
 `--case personal-agent` is the durable acceptance entry for Personal Agent
 product behavior. It is a fail-fast real-backend gate: local YAML must provide

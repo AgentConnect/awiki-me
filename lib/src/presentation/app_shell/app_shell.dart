@@ -33,6 +33,7 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
+import 'providers/message_sync_coordinator_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/selected_conversation_provider.dart';
 import 'providers/session_provider.dart';
@@ -110,6 +111,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
+    final messageSync = ref.watch(messageSyncCoordinatorProvider);
     final realtimeStatus = ref
         .watch(realtimeConnectionStatusProvider)
         .maybeWhen(
@@ -137,6 +139,12 @@ class _AppShellState extends ConsumerState<AppShell> {
         children: <Widget>[
           const OnboardingPage(),
           if (runtime.isBusy) const AwikiMeLoadingMask(),
+          if (messageSync.status == MessageSyncCoordinatorStatus.authRevoked)
+            AwikiMePersistentToast(
+              message: context.l10n.messageSyncStatusAuthRevoked,
+              danger: true,
+              bottom: 32,
+            ),
         ],
       );
     }
@@ -262,6 +270,23 @@ class _AppShellState extends ConsumerState<AppShell> {
                   realtimeStatus == RealtimeConnectionStatus.reconnecting,
               bottom: responsive.isPhone ? 96 : 32,
             ),
+          if (_shouldShowMessageSyncBanner(messageSync))
+            AwikiMePersistentToast(
+              message: _messageSyncBannerMessage(context, messageSync),
+              danger:
+                  messageSync.status ==
+                      MessageSyncCoordinatorStatus.retryableFailure ||
+                  messageSync.status ==
+                      MessageSyncCoordinatorStatus.authRevoked,
+              showSpinner:
+                  messageSync.status ==
+                      MessageSyncCoordinatorStatus.recoveryRequired ||
+                  messageSync.status ==
+                      MessageSyncCoordinatorStatus.recovering,
+              bottom: _shouldShowRealtimeToast(realtimeStatus)
+                  ? (responsive.isPhone ? 154 : 90)
+                  : (responsive.isPhone ? 96 : 32),
+            ),
         ],
       ),
     );
@@ -292,6 +317,32 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _shouldShowRealtimeToast(RealtimeConnectionStatus status) {
     return status == RealtimeConnectionStatus.connecting ||
         status == RealtimeConnectionStatus.reconnecting;
+  }
+
+  bool _shouldShowMessageSyncBanner(MessageSyncCoordinatorState state) {
+    return state.status == MessageSyncCoordinatorStatus.recoveryRequired ||
+        state.status == MessageSyncCoordinatorStatus.recovering ||
+        state.status == MessageSyncCoordinatorStatus.retryableFailure ||
+        state.status == MessageSyncCoordinatorStatus.authRevoked;
+  }
+
+  String _messageSyncBannerMessage(
+    BuildContext context,
+    MessageSyncCoordinatorState state,
+  ) {
+    return switch (state.status) {
+      MessageSyncCoordinatorStatus.recoveryRequired =>
+        context.l10n.messageSyncStatusRecoveryRequired,
+      MessageSyncCoordinatorStatus.recovering =>
+        context.l10n.messageSyncStatusRecovering,
+      MessageSyncCoordinatorStatus.retryableFailure =>
+        context.l10n.messageSyncStatusRetryableFailure,
+      MessageSyncCoordinatorStatus.authRevoked =>
+        context.l10n.messageSyncStatusAuthRevoked,
+      MessageSyncCoordinatorStatus.idle => context.l10n.messageSyncStatusIdle,
+      MessageSyncCoordinatorStatus.syncing =>
+        context.l10n.messageSyncStatusSyncing,
+    };
   }
 
   String _realtimeToastMessage(

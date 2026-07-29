@@ -167,4 +167,254 @@ void main() {
       );
     },
   );
+
+  test(
+    'in-memory domain snapshots preserve atomic empty and isolation semantics',
+    () async {
+      final store = InMemoryAwikiProductLocalStore();
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-1',
+        accountId: 'account-1',
+      );
+      final refreshedAt = DateTime.utc(2026, 7, 28, 8);
+
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '90071992547409931234567890',
+          refreshedAt: refreshedAt,
+          agents: const <ProductAgentInventoryItem>[
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:inactive',
+              activeState: 'inactive',
+              payloadJson: '{"name":"Inactive"}',
+            ),
+          ],
+        ),
+      );
+      await store.replaceAgentStatusSnapshot(
+        ProductAgentStatusSnapshot(
+          binding: binding,
+          domainVersion: '5',
+          refreshedAt: refreshedAt,
+          statuses: const <ProductAgentStatusItem>[
+            ProductAgentStatusItem(
+              agentDid: 'did:agent:inactive',
+              payloadJson: '{"runtime":"online"}',
+            ),
+          ],
+        ),
+      );
+
+      final inputAgents = <ProductAgentInventoryItem>[
+        const ProductAgentInventoryItem(
+          agentDid: 'did:agent:replacement',
+          activeState: 'active',
+          payloadJson: '{"name":"Replacement"}',
+        ),
+      ];
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '90071992547409931234567891',
+          refreshedAt: refreshedAt.add(const Duration(minutes: 1)),
+          agents: inputAgents,
+        ),
+      );
+      inputAgents.clear();
+
+      final inventory = await store.loadAgentInventorySnapshot(
+        binding: binding,
+      );
+      final status = await store.loadAgentStatusSnapshot(binding: binding);
+      expect(inventory?.agents.single.agentDid, 'did:agent:replacement');
+      expect(status?.statuses.single.agentDid, 'did:agent:inactive');
+
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '90071992547409931234567892',
+          refreshedAt: refreshedAt.add(const Duration(minutes: 2)),
+          agents: const <ProductAgentInventoryItem>[],
+        ),
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(binding: binding))?.agents,
+        isEmpty,
+      );
+      expect(
+        (await store.loadAgentStatusSnapshot(binding: binding))?.statuses,
+        hasLength(1),
+      );
+
+      await store.replaceProfileSnapshot(
+        ProductProfileSnapshot(
+          binding: binding,
+          domainVersion: '2',
+          refreshedAt: refreshedAt,
+          payloadJson: '{"display_name":"Alice"}',
+        ),
+      );
+      await store.replaceProfileSnapshot(
+        ProductProfileSnapshot(
+          binding: binding,
+          domainVersion: '3',
+          refreshedAt: refreshedAt.add(const Duration(minutes: 3)),
+        ),
+      );
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.payloadJson,
+        isNull,
+      );
+
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          domainVersion: '3',
+          refreshedAt: refreshedAt,
+          devices: const <ProductDeviceRegistryItem>[
+            ProductDeviceRegistryItem(
+              protocolDeviceId: 'protocol-device-1',
+              authGeneration: '184467440737095516160',
+              payloadJson: '{"state":"active"}',
+            ),
+          ],
+        ),
+      );
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          domainVersion: '4',
+          refreshedAt: refreshedAt.add(const Duration(minutes: 4)),
+          devices: const <ProductDeviceRegistryItem>[],
+        ),
+      );
+      expect(
+        (await store.loadDeviceRegistrySnapshot(binding: binding))?.devices,
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'in-memory copy-on-read keeps legacy data and fences account mismatch',
+    () async {
+      final store = InMemoryAwikiProductLocalStore();
+      const legacyOwnerDid = 'did:wba:awiki.ai:alice:e1_old';
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-copy',
+        accountId: 'account-copy',
+      );
+      await store.saveAgentState(
+        LocalAgentState(
+          ownerDid: legacyOwnerDid,
+          agentDid: 'did:agent:legacy',
+          valueJson: '{"active_state":"inactive"}',
+          updatedAt: DateTime.utc(2026, 7, 28, 7),
+        ),
+      );
+
+      expect(await store.loadAgentInventorySnapshot(binding: binding), isNull);
+      final copied = await store.loadAgentInventorySnapshot(
+        binding: binding,
+        legacyOwnerDid: legacyOwnerDid,
+      );
+      expect(copied?.domainVersion, '0');
+      expect(copied?.payloadHash, productLegacyAgentSeedPayloadHash);
+      expect(copied?.agents.single.activeState, 'inactive');
+      expect(
+        await store.loadAgentStates(ownerDid: legacyOwnerDid),
+        hasLength(1),
+      );
+
+      const mismatch = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-copy',
+        accountId: 'account-other',
+      );
+      await expectLater(
+        store.loadAgentStatusSnapshot(binding: mismatch),
+        throwsA(isA<ProductAccountBindingMismatchException>()),
+      );
+    },
+  );
+
+  test(
+    'in-memory validation and version failures leave prior snapshot unchanged',
+    () async {
+      final store = InMemoryAwikiProductLocalStore();
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-atomic',
+        accountId: 'account-atomic',
+      );
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '2',
+          refreshedAt: DateTime.utc(2026, 7, 28, 8),
+          agents: const <ProductAgentInventoryItem>[
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:original',
+              activeState: 'active',
+              payloadJson: '{"name":"Original"}',
+            ),
+          ],
+        ),
+      );
+
+      await expectLater(
+        store.replaceAgentInventorySnapshot(
+          ProductAgentInventorySnapshot(
+            binding: binding,
+            domainVersion: '3',
+            refreshedAt: DateTime.utc(2026, 7, 28, 9),
+            agents: const <ProductAgentInventoryItem>[
+              ProductAgentInventoryItem(
+                agentDid: 'did:agent:duplicate',
+                activeState: 'active',
+                payloadJson: '{"name":"One"}',
+              ),
+              ProductAgentInventoryItem(
+                agentDid: 'did:agent:duplicate',
+                activeState: 'inactive',
+                payloadJson: '{"name":"Two"}',
+              ),
+            ],
+          ),
+        ),
+        throwsArgumentError,
+      );
+      await expectLater(
+        store.replaceAgentInventorySnapshot(
+          ProductAgentInventorySnapshot(
+            binding: binding,
+            domainVersion: '1',
+            refreshedAt: DateTime.utc(2026, 7, 28, 10),
+            agents: const <ProductAgentInventoryItem>[],
+          ),
+        ),
+        throwsA(isA<ProductDomainVersionRegressionException>()),
+      );
+      await expectLater(
+        store.replaceDeviceRegistrySnapshot(
+          ProductDeviceRegistrySnapshot(
+            binding: binding,
+            domainVersion: '1',
+            refreshedAt: DateTime.utc(2026, 7, 28, 10),
+            devices: const <ProductDeviceRegistryItem>[
+              ProductDeviceRegistryItem(
+                protocolDeviceId: 'protocol-device-invalid',
+                authGeneration: '01',
+                payloadJson: '{"state":"active"}',
+              ),
+            ],
+          ),
+        ),
+        throwsArgumentError,
+      );
+
+      final retained = await store.loadAgentInventorySnapshot(binding: binding);
+      expect(retained?.domainVersion, '2');
+      expect(retained?.agents.single.agentDid, 'did:agent:original');
+    },
+  );
 }

@@ -489,6 +489,7 @@ class _ThreadPatchSubscription {
   const _ThreadPatchSubscription({
     required this.token,
     required this.sessionEpoch,
+    required this.sessionFence,
     required this.ownerDid,
     required this.conversationRef,
     required this.threadKind,
@@ -499,6 +500,7 @@ class _ThreadPatchSubscription {
 
   final int token;
   final SessionEpoch sessionEpoch;
+  final _ThreadPatchSessionFence sessionFence;
   final String ownerDid;
   final AppConversationReadRef conversationRef;
   final String threadKind;
@@ -515,6 +517,7 @@ class _ThreadPatchSubscription {
     return _ThreadPatchSubscription(
       token: token,
       sessionEpoch: sessionEpoch,
+      sessionFence: sessionFence,
       ownerDid: ownerDid,
       conversationRef: conversationRef,
       threadKind: threadKind,
@@ -523,6 +526,71 @@ class _ThreadPatchSubscription {
       lastVersion: lastVersion ?? this.lastVersion,
     );
   }
+}
+
+class _ThreadPatchSessionFence {
+  const _ThreadPatchSessionFence({
+    required this.sessionGeneration,
+    required this.ownerDid,
+    this.bindingCurrentDid,
+    this.ownerIdentityId,
+    this.accountId,
+    this.deviceAuthGeneration,
+    this.identityGeneration,
+    this.protocolDeviceId,
+  });
+
+  factory _ThreadPatchSessionFence.fromSession(SessionState state) {
+    final session = state.session;
+    if (session == null) {
+      throw StateError('thread_patch_session_unavailable');
+    }
+    final binding = session.accountBinding;
+    return _ThreadPatchSessionFence(
+      sessionGeneration: state.generation,
+      ownerDid: session.did,
+      bindingCurrentDid: binding?.currentDid,
+      ownerIdentityId: binding?.ownerIdentityId,
+      accountId: binding?.accountId,
+      deviceAuthGeneration: binding?.deviceAuthGeneration,
+      identityGeneration: binding?.identityGeneration,
+      protocolDeviceId: binding?.protocolDeviceId,
+    );
+  }
+
+  final int sessionGeneration;
+  final String ownerDid;
+  final String? bindingCurrentDid;
+  final String? ownerIdentityId;
+  final String? accountId;
+  final String? deviceAuthGeneration;
+  final String? identityGeneration;
+  final String? protocolDeviceId;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ThreadPatchSessionFence &&
+          other.sessionGeneration == sessionGeneration &&
+          other.ownerDid == ownerDid &&
+          other.bindingCurrentDid == bindingCurrentDid &&
+          other.ownerIdentityId == ownerIdentityId &&
+          other.accountId == accountId &&
+          other.deviceAuthGeneration == deviceAuthGeneration &&
+          other.identityGeneration == identityGeneration &&
+          other.protocolDeviceId == protocolDeviceId;
+
+  @override
+  int get hashCode => Object.hash(
+    sessionGeneration,
+    ownerDid,
+    bindingCurrentDid,
+    ownerIdentityId,
+    accountId,
+    deviceAuthGeneration,
+    identityGeneration,
+    protocolDeviceId,
+  );
 }
 
 class ThreadMemoryCachePolicy {
@@ -694,6 +762,7 @@ class ChatThreadsController
   final Map<String, Future<void>> _activeVisibleThreadStaleGuards =
       <String, Future<void>>{};
   final Set<String> _activeLocalHistoryLoads = <String>{};
+  int _localHistoryGeneration = 0;
   final Set<String> _activeRemoteHistorySyncs = <String>{};
   final Map<String, _ThreadPatchSubscription> _threadPatchSubscriptions =
       <String, _ThreadPatchSubscription>{};
@@ -935,6 +1004,7 @@ class ChatThreadsController
     if (sessionEpoch == null) {
       return;
     }
+    final localHistoryGeneration = _localHistoryGeneration;
     final visibleEntries = <MapEntry<String, _ThreadCacheMetadata>>[
       for (final entry in _cacheMetadataByThreadId.entries)
         if (entry.value.isVisible && entry.value.visibleConversation != null)
@@ -944,7 +1014,8 @@ class ChatThreadsController
       return;
     }
     for (final entry in visibleEntries) {
-      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
+          _localHistoryGeneration != localHistoryGeneration) {
         break;
       }
       final conversation = entry.value.visibleConversation;
@@ -957,6 +1028,10 @@ class ChatThreadsController
         force: force,
         limit: limit,
       );
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
+          _localHistoryGeneration != localHistoryGeneration) {
+        break;
+      }
     }
   }
 
@@ -968,6 +1043,7 @@ class ChatThreadsController
     if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
+    final localHistoryGeneration = _localHistoryGeneration;
     final aliasWarmCount = _warmDisplayThreadFromConversationAliases(
       conversation,
       displayThreadId: displayThreadId,
@@ -1050,7 +1126,8 @@ class ChatThreadsController
               thread(displayThreadId).messages,
             ),
           );
-    if (!_isCurrentSessionEpoch(sessionEpoch)) {
+    if (!_isCurrentSessionEpoch(sessionEpoch) ||
+        _localHistoryGeneration != localHistoryGeneration) {
       return;
     }
     unawaited(
@@ -1351,6 +1428,7 @@ class ChatThreadsController
     if (!_isCurrentSessionEpoch(sessionEpoch)) {
       return;
     }
+    final localHistoryGeneration = _localHistoryGeneration;
     final conversationRef = _conversationReadRefFor(conversation);
     if (conversationRef == null) {
       _chatProviderTrace(
@@ -1396,7 +1474,8 @@ class ChatThreadsController
           afterServerSeq: effectiveAfterServerSeq,
         );
       }
-      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
+          _localHistoryGeneration != localHistoryGeneration) {
         return;
       }
       final repairedVersion = await _repairThreadFromLocalProjection(
@@ -1416,7 +1495,8 @@ class ChatThreadsController
               sessionEpoch: sessionEpoch,
             )
           : const _HistoryLoadResult(loadedCount: 0, failed: false);
-      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
+          _localHistoryGeneration != localHistoryGeneration) {
         return;
       }
       if (repairedVersion == null && !localResult.loadedAny) {
@@ -1432,7 +1512,8 @@ class ChatThreadsController
         return;
       }
       await ref.read(conversationListProvider.notifier).refreshFastLocal();
-      if (!_isCurrentSessionEpoch(sessionEpoch)) {
+      if (!_isCurrentSessionEpoch(sessionEpoch) ||
+          _localHistoryGeneration != localHistoryGeneration) {
         return;
       }
       _flushPendingReadAck(displayThreadId);
@@ -1462,7 +1543,8 @@ class ChatThreadsController
         },
       );
     } finally {
-      if (_isCurrentSessionEpoch(sessionEpoch)) {
+      if (_isCurrentSessionEpoch(sessionEpoch) &&
+          _localHistoryGeneration == localHistoryGeneration) {
         _flushPendingReadAck(displayThreadId);
       }
     }
@@ -1886,7 +1968,9 @@ class ChatThreadsController
     String threadId,
     SessionEpoch sessionEpoch,
   ) async {
-    while (_isCurrentSessionEpoch(sessionEpoch)) {
+    final localHistoryGeneration = _localHistoryGeneration;
+    while (_isCurrentSessionEpoch(sessionEpoch) &&
+        _localHistoryGeneration == localHistoryGeneration) {
       final pending = _pendingReadAcksByThreadId[threadId];
       if (pending == null) {
         return true;
@@ -1943,7 +2027,8 @@ class ChatThreadsController
             .read(conversationServiceProvider)
             .markConversationRead(conversationRef, watermark: watermark);
         watch.stop();
-        if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        if (!_isCurrentSessionEpoch(sessionEpoch) ||
+            _localHistoryGeneration != localHistoryGeneration) {
           return false;
         }
         final effective = result.effectiveWatermark;
@@ -2011,7 +2096,8 @@ class ChatThreadsController
         );
       } catch (error) {
         watch.stop();
-        if (!_isCurrentSessionEpoch(sessionEpoch)) {
+        if (!_isCurrentSessionEpoch(sessionEpoch) ||
+            _localHistoryGeneration != localHistoryGeneration) {
           return false;
         }
         _requeuePendingReadAck(
@@ -2046,9 +2132,18 @@ class ChatThreadsController
     AppConversationReadRef? conversationRef,
     bool fallbackToLocalHistory = true,
     SessionEpoch? sessionEpoch,
+    bool Function()? isCurrent,
   }) async {
     final operationEpoch = sessionEpoch ?? _captureSessionEpoch();
     if (operationEpoch == null || !_isCurrentSessionEpoch(operationEpoch)) {
+      return null;
+    }
+    final localHistoryGeneration = _localHistoryGeneration;
+    bool operationIsCurrent() =>
+        _isCurrentSessionEpoch(operationEpoch) &&
+        _localHistoryGeneration == localHistoryGeneration &&
+        (isCurrent?.call() ?? true);
+    if (!operationIsCurrent()) {
       return null;
     }
     final messaging = ref.read(messagingServiceProvider);
@@ -2058,11 +2153,15 @@ class ChatThreadsController
         _conversationReadRefFor(conversation);
     if (effectiveConversationRef == null) {
       if (fallbackToLocalHistory) {
+        if (!operationIsCurrent()) {
+          return null;
+        }
         await _loadLocalHistory(
           conversation,
           intoThreadId: displayThreadId,
           limit: _initialLocalHistoryLimit,
           sessionEpoch: operationEpoch,
+          isCurrent: operationIsCurrent,
         );
       }
       return null;
@@ -2074,7 +2173,7 @@ class ChatThreadsController
         final patch = await timelineMessaging.repairConversationTimelineStore(
           effectiveConversationRef,
         );
-        if (!_isCurrentSessionEpoch(operationEpoch)) {
+        if (!operationIsCurrent()) {
           return null;
         }
         final ownerDid = ref.read(sessionProvider).session?.did.trim();
@@ -2092,7 +2191,7 @@ class ChatThreadsController
             conversation,
             sessionEpoch: operationEpoch,
           );
-          if (applied && _isCurrentSessionEpoch(operationEpoch)) {
+          if (applied && operationIsCurrent()) {
             _recordThreadPatchRepairVersion(displayThreadId, patch);
             return patch.version;
           }
@@ -2103,11 +2202,15 @@ class ChatThreadsController
       }
     }
     if (fallbackToLocalHistory) {
+      if (!operationIsCurrent()) {
+        return null;
+      }
       await _loadLocalHistory(
         conversation,
         intoThreadId: displayThreadId,
         limit: _initialLocalHistoryLimit,
         sessionEpoch: operationEpoch,
+        isCurrent: operationIsCurrent,
       );
     }
     return null;
@@ -2139,10 +2242,19 @@ class ChatThreadsController
       return;
     }
     final timelineMessaging = messaging as ConversationTimelineMessagingService;
-    final session = ref.read(sessionProvider).session;
+    final sessionState = ref.read(sessionProvider);
+    final session = sessionState.session;
     final ownerDid = session?.did.trim();
     final sessionEpoch = _captureSessionEpoch();
     if (ownerDid == null || ownerDid.isEmpty || sessionEpoch == null) {
+      return;
+    }
+    final binding = session?.accountBinding;
+    if (binding != null &&
+        (binding.currentDid != ownerDid ||
+            binding.ownerIdentityId.trim().isEmpty ||
+            binding.accountId.trim().isEmpty ||
+            binding.deviceAuthGeneration.trim().isEmpty)) {
       return;
     }
     final conversationRef = _conversationReadRefFor(conversation);
@@ -2155,8 +2267,10 @@ class ChatThreadsController
     }
     final threadRef = _localHistoryThreadRefFor(conversation);
     final expectedPatchKey = _threadPatchKeyFor(threadRef);
+    final sessionFence = _ThreadPatchSessionFence.fromSession(sessionState);
     final existing = _threadPatchSubscriptions[displayThreadId];
     if (existing != null &&
+        existing.sessionFence == sessionFence &&
         existing.ownerDid == ownerDid &&
         existing.sessionEpoch == sessionEpoch &&
         existing.conversationRefKey == conversationRef.conversationId &&
@@ -2202,6 +2316,7 @@ class ChatThreadsController
     _threadPatchSubscriptions[displayThreadId] = _ThreadPatchSubscription(
       token: token,
       sessionEpoch: sessionEpoch,
+      sessionFence: sessionFence,
       ownerDid: ownerDid,
       conversationRef: conversationRef,
       threadKind: expectedPatchKey.kind,
@@ -2223,7 +2338,8 @@ class ChatThreadsController
     final subscription = _threadPatchSubscriptions[displayThreadId];
     if (subscription == null ||
         subscription.token != token ||
-        subscription.sessionEpoch != sessionEpoch) {
+        subscription.sessionEpoch != sessionEpoch ||
+        !_isThreadPatchSessionFenceCurrent(subscription.sessionFence)) {
       return;
     }
     _threadPatchSubscriptions.remove(displayThreadId);
@@ -2240,8 +2356,12 @@ class ChatThreadsController
       displayThreadId: displayThreadId,
       conversationRef: subscription.conversationRef,
       sessionEpoch: sessionEpoch,
+      isCurrent: () =>
+          _isCurrentSessionEpoch(sessionEpoch) &&
+          _isThreadPatchSessionFenceCurrent(subscription.sessionFence),
     );
     if (!_isCurrentSessionEpoch(sessionEpoch) ||
+        !_isThreadPatchSessionFenceCurrent(subscription.sessionFence) ||
         _cacheMetadataByThreadId[displayThreadId]?.isVisible != true) {
       return;
     }
@@ -2267,10 +2387,17 @@ class ChatThreadsController
     if (currentSubscription == null ||
         currentSubscription.token != token ||
         currentSubscription.sessionEpoch != sessionEpoch ||
-        currentSubscription.ownerDid != ownerDid) {
+        currentSubscription.ownerDid != ownerDid ||
+        !_isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence)) {
       return;
     }
     if (patch.ownerDid.trim() != ownerDid) {
+      return;
+    }
+    final expectedOwnerIdentityId =
+        currentSubscription.sessionFence.ownerIdentityId;
+    if (expectedOwnerIdentityId != null &&
+        patch.ownerIdentityId != expectedOwnerIdentityId) {
       return;
     }
     if (!_threadPatchMatchesSubscription(patch, currentSubscription)) {
@@ -2315,8 +2442,12 @@ class ChatThreadsController
       conversation,
       sessionEpoch: sessionEpoch,
     );
+    final activeSubscription = _threadPatchSubscriptions[displayThreadId];
     if (!_isCurrentSessionEpoch(sessionEpoch) ||
-        _threadPatchSubscriptions[displayThreadId]?.token != token) {
+        activeSubscription?.token != token ||
+        activeSubscription?.sessionEpoch != sessionEpoch ||
+        activeSubscription?.sessionFence != currentSubscription.sessionFence ||
+        !_isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence)) {
       return;
     }
     if (!applied) {
@@ -2446,24 +2577,39 @@ class ChatThreadsController
     if (currentSubscription == null ||
         currentSubscription.token != token ||
         currentSubscription.sessionEpoch != sessionEpoch ||
+        !_isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence) ||
         messaging is! ConversationTimelineMessagingService) {
       return;
     }
     final timelineMessaging = messaging as ConversationTimelineMessagingService;
+    final localHistoryGeneration = _localHistoryGeneration;
+    bool isCurrent() {
+      final active = _threadPatchSubscriptions[displayThreadId];
+      return _isCurrentSessionEpoch(sessionEpoch) &&
+          _localHistoryGeneration == localHistoryGeneration &&
+          active?.token == token &&
+          active?.sessionEpoch == sessionEpoch &&
+          active?.sessionFence == currentSubscription.sessionFence &&
+          _isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence);
+    }
+
     try {
       final patch = await timelineMessaging.repairConversationTimelineStore(
         currentSubscription.conversationRef,
       );
-      if (!_isCurrentSessionEpoch(sessionEpoch) ||
-          _threadPatchSubscriptions[displayThreadId]?.token != token) {
+      if (!isCurrent()) {
         return;
       }
       if (patch.ownerDid.trim() != currentSubscription.ownerDid ||
+          (currentSubscription.sessionFence.ownerIdentityId != null &&
+              patch.ownerIdentityId !=
+                  currentSubscription.sessionFence.ownerIdentityId) ||
           !_threadPatchMatchesSubscription(patch, currentSubscription)) {
         await _loadLocalHistory(
           conversation,
           intoThreadId: displayThreadId,
           sessionEpoch: sessionEpoch,
+          isCurrent: isCurrent,
         );
         return;
       }
@@ -2473,27 +2619,40 @@ class ChatThreadsController
         conversation,
         sessionEpoch: sessionEpoch,
       );
-      if (applied &&
-          _isCurrentSessionEpoch(sessionEpoch) &&
-          _threadPatchSubscriptions[displayThreadId]?.token == token) {
+      if (applied && isCurrent()) {
         _threadPatchSubscriptions[displayThreadId] = currentSubscription
             .copyWith(lastVersion: patch.version);
-      } else if (!applied && _isCurrentSessionEpoch(sessionEpoch)) {
+      } else if (!applied && isCurrent()) {
         await _loadLocalHistory(
           conversation,
           intoThreadId: displayThreadId,
           sessionEpoch: sessionEpoch,
+          isCurrent: isCurrent,
         );
       }
     } catch (_) {
-      if (_isCurrentSessionEpoch(sessionEpoch)) {
-        await _loadLocalHistory(
-          conversation,
-          intoThreadId: displayThreadId,
-          sessionEpoch: sessionEpoch,
-        );
+      if (!isCurrent()) {
+        return;
       }
+      await _loadLocalHistory(
+        conversation,
+        intoThreadId: displayThreadId,
+        sessionEpoch: sessionEpoch,
+        isCurrent: isCurrent,
+      );
     }
+  }
+
+  bool _isThreadPatchSessionFenceCurrent(_ThreadPatchSessionFence fence) {
+    if (!mounted) {
+      return false;
+    }
+    final state = ref.read(sessionProvider);
+    final session = state.session;
+    if (session == null) {
+      return false;
+    }
+    return _ThreadPatchSessionFence.fromSession(state) == fence;
   }
 
   void _restoreVisibleReadIntentIfCurrent(
@@ -2576,9 +2735,18 @@ class ChatThreadsController
     bool showHydratingState = true,
     bool markLoadedWhenEmpty = true,
     SessionEpoch? sessionEpoch,
+    bool Function()? isCurrent,
   }) async {
     final operationEpoch = sessionEpoch ?? _captureSessionEpoch();
     if (operationEpoch == null || !_isCurrentSessionEpoch(operationEpoch)) {
+      return const _HistoryLoadResult(loadedCount: 0, failed: false);
+    }
+    final localHistoryGeneration = _localHistoryGeneration;
+    bool operationIsCurrent() =>
+        _isCurrentSessionEpoch(operationEpoch) &&
+        _localHistoryGeneration == localHistoryGeneration &&
+        (isCurrent?.call() ?? true);
+    if (!operationIsCurrent()) {
       return const _HistoryLoadResult(loadedCount: 0, failed: false);
     }
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
@@ -2616,7 +2784,7 @@ class ChatThreadsController
     try {
       if (messaging is! ConversationTimelineMessagingService &&
           messaging is! LocalHistoryMessagingService) {
-        if (shouldShowLoading && _isCurrentSessionEpoch(operationEpoch)) {
+        if (shouldShowLoading && operationIsCurrent()) {
           _setThreadLoading(targetThreadId, false);
           if (showHydratingState) {
             _setThreadLocalHistoryHydrating(targetThreadId, false);
@@ -2658,7 +2826,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!_isCurrentSessionEpoch(operationEpoch)) {
+      if (!operationIsCurrent()) {
         return const _HistoryLoadResult(loadedCount: 0, failed: false);
       }
       _chatProviderTrace(
@@ -2698,7 +2866,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!_isCurrentSessionEpoch(operationEpoch)) {
+      if (!operationIsCurrent()) {
         return _HistoryLoadResult(
           loadedCount: history.length,
           failed: false,
@@ -2759,10 +2927,11 @@ class ChatThreadsController
           'elapsed_ms': totalWatch.elapsedMilliseconds,
         },
       );
-      if (shouldShowLoading && _isCurrentSessionEpoch(operationEpoch)) {
+      final isCurrentSession = operationIsCurrent();
+      if (shouldShowLoading && isCurrentSession) {
         _setThreadLoading(targetThreadId, false);
       }
-      if (_isCurrentSessionEpoch(operationEpoch) && showHydratingState) {
+      if (isCurrentSession && showHydratingState) {
         _setThreadLocalHistoryHydrating(targetThreadId, false);
       }
       totalWatch.stop();
@@ -2773,11 +2942,14 @@ class ChatThreadsController
       );
       return const _HistoryLoadResult(loadedCount: 0, failed: true);
     } finally {
-      if (_isCurrentSessionEpoch(operationEpoch)) {
+      final isCurrentSession = operationIsCurrent();
+      if (_localHistoryGeneration == localHistoryGeneration) {
         _activeLocalHistoryLoads.remove(targetThreadId);
-        if (showHydratingState) {
-          _setThreadLocalHistoryHydrating(targetThreadId, false);
-        }
+      }
+      if (isCurrentSession && showHydratingState) {
+        _setThreadLocalHistoryHydrating(targetThreadId, false);
+      }
+      if (isCurrentSession) {
         _chatProviderTrace(
           'local_history.load_finish',
           fields: <String, Object?>{
@@ -2810,6 +2982,10 @@ class ChatThreadsController
     if (operationEpoch == null || !_isCurrentSessionEpoch(operationEpoch)) {
       return;
     }
+    final localHistoryGeneration = _localHistoryGeneration;
+    bool operationIsCurrent() =>
+        _isCurrentSessionEpoch(operationEpoch) &&
+        _localHistoryGeneration == localHistoryGeneration;
     final targetThreadId = _displayThreadIdFor(conversation, intoThreadId);
     final conversationRef = _conversationReadRefFor(conversation);
     final totalWatch = Stopwatch()..start();
@@ -2856,7 +3032,7 @@ class ChatThreadsController
           },
           level: AwikiPerformanceLogLevel.verbose,
         );
-        if (!_isCurrentSessionEpoch(operationEpoch)) {
+        if (!operationIsCurrent()) {
           return;
         }
         final repairedVersion = await _repairThreadFromLocalProjection(
@@ -2865,6 +3041,7 @@ class ChatThreadsController
           conversationRef: syncConversationRef,
           fallbackToLocalHistory: false,
           sessionEpoch: operationEpoch,
+          isCurrent: operationIsCurrent,
         );
         final localResult = repairedVersion == null
             ? await _loadLocalHistory(
@@ -2874,16 +3051,17 @@ class ChatThreadsController
                 showHydratingState: false,
                 markLoadedWhenEmpty: false,
                 sessionEpoch: operationEpoch,
+                isCurrent: operationIsCurrent,
               )
             : const _HistoryLoadResult(loadedCount: 0, failed: false);
-        if (!_isCurrentSessionEpoch(operationEpoch)) {
+        if (!operationIsCurrent()) {
           return;
         }
         if (showLoading) {
           _setThreadLoading(targetThreadId, false);
         }
         await ref.read(conversationListProvider.notifier).refreshFastLocal();
-        if (!_isCurrentSessionEpoch(operationEpoch)) {
+        if (!operationIsCurrent()) {
           return;
         }
         _flushPendingReadAck(targetThreadId);
@@ -2910,7 +3088,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!_isCurrentSessionEpoch(operationEpoch)) {
+      if (!operationIsCurrent()) {
         return;
       }
       final repairedVersion = await _repairThreadFromLocalProjection(
@@ -2919,6 +3097,7 @@ class ChatThreadsController
         conversationRef: conversationRef,
         fallbackToLocalHistory: false,
         sessionEpoch: operationEpoch,
+        isCurrent: operationIsCurrent,
       );
       final localResult = repairedVersion == null
           ? await _loadLocalHistory(
@@ -2928,6 +3107,7 @@ class ChatThreadsController
               showHydratingState: false,
               markLoadedWhenEmpty: false,
               sessionEpoch: operationEpoch,
+              isCurrent: operationIsCurrent,
             )
           : const _HistoryLoadResult(loadedCount: 0, failed: false);
       AwikiPerformanceLogger.log(
@@ -2941,7 +3121,7 @@ class ChatThreadsController
         },
         level: AwikiPerformanceLogLevel.verbose,
       );
-      if (!_isCurrentSessionEpoch(operationEpoch)) {
+      if (!operationIsCurrent()) {
         return;
       }
       _flushPendingReadAck(targetThreadId);
@@ -2956,7 +3136,7 @@ class ChatThreadsController
         },
       );
     } catch (error) {
-      if (!_isCurrentSessionEpoch(operationEpoch)) {
+      if (!operationIsCurrent()) {
         return;
       }
       if (showLoading) {
@@ -2968,7 +3148,7 @@ class ChatThreadsController
             .showError(AppMessage.fromError(error));
       }
     } finally {
-      if (_isCurrentSessionEpoch(operationEpoch)) {
+      if (operationIsCurrent()) {
         _activeRemoteHistorySyncs.remove(targetThreadId);
         _flushPendingReadAck(targetThreadId);
         _runPendingHistorySyncIfNeeded(targetThreadId);
@@ -3699,6 +3879,7 @@ class ChatThreadsController
   }
 
   void _resetSessionBoundState() {
+    _localHistoryGeneration += 1;
     _cancelAgentProcessingTimers();
     _cancelThreadPatchSubscriptions();
     _cancelThreadPatchSubscriptionTtls();

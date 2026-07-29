@@ -2064,6 +2064,448 @@ void main() {
     },
   );
 
+  test(
+    'patch generation waits for one reset seed and reuses ready state',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      final prepared = notifier.preparePatchGeneration();
+      final ensured = notifier.ensurePatchReady();
+      await pumpEventQueue();
+      expect(service.watchCalls, 1);
+
+      final seeded = _conversation(
+        conversationId: 'conv:seed',
+        threadId: 'dm:alice:seed',
+        displayName: 'Seed',
+      );
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          items: <ConversationSummary>[seeded],
+        ),
+      );
+
+      await Future.wait(<Future<void>>[prepared, ensured]);
+      await notifier.ensurePatchReady();
+
+      expect(service.watchCalls, 1);
+      expect(service.fastCalls, 0);
+      expect(container.read(conversationListProvider).conversations, <Object>[
+        seeded,
+      ]);
+    },
+  );
+
+  test(
+    'patch arriving during reset seed is applied once without extra seed',
+    () async {
+      final directory = _DelayedCachedDirectoryService();
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+        directory: directory,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      final ready = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+          items: <ConversationSummary>[
+            _conversation(
+              conversationId: 'conv:bob',
+              threadId: 'dm:alice:bob',
+              displayName: 'Bob',
+              targetDid: 'did:bob',
+              peerPersonaId: 'persona:bob',
+            ),
+          ],
+        ),
+      );
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: _conversation(
+            conversationId: 'conv:carol',
+            threadId: 'dm:alice:carol',
+            displayName: 'Carol',
+            targetDid: 'did:carol',
+            peerPersonaId: 'persona:carol',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+      directory.complete(const <PeerDisplayProfile>[]);
+      await ready;
+      await pumpEventQueue();
+
+      final state = container.read(conversationListProvider);
+      expect(
+        state.entitiesById.keys,
+        containsAll(<String>['conv:bob', 'conv:carol']),
+      );
+      expect(state.version, 2);
+      expect(service.watchCalls, 1);
+      expect(service.fastCalls, 0);
+    },
+  );
+
+  test(
+    'bound patch stream error coalesces one rebuild and resumes deltas',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+        initialPatch: const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      await notifier.preparePatchGeneration();
+
+      service.emitError(StateError('stream failed'));
+      service.emitError(StateError('stream failed again'));
+      await pumpEventQueue(times: 20);
+
+      expect(service.watchCalls, 2);
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: _conversation(
+            conversationId: 'conv:after-rebuild',
+            threadId: 'dm:alice:after-rebuild',
+            displayName: 'After rebuild',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(conversationListProvider).entitiesById,
+        contains('conv:after-rebuild'),
+      );
+
+      await service.closeActiveWatches();
+      await pumpEventQueue(times: 20);
+      expect(service.watchCalls, 3);
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: _conversation(
+            conversationId: 'conv:after-close',
+            threadId: 'dm:alice:after-close',
+            displayName: 'After close',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+      expect(
+        container.read(conversationListProvider).entitiesById,
+        contains('conv:after-close'),
+      );
+    },
+  );
+
+  test(
+    'new auth generation rebuild is not swallowed or cleared by stale rebuild',
+    () async {
+      final releaseOldRebuild = Completer<void>();
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+        firstWatchCancelBarrier: releaseOldRebuild.future,
+      );
+      addTearDown(() {
+        if (!releaseOldRebuild.isCompleted) {
+          releaseOldRebuild.complete();
+        }
+      });
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      final firstReady = notifier.preparePatchGeneration();
+      await Future<void>.value();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await firstReady;
+
+      service.emitError(StateError('old generation stream failed'));
+      await service.firstWatchCancelStarted.future;
+      expect(service.watchCalls, 1);
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              accountBinding: _accountBinding(deviceAuthGeneration: '2'),
+            ),
+          );
+      final secondReady = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      expect(service.watchCalls, 2);
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await secondReady;
+
+      service.emitError(StateError('new generation stream failed'));
+      service.emitError(StateError('same generation duplicate failure'));
+      await pumpEventQueue(times: 20);
+
+      expect(service.watchCalls, 3);
+      final newReadiness = notifier.ensurePatchReady();
+
+      releaseOldRebuild.complete();
+      await pumpEventQueue(times: 20);
+
+      expect(service.watchCalls, 3);
+      // ignore: invalid_use_of_visible_for_testing_member
+      final trackedRebuild = notifier.debugPatchRebuildOperationForTesting;
+      expect(trackedRebuild, isNotNull);
+      expect(identical(trackedRebuild, newReadiness), isTrue);
+      final coalescedReadiness = notifier.ensurePatchReady();
+      expect(identical(coalescedReadiness, newReadiness), isTrue);
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await Future.wait(<Future<void>>[newReadiness, coalescedReadiness]);
+      expect(service.watchCalls, 3);
+    },
+  );
+
+  test(
+    'bound patch stream error before first reset reconnects within readiness timeout',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      final ready = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      expect(service.watchCalls, 1);
+
+      service.emitError(StateError('transient initial error'));
+      await pumpEventQueue(times: 20);
+      expect(service.watchCalls, 2);
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+
+      await ready;
+      expect(container.read(conversationListProvider).version, 1);
+    },
+  );
+
+  test(
+    'bound patch stream close before first reset reconnects within readiness timeout',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      final ready = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      expect(service.watchCalls, 1);
+
+      await service.closeActiveWatches();
+      await pumpEventQueue(times: 20);
+      expect(service.watchCalls, 2);
+
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+
+      await ready;
+      expect(container.read(conversationListProvider).version, 1);
+    },
+  );
+
+  test(
+    'same DID auth generation switch rejects old asynchronous patch',
+    () async {
+      final directory = _DelayedCachedDirectoryService();
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+        directory: directory,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+      final firstReady = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await firstReady;
+
+      service.emitPatch(
+        ConversationListPatch(
+          kind: ConversationListPatchKind.upsert,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          item: _conversation(
+            conversationId: 'conv:old',
+            threadId: 'dm:alice:old',
+            displayName: 'Old',
+            targetDid: 'did:old',
+            peerPersonaId: 'persona:old',
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              accountBinding: _accountBinding(deviceAuthGeneration: '2'),
+            ),
+          );
+      final secondReady = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      directory.complete(const <PeerDisplayProfile>[]);
+      await pumpEventQueue();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
+        ),
+      );
+      await secondReady;
+      await pumpEventQueue();
+
+      expect(
+        container.read(conversationListProvider).entitiesById,
+        isNot(contains('conv:old')),
+      );
+      expect(service.watchCalls, 2);
+    },
+  );
+
   test('conversation patch rejects stale and incomplete mutations', () async {
     final service = _PatchConversationService(
       conversations: const <ConversationSummary>[],
@@ -2959,6 +3401,138 @@ void main() {
   );
 
   test(
+    'same DID auth generation starts a new repair without stale repair clearing it',
+    () async {
+      final oldRepair = Completer<ConversationStoreRepairResult>();
+      final currentRepair = Completer<ConversationStoreRepairResult>();
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+        repairResults: <Future<ConversationStoreRepairResult>>[
+          oldRepair.future,
+          currentRepair.future,
+        ],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      final firstReady = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await firstReady;
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          reason: 'old_generation_repair',
+        ),
+      );
+      await pumpEventQueue();
+      expect(service.repairCalls, 1);
+
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              accountBinding: _accountBinding(deviceAuthGeneration: '2'),
+            ),
+          );
+      final secondReady = notifier.preparePatchGeneration();
+      await pumpEventQueue();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await secondReady;
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 2,
+          unreadTotal: 0,
+          reason: 'current_generation_repair',
+        ),
+      );
+      await pumpEventQueue();
+      expect(service.repairCalls, 2);
+
+      oldRepair.complete(
+        ConversationStoreRepairResult(
+          conversations: <ConversationSummary>[
+            _conversation(
+              conversationId: 'conv:stale',
+              threadId: 'dm:alice:stale',
+              displayName: 'Stale',
+            ),
+          ],
+          version: 2,
+        ),
+      );
+      await pumpEventQueue();
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.repairRequired,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 3,
+          unreadTotal: 0,
+          reason: 'coalesced_current_repair',
+        ),
+      );
+      await pumpEventQueue();
+      expect(service.repairCalls, 2);
+
+      currentRepair.complete(
+        ConversationStoreRepairResult(
+          conversations: <ConversationSummary>[
+            _conversation(
+              conversationId: 'conv:current',
+              threadId: 'dm:alice:current',
+              displayName: 'Current',
+            ),
+          ],
+          version: 3,
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(conversationListProvider).entitiesById,
+        contains('conv:current'),
+      );
+      expect(
+        container.read(conversationListProvider).entitiesById,
+        isNot(contains('conv:stale')),
+      );
+    },
+  );
+
+  test(
     'conversation patch gap does not advance version before repair lands',
     () async {
       final service = _PatchConversationService(
@@ -3362,6 +3936,7 @@ ProviderContainer _conversationContainer({
   AwikiEnvironmentConfig? environment,
   DirectoryApplicationService? directory,
   bool authenticated = true,
+  SessionAccountBinding? accountBinding,
 }) {
   return ProviderContainer(
     overrides: <Override>[
@@ -3382,12 +3957,24 @@ ProviderContainer _conversationContainer({
               did: ownerDid,
               credentialName: 'alice',
               displayName: 'Alice',
+              accountBinding: accountBinding,
             ),
           );
         }
         return controller;
       }),
     ],
+  );
+}
+
+SessionAccountBinding _accountBinding({String deviceAuthGeneration = '1'}) {
+  return SessionAccountBinding(
+    ownerIdentityId: 'owner-alice',
+    accountId: 'account-alice',
+    currentDid: 'did:alice',
+    protocolDeviceId: 'device-alice',
+    identityGeneration: '1',
+    deviceAuthGeneration: deviceAuthGeneration,
   );
 }
 
@@ -3893,13 +4480,22 @@ class _PatchConversationService extends _StaticConversationService {
     this.repaired = const <ConversationSummary>[],
     this.repairVersion = 1,
     this.repairResult,
+    this.repairResults = const <Future<ConversationStoreRepairResult>>[],
+    this.initialPatch,
+    this.firstWatchCancelBarrier,
   });
 
   final List<ConversationSummary> repaired;
   final int repairVersion;
   final Future<ConversationStoreRepairResult>? repairResult;
+  final List<Future<ConversationStoreRepairResult>> repairResults;
+  final ConversationListPatch? initialPatch;
+  final Future<void>? firstWatchCancelBarrier;
+  final Completer<void> firstWatchCancelStarted = Completer<void>();
   final StreamController<ConversationListPatch> _patches =
       StreamController<ConversationListPatch>.broadcast(sync: true);
+  final Set<StreamController<ConversationListPatch>> _watchControllers =
+      <StreamController<ConversationListPatch>>{};
   int watchCalls = 0;
   int repairCalls = 0;
   bool cancelled = false;
@@ -3914,16 +4510,27 @@ class _PatchConversationService extends _StaticConversationService {
 
   Future<void> closePatches() => _patches.close();
 
+  Future<void> closeActiveWatches() async {
+    final active = _watchControllers.toList(growable: false);
+    await Future.wait(active.map((controller) => controller.close()));
+  }
+
   @override
   Stream<ConversationListPatch> watchConversationPatches({
     required String ownerDid,
   }) {
     watchCalls += 1;
+    final watchNumber = watchCalls;
     late final StreamController<ConversationListPatch> controller;
     late final StreamSubscription<ConversationListPatch> subscription;
     controller = StreamController<ConversationListPatch>(
       sync: true,
       onListen: () {
+        _watchControllers.add(controller);
+        final seed = initialPatch;
+        if (seed != null) {
+          controller.add(seed);
+        }
         subscription = _patches.stream.listen(
           controller.add,
           onError: controller.addError,
@@ -3931,8 +4538,16 @@ class _PatchConversationService extends _StaticConversationService {
         );
       },
       onCancel: () async {
+        _watchControllers.remove(controller);
         cancelled = true;
         await subscription.cancel();
+        final barrier = firstWatchCancelBarrier;
+        if (watchNumber == 1 && barrier != null) {
+          if (!firstWatchCancelStarted.isCompleted) {
+            firstWatchCancelStarted.complete();
+          }
+          await barrier;
+        }
       },
     );
     return controller.stream;
@@ -3944,7 +4559,11 @@ class _PatchConversationService extends _StaticConversationService {
     int limit = 100,
     bool unreadOnly = false,
   }) async {
+    final repairIndex = repairCalls;
     repairCalls += 1;
+    if (repairIndex < repairResults.length) {
+      return repairResults[repairIndex];
+    }
     final result = repairResult;
     if (result != null) {
       return result;

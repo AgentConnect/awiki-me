@@ -35,7 +35,9 @@ import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/services/peer_display_name_resolver.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -63,6 +65,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
 
 import '../../case_attestation.dart';
+import '../../performance_contract.dart';
 import 'support/ui_oracles.dart';
 
 part 'flows/attachment_flow.dart';
@@ -208,7 +211,11 @@ void runDesktopCliPeerE2e({
           ? await _prepareIdentitySwitchSessions(bootstrap, config)
           : null;
       final preparedSession = selectedCase.runsPerformance
-          ? null
+          ? await _preparePerformanceAppIdentity(
+              bootstrap: bootstrap,
+              config: config,
+              warmup: performanceWarmup!,
+            )
           : identitySwitchSessions?.primary ??
                 await _prepareAppIdentity(
                   bootstrap.onboardingService!,
@@ -235,11 +242,12 @@ void runDesktopCliPeerE2e({
       final countingConversations = config.e2eCase.runsPerformance
           ? _CountingConversationService(bootstrap.conversationService!)
           : null;
-      final faultMessaging = preparedSession == null
+      final faultMessaging = selectedCase.runsPerformance
           ? null
           : _FailOnceMessagingService(
               delegate: bootstrap.messagingService!,
               ownerDid: preparedSession.did,
+              ownerIdentityId: preparedSession.ownerIdentityId ?? '',
             );
       final attachmentOpenRecorder = _RecordingAttachmentOpenService();
       final appProviderOverrides = <Override>[
@@ -260,13 +268,7 @@ void runDesktopCliPeerE2e({
       shellWatch.stop();
       expect(find.byType(AppShell), findsOneWidget);
 
-      final session = selectedCase.runsPerformance
-          ? await _preparePerformanceAppIdentity(
-              bootstrap: bootstrap,
-              config: config,
-              warmup: performanceWarmup!,
-            )
-          : preparedSession!;
+      final session = preparedSession;
       expect(session.authenticated, isTrue);
       final robot = _DesktopAppRobot(
         tester,
@@ -274,8 +276,8 @@ void runDesktopCliPeerE2e({
             ? 'DISPLAY-NAME-E2E-002'
             : null,
       );
-      await robot.activate(session);
-      if (!selectedCase.runsPerformance && !selectedCase.runsIdentitySwitch) {
+      await robot.awaitRestoredSession(session);
+      if (!selectedCase.runsPerformance) {
         await E2eCaseAttestationWriter.markPassed(
           'AUTH-E2E-001',
           phases: const <String>[
@@ -721,8 +723,7 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
       summaryElapsed: summaryWatch.elapsed,
       eventsApplied: syncResult.eventsApplied,
       pagesFetched: syncResult.pagesFetched,
-      snapshotRequired: syncResult.snapshotRequired,
-      hasMore: syncResult.hasMore,
+      recoveryRequired: syncResult.recoveryRequired,
       localConversationCount: summaries.length,
       warnings: syncResult.warnings,
     );
@@ -749,8 +750,7 @@ class _PerformanceWarmupResult {
     required this.summaryElapsed,
     required this.eventsApplied,
     required this.pagesFetched,
-    required this.snapshotRequired,
-    required this.hasMore,
+    required this.recoveryRequired,
     required this.localConversationCount,
     required this.warnings,
   });
@@ -767,8 +767,7 @@ class _PerformanceWarmupResult {
   final Duration summaryElapsed;
   final int eventsApplied;
   final int pagesFetched;
-  final bool snapshotRequired;
-  final bool hasMore;
+  final bool recoveryRequired;
   final int localConversationCount;
   final List<String> warnings;
 }

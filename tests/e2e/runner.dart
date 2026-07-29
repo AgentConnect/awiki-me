@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
+import 'performance_contract.dart';
 import 'remote_multi_device_join_contract.dart';
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
@@ -45,6 +46,34 @@ const String _multiDeviceRemoteOtpCommandEnv =
     'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
 const String _multiDeviceRemoteHandlePrefixEnv =
     'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX';
+const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
+const String _syncRecoveryOperatorModeEnv =
+    'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
+const String _syncRecoveryAccountAllowlistEnv =
+    'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
+const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
+const String _syncRecoveryTarget = 'awiki-info-testing';
+const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
+const String _accountStateOperatorCommandEnv =
+    'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
+const String _accountStateFailpointEnableEnv =
+    'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
+const String _accountStateAllowlistEnv =
+    'AWIKI_ACCOUNT_STATE_TEST_ACCOUNT_ALLOWLIST';
+const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
+const String _defaultRemoteTargetManifestPath =
+    '../awiki-system-test/suites/remote-test-targets.json';
+const Set<String> _accountStateRequiredTargetCapabilities = <String>{
+  'multi-device-v1',
+  'message-sync-v2',
+  'account-state-sync-v1',
+};
+const List<String> _localAccountStateOperatorCommand = <String>[
+  '/home/ecs-user/awiki-space/user-service/.venv/bin/python',
+  '/home/ecs-user/awiki-space/user-service/scripts/'
+      'run_account_state_sync_test_action.py',
+  '--apply',
+];
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
@@ -93,6 +122,23 @@ const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-AGENT-MESSAGE-SYNC-E2E-001',
   'DEVICE-MESSAGE-SYNC-E2E-001',
   'DEVICE-MESSAGE-SYNC-E2E-002',
+  'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001',
+  'DEVICE-MESSAGE-TAIL-ONLY-E2E-001',
+  'DEVICE-MESSAGE-READ-SYNC-E2E-001',
+  'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001',
+  'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
+  'DEVICE-MESSAGE-RECONNECT-E2E-001',
+  'DEVICE-MESSAGE-PATCH-READY-E2E-001',
+  'DEVICE-MESSAGE-DIAGNOSTICS-E2E-001',
+  'DEVICE-AGENT-ADD-SYNC-E2E-001',
+  'DEVICE-AGENT-RENAME-SYNC-E2E-001',
+  'DEVICE-AGENT-DELETE-SYNC-E2E-001',
+  'DEVICE-AGENT-UNBIND-SYNC-E2E-001',
+  'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001',
+  'DEVICE-PROFILE-SYNC-E2E-001',
+  'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
+  'DEVICE-REGISTRY-SYNC-E2E-001',
+  'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
 ];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',
@@ -139,6 +185,7 @@ const List<String> _desktopIdentitySwitchCaseIds = <String>[
 ];
 const List<String> _desktopCliPeerRestartCaseIds = <String>[
   'PROCESS-RESTART-E2E-001',
+  'MESSAGE-PATCH-RESTART-E2E-001',
   'IDENTITY-DELETE-E2E-001',
 ];
 const List<String> _desktopCliPeerDisplayNameFallbackCaseIds = <String>[
@@ -194,34 +241,6 @@ const Set<String> _desktopCliPeerPerformanceRequiredMetrics = <String>{
   'cache.total_retained_messages',
   'cache.active_patch_subscription_count',
   'cache.message_route_entry_count',
-  'cache.trimmed_message_count',
-  'cache.evicted_thread_count',
-  'cache.protected_overflow_count',
-};
-const Set<String> _desktopCliPeerPerformanceRequiredDatasetFields = <String>{
-  'conversationCountTarget',
-  'conversationCountObserved',
-  'warmupConversationCountObserved',
-  'visibleConversationCountObserved',
-  'longThreadMessageCountTarget',
-  'longThreadMessageCountObserved',
-};
-const Set<String> _desktopCliPeerPerformanceRequiredCounters = <String>{
-  'performance_dataset.existing_count',
-  'performance_dataset.created_count',
-  'performance_dataset.long_thread_initial_count',
-  'performance_dataset.long_thread_created_count',
-  'performance_dataset.long_thread_observed_count',
-  'message_sync.warmup_events_applied',
-  'message_sync.warmup_pages_fetched',
-  'message_sync.warmup_snapshot_required_count',
-  'message_sync.warmup_has_more_count',
-  'conversation_list.fast_local_pages_fetched',
-  'conversation_list.full_pages_fetched',
-  'conversation.full_refresh_during_send_receive_count',
-  'conversation.list_conversations_calls_total',
-  'conversation.patch_apply_count',
-  'conversation.patch_repair_count',
   'cache.trimmed_message_count',
   'cache.evicted_thread_count',
   'cache.protected_overflow_count',
@@ -294,8 +313,6 @@ class DesktopE2eRunner {
   late final Directory multiDeviceCliAdminHomeDir;
   late final Directory rootTransferCliMemberWorkspaceDir;
   late final Directory rootTransferCliMemberHomeDir;
-  late final Directory appIdentityWorkspaceDir;
-  late final Directory appIdentityHomeDir;
   late final Directory appStateRootDir;
   late final Directory multiDeviceAppJoiningStateRootDir;
   late final Directory rootTransferAppAdminStateRootDir;
@@ -366,12 +383,6 @@ class DesktopE2eRunner {
     rootTransferCliMemberHomeDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member-home',
     );
-    appIdentityWorkspaceDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-identity-cli',
-    );
-    appIdentityHomeDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-identity-home',
-    );
     appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
     multiDeviceAppJoiningStateRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-joining-device',
@@ -426,8 +437,6 @@ class DesktopE2eRunner {
     _addRuntimeSecret(multiDeviceCliAdminHomeDir.path);
     _addRuntimeSecret(rootTransferCliMemberWorkspaceDir.path);
     _addRuntimeSecret(rootTransferCliMemberHomeDir.path);
-    _addRuntimeSecret(appIdentityWorkspaceDir.path);
-    _addRuntimeSecret(appIdentityHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(multiDeviceAppJoiningStateRootDir.path);
     _addRuntimeSecret(rootTransferAppAdminStateRootDir.path);
@@ -492,8 +501,6 @@ class DesktopE2eRunner {
         rootTransferCliMemberHomeDir.createSync(recursive: true);
         rootTransferAppAdminStateRootDir.createSync(recursive: true);
       }
-      appIdentityWorkspaceDir.createSync(recursive: true);
-      appIdentityHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
     }
     if (!options.dryRun &&
@@ -751,6 +758,11 @@ class DesktopE2eRunner {
       await commands.requireFile(_multiDeviceAppPairTarget);
       await commands.requireFile('test_driver/integration_test.dart');
       if (pairConfig.functional) {
+        _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
+        _requireAppPairAccountStateOperatorEnvironment(
+          root: root,
+          environment: Platform.environment,
+        );
         if (!daemonStateRootFitsUnixSocket(appPairDaemonStateRootDir.path)) {
           throw E2eFailure(
             'The App-pair Daemon state root exceeds the macOS Unix-domain socket path limit.',
@@ -758,6 +770,7 @@ class DesktopE2eRunner {
         }
         await commands.requireFile(pairConfig.cliBin!);
         await commands.requireFile(pairConfig.daemonBinary!);
+        await commands.requireFile(_localAccountStateOperatorCommand[1]);
         if (pairConfig.daemonEnvFile != null) {
           await commands.requireFile(pairConfig.daemonEnvFile!);
         }
@@ -846,6 +859,22 @@ class DesktopE2eRunner {
             remoteMultiDeviceStagedOtpFlag: pairConfig.allowStagedOtpOnSmsError
                 ? '1'
                 : '0',
+            _syncRecoveryEnableEnv:
+                Platform.environment[_syncRecoveryEnableEnv]!,
+            _syncRecoveryOperatorModeEnv:
+                Platform.environment[_syncRecoveryOperatorModeEnv]!,
+            _syncRecoveryAccountAllowlistEnv:
+                Platform.environment[_syncRecoveryAccountAllowlistEnv]!,
+            _syncRecoveryTargetEnv:
+                Platform.environment[_syncRecoveryTargetEnv]!,
+            _accountStateEnableEnv:
+                Platform.environment[_accountStateEnableEnv]!,
+            _accountStateOperatorCommandEnv:
+                Platform.environment[_accountStateOperatorCommandEnv]!,
+            _accountStateFailpointEnableEnv:
+                Platform.environment[_accountStateFailpointEnableEnv]!,
+            _accountStateAllowlistEnv:
+                Platform.environment[_accountStateAllowlistEnv]!,
           };
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
@@ -934,6 +963,11 @@ class DesktopE2eRunner {
             'readyFile': appPairDaemonReadyFile.path,
             'handle': pairConfig.daemonHandle,
             'envFile': pairConfig.daemonEnvFile,
+          },
+          'accountState': <String, Object?>{
+            'operatorCommand': _accountStateOperatorCommand(
+              Platform.environment,
+            ),
           },
         },
       'suite': <String, Object?>{
@@ -1189,18 +1223,10 @@ class DesktopE2eRunner {
     await _timed('Preparing CLI workspace', _prepareCliWorkspace);
     await _timed('Preparing CLI identity', _prepareCliIdentity);
     await _timed('Checking CLI ready state', _checkCliReady);
-    if (peerConfig.e2eCase != DesktopE2eCase.performance) {
-      await _timed(
-        'Waiting for App registration OTP window',
-        _waitForAppRegistrationOtpWindow,
-      );
-    }
-    if (peerConfig.e2eCase == DesktopE2eCase.performance) {
-      await _timed(
-        'Preparing performance App identity',
-        _preparePerformanceAppIdentity,
-      );
-    }
+    await _timed(
+      'Waiting for App registration OTP window',
+      _waitForAppRegistrationOtpWindow,
+    );
 
     if (options.prepareOnly) {
       _section('Prepare-only completed');
@@ -1506,74 +1532,6 @@ class DesktopE2eRunner {
     };
     if (!identitiesDistinct) {
       throw E2eFailure('App and CLI peer identities must be distinct.');
-    }
-  }
-
-  Future<void> _preparePerformanceAppIdentity() async {
-    final peerConfig = _requireConfig();
-    await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: const <String>['--format', 'json', 'init'],
-    );
-    await _prepareCliTenant(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-    );
-    await _writeCliConfig(appIdentityWorkspaceDir);
-    await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: const <String>['--format', 'json', 'config', 'show'],
-    );
-    final recover = await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: <String>[
-        '--format',
-        'json',
-        'id',
-        'recover',
-        '--handle',
-        peerConfig.appHandle,
-        '--phone',
-        peerConfig.otpPhone,
-        '--otp',
-        peerConfig.otpCode,
-      ],
-      allowFailure: true,
-    );
-    if (recover.exitCode == 0 || options.dryRun) {
-      return;
-    }
-    if (!_looksRecoverableForRegister(recover.output)) {
-      throw E2eFailure(
-        'Performance App identity recover failed and did not look like a '
-        'missing-handle error: ${redactor.redact(recover.output)}',
-      );
-    }
-    final register = await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: <String>[
-        '--format',
-        'json',
-        'id',
-        'register',
-        '--handle',
-        peerConfig.appHandle,
-        '--phone',
-        peerConfig.otpPhone,
-        '--otp',
-        peerConfig.otpCode,
-      ],
-      allowFailure: true,
-    );
-    if (register.exitCode != 0) {
-      throw E2eFailure(
-        'Performance App identity register failed: '
-        '${redactor.redact(register.output)}',
-      );
     }
   }
 
@@ -2734,6 +2692,107 @@ String cliBuildCommitFromVersionJson(String output) {
 
 String _basename(String path) {
   return path.replaceAll('\\', '/').split('/').last;
+}
+
+void _requireAppPairRecoveryOperatorEnvironment(
+  Map<String, String> environment,
+) {
+  final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
+  if (environment[_syncRecoveryEnableEnv]?.trim() != '1' ||
+      environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
+      environment[_syncRecoveryAccountAllowlistEnv]?.trim().isNotEmpty !=
+          true ||
+      (mode != 'ali' && mode != 'local')) {
+    throw E2eFailure(
+      'The functional App-pair suite requires the reviewed sync-recovery '
+      'operator opt-in, target, mode, and account allowlist.',
+    );
+  }
+}
+
+List<String> _accountStateOperatorCommand(Map<String, String> environment) {
+  final raw = environment[_accountStateOperatorCommandEnv]?.trim() ?? '';
+  Object? decoded;
+  try {
+    decoded = jsonDecode(raw);
+  } on FormatException {
+    throw E2eFailure('The App-pair Account State operator command is invalid.');
+  }
+  if (decoded is! List ||
+      decoded.isEmpty ||
+      decoded.any((value) => value is! String || value.trim().isEmpty)) {
+    throw E2eFailure('The App-pair Account State operator command is invalid.');
+  }
+  final command = decoded.cast<String>().toList(growable: false);
+  if (!_sameOrderedStrings(command, _localAccountStateOperatorCommand)) {
+    throw E2eFailure(
+      'The App-pair Account State operator command is not reviewed.',
+    );
+  }
+  return command;
+}
+
+void _requireAppPairAccountStateOperatorEnvironment({
+  required Directory root,
+  required Map<String, String> environment,
+}) {
+  if (environment[_accountStateEnableEnv]?.trim() != '1' ||
+      environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
+      environment[_syncRecoveryOperatorModeEnv]?.trim() != 'local' ||
+      environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
+      environment[_accountStateAllowlistEnv]?.trim().isNotEmpty != true) {
+    throw E2eFailure(
+      'The App-pair Account State capability, failpoint, target, mode, '
+      'and account allowlist gate is incomplete.',
+    );
+  }
+  _accountStateOperatorCommand(environment);
+
+  final configuredPath =
+      environment[_remoteTargetManifestEnv]?.trim().isNotEmpty == true
+      ? environment[_remoteTargetManifestEnv]!.trim()
+      : _defaultRemoteTargetManifestPath;
+  final manifestFile = File(
+    configuredPath.startsWith('/')
+        ? configuredPath
+        : '${root.path}/$configuredPath',
+  );
+  Object? decoded;
+  try {
+    decoded = jsonDecode(manifestFile.readAsStringSync());
+  } on Object {
+    throw E2eFailure(
+      'The App-pair reviewed remote target manifest is unavailable.',
+    );
+  }
+  if (decoded is! Map || decoded['schemaVersion'] != 1) {
+    throw E2eFailure(
+      'The App-pair reviewed remote target manifest is invalid.',
+    );
+  }
+  final targets = decoded['targets'];
+  final target = targets is Map ? targets[_syncRecoveryTarget] : null;
+  if (target is! Map ||
+      target['didDomain'] != 'awiki.info' ||
+      target['userServiceUrl'] != 'https://awiki.info' ||
+      target['messageServiceUrl'] != 'https://awiki.info') {
+    throw E2eFailure(
+      'The App-pair reviewed remote target does not match awiki.info.',
+    );
+  }
+  final rawCapabilities = target['capabilities'];
+  final capabilities = rawCapabilities is List
+      ? rawCapabilities.map((value) => value.toString()).toSet()
+      : const <String>{};
+  final missing = _accountStateRequiredTargetCapabilities.difference(
+    capabilities,
+  );
+  if (missing.isNotEmpty) {
+    throw E2eFailure(
+      'The App-pair reviewed remote target is missing required Account '
+      'State capabilities.',
+    );
+  }
 }
 
 class DesktopCommandRunner {
@@ -4580,12 +4639,12 @@ class DesktopPerformanceBudgetResult {
         hardFailures.add('missing required metric $metric');
       }
     }
-    for (final field in _desktopCliPeerPerformanceRequiredDatasetFields) {
+    for (final field in desktopE2ePerformanceRequiredDatasetFields) {
       if (!report.dataset.containsKey(field)) {
         hardFailures.add('missing required dataset field $field');
       }
     }
-    for (final counter in _desktopCliPeerPerformanceRequiredCounters) {
+    for (final counter in desktopE2ePerformanceRequiredCounters) {
       if (!report.counters.containsKey(counter)) {
         hardFailures.add('missing required counter $counter');
       }
@@ -5022,16 +5081,6 @@ class E2eFailure implements Exception {
 
   @override
   String toString() => message;
-}
-
-bool _looksRecoverableForRegister(String output) {
-  final lower = output.toLowerCase();
-  return lower.contains('not found') ||
-      lower.contains('handle_not_found') ||
-      lower.contains('not active') ||
-      lower.contains('not_registered') ||
-      lower.contains('not registered') ||
-      lower.contains('404');
 }
 
 String? _stringAt(Map<String, Object?> map, String key) {

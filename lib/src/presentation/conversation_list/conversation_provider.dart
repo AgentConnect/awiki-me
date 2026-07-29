@@ -122,26 +122,44 @@ class _ConversationOwnerOperation {
   final int generation;
 }
 
-class _ConversationPatchRepairOperation {
-  _ConversationPatchRepairOperation({
-    required this.epoch,
-    required this.generation,
-    required this.subscriptionToken,
+/// Payload-free ordering evidence for one bound-session Patch generation.
+///
+/// It exists so startup and release tests can fail closed on the required
+/// subscribe -> committed reset -> reliable sync ordering without reading
+/// account, device, cursor, or message identifiers.
+@immutable
+class ConversationPatchStartupObservation {
+  const ConversationPatchStartupObservation({
+    required this.subscriptionStartedSequence,
+    this.patchReadySequence,
+    this.firstReliableSyncStartedSequence,
   });
 
-  final SessionEpoch epoch;
-  final int generation;
-  final int subscriptionToken;
-  late final Future<void> future;
+  final int subscriptionStartedSequence;
+  final int? patchReadySequence;
+  final int? firstReliableSyncStartedSequence;
 
-  bool matches({
-    required SessionEpoch otherEpoch,
-    required int otherGeneration,
-    required int otherSubscriptionToken,
+  bool get provesSubscribeBeforeFirstReliableSync {
+    final ready = patchReadySequence;
+    final reliable = firstReliableSyncStartedSequence;
+    return subscriptionStartedSequence > 0 &&
+        ready != null &&
+        reliable != null &&
+        subscriptionStartedSequence < ready &&
+        ready < reliable;
+  }
+
+  ConversationPatchStartupObservation copyWith({
+    int? patchReadySequence,
+    int? firstReliableSyncStartedSequence,
   }) {
-    return epoch == otherEpoch &&
-        generation == otherGeneration &&
-        subscriptionToken == otherSubscriptionToken;
+    return ConversationPatchStartupObservation(
+      subscriptionStartedSequence: subscriptionStartedSequence,
+      patchReadySequence: patchReadySequence ?? this.patchReadySequence,
+      firstReliableSyncStartedSequence:
+          firstReliableSyncStartedSequence ??
+          this.firstReliableSyncStartedSequence,
+    );
   }
 }
 
@@ -167,16 +185,177 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   StreamSubscription<ConversationListPatch>? _patchSubscription;
   String? _patchSubscriptionOwnerDid;
   SessionEpoch? _patchSubscriptionEpoch;
+  Future<void>? _badgeUpdateTail;
+  _ConversationPatchSessionFence? _patchSessionFence;
+  _ConversationPatchSessionFence? _patchPreparingFence;
+  Future<void>? _patchReadyOperation;
+  _ConversationPatchWorkScope? _patchRebuildScope;
+  Future<void>? _patchRebuildOperation;
+  Completer<void>? _patchReadyCompleter;
+  bool _patchReady = false;
+  (int, String)? _legacyPatchReadyFence;
+  Future<void>? _legacyPatchReadyOperation;
+  bool _legacyPatchReady = false;
   int _patchSubscriptionToken = 0;
   int _lastPatchVersion = 0;
-  _ConversationPatchRepairOperation? _patchRepairOperation;
-  Future<void>? _badgeUpdateTail;
+  int _patchStartupSequence = 0;
+  ConversationPatchStartupObservation? _patchStartupObservation;
+  _ConversationPatchStreamScope? _patchReconnectScope;
+  Future<void>? _patchReconnectOperation;
+  _ConversationPatchWorkScope? _patchRepairScope;
+  Future<void>? _patchRepairOperation;
   final Map<String, DateTime> _locallyHiddenConversationKeys =
       <String, DateTime>{};
   final _ConversationReadPresentationStore _readPresentation =
       _ConversationReadPresentationStore();
 
   NotificationFacade get _notification => ref.read(notificationFacadeProvider);
+
+  /// Establishes the committed-patch stream for the current account session.
+  ///
+  /// The generation-specific reset emitted by Core is the single bounded local
+  /// seed. Callers may start reliable remote sync only after this future
+  /// completes.
+  Future<void> preparePatchGeneration() {
+    final fence = _tryCurrentPatchSessionFence();
+    if (fence == null) {
+      return _prepareLegacyPatchGeneration();
+    }
+    if (_patchSessionFence == fence && _patchReady) {
+      return Future<void>.value();
+    }
+    final active = _patchReadyOperation;
+    if ((_patchSessionFence == fence || _patchPreparingFence == fence) &&
+        active != null) {
+      return active;
+    }
+    _patchPreparingFence = fence;
+    late final Future<void> operation;
+    operation = _preparePatchGeneration(fence).whenComplete(() {
+      if (identical(_patchReadyOperation, operation)) {
+        _patchReadyOperation = null;
+      }
+      if (_patchPreparingFence == fence) {
+        _patchPreparingFence = null;
+      }
+    });
+    _patchReadyOperation = operation;
+    return operation;
+  }
+
+  Future<void> ensurePatchReady() => preparePatchGeneration();
+
+  @visibleForTesting
+  Future<void>? get debugPatchRebuildOperationForTesting =>
+      _patchRebuildOperation;
+
+  ConversationPatchStartupObservation? get patchStartupObservation =>
+      _patchStartupObservation;
+
+  /// Records the first reliable pull for the current bound Patch generation.
+  ///
+  /// The coordinator calls this only after [preparePatchGeneration] completes.
+  /// Throwing here makes an ordering regression fail closed before remote sync.
+  void recordReliableSyncStartedForCurrentPatchGeneration() {
+    final observation = _patchStartupObservation;
+    final fence = _patchSessionFence;
+    if (fence == null && _legacyPatchReady) {
+      return;
+    }
+    if (fence == null ||
+        !_patchReady ||
+        !_isPatchSessionFenceCurrent(fence) ||
+        observation == null ||
+        observation.patchReadySequence == null) {
+      throw StateError('conversation_patch_not_ready_for_reliable_sync');
+    }
+    if (observation.firstReliableSyncStartedSequence != null) {
+      return;
+    }
+    _patchStartupObservation = observation.copyWith(
+      firstReliableSyncStartedSequence: ++_patchStartupSequence,
+    );
+  }
+
+  Future<void> _prepareLegacyPatchGeneration() {
+    final sessionState = ref.read(sessionProvider);
+    final session = sessionState.session;
+    if (session == null) {
+      throw StateError('conversation_patch_session_unavailable');
+    }
+    final fence = (sessionState.generation, session.did);
+    if (_legacyPatchReadyFence == fence && _legacyPatchReady) {
+      return Future<void>.value();
+    }
+    final active = _legacyPatchReadyOperation;
+    if (_legacyPatchReadyFence == fence && active != null) {
+      return active;
+    }
+    _legacyPatchReadyFence = fence;
+    _legacyPatchReady = false;
+    late final Future<void> operation;
+    operation = _runLegacyPatchSeed(fence).whenComplete(() {
+      if (identical(_legacyPatchReadyOperation, operation)) {
+        _legacyPatchReadyOperation = null;
+      }
+    });
+    _legacyPatchReadyOperation = operation;
+    return operation;
+  }
+
+  Future<void> _runLegacyPatchSeed((int, String) fence) async {
+    await refreshFastLocal();
+    final current = ref.read(sessionProvider);
+    if (current.generation != fence.$1 ||
+        current.session?.did != fence.$2 ||
+        current.session?.accountBinding != null) {
+      throw StateError('conversation_patch_session_changed');
+    }
+    _legacyPatchReady = true;
+  }
+
+  Future<void> _preparePatchGeneration(
+    _ConversationPatchSessionFence fence,
+  ) async {
+    await _cancelPatchSubscription();
+    if (!_isPatchSessionFenceCurrent(fence)) {
+      throw StateError('conversation_patch_session_changed');
+    }
+    _patchSessionFence = fence;
+    _patchReady = false;
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch == null ||
+        epoch.generation != fence.sessionGeneration ||
+        epoch.ownerDid != fence.ownerDid) {
+      throw StateError('conversation_patch_session_changed');
+    }
+    final completer = Completer<void>();
+    _patchReadyCompleter = completer;
+    _startPatchSubscription(
+      ownerDid: fence.ownerDid,
+      generation: _refreshGeneration,
+      epoch: epoch,
+      fence: fence,
+    );
+    try {
+      await completer.future.timeout(
+        refreshTimeout,
+        onTimeout: () => throw TimeoutException(
+          'conversation_patch_ready_timeout',
+          refreshTimeout,
+        ),
+      );
+    } finally {
+      if (identical(_patchReadyCompleter, completer)) {
+        _patchReadyCompleter = null;
+      }
+    }
+    if (!_isPatchSessionFenceCurrent(fence) ||
+        _patchSessionFence != fence ||
+        !_patchReady) {
+      throw StateError('conversation_patch_session_changed');
+    }
+  }
 
   Future<void> ensureLoaded() {
     if (state.conversations.isNotEmpty) {
@@ -541,10 +720,15 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   }
 
   void _ensurePatchSubscriptionForCurrentSession() {
-    final session = ref.read(sessionProvider).session;
-    final epoch = ref.read(sessionProvider).activeEpoch;
+    final sessionState = ref.read(sessionProvider);
+    final session = sessionState.session;
+    final epoch = sessionState.activeEpoch;
     if (session == null || epoch == null) {
       unawaited(_cancelPatchSubscription());
+      return;
+    }
+    if (session.accountBinding != null) {
+      unawaited(preparePatchGeneration().catchError((_) {}));
       return;
     }
     _ensurePatchSubscription(
@@ -559,16 +743,48 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required int generation,
     required SessionEpoch epoch,
   }) {
-    if (_patchSubscriptionOwnerDid == ownerDid &&
+    final currentFence = _tryCurrentPatchSessionFence();
+    if (currentFence != null) {
+      if (_patchSessionFence == currentFence &&
+          _patchSubscriptionOwnerDid == ownerDid &&
+          _patchSubscription != null) {
+        return;
+      }
+      unawaited(preparePatchGeneration().catchError((_) {}));
+      return;
+    }
+    if (_patchSessionFence == null &&
+        _patchSubscriptionOwnerDid == ownerDid &&
         _patchSubscriptionEpoch == epoch &&
         _patchSubscription != null) {
       return;
     }
     unawaited(_cancelPatchSubscription());
+    _patchSessionFence = null;
+    _patchReady = false;
+    _startPatchSubscription(
+      ownerDid: ownerDid,
+      generation: generation,
+      epoch: epoch,
+    );
+  }
+
+  void _startPatchSubscription({
+    required String ownerDid,
+    required int generation,
+    required SessionEpoch epoch,
+    _ConversationPatchSessionFence? fence,
+  }) {
     _patchSubscriptionOwnerDid = ownerDid;
     _patchSubscriptionEpoch = epoch;
     final token = ++_patchSubscriptionToken;
     _lastPatchVersion = 0;
+    if (fence != null) {
+      _patchStartupSequence = 0;
+      _patchStartupObservation = ConversationPatchStartupObservation(
+        subscriptionStartedSequence: ++_patchStartupSequence,
+      );
+    }
     _patchSubscription = ref
         .read(conversationServiceProvider)
         .watchConversationPatches(ownerDid: ownerDid)
@@ -583,20 +799,56 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         })
         .listen(
           (_) {},
-          onError: (_) => _schedulePatchRepair(
-            ownerDid: ownerDid,
-            generation: generation,
-            token: token,
-            expectedEpoch: epoch,
-            reason: 'stream_error',
-          ),
-          onDone: () => _schedulePatchRepair(
-            ownerDid: ownerDid,
-            generation: generation,
-            token: token,
-            expectedEpoch: epoch,
-            reason: 'stream_closed',
-          ),
+          onError: (Object error, StackTrace stackTrace) {
+            if (fence != null) {
+              if (!_patchReady && _patchReadyCompleter != null) {
+                _scheduleInitialPatchStreamReconnect(
+                  fence: fence,
+                  token: token,
+                  reason: 'stream_error',
+                );
+                return;
+              }
+              _schedulePatchGenerationRebuild(
+                fence: fence,
+                token: token,
+                reason: 'stream_error',
+              );
+              return;
+            }
+            _schedulePatchRepair(
+              ownerDid: ownerDid,
+              generation: generation,
+              token: token,
+              expectedEpoch: epoch,
+              reason: 'stream_error',
+            );
+          },
+          onDone: () {
+            if (fence != null) {
+              if (!_patchReady && _patchReadyCompleter != null) {
+                _scheduleInitialPatchStreamReconnect(
+                  fence: fence,
+                  token: token,
+                  reason: 'stream_closed',
+                );
+                return;
+              }
+              _schedulePatchGenerationRebuild(
+                fence: fence,
+                token: token,
+                reason: 'stream_closed',
+              );
+              return;
+            }
+            _schedulePatchRepair(
+              ownerDid: ownerDid,
+              generation: generation,
+              token: token,
+              expectedEpoch: epoch,
+              reason: 'stream_closed',
+            );
+          },
         );
   }
 
@@ -607,7 +859,132 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _patchSubscriptionEpoch = null;
     _patchSubscriptionToken += 1;
     _lastPatchVersion = 0;
+    _patchReady = false;
+    _legacyPatchReady = false;
+    _patchStartupObservation = null;
+    _patchStartupSequence = 0;
+    final completer = _patchReadyCompleter;
+    _patchReadyCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.completeError(
+        StateError('conversation_patch_generation_replaced'),
+      );
+    }
     await subscription?.cancel();
+  }
+
+  void _scheduleInitialPatchStreamReconnect({
+    required _ConversationPatchSessionFence fence,
+    required int token,
+    required String reason,
+  }) {
+    final completer = _patchReadyCompleter;
+    if (completer == null ||
+        completer.isCompleted ||
+        token != _patchSubscriptionToken ||
+        _patchSessionFence != fence ||
+        !_isPatchSessionFenceCurrent(fence)) {
+      return;
+    }
+    final scope = _ConversationPatchStreamScope(
+      token: token,
+      fence: fence,
+      readyCompleter: completer,
+    );
+    if (_patchReconnectScope == scope && _patchReconnectOperation != null) {
+      return;
+    }
+    late final Future<void> operation;
+    operation =
+        Future<void>.delayed(Duration.zero, () async {
+          if (_patchReconnectScope != scope ||
+              token != _patchSubscriptionToken ||
+              !identical(_patchReadyCompleter, completer) ||
+              completer.isCompleted ||
+              _patchSessionFence != fence ||
+              !_isPatchSessionFenceCurrent(fence)) {
+            return;
+          }
+          _trace(
+            'patch.initial_reconnect',
+            fields: <String, Object?>{'reason': reason},
+          );
+          final subscription = _patchSubscription;
+          _patchSubscription = null;
+          _patchSubscriptionOwnerDid = null;
+          _patchSubscriptionToken += 1;
+          _lastPatchVersion = 0;
+          await subscription?.cancel();
+          if (!identical(_patchReadyCompleter, completer) ||
+              completer.isCompleted ||
+              _patchSessionFence != fence ||
+              !_isPatchSessionFenceCurrent(fence)) {
+            return;
+          }
+          _startPatchSubscription(
+            ownerDid: fence.ownerDid,
+            generation: _refreshGeneration,
+            epoch: ref.read(sessionProvider).activeEpoch!,
+            fence: fence,
+          );
+        }).whenComplete(() {
+          if (identical(_patchReconnectOperation, operation) &&
+              _patchReconnectScope == scope) {
+            _patchReconnectOperation = null;
+            _patchReconnectScope = null;
+          }
+        });
+    _patchReconnectScope = scope;
+    _patchReconnectOperation = operation;
+    unawaited(operation.catchError((_) {}));
+  }
+
+  void _schedulePatchGenerationRebuild({
+    required _ConversationPatchSessionFence fence,
+    required int token,
+    required String reason,
+  }) {
+    if (token != _patchSubscriptionToken ||
+        _patchSessionFence != fence ||
+        !_isPatchSessionFenceCurrent(fence)) {
+      return;
+    }
+    final scope = _ConversationPatchWorkScope(
+      ownerDid: fence.ownerDid,
+      generation: _refreshGeneration,
+      token: token,
+      fence: fence,
+    );
+    _patchReady = false;
+    if (_patchRebuildScope == scope && _patchRebuildOperation != null) {
+      return;
+    }
+    late final Future<void> operation;
+    operation =
+        Future<void>.delayed(Duration.zero, () async {
+          if (_patchRebuildScope != scope ||
+              token != _patchSubscriptionToken ||
+              _refreshGeneration != scope.generation ||
+              _patchSessionFence != fence ||
+              !_isPatchSessionFenceCurrent(fence)) {
+            return;
+          }
+          _trace('patch.rebuild', fields: <String, Object?>{'reason': reason});
+          await _preparePatchGeneration(fence);
+        }).whenComplete(() {
+          if (identical(_patchRebuildOperation, operation) &&
+              _patchRebuildScope == scope) {
+            _patchRebuildOperation = null;
+            _patchRebuildScope = null;
+          }
+          if (identical(_patchReadyOperation, operation)) {
+            _patchReadyOperation = null;
+          }
+        });
+    _patchRebuildScope = scope;
+    _patchRebuildOperation = operation;
+    _patchReadyOperation = operation;
+    unawaited(operation.catchError((_) {}));
   }
 
   Future<void> _handleConversationPatch(
@@ -757,6 +1134,9 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     }
     if (applied) {
       _lastPatchVersion = state.version;
+      if (patch.kind == ConversationListPatchKind.reset) {
+        _completePatchReady(token);
+      }
     }
   }
 
@@ -766,11 +1146,72 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required int token,
     required SessionEpoch expectedEpoch,
   }) {
-    return token == _patchSubscriptionToken &&
-        patch.ownerDid == ownerDid &&
-        _patchSubscriptionOwnerDid == ownerDid &&
-        _patchSubscriptionEpoch == expectedEpoch &&
-        expectedEpoch.matches(ref.read(sessionProvider));
+    if (token != _patchSubscriptionToken ||
+        patch.ownerDid != ownerDid ||
+        _patchSubscriptionOwnerDid != ownerDid ||
+        _patchSubscriptionEpoch != expectedEpoch ||
+        !expectedEpoch.matches(ref.read(sessionProvider))) {
+      return false;
+    }
+    final fence = _patchSessionFence;
+    if (fence == null) {
+      return expectedEpoch.ownerDid == ownerDid &&
+          ref.read(sessionProvider).session?.did == ownerDid;
+    }
+    return (_patchReady || patch.kind == ConversationListPatchKind.reset) &&
+        patch.ownerIdentityId == fence.ownerIdentityId &&
+        _isPatchSessionFenceCurrent(fence);
+  }
+
+  _ConversationPatchSessionFence? _tryCurrentPatchSessionFence() {
+    final sessionState = ref.read(sessionProvider);
+    final session = sessionState.session;
+    final binding = session?.accountBinding;
+    if (session == null ||
+        binding == null ||
+        binding.currentDid != session.did ||
+        binding.ownerIdentityId.trim().isEmpty ||
+        binding.accountId.trim().isEmpty ||
+        binding.deviceAuthGeneration.trim().isEmpty) {
+      return null;
+    }
+    return _ConversationPatchSessionFence(
+      sessionGeneration: sessionState.generation,
+      ownerIdentityId: binding.ownerIdentityId,
+      accountId: binding.accountId,
+      deviceAuthGeneration: binding.deviceAuthGeneration,
+      identityGeneration: binding.identityGeneration,
+      protocolDeviceId: binding.protocolDeviceId,
+      ownerDid: session.did,
+    );
+  }
+
+  bool _isPatchSessionFenceCurrent(_ConversationPatchSessionFence fence) =>
+      _tryCurrentPatchSessionFence() == fence;
+
+  void _completePatchReady(int token) {
+    if (token != _patchSubscriptionToken) {
+      return;
+    }
+    final epoch = _patchSubscriptionEpoch;
+    final fence = _patchSessionFence;
+    if (epoch == null ||
+        !epoch.matches(ref.read(sessionProvider)) ||
+        fence == null ||
+        !_isPatchSessionFenceCurrent(fence)) {
+      return;
+    }
+    _patchReady = true;
+    final observation = _patchStartupObservation;
+    if (observation != null && observation.patchReadySequence == null) {
+      _patchStartupObservation = observation.copyWith(
+        patchReadySequence: ++_patchStartupSequence,
+      );
+    }
+    final completer = _patchReadyCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
   }
 
   void _applyPatchReset(ConversationListPatch patch) {
@@ -929,13 +1370,13 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required SessionEpoch expectedEpoch,
     required String reason,
   }) {
-    final active = _patchRepairOperation;
-    if (active != null &&
-        active.matches(
-          otherEpoch: expectedEpoch,
-          otherGeneration: generation,
-          otherSubscriptionToken: token,
-        )) {
+    final scope = _ConversationPatchWorkScope(
+      ownerDid: ownerDid,
+      generation: generation,
+      token: token,
+      fence: _patchSessionFence,
+    );
+    if (_patchRepairScope == scope && _patchRepairOperation != null) {
       _trace(
         'patch_repair.skip',
         fields: <String, Object?>{
@@ -946,24 +1387,25 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       );
       return;
     }
-    final operation = _ConversationPatchRepairOperation(
-      epoch: expectedEpoch,
-      generation: generation,
-      subscriptionToken: token,
-    );
-    _patchRepairOperation = operation;
-    operation.future =
+    late final Future<void> operation;
+    operation =
         _repairFromPatchStream(
           ownerDid: ownerDid,
           generation: generation,
           token: token,
           expectedEpoch: expectedEpoch,
+          fence: scope.fence,
           reason: reason,
         ).whenComplete(() {
-          if (identical(_patchRepairOperation, operation)) {
+          if (identical(_patchRepairOperation, operation) &&
+              _patchRepairScope == scope) {
             _patchRepairOperation = null;
+            _patchRepairScope = null;
           }
         });
+    _patchRepairScope = scope;
+    _patchRepairOperation = operation;
+    unawaited(operation.catchError((_) {}));
   }
 
   Future<void> _repairFromPatchStream({
@@ -971,6 +1413,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     required int generation,
     required int token,
     required SessionEpoch expectedEpoch,
+    required _ConversationPatchSessionFence? fence,
     required String reason,
   }) async {
     _trace(
@@ -982,11 +1425,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         'last_version': _lastPatchVersion,
       },
     );
-    if (!_isPatchRepairRequestCurrent(
+    if (!_isPatchWorkCurrent(
       ownerDid: ownerDid,
       generation: generation,
       token: token,
       expectedEpoch: expectedEpoch,
+      fence: fence,
     )) {
       _trace(
         'patch_repair.skip',
@@ -1005,11 +1449,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       fields: <String, Object?>{'reason': reason},
       level: AwikiPerformanceLogLevel.verbose,
     );
-    if (!_isPatchRepairRequestCurrent(
+    if (!_isPatchWorkCurrent(
       ownerDid: ownerDid,
       generation: generation,
       token: token,
       expectedEpoch: expectedEpoch,
+      fence: fence,
     )) {
       _trace(
         'patch_repair.skip',
@@ -1037,11 +1482,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       badgeSource: 'patch_repair',
       version: repair.version,
     );
-    if (!_isPatchRepairRequestCurrent(
+    if (!_isPatchWorkCurrent(
       ownerDid: ownerDid,
       generation: generation,
       token: token,
       expectedEpoch: expectedEpoch,
+      fence: fence,
     )) {
       return;
     }
@@ -1050,19 +1496,29 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     }
   }
 
-  bool _isPatchRepairRequestCurrent({
+  bool _isPatchWorkCurrent({
     required String ownerDid,
     required int generation,
     required int token,
     required SessionEpoch expectedEpoch,
+    required _ConversationPatchSessionFence? fence,
   }) {
-    return mounted &&
-        expectedEpoch.ownerDid == ownerDid &&
-        expectedEpoch.matches(ref.read(sessionProvider)) &&
-        _patchSubscriptionEpoch == expectedEpoch &&
-        _patchSubscriptionOwnerDid == ownerDid &&
-        token == _patchSubscriptionToken &&
-        generation == _refreshGeneration;
+    if (!mounted ||
+        generation != _refreshGeneration ||
+        token != _patchSubscriptionToken ||
+        _patchSubscriptionOwnerDid != ownerDid ||
+        _patchSubscriptionEpoch != expectedEpoch ||
+        expectedEpoch.ownerDid != ownerDid ||
+        !expectedEpoch.matches(ref.read(sessionProvider))) {
+      return false;
+    }
+    if (fence != null) {
+      return _patchSessionFence == fence &&
+          fence.ownerDid == ownerDid &&
+          _isPatchSessionFenceCurrent(fence);
+    }
+    return _patchSessionFence == null &&
+        ref.read(sessionProvider).session?.did == ownerDid;
   }
 
   bool _canApplySnapshotBootstrap({
@@ -1712,6 +2168,98 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       // Badge updates are OS integration; they should not make list data fail.
     }
   }
+}
+
+class _ConversationPatchSessionFence {
+  const _ConversationPatchSessionFence({
+    required this.sessionGeneration,
+    required this.ownerIdentityId,
+    required this.accountId,
+    required this.deviceAuthGeneration,
+    required this.identityGeneration,
+    required this.protocolDeviceId,
+    required this.ownerDid,
+  });
+
+  final int sessionGeneration;
+  final String ownerIdentityId;
+  final String accountId;
+  final String deviceAuthGeneration;
+  final String identityGeneration;
+  final String protocolDeviceId;
+  final String ownerDid;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ConversationPatchSessionFence &&
+          other.sessionGeneration == sessionGeneration &&
+          other.ownerIdentityId == ownerIdentityId &&
+          other.accountId == accountId &&
+          other.deviceAuthGeneration == deviceAuthGeneration &&
+          other.identityGeneration == identityGeneration &&
+          other.protocolDeviceId == protocolDeviceId &&
+          other.ownerDid == ownerDid;
+
+  @override
+  int get hashCode => Object.hash(
+    sessionGeneration,
+    ownerIdentityId,
+    accountId,
+    deviceAuthGeneration,
+    identityGeneration,
+    protocolDeviceId,
+    ownerDid,
+  );
+}
+
+class _ConversationPatchStreamScope {
+  const _ConversationPatchStreamScope({
+    required this.token,
+    required this.fence,
+    required this.readyCompleter,
+  });
+
+  final int token;
+  final _ConversationPatchSessionFence fence;
+  final Completer<void> readyCompleter;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ConversationPatchStreamScope &&
+          other.token == token &&
+          other.fence == fence &&
+          identical(other.readyCompleter, readyCompleter);
+
+  @override
+  int get hashCode => Object.hash(token, fence, readyCompleter);
+}
+
+class _ConversationPatchWorkScope {
+  const _ConversationPatchWorkScope({
+    required this.ownerDid,
+    required this.generation,
+    required this.token,
+    required this.fence,
+  });
+
+  final String ownerDid;
+  final int generation;
+  final int token;
+  final _ConversationPatchSessionFence? fence;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ConversationPatchWorkScope &&
+          other.ownerDid == ownerDid &&
+          other.generation == generation &&
+          other.token == token &&
+          other.fence == fence;
+
+  @override
+  int get hashCode => Object.hash(ownerDid, generation, token, fence);
 }
 
 void _trace(String event, {Map<String, Object?> fields = const {}}) {

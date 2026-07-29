@@ -5,6 +5,8 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -164,6 +166,7 @@ void main() {
     expect(find.text('退出并删除当前凭证'), findsOneWidget);
     expect(find.text('删除本地凭证：default'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('退出并删除当前凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pumpAndSettle();
 
@@ -233,6 +236,7 @@ void main() {
 
     expect(find.byType(SettingsPage), findsOneWidget);
 
+    await tester.ensureVisible(find.text('退出并删除当前凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('退出并删除'));
@@ -251,6 +255,109 @@ void main() {
     expect(find.text('下载更新'), findsNothing);
     expect(find.text('立即更新'), findsNothing);
     expect(find.text('消息推送通知'), findsNothing);
+  });
+
+  testWidgets('设置页展示撤权同步状态并进入重新登录', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:revoked',
+      credentialName: 'revoked',
+      displayName: 'Revoked',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.authRevoked,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步'), findsOneWidget);
+    expect(find.text('此设备已不再获得授权，请重新登录后继续。'), findsOneWidget);
+    expect(find.text('重新登录'), findsOneWidget);
+
+    await tester.tap(find.text('重新登录'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsPage)),
+    );
+    expect(container.read(sessionProvider).session, isNull);
+    expect(gateway.logoutCalls, 1);
+  });
+
+  testWidgets('设置页展示消息恢复进度且恢复期间不可重复触发', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:test:recovering',
+          credentialName: 'recovering',
+          displayName: 'Recovering',
+        ),
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.recovering,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步'), findsOneWidget);
+    expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.text('重试'), findsNothing);
+  });
+
+  testWidgets('设置页展示可重试同步失败并调度手动重试', (tester) async {
+    late _FixedMessageSyncCoordinator coordinator;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:test:retryable',
+          credentialName: 'retryable',
+          displayName: 'Retryable',
+        ),
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith((ref) {
+            return coordinator = _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.retryableFailure,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    await tester.pump();
+
+    expect(coordinator.requestReasons, ['manual_refresh']);
   });
 
   testWidgets('设置页检查更新调用真实更新服务', (tester) async {
@@ -1018,4 +1125,21 @@ void main() {
     expect(control.lastRevokedPersonalAgentDid, 'did:agent:message:two');
     expect(identities.lastRevokedDaemonSubkeySelector, isNull);
   });
+}
+
+class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
+  _FixedMessageSyncCoordinator(
+    super.ref,
+    MessageSyncCoordinatorState initialState,
+  ) {
+    state = initialState;
+  }
+
+  final List<String> requestReasons = <String>[];
+
+  @override
+  Future<void> requestSync(String reason, {bool immediate = false}) {
+    requestReasons.add(reason);
+    return Future<void>.value();
+  }
 }

@@ -2,6 +2,9 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
@@ -90,4 +93,61 @@ void main() {
     expect(find.text('消息连接中断，正在重连...'), findsNothing);
     expect(find.text('消息服务已断开，正在尝试恢复'), findsNothing);
   });
+
+  testWidgets('AppShell 恢复中显示全局同步进度', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.recovering,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+  });
+
+  testWidgets('AppShell 可重试失败显示全局同步错误', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.retryableFailure,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+  });
+}
+
+class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
+  _FixedMessageSyncCoordinator(
+    super.ref,
+    MessageSyncCoordinatorState initialState,
+  ) {
+    state = initialState;
+  }
 }

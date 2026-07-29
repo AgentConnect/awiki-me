@@ -27,10 +27,20 @@ class _DesktopAppRobot {
     fail('Selected conversation "$selectedId" is missing from the App store.');
   }
 
-  Future<void> activate(AppSession session) async {
-    await container
-        .read(appRuntimeProvider.notifier)
-        .activateCommittedSession(session);
+  Future<void> awaitRestoredSession(AppSession session) async {
+    await pumpUntil(
+      description: 'restored App session',
+      condition: () {
+        final runtime = container.read(appRuntimeProvider);
+        return runtime.isInitialized && !runtime.isBusy;
+      },
+    );
+    final runtime = container.read(appRuntimeProvider);
+    final activeSession = container.read(sessionProvider).session;
+    if (runtime.activatedDid != session.did ||
+        activeSession?.did != session.did) {
+      fail('The App did not restore the expected authenticated identity.');
+    }
     await pumpUntil(
       description: 'authenticated App shell',
       condition: () =>
@@ -326,7 +336,7 @@ class _DesktopAppRobot {
       description: 'group sender-label anchor ${anchor.localId}',
     );
     await tester.ensureVisible(anchorContent);
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     E2eObservation observe() {
       final sender = find.byKey(Key('chat-message-sender:${anchor.localId}'));
@@ -1541,9 +1551,7 @@ class _DesktopAppRobot {
       description: 'AppShell after widget restart',
       timeout: const Duration(seconds: 90),
     );
-    if (find.bySemanticsIdentifier('e2e-authenticated').evaluate().isEmpty) {
-      await activate(session);
-    }
+    await awaitRestoredSession(session);
     await pumpUntilFinder(
       find.bySemanticsIdentifier('e2e-authenticated'),
       description: 'authenticated App after widget restart',
@@ -1739,10 +1747,12 @@ class _FailOnceMessagingService
   _FailOnceMessagingService({
     required MessagingService delegate,
     required this.ownerDid,
+    required this.ownerIdentityId,
   }) : _delegate = delegate;
 
   final MessagingService _delegate;
   final String ownerDid;
+  final String ownerIdentityId;
   bool _failNextConversationText = false;
   int delegatedConversationTextAttempts = 0;
   bool conversationTextAttemptPending = false;
@@ -1797,6 +1807,7 @@ class _FailOnceMessagingService
         sink.emit(
           ThreadMessagePatch(
             kind: ThreadMessagePatchKind.upsert,
+            ownerIdentityId: ownerIdentityId,
             ownerDid: ownerDid,
             version: version,
             threadKind: 'conversation',
@@ -2074,6 +2085,7 @@ class _FailOnceMessagingService
     }
     return ThreadMessagePatch(
       kind: patch.kind,
+      ownerIdentityId: patch.ownerIdentityId,
       ownerDid: patch.ownerDid,
       version: patch.version,
       threadKind: patch.threadKind,
@@ -2182,6 +2194,7 @@ class _RecordingAttachmentOpenService extends AttachmentOpenService {
 ThreadMessagePatch _withPatchVersion(ThreadMessagePatch patch, int version) =>
     ThreadMessagePatch(
       kind: patch.kind,
+      ownerIdentityId: patch.ownerIdentityId,
       ownerDid: patch.ownerDid,
       version: version,
       threadKind: patch.threadKind,

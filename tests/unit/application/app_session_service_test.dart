@@ -11,6 +11,7 @@ import 'package:awiki_me/src/application/ports/im_core_runtime_port.dart';
 import 'package:awiki_me/src/application/ports/realtime_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -64,6 +65,9 @@ void main() {
         expect(restored?.authenticated, isTrue);
         expect(restored?.expiresAt, DateTime.utc(2026, 5, 23, 9));
         expect(restored?.jwtToken, 'jwt-restored');
+        expect(restored?.ownerIdentityId, 'id-default');
+        expect(restored?.accountId, 'account-id-default');
+        expect(restored?.protocolDeviceId, 'protocol-device-id-default');
         expect(runtime.openCount, 1);
         expect(runtime.vaultChecks, ['id-default']);
         expect(runtime.switchedIdentities, ['id-default']);
@@ -75,7 +79,11 @@ void main() {
       'restoreSession keeps the local identity when auth is temporarily offline',
       () async {
         final runtime = _FakeRuntime();
-        final identity = _session('id-offline');
+        final identity = _session('id-offline').copyWith(
+          authenticated: true,
+          expiresAt: DateTime.utc(2026, 5, 22),
+          jwtToken: 'stale-jwt',
+        );
         final auth = _FakeAuth(
           ensureError: Exception(
             'transport unavailable: error sending request for url',
@@ -92,6 +100,7 @@ void main() {
 
         expect(restored?.identityId, 'id-offline');
         expect(restored?.authenticated, isFalse);
+        expect(restored?.expiresAt, isNull);
         expect(restored?.jwtToken, isNull);
         expect(runtime.vaultChecks, ['id-offline']);
         expect(runtime.switchedIdentities, ['id-offline']);
@@ -228,6 +237,161 @@ void main() {
         expect(runtime.switchedIdentities, ['id-resolved']);
       },
     );
+
+    test(
+      'activateIdentity fails closed when the active binding mismatches identity',
+      () async {
+        final identity = _session('id-binding');
+        final identities = _FakeIdentities(
+          defaultIdentity: identity,
+          activeBinding: const SessionAccountBinding(
+            ownerIdentityId: 'another-owner',
+            accountId: 'account-binding',
+            currentDid: 'did:wba:awiki.ai:alice:e1_id-binding',
+            protocolDeviceId: 'protocol-device-binding',
+            identityGeneration: '1',
+            deviceAuthGeneration: '2',
+          ),
+        );
+        final active = _FakeActiveSessionStore('id-previous');
+        final auth = _FakeAuth();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: auth,
+          activeSessionStore: active,
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+
+        expect(identities.activeBindingCount, 1);
+        expect(auth.ensureCount, 0);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
+      'activateIdentity does not infer a binding when Core reports unavailable',
+      () async {
+        final active = _FakeActiveSessionStore('id-previous');
+        final identities = _FakeIdentities(
+          defaultIdentity: _session('id-unavailable'),
+          activeBindingError: StateError(
+            'active_sync_account_binding_unavailable',
+          ),
+        );
+        final auth = _FakeAuth();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: identities,
+          auth: auth,
+          activeSessionStore: active,
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+
+        expect(auth.ensureCount, 0);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
+      'activateIdentity rejects non-canonical binding generations',
+      () async {
+        final identity = _session('id-generation');
+        final auth = _FakeAuth();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(
+            defaultIdentity: identity,
+            activeBinding: SessionAccountBinding(
+              ownerIdentityId: identity.identityId,
+              accountId: 'account-generation',
+              currentDid: identity.did,
+              protocolDeviceId: 'protocol-device-generation',
+              identityGeneration: '01',
+              deviceAuthGeneration: '2',
+            ),
+          ),
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(),
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+        expect(auth.ensureCount, 0);
+      },
+    );
+
+    test('activateIdentity rejects zero binding generations', () async {
+      final identity = _session('id-zero-generation');
+
+      for (final generations in [
+        (identity: '0', deviceAuth: '2'),
+        (identity: '1', deviceAuth: '0'),
+      ]) {
+        final auth = _FakeAuth();
+        final service = ImCoreAppSessionService(
+          runtime: _FakeRuntime(),
+          identities: _FakeIdentities(
+            defaultIdentity: identity,
+            activeBinding: SessionAccountBinding(
+              ownerIdentityId: identity.identityId,
+              accountId: 'account-zero-generation',
+              currentDid: identity.did,
+              protocolDeviceId: 'protocol-device-zero-generation',
+              identityGeneration: generations.identity,
+              deviceAuthGeneration: generations.deviceAuth,
+            ),
+          ),
+          auth: auth,
+          activeSessionStore: _FakeActiveSessionStore(),
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+        expect(auth.ensureCount, 0);
+      }
+    });
+
+    test('activateIdentity rejects reserved protocol device id', () async {
+      final identity = _session('id-reserved-device');
+      final auth = _FakeAuth();
+      final service = ImCoreAppSessionService(
+        runtime: _FakeRuntime(),
+        identities: _FakeIdentities(
+          defaultIdentity: identity,
+          activeBinding: SessionAccountBinding(
+            ownerIdentityId: identity.identityId,
+            accountId: 'account-reserved-device',
+            currentDid: identity.did,
+            protocolDeviceId: 'default',
+            identityGeneration: '1',
+            deviceAuthGeneration: '2',
+          ),
+        ),
+        auth: auth,
+        activeSessionStore: _FakeActiveSessionStore(),
+      );
+
+      await expectLater(
+        service.loginWithIdentity('alice-local'),
+        throwsStateError,
+      );
+      expect(auth.ensureCount, 0);
+    });
 
     test(
       'refreshSession updates auth metadata for the active session',
@@ -1040,15 +1204,35 @@ class _FakeIdentities implements IdentityCorePort {
     AppSession? defaultIdentity,
     AppSession? resolvedIdentity,
     List<AppSession> extraIdentities = const <AppSession>[],
+    SessionAccountBinding? activeBinding,
+    this.activeBindingError,
   }) : _defaultIdentity = defaultIdentity,
        _resolvedIdentity = resolvedIdentity,
-       _extraIdentities = extraIdentities;
+       _extraIdentities = extraIdentities,
+       _activeBinding =
+           activeBinding ??
+           _bindingFor(
+             defaultIdentity ?? resolvedIdentity ?? _session('id-default'),
+           );
 
   final AppSession? _defaultIdentity;
   final AppSession? _resolvedIdentity;
   final List<AppSession> _extraIdentities;
+  final SessionAccountBinding _activeBinding;
+  final Object? activeBindingError;
   final List<String> resolvedSelectors = <String>[];
   final List<String> deletedSelectors = <String>[];
+  int activeBindingCount = 0;
+
+  @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() async {
+    activeBindingCount += 1;
+    final error = activeBindingError;
+    if (error != null) {
+      throw error;
+    }
+    return _activeBinding;
+  }
 
   @override
   Future<AppSession?> defaultIdentity() async => _defaultIdentity;
@@ -1122,6 +1306,17 @@ class _FakeIdentities implements IdentityCorePort {
     deletedSelectors.add(identityIdOrAlias);
     return _defaultIdentity ?? _session(identityIdOrAlias);
   }
+}
+
+SessionAccountBinding _bindingFor(AppSession identity) {
+  return SessionAccountBinding(
+    ownerIdentityId: identity.identityId,
+    accountId: 'account-${identity.identityId}',
+    currentDid: identity.did,
+    protocolDeviceId: 'protocol-device-${identity.identityId}',
+    identityGeneration: '1',
+    deviceAuthGeneration: '2',
+  );
 }
 
 class _FakeActiveSessionStore implements ActiveSessionStore {

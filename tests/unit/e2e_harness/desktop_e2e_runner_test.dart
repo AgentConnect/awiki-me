@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../../e2e/case_attestation.dart';
 import '../../e2e/runner.dart';
+import '../../e2e/performance_contract.dart';
 
 void main() {
   group('DesktopFlutterBuildIsolation', () {
@@ -221,6 +222,23 @@ void main() {
         'DEVICE-AGENT-MESSAGE-SYNC-E2E-001',
         'DEVICE-MESSAGE-SYNC-E2E-001',
         'DEVICE-MESSAGE-SYNC-E2E-002',
+        'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001',
+        'DEVICE-MESSAGE-TAIL-ONLY-E2E-001',
+        'DEVICE-MESSAGE-READ-SYNC-E2E-001',
+        'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001',
+        'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
+        'DEVICE-MESSAGE-RECONNECT-E2E-001',
+        'DEVICE-MESSAGE-PATCH-READY-E2E-001',
+        'DEVICE-MESSAGE-DIAGNOSTICS-E2E-001',
+        'DEVICE-AGENT-ADD-SYNC-E2E-001',
+        'DEVICE-AGENT-RENAME-SYNC-E2E-001',
+        'DEVICE-AGENT-DELETE-SYNC-E2E-001',
+        'DEVICE-AGENT-UNBIND-SYNC-E2E-001',
+        'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001',
+        'DEVICE-PROFILE-SYNC-E2E-001',
+        'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
+        'DEVICE-REGISTRY-SYNC-E2E-001',
+        'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 30));
       expect(
@@ -304,6 +322,7 @@ void main() {
       expect(coldRestart.e2eCase, DesktopE2eCase.restart);
       expect(restart.e2eCase.caseIds, <String>[
         'PROCESS-RESTART-E2E-001',
+        'MESSAGE-PATCH-RESTART-E2E-001',
         'IDENTITY-DELETE-E2E-001',
       ]);
     });
@@ -1320,6 +1339,28 @@ cliHandle: legacy-cli
       }
     });
 
+    test('suite manifest drift fails closed', () {
+      final definition = DesktopE2eSuiteManifest.load(
+        Directory.current,
+      ).definitionFor(DesktopE2eCase.multiDeviceAppPairFunctional);
+      final incompleteCaseIds = DesktopE2eCase
+          .multiDeviceAppPairFunctional
+          .caseIds
+          .where((caseId) => caseId != 'DEVICE-MESSAGE-HINT-LOSS-E2E-001')
+          .toList(growable: false);
+
+      expect(
+        () => definition.validateCodeCaseIds(incompleteCaseIds),
+        throwsA(
+          isA<E2eFailure>().having(
+            (error) => error.message,
+            'message',
+            contains('manifest drift'),
+          ),
+        ),
+      );
+    });
+
     test('remote product suites reject local or non-audited targets', () {
       final definition = DesktopE2eSuiteManifest.load(
         Directory.current,
@@ -1794,6 +1835,7 @@ cliPeer:
       expect(decoded['case'], 'restart');
       expect(decoded['caseIds'], <dynamic>[
         'PROCESS-RESTART-E2E-001',
+        'MESSAGE-PATCH-RESTART-E2E-001',
         'IDENTITY-DELETE-E2E-001',
       ]);
     });
@@ -2263,12 +2305,8 @@ performance:
         await runner.run();
 
         final log = lines.join('\n');
-        expect(
-          log,
-          contains(
-            r'$ <redacted> --format json id recover --handle e2e-app --phone <redacted> --otp <redacted>',
-          ),
-        );
+        expect(log, isNot(contains('id recover --handle e2e-app')));
+        expect(log, isNot(contains('id register --handle e2e-app')));
         expect(log, isNot(contains('Preparing performance dataset')));
         expect(
           log,
@@ -2327,7 +2365,7 @@ performance:
         expect(
           steps.map((step) => (step as Map<String, dynamic>)['name']),
           containsAll(<String>[
-            'Preparing performance App identity',
+            'Waiting for App registration OTP window',
             'Flutter App + CLI peer flow',
           ]),
         );
@@ -3154,6 +3192,45 @@ performance:
       );
     });
 
+    test('performance producer report satisfies the exact gate contract', () {
+      final produced = buildDesktopE2ePerformanceProductReport(
+        runId: 'run-performance-contract',
+        caseName: 'performance',
+        dataset: const <String, Object?>{
+          'conversationCountTarget': 1,
+          'conversationCountObserved': 1,
+          'warmupConversationCountObserved': 1,
+          'visibleConversationCountObserved': 1,
+          'longThreadMessageCountTarget': 1,
+          'longThreadMessageCountObserved': 1,
+        },
+        metrics: const <String, num>{},
+        counters: _completePerformanceCounters().cast<String, int>(),
+        appProductTimings: const <Map<String, Object?>>[],
+      );
+      final decoded = jsonDecode(jsonEncode(produced)) as Map<String, dynamic>;
+      final result = DesktopPerformanceBudgetResult.evaluate(
+        config: DesktopPerformanceConfig(
+          datasetConversationCount: 1,
+          longThreadMessageCount: 1,
+          requiredMetrics: const <String>{},
+          hardBudgetMs: const <String, int>{},
+          softBudgetMs: const <String, int>{},
+          maxFullRefreshDuringSendReceive: 0,
+        ),
+        report: DesktopProductTimingReport.fromJson(decoded),
+      );
+
+      expect(
+        result.hardFailures.where(
+          (failure) =>
+              failure.startsWith('missing required counter') ||
+              failure.startsWith('missing required dataset field'),
+        ),
+        isEmpty,
+      );
+    });
+
     test('scales Flutter command timeout for large performance datasets', () {
       final fiveHundred = DesktopPerformanceConfig.defaults;
       final oneThousand = DesktopPerformanceConfig(
@@ -3491,8 +3568,7 @@ Map<String, Object?> _completePerformanceCounters() {
     'performance_dataset.long_thread_observed_count': 1,
     'message_sync.warmup_events_applied': 1,
     'message_sync.warmup_pages_fetched': 1,
-    'message_sync.warmup_snapshot_required_count': 0,
-    'message_sync.warmup_has_more_count': 0,
+    'message_sync.warmup_recovery_required_count': 0,
     'conversation_list.fast_local_pages_fetched': 1,
     'conversation_list.full_pages_fetched': 1,
     'conversation.full_refresh_during_send_receive_count': 0,

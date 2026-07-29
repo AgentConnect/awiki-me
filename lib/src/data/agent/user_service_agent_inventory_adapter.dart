@@ -8,7 +8,8 @@ import '../../domain/entities/agent/install_command.dart';
 import '../services/authenticated_user_service_rpc_client.dart';
 import '../services/awiki_onboarding_utility_client.dart';
 
-class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
+class UserServiceAgentInventoryAdapter
+    implements AgentInventoryPort, VersionedAgentInventoryMutationPort {
   UserServiceAgentInventoryAdapter({
     required String userServiceUrl,
     AwikiOnboardingUtilityHttpClient? client,
@@ -108,6 +109,18 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String agentDid,
     required String displayName,
   }) async {
+    return (await updateDisplayNameVersioned(
+      agentDid: agentDid,
+      displayName: displayName,
+    )).value;
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<AgentSummary>>
+  updateDisplayNameVersioned({
+    required String agentDid,
+    required String displayName,
+  }) async {
     final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'update_display_name',
@@ -116,23 +129,40 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
         'display_name': displayName,
       },
     );
+    final inventoryVersion = _requiredMutationVersion(
+      result,
+      'inventory_version',
+    );
     final agent = result['agent'];
-    if (agent is Map) {
-      return AgentSummary.fromJson(
-        agent.map<String, Object?>(
-          (key, value) => MapEntry(key.toString(), value),
-        ),
-      );
-    }
-    return AgentSummary.fromJson(result);
+    final value = agent is Map
+        ? AgentSummary.fromJson(
+            agent.map<String, Object?>(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          )
+        : AgentSummary.fromJson(result);
+    return AgentInventoryMutationResult<AgentSummary>(
+      value: value,
+      inventoryVersion: inventoryVersion,
+    );
   }
 
   @override
   Future<void> unbindAgent({required String agentDid}) async {
-    await _rpcCall(
+    await unbindAgentVersioned(agentDid: agentDid);
+  }
+
+  @override
+  Future<AgentInventoryMutationReceipt> unbindAgentVersioned({
+    required String agentDid,
+  }) async {
+    final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'unbind_agent',
       params: <String, Object?>{'agent_did': agentDid},
+    );
+    return AgentInventoryMutationReceipt(
+      inventoryVersion: _requiredMutationVersion(result, 'inventory_version'),
     );
   }
 
@@ -140,25 +170,38 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
   Future<List<AgentSummary>> removeAgentFromAccount({
     required String agentDid,
   }) async {
+    return (await removeAgentFromAccountVersioned(agentDid: agentDid)).value;
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<List<AgentSummary>>>
+  removeAgentFromAccountVersioned({required String agentDid}) async {
     final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'remove_agent_from_account',
       params: <String, Object?>{'agent_did': agentDid},
     );
+    final inventoryVersion = _requiredMutationVersion(
+      result,
+      'inventory_version',
+    );
     final removed = result['removed'];
-    if (removed is! List) {
-      return const <AgentSummary>[];
-    }
-    return removed
-        .whereType<Map>()
-        .map(
-          (item) => AgentSummary.fromJson(
-            item.map<String, Object?>(
-              (key, value) => MapEntry(key.toString(), value),
-            ),
-          ),
-        )
-        .toList();
+    final value = removed is! List
+        ? const <AgentSummary>[]
+        : removed
+              .whereType<Map>()
+              .map(
+                (item) => AgentSummary.fromJson(
+                  item.map<String, Object?>(
+                    (key, value) => MapEntry(key.toString(), value),
+                  ),
+                ),
+              )
+              .toList();
+    return AgentInventoryMutationResult<List<AgentSummary>>(
+      value: value,
+      inventoryVersion: inventoryVersion,
+    );
   }
 
   @override
@@ -178,6 +221,18 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     required String agentDid,
     required AgentInvocationPolicy policy,
   }) async {
+    return (await updateInvocationPolicyVersioned(
+      agentDid: agentDid,
+      policy: policy,
+    )).value;
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<AgentInvocationPolicy>>
+  updateInvocationPolicyVersioned({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
     final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'update_invocation_policy',
@@ -188,7 +243,14 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
         'blacklist_handles': policy.blacklistHandles,
       },
     );
-    return AgentInvocationPolicy.fromJson(result);
+    final inventoryVersion = _requiredMutationVersion(
+      result,
+      'inventory_version',
+    );
+    return AgentInventoryMutationResult<AgentInvocationPolicy>(
+      value: AgentInvocationPolicy.fromJson(result),
+      inventoryVersion: inventoryVersion,
+    );
   }
 
   @override
@@ -306,6 +368,14 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     final token = rawToken?.trim();
     return token == null || token.isEmpty ? null : token;
   }
+}
+
+String _requiredMutationVersion(Map<String, Object?> result, String field) {
+  final value = result[field];
+  if (value is! String || !RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(value)) {
+    throw FormatException('$field must be a canonical decimal string');
+  }
+  return value;
 }
 
 Map<String, Object?> _runtimeTokenDriverConfig(

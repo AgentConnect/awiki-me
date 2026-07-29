@@ -59,9 +59,68 @@ void main() {
     );
     expect(httpClient.requests, isEmpty);
   });
+
+  test('mutation requires canonical string inventory_version', () async {
+    final httpClient = _CapturingHttpClient(
+      result: <String, Object?>{
+        'agent_did': 'did:agent:one',
+        'agent_kind': 'runtime',
+        'display_name': 'Renamed',
+        'active_state': 'active',
+        'inventory_version': '18446744073709551615',
+      },
+    );
+    final adapter = UserServiceAgentInventoryAdapter(
+      userServiceUrl: 'https://example.test',
+      client: AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://example.test',
+        httpClient: httpClient,
+      ),
+      bearerTokenProvider: () => 'device-access-token',
+    );
+
+    final mutation = await adapter.updateDisplayNameVersioned(
+      agentDid: 'did:agent:one',
+      displayName: 'Renamed',
+    );
+
+    expect(mutation.value.displayName, 'Renamed');
+    expect(mutation.inventoryVersion, '18446744073709551615');
+  });
+
+  test('mutation rejects numeric inventory_version', () async {
+    final httpClient = _CapturingHttpClient(
+      result: <String, Object?>{
+        'agent_did': 'did:agent:one',
+        'agent_kind': 'runtime',
+        'display_name': 'Renamed',
+        'active_state': 'active',
+        'inventory_version': 2,
+      },
+    );
+    final adapter = UserServiceAgentInventoryAdapter(
+      userServiceUrl: 'https://example.test',
+      client: AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://example.test',
+        httpClient: httpClient,
+      ),
+      bearerTokenProvider: () => 'device-access-token',
+    );
+
+    await expectLater(
+      adapter.updateDisplayName(
+        agentDid: 'did:agent:one',
+        displayName: 'Renamed',
+      ),
+      throwsFormatException,
+    );
+  });
 }
 
 class _CapturingHttpClient extends http.BaseClient {
+  _CapturingHttpClient({this.result});
+
+  final Map<String, Object?>? result;
   final List<http.Request> requests = <http.Request>[];
 
   @override
@@ -75,7 +134,16 @@ class _CapturingHttpClient extends http.BaseClient {
     return http.StreamedResponse(
       Stream<List<int>>.fromIterable(<List<int>>[
         utf8.encode(
-          '{"jsonrpc":"2.0","result":{"token":"daemon-token","token_id":"agtok_1"},"id":"req-1"}',
+          jsonEncode(<String, Object?>{
+            'jsonrpc': '2.0',
+            'result':
+                result ??
+                <String, Object?>{
+                  'token': 'daemon-token',
+                  'token_id': 'agtok_1',
+                },
+            'id': 'req-1',
+          }),
         ),
       ]),
       200,

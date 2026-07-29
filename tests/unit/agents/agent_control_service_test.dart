@@ -18,6 +18,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -1288,6 +1289,11 @@ class _IdentityCoreStub implements IdentityCorePort {
   final List<String> calls = <String>[];
   Object? revokeError;
   String verificationMethod = 'did:human:me#daemon-key-1';
+
+  @override
+  Future<SessionAccountBinding> activeSyncAccountBinding() {
+    throw UnimplementedError();
+  }
 
   @override
   Future<DaemonSubkeyAuthorizationRevokeResult> revokeDaemonSubkeyAuthorization(

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -16,7 +17,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
        _databasePath = databasePath;
 
   static const String databaseName = 'awiki_me_product_store.db';
-  static const int databaseVersion = 3;
+  static const int databaseVersion = 4;
 
   Database? _database;
   Future<Database>? _databaseOpening;
@@ -71,6 +72,9 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
           if (oldVersion < 3) {
             await _upgradeConversationOverlaysToConversationId(db);
           }
+          if (oldVersion < 4) {
+            await _createAccountDomainSnapshotTables(db);
+          }
         },
       ),
     );
@@ -87,7 +91,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
         await database.rawQuery('PRAGMA user_version'),
       );
       if (version != null && version > 0 && version < databaseVersion) {
-        await _createCanonicalMigrationBackup(database, databasePath: path);
+        await _createSchemaUpgradeBackup(database, databasePath: path);
       }
     } finally {
       await database.close();
@@ -196,8 +200,46 @@ WHERE owner_did = ? AND legacy_conversation_id = ?
       backupDirectory.path,
       'awiki_me_product_store.pre-canonical-v2.sqlite',
     );
+    await _createVerifiedBackup(
+      db,
+      backupPath: backupPath,
+      emptyErrorCode: 'canonical_conversation_overlay_backup_empty',
+      invalidErrorCode: 'canonical_conversation_overlay_backup_invalid',
+    );
+  }
+
+  Future<void> _createSchemaUpgradeBackup(
+    Database db, {
+    required String databasePath,
+  }) async {
+    final backupDirectory = Directory(
+      p.join(p.dirname(databasePath), 'schema-upgrades'),
+    );
+    await backupDirectory.create(recursive: true);
+    final backupPath = p.join(
+      backupDirectory.path,
+      'awiki_me_product_store.pre-v$databaseVersion.sqlite',
+    );
+    await _createVerifiedBackup(
+      db,
+      backupPath: backupPath,
+      emptyErrorCode: 'product_store_schema_backup_empty',
+      invalidErrorCode: 'product_store_schema_backup_invalid',
+    );
+  }
+
+  Future<void> _createVerifiedBackup(
+    Database db, {
+    required String backupPath,
+    required String emptyErrorCode,
+    required String invalidErrorCode,
+  }) async {
     if (await File(backupPath).exists()) {
-      await _verifyCanonicalMigrationBackup(backupPath);
+      await _verifyDatabaseBackup(
+        backupPath,
+        emptyErrorCode: emptyErrorCode,
+        invalidErrorCode: invalidErrorCode,
+      );
       return;
     }
     final temporaryPath = '$backupPath.tmp';
@@ -207,15 +249,21 @@ WHERE owner_did = ? AND legacy_conversation_id = ?
     }
     final escaped = temporaryPath.replaceAll("'", "''");
     await db.execute("VACUUM INTO '$escaped'");
-    await _verifyCanonicalMigrationBackup(temporaryPath);
+    await _verifyDatabaseBackup(
+      temporaryPath,
+      emptyErrorCode: emptyErrorCode,
+      invalidErrorCode: invalidErrorCode,
+    );
     await File(temporaryPath).rename(backupPath);
   }
 
-  Future<void> _verifyCanonicalMigrationBackup(String path) async {
+  Future<void> _verifyDatabaseBackup(
+    String path, {
+    required String emptyErrorCode,
+    required String invalidErrorCode,
+  }) async {
     if (await File(path).length() == 0) {
-      throw const FileSystemException(
-        'canonical_conversation_overlay_backup_empty',
-      );
+      throw FileSystemException(emptyErrorCode);
     }
     final database = await openDatabase(
       path,
@@ -229,9 +277,7 @@ WHERE owner_did = ? AND legacy_conversation_id = ?
           ? values.single?.toString().trim().toLowerCase()
           : null;
       if (result != 'ok') {
-        throw const FileSystemException(
-          'canonical_conversation_overlay_backup_invalid',
-        );
+        throw FileSystemException(invalidErrorCode);
       }
     } finally {
       await database.close();
@@ -379,6 +425,7 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
       )
     ''');
     await _createAgentStatesTable(db);
+    await _createAccountDomainSnapshotTables(db);
   }
 
   static Future<void> _createAgentStatesTable(DatabaseExecutor db) async {
@@ -389,6 +436,117 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
         value_json TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (owner_did, agent_did)
+      )
+    ''');
+  }
+
+  static Future<void> _createAccountDomainSnapshotTables(
+    DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_domain_sync_state (
+        owner_identity_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        domain_version TEXT NOT NULL,
+        payload_hash TEXT,
+        refreshed_at INTEGER NOT NULL,
+        PRIMARY KEY (owner_identity_id, domain),
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(account_id) <> ''),
+        CHECK (refreshed_at >= 0),
+        CHECK (
+          domain IN (
+            'profile',
+            'agent_inventory',
+            'agent_status',
+            'device_registry'
+          )
+        ),
+        CHECK (
+          domain_version = '0' OR (
+            domain_version NOT GLOB '*[^0-9]*'
+            AND SUBSTR(domain_version, 1, 1) BETWEEN '1' AND '9'
+          )
+        )
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS account_domain_sync_state_account_idx
+      ON account_domain_sync_state(account_id, domain)
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_agent_inventory_snapshot (
+        owner_identity_id TEXT NOT NULL,
+        agent_did TEXT NOT NULL,
+        inventory_version TEXT NOT NULL,
+        active_state TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (owner_identity_id, agent_did),
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(agent_did) <> ''),
+        CHECK (TRIM(active_state) <> ''),
+        CHECK (
+          inventory_version = '0' OR (
+            inventory_version NOT GLOB '*[^0-9]*'
+            AND SUBSTR(inventory_version, 1, 1) BETWEEN '1' AND '9'
+          )
+        )
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_agent_status_snapshot (
+        owner_identity_id TEXT NOT NULL,
+        agent_did TEXT NOT NULL,
+        agent_status_version TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (owner_identity_id, agent_did),
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(agent_did) <> ''),
+        CHECK (
+          agent_status_version = '0' OR (
+            agent_status_version NOT GLOB '*[^0-9]*'
+            AND SUBSTR(agent_status_version, 1, 1) BETWEEN '1' AND '9'
+          )
+        )
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_profile_snapshot (
+        owner_identity_id TEXT PRIMARY KEY,
+        profile_version TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (
+          profile_version = '0' OR (
+            profile_version NOT GLOB '*[^0-9]*'
+            AND SUBSTR(profile_version, 1, 1) BETWEEN '1' AND '9'
+          )
+        )
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_device_registry_snapshot (
+        owner_identity_id TEXT NOT NULL,
+        protocol_device_id TEXT NOT NULL,
+        registry_version TEXT NOT NULL,
+        auth_generation TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (owner_identity_id, protocol_device_id),
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(protocol_device_id) <> ''),
+        CHECK (
+          registry_version = '0' OR (
+            registry_version NOT GLOB '*[^0-9]*'
+            AND SUBSTR(registry_version, 1, 1) BETWEEN '1' AND '9'
+          )
+        ),
+        CHECK (
+          auth_generation = '0' OR (
+            auth_generation NOT GLOB '*[^0-9]*'
+            AND SUBSTR(auth_generation, 1, 1) BETWEEN '1' AND '9'
+          )
+        )
       )
     ''');
   }
@@ -737,6 +895,452 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
       whereArgs: <Object?>[ownerDid, agentDid],
     );
   }
+
+  @override
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    return _loadDomainState(db, binding, domain);
+  }
+
+  @override
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding}) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    final states = <ProductAccountDomain, ProductAccountDomainSyncState>{};
+    for (final domain in ProductAccountDomain.values) {
+      final state = await _loadDomainState(db, binding, domain);
+      if (state != null) {
+        states[domain] = state;
+      }
+    }
+    return states;
+  }
+
+  @override
+  Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
+    required ProductAccountBinding binding,
+    String? legacyOwnerDid,
+  }) async {
+    validateProductAccountBinding(binding);
+    if (legacyOwnerDid == null) {
+      return _loadAgentInventorySnapshot(await _db, binding);
+    }
+    _requireLegacyOwnerDid(legacyOwnerDid);
+    return (await _db).transaction((transaction) async {
+      final existing = await _loadAgentInventorySnapshot(transaction, binding);
+      if (existing != null) {
+        return existing;
+      }
+      final legacyRows = await transaction.query(
+        'local_agent_states',
+        where: 'owner_did = ?',
+        whereArgs: <Object?>[legacyOwnerDid],
+        orderBy: 'updated_at DESC',
+      );
+      final legacyStates = legacyRows
+          .map(_agentStateFromRow)
+          .toList(growable: false);
+      final snapshot = ProductAgentInventorySnapshot(
+        binding: binding,
+        domainVersion: '0',
+        payloadHash: productLegacyAgentSeedPayloadHash,
+        refreshedAt: _legacyRefreshedAt(
+          legacyStates.map((state) => state.updatedAt),
+        ),
+        agents: legacyStates.map(
+          (state) => ProductAgentInventoryItem(
+            agentDid: state.agentDid,
+            activeState: _legacyAgentActiveState(state.valueJson),
+            payloadJson: state.valueJson,
+          ),
+        ),
+      );
+      validateProductAgentInventorySnapshot(snapshot);
+      await _replaceAgentInventorySnapshot(transaction, snapshot);
+      return snapshot;
+    });
+  }
+
+  @override
+  Future<void> replaceAgentInventorySnapshot(
+    ProductAgentInventorySnapshot snapshot,
+  ) async {
+    validateProductAgentInventorySnapshot(snapshot);
+    await (await _db).transaction(
+      (transaction) => _replaceAgentInventorySnapshot(transaction, snapshot),
+    );
+  }
+
+  @override
+  Future<ProductAgentStatusSnapshot?> loadAgentStatusSnapshot({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    final state = await _loadDomainState(
+      db,
+      binding,
+      ProductAccountDomain.agentStatus,
+    );
+    if (state == null) {
+      return null;
+    }
+    final rows = await db.query(
+      'account_agent_status_snapshot',
+      where: 'owner_identity_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId],
+      orderBy: 'agent_did ASC',
+    );
+    _assertRowsUseDomainVersion(
+      rows,
+      column: 'agent_status_version',
+      domainVersion: state.domainVersion,
+    );
+    final snapshot = ProductAgentStatusSnapshot(
+      binding: binding,
+      domainVersion: state.domainVersion,
+      payloadHash: state.payloadHash,
+      refreshedAt: state.refreshedAt,
+      statuses: rows.map(
+        (row) => ProductAgentStatusItem(
+          agentDid: row['agent_did']?.toString() ?? '',
+          payloadJson: row['payload_json']?.toString() ?? '',
+        ),
+      ),
+    );
+    validateProductAgentStatusSnapshot(snapshot);
+    return snapshot;
+  }
+
+  @override
+  Future<void> replaceAgentStatusSnapshot(
+    ProductAgentStatusSnapshot snapshot,
+  ) async {
+    validateProductAgentStatusSnapshot(snapshot);
+    await (await _db).transaction((transaction) async {
+      await _assertAccountBinding(transaction, snapshot.binding);
+      await _assertNonRegressingDomainVersion(
+        transaction,
+        snapshot.binding,
+        ProductAccountDomain.agentStatus,
+        snapshot.domainVersion,
+      );
+      await transaction.delete(
+        'account_agent_status_snapshot',
+        where: 'owner_identity_id = ?',
+        whereArgs: <Object?>[snapshot.binding.ownerIdentityId],
+      );
+      for (final status in snapshot.statuses) {
+        await transaction
+            .insert('account_agent_status_snapshot', <String, Object?>{
+              'owner_identity_id': snapshot.binding.ownerIdentityId,
+              'agent_did': status.agentDid,
+              'agent_status_version': snapshot.domainVersion,
+              'payload_json': status.payloadJson,
+            });
+      }
+      await _writeDomainState(transaction, snapshot.syncState);
+    });
+  }
+
+  @override
+  Future<ProductProfileSnapshot?> loadProfileSnapshot({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    final state = await _loadDomainState(
+      db,
+      binding,
+      ProductAccountDomain.profile,
+    );
+    if (state == null) {
+      return null;
+    }
+    final rows = await db.query(
+      'account_profile_snapshot',
+      where: 'owner_identity_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId],
+      limit: 1,
+    );
+    if (rows.isNotEmpty &&
+        rows.single['profile_version']?.toString() != state.domainVersion) {
+      throw StateError('product_profile_snapshot_version_mismatch');
+    }
+    final snapshot = ProductProfileSnapshot(
+      binding: binding,
+      domainVersion: state.domainVersion,
+      payloadHash: state.payloadHash,
+      refreshedAt: state.refreshedAt,
+      payloadJson: rows.isEmpty
+          ? null
+          : rows.single['payload_json']?.toString() ?? '',
+    );
+    validateProductProfileSnapshot(snapshot);
+    return snapshot;
+  }
+
+  @override
+  Future<void> replaceProfileSnapshot(ProductProfileSnapshot snapshot) async {
+    validateProductProfileSnapshot(snapshot);
+    await (await _db).transaction((transaction) async {
+      await _assertAccountBinding(transaction, snapshot.binding);
+      await _assertNonRegressingDomainVersion(
+        transaction,
+        snapshot.binding,
+        ProductAccountDomain.profile,
+        snapshot.domainVersion,
+      );
+      await transaction.delete(
+        'account_profile_snapshot',
+        where: 'owner_identity_id = ?',
+        whereArgs: <Object?>[snapshot.binding.ownerIdentityId],
+      );
+      final payloadJson = snapshot.payloadJson;
+      if (payloadJson != null) {
+        await transaction.insert('account_profile_snapshot', <String, Object?>{
+          'owner_identity_id': snapshot.binding.ownerIdentityId,
+          'profile_version': snapshot.domainVersion,
+          'payload_json': payloadJson,
+        });
+      }
+      await _writeDomainState(transaction, snapshot.syncState);
+    });
+  }
+
+  @override
+  Future<ProductDeviceRegistrySnapshot?> loadDeviceRegistrySnapshot({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    final state = await _loadDomainState(
+      db,
+      binding,
+      ProductAccountDomain.deviceRegistry,
+    );
+    if (state == null) {
+      return null;
+    }
+    final rows = await db.query(
+      'account_device_registry_snapshot',
+      where: 'owner_identity_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId],
+      orderBy: 'protocol_device_id ASC',
+    );
+    _assertRowsUseDomainVersion(
+      rows,
+      column: 'registry_version',
+      domainVersion: state.domainVersion,
+    );
+    final snapshot = ProductDeviceRegistrySnapshot(
+      binding: binding,
+      domainVersion: state.domainVersion,
+      payloadHash: state.payloadHash,
+      refreshedAt: state.refreshedAt,
+      devices: rows.map(
+        (row) => ProductDeviceRegistryItem(
+          protocolDeviceId: row['protocol_device_id']?.toString() ?? '',
+          authGeneration: row['auth_generation']?.toString() ?? '',
+          payloadJson: row['payload_json']?.toString() ?? '',
+        ),
+      ),
+    );
+    validateProductDeviceRegistrySnapshot(snapshot);
+    return snapshot;
+  }
+
+  @override
+  Future<void> replaceDeviceRegistrySnapshot(
+    ProductDeviceRegistrySnapshot snapshot,
+  ) async {
+    validateProductDeviceRegistrySnapshot(snapshot);
+    await (await _db).transaction((transaction) async {
+      await _assertAccountBinding(transaction, snapshot.binding);
+      await _assertNonRegressingDomainVersion(
+        transaction,
+        snapshot.binding,
+        ProductAccountDomain.deviceRegistry,
+        snapshot.domainVersion,
+      );
+      await transaction.delete(
+        'account_device_registry_snapshot',
+        where: 'owner_identity_id = ?',
+        whereArgs: <Object?>[snapshot.binding.ownerIdentityId],
+      );
+      for (final device in snapshot.devices) {
+        await transaction
+            .insert('account_device_registry_snapshot', <String, Object?>{
+              'owner_identity_id': snapshot.binding.ownerIdentityId,
+              'protocol_device_id': device.protocolDeviceId,
+              'registry_version': snapshot.domainVersion,
+              'auth_generation': device.authGeneration,
+              'payload_json': device.payloadJson,
+            });
+      }
+      await _writeDomainState(transaction, snapshot.syncState);
+    });
+  }
+
+  static Future<ProductAgentInventorySnapshot?> _loadAgentInventorySnapshot(
+    DatabaseExecutor db,
+    ProductAccountBinding binding,
+  ) async {
+    await _assertAccountBinding(db, binding);
+    final state = await _loadDomainState(
+      db,
+      binding,
+      ProductAccountDomain.agentInventory,
+    );
+    if (state == null) {
+      return null;
+    }
+    final rows = await db.query(
+      'account_agent_inventory_snapshot',
+      where: 'owner_identity_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId],
+      orderBy: 'agent_did ASC',
+    );
+    _assertRowsUseDomainVersion(
+      rows,
+      column: 'inventory_version',
+      domainVersion: state.domainVersion,
+    );
+    final snapshot = ProductAgentInventorySnapshot(
+      binding: binding,
+      domainVersion: state.domainVersion,
+      payloadHash: state.payloadHash,
+      refreshedAt: state.refreshedAt,
+      agents: rows.map(
+        (row) => ProductAgentInventoryItem(
+          agentDid: row['agent_did']?.toString() ?? '',
+          activeState: row['active_state']?.toString() ?? '',
+          payloadJson: row['payload_json']?.toString() ?? '',
+        ),
+      ),
+    );
+    validateProductAgentInventorySnapshot(snapshot);
+    return snapshot;
+  }
+
+  static Future<void> _replaceAgentInventorySnapshot(
+    DatabaseExecutor db,
+    ProductAgentInventorySnapshot snapshot,
+  ) async {
+    await _assertAccountBinding(db, snapshot.binding);
+    await _assertNonRegressingDomainVersion(
+      db,
+      snapshot.binding,
+      ProductAccountDomain.agentInventory,
+      snapshot.domainVersion,
+    );
+    await db.delete(
+      'account_agent_inventory_snapshot',
+      where: 'owner_identity_id = ?',
+      whereArgs: <Object?>[snapshot.binding.ownerIdentityId],
+    );
+    for (final agent in snapshot.agents) {
+      await db.insert('account_agent_inventory_snapshot', <String, Object?>{
+        'owner_identity_id': snapshot.binding.ownerIdentityId,
+        'agent_did': agent.agentDid,
+        'inventory_version': snapshot.domainVersion,
+        'active_state': agent.activeState,
+        'payload_json': agent.payloadJson,
+      });
+    }
+    await _writeDomainState(db, snapshot.syncState);
+  }
+
+  static Future<void> _assertAccountBinding(
+    DatabaseExecutor db,
+    ProductAccountBinding binding,
+  ) async {
+    final rows = await db.query(
+      'account_domain_sync_state',
+      columns: const <String>['account_id'],
+      where: 'owner_identity_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId],
+      distinct: true,
+    );
+    for (final row in rows) {
+      if (row['account_id']?.toString() != binding.accountId) {
+        throw const ProductAccountBindingMismatchException();
+      }
+    }
+  }
+
+  static Future<ProductAccountDomainSyncState?> _loadDomainState(
+    DatabaseExecutor db,
+    ProductAccountBinding binding,
+    ProductAccountDomain domain,
+  ) async {
+    final rows = await db.query(
+      'account_domain_sync_state',
+      where: 'owner_identity_id = ? AND domain = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId, domain.storageValue],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    final row = rows.single;
+    if (row['account_id']?.toString() != binding.accountId) {
+      throw const ProductAccountBindingMismatchException();
+    }
+    final state = ProductAccountDomainSyncState(
+      binding: binding,
+      domain: domain,
+      domainVersion: row['domain_version']?.toString() ?? '',
+      payloadHash: row['payload_hash']?.toString(),
+      refreshedAt: DateTime.fromMillisecondsSinceEpoch(
+        int.tryParse(row['refreshed_at']?.toString() ?? '') ?? -1,
+        isUtc: true,
+      ),
+    );
+    if (!isCanonicalProductDecimal(state.domainVersion) ||
+        state.refreshedAt.millisecondsSinceEpoch < 0) {
+      throw StateError('product_domain_sync_state_invalid');
+    }
+    return state;
+  }
+
+  static Future<void> _assertNonRegressingDomainVersion(
+    DatabaseExecutor db,
+    ProductAccountBinding binding,
+    ProductAccountDomain domain,
+    String incomingVersion,
+  ) async {
+    final existing = await _loadDomainState(db, binding, domain);
+    if (existing != null &&
+        compareProductDecimalVersions(incomingVersion, existing.domainVersion) <
+            0) {
+      throw const ProductDomainVersionRegressionException();
+    }
+  }
+
+  static Future<void> _writeDomainState(
+    DatabaseExecutor db,
+    ProductAccountDomainSyncState state,
+  ) async {
+    await db.insert('account_domain_sync_state', <String, Object?>{
+      'owner_identity_id': state.binding.ownerIdentityId,
+      'account_id': state.binding.accountId,
+      'domain': state.domain.storageValue,
+      'domain_version': state.domainVersion,
+      'payload_hash': state.payloadHash,
+      'refreshed_at': state.refreshedAt.toUtc().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
 }
 
 ProductConversationOverlay _overlayFromRow(Map<String, Object?> row) {
@@ -850,6 +1454,56 @@ Map<String, Object?> _agentStateToRow(LocalAgentState state) {
     'value_json': state.valueJson,
     'updated_at': state.updatedAt.toUtc().toIso8601String(),
   };
+}
+
+void _assertRowsUseDomainVersion(
+  List<Map<String, Object?>> rows, {
+  required String column,
+  required String domainVersion,
+}) {
+  for (final row in rows) {
+    if (row[column]?.toString() != domainVersion) {
+      throw StateError('product_snapshot_row_version_mismatch');
+    }
+  }
+}
+
+void _requireLegacyOwnerDid(String value) {
+  if (value.isEmpty || value.trim() != value) {
+    throw ArgumentError.value(
+      value,
+      'legacyOwnerDid',
+      'must be non-empty and contain no surrounding whitespace',
+    );
+  }
+}
+
+DateTime _legacyRefreshedAt(Iterable<DateTime> values) {
+  var latest = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  for (final value in values) {
+    final utc = value.toUtc();
+    if (utc.isAfter(latest)) {
+      latest = utc;
+    }
+  }
+  return latest;
+}
+
+String _legacyAgentActiveState(String valueJson) {
+  try {
+    final value = jsonDecode(valueJson);
+    if (value is Map) {
+      final activeState = value['active_state']?.toString();
+      if (activeState != null &&
+          activeState.isNotEmpty &&
+          activeState.trim() == activeState) {
+        return activeState;
+      }
+    }
+  } on FormatException {
+    // Snapshot validation reports malformed legacy payloads before commit.
+  }
+  return 'legacy_unknown';
 }
 
 bool _readBool(Object? value) {

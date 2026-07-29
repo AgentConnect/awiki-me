@@ -6,6 +6,7 @@ import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
+import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,6 +38,26 @@ void main() {
     expect(session.jwtToken, 'jwt-123');
     expect(legacy.credentialName, 'alice-local');
     expect(legacy.jwtToken, 'jwt-123');
+  });
+
+  test('active sync account binding maps every typed SDK field', () {
+    const binding = core.ActiveSyncAccountBinding(
+      ownerIdentityId: 'owner-identity-1',
+      accountId: 'account-1',
+      currentDid: 'did:wba:awiki.ai:alice:e1_current',
+      protocolDeviceId: 'protocol-device-1',
+      identityGeneration: '90071992547409931234567890',
+      deviceAuthGeneration: '184467440737095516160',
+    );
+
+    final sessionBinding = mapper.sessionAccountBindingFromCore(binding);
+
+    expect(sessionBinding.ownerIdentityId, binding.ownerIdentityId);
+    expect(sessionBinding.accountId, binding.accountId);
+    expect(sessionBinding.currentDid, binding.currentDid);
+    expect(sessionBinding.protocolDeviceId, binding.protocolDeviceId);
+    expect(sessionBinding.identityGeneration, binding.identityGeneration);
+    expect(sessionBinding.deviceAuthGeneration, binding.deviceAuthGeneration);
   });
 
   test(
@@ -883,10 +904,11 @@ void main() {
       title: 'must not become chat',
       body: 'must not become chat preview',
       sync: core.RealtimeSyncHint(
+        domains: <core.SyncDomain>{core.SyncDomain.deviceRegistry},
+        reason: 'device_registry_changed',
         syncDirty: true,
         gapDetected: false,
-        eventSeq: '42',
-        eventType: 'system_notification_changed',
+        hasUnknownDomain: false,
       ),
     );
 
@@ -896,7 +918,9 @@ void main() {
     expect(update!.systemNotificationChanged, isTrue);
     expect(update.needsReliableSync, isTrue);
     expect(update.syncDirty, isTrue);
-    expect(update.syncEventSeq, '42');
+    expect(update.domains, <SyncDomain>{SyncDomain.deviceRegistry});
+    expect(update.reason, 'device_registry_changed');
+    expect(update.hasUnknownDomain, isFalse);
     expect(update.message, isNull);
     expect(update.conversation, isNull);
     expect(update.conversationHint, isNull);
@@ -907,10 +931,11 @@ void main() {
     const event = core.RealtimeEvent(
       kind: 'unknown_notification',
       sync: core.RealtimeSyncHint(
+        domains: <core.SyncDomain>{core.SyncDomain.message},
+        reason: 'message_available',
         syncDirty: true,
         gapDetected: false,
-        eventSeq: '43',
-        eventType: 'message.created',
+        hasUnknownDomain: true,
       ),
     );
 
@@ -919,8 +944,9 @@ void main() {
     expect(update, isNotNull);
     expect(update!.needsReliableSync, isTrue);
     expect(update.syncDirty, isTrue);
-    expect(update.syncEventSeq, '43');
-    expect(update.syncEventType, 'message.created');
+    expect(update.domains, <SyncDomain>{SyncDomain.message});
+    expect(update.reason, 'message_available');
+    expect(update.hasUnknownDomain, isTrue);
     expect(update.message, isNull);
     expect(update.conversation, isNull);
     expect(update.conversationHint, isNull);
@@ -1133,6 +1159,8 @@ void main() {
         avatarUri: 'https://cdn.example/alice.png',
         profileUri: 'https://profiles.example/alice',
         subjectType: 'person',
+        versionId: '7',
+        profileVersion: '18446744073709551615',
       ),
     );
     final patch = mapper.profilePatchToCore(
@@ -1140,6 +1168,13 @@ void main() {
         displayName: 'New Alice',
         profileMarkdown: 'new md',
         avatarUri: 'https://cdn.example/new-alice.png',
+      ),
+    );
+    final invalidProfileVersion = mapper.userProfileFromCore(
+      const core.UserProfile(
+        subject: 'did:alice',
+        versionId: '7',
+        profileVersion: 'profile-v9',
       ),
     );
     final relationship = mapper.relationshipFromCore(
@@ -1177,6 +1212,8 @@ void main() {
     expect(profile.avatarUri, 'https://cdn.example/alice.png');
     expect(profile.profileUri, 'https://profiles.example/alice');
     expect(profile.subjectType, 'person');
+    expect(profile.profileVersion, '18446744073709551615');
+    expect(invalidProfileVersion.profileVersion, isNull);
     expect(profile.handle, 'alice.awiki');
     expect(profile.fullHandle, 'alice.awiki');
     expect(profile.profileMarkdown, '# Alice');

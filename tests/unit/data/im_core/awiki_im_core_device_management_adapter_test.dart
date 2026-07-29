@@ -323,8 +323,9 @@ void main() {
       final snapshot = deviceRegistryFromCore(
         const core.DeviceJoinRegistrySnapshot(
           did: _did,
-          devices: <core.DeviceJoinAuthorizedDeviceSummary>[
-            core.DeviceJoinAuthorizedDeviceSummary(
+          registryVersion: '7',
+          devices: <core.DeviceRegistryAuthorizedDeviceSummary>[
+            core.DeviceRegistryAuthorizedDeviceSummary(
               protocolDeviceId: 'admin-1',
               signingKeyId: 'did:key:sign',
               e2eeKeyId: 'did:key:e2ee',
@@ -332,12 +333,14 @@ void main() {
               role: core.DeviceJoinRole.admin,
               managementReady: false,
               isCurrent: true,
+              authGeneration: '2',
             ),
           ],
         ),
       );
 
       expect(snapshot.did, _did);
+      expect(snapshot.registryVersion, '7');
       expect(snapshot.currentDevice?.role, DeviceRole.admin);
       expect(snapshot.currentDevice?.managementReady, isFalse);
     },

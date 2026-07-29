@@ -247,6 +247,7 @@ class ImCoreConversationService
           final item = patch.item;
           if (item == null) {
             yield _repairPatch(
+              ownerIdentityId: patch.ownerIdentityId,
               ownerDid: ownerDid,
               version: patch.version,
               unreadTotal: patch.unreadTotal,
@@ -261,6 +262,7 @@ class ImCoreConversationService
           if (normalized == null) {
             yield ConversationListPatch(
               kind: ConversationListPatchKind.remove,
+              ownerIdentityId: patch.ownerIdentityId,
               ownerDid: ownerDid,
               version: patch.version,
               unreadTotal: patch.unreadTotal,
@@ -272,6 +274,7 @@ class ImCoreConversationService
           }
           yield ConversationListPatch(
             kind: ConversationListPatchKind.upsert,
+            ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
@@ -281,6 +284,7 @@ class ImCoreConversationService
         case CoreConversationPatchKind.remove:
           yield ConversationListPatch(
             kind: ConversationListPatchKind.remove,
+            ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
@@ -290,6 +294,7 @@ class ImCoreConversationService
         case CoreConversationPatchKind.reorder:
           yield ConversationListPatch(
             kind: ConversationListPatchKind.reorder,
+            ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
@@ -299,6 +304,7 @@ class ImCoreConversationService
           );
         case CoreConversationPatchKind.repairRequired:
           yield _repairPatch(
+            ownerIdentityId: patch.ownerIdentityId,
             ownerDid: ownerDid,
             version: patch.version,
             unreadTotal: patch.unreadTotal,
@@ -318,6 +324,7 @@ class ImCoreConversationService
     );
     return ConversationListPatch(
       kind: ConversationListPatchKind.reset,
+      ownerIdentityId: patch.ownerIdentityId,
       ownerDid: ownerDid,
       version: patch.version,
       unreadTotal: patch.unreadTotal,
@@ -326,6 +333,7 @@ class ImCoreConversationService
   }
 
   ConversationListPatch _repairPatch({
+    String ownerIdentityId = '',
     required String ownerDid,
     required int version,
     required int unreadTotal,
@@ -333,6 +341,7 @@ class ImCoreConversationService
   }) {
     return ConversationListPatch(
       kind: ConversationListPatchKind.repairRequired,
+      ownerIdentityId: ownerIdentityId,
       ownerDid: ownerDid,
       version: version,
       unreadTotal: unreadTotal,

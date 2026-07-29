@@ -12,8 +12,40 @@ void main() {
 
     await service.syncNow(reason: 'app_resumed', limit: 50);
 
-    expect(core.deltaReasons, ['app_resumed']);
-    expect(core.deltaLimits, [50]);
+    expect(core.syncReasons, ['app_resume']);
+    expect(core.syncLimits, [50]);
+  });
+
+  test('syncNow maps every internal trigger to a frozen Core reason', () async {
+    final core = _FakeMessageSyncCore();
+    final service = ImCoreMessageSyncService(sync: core);
+    const cases = <String, String>{
+      'startup': 'session_start',
+      'session_start': 'session_start',
+      'app_resumed': 'app_resume',
+      'app_resume': 'app_resume',
+      'realtime_reconnected': 'websocket_reconnect',
+      'websocket_reconnect': 'websocket_reconnect',
+      'foreground_catch_up': 'foreground_reconcile',
+      'foreground_reconcile': 'foreground_reconcile',
+      'realtime_message': 'websocket_hint',
+      'realtime_dirty': 'websocket_hint',
+      'realtime_gap': 'websocket_hint',
+      'realtime_persistent_fact': 'websocket_hint',
+      'realtime_agent_control': 'websocket_hint',
+      'system_notification_changed': 'websocket_hint',
+      'websocket_hint': 'websocket_hint',
+      'after_mutation': 'after_mutation',
+      'manual_refresh': 'manual_refresh',
+      'realtime_future_hint': 'websocket_hint',
+      'unknown_internal_trigger': 'manual_refresh',
+    };
+
+    for (final entry in cases.entries) {
+      await service.syncNow(reason: entry.key);
+    }
+
+    expect(core.syncReasons, cases.values);
   });
 
   test(
@@ -114,8 +146,8 @@ class _FakeMessageSyncCore
 
   final MessageSyncThreadAfterResult threadAfterResult;
   final MessageSyncThreadAfterResult conversationAfterResult;
-  final List<String?> deltaReasons = <String?>[];
-  final List<int?> deltaLimits = <int?>[];
+  final List<String?> syncReasons = <String?>[];
+  final List<int?> syncLimits = <int?>[];
   final List<AppThreadRef> threadAfterThreads = <AppThreadRef>[];
   final List<String?> threadAfterSeqs = <String?>[];
   final List<int?> threadAfterLimits = <int?>[];
@@ -124,18 +156,16 @@ class _FakeMessageSyncCore
   final List<int?> conversationAfterLimits = <int?>[];
 
   @override
-  Future<MessageSyncDeltaResult> syncDelta({
+  Future<MessageSyncOutcome> syncNow({
     int? limit,
-    String? deviceId,
-    String? reason,
+    required String reason,
   }) async {
-    deltaReasons.add(reason);
-    deltaLimits.add(limit);
-    return const MessageSyncDeltaResult(
+    syncReasons.add(reason);
+    syncLimits.add(limit);
+    return const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
       eventsApplied: 0,
       pagesFetched: 0,
-      hasMore: false,
-      snapshotRequired: false,
     );
   }
 
@@ -166,16 +196,14 @@ class _FakeMessageSyncCore
 
 class _ThreadOnlyMessageSyncCore implements MessageSyncCorePort {
   @override
-  Future<MessageSyncDeltaResult> syncDelta({
+  Future<MessageSyncOutcome> syncNow({
     int? limit,
-    String? deviceId,
-    String? reason,
+    required String reason,
   }) async {
-    return const MessageSyncDeltaResult(
+    return const MessageSyncOutcome(
+      status: MessageSyncStatus.idle,
       eventsApplied: 0,
       pagesFetched: 0,
-      hasMore: false,
-      snapshotRequired: false,
     );
   }
 

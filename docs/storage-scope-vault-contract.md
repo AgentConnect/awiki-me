@@ -154,6 +154,111 @@ symlink，不能只检查最终scope目录；目录创建仍需保持exclusive/c
 Manifest只保存非secret不变量。Keychain service/account不能从manifest自由读取，
 必须由编译期channel配置和scope ID派生，避免被篡改后指向其他secret item。
 
+### 4.1 Product local DB v4 与账号绑定
+
+`product/awiki_me_product_store.db` 的 schema v4 是 additive upgrade。它保留 v3 的
+conversation overlay、draft、UI preference 和 `local_agent_states`，并一次建立：
+
+```text
+account_domain_sync_state
+account_agent_inventory_snapshot
+account_agent_status_snapshot
+account_profile_snapshot
+account_device_registry_snapshot
+```
+
+这些表只保存 User Service 权威账号域的可丢弃展示 cache，不保存 message、conversation、
+group、read-state、sync cursor、event receipt、mutation outbox、JWT 或密钥。消息可靠状态仍由
+im-core SQLite 独占。
+
+App 激活或切换身份后必须从当前 `AwikiImClient.activeSyncAccountBinding()` 取得 typed
+`ActiveSyncAccountBinding`，并验证：
+
+```text
+ownerIdentityId == 当前 IdentitySummary.id
+currentDid == 当前 IdentitySummary.did
+accountId 非空
+protocolDeviceId 非空且不等于保留兼容值 default
+identityGeneration / deviceAuthGeneration 为 canonical positive decimal string（大于 0、无前导零）
+```
+
+该 binding 不可由 Handle、DID、JWT payload、`vault_context_device_id`、Storage Scope UUID 或
+App installation UUID 推断。Core 返回 unavailable、字段不一致、Protocol Device ID 为
+`default`，或 generation 不是 canonical positive decimal 时，session activation fail closed，
+不能写 active-session pointer 或账号域 cache。`SessionIdentity` 和 `AppSession` 只保留这一
+typed binding 的安全字段；JWT 仍只用于现有认证兼容面，不能成为账号主键来源。
+
+每个账号域以 `(owner_identity_id, domain)` 保存 version，并同时保存稳定 `account_id`。
+同一 `owner_identity_id` 已出现其他 `account_id` 时，SQLite 和 InMemory store 都必须拒绝读写。
+四个 typed replace API 在单一事务中清旧 rows、写完整 snapshot并推进 version；空 snapshot
+同样清旧并推进。Agent inventory topology 和 latest status 独立替换，status 不能改写
+`active_state`。Product DB 中的 `domain_version`、`inventory_version`、
+`agent_status_version`、`profile_version`、`registry_version` 和 Registry snapshot
+`auth_generation` 使用任意精度 canonical non-negative decimal TEXT，允许唯一的零值表示
+`0`，不收窄为 SQLite INTEGER 或 Dart number。这些 Product cache 字段不得与 Session
+binding 中必须大于 0 的 identity/device generation 混用。
+
+旧 `owner_did` Agent cache 只有在 stable binding 和明确旧 owner DID 同时提供后才允许
+copy-on-read 到 inventory version `0`；旧表不在 v4 migration 中删除。数据库从 v1/v2/v3
+升级到 v4 前，未升级连接必须先通过 `VACUUM INTO` 生成并用 `PRAGMA integrity_check` 验证：
+
+```text
+product/schema-upgrades/awiki_me_product_store.pre-v4.sqlite
+```
+
+事务失败时 snapshot rows 与 domain version 都保持原值；不能留下半个账号域快照。
+
+### 4.2 多设备消息同步的本地所有权
+
+普通消息多设备同步沿用同一个 Storage Scope，但不会把可靠状态下放到 Product DB 或
+Flutter provider：
+
+```text
+ActiveSyncAccountBinding.ownerIdentityId
+  -> im-core SQLite owner partition
+    -> account/replica sync state、可靠 cursor、event receipt、recovery state
+    -> canonical message/conversation/read projection
+      -> Core committed patch
+        -> AWiki Me bounded in-memory window
+```
+
+- `owner_identity_id` 是 Core 本地消息、会话、已读和同步状态的稳定分区键；当前 DID、
+  `account_id`、`protocol_device_id` 和 generation 只作为经过验证的绑定与 fencing 字段。
+- 账号流的 raw scan cursor、visible cursor、replica bootstrap/recovery 状态、幂等 receipt
+  和 mutation outbox 只存在 im-core SQLite。AWiki Me 不读取、保存或推进这些 cursor，
+  `awiki_me_product_store.db` 也不得复制它们。
+- AWiki Me 的会话列表和当前消息窗口只是 Core canonical projection 的有界内存投影。
+  App session 激活必须先建立 committed-patch subscription，再完成当前 session generation
+  的一次有界本地 seed，之后才能发起首次可靠同步。同一 generation 的后续 realtime hint、
+  WebSocket 重连和前台对账复用该订阅，不再在每次同步后全量刷新会话或执行 20×50
+  history prewarm。
+- patch generation、session generation、`owner_identity_id`、`account_id`、
+  `device_auth_generation` 或当前 DID 不匹配时，App 必须拒绝旧 patch 和旧同步结果；
+  gap、stream rebuild 或显式 repair 只能重新执行一次有界 seed，不能清空 Core 权威库。
+
+新设备和已有设备的恢复语义不同：
+
+- 新 replica 使用 tail-only bootstrap，从服务端当前流尾开始，不导入加入前的普通消息。
+- 已有 replica 出现 retention gap、epoch mismatch 或长期离线时，由 Core 驱动 compact
+  recovery；服务端按自己的时间同时限制为最近 48 小时且最多 500 条普通逻辑消息。
+- 500 条只统计普通逻辑消息，不统计状态事件或 E2EE/MLS 数据。Snapshot 是 merge：
+  窗口外缺失不表示删除，也不得删除设备本地已经存在的更早普通消息。
+- Agent Inventory、Agent Status、Profile 和 Device Registry 是独立的版本化当前快照，
+  不受普通消息 48h/500 窗口限制，仍只缓存于 Product DB 对应账号域表。
+
+WebSocket 只携带 dirty-domain/wake-up hint；即使提示丢失，startup、前台恢复、重连或周期
+对账仍通过 HTTP 可靠拉取并由 Core 原子提交事实与 cursor。移动 Push 在当前版本明确延期，
+将来启用也只能负责唤醒，不能携带消息事实或替代 HTTP/Core commit。
+
+产品安全诊断只允许暴露 typed `lastSuccessAt`、sync/recovery mode、
+`pendingMutationCount`、dirty domains、retry state 和可选 `nextRetryAt`。普通 state、
+日志和 UI 不得包含 raw cursor/epoch、完整 account/device ID、recovery token、消息正文、
+payload 或认证材料。
+
+当前普通同步明确不包含 Direct E2EE、Group MLS、密钥、密文、加密历史，也不定义普通消息
+编辑、撤回、删除或消息 tombstone。以上数据不得为了“统一存储”进入普通 sync state、
+Product DB cache 或 App diagnostics。
+
 ## 5. Keychain / platform secret locator
 
 Production locator：
