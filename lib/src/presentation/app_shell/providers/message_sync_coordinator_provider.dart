@@ -445,38 +445,6 @@ class MessageSyncCoordinator
         if (!_isCurrentSync(epoch, sessionFence)) {
           return;
         }
-        final conversations = ref
-            .read(conversationListProvider)
-            .conversations;
-        if (!_isCurrentSync(epoch, sessionFence)) {
-          return;
-        }
-        _messageSyncTrace(
-          'run.prewarm.start',
-          fields: <String, Object?>{
-            'reason': reason,
-            'conversations': conversations.length,
-          },
-        );
-        await ref
-            .read(chatThreadsProvider.notifier)
-            .prewarmLocalHistoryForConversations(conversations);
-        if (!_isCurrentSync(epoch, sessionFence)) {
-          return;
-        }
-        await ref
-            .read(chatThreadsProvider.notifier)
-            .refreshVisibleLocalProjections(force: true);
-        if (!_isCurrentSync(epoch, sessionFence)) {
-          return;
-        }
-        _messageSyncTrace(
-          'run.prewarm.done',
-          fields: <String, Object?>{
-            'reason': reason,
-            'conversations': conversations.length,
-          },
-        );
       } catch (error) {
         _messageSyncTrace(
           'run.failed',
