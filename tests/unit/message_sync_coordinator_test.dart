@@ -148,6 +148,43 @@ void main() {
   });
 
   test(
+    'bound startup records Patch subscribe and reset before reliable sync',
+    () async {
+      final gateway = FakeAwikiGateway();
+      final conversations = _BoundReadyConversationService(
+        gateway,
+        ownerIdentityId: 'owner-a',
+      );
+      final container = _container(
+        gateway,
+        FakeMessageSyncService(),
+        session: _boundSession(deviceAuthGeneration: '1'),
+        conversationService: conversations,
+      );
+      addTearDown(container.dispose);
+      addTearDown(conversations.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('startup', immediate: true);
+
+      final observation = container
+          .read(conversationListProvider.notifier)
+          .patchStartupObservation;
+      expect(observation, isNotNull);
+      expect(observation!.provesSubscribeBeforeFirstReliableSync, isTrue);
+      expect(
+        observation.subscriptionStartedSequence,
+        lessThan(observation.patchReadySequence!),
+      );
+      expect(
+        observation.patchReadySequence,
+        lessThan(observation.firstReliableSyncStartedSequence!),
+      );
+    },
+  );
+
+  test(
     'same DID auth-generation change rejects stale sync completion',
     () async {
       final gateway = FakeAwikiGateway();
@@ -256,6 +293,24 @@ void main() {
     ]);
     expect(state.retryState, AppMessageSyncRetryState.scheduled);
     expect(state.nextRetryAt, retryAt);
+    final firstSafe = state.safeDiagnostics;
+    expect(firstSafe.isCurrent, isTrue);
+    expect(firstSafe.refreshAttemptSequence, 1);
+    expect(firstSafe.refreshSuccessSequence, 1);
+    expect(firstSafe.refreshedAt, isNotNull);
+    expect(firstSafe.toJson(), <String, Object?>{
+      'schema_version': 1,
+      'current': true,
+      'refresh_attempt_sequence': 1,
+      'refresh_success_sequence': 1,
+      'refreshed_at': firstSafe.refreshedAt!.toUtc().toIso8601String(),
+      'last_success_at': successAt.toIso8601String(),
+      'mode': 'retryable',
+      'pending_mutation_count': 2,
+      'dirty_domains': <String>['messages', 'readState'],
+      'retry_state': 'scheduled',
+      'next_retry_at': retryAt.toIso8601String(),
+    });
 
     messaging.nextDiagnosticsError = StateError('diagnostics unavailable');
     sync.deltaResult = const MessageSyncOutcome(
@@ -272,6 +327,12 @@ void main() {
     expect(state.lastError, isNull);
     expect(state.lastSuccessAt, successAt);
     expect(state.pendingMutationCount, 2);
+    final staleSafe = state.safeDiagnostics;
+    expect(staleSafe.isCurrent, isFalse);
+    expect(staleSafe.refreshAttemptSequence, 2);
+    expect(staleSafe.refreshSuccessSequence, 1);
+    expect(staleSafe.refreshedAt, firstSafe.refreshedAt);
+    expect(staleSafe.toJson()['current'], isFalse);
   });
 
   test(

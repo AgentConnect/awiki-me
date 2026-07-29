@@ -48,6 +48,9 @@ class MessageSyncCoordinatorState {
     this.dirtyDomains = const <AppMessageSyncDirtyDomain>[],
     this.retryState = AppMessageSyncRetryState.none,
     this.nextRetryAt,
+    this.diagnosticsRefreshAttemptSequence = 0,
+    this.diagnosticsRefreshSuccessSequence = 0,
+    this.diagnosticsRefreshedAt,
   });
 
   final MessageSyncCoordinatorStatus status;
@@ -61,6 +64,9 @@ class MessageSyncCoordinatorState {
   final List<AppMessageSyncDirtyDomain> dirtyDomains;
   final AppMessageSyncRetryState retryState;
   final DateTime? nextRetryAt;
+  final int diagnosticsRefreshAttemptSequence;
+  final int diagnosticsRefreshSuccessSequence;
+  final DateTime? diagnosticsRefreshedAt;
 
   bool get isSyncing =>
       status == MessageSyncCoordinatorStatus.syncing ||
@@ -70,6 +76,21 @@ class MessageSyncCoordinatorState {
       status == MessageSyncCoordinatorStatus.recoveryRequired;
 
   bool get isAuthRevoked => status == MessageSyncCoordinatorStatus.authRevoked;
+
+  AppMessageSyncSafeDiagnostics get safeDiagnostics =>
+      AppMessageSyncSafeDiagnostics(
+        refreshAttemptSequence: diagnosticsRefreshAttemptSequence,
+        refreshSuccessSequence: diagnosticsRefreshSuccessSequence,
+        refreshedAt: diagnosticsRefreshedAt,
+        lastSuccessAt: lastSuccessAt,
+        mode: mode,
+        pendingMutationCount: pendingMutationCount,
+        dirtyDomains: List<AppMessageSyncDirtyDomain>.unmodifiable(
+          dirtyDomains,
+        ),
+        retryState: retryState,
+        nextRetryAt: nextRetryAt,
+      );
 
   @Deprecated('Use recoveryRequired.')
   bool get snapshotRequired => recoveryRequired;
@@ -86,6 +107,9 @@ class MessageSyncCoordinatorState {
     List<AppMessageSyncDirtyDomain>? dirtyDomains,
     AppMessageSyncRetryState? retryState,
     Object? nextRetryAt = _unset,
+    int? diagnosticsRefreshAttemptSequence,
+    int? diagnosticsRefreshSuccessSequence,
+    Object? diagnosticsRefreshedAt = _unset,
   }) {
     return MessageSyncCoordinatorState(
       status: status ?? this.status,
@@ -109,6 +133,15 @@ class MessageSyncCoordinatorState {
       nextRetryAt: identical(nextRetryAt, _unset)
           ? this.nextRetryAt
           : nextRetryAt as DateTime?,
+      diagnosticsRefreshAttemptSequence:
+          diagnosticsRefreshAttemptSequence ??
+          this.diagnosticsRefreshAttemptSequence,
+      diagnosticsRefreshSuccessSequence:
+          diagnosticsRefreshSuccessSequence ??
+          this.diagnosticsRefreshSuccessSequence,
+      diagnosticsRefreshedAt: identical(diagnosticsRefreshedAt, _unset)
+          ? this.diagnosticsRefreshedAt
+          : diagnosticsRefreshedAt as DateTime?,
     );
   }
 }
@@ -291,6 +324,9 @@ class MessageSyncCoordinator
         if (!_isCurrentSession(sessionFence)) {
           return;
         }
+        ref
+            .read(conversationListProvider.notifier)
+            .recordReliableSyncStartedForCurrentPatchGeneration();
         final result = await ref
             .read(messageSyncServiceProvider)
             .syncNow(reason: reason);
@@ -435,11 +471,13 @@ class MessageSyncCoordinator
   Future<void> _refreshDiagnosticsBestEffort(
     _MessageSyncSessionFence fence,
   ) async {
+    final service = ref.read(messagingServiceProvider);
+    if (service is! MessageSyncDiagnosticsService) {
+      return;
+    }
+    final attemptSequence = state.diagnosticsRefreshAttemptSequence + 1;
+    state = state.copyWith(diagnosticsRefreshAttemptSequence: attemptSequence);
     try {
-      final service = ref.read(messagingServiceProvider);
-      if (service is! MessageSyncDiagnosticsService) {
-        return;
-      }
       final diagnostics = await (service as MessageSyncDiagnosticsService)
           .syncDiagnostics();
       if (!_isCurrentSession(fence)) {
@@ -454,6 +492,8 @@ class MessageSyncCoordinator
         ),
         retryState: diagnostics.retryState,
         nextRetryAt: diagnostics.nextRetryAt,
+        diagnosticsRefreshSuccessSequence: attemptSequence,
+        diagnosticsRefreshedAt: DateTime.now(),
       );
     } catch (error) {
       _messageSyncTrace(

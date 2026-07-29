@@ -112,6 +112,47 @@ class ConversationListState {
 
 const Object _conversationListStateUnset = Object();
 
+/// Payload-free ordering evidence for one bound-session Patch generation.
+///
+/// It exists so startup and release tests can fail closed on the required
+/// subscribe -> committed reset -> reliable sync ordering without reading
+/// account, device, cursor, or message identifiers.
+@immutable
+class ConversationPatchStartupObservation {
+  const ConversationPatchStartupObservation({
+    required this.subscriptionStartedSequence,
+    this.patchReadySequence,
+    this.firstReliableSyncStartedSequence,
+  });
+
+  final int subscriptionStartedSequence;
+  final int? patchReadySequence;
+  final int? firstReliableSyncStartedSequence;
+
+  bool get provesSubscribeBeforeFirstReliableSync {
+    final ready = patchReadySequence;
+    final reliable = firstReliableSyncStartedSequence;
+    return subscriptionStartedSequence > 0 &&
+        ready != null &&
+        reliable != null &&
+        subscriptionStartedSequence < ready &&
+        ready < reliable;
+  }
+
+  ConversationPatchStartupObservation copyWith({
+    int? patchReadySequence,
+    int? firstReliableSyncStartedSequence,
+  }) {
+    return ConversationPatchStartupObservation(
+      subscriptionStartedSequence: subscriptionStartedSequence,
+      patchReadySequence: patchReadySequence ?? this.patchReadySequence,
+      firstReliableSyncStartedSequence:
+          firstReliableSyncStartedSequence ??
+          this.firstReliableSyncStartedSequence,
+    );
+  }
+}
+
 class ConversationListController extends StateNotifier<ConversationListState> {
   ConversationListController(
     this.ref, {
@@ -145,6 +186,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   bool _legacyPatchReady = false;
   int _patchSubscriptionToken = 0;
   int _lastPatchVersion = 0;
+  int _patchStartupSequence = 0;
+  ConversationPatchStartupObservation? _patchStartupObservation;
   _ConversationPatchStreamScope? _patchReconnectScope;
   Future<void>? _patchReconnectOperation;
   _ConversationPatchWorkScope? _patchRepairScope;
@@ -193,6 +236,34 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   @visibleForTesting
   Future<void>? get debugPatchRebuildOperationForTesting =>
       _patchRebuildOperation;
+
+  ConversationPatchStartupObservation? get patchStartupObservation =>
+      _patchStartupObservation;
+
+  /// Records the first reliable pull for the current bound Patch generation.
+  ///
+  /// The coordinator calls this only after [preparePatchGeneration] completes.
+  /// Throwing here makes an ordering regression fail closed before remote sync.
+  void recordReliableSyncStartedForCurrentPatchGeneration() {
+    final observation = _patchStartupObservation;
+    final fence = _patchSessionFence;
+    if (fence == null && _legacyPatchReady) {
+      return;
+    }
+    if (fence == null ||
+        !_patchReady ||
+        !_isPatchSessionFenceCurrent(fence) ||
+        observation == null ||
+        observation.patchReadySequence == null) {
+      throw StateError('conversation_patch_not_ready_for_reliable_sync');
+    }
+    if (observation.firstReliableSyncStartedSequence != null) {
+      return;
+    }
+    _patchStartupObservation = observation.copyWith(
+      firstReliableSyncStartedSequence: ++_patchStartupSequence,
+    );
+  }
 
   Future<void> _prepareLegacyPatchGeneration() {
     final sessionState = ref.read(sessionProvider);
@@ -637,6 +708,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _patchSubscriptionOwnerDid = ownerDid;
     final token = ++_patchSubscriptionToken;
     _lastPatchVersion = 0;
+    if (fence != null) {
+      _patchStartupSequence = 0;
+      _patchStartupObservation = ConversationPatchStartupObservation(
+        subscriptionStartedSequence: ++_patchStartupSequence,
+      );
+    }
     _patchSubscription = ref
         .read(conversationServiceProvider)
         .watchConversationPatches(ownerDid: ownerDid)
@@ -709,6 +786,8 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     _lastPatchVersion = 0;
     _patchReady = false;
     _legacyPatchReady = false;
+    _patchStartupObservation = null;
+    _patchStartupSequence = 0;
     final completer = _patchReadyCompleter;
     _patchReadyCompleter = null;
     if (completer != null && !completer.isCompleted) {
@@ -1018,6 +1097,12 @@ class ConversationListController extends StateNotifier<ConversationListState> {
       return;
     }
     _patchReady = true;
+    final observation = _patchStartupObservation;
+    if (observation != null && observation.patchReadySequence == null) {
+      _patchStartupObservation = observation.copyWith(
+        patchReadySequence: ++_patchStartupSequence,
+      );
+    }
     final completer = _patchReadyCompleter;
     if (completer != null && !completer.isCompleted) {
       completer.complete();
