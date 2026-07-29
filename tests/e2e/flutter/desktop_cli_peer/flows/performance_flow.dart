@@ -259,19 +259,36 @@ Future<void> _verifyPerformanceRegression({
     cliSendWatch.elapsedMilliseconds,
   );
   final threadAfterWatch = Stopwatch()..start();
-  final threadAfter = await messageSync.syncThreadAfter(
-    thread: thread,
-    limit: 20,
-  );
+  late final int threadAfterItems;
+  late final bool? threadAfterHasMore;
+  late final List<String> threadAfterWarnings;
+  if (config.environment.messageSyncV2ReadEnabled) {
+    expect(messageSync, isA<ConversationMessageSyncService>());
+    final result = await (messageSync as ConversationMessageSyncService)
+        .syncConversationAfter(
+          conversation: AppConversationReadRef.fromConversationId(
+            conversationForCliMessage.conversationId,
+          ),
+          limit: 20,
+        );
+    threadAfterItems = result.messages.length;
+    threadAfterHasMore = result.hasMore;
+    threadAfterWarnings = result.warnings;
+  } else {
+    final messages = await messaging.loadHistory(thread, limit: 20);
+    threadAfterItems = messages.length;
+    threadAfterHasMore = null;
+    threadAfterWarnings = const <String>[];
+  }
   threadAfterWatch.stop();
   recorder.record(
     'message.cli_send_app_thread_after_ms',
     threadAfterWatch.elapsed,
     source: 'app',
     fields: <String, Object?>{
-      'items': threadAfter.messages.length,
-      'hasMore': threadAfter.hasMore,
-      'warnings': threadAfter.warnings,
+      'items': threadAfterItems,
+      'hasMore': threadAfterHasMore,
+      'warnings': threadAfterWarnings,
     },
   );
   await _waitForAppHistory(

@@ -197,7 +197,11 @@ void runDesktopCliPeerE2e({
       );
       appCreateWatch.stop();
       final preparedSession = selectedCase.runsPerformance
-          ? null
+          ? await _preparePerformanceAppIdentity(
+              bootstrap: bootstrap,
+              config: config,
+              warmup: performanceWarmup!,
+            )
           : await _prepareAppIdentity(
               bootstrap.onboardingService!,
               bootstrap.onboardingSupportService!,
@@ -206,7 +210,7 @@ void runDesktopCliPeerE2e({
       final countingConversations = config.e2eCase.runsPerformance
           ? _CountingConversationService(bootstrap.conversationService!)
           : null;
-      final faultMessaging = preparedSession == null
+      final faultMessaging = selectedCase.runsPerformance
           ? null
           : _FailOnceMessagingService(
               delegate: bootstrap.messagingService!,
@@ -236,13 +240,7 @@ void runDesktopCliPeerE2e({
       shellWatch.stop();
       expect(find.byType(AppShell), findsOneWidget);
 
-      final session = selectedCase.runsPerformance
-          ? await _preparePerformanceAppIdentity(
-              bootstrap: bootstrap,
-              config: config,
-              warmup: performanceWarmup!,
-            )
-          : preparedSession!;
+      final session = preparedSession;
       expect(session.authenticated, isTrue);
       final robot = _DesktopAppRobot(
         tester,

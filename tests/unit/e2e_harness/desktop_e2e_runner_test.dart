@@ -2244,12 +2244,8 @@ performance:
         await runner.run();
 
         final log = lines.join('\n');
-        expect(
-          log,
-          contains(
-            r'$ <redacted> --format json id recover --handle e2e-app --phone <redacted> --otp <redacted>',
-          ),
-        );
+        expect(log, isNot(contains('id recover --handle e2e-app')));
+        expect(log, isNot(contains('id register --handle e2e-app')));
         expect(log, isNot(contains('Preparing performance dataset')));
         expect(
           log,
@@ -2308,7 +2304,7 @@ performance:
         expect(
           steps.map((step) => (step as Map<String, dynamic>)['name']),
           containsAll(<String>[
-            'Preparing performance App identity',
+            'Waiting for App registration OTP window',
             'Flutter App + CLI peer flow',
           ]),
         );

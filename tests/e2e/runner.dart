@@ -310,8 +310,6 @@ class DesktopE2eRunner {
   late final Directory multiDeviceCliAdminHomeDir;
   late final Directory rootTransferCliMemberWorkspaceDir;
   late final Directory rootTransferCliMemberHomeDir;
-  late final Directory appIdentityWorkspaceDir;
-  late final Directory appIdentityHomeDir;
   late final Directory appStateRootDir;
   late final Directory multiDeviceAppJoiningStateRootDir;
   late final Directory rootTransferAppAdminStateRootDir;
@@ -382,12 +380,6 @@ class DesktopE2eRunner {
     rootTransferCliMemberHomeDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/root-transfer-cli-member-home',
     );
-    appIdentityWorkspaceDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-identity-cli',
-    );
-    appIdentityHomeDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-identity-home',
-    );
     appStateRootDir = Directory('${root.path}/.e2e/$runScope/$runId/app');
     multiDeviceAppJoiningStateRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-joining-device',
@@ -442,8 +434,6 @@ class DesktopE2eRunner {
     _addRuntimeSecret(multiDeviceCliAdminHomeDir.path);
     _addRuntimeSecret(rootTransferCliMemberWorkspaceDir.path);
     _addRuntimeSecret(rootTransferCliMemberHomeDir.path);
-    _addRuntimeSecret(appIdentityWorkspaceDir.path);
-    _addRuntimeSecret(appIdentityHomeDir.path);
     _addRuntimeSecret(appStateRootDir.path);
     _addRuntimeSecret(multiDeviceAppJoiningStateRootDir.path);
     _addRuntimeSecret(rootTransferAppAdminStateRootDir.path);
@@ -508,8 +498,6 @@ class DesktopE2eRunner {
         rootTransferCliMemberHomeDir.createSync(recursive: true);
         rootTransferAppAdminStateRootDir.createSync(recursive: true);
       }
-      appIdentityWorkspaceDir.createSync(recursive: true);
-      appIdentityHomeDir.createSync(recursive: true);
       appStateRootDir.createSync(recursive: true);
     }
     if (!options.dryRun &&
@@ -1229,18 +1217,10 @@ class DesktopE2eRunner {
     await _timed('Preparing CLI workspace', _prepareCliWorkspace);
     await _timed('Preparing CLI identity', _prepareCliIdentity);
     await _timed('Checking CLI ready state', _checkCliReady);
-    if (peerConfig.e2eCase != DesktopE2eCase.performance) {
-      await _timed(
-        'Waiting for App registration OTP window',
-        _waitForAppRegistrationOtpWindow,
-      );
-    }
-    if (peerConfig.e2eCase == DesktopE2eCase.performance) {
-      await _timed(
-        'Preparing performance App identity',
-        _preparePerformanceAppIdentity,
-      );
-    }
+    await _timed(
+      'Waiting for App registration OTP window',
+      _waitForAppRegistrationOtpWindow,
+    );
 
     if (options.prepareOnly) {
       _section('Prepare-only completed');
@@ -1530,74 +1510,6 @@ class DesktopE2eRunner {
     };
     if (!identitiesDistinct) {
       throw E2eFailure('App and CLI peer identities must be distinct.');
-    }
-  }
-
-  Future<void> _preparePerformanceAppIdentity() async {
-    final peerConfig = _requireConfig();
-    await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: const <String>['--format', 'json', 'init'],
-    );
-    await _prepareCliTenant(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-    );
-    await _writeCliConfig(appIdentityWorkspaceDir);
-    await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: const <String>['--format', 'json', 'config', 'show'],
-    );
-    final recover = await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: <String>[
-        '--format',
-        'json',
-        'id',
-        'recover',
-        '--handle',
-        peerConfig.appHandle,
-        '--phone',
-        peerConfig.otpPhone,
-        '--otp',
-        peerConfig.otpCode,
-      ],
-      allowFailure: true,
-    );
-    if (recover.exitCode == 0 || options.dryRun) {
-      return;
-    }
-    if (!_looksRecoverableForRegister(recover.output)) {
-      throw E2eFailure(
-        'Performance App identity recover failed and did not look like a '
-        'missing-handle error: ${redactor.redact(recover.output)}',
-      );
-    }
-    final register = await _cliForWorkspace(
-      workspaceDir: appIdentityWorkspaceDir,
-      homeDir: appIdentityHomeDir,
-      args: <String>[
-        '--format',
-        'json',
-        'id',
-        'register',
-        '--handle',
-        peerConfig.appHandle,
-        '--phone',
-        peerConfig.otpPhone,
-        '--otp',
-        peerConfig.otpCode,
-      ],
-      allowFailure: true,
-    );
-    if (register.exitCode != 0) {
-      throw E2eFailure(
-        'Performance App identity register failed: '
-        '${redactor.redact(register.output)}',
-      );
     }
   }
 
@@ -5102,16 +5014,6 @@ class E2eFailure implements Exception {
 
   @override
   String toString() => message;
-}
-
-bool _looksRecoverableForRegister(String output) {
-  final lower = output.toLowerCase();
-  return lower.contains('not found') ||
-      lower.contains('handle_not_found') ||
-      lower.contains('not active') ||
-      lower.contains('not_registered') ||
-      lower.contains('not registered') ||
-      lower.contains('404');
 }
 
 String? _stringAt(Map<String, Object?> map, String key) {
