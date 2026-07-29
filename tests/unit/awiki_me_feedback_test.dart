@@ -188,6 +188,41 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
+  testWidgets('info toast renders detail and stays visible long enough', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: Builder(
+          builder: (context) {
+            return CupertinoButton(
+              onPressed: () {
+                AwikiMeToast.show(
+                  context,
+                  '收到新消息',
+                  detail: 'AWiki Skill Agent：任务已完成',
+                );
+              },
+              child: const Text('show'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('show'));
+    await tester.pump();
+
+    expect(find.byType(SelectionArea), findsNothing);
+    expect(find.text('收到新消息'), findsOneWidget);
+    expect(find.text('AWiki Skill Agent：任务已完成'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('收到新消息'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+  });
+
   testWidgets('danger persistent toast exposes selectable text', (
     tester,
   ) async {

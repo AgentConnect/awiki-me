@@ -4185,16 +4185,18 @@ class FakeNotificationFacade implements NotificationFacade {
   String? lastInAppBody;
   String? lastSystemTitle;
   String? lastSystemBody;
+  int inAppNotificationCount = 0;
+  int systemNotificationCount = 0;
   int lastBadgeCount = 0;
-  int inAppCalls = 0;
-  int systemCalls = 0;
+  int get inAppCalls => inAppNotificationCount;
+  int get systemCalls => systemNotificationCount;
 
   @override
   Future<void> showSystemNotification({
     required String title,
     required String body,
   }) async {
-    systemCalls += 1;
+    systemNotificationCount += 1;
     lastSystemTitle = title;
     lastSystemBody = body;
   }
@@ -4204,7 +4206,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String title,
     required String body,
   }) async {
-    inAppCalls += 1;
+    inAppNotificationCount += 1;
     lastInAppTitle = title;
     lastInAppBody = body;
   }

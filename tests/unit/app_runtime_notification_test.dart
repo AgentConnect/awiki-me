@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
@@ -14,6 +15,7 @@ import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_terminal_notification.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
@@ -196,6 +198,10 @@ void main() {
           );
     }
 
+    Future<void> settleAgentInventoryRefresh() {
+      return container.read(agentsProvider.notifier).syncRemoteInventory();
+    }
+
     RealtimeUpdate buildUpdate() {
       return RealtimeUpdate(
         message: ChatMessage(
@@ -221,6 +227,83 @@ void main() {
           targetDid: 'did:test:peer',
         ),
       );
+    }
+
+    void seedRuntimeAgent() {
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'codex',
+              'display_name': 'Codex',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+    }
+
+    RealtimeUpdate buildRuntimeUpdate({
+      String messageId = 'remote-1',
+      String content = 'Runtime final reply',
+    }) {
+      return RealtimeUpdate(
+        message: ChatMessage(
+          localId: messageId,
+          remoteId: messageId,
+          threadId: 'dm:runtime',
+          senderDid: 'did:agent:runtime',
+          senderName: 'Codex',
+          receiverDid: 'did:test:me',
+          content: content,
+          createdAt: DateTime(2026, 7, 27, 12),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'dm:runtime',
+          conversationId: 'dm:runtime',
+          displayName: 'Codex',
+          lastMessagePreview: content,
+          lastMessageAt: DateTime(2026, 7, 27, 12),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: 'did:agent:runtime',
+        ),
+      );
+    }
+
+    Map<String, Object?> terminalPayload({
+      String eventId = 'evt_run_terminal:run_1:completed',
+      String state = 'finished',
+      String? outcome = 'completed',
+      String summary = '任务已完成',
+      String? nextStep,
+      String? finalMessageId = 'remote-1',
+    }) => <String, Object?>{
+      'schema': 'awiki.agent.status.v1',
+      'event_id': eventId,
+      'run_id': 'run_1',
+      'state': state,
+      if (outcome != null) 'business_outcome': outcome,
+      'summary': summary,
+      'next_step': nextStep,
+      'final_message_id': finalMessageId,
+    };
+
+    Future<void> emitControl(Map<String, Object?> payload) async {
+      gateway.nextRealtimeUpdate = RealtimeUpdate(agentControlPayload: payload);
+      await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
+      await pumpEventQueue();
     }
 
     ConversationSummary staleSelectedConversation() {
@@ -267,7 +350,7 @@ void main() {
       expect(container.read(selectedConversationProvider), isNull);
     });
 
-    test('前台收到消息时显示应用内提示', () async {
+    test('前台收到消息时显示真实 UI feedback', () async {
       gateway.nextRealtimeUpdate = buildUpdate();
       container
           .read(appLifecycleProvider.notifier)
@@ -276,8 +359,11 @@ void main() {
       await activate();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
 
-      expect(notificationFacade.lastInAppTitle, 'Peer');
-      expect(notificationFacade.lastInAppBody, 'hello');
+      final feedback = container.read(uiFeedbackProvider);
+      expect(feedback?.message.id, 'newMessageArrived');
+      expect(feedback?.detail, 'Peer：hello');
+      expect(feedback?.danger, isFalse);
+      expect(notificationFacade.lastInAppTitle, isNull);
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
@@ -1319,8 +1405,8 @@ void main() {
       expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
       expect(container.read(conversationListProvider).conversations, isEmpty);
-      expect(notificationFacade.lastInAppTitle, 'Peer');
-      expect(notificationFacade.lastInAppBody, 'hello');
+      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
+      expect(notificationFacade.lastInAppTitle, isNull);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: ChatMessage(
@@ -1365,8 +1451,8 @@ void main() {
       );
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
-      expect(notificationFacade.lastInAppTitle, 'Peer');
-      expect(notificationFacade.lastInAppBody, 'hello group');
+      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello group');
+      expect(notificationFacade.lastInAppTitle, isNull);
     });
 
     test('v2 reader普通消息只信 committed 通知且保留 encrypted realtime 旧路径', () async {
@@ -1501,11 +1587,14 @@ void main() {
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
 
-      expect(notificationFacade.inAppCalls, 2);
-      expect(notificationFacade.lastInAppTitle, 'Encrypted Peer');
+      expect(notificationFacade.inAppCalls, 1);
       expect(
-        notificationFacade.lastInAppBody,
-        'existing secure realtime payload',
+        container.read(uiFeedbackProvider)?.detail,
+        contains('Encrypted Peer'),
+      );
+      expect(
+        container.read(uiFeedbackProvider)?.detail,
+        contains('existing secure realtime payload'),
       );
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
@@ -1553,7 +1642,11 @@ void main() {
         container.read(groupProvider).groups.single.groupId,
         'secure-group',
       );
-      expect(notificationFacade.inAppCalls, 3);
+      expect(notificationFacade.inAppCalls, 1);
+      expect(
+        container.read(uiFeedbackProvider)?.detail,
+        contains('Encrypted Peer'),
+      );
     });
 
     test('实时消息更新最近会话但不会覆盖未读 @ 我状态', () async {
@@ -1871,26 +1964,108 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('Runtime Agent 普通实时消息只触发通知和 core sync', () async {
+    test('Skill Agent 即使被旧模型标成 daemon，前台也不显示消息横幅', () async {
+      const skillDid =
+          'did:wba:agent-connect.cn:agent:skill:skill-test:e1_skill';
       container.read(agentsProvider.notifier).applyControlPayload(
         const <String, Object?>{
           'schema': 'awiki.agent.status.v1',
-          'status_scope': 'snapshot',
-          'daemon_agent_did': 'did:agent:daemon',
+          'status_scope': 'daemon',
+          'daemon_agent_did': skillDid,
           'daemon': <String, Object?>{
-            'agent_did': 'did:agent:daemon',
+            'agent_did': skillDid,
+            'display_name': 'AWiki Skill Agent',
             'status': 'ready',
           },
-          'runtimes': <Object?>[
-            <String, Object?>{
-              'agent_did': 'did:agent:runtime',
-              'daemon_agent_did': 'did:agent:daemon',
-              'runtime': 'hermes',
-              'status': 'ready',
-            },
-          ],
         },
       );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'skill-normal',
+          remoteId: 'skill-normal',
+          threadId: 'dm:skill',
+          senderDid: skillDid,
+          senderName: 'AWiki Skill Agent',
+          receiverDid: 'did:test:me',
+          content: '任务已完成',
+          createdAt: DateTime(2026, 7, 29, 10, 17),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'dm:skill',
+          conversationId: 'dm:skill',
+          displayName: 'AWiki Skill Agent',
+          lastMessagePreview: '任务已完成',
+          lastMessageAt: DateTime(2026, 7, 29, 10, 17),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: skillDid,
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
+    test('Skill Agent 即使被旧模型标成 daemon，后台仍显示系统通知', () async {
+      const skillDid =
+          'did:wba:agent-connect.cn:agent:skill:skill-test:e1_skill';
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'daemon',
+          'daemon_agent_did': skillDid,
+          'daemon': <String, Object?>{
+            'agent_did': skillDid,
+            'display_name': 'AWiki Skill Agent',
+            'status': 'ready',
+          },
+        },
+      );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'skill-background',
+          remoteId: 'skill-background',
+          threadId: 'dm:skill',
+          senderDid: skillDid,
+          senderName: 'AWiki Skill Agent',
+          receiverDid: 'did:test:me',
+          content: '任务已完成',
+          createdAt: DateTime(2026, 7, 29, 10, 18),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'dm:skill',
+          conversationId: 'dm:skill',
+          displayName: 'AWiki Skill Agent',
+          lastMessagePreview: '任务已完成',
+          lastMessageAt: DateTime(2026, 7, 29, 10, 18),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: skillDid,
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.systemNotificationCount, 1);
+      expect(notificationFacade.lastSystemTitle, 'AWiki Skill Agent');
+    });
+
+    test('Runtime Agent 普通实时消息先进入相关窗口且只触发 core sync', () async {
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: ChatMessage(
           localId: 'runtime-normal',
@@ -1920,6 +2095,8 @@ void main() {
           .setLifecycle(AppLifecycleState.resumed);
 
       await activate();
+      await settleAgentInventoryRefresh();
+      seedRuntimeAgent();
       messageSyncService.syncReasons.clear();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
@@ -1934,32 +2111,10 @@ void main() {
       expect(conversations, isEmpty);
       expect(container.read(conversationListProvider).unreadCount, 0);
       expect(messageSyncService.syncReasons, contains('realtime_message'));
-      expect(notificationFacade.lastInAppTitle, 'Hermes');
-      expect(notificationFacade.lastInAppBody, 'Hermes reply');
+      expect(notificationFacade.lastInAppTitle, isNull);
     });
 
     test('实时 Agent hint 不覆盖现有会话，只调度 core sync', () async {
-      container.read(agentsProvider.notifier).applyControlPayload(
-        const <String, Object?>{
-          'schema': 'awiki.agent.status.v1',
-          'status_scope': 'snapshot',
-          'daemon_agent_did': 'did:agent:daemon',
-          'daemon': <String, Object?>{
-            'agent_did': 'did:agent:daemon',
-            'status': 'ready',
-          },
-          'runtimes': <Object?>[
-            <String, Object?>{
-              'agent_did': 'did:agent:runtime:hermes',
-              'daemon_agent_did': 'did:agent:daemon',
-              'runtime': 'hermes',
-              'handle': 'hermes',
-              'display_name': 'Hermes',
-              'status': 'ready',
-            },
-          ],
-        },
-      );
       final pendingAlias = ConversationSummary(
         threadId: 'dm:pending:hermes.awiki.info',
         conversationId: 'dm:pending:hermes.awiki.info',
@@ -2004,6 +2159,28 @@ void main() {
           .setLifecycle(AppLifecycleState.resumed);
 
       await activate();
+      await settleAgentInventoryRefresh();
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime:hermes',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'handle': 'hermes',
+              'display_name': 'Hermes',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
       messageSyncService.syncReasons.clear();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
@@ -2027,10 +2204,10 @@ void main() {
         isEmpty,
       );
       expect(messageSyncService.syncReasons, contains('realtime_message'));
-      expect(notificationFacade.lastInAppTitle, 'Hermes');
+      expect(notificationFacade.lastInAppTitle, isNull);
     });
 
-    test('实时消息的过期 conversation hint 不会污染最近会话', () async {
+    test('Agent inventory 完成前的实时消息前台静默且不会污染最近会话', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
@@ -2071,7 +2248,8 @@ void main() {
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(conversationListProvider).unreadCount, 0);
       expect(messageSyncService.syncReasons, contains('realtime_message'));
-      expect(notificationFacade.lastInAppTitle, 'Hermes');
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.lastInAppTitle, isNull);
     });
 
     test('实时控制状态只调度可靠同步，不直接更新智能体投影', () async {
@@ -2138,6 +2316,212 @@ void main() {
       );
       expect(notificationFacade.lastInAppTitle, isNull);
       expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
+    test('前台三种业务终态保持安静且不进入通知 facade', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+
+      for (final entry in <(String, String?)>[
+        ('completed', null),
+        ('blocked', '补充访问权限'),
+        ('action_required', '确认是否继续'),
+      ]) {
+        await emitControl(
+          terminalPayload(
+            eventId: 'evt_${entry.$1}',
+            outcome: entry.$1,
+            nextStep: entry.$2,
+            finalMessageId: 'msg_${entry.$1}',
+          ),
+        );
+        expect(container.read(uiFeedbackProvider), isNull);
+      }
+
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    });
+
+    test('前台真实运行失败保持安静', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+
+      await emitControl(
+        terminalPayload(
+          eventId: 'evt_failed',
+          state: 'failed',
+          outcome: null,
+          finalMessageId: null,
+        ),
+      );
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+    });
+
+    test('running 状态不通知', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+
+      await emitControl(terminalPayload(state: 'running'));
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+    });
+
+    test('同一 run 的同一终态在 replay 和不同 event id 下只通知一次', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+
+      await emitControl(terminalPayload());
+      await emitControl(terminalPayload());
+      await emitControl(terminalPayload(eventId: 'evt_reconnected'));
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+    });
+
+    test('普通最终回复先到时三种业务终态胜出且只通知一次', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await settleAgentInventoryRefresh();
+      seedRuntimeAgent();
+
+      for (final entry in <(String, String?)>[
+        ('completed', null),
+        ('blocked', '补充访问权限'),
+        ('action_required', '确认是否继续'),
+      ]) {
+        final messageId = 'msg_message_first_${entry.$1}';
+        gateway.nextRealtimeUpdate = buildRuntimeUpdate(messageId: messageId);
+        await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+        await emitControl(
+          terminalPayload(
+            eventId: 'evt_message_first_${entry.$1}',
+            outcome: entry.$1,
+            nextStep: entry.$2,
+            finalMessageId: messageId,
+          ),
+        );
+
+        expect(container.read(uiFeedbackProvider), isNull);
+      }
+
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+    });
+
+    test('completed 状态先到时普通最终回复不双响', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await settleAgentInventoryRefresh();
+      seedRuntimeAgent();
+
+      await emitControl(terminalPayload());
+      gateway.nextRealtimeUpdate = buildRuntimeUpdate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      await pumpEventQueue();
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 0);
+    });
+
+    test('Runtime Agent 非终态消息在相关窗口超时后回退普通通知', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      await settleAgentInventoryRefresh();
+      seedRuntimeAgent();
+      gateway.nextRealtimeUpdate = buildRuntimeUpdate(
+        messageId: 'msg_timeout',
+        content: 'Progress needs attention',
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+      expect(notificationFacade.inAppNotificationCount, 0);
+
+      await Future<void>.delayed(
+        AgentTerminalNotificationDeduplicator.runtimeMessageCorrelationWindow +
+            const Duration(milliseconds: 100),
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+      await emitControl(
+        terminalPayload(
+          eventId: 'evt_timeout_late',
+          finalMessageId: 'msg_timeout',
+        ),
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+    });
+
+    test(
+      'logout cancels pending Runtime Agent ordinary notification',
+      () async {
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.resumed);
+        await activate();
+        await settleAgentInventoryRefresh();
+        seedRuntimeAgent();
+        gateway.nextRealtimeUpdate = buildRuntimeUpdate(
+          messageId: 'msg_logout_pending',
+        );
+        await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+        await container.read(appRuntimeProvider.notifier).logout();
+        await Future<void>.delayed(
+          AgentTerminalNotificationDeduplicator
+                  .runtimeMessageCorrelationWindow +
+              const Duration(milliseconds: 100),
+        );
+
+        expect(notificationFacade.inAppNotificationCount, 0);
+        expect(notificationFacade.systemNotificationCount, 0);
+      },
+    );
+
+    test('后台终态仅发送一次本地系统通知', () async {
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      await activate();
+
+      await emitControl(
+        terminalPayload(outcome: 'action_required', nextStep: '确认是否继续'),
+      );
+      await emitControl(
+        terminalPayload(
+          eventId: 'evt_replay',
+          outcome: 'action_required',
+          nextStep: '确认是否继续',
+        ),
+      );
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.inAppNotificationCount, 0);
+      expect(notificationFacade.systemNotificationCount, 1);
+      expect(notificationFacade.lastSystemTitle, isNotEmpty);
+      expect(notificationFacade.lastSystemBody, contains('确认是否继续'));
     });
 
     test('实时可见控制状态不进入最近会话、消息或通知', () async {
