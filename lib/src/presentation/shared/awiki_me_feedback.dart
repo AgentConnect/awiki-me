@@ -9,6 +9,7 @@ import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
 
 const _awikiMeInfoToastDuration = Duration(seconds: 2);
+const _awikiMeInfoDetailToastDuration = Duration(seconds: 5);
 const _awikiMeDangerToastDuration = Duration(seconds: 8);
 
 class AwikiMeToast {
@@ -25,7 +26,11 @@ class AwikiMeToast {
     }
     final displayDuration =
         duration ??
-        (danger ? _awikiMeDangerToastDuration : _awikiMeInfoToastDuration);
+        (danger
+            ? _awikiMeDangerToastDuration
+            : detail?.trim().isNotEmpty == true
+            ? _awikiMeInfoDetailToastDuration
+            : _awikiMeInfoToastDuration);
     final entry = OverlayEntry(
       builder: (context) {
         final theme = context.awikiTheme;
@@ -82,7 +87,7 @@ class _ToastContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final detailText = detail?.trim();
-    if (!danger || detailText == null || detailText.isEmpty) {
+    if (detailText == null || detailText.isEmpty) {
       return Text(
         message,
         textAlign: TextAlign.center,
@@ -91,6 +96,34 @@ class _ToastContent extends StatelessWidget {
           fontSize: 14,
           fontWeight: FontWeight.w500,
         ),
+      );
+    }
+    if (!danger) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: theme.surface,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            detailText,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: theme.surface.withValues(alpha: 0.9),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
       );
     }
     return Row(

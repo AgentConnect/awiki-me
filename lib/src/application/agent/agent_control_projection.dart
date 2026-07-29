@@ -24,6 +24,7 @@ bool shouldShowConversationForChatList(
   final daemonDids = daemonAgentDids
       .map((did) => did.trim())
       .where((did) => did.isNotEmpty)
+      .where((did) => !_looksLikeSkillAgentDirectTarget(did))
       .toSet();
   return targetDid == null ||
       targetDid.isEmpty ||
@@ -53,4 +54,9 @@ bool _looksLikeDaemonDirectTarget(String? value) {
   }
   return normalized.contains(':agent:daemon:') ||
       normalized.startsWith('edgehost-');
+}
+
+bool _looksLikeSkillAgentDirectTarget(String? value) {
+  final normalized = value?.trim().toLowerCase();
+  return normalized != null && normalized.contains(':agent:skill:');
 }
