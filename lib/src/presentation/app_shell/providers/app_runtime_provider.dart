@@ -782,6 +782,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final isForeground =
         ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
     if (isForeground) {
+      final isAgentMessage = message.senderDid.trim().toLowerCase().contains(
+        ':agent:',
+      );
+      if (isAgentMessage) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showInfo(AppMessage.newMessageArrived(), detail: '$title：$body');
@@ -793,6 +799,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _showAgentTerminalNotification(AgentTerminalNotification notification) {
+    final isForeground =
+        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
+    if (isForeground) {
+      return;
+    }
     final l10n = _currentLocalizations();
     final message = switch (notification.kind) {
       AgentTerminalKind.completed => AppMessage.agentTerminalCompleted(
@@ -811,17 +822,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         AppMessage.agentTerminalRuntimeFailed(),
     };
     final body = message.resolve(l10n);
-    final isForeground =
-        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
-    if (isForeground) {
-      final feedback = ref.read(uiFeedbackProvider.notifier);
-      if (notification.kind == AgentTerminalKind.runtimeFailed) {
-        feedback.showError(message);
-      } else {
-        feedback.showInfo(message);
-      }
-      return;
-    }
     unawaited(
       ref
           .read(notificationFacadeProvider)

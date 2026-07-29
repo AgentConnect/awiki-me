@@ -54,7 +54,7 @@ FakeAgentControlService _runtimeAgentControl() {
 }
 
 void main() {
-  testWidgets('前台所有业务终态和运行失败经 AppShell 显示真实 Toast', (tester) async {
+  testWidgets('前台所有业务终态和运行失败均不显示 App 内横幅', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'default',
@@ -139,13 +139,13 @@ void main() {
       await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
       await tester.pump();
       await tester.pump();
-      expect(find.text(entry.$2), findsOneWidget);
+      expect(find.text(entry.$2), findsNothing);
     }
 
     await tester.pump(const Duration(seconds: 8));
   });
 
-  testWidgets('消息先到时 matching blocked 终态取消普通通知并胜出', (tester) async {
+  testWidgets('消息先到时 matching blocked 终态取消普通通知且前台静默', (tester) async {
     const session = SessionIdentity(
       did: 'did:test:me',
       credentialName: 'default',
@@ -244,7 +244,7 @@ void main() {
     await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
     await tester.pump();
     await tester.pump();
-    expect(find.text('已阻塞: 缺少访问权限. 下一步: 补充访问权限'), findsOneWidget);
+    expect(find.text('已阻塞: 缺少访问权限. 下一步: 补充访问权限'), findsNothing);
 
     await tester.pump(
       AgentTerminalNotificationDeduplicator.runtimeMessageCorrelationWindow,

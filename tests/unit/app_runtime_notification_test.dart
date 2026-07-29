@@ -1249,7 +1249,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('Skill Agent 即使被旧模型标成 daemon 仍显示普通消息通知', () async {
+    test('Skill Agent 即使被旧模型标成 daemon，前台也不显示消息横幅', () async {
       const skillDid =
           'did:wba:agent-connect.cn:agent:skill:skill-test:e1_skill';
       container.read(agentsProvider.notifier).applyControlPayload(
@@ -1295,10 +1295,59 @@ void main() {
       await activate();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
 
-      final feedback = container.read(uiFeedbackProvider);
-      expect(feedback?.message.id, 'newMessageArrived');
-      expect(feedback?.detail, 'AWiki Skill Agent：任务已完成');
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
+    test('Skill Agent 即使被旧模型标成 daemon，后台仍显示系统通知', () async {
+      const skillDid =
+          'did:wba:agent-connect.cn:agent:skill:skill-test:e1_skill';
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'daemon',
+          'daemon_agent_did': skillDid,
+          'daemon': <String, Object?>{
+            'agent_did': skillDid,
+            'display_name': 'AWiki Skill Agent',
+            'status': 'ready',
+          },
+        },
+      );
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        message: ChatMessage(
+          localId: 'skill-background',
+          remoteId: 'skill-background',
+          threadId: 'dm:skill',
+          senderDid: skillDid,
+          senderName: 'AWiki Skill Agent',
+          receiverDid: 'did:test:me',
+          content: '任务已完成',
+          createdAt: DateTime(2026, 7, 29, 10, 18),
+          isMine: false,
+          sendState: MessageSendState.sent,
+        ),
+        conversationHint: ConversationSummary(
+          threadId: 'dm:skill',
+          conversationId: 'dm:skill',
+          displayName: 'AWiki Skill Agent',
+          lastMessagePreview: '任务已完成',
+          lastMessageAt: DateTime(2026, 7, 29, 10, 18),
+          unreadCount: 1,
+          isGroup: false,
+          targetDid: skillDid,
+        ),
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+
+      await activate();
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.systemNotificationCount, 1);
+      expect(notificationFacade.lastSystemTitle, 'AWiki Skill Agent');
     });
 
     test('Runtime Agent 普通实时消息先进入相关窗口且只触发 core sync', () async {
@@ -1443,7 +1492,7 @@ void main() {
       expect(notificationFacade.lastInAppTitle, isNull);
     });
 
-    test('实时消息的过期 conversation hint 不会污染最近会话', () async {
+    test('Agent inventory 完成前的实时消息前台静默且不会污染最近会话', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
@@ -1484,10 +1533,7 @@ void main() {
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(conversationListProvider).unreadCount, 0);
       expect(messageSyncService.syncReasons, contains('realtime_message'));
-      expect(
-        container.read(uiFeedbackProvider)?.detail,
-        'Hermes：runtime reply',
-      );
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
     });
 
@@ -1556,16 +1602,16 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('前台三种业务终态映射为真实 UI feedback 且不进入通知 facade', () async {
+    test('前台三种业务终态保持安静且不进入通知 facade', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
       await activate();
 
-      for (final entry in <(String, String?, String)>[
-        ('completed', null, 'agentTerminalCompleted'),
-        ('blocked', '补充访问权限', 'agentTerminalBlocked'),
-        ('action_required', '确认是否继续', 'agentTerminalActionRequired'),
+      for (final entry in <(String, String?)>[
+        ('completed', null),
+        ('blocked', '补充访问权限'),
+        ('action_required', '确认是否继续'),
       ]) {
         await emitControl(
           terminalPayload(
@@ -1575,9 +1621,7 @@ void main() {
             finalMessageId: 'msg_${entry.$1}',
           ),
         );
-        final feedback = container.read(uiFeedbackProvider);
-        expect(feedback?.message.id, entry.$3);
-        expect(feedback?.danger, isFalse);
+        expect(container.read(uiFeedbackProvider), isNull);
       }
 
       expect(notificationFacade.inAppNotificationCount, 0);
@@ -1585,7 +1629,7 @@ void main() {
       expect(container.read(conversationListProvider).conversations, isEmpty);
     });
 
-    test('前台真实运行失败显示危险 UI feedback', () async {
+    test('前台真实运行失败保持安静', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
@@ -1600,9 +1644,7 @@ void main() {
         ),
       );
 
-      final feedback = container.read(uiFeedbackProvider);
-      expect(feedback?.message.id, 'agentTerminalRuntimeFailed');
-      expect(feedback?.danger, isTrue);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.inAppNotificationCount, 0);
       expect(notificationFacade.systemNotificationCount, 0);
     });
@@ -1627,11 +1669,10 @@ void main() {
       await activate();
 
       await emitControl(terminalPayload());
-      final firstFeedbackId = container.read(uiFeedbackProvider)?.id;
       await emitControl(terminalPayload());
       await emitControl(terminalPayload(eventId: 'evt_reconnected'));
 
-      expect(container.read(uiFeedbackProvider)?.id, firstFeedbackId);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.inAppNotificationCount, 0);
       expect(notificationFacade.systemNotificationCount, 0);
     });
@@ -1644,10 +1685,10 @@ void main() {
       await settleAgentInventoryRefresh();
       seedRuntimeAgent();
 
-      for (final entry in <(String, String?, String)>[
-        ('completed', null, 'agentTerminalCompleted'),
-        ('blocked', '补充访问权限', 'agentTerminalBlocked'),
-        ('action_required', '确认是否继续', 'agentTerminalActionRequired'),
+      for (final entry in <(String, String?)>[
+        ('completed', null),
+        ('blocked', '补充访问权限'),
+        ('action_required', '确认是否继续'),
       ]) {
         final messageId = 'msg_message_first_${entry.$1}';
         gateway.nextRealtimeUpdate = buildRuntimeUpdate(messageId: messageId);
@@ -1661,7 +1702,7 @@ void main() {
           ),
         );
 
-        expect(container.read(uiFeedbackProvider)?.message.id, entry.$3);
+        expect(container.read(uiFeedbackProvider), isNull);
       }
 
       expect(notificationFacade.inAppNotificationCount, 0);
@@ -1677,13 +1718,11 @@ void main() {
       seedRuntimeAgent();
 
       await emitControl(terminalPayload());
-      final feedbackId = container.read(uiFeedbackProvider)?.id;
       gateway.nextRealtimeUpdate = buildRuntimeUpdate();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
 
-      expect(feedbackId, isNotNull);
-      expect(container.read(uiFeedbackProvider)?.id, feedbackId);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.inAppNotificationCount, 0);
       expect(notificationFacade.systemNotificationCount, 0);
     });
@@ -1707,9 +1746,7 @@ void main() {
         AgentTerminalNotificationDeduplicator.runtimeMessageCorrelationWindow +
             const Duration(milliseconds: 100),
       );
-      final feedback = container.read(uiFeedbackProvider);
-      expect(feedback?.message.id, 'newMessageArrived');
-      expect(feedback?.detail, 'Codex：Progress needs attention');
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.inAppNotificationCount, 0);
       await emitControl(
         terminalPayload(
@@ -1717,7 +1754,7 @@ void main() {
           finalMessageId: 'msg_timeout',
         ),
       );
-      expect(container.read(uiFeedbackProvider)?.id, feedback?.id);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.inAppNotificationCount, 0);
     });
 
