@@ -52,6 +52,27 @@ const String _syncRecoveryAccountAllowlistEnv =
     'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
 const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
 const String _syncRecoveryTarget = 'awiki-info-testing';
+const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
+const String _accountStateOperatorCommandEnv =
+    'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
+const String _accountStateFailpointEnableEnv =
+    'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
+const String _accountStateAllowlistEnv =
+    'AWIKI_ACCOUNT_STATE_TEST_ACCOUNT_ALLOWLIST';
+const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
+const String _defaultRemoteTargetManifestPath =
+    '../awiki-system-test/suites/remote-test-targets.json';
+const Set<String> _accountStateRequiredTargetCapabilities = <String>{
+  'multi-device-v1',
+  'message-sync-v2',
+  'account-state-sync-v1',
+};
+const List<String> _localAccountStateOperatorCommand = <String>[
+  '/home/ecs-user/awiki-space/user-service/.venv/bin/python',
+  '/home/ecs-user/awiki-space/user-service/scripts/'
+      'run_account_state_sync_test_action.py',
+  '--apply',
+];
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
@@ -102,6 +123,16 @@ const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-MESSAGE-SYNC-E2E-002',
   'DEVICE-MESSAGE-ONLINE-SYNC-E2E-001',
   'DEVICE-MESSAGE-TAIL-ONLY-E2E-001',
+  'DEVICE-MESSAGE-READ-SYNC-E2E-001',
+  'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001',
+  'DEVICE-AGENT-ADD-SYNC-E2E-001',
+  'DEVICE-AGENT-RENAME-SYNC-E2E-001',
+  'DEVICE-AGENT-DELETE-SYNC-E2E-001',
+  'DEVICE-AGENT-UNBIND-SYNC-E2E-001',
+  'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001',
+  'DEVICE-PROFILE-SYNC-E2E-001',
+  'DEVICE-REGISTRY-SYNC-E2E-001',
+  'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
 ];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',
@@ -758,6 +789,10 @@ class DesktopE2eRunner {
       await commands.requireFile('test_driver/integration_test.dart');
       if (pairConfig.functional) {
         _requireAppPairRecoveryOperatorEnvironment(Platform.environment);
+        _requireAppPairAccountStateOperatorEnvironment(
+          root: root,
+          environment: Platform.environment,
+        );
         if (!daemonStateRootFitsUnixSocket(appPairDaemonStateRootDir.path)) {
           throw E2eFailure(
             'The App-pair Daemon state root exceeds the macOS Unix-domain socket path limit.',
@@ -765,6 +800,7 @@ class DesktopE2eRunner {
         }
         await commands.requireFile(pairConfig.cliBin!);
         await commands.requireFile(pairConfig.daemonBinary!);
+        await commands.requireFile(_localAccountStateOperatorCommand[1]);
         if (pairConfig.daemonEnvFile != null) {
           await commands.requireFile(pairConfig.daemonEnvFile!);
         }
@@ -861,6 +897,14 @@ class DesktopE2eRunner {
                 Platform.environment[_syncRecoveryAccountAllowlistEnv]!,
             _syncRecoveryTargetEnv:
                 Platform.environment[_syncRecoveryTargetEnv]!,
+            _accountStateEnableEnv:
+                Platform.environment[_accountStateEnableEnv]!,
+            _accountStateOperatorCommandEnv:
+                Platform.environment[_accountStateOperatorCommandEnv]!,
+            _accountStateFailpointEnableEnv:
+                Platform.environment[_accountStateFailpointEnableEnv]!,
+            _accountStateAllowlistEnv:
+                Platform.environment[_accountStateAllowlistEnv]!,
           };
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
@@ -949,6 +993,11 @@ class DesktopE2eRunner {
             'readyFile': appPairDaemonReadyFile.path,
             'handle': pairConfig.daemonHandle,
             'envFile': pairConfig.daemonEnvFile,
+          },
+          'accountState': <String, Object?>{
+            'operatorCommand': _accountStateOperatorCommand(
+              Platform.environment,
+            ),
           },
         },
       'suite': <String, Object?>{
@@ -2740,6 +2789,91 @@ void _requireAppPairRecoveryOperatorEnvironment(
     throw E2eFailure(
       'The functional App-pair suite requires the reviewed sync-recovery '
       'operator opt-in, target, mode, and account allowlist.',
+    );
+  }
+}
+
+List<String> _accountStateOperatorCommand(Map<String, String> environment) {
+  final raw = environment[_accountStateOperatorCommandEnv]?.trim() ?? '';
+  Object? decoded;
+  try {
+    decoded = jsonDecode(raw);
+  } on FormatException {
+    throw E2eFailure('The App-pair Account State operator command is invalid.');
+  }
+  if (decoded is! List ||
+      decoded.isEmpty ||
+      decoded.any((value) => value is! String || value.trim().isEmpty)) {
+    throw E2eFailure('The App-pair Account State operator command is invalid.');
+  }
+  final command = decoded.cast<String>().toList(growable: false);
+  if (!_sameOrderedStrings(command, _localAccountStateOperatorCommand)) {
+    throw E2eFailure(
+      'The App-pair Account State operator command is not reviewed.',
+    );
+  }
+  return command;
+}
+
+void _requireAppPairAccountStateOperatorEnvironment({
+  required Directory root,
+  required Map<String, String> environment,
+}) {
+  if (environment[_accountStateEnableEnv]?.trim() != '1' ||
+      environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
+      environment[_syncRecoveryOperatorModeEnv]?.trim() != 'local' ||
+      environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
+      environment[_accountStateAllowlistEnv]?.trim().isNotEmpty != true) {
+    throw E2eFailure(
+      'The App-pair Account State capability, failpoint, target, mode, '
+      'and account allowlist gate is incomplete.',
+    );
+  }
+  _accountStateOperatorCommand(environment);
+
+  final configuredPath =
+      environment[_remoteTargetManifestEnv]?.trim().isNotEmpty == true
+      ? environment[_remoteTargetManifestEnv]!.trim()
+      : _defaultRemoteTargetManifestPath;
+  final manifestFile = File(
+    configuredPath.startsWith('/')
+        ? configuredPath
+        : '${root.path}/$configuredPath',
+  );
+  Object? decoded;
+  try {
+    decoded = jsonDecode(manifestFile.readAsStringSync());
+  } on Object {
+    throw E2eFailure(
+      'The App-pair reviewed remote target manifest is unavailable.',
+    );
+  }
+  if (decoded is! Map || decoded['schemaVersion'] != 1) {
+    throw E2eFailure(
+      'The App-pair reviewed remote target manifest is invalid.',
+    );
+  }
+  final targets = decoded['targets'];
+  final target = targets is Map ? targets[_syncRecoveryTarget] : null;
+  if (target is! Map ||
+      target['didDomain'] != 'awiki.info' ||
+      target['userServiceUrl'] != 'https://awiki.info' ||
+      target['messageServiceUrl'] != 'https://awiki.info') {
+    throw E2eFailure(
+      'The App-pair reviewed remote target does not match awiki.info.',
+    );
+  }
+  final rawCapabilities = target['capabilities'];
+  final capabilities = rawCapabilities is List
+      ? rawCapabilities.map((value) => value.toString()).toSet()
+      : const <String>{};
+  final missing = _accountStateRequiredTargetCapabilities.difference(
+    capabilities,
+  );
+  if (missing.isNotEmpty) {
+    throw E2eFailure(
+      'The App-pair reviewed remote target is missing required Account '
+      'State capabilities.',
     );
   }
 }

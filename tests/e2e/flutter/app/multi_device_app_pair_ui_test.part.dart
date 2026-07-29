@@ -546,7 +546,15 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairOnlineSyncV2CaseId) ||
       _invocationExpects(_appPairTailOnlySyncV2CaseId) ||
       _invocationExpects(_appPairReadSyncV2CaseId) ||
-      _invocationExpects(_appPairOfflineRecoveryV2CaseId);
+      _invocationExpects(_appPairOfflineRecoveryV2CaseId) ||
+      _invocationExpects(_appPairAgentAddSyncCaseId) ||
+      _invocationExpects(_appPairAgentRenameSyncCaseId) ||
+      _invocationExpects(_appPairAgentDeleteSyncCaseId) ||
+      _invocationExpects(_appPairAgentUnbindSyncCaseId) ||
+      _invocationExpects(_appPairAgentArchiveSyncCaseId) ||
+      _invocationExpects(_appPairProfileSyncCaseId) ||
+      _invocationExpects(_appPairRegistrySyncCaseId) ||
+      _invocationExpects(_appPairDomainIsolationCaseId);
   final expectsSecurity = _invocationExpects(_appPairCaseId);
   if (config.functional != expectsFunctional ||
       config.functional == expectsSecurity ||
@@ -820,6 +828,20 @@ Future<void> _runAppPairAdminFunctional({
     content: agentPromptText,
   );
   await config.coordinator.publish('admin', 'functional_agent_prompt_visible');
+  await _runAppPairAdminAccountStateDomains(
+    tester: tester,
+    config: config,
+    bootstrap: bootstrap,
+    container: container,
+    accountDid: adminDid,
+    joinedDeviceId: joinedDeviceId,
+    peer: peer,
+    peerDid: peerDid,
+    conversationId: canonicalConversationId,
+    agents: agents,
+    codex: codex,
+    claude: claude,
+  );
 }
 
 Future<void> _runAppPairJoinerFunctional({
@@ -1041,11 +1063,26 @@ Future<void> _runAppPairJoinerFunctional({
     preservedMessageText: outboundText,
   );
   await _openAppPairAgentsPage(tester);
+  final agentAddBefore = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_agent_add_before',
+  );
   await config.coordinator.publish('joiner', 'functional_agent_observer_ready');
   final created = await config.coordinator.waitFor(
     'admin',
     'functional_agents_created',
     timeout: const Duration(minutes: 3),
+  );
+  final agentAddAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_agent_add_after',
+  );
+  _requireDomainAdvanced(
+    agentAddBefore.domainVersions,
+    agentAddAfter.domainVersions,
+    ProductAccountDomain.agentInventory,
   );
   final daemon = await _waitForAppPairAgent(
     tester: tester,
@@ -1098,6 +1135,14 @@ Future<void> _runAppPairJoinerFunctional({
       'both_runtime_agents_visible',
     ],
   );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentAddSyncCaseId,
+    phases: const <String>[
+      'admin_app_created_runtime_agents',
+      'joining_app_pulled_new_inventory_version',
+      'joining_app_projected_exact_added_agents_once',
+    ],
+  );
   final agentPrompt = await _sendAppPairAgentPromptThroughUi(
     tester: tester,
     container: container,
@@ -1128,6 +1173,917 @@ Future<void> _runAppPairJoinerFunctional({
       'admin_app_agent_own_sync_visible',
     ],
   );
+  await _runAppPairJoinerAccountStateDomains(
+    tester: tester,
+    config: config,
+    bootstrap: bootstrap,
+    container: container,
+    accountDid: accountDid,
+    joinedDeviceId: joinedDeviceId,
+    peerDid: peerDid,
+    conversationId: conversationId,
+  );
+}
+
+Future<void> _runAppPairAdminAccountStateDomains({
+  required WidgetTester tester,
+  required _AppPairRunConfig config,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required String accountDid,
+  required String joinedDeviceId,
+  required _JoinCli peer,
+  required String peerDid,
+  required String conversationId,
+  required AgentsController agents,
+  required AgentSummary codex,
+  required AgentSummary claude,
+}) async {
+  final accountId = _requireAppPairAccountId(container);
+
+  final renamedCodex = 'Pair Codex ${_safeId(config.runId, 8)}';
+  await agents.renameAgent(agentDid: codex.agentDid, displayName: renamedCodex);
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: codex.agentDid,
+    displayName: renamedCodex,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_agent_renamed',
+    data: <String, Object?>{
+      'agentDid': codex.agentDid,
+      'displayName': renamedCodex,
+    },
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_agent_rename_converged',
+    timeout: const Duration(minutes: 2),
+  );
+
+  agents.select(claude.agentDid);
+  await agents.unbindSelected();
+  await _waitForAppPairAgentAbsent(
+    tester: tester,
+    container: container,
+    agentDid: claude.agentDid,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_agent_unbound',
+    data: <String, Object?>{'agentDid': claude.agentDid},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_agent_unbind_converged',
+    timeout: const Duration(minutes: 2),
+  );
+
+  agents.select(codex.agentDid);
+  await agents.deleteSelected();
+  await _waitForAppPairAgentAbsent(
+    tester: tester,
+    container: container,
+    agentDid: codex.agentDid,
+    timeout: const Duration(minutes: 2),
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_agent_deleted',
+    data: <String, Object?>{'agentDid': codex.agentDid},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_agent_archive_converged',
+    timeout: const Duration(minutes: 2),
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentDeleteSyncCaseId,
+    phases: const <String>[
+      'admin_app_submitted_real_runtime_delete',
+      'admin_app_removed_deleted_runtime_after_authoritative_reconcile',
+      'joining_app_confirmed_terminal_inventory_convergence',
+    ],
+  );
+
+  final beforeProfile = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_profile_before',
+  );
+  final nickname = 'Pair Profile ${_safeId(config.runId, 10)}';
+  final bio = 'account-state-${_safeId(config.runId, 12)}';
+  await container
+      .read(profileProvider.notifier)
+      .updateProfile(ProfilePatch(displayName: nickname, bio: bio));
+  await _waitForAppPairProfile(
+    tester: tester,
+    container: container,
+    displayName: nickname,
+    bio: bio,
+  );
+  final afterProfile = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_profile_after',
+  );
+  _requireOnlyAccountStateDomainAdvanced(
+    beforeProfile.domainVersions,
+    afterProfile.domainVersions,
+    advanced: ProductAccountDomain.profile,
+    ignored: const <ProductAccountDomain>{ProductAccountDomain.agentStatus},
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_profile_updated',
+    data: <String, Object?>{'displayName': nickname, 'bio': bio},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_profile_converged',
+    timeout: const Duration(minutes: 2),
+  );
+
+  final isolationAgent = await _runAppPairAccountStateOperator(
+    config,
+    action: 'agent_add',
+    accountId: accountId,
+    params: <String, Object?>{'controller_did': accountDid},
+    expectedResultKeys: const <String>{
+      'agent_did',
+      'display_name',
+      'active_state',
+    },
+  );
+  final isolationAgentDid = _required(isolationAgent, 'agent_did');
+  final isolationOldName = _required(isolationAgent, 'display_name');
+  if (isolationAgent['active_state'] != 'active') {
+    fail('The Account State isolation Agent did not start active.');
+  }
+  await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_isolation_fixture',
+  );
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: isolationAgentDid,
+    displayName: isolationOldName,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_isolation_fixture_ready',
+    data: <String, Object?>{
+      'agentDid': isolationAgentDid,
+      'displayName': isolationOldName,
+    },
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_isolation_fixture_converged',
+    timeout: const Duration(minutes: 2),
+  );
+
+  final receiptId = 'receipt-${_nonce(14)}';
+  await _runAppPairAccountStateOperator(
+    config,
+    action: 'account_state_fail_once',
+    accountId: accountId,
+    params: <String, Object?>{
+      'protocol_device_id': joinedDeviceId,
+      'domain': 'agent_inventory',
+      'ttl_seconds': 60,
+      'receipt_id': receiptId,
+    },
+    expectedResultKeys: const <String>{
+      'domain',
+      'armed',
+      'ttl_seconds',
+      'receipt_id',
+    },
+  );
+  final renamedIsolationAgent = await _runAppPairAccountStateOperator(
+    config,
+    action: 'agent_rename',
+    accountId: accountId,
+    params: <String, Object?>{'agent_did': isolationAgentDid},
+    expectedResultKeys: const <String>{
+      'agent_did',
+      'display_name',
+      'active_state',
+    },
+  );
+  final isolationNewName = _required(renamedIsolationAgent, 'display_name');
+  if (_required(renamedIsolationAgent, 'agent_did') != isolationAgentDid ||
+      isolationNewName == isolationOldName ||
+      renamedIsolationAgent['active_state'] != 'active') {
+    fail('The isolation Agent rename receipt was not closed.');
+  }
+  final isolationNickname = 'Isolation ${_safeId(config.runId, 10)}';
+  final isolationProfile = await _runAppPairAccountStateOperator(
+    config,
+    action: 'profile_update',
+    accountId: accountId,
+    params: <String, Object?>{'nick_name': isolationNickname},
+    expectedResultKeys: const <String>{'nick_name'},
+  );
+  if (isolationProfile['nick_name'] != isolationNickname) {
+    fail('The isolation Profile mutation receipt was not closed.');
+  }
+  final isolationMessage = _appPairMessage(config.runId, 'domain-isolation');
+  final isolationMessageId = await peer.sendDirectText(
+    to: accountDid,
+    text: isolationMessage,
+  );
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: isolationMessage,
+    messageId: isolationMessageId,
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_isolation_mutated',
+    data: <String, Object?>{
+      'agentDid': isolationAgentDid,
+      'oldDisplayName': isolationOldName,
+      'newDisplayName': isolationNewName,
+      'profileDisplayName': isolationNickname,
+      'messageId': isolationMessageId,
+      'receiptId': receiptId,
+    },
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_isolation_recovered',
+    timeout: const Duration(minutes: 3),
+  );
+
+  await container.read(devicesProvider.notifier).loadManagement();
+  final registryBefore = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_registry_before',
+  );
+  final target = container
+      .read(devicesProvider)
+      .registry
+      ?.devices
+      .where(
+        (device) =>
+            device.protocolDeviceId == joinedDeviceId &&
+            device.status == DeviceStatus.active &&
+            !device.isCurrent,
+      )
+      .toList(growable: false);
+  if (target == null || target.length != 1) {
+    fail('The admin App did not resolve the exact active revoke target.');
+  }
+  await config.coordinator.publish('admin', 'account_state_registry_ready');
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_registry_observer_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final revoked = await container
+      .read(devicesProvider.notifier)
+      .revokeDevice(
+        target: target.single,
+        presenceReason: 'AWiki E2E exact sibling revoke',
+      );
+  if (!revoked) {
+    fail('The admin App did not complete the exact sibling revoke.');
+  }
+  await _pumpUntil(
+    tester,
+    () {
+      final registry = container.read(devicesProvider).registry;
+      return registry?.devices
+              .where(
+                (device) =>
+                    device.protocolDeviceId == joinedDeviceId &&
+                    device.status == DeviceStatus.revoked,
+              )
+              .length ==
+          1;
+    },
+    timeout: const Duration(minutes: 2),
+    failure: 'The admin App fresh Registry did not confirm sibling revoke.',
+  );
+  final registryAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_registry_after',
+  );
+  _requireDomainAdvanced(
+    registryBefore.domainVersions,
+    registryAfter.domainVersions,
+    ProductAccountDomain.deviceRegistry,
+  );
+  final cachedRegistry = container.read(devicesProvider).cachedRegistry;
+  if (cachedRegistry == null ||
+      cachedRegistry.devices
+              .where(
+                (device) =>
+                    device.protocolDeviceId == joinedDeviceId &&
+                    device.status == DeviceStatus.revoked,
+              )
+              .length !=
+          1) {
+    fail('The admin App display cache did not converge the revoked sibling.');
+  }
+  await config.coordinator.publish('admin', 'account_state_registry_revoked');
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_registry_fenced',
+    timeout: const Duration(minutes: 2),
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairRegistrySyncCaseId,
+    phases: const <String>[
+      'admin_security_path_loaded_fresh_registry',
+      'admin_revoked_exact_active_sibling_with_user_presence',
+      'active_admin_registry_cache_converged_higher_version',
+      'revoked_sibling_product_request_was_fenced',
+    ],
+  );
+}
+
+Future<void> _runAppPairJoinerAccountStateDomains({
+  required WidgetTester tester,
+  required _AppPairRunConfig config,
+  required AppBootstrap bootstrap,
+  required ProviderContainer container,
+  required String accountDid,
+  required String joinedDeviceId,
+  required String peerDid,
+  required String conversationId,
+}) async {
+  var versions = (await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_stage4_baseline',
+  )).domainVersions;
+
+  final renamed = await config.coordinator.waitFor(
+    'admin',
+    'account_state_agent_renamed',
+    timeout: const Duration(minutes: 2),
+  );
+  final renameBefore = versions;
+  final renameAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_agent_rename',
+  );
+  _requireDomainAdvanced(
+    renameBefore,
+    renameAfter.domainVersions,
+    ProductAccountDomain.agentInventory,
+  );
+  final renamedDid = _required(renamed, 'agentDid');
+  final renamedDisplayName = _required(renamed, 'displayName');
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: renamedDid,
+    displayName: renamedDisplayName,
+  );
+  versions = renameAfter.domainVersions;
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentRenameSyncCaseId,
+    phases: const <String>[
+      'admin_app_renamed_exact_runtime_agent',
+      'joining_app_pulled_higher_inventory_version',
+      'joining_app_rendered_exact_new_name_without_duplicate',
+    ],
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_agent_rename_converged',
+  );
+
+  final unbound = await config.coordinator.waitFor(
+    'admin',
+    'account_state_agent_unbound',
+    timeout: const Duration(minutes: 2),
+  );
+  final unbindAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_agent_unbind',
+  );
+  _requireDomainAdvanced(
+    versions,
+    unbindAfter.domainVersions,
+    ProductAccountDomain.agentInventory,
+  );
+  final unboundDid = _required(unbound, 'agentDid');
+  await _waitForAppPairAgentAbsent(
+    tester: tester,
+    container: container,
+    agentDid: unboundDid,
+  );
+  await _waitForCachedAgentState(
+    tester: tester,
+    container: container,
+    agentDid: unboundDid,
+    activeState: 'inactive',
+  );
+  versions = unbindAfter.domainVersions;
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentUnbindSyncCaseId,
+    phases: const <String>[
+      'admin_app_unbound_exact_runtime_agent',
+      'joining_app_cached_authoritative_inactive_row',
+      'joining_app_removed_inactive_agent_from_visible_projection',
+    ],
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_agent_unbind_converged',
+  );
+
+  final deleted = await config.coordinator.waitFor(
+    'admin',
+    'account_state_agent_deleted',
+    timeout: const Duration(minutes: 2),
+  );
+  final archiveAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_agent_archive',
+  );
+  _requireDomainAdvanced(
+    versions,
+    archiveAfter.domainVersions,
+    ProductAccountDomain.agentInventory,
+  );
+  final deletedDid = _required(deleted, 'agentDid');
+  await _waitForAppPairAgentAbsent(
+    tester: tester,
+    container: container,
+    agentDid: deletedDid,
+  );
+  await _waitForCachedAgentState(
+    tester: tester,
+    container: container,
+    agentDid: deletedDid,
+    activeState: 'archived',
+  );
+  versions = archiveAfter.domainVersions;
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentArchiveSyncCaseId,
+    phases: const <String>[
+      'delete_committed_authoritative_archived_topology',
+      'joining_app_cached_archived_row_at_higher_inventory_version',
+      'joining_app_filtered_archived_agent_from_visible_projection',
+    ],
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_agent_archive_converged',
+  );
+
+  final profile = await config.coordinator.waitFor(
+    'admin',
+    'account_state_profile_updated',
+    timeout: const Duration(minutes: 2),
+  );
+  final profileBefore = versions;
+  final profileAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_profile_remote',
+  );
+  _requireOnlyAccountStateDomainAdvanced(
+    profileBefore,
+    profileAfter.domainVersions,
+    advanced: ProductAccountDomain.profile,
+    ignored: const <ProductAccountDomain>{ProductAccountDomain.agentStatus},
+  );
+  await _waitForAppPairProfile(
+    tester: tester,
+    container: container,
+    displayName: _required(profile, 'displayName'),
+    bio: _required(profile, 'bio'),
+  );
+  versions = profileAfter.domainVersions;
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairProfileSyncCaseId,
+    phases: const <String>[
+      'admin_app_committed_profile_mutation',
+      'joining_app_profile_version_advanced',
+      'joining_app_rendered_exact_profile_snapshot',
+      'inventory_and_registry_versions_did_not_advance',
+    ],
+  );
+  await config.coordinator.publish('joiner', 'account_state_profile_converged');
+
+  final fixture = await config.coordinator.waitFor(
+    'admin',
+    'account_state_isolation_fixture_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final fixtureAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_isolation_fixture',
+  );
+  final isolationAgentDid = _required(fixture, 'agentDid');
+  final isolationOldName = _required(fixture, 'displayName');
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: isolationAgentDid,
+    displayName: isolationOldName,
+  );
+  versions = fixtureAfter.domainVersions;
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_isolation_fixture_converged',
+  );
+
+  final isolation = await config.coordinator.waitFor(
+    'admin',
+    'account_state_isolation_mutated',
+    timeout: const Duration(minutes: 2),
+  );
+  final isolationBefore = versions;
+  final failed = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_domain_isolation_failure',
+    allowPartialFailure: true,
+  );
+  if (failed.domainErrors.keys.toSet().difference(const <ProductAccountDomain>{
+        ProductAccountDomain.agentInventory,
+      }).isNotEmpty ||
+      !failed.domainErrors.containsKey(ProductAccountDomain.agentInventory)) {
+    fail('The Account State one-shot failure was not isolated to Inventory.');
+  }
+  _requireDomainUnchanged(
+    isolationBefore,
+    failed.domainVersions,
+    ProductAccountDomain.agentInventory,
+  );
+  _requireDomainAdvanced(
+    isolationBefore,
+    failed.domainVersions,
+    ProductAccountDomain.profile,
+  );
+  await _waitForAppPairProfile(
+    tester: tester,
+    container: container,
+    displayName: _required(isolation, 'profileDisplayName'),
+  );
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: isolationAgentDid,
+    displayName: _required(isolation, 'oldDisplayName'),
+  );
+  final isolationText = _appPairMessage(config.runId, 'domain-isolation');
+  await _waitForAppPairMessage(
+    container: container,
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: isolationText,
+    messageId: _required(isolation, 'messageId'),
+    senderDid: peerDid,
+    receiverDid: accountDid,
+    isMine: false,
+  );
+  final recovered = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_domain_isolation_retry',
+  );
+  if (recovered.domainErrors.isNotEmpty) {
+    fail('The Account State one-shot failure did not recover on retry.');
+  }
+  _requireDomainAdvanced(
+    isolationBefore,
+    recovered.domainVersions,
+    ProductAccountDomain.agentInventory,
+  );
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: isolationAgentDid,
+    displayName: _required(isolation, 'newDisplayName'),
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairDomainIsolationCaseId,
+    phases: const <String>[
+      'exact_joining_device_inventory_failpoint_consumed_once',
+      'profile_domain_converged_while_inventory_failed',
+      'ordinary_message_sync_converged_while_inventory_failed',
+      'previous_inventory_snapshot_was_preserved',
+      'inventory_retry_converged_and_cleared_domain_error',
+    ],
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_isolation_recovered',
+  );
+
+  await config.coordinator.waitFor(
+    'admin',
+    'account_state_registry_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final currentRegistry = container.read(devicesProvider).displayRegistry;
+  if (currentRegistry == null ||
+      currentRegistry.currentDevice?.protocolDeviceId != joinedDeviceId ||
+      currentRegistry.currentDevice?.status != DeviceStatus.active) {
+    fail('The joining App did not start Registry observation as active.');
+  }
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_registry_observer_ready',
+  );
+  await config.coordinator.waitFor(
+    'admin',
+    'account_state_registry_revoked',
+    timeout: const Duration(minutes: 2),
+  );
+  var fenced = false;
+  try {
+    await bootstrap.deviceManagementCorePort!.identityDeviceRegistry(
+      accountDid,
+    );
+  } on Object {
+    fenced = true;
+  }
+  if (!fenced) {
+    fail('The revoked joining App retained a successful Registry request.');
+  }
+  await config.coordinator.publish('joiner', 'account_state_registry_fenced');
+}
+
+Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String reason,
+  bool allowPartialFailure = false,
+}) async {
+  await container
+      .read(accountStateSyncCoordinatorProvider.notifier)
+      .request(reason, force: true);
+  await tester.pump(const Duration(milliseconds: 100));
+  final state = container.read(accountStateSyncCoordinatorProvider);
+  if (state.isSyncing || state.pendingReason != null) {
+    fail('The Account State coordinator did not quiesce for $reason.');
+  }
+  if (!allowPartialFailure &&
+      (state.status != AccountStateSyncCoordinatorStatus.ready ||
+          state.domainErrors.isNotEmpty)) {
+    fail('The Account State coordinator failed safely for $reason.');
+  }
+  if (allowPartialFailure && state.domainErrors.isEmpty) {
+    fail('The Account State failure injection was not observed for $reason.');
+  }
+  for (final domain in ProductAccountDomain.values) {
+    final version = state.domainVersions[domain];
+    if (version == null || !_isWireDecimal(version)) {
+      fail('The Account State coordinator omitted a decimal domain version.');
+    }
+  }
+  return state;
+}
+
+bool _isWireDecimal(String value) =>
+    RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(value);
+
+void _requireDomainAdvanced(
+  Map<ProductAccountDomain, String> before,
+  Map<ProductAccountDomain, String> after,
+  ProductAccountDomain domain,
+) {
+  final previous = BigInt.tryParse(before[domain] ?? '');
+  final current = BigInt.tryParse(after[domain] ?? '');
+  if (previous == null || current == null || current <= previous) {
+    fail('The expected Account State domain version did not advance.');
+  }
+}
+
+void _requireDomainUnchanged(
+  Map<ProductAccountDomain, String> before,
+  Map<ProductAccountDomain, String> after,
+  ProductAccountDomain domain,
+) {
+  if (before[domain] == null || before[domain] != after[domain]) {
+    fail('An Account State domain version changed unexpectedly.');
+  }
+}
+
+void _requireOnlyAccountStateDomainAdvanced(
+  Map<ProductAccountDomain, String> before,
+  Map<ProductAccountDomain, String> after, {
+  required ProductAccountDomain advanced,
+  Set<ProductAccountDomain> ignored = const <ProductAccountDomain>{},
+}) {
+  _requireDomainAdvanced(before, after, advanced);
+  for (final domain in ProductAccountDomain.values) {
+    if (domain == advanced || ignored.contains(domain)) {
+      continue;
+    }
+    _requireDomainUnchanged(before, after, domain);
+  }
+}
+
+Future<void> _waitForAppPairProfile({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String displayName,
+  String? bio,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final profile = container.read(profileProvider).profile;
+      return profile?.displayName == displayName &&
+          (bio == null || profile?.bio == bio);
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The App-pair Profile projection did not converge exactly.',
+  );
+}
+
+Future<void> _waitForAppPairAgentDisplayName({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String agentDid,
+  required String displayName,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final matches = container
+          .read(agentsProvider)
+          .agents
+          .where(
+            (agent) =>
+                agent.agentDid == agentDid &&
+                agent.displayName == displayName &&
+                agent.activeState == 'active',
+          )
+          .toList(growable: false);
+      if (matches.length > 1) {
+        fail('The App-pair Agent projection contained a duplicate.');
+      }
+      return matches.length == 1;
+    },
+    timeout: const Duration(seconds: 90),
+    failure: 'The App-pair Agent display name did not converge.',
+  );
+}
+
+Future<void> _waitForAppPairAgentAbsent({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String agentDid,
+  Duration timeout = const Duration(seconds: 90),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await container
+        .read(accountStateSyncCoordinatorProvider.notifier)
+        .request('e2e_agent_terminal_reconcile', force: true);
+    await tester.pump(const Duration(milliseconds: 200));
+    final matches = container
+        .read(agentsProvider)
+        .agents
+        .where((agent) => agent.agentDid == agentDid)
+        .length;
+    if (matches == 0) {
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
+  fail('The App-pair visible Agent projection retained a terminal Agent.');
+}
+
+Future<void> _waitForCachedAgentState({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String agentDid,
+  required String activeState,
+}) async {
+  final session = container.read(sessionProvider).session;
+  final binding = session?.accountBinding;
+  if (binding == null) {
+    fail('The App-pair session has no stable Account State binding.');
+  }
+  final stableBinding = ProductAccountBinding.fromSession(binding);
+  final store = container.read(productLocalStoreProvider);
+  final deadline = DateTime.now().add(const Duration(seconds: 60));
+  while (DateTime.now().isBefore(deadline)) {
+    final snapshot = await store.loadAgentInventorySnapshot(
+      binding: stableBinding,
+    );
+    final matches =
+        snapshot?.agents
+            .where(
+              (item) =>
+                  item.agentDid == agentDid && item.activeState == activeState,
+            )
+            .length ??
+        0;
+    if (matches > 1) {
+      fail('The App-pair cache retained duplicate Agent topology rows.');
+    }
+    if (matches == 1) {
+      return;
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+  fail('The App-pair cache did not retain the terminal Agent state.');
+}
+
+String _requireAppPairAccountId(ProviderContainer container) {
+  final accountId = container
+      .read(sessionProvider)
+      .session
+      ?.accountBinding
+      ?.accountId
+      .trim();
+  if (accountId == null || accountId.isEmpty) {
+    fail('The App-pair session has no stable account_id.');
+  }
+  return accountId;
+}
+
+Future<Map<String, Object?>> _runAppPairAccountStateOperator(
+  _AppPairRunConfig config, {
+  required String action,
+  required String accountId,
+  required Map<String, Object?> params,
+  required Set<String> expectedResultKeys,
+}) async {
+  _requireAccountStateOperatorEnvironment(config.accountStateOperatorCommand);
+  final process = await Process.start(
+    config.accountStateOperatorCommand.first,
+    config.accountStateOperatorCommand.skip(1).toList(growable: false),
+    includeParentEnvironment: true,
+    runInShell: false,
+  );
+  final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+  final stderrFuture = process.stderr.drain<void>();
+  process.stdin.write(
+    jsonEncode(<String, Object?>{
+      'schema_version': 1,
+      'action': action,
+      'account_id': accountId,
+      'params': params,
+    }),
+  );
+  await process.stdin.close();
+  int exitCode;
+  try {
+    exitCode = await process.exitCode.timeout(const Duration(seconds: 60));
+  } on TimeoutException {
+    process.kill();
+    fail('The fixed Account State operator timed out.');
+  }
+  final stdout = await stdoutFuture;
+  await stderrFuture;
+  if (exitCode != 0 || utf8.encode(stdout).length > 32 * 1024) {
+    fail('The fixed Account State operator returned no bounded receipt.');
+  }
+  Object? decoded;
+  try {
+    decoded = jsonDecode(stdout);
+  } on FormatException {
+    fail('The fixed Account State operator returned no closed receipt.');
+  }
+  if (decoded is! Map) {
+    fail('The fixed Account State operator receipt was not an object.');
+  }
+  final receipt = _stringMap(decoded);
+  final resultRaw = receipt['result'];
+  if (receipt.length != 4 ||
+      receipt['schema_version'] != 1 ||
+      receipt['action'] != action ||
+      receipt['changed'] != true ||
+      resultRaw is! Map) {
+    fail('The fixed Account State operator receipt was invalid.');
+  }
+  final result = _stringMap(resultRaw);
+  if (result.keys.toSet().difference(expectedResultKeys).isNotEmpty ||
+      expectedResultKeys.difference(result.keys.toSet()).isNotEmpty) {
+    fail('The fixed Account State operator result schema was invalid.');
+  }
+  return result;
 }
 
 Future<void> _leaveCompletedAppPairJoin(WidgetTester tester) async {

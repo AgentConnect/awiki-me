@@ -19,6 +19,7 @@ import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
@@ -28,14 +29,18 @@ import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/l10n/l10n.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/account_state_sync_coordinator_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_approval_sheet.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
@@ -45,6 +50,7 @@ import 'package:awiki_me/src/presentation/group/group_encryption_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
@@ -74,6 +80,16 @@ const String _appPairTailOnlySyncV2CaseId = 'DEVICE-MESSAGE-TAIL-ONLY-E2E-001';
 const String _appPairReadSyncV2CaseId = 'DEVICE-MESSAGE-READ-SYNC-E2E-001';
 const String _appPairOfflineRecoveryV2CaseId =
     'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001';
+const String _appPairAgentAddSyncCaseId = 'DEVICE-AGENT-ADD-SYNC-E2E-001';
+const String _appPairAgentRenameSyncCaseId = 'DEVICE-AGENT-RENAME-SYNC-E2E-001';
+const String _appPairAgentDeleteSyncCaseId = 'DEVICE-AGENT-DELETE-SYNC-E2E-001';
+const String _appPairAgentUnbindSyncCaseId = 'DEVICE-AGENT-UNBIND-SYNC-E2E-001';
+const String _appPairAgentArchiveSyncCaseId =
+    'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001';
+const String _appPairProfileSyncCaseId = 'DEVICE-PROFILE-SYNC-E2E-001';
+const String _appPairRegistrySyncCaseId = 'DEVICE-REGISTRY-SYNC-E2E-001';
+const String _appPairDomainIsolationCaseId =
+    'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001';
 const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
 const String _syncRecoveryOperatorModeEnv =
     'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
@@ -81,6 +97,15 @@ const String _syncRecoveryAccountAllowlistEnv =
     'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
 const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
 const String _syncRecoveryTarget = 'awiki-info-testing';
+const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
+const String _accountStateOperatorModeEnv =
+    'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
+const String _accountStateOperatorCommandEnv =
+    'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
+const String _accountStateFailpointEnableEnv =
+    'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
+const String _accountStateAllowlistEnv =
+    'AWIKI_ACCOUNT_STATE_TEST_ACCOUNT_ALLOWLIST';
 const List<String> _localSyncRecoveryPrepareCommand = <String>[
   '/usr/bin/python3',
   '/home/ecs-user/awiki-space/message-service/scripts/'
@@ -93,6 +118,12 @@ const List<String> _aliSyncRecoveryPrepareCommand = <String>[
   '/usr/bin/python3',
   '/home/ecs-user/awiki-space/message-service/scripts/'
       'prepare_sync_v2_recovery_test.py',
+];
+const List<String> _localAccountStateOperatorCommand = <String>[
+  '/home/ecs-user/awiki-space/user-service/.venv/bin/python',
+  '/home/ecs-user/awiki-space/user-service/scripts/'
+      'run_account_state_sync_test_action.py',
+  '--apply',
 ];
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
@@ -1198,6 +1229,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     required this.daemonReadyFile,
     required this.daemonHandle,
     required this.daemonEnvFile,
+    required this.accountStateOperatorCommand,
   });
 
   @override
@@ -1238,6 +1270,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
   final String daemonReadyFile;
   final String daemonHandle;
   final String? daemonEnvFile;
+  final List<String> accountStateOperatorCommand;
 
   static _AppPairRunConfig load() {
     if (Platform.environment[_activationGate]?.trim() != '1') {
@@ -1268,6 +1301,9 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     final daemon = functional.isEmpty
         ? const <String, Object?>{}
         : _map(functional, 'daemon');
+    final accountState = functional.isEmpty
+        ? const <String, Object?>{}
+        : _map(functional, 'accountState');
     final endpoint = Uri.tryParse(_required(coordinator, 'baseUrl'));
     if (endpoint == null ||
         endpoint.scheme != 'http' ||
@@ -1308,6 +1344,9 @@ class _AppPairRunConfig implements _CliEndpointConfig {
       daemonReadyFile: functional.isEmpty ? '' : _required(daemon, 'readyFile'),
       daemonHandle: functional.isEmpty ? '' : _required(daemon, 'handle'),
       daemonEnvFile: functional.isEmpty ? null : daemon['envFile']?.toString(),
+      accountStateOperatorCommand: functional.isEmpty
+          ? const <String>[]
+          : _requiredStringList(accountState, 'operatorCommand'),
     );
     if (config.didDomain != 'awiki.info' ||
         config.adminStateRoot == config.joinerStateRoot) {
@@ -1334,9 +1373,13 @@ class _AppPairRunConfig implements _CliEndpointConfig {
           config.daemonBinary.isEmpty ||
           config.daemonStateRoot.isEmpty ||
           config.daemonReadyFile.isEmpty ||
-          config.daemonHandle.isEmpty) {
+          config.daemonHandle.isEmpty ||
+          config.accountStateOperatorCommand.isEmpty) {
         throw StateError('The App-pair functional config is incomplete.');
       }
+      _requireAccountStateOperatorEnvironment(
+        config.accountStateOperatorCommand,
+      );
       final isolatedPaths = <String>[
         config.adminStateRoot,
         config.joinerStateRoot,
@@ -2613,7 +2656,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   anpServiceDid: config.anpServiceDid,
   agentImEnabled: enableAppPairFunctional,
   messageSyncV2ReadEnabled: enableAppPairFunctional,
-  multiDeviceDeviceRevokeEnabled: enableStep4,
+  multiDeviceDeviceRevokeEnabled: enableStep4 || enableAppPairFunctional,
   multiDeviceDirectE2eeEnabled: enableRootTransfer,
   multiDeviceGroupE2eeEnabled: enableStep4,
 );
@@ -3149,6 +3192,59 @@ bool _requiredBool(Map<String, Object?> map, String key) {
     throw StateError('Remote multi-device config is incomplete.');
   }
   return value;
+}
+
+List<String> _requiredStringList(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! List ||
+      value.isEmpty ||
+      value.any((item) => item is! String || item.trim().isEmpty)) {
+    throw StateError('Remote multi-device config is incomplete.');
+  }
+  return value.cast<String>().toList(growable: false);
+}
+
+void _requireAccountStateOperatorEnvironment(List<String> configuredCommand) {
+  List<String>? environmentCommand;
+  try {
+    final decoded = jsonDecode(
+      Platform.environment[_accountStateOperatorCommandEnv] ?? '',
+    );
+    if (decoded is List &&
+        decoded.isNotEmpty &&
+        decoded.every((item) => item is String && item.trim().isNotEmpty)) {
+      environmentCommand = decoded.cast<String>().toList(growable: false);
+    }
+  } on FormatException {
+    environmentCommand = null;
+  }
+  if (Platform.environment[_accountStateEnableEnv]?.trim() != '1' ||
+      Platform.environment[_accountStateOperatorModeEnv]?.trim() != 'local' ||
+      Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
+          _syncRecoveryTarget ||
+      Platform.environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
+      Platform.environment[_accountStateAllowlistEnv]?.trim().isNotEmpty !=
+          true ||
+      environmentCommand == null ||
+      !_sameOrderedText(
+        environmentCommand,
+        _localAccountStateOperatorCommand,
+      ) ||
+      !_sameOrderedText(configuredCommand, _localAccountStateOperatorCommand)) {
+    throw StateError('The App-pair Account State operator gate is incomplete.');
+  }
+}
+
+bool _sameOrderedText(List<String> first, List<String> second) {
+  if (first.length != second.length) {
+    return false;
+  }
+  for (var index = 0; index < first.length; index += 1) {
+    if (first[index] != second[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 String _uniqueHandle(String prefix) => '$prefix${_nonce(10)}';

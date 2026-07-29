@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-28.message-sync-v2-online-v1",
+  "sourceRevision": "2026-07-29.account-state-sync-v1-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -98,8 +98,8 @@
         "release"
       ],
       "owner": "awiki-me-agents+awiki-me-messaging",
-      "estimatedMinutes": 24,
-      "timeoutMinutes": 35,
+      "estimatedMinutes": 34,
+      "timeoutMinutes": 45,
       "cleanupPolicy": "isolated_device_join_residual_ledger",
       "allowedHosts": [
         "awiki.info"
@@ -112,7 +112,8 @@
         "device_join_session",
         "isolated_app_state",
         "isolated_cli_state",
-        "agent_inventory"
+        "agent_inventory",
+        "account_state_failpoint"
       ],
       "caseIds": [
         "DEVICE-AGENT-SYNC-E2E-001",
@@ -122,7 +123,15 @@
         "DEVICE-MESSAGE-ONLINE-SYNC-E2E-001",
         "DEVICE-MESSAGE-TAIL-ONLY-E2E-001",
         "DEVICE-MESSAGE-READ-SYNC-E2E-001",
-        "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001"
+        "DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001",
+        "DEVICE-AGENT-ADD-SYNC-E2E-001",
+        "DEVICE-AGENT-RENAME-SYNC-E2E-001",
+        "DEVICE-AGENT-DELETE-SYNC-E2E-001",
+        "DEVICE-AGENT-UNBIND-SYNC-E2E-001",
+        "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001",
+        "DEVICE-PROFILE-SYNC-E2E-001",
+        "DEVICE-REGISTRY-SYNC-E2E-001",
+        "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001"
       ]
     },
     "step4-revoke-mls": {
