@@ -5,6 +5,7 @@ enum ThreadMessagePatchKind { reset, upsert, remove, repairRequired }
 class ThreadMessagePatch {
   const ThreadMessagePatch({
     required this.kind,
+    this.ownerIdentityId = '',
     required this.ownerDid,
     required this.version,
     required this.threadKind,
@@ -18,6 +19,7 @@ class ThreadMessagePatch {
   });
 
   final ThreadMessagePatchKind kind;
+  final String ownerIdentityId;
   final String ownerDid;
   final int version;
   final String threadKind;

@@ -203,6 +203,7 @@ void main() {
 
       final patch = await patchFuture.timeout(const Duration(seconds: 1));
       expect(patch.kind.name, 'upsert');
+      expect(patch.ownerIdentityId, 'alice-id');
       expect(patch.ownerDid, 'did:alice');
       expect(patch.item?.threadId, 'did:bob');
       expect(patch.item?.lastMessagePreview, 'hello');

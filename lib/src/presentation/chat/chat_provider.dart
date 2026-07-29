@@ -459,6 +459,7 @@ class _PendingReadAck {
 class _ThreadPatchSubscription {
   const _ThreadPatchSubscription({
     required this.token,
+    required this.sessionFence,
     required this.ownerDid,
     required this.conversationRef,
     required this.threadKind,
@@ -468,6 +469,7 @@ class _ThreadPatchSubscription {
   });
 
   final int token;
+  final _ThreadPatchSessionFence sessionFence;
   final String ownerDid;
   final AppConversationReadRef conversationRef;
   final String threadKind;
@@ -483,6 +485,7 @@ class _ThreadPatchSubscription {
   }) {
     return _ThreadPatchSubscription(
       token: token,
+      sessionFence: sessionFence,
       ownerDid: ownerDid,
       conversationRef: conversationRef,
       threadKind: threadKind,
@@ -491,6 +494,71 @@ class _ThreadPatchSubscription {
       lastVersion: lastVersion ?? this.lastVersion,
     );
   }
+}
+
+class _ThreadPatchSessionFence {
+  const _ThreadPatchSessionFence({
+    required this.sessionGeneration,
+    required this.ownerDid,
+    this.bindingCurrentDid,
+    this.ownerIdentityId,
+    this.accountId,
+    this.deviceAuthGeneration,
+    this.identityGeneration,
+    this.protocolDeviceId,
+  });
+
+  factory _ThreadPatchSessionFence.fromSession(SessionState state) {
+    final session = state.session;
+    if (session == null) {
+      throw StateError('thread_patch_session_unavailable');
+    }
+    final binding = session.accountBinding;
+    return _ThreadPatchSessionFence(
+      sessionGeneration: state.generation,
+      ownerDid: session.did,
+      bindingCurrentDid: binding?.currentDid,
+      ownerIdentityId: binding?.ownerIdentityId,
+      accountId: binding?.accountId,
+      deviceAuthGeneration: binding?.deviceAuthGeneration,
+      identityGeneration: binding?.identityGeneration,
+      protocolDeviceId: binding?.protocolDeviceId,
+    );
+  }
+
+  final int sessionGeneration;
+  final String ownerDid;
+  final String? bindingCurrentDid;
+  final String? ownerIdentityId;
+  final String? accountId;
+  final String? deviceAuthGeneration;
+  final String? identityGeneration;
+  final String? protocolDeviceId;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ThreadPatchSessionFence &&
+          other.sessionGeneration == sessionGeneration &&
+          other.ownerDid == ownerDid &&
+          other.bindingCurrentDid == bindingCurrentDid &&
+          other.ownerIdentityId == ownerIdentityId &&
+          other.accountId == accountId &&
+          other.deviceAuthGeneration == deviceAuthGeneration &&
+          other.identityGeneration == identityGeneration &&
+          other.protocolDeviceId == protocolDeviceId;
+
+  @override
+  int get hashCode => Object.hash(
+    sessionGeneration,
+    ownerDid,
+    bindingCurrentDid,
+    ownerIdentityId,
+    accountId,
+    deviceAuthGeneration,
+    identityGeneration,
+    protocolDeviceId,
+  );
 }
 
 class ThreadMemoryCachePolicy {
@@ -2050,9 +2118,18 @@ class ChatThreadsController
       return;
     }
     final timelineMessaging = messaging as ConversationTimelineMessagingService;
-    final session = ref.read(sessionProvider).session;
+    final sessionState = ref.read(sessionProvider);
+    final session = sessionState.session;
     final ownerDid = session?.did.trim();
     if (ownerDid == null || ownerDid.isEmpty) {
+      return;
+    }
+    final binding = session?.accountBinding;
+    if (binding != null &&
+        (binding.currentDid != ownerDid ||
+            binding.ownerIdentityId.trim().isEmpty ||
+            binding.accountId.trim().isEmpty ||
+            binding.deviceAuthGeneration.trim().isEmpty)) {
       return;
     }
     final conversationRef = _conversationReadRefFor(conversation);
@@ -2065,8 +2142,10 @@ class ChatThreadsController
     }
     final threadRef = _localHistoryThreadRefFor(conversation);
     final expectedPatchKey = _threadPatchKeyFor(threadRef);
+    final sessionFence = _ThreadPatchSessionFence.fromSession(sessionState);
     final existing = _threadPatchSubscriptions[displayThreadId];
     if (existing != null &&
+        existing.sessionFence == sessionFence &&
         existing.ownerDid == ownerDid &&
         existing.conversationRefKey == conversationRef.conversationId &&
         existing.threadKind == expectedPatchKey.kind &&
@@ -2107,6 +2186,7 @@ class ChatThreadsController
         );
     _threadPatchSubscriptions[displayThreadId] = _ThreadPatchSubscription(
       token: token,
+      sessionFence: sessionFence,
       ownerDid: ownerDid,
       conversationRef: conversationRef,
       threadKind: expectedPatchKey.kind,
@@ -2125,7 +2205,9 @@ class ChatThreadsController
       return;
     }
     final subscription = _threadPatchSubscriptions[displayThreadId];
-    if (subscription == null || subscription.token != token) {
+    if (subscription == null ||
+        subscription.token != token ||
+        !_isThreadPatchSessionFenceCurrent(subscription.sessionFence)) {
       return;
     }
     _threadPatchSubscriptions.remove(displayThreadId);
@@ -2141,8 +2223,12 @@ class ChatThreadsController
       conversation,
       displayThreadId: displayThreadId,
       conversationRef: subscription.conversationRef,
+      isCurrent: () =>
+          mounted &&
+          _isThreadPatchSessionFenceCurrent(subscription.sessionFence),
     );
     if (!mounted ||
+        !_isThreadPatchSessionFenceCurrent(subscription.sessionFence) ||
         _cacheMetadataByThreadId[displayThreadId]?.isVisible != true) {
       return;
     }
@@ -2166,10 +2252,17 @@ class ChatThreadsController
     final currentSubscription = _threadPatchSubscriptions[displayThreadId];
     if (currentSubscription == null ||
         currentSubscription.token != token ||
-        currentSubscription.ownerDid != ownerDid) {
+        currentSubscription.ownerDid != ownerDid ||
+        !_isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence)) {
       return;
     }
     if (patch.ownerDid.trim() != ownerDid) {
+      return;
+    }
+    final expectedOwnerIdentityId =
+        currentSubscription.sessionFence.ownerIdentityId;
+    if (expectedOwnerIdentityId != null &&
+        patch.ownerIdentityId != expectedOwnerIdentityId) {
       return;
     }
     if (!_threadPatchMatchesSubscription(patch, currentSubscription)) {
@@ -2211,8 +2304,11 @@ class ChatThreadsController
       patch,
       conversation,
     );
+    final activeSubscription = _threadPatchSubscriptions[displayThreadId];
     if (!mounted ||
-        _threadPatchSubscriptions[displayThreadId]?.token != token) {
+        activeSubscription?.token != token ||
+        activeSubscription?.sessionFence != currentSubscription.sessionFence ||
+        !_isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence)) {
       return;
     }
     if (!applied) {
@@ -2334,21 +2430,36 @@ class ChatThreadsController
     final currentSubscription = _threadPatchSubscriptions[displayThreadId];
     if (currentSubscription == null ||
         currentSubscription.token != token ||
+        !_isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence) ||
         messaging is! ConversationTimelineMessagingService) {
       return;
     }
     final timelineMessaging = messaging as ConversationTimelineMessagingService;
+    bool isCurrent() {
+      final active = _threadPatchSubscriptions[displayThreadId];
+      return mounted &&
+          active?.token == token &&
+          active?.sessionFence == currentSubscription.sessionFence &&
+          _isThreadPatchSessionFenceCurrent(currentSubscription.sessionFence);
+    }
+
     try {
       final patch = await timelineMessaging.repairConversationTimelineStore(
         currentSubscription.conversationRef,
       );
-      if (!mounted ||
-          _threadPatchSubscriptions[displayThreadId]?.token != token) {
+      if (!isCurrent()) {
         return;
       }
       if (patch.ownerDid.trim() != currentSubscription.ownerDid ||
+          (currentSubscription.sessionFence.ownerIdentityId != null &&
+              patch.ownerIdentityId !=
+                  currentSubscription.sessionFence.ownerIdentityId) ||
           !_threadPatchMatchesSubscription(patch, currentSubscription)) {
-        await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+        await _loadLocalHistory(
+          conversation,
+          intoThreadId: displayThreadId,
+          isCurrent: isCurrent,
+        );
         return;
       }
       final applied = await _applyThreadPatchBody(
@@ -2356,17 +2467,35 @@ class ChatThreadsController
         patch,
         conversation,
       );
-      if (applied &&
-          mounted &&
-          _threadPatchSubscriptions[displayThreadId]?.token == token) {
+      if (applied && isCurrent()) {
         _threadPatchSubscriptions[displayThreadId] = currentSubscription
             .copyWith(lastVersion: patch.version);
-      } else if (!applied && mounted) {
-        await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+      } else if (!applied && isCurrent()) {
+        await _loadLocalHistory(
+          conversation,
+          intoThreadId: displayThreadId,
+          isCurrent: isCurrent,
+        );
       }
     } catch (_) {
-      await _loadLocalHistory(conversation, intoThreadId: displayThreadId);
+      if (!isCurrent()) {
+        return;
+      }
+      await _loadLocalHistory(
+        conversation,
+        intoThreadId: displayThreadId,
+        isCurrent: isCurrent,
+      );
     }
+  }
+
+  bool _isThreadPatchSessionFenceCurrent(_ThreadPatchSessionFence fence) {
+    final state = ref.read(sessionProvider);
+    final session = state.session;
+    if (session == null) {
+      return false;
+    }
+    return _ThreadPatchSessionFence.fromSession(state) == fence;
   }
 
   void _restoreVisibleReadIntentIfCurrent(
@@ -2443,8 +2572,9 @@ class ChatThreadsController
     int limit = 100,
     bool showHydratingState = true,
     bool markLoadedWhenEmpty = true,
+    bool Function()? isCurrent,
   }) async {
-    if (!mounted) {
+    if (!mounted || !(isCurrent?.call() ?? true)) {
       return const _HistoryLoadResult(loadedCount: 0, failed: false);
     }
     final sessionGeneration = ref.read(sessionProvider).generation;
@@ -2484,7 +2614,7 @@ class ChatThreadsController
     try {
       if (messaging is! ConversationTimelineMessagingService &&
           messaging is! LocalHistoryMessagingService) {
-        if (shouldShowLoading && mounted) {
+        if (shouldShowLoading && mounted && (isCurrent?.call() ?? true)) {
           _setThreadLoading(targetThreadId, false);
           if (showHydratingState) {
             _setThreadLocalHistoryHydrating(targetThreadId, false);
@@ -2565,7 +2695,8 @@ class ChatThreadsController
       );
       if (!mounted ||
           ref.read(sessionProvider).generation != sessionGeneration ||
-          _localHistoryGeneration != localHistoryGeneration) {
+          _localHistoryGeneration != localHistoryGeneration ||
+          !(isCurrent?.call() ?? true)) {
         return _HistoryLoadResult(
           loadedCount: history.length,
           failed: false,
@@ -2629,7 +2760,8 @@ class ChatThreadsController
       final isCurrentSession =
           mounted &&
           ref.read(sessionProvider).generation == sessionGeneration &&
-          _localHistoryGeneration == localHistoryGeneration;
+          _localHistoryGeneration == localHistoryGeneration &&
+          (isCurrent?.call() ?? true);
       if (shouldShowLoading && isCurrentSession) {
         _setThreadLoading(targetThreadId, false);
       }
@@ -2647,7 +2779,8 @@ class ChatThreadsController
       final isCurrentSession =
           mounted &&
           ref.read(sessionProvider).generation == sessionGeneration &&
-          _localHistoryGeneration == localHistoryGeneration;
+          _localHistoryGeneration == localHistoryGeneration &&
+          (isCurrent?.call() ?? true);
       if (_localHistoryGeneration == localHistoryGeneration) {
         _activeLocalHistoryLoads.remove(targetThreadId);
       }

@@ -3,6 +3,7 @@ import '../domain/entities/chat_mention.dart';
 import 'models/attachment_models.dart';
 import 'models/app_conversation_read_ref.dart';
 import 'models/app_thread_ref.dart';
+import 'models/message_sync_diagnostics.dart';
 import 'models/thread_message_patch.dart';
 import 'ports/message_core_port.dart';
 
@@ -121,16 +122,32 @@ abstract interface class ConversationTimelineMessagingService {
   });
 }
 
+abstract interface class MessageSyncDiagnosticsService {
+  Future<AppMessageSyncDiagnostics> syncDiagnostics();
+}
+
 class ImCoreMessagingService
     implements
         MessagingService,
         LocalHistoryMessagingService,
         ThreadPatchMessagingService,
-        ConversationTimelineMessagingService {
+        ConversationTimelineMessagingService,
+        MessageSyncDiagnosticsService {
   const ImCoreMessagingService({required MessageCorePort messages})
     : _messages = messages;
 
   final MessageCorePort _messages;
+
+  @override
+  Future<AppMessageSyncDiagnostics> syncDiagnostics() {
+    final messages = _messages;
+    if (messages is! MessageSyncDiagnosticsCorePort) {
+      throw UnsupportedError(
+        'Message core does not expose safe sync diagnostics.',
+      );
+    }
+    return (messages as MessageSyncDiagnosticsCorePort).syncDiagnostics();
+  }
 
   @override
   Future<ChatMessage> sendText({

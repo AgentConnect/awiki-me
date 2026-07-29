@@ -6,6 +6,7 @@ import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
+import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_message_adapter.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_paths.dart';
@@ -120,6 +121,7 @@ void main() {
     expect(client.messages.lastWatchConversationTimelineLimit, 12);
     expect(client.messages.lastRepairConversationTimelineLimit, 13);
     expect(watched.conversationId, 'dm:peer-scope:v1:bob');
+    expect(watched.ownerIdentityId, 'alice-id');
     expect(watched.message?.conversationId, 'dm:peer-scope:v1:bob');
     expect(repaired.conversationId, 'dm:peer-scope:v1:bob');
   });
@@ -472,6 +474,23 @@ void main() {
     expect(adapter.sentTextContent, isNull);
     expect(adapter.sentPayload, isNull);
   });
+
+  test('sync diagnostics maps only redacted product-safe fields', () async {
+    final client = _FakeClient(ownerDid: 'did:alice');
+    final adapter = AwikiImCoreMessageAdapter(runtime: _FakeRuntime(client));
+
+    final diagnostics = await adapter.syncDiagnostics();
+
+    expect(diagnostics.lastSuccessAt, DateTime.parse('2026-07-29T01:02:03Z'));
+    expect(diagnostics.mode, AppMessageSyncMode.recovering);
+    expect(diagnostics.pendingMutationCount, 2);
+    expect(diagnostics.dirtyDomains, <AppMessageSyncDirtyDomain>[
+      AppMessageSyncDirtyDomain.messages,
+      AppMessageSyncDirtyDomain.readState,
+    ]);
+    expect(diagnostics.retryState, AppMessageSyncRetryState.scheduled);
+    expect(diagnostics.nextRetryAt, DateTime.parse('2026-07-29T01:03:03Z'));
+  });
 }
 
 class _FakeRuntime extends AwikiImCoreRuntime {
@@ -557,6 +576,22 @@ class _FakeMessageApi implements core.MessageApi {
   final StreamController<core.ThreadMessageStorePatch>
   _conversationTimelinePatches =
       StreamController<core.ThreadMessageStorePatch>.broadcast(sync: true);
+
+  @override
+  Future<core.MessageSyncDiagnostics> syncDiagnostics() async {
+    return const core.MessageSyncDiagnostics(
+      lastSuccessAt: '2026-07-29T01:02:03Z',
+      mode: core.MessageSyncMode.recovering,
+      pendingMutationCount: 2,
+      dirtyDomains: <core.MessageSyncDirtyDomain>[
+        core.MessageSyncDirtyDomain.messages,
+        core.MessageSyncDirtyDomain.readState,
+      ],
+      retryState: core.MessageSyncRetryState.scheduled,
+      nextRetryAt: '2026-07-29T01:03:03Z',
+    );
+  }
+
   final StreamController<core.ThreadMessageStorePatch> _threadPatches =
       StreamController<core.ThreadMessageStorePatch>.broadcast(sync: true);
   int localHistoryCalls = 0;

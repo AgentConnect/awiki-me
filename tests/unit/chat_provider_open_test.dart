@@ -2154,6 +2154,275 @@ void main() {
     },
   );
 
+  test(
+    'same DID auth generation switch rejects old timeline subscription',
+    () async {
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[],
+        ownerIdentityId: 'owner-me',
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+                accountBinding: _chatAccountBinding(),
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+      final controller = patchContainer.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+
+      patchContainer
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              accountBinding: _chatAccountBinding(deviceAuthGeneration: '2'),
+            ),
+          );
+      patchMessaging.emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerIdentityId: 'owner-me',
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          message: message.copyWith(
+            remoteId: 'old-generation',
+            content: 'old generation',
+            conversationId: conversation.conversationId,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+      patchMessaging.emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerIdentityId: 'owner-me',
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          message: message.copyWith(
+            remoteId: 'new-generation',
+            content: 'new generation',
+            conversationId: conversation.conversationId,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      final messages = patchContainer
+          .read(chatThreadProvider(_timelineThreadId(conversation)))
+          .messages;
+      expect(
+        messages.map((item) => item.content),
+        isNot(contains('old generation')),
+      );
+      expect(messages.map((item) => item.content), contains('new generation'));
+      expect(patchMessaging.watchConversationCalls, 2);
+    },
+  );
+
+  test(
+    'same DID auth generation switch blocks stale repair failure history fallback',
+    () async {
+      final repair = Completer<ThreadMessagePatch>();
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[],
+        ownerIdentityId: 'owner-me',
+        repairConversationResult: repair.future,
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) {
+            final controller = SessionController();
+            controller.setSession(
+              SessionIdentity(
+                did: 'did:me',
+                credentialName: 'me.json',
+                displayName: 'Me',
+                accountBinding: _chatAccountBinding(),
+              ),
+            );
+            return controller;
+          }),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+      final controller = patchContainer.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+      final historyCallsBeforeRepair =
+          patchMessaging.loadConversationTimelineCalls;
+
+      patchMessaging.emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerIdentityId: 'owner-me',
+          ownerDid: 'did:me',
+          version: 3,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          message: message.copyWith(
+            remoteId: 'gap-message',
+            conversationId: conversation.conversationId,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+      expect(patchMessaging.repairConversationCalls, 1);
+
+      patchContainer
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: 'did:me',
+              credentialName: 'me.json',
+              displayName: 'Me',
+              accountBinding: _chatAccountBinding(deviceAuthGeneration: '2'),
+            ),
+          );
+      repair.completeError(StateError('repair failed after session switch'));
+      await pumpEventQueue();
+
+      expect(
+        patchMessaging.loadConversationTimelineCalls,
+        historyCallsBeforeRepair,
+      );
+    },
+  );
+
+  test(
+    'patch body completion rechecks full fence before advancing version',
+    () async {
+      final repair = Completer<ThreadMessagePatch>();
+      final patchMessaging = _PatchMessagingService(
+        localHistory: <ChatMessage>[],
+        ownerIdentityId: 'owner-me',
+        repairConversationResult: repair.future,
+      );
+      final sessionController = _MutableSessionController();
+      sessionController.setSession(
+        SessionIdentity(
+          did: 'did:me',
+          credentialName: 'me.json',
+          displayName: 'Me',
+          accountBinding: _chatAccountBinding(),
+        ),
+      );
+      final patchContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          ...fakeApplicationServiceOverrides(gateway),
+          messagingServiceProvider.overrideWithValue(patchMessaging),
+          sessionProvider.overrideWith((ref) => sessionController),
+        ],
+      );
+      addTearDown(patchContainer.dispose);
+      final controller = patchContainer.read(chatThreadsProvider.notifier);
+      controller.markConversationVisible(conversation);
+      await pumpEventQueue();
+
+      patchMessaging.emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.repairRequired,
+          ownerIdentityId: 'owner-me',
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+        ),
+      );
+      await pumpEventQueue();
+      expect(patchMessaging.repairConversationCalls, 1);
+
+      sessionController.replaceSessionWithoutAdvancingGeneration(
+        SessionIdentity(
+          did: 'did:me',
+          credentialName: 'me.json',
+          displayName: 'Me',
+          accountBinding: _chatAccountBinding(deviceAuthGeneration: '2'),
+        ),
+      );
+      repair.complete(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.reset,
+          ownerIdentityId: 'owner-me',
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+        ),
+      );
+      await pumpEventQueue();
+
+      sessionController.replaceSessionWithoutAdvancingGeneration(
+        SessionIdentity(
+          did: 'did:me',
+          credentialName: 'me.json',
+          displayName: 'Me',
+          accountBinding: _chatAccountBinding(),
+        ),
+      );
+      patchMessaging.emitPatch(
+        ThreadMessagePatch(
+          kind: ThreadMessagePatchKind.upsert,
+          ownerIdentityId: 'owner-me',
+          ownerDid: 'did:me',
+          version: 2,
+          threadKind: 'conversation',
+          threadId: conversation.conversationId,
+          conversationId: conversation.conversationId,
+          message: message.copyWith(
+            remoteId: 'post-fence-message',
+            content: 'post fence message',
+            conversationId: conversation.conversationId,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        patchContainer
+            .read(chatThreadProvider(_timelineThreadId(conversation)))
+            .messages
+            .map((item) => item.content),
+        contains('post fence message'),
+      );
+    },
+  );
+
   test('未读摘要不会单独触发 history load', () async {
     final local = ChatMessage(
       localId: 'local-visible',
@@ -6627,6 +6896,17 @@ void main() {
   });
 }
 
+SessionAccountBinding _chatAccountBinding({String deviceAuthGeneration = '1'}) {
+  return SessionAccountBinding(
+    ownerIdentityId: 'owner-me',
+    accountId: 'account-me',
+    currentDid: 'did:me',
+    protocolDeviceId: 'device-me',
+    identityGeneration: '1',
+    deviceAuthGeneration: deviceAuthGeneration,
+  );
+}
+
 class _ThrowingMarkReadGateway extends FakeAwikiGateway {
   @override
   Future<void> markConversationRead(
@@ -6640,6 +6920,12 @@ class _ThrowingMarkReadGateway extends FakeAwikiGateway {
   }
 }
 
+class _MutableSessionController extends SessionController {
+  void replaceSessionWithoutAdvancingGeneration(SessionIdentity session) {
+    state = state.copyWith(session: session);
+  }
+}
+
 class _PatchMessagingService
     implements
         MessagingService,
@@ -6648,7 +6934,9 @@ class _PatchMessagingService
         ConversationTimelineMessagingService {
   _PatchMessagingService({
     required this.localHistory,
+    this.ownerIdentityId = '',
     ThreadMessagePatch? repairPatch,
+    this.repairConversationResult,
     this.emitPendingBeforeTextResult = false,
     this.textSendError,
   }) : repairPatch =
@@ -6662,8 +6950,10 @@ class _PatchMessagingService
            );
 
   final List<ChatMessage> localHistory;
+  final String ownerIdentityId;
   final bool emitPendingBeforeTextResult;
   final Object? textSendError;
+  final Future<ThreadMessagePatch>? repairConversationResult;
   ThreadMessagePatch repairPatch;
   final Map<String, List<ChatMessage>> projectionByConversationId =
       <String, List<ChatMessage>>{};
@@ -6675,6 +6965,7 @@ class _PatchMessagingService
   int? lastRepairConversationLimit;
   int watchCalls = 0;
   int watchConversationCalls = 0;
+  int loadConversationTimelineCalls = 0;
   int cancelledWatches = 0;
   String? lastConversationTimelineId;
   int sendConversationAttachmentCalls = 0;
@@ -6718,6 +7009,7 @@ class _PatchMessagingService
       controller.add(
         ThreadMessagePatch(
           kind: ThreadMessagePatchKind.reset,
+          ownerIdentityId: ownerIdentityId,
           ownerDid: 'did:me',
           version: 1,
           threadKind: _patchThreadKind(thread),
@@ -6748,6 +7040,7 @@ class _PatchMessagingService
       controller.add(
         ThreadMessagePatch(
           kind: ThreadMessagePatchKind.reset,
+          ownerIdentityId: ownerIdentityId,
           ownerDid: 'did:me',
           version: 1,
           threadKind: 'conversation',
@@ -6788,12 +7081,17 @@ class _PatchMessagingService
     repairConversationCalls += 1;
     lastRepairConversationLimit = limit;
     lastConversationTimelineId = conversation.conversationId;
+    final result = repairConversationResult;
+    if (result != null) {
+      return result;
+    }
     final projected = projectionByConversationId[conversation.conversationId];
     if (projected == null) {
       return _patchWithConversationId(repairPatch, conversation.conversationId);
     }
     return ThreadMessagePatch(
       kind: ThreadMessagePatchKind.reset,
+      ownerIdentityId: ownerIdentityId,
       ownerDid: 'did:me',
       version: repairPatch.version,
       threadKind: 'conversation',
@@ -6840,6 +7138,7 @@ class _PatchMessagingService
     String? cursor,
     bool includeControlPayloads = false,
   }) async {
+    loadConversationTimelineCalls += 1;
     lastConversationTimelineId = conversation.conversationId;
     return projectionByConversationId[conversation.conversationId] ??
         _withConversationId(localHistory, conversation.conversationId);

@@ -80,6 +80,7 @@ void main() {
     late FakeMessageSyncService messageSyncService;
     late FakeDeviceManagementCore deviceCore;
     late _RecordingAccountStateSyncRequestBus accountStateRequests;
+    late _BoundSessionConversationService boundConversationService;
     late ProviderContainer container;
 
     setUp(() {
@@ -87,6 +88,7 @@ void main() {
       realtimeGateway = FakeRealtimeGateway();
       notificationFacade = FakeNotificationFacade();
       messageSyncService = FakeMessageSyncService();
+      boundConversationService = _BoundSessionConversationService(gateway);
       accountStateRequests = _RecordingAccountStateSyncRequestBus();
       deviceCore = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
@@ -120,6 +122,7 @@ void main() {
             gateway,
             realtimeGateway: realtimeGateway,
             messageSyncService: messageSyncService,
+            conversationService: boundConversationService,
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
@@ -144,7 +147,10 @@ void main() {
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
       );
-      addTearDown(container.dispose);
+      addTearDown(() async {
+        container.dispose();
+        await boundConversationService.dispose();
+      });
     });
 
     Future<void> activate() async {
@@ -167,6 +173,7 @@ void main() {
       String did = 'did:test:me',
       String protocolDeviceId = 'device-a',
     }) {
+      boundConversationService.prepareOwner(ownerIdentityId);
       return container
           .read(appRuntimeProvider.notifier)
           .activateSession(
@@ -272,10 +279,28 @@ void main() {
     });
 
     test('激活身份后后台调度 startup 可靠同步', () async {
+      final conversation = ConversationSummary(
+        threadId: 'dm:startup-seed',
+        conversationId: 'dm:startup-seed',
+        displayName: 'Startup peer',
+        lastMessagePreview: 'seeded before sync',
+        lastMessageAt: DateTime.utc(2026, 7, 29),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:test:startup-peer',
+      );
+      gateway.conversations = <ConversationSummary>[conversation];
+
       await activate();
+
+      expect(gateway.listConversationsCalls, 1);
+      expect(container.read(conversationListProvider).conversations, [
+        conversation,
+      ]);
       await pumpEventQueue();
 
       expect(messageSyncService.syncReasons, contains('startup'));
+      expect(gateway.listConversationsCalls, 1);
       expect(container.read(appRuntimeProvider).isBusy, isFalse);
     });
 
@@ -853,6 +878,7 @@ void main() {
             gateway,
             realtimeGateway: realtimeGateway,
             messageSyncService: messageSyncService,
+            conversationService: boundConversationService,
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
@@ -1119,8 +1145,8 @@ void main() {
 
       expect(sync.syncReasons, contains('startup'));
       expect(sync.syncReasons, contains('app_resumed'));
-      expect(conversations.fastCalls, 2);
-      expect(conversations.enrichCalls, 2);
+      expect(conversations.fastCalls, 1);
+      expect(conversations.enrichCalls, 1);
       slowProfile.complete();
       await Future<void>.delayed(Duration.zero);
     });
@@ -2084,6 +2110,7 @@ void main() {
         },
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
+      await pumpEventQueue();
 
       expect(
         container
@@ -2260,6 +2287,55 @@ void main() {
       expect(realtimeGateway.connectionStatus, RealtimeConnectionStatus.failed);
     });
   });
+}
+
+class _BoundSessionConversationService extends FakeConversationService {
+  _BoundSessionConversationService(super.gateway);
+
+  final List<StreamController<ConversationListPatch>> _controllers =
+      <StreamController<ConversationListPatch>>[];
+  String? _ownerIdentityId;
+
+  void prepareOwner(String ownerIdentityId) {
+    _ownerIdentityId = ownerIdentityId;
+  }
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    final controller = StreamController<ConversationListPatch>.broadcast(
+      sync: true,
+    );
+    _controllers.add(controller);
+    final ownerIdentityId = _ownerIdentityId;
+    if (ownerIdentityId != null) {
+      scheduleMicrotask(() {
+        if (controller.isClosed) {
+          return;
+        }
+        controller.add(
+          ConversationListPatch(
+            kind: ConversationListPatchKind.reset,
+            ownerIdentityId: ownerIdentityId,
+            ownerDid: ownerDid,
+            version: 1,
+            unreadTotal: 0,
+            items: gateway.conversations,
+          ),
+        );
+      });
+    }
+    return controller.stream;
+  }
+
+  Future<void> dispose() async {
+    await Future.wait<void>(
+      _controllers
+          .where((controller) => !controller.isClosed)
+          .map((controller) => controller.close()),
+    );
+  }
 }
 
 class _RecordingConversationService implements ConversationService {

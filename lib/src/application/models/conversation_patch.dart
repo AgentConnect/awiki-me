@@ -11,6 +11,7 @@ enum ConversationListPatchKind {
 class ConversationListPatch {
   const ConversationListPatch({
     required this.kind,
+    this.ownerIdentityId = '',
     required this.ownerDid,
     required this.version,
     required this.unreadTotal,
@@ -24,6 +25,7 @@ class ConversationListPatch {
   });
 
   final ConversationListPatchKind kind;
+  final String ownerIdentityId;
   final String ownerDid;
   final int version;
   final int unreadTotal;
@@ -81,6 +83,7 @@ class CoreConversationPage {
 class CoreConversationPatch {
   const CoreConversationPatch({
     required this.kind,
+    this.ownerIdentityId = '',
     required this.ownerDid,
     required this.version,
     required this.unreadTotal,
@@ -93,6 +96,7 @@ class CoreConversationPatch {
   });
 
   final CoreConversationPatchKind kind;
+  final String ownerIdentityId;
   final String ownerDid;
   final int version;
   final int unreadTotal;

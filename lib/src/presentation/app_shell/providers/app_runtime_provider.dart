@@ -193,6 +193,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         'app_runtime.activate_session.e2ee',
         () => ref.read(e2eeFacadeProvider).initialize(session),
       );
+      await ref
+          .read(conversationListProvider.notifier)
+          .preparePatchGeneration();
       _isLoggingOut = false;
       state = state.copyWith(
         isBusy: false,
@@ -475,9 +478,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
     final conversationCurrent = await _runAuthenticatedRefreshDomain(
       sessionFence,
-      label: 'app_refresh.conversation_fast_local',
+      label: 'app_refresh.conversation_patch_ready',
       action: () =>
-          ref.read(conversationListProvider.notifier).refreshFastLocal(),
+          ref.read(conversationListProvider.notifier).ensurePatchReady(),
       clearStale: _clearAuthenticatedProjection,
     );
     if (!conversationCurrent) {

@@ -317,28 +317,34 @@ void main() {
     expect(error.toString(), isNot(contains(token)));
   });
 
-  test('maps authorized registry roles and readiness without pending requests', () {
-    final snapshot = deviceRegistryFromCore(
-      const core.DeviceJoinRegistrySnapshot(
-        did: _did,
-        devices: <core.DeviceJoinAuthorizedDeviceSummary>[
-          core.DeviceJoinAuthorizedDeviceSummary(
-            protocolDeviceId: 'admin-1',
-            signingKeyId: 'did:key:sign',
-            e2eeKeyId: 'did:key:e2ee',
-            status: core.DeviceJoinAuthorizationStatus.active,
-            role: core.DeviceJoinRole.admin,
-            managementReady: false,
-            isCurrent: true,
-          ),
-        ],
-      ),
-    );
+  test(
+    'maps authorized registry roles and readiness without pending requests',
+    () {
+      final snapshot = deviceRegistryFromCore(
+        const core.DeviceJoinRegistrySnapshot(
+          did: _did,
+          registryVersion: '7',
+          devices: <core.DeviceRegistryAuthorizedDeviceSummary>[
+            core.DeviceRegistryAuthorizedDeviceSummary(
+              protocolDeviceId: 'admin-1',
+              signingKeyId: 'did:key:sign',
+              e2eeKeyId: 'did:key:e2ee',
+              status: core.DeviceJoinAuthorizationStatus.active,
+              role: core.DeviceJoinRole.admin,
+              managementReady: false,
+              isCurrent: true,
+              authGeneration: '2',
+            ),
+          ],
+        ),
+      );
 
-    expect(snapshot.did, _did);
-    expect(snapshot.currentDevice?.role, DeviceRole.admin);
-    expect(snapshot.currentDevice?.managementReady, isFalse);
-  });
+      expect(snapshot.did, _did);
+      expect(snapshot.registryVersion, '7');
+      expect(snapshot.currentDevice?.role, DeviceRole.admin);
+      expect(snapshot.currentDevice?.managementReady, isFalse);
+    },
+  );
 
   test('maps verified Join request notice without raw proof material', () {
     final request = deviceJoinRequestFromCore(

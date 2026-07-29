@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
+import '../../../application/messaging_service.dart';
+import '../../../application/models/message_sync_diagnostics.dart';
 import '../../../application/ports/message_sync_core_port.dart';
 import '../../../core/performance_logger.dart';
 import '../../../domain/entities/chat_message.dart';
@@ -14,7 +16,6 @@ import '../../../l10n/app_message.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
-import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
 import 'app_lifecycle_provider.dart';
@@ -41,6 +42,12 @@ class MessageSyncCoordinatorState {
     this.lastReason,
     this.lastError,
     this.lastStatus,
+    this.lastSuccessAt,
+    this.mode = AppMessageSyncMode.uninitialized,
+    this.pendingMutationCount = 0,
+    this.dirtyDomains = const <AppMessageSyncDirtyDomain>[],
+    this.retryState = AppMessageSyncRetryState.none,
+    this.nextRetryAt,
   });
 
   final MessageSyncCoordinatorStatus status;
@@ -48,6 +55,12 @@ class MessageSyncCoordinatorState {
   final String? lastReason;
   final Object? lastError;
   final MessageSyncStatus? lastStatus;
+  final DateTime? lastSuccessAt;
+  final AppMessageSyncMode mode;
+  final int pendingMutationCount;
+  final List<AppMessageSyncDirtyDomain> dirtyDomains;
+  final AppMessageSyncRetryState retryState;
+  final DateTime? nextRetryAt;
 
   bool get isSyncing =>
       status == MessageSyncCoordinatorStatus.syncing ||
@@ -67,6 +80,12 @@ class MessageSyncCoordinatorState {
     Object? lastReason = _unset,
     Object? lastError = _unset,
     Object? lastStatus = _unset,
+    Object? lastSuccessAt = _unset,
+    AppMessageSyncMode? mode,
+    int? pendingMutationCount,
+    List<AppMessageSyncDirtyDomain>? dirtyDomains,
+    AppMessageSyncRetryState? retryState,
+    Object? nextRetryAt = _unset,
   }) {
     return MessageSyncCoordinatorState(
       status: status ?? this.status,
@@ -80,6 +99,16 @@ class MessageSyncCoordinatorState {
       lastStatus: identical(lastStatus, _unset)
           ? this.lastStatus
           : lastStatus as MessageSyncStatus?,
+      lastSuccessAt: identical(lastSuccessAt, _unset)
+          ? this.lastSuccessAt
+          : lastSuccessAt as DateTime?,
+      mode: mode ?? this.mode,
+      pendingMutationCount: pendingMutationCount ?? this.pendingMutationCount,
+      dirtyDomains: dirtyDomains ?? this.dirtyDomains,
+      retryState: retryState ?? this.retryState,
+      nextRetryAt: identical(nextRetryAt, _unset)
+          ? this.nextRetryAt
+          : nextRetryAt as DateTime?,
     );
   }
 }
@@ -256,10 +285,20 @@ class MessageSyncCoordinator
         lastReason: reason,
         lastError: null,
       );
+      var diagnosticsAttempted = false;
       try {
+        await ref.read(conversationListProvider.notifier).ensurePatchReady();
+        if (!_isCurrentSession(sessionFence)) {
+          return;
+        }
         final result = await ref
             .read(messageSyncServiceProvider)
             .syncNow(reason: reason);
+        if (!_isCurrentSession(sessionFence)) {
+          return;
+        }
+        diagnosticsAttempted = true;
+        await _refreshDiagnosticsBestEffort(sessionFence);
         if (!_isCurrentSession(sessionFence)) {
           return;
         }
@@ -318,44 +357,6 @@ class MessageSyncCoordinator
         if (!_isCurrentSession(sessionFence)) {
           return;
         }
-        _messageSyncTrace(
-          'run.refresh_fast_local.start',
-          fields: <String, Object?>{'reason': reason},
-        );
-        await ref.read(conversationListProvider.notifier).refreshFastLocal();
-        if (!_isCurrentSession(sessionFence)) {
-          return;
-        }
-        final conversations = ref.read(conversationListProvider).conversations;
-        if (!_isCurrentSession(sessionFence)) {
-          return;
-        }
-        _messageSyncTrace(
-          'run.prewarm.start',
-          fields: <String, Object?>{
-            'reason': reason,
-            'conversations': conversations.length,
-          },
-        );
-        await ref
-            .read(chatThreadsProvider.notifier)
-            .prewarmLocalHistoryForConversations(conversations);
-        if (!_isCurrentSession(sessionFence)) {
-          return;
-        }
-        await ref
-            .read(chatThreadsProvider.notifier)
-            .refreshVisibleLocalProjections(force: true);
-        if (!_isCurrentSession(sessionFence)) {
-          return;
-        }
-        _messageSyncTrace(
-          'run.prewarm.done',
-          fields: <String, Object?>{
-            'reason': reason,
-            'conversations': conversations.length,
-          },
-        );
       } catch (error) {
         _lastFailedAt = DateTime.now();
         _messageSyncTrace(
@@ -367,6 +368,12 @@ class MessageSyncCoordinator
         );
         if (!_isCurrentSession(sessionFence)) {
           return;
+        }
+        if (!diagnosticsAttempted) {
+          await _refreshDiagnosticsBestEffort(sessionFence);
+          if (!_isCurrentSession(sessionFence)) {
+            return;
+          }
         }
         _recoveryRetryPending = false;
         _runningRecoveryRetry = false;
@@ -423,6 +430,37 @@ class MessageSyncCoordinator
 
   bool _isCurrentSession(_MessageSyncSessionFence fence) {
     return !_disposed && fence.matches(ref.read(sessionProvider));
+  }
+
+  Future<void> _refreshDiagnosticsBestEffort(
+    _MessageSyncSessionFence fence,
+  ) async {
+    try {
+      final service = ref.read(messagingServiceProvider);
+      if (service is! MessageSyncDiagnosticsService) {
+        return;
+      }
+      final diagnostics = await (service as MessageSyncDiagnosticsService)
+          .syncDiagnostics();
+      if (!_isCurrentSession(fence)) {
+        return;
+      }
+      state = state.copyWith(
+        lastSuccessAt: diagnostics.lastSuccessAt,
+        mode: diagnostics.mode,
+        pendingMutationCount: diagnostics.pendingMutationCount,
+        dirtyDomains: List<AppMessageSyncDirtyDomain>.unmodifiable(
+          diagnostics.dirtyDomains,
+        ),
+        retryState: diagnostics.retryState,
+        nextRetryAt: diagnostics.nextRetryAt,
+      );
+    } catch (error) {
+      _messageSyncTrace(
+        'diagnostics.refresh_failed',
+        fields: <String, Object?>{'error_type': error.runtimeType},
+      );
+    }
   }
 
   void _dispatchCommittedIncomingNotifications(MessageSyncOutcome outcome) {
@@ -556,6 +594,7 @@ class _MessageSyncSessionFence {
     required this.generation,
     required this.ownerIdentityId,
     required this.accountId,
+    required this.deviceAuthGeneration,
     required this.did,
   });
 
@@ -565,6 +604,7 @@ class _MessageSyncSessionFence {
       generation: sessionState.generation,
       ownerIdentityId: session.ownerIdentityId,
       accountId: session.accountId,
+      deviceAuthGeneration: session.accountBinding?.deviceAuthGeneration,
       did: session.did,
     );
   }
@@ -578,6 +618,7 @@ class _MessageSyncSessionFence {
   final int generation;
   final String? ownerIdentityId;
   final String? accountId;
+  final String? deviceAuthGeneration;
   final String did;
 
   bool matches(SessionState sessionState) {
@@ -586,6 +627,7 @@ class _MessageSyncSessionFence {
         sessionState.generation == generation &&
         session.ownerIdentityId == ownerIdentityId &&
         session.accountId == accountId &&
+        session.accountBinding?.deviceAuthGeneration == deviceAuthGeneration &&
         session.did == did;
   }
 }
