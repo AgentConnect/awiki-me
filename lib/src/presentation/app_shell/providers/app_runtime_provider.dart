@@ -39,10 +39,11 @@ const bool _runtimeTraceEnabled = bool.fromEnvironment(
   'AWIKI_RUNTIME_TRACE',
   defaultValue: false,
 );
-const Set<String> _stageTwoPersistentRealtimeEventTypes = <String>{
-  'message.created',
-  'group.member_changed',
-  'group.profile_updated',
+const Set<SyncDomain> _accountStateRealtimeDomains = <SyncDomain>{
+  SyncDomain.profile,
+  SyncDomain.agentInventory,
+  SyncDomain.agentStatus,
+  SyncDomain.deviceRegistry,
 };
 
 const Object _unsetActivatedDid = Object();
@@ -81,7 +82,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   AppRuntimeController(
     this.ref, {
     Duration foregroundCatchUpInterval = const Duration(seconds: 30),
+    Duration realtimeSyncRetryBaseDelay = const Duration(seconds: 2),
+    int realtimeSyncRetryLimit = 3,
   }) : _foregroundCatchUpInterval = foregroundCatchUpInterval,
+       _realtimeSyncRetryBaseDelay = realtimeSyncRetryBaseDelay,
+       _realtimeSyncRetryLimit = realtimeSyncRetryLimit,
        super(const AppRuntimeState()) {
     _lifecycleSubscription = ref.listen<AppLifecycleState>(
       appLifecycleProvider,
@@ -104,6 +109,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   final Ref ref;
   final Duration _foregroundCatchUpInterval;
+  final Duration _realtimeSyncRetryBaseDelay;
+  final int _realtimeSyncRetryLimit;
   static const Duration _requestTimeout = Duration(seconds: 20);
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
@@ -117,6 +124,13 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   int? _authenticatedRefreshFollowUpSessionGeneration;
   DateTime? _lastAuthenticatedRefreshStartedAt;
   Timer? _foregroundCatchUpTimer;
+  final Set<SyncDomain> _pendingRealtimeSyncDomains = <SyncDomain>{};
+  bool _pendingRealtimeUnknownDomain = false;
+  String? _pendingRealtimeSyncReason;
+  _RealtimeSyncSessionFence? _pendingRealtimeSyncFence;
+  Future<void>? _realtimeSyncDispatch;
+  Timer? _realtimeSyncRetryTimer;
+  int _realtimeSyncRetryAttempt = 0;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
@@ -169,6 +183,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final totalWatch = Stopwatch()..start();
     state = state.copyWith(isBusy: true, activatedDid: null);
     try {
+      _clearRealtimeSyncHints();
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(sessionProvider.notifier).setSession(session);
       ref.read(messageSyncCoordinatorProvider.notifier).resetForSession();
@@ -341,6 +356,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   void _clearAuthenticatedUiState() {
     _stopForegroundCatchUp();
+    _clearRealtimeSyncHints();
     ref.read(sessionProvider.notifier).clear();
     _clearAuthenticatedProjection();
   }
@@ -807,8 +823,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         'conversation_hint': update.conversationHint != null,
         'sync_dirty': update.syncDirty,
         'gap': update.gapDetected,
-        'event_seq': update.syncEventSeq,
-        'event_type': update.syncEventType,
+        'unknown_domain': update.hasUnknownDomain,
+        'domains': update.domains.map((domain) => domain.name).join(','),
+        'reason': update.reason,
         'thread_hash': _runtimeSafeHash(
           traceConversation?.threadId ?? update.message?.threadId,
         ),
@@ -832,10 +849,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         'reliable_sync.schedule',
         fields: <String, Object?>{
           'reason': reliableSyncReason,
-          'event_seq': update.syncEventSeq,
+          'domains': update.domains.map((domain) => domain.name).join(','),
+          'unknown_domain': update.hasUnknownDomain,
         },
       );
-      _scheduleReliableSync(reliableSyncReason);
+      _scheduleRealtimeSync(update, reliableSyncReason);
     }
     final controlPayload = update.agentControlPayload;
     if (controlPayload != null) {
@@ -867,7 +885,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           'message': update.message != null,
           'group': update.group != null,
           'conversation_hint': update.conversationHint != null,
-          'event_type': update.syncEventType,
+          'domains': update.domains.map((domain) => domain.name).join(','),
         },
       );
       return;
@@ -973,6 +991,203 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     );
   }
 
+  void _scheduleRealtimeSync(RealtimeUpdate update, String fallbackReason) {
+    final sessionState = ref.read(sessionProvider);
+    final fence = _RealtimeSyncSessionFence.capture(sessionState);
+    if (fence == null) {
+      _scheduleReliableSync(fallbackReason);
+      return;
+    }
+
+    final domains = <SyncDomain>{...update.domains};
+    if (domains.isEmpty &&
+        !update.hasUnknownDomain &&
+        (update.syncDirty ||
+            update.gapDetected ||
+            update.systemNotificationChanged ||
+            update.message != null ||
+            update.group != null ||
+            update.conversationHint != null ||
+            update.agentControlPayload != null)) {
+      domains.add(SyncDomain.message);
+    }
+    if (domains.isEmpty && !update.hasUnknownDomain) {
+      return;
+    }
+
+    final pendingFence = _pendingRealtimeSyncFence;
+    if (pendingFence != null && !pendingFence.sameSession(fence)) {
+      _clearRealtimeSyncHints();
+    }
+    _pendingRealtimeSyncFence = fence;
+    _pendingRealtimeSyncDomains.addAll(domains);
+    _pendingRealtimeUnknownDomain =
+        _pendingRealtimeUnknownDomain || update.hasUnknownDomain;
+    _realtimeSyncRetryAttempt = 0;
+    _pendingRealtimeSyncReason = update.reason?.trim().isNotEmpty == true
+        ? update.reason!.trim()
+        : fallbackReason;
+    _startRealtimeSyncDrain();
+  }
+
+  void _startRealtimeSyncDrain() {
+    if (_realtimeSyncDispatch != null ||
+        _realtimeSyncRetryTimer != null ||
+        _pendingRealtimeSyncFence == null ||
+        (_pendingRealtimeSyncDomains.isEmpty &&
+            !_pendingRealtimeUnknownDomain)) {
+      return;
+    }
+    late final Future<void> operation;
+    operation = Future<void>.microtask(_drainRealtimeSyncHints).whenComplete(
+      () {
+        if (identical(_realtimeSyncDispatch, operation)) {
+          _realtimeSyncDispatch = null;
+        }
+        if (mounted &&
+            _pendingRealtimeSyncFence != null &&
+            (_pendingRealtimeSyncDomains.isNotEmpty ||
+                _pendingRealtimeUnknownDomain)) {
+          _startRealtimeSyncDrain();
+        }
+      },
+    );
+    _realtimeSyncDispatch = operation;
+  }
+
+  Future<void> _drainRealtimeSyncHints() async {
+    while (mounted) {
+      final fence = _pendingRealtimeSyncFence;
+      if (fence == null) {
+        _clearRealtimeSyncHints();
+        return;
+      }
+      if (!fence.matches(ref.read(sessionProvider))) {
+        _clearRealtimeSyncHints(expectedFence: fence);
+        return;
+      }
+      if (_pendingRealtimeSyncDomains.isEmpty &&
+          !_pendingRealtimeUnknownDomain) {
+        return;
+      }
+
+      final domains = Set<SyncDomain>.of(_pendingRealtimeSyncDomains);
+      final hasUnknownDomain = _pendingRealtimeUnknownDomain;
+      final reason = _pendingRealtimeSyncReason ?? 'realtime_domain_changed';
+      _pendingRealtimeSyncDomains.clear();
+      _pendingRealtimeUnknownDomain = false;
+      _pendingRealtimeSyncReason = null;
+
+      final actions = <Future<void>>[];
+      final failedDomains = <SyncDomain>{};
+      var unknownDomainFailed = false;
+      if (domains.contains(SyncDomain.message)) {
+        actions.add(
+          (() async {
+            try {
+              await ref
+                  .read(messageSyncCoordinatorProvider.notifier)
+                  .requestSync(reason);
+              if (ref.read(messageSyncCoordinatorProvider).status ==
+                  MessageSyncCoordinatorStatus.retryableFailure) {
+                failedDomains.add(SyncDomain.message);
+              }
+            } on Object {
+              failedDomains.add(SyncDomain.message);
+            }
+          })(),
+        );
+      }
+      final accountDomains = domains
+          .where(_accountStateRealtimeDomains.contains)
+          .toSet();
+      if (hasUnknownDomain || accountDomains.isNotEmpty) {
+        actions.add(
+          (() async {
+            try {
+              await ref
+                  .read(accountStateSyncRequestBusProvider)
+                  .request(reason);
+            } on Object {
+              failedDomains.addAll(accountDomains);
+              unknownDomainFailed = hasUnknownDomain;
+            }
+          })(),
+        );
+      }
+      if (actions.isNotEmpty) {
+        await Future.wait(actions);
+      }
+      if (!fence.matches(ref.read(sessionProvider))) {
+        _clearRealtimeSyncHints(expectedFence: fence);
+        return;
+      }
+      if (failedDomains.isNotEmpty || unknownDomainFailed) {
+        _scheduleRealtimeSyncRetry(
+          fence: fence,
+          domains: failedDomains,
+          hasUnknownDomain: unknownDomainFailed,
+          reason: reason,
+        );
+        return;
+      }
+      _realtimeSyncRetryAttempt = 0;
+      if (_pendingRealtimeSyncDomains.isEmpty &&
+          !_pendingRealtimeUnknownDomain) {
+        _clearRealtimeSyncHints(expectedFence: fence);
+        return;
+      }
+    }
+  }
+
+  void _scheduleRealtimeSyncRetry({
+    required _RealtimeSyncSessionFence fence,
+    required Set<SyncDomain> domains,
+    required bool hasUnknownDomain,
+    required String reason,
+  }) {
+    if (_realtimeSyncRetryAttempt >= _realtimeSyncRetryLimit) {
+      _clearRealtimeSyncHints(expectedFence: fence);
+      return;
+    }
+    final pendingFence = _pendingRealtimeSyncFence;
+    if (pendingFence != null && !pendingFence.sameSession(fence)) {
+      return;
+    }
+    _pendingRealtimeSyncFence = fence;
+    _pendingRealtimeSyncDomains.addAll(domains);
+    _pendingRealtimeUnknownDomain =
+        _pendingRealtimeUnknownDomain || hasUnknownDomain;
+    _pendingRealtimeSyncReason ??= reason;
+    _realtimeSyncRetryAttempt += 1;
+    final multiplier = 1 << (_realtimeSyncRetryAttempt - 1);
+    final delay = _realtimeSyncRetryBaseDelay * multiplier;
+    _realtimeSyncRetryTimer ??= Timer(delay, () {
+      _realtimeSyncRetryTimer = null;
+      if (!mounted || !fence.matches(ref.read(sessionProvider))) {
+        _clearRealtimeSyncHints(expectedFence: fence);
+        return;
+      }
+      _startRealtimeSyncDrain();
+    });
+  }
+
+  void _clearRealtimeSyncHints({_RealtimeSyncSessionFence? expectedFence}) {
+    final pendingFence = _pendingRealtimeSyncFence;
+    if (expectedFence != null &&
+        pendingFence != null &&
+        !pendingFence.sameSession(expectedFence)) {
+      return;
+    }
+    _pendingRealtimeSyncDomains.clear();
+    _pendingRealtimeUnknownDomain = false;
+    _pendingRealtimeSyncReason = null;
+    _pendingRealtimeSyncFence = null;
+    _realtimeSyncRetryTimer?.cancel();
+    _realtimeSyncRetryTimer = null;
+    _realtimeSyncRetryAttempt = 0;
+  }
+
   String? _reliableSyncReasonFor(RealtimeUpdate update) {
     if (update.agentControlPayload != null) {
       return 'realtime_agent_control';
@@ -984,7 +1199,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return 'realtime_gap';
     }
     if (update.syncDirty) {
-      return 'realtime_dirty';
+      return update.reason?.trim().isNotEmpty == true
+          ? update.reason!.trim()
+          : 'realtime_dirty';
+    }
+    if (update.domains.isNotEmpty || update.hasUnknownDomain) {
+      return update.reason?.trim().isNotEmpty == true
+          ? update.reason!.trim()
+          : 'realtime_domain_changed';
     }
     if (update.message != null) {
       return 'realtime_message';
@@ -1000,9 +1222,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (message != null) {
       return !message.isEncrypted;
     }
-    final eventType = update.syncEventType?.trim();
-    return eventType != null &&
-        _stageTwoPersistentRealtimeEventTypes.contains(eventType);
+    return update.domains.contains(SyncDomain.message);
   }
 
   bool _shouldAcceptRealtimeConversationHint(ConversationSummary conversation) {
@@ -1063,12 +1283,57 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   @override
   void dispose() {
     _stopForegroundCatchUp();
+    _clearRealtimeSyncHints();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
     _messageSyncSubscription.close();
     _realtimeUpdateSubscription.cancel();
     super.dispose();
   }
+}
+
+class _RealtimeSyncSessionFence {
+  const _RealtimeSyncSessionFence({
+    required this.generation,
+    required this.ownerIdentityId,
+    required this.accountId,
+    required this.did,
+  });
+
+  static _RealtimeSyncSessionFence? capture(SessionState state) {
+    final session = state.session;
+    final ownerIdentityId = session?.ownerIdentityId?.trim();
+    final accountId = session?.accountId?.trim();
+    if (session == null ||
+        ownerIdentityId == null ||
+        ownerIdentityId.isEmpty ||
+        accountId == null ||
+        accountId.isEmpty) {
+      return null;
+    }
+    return _RealtimeSyncSessionFence(
+      generation: state.generation,
+      ownerIdentityId: ownerIdentityId,
+      accountId: accountId,
+      did: session.did,
+    );
+  }
+
+  final int generation;
+  final String ownerIdentityId;
+  final String accountId;
+  final String did;
+
+  bool matches(SessionState state) {
+    final next = capture(state);
+    return next != null && sameSession(next);
+  }
+
+  bool sameSession(_RealtimeSyncSessionFence other) =>
+      other.generation == generation &&
+      other.ownerIdentityId == ownerIdentityId &&
+      other.accountId == accountId &&
+      other.did == did;
 }
 
 class _AuthenticatedRefreshSessionFence {

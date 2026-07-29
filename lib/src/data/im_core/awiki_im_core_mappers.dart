@@ -610,10 +610,11 @@ class AwikiImCoreMappers {
     if (event.isSystemNotificationChanged) {
       return RealtimeUpdate(
         systemNotificationChanged: true,
+        domains: _syncDomainsFromCore(event.sync?.domains),
+        reason: _nonEmpty(event.sync?.reason),
         syncDirty: event.sync?.syncDirty ?? false,
         gapDetected: event.sync?.gapDetected ?? false,
-        syncEventSeq: event.sync?.eventSeq,
-        syncEventType: event.sync?.eventType,
+        hasUnknownDomain: event.sync?.hasUnknownDomain ?? false,
       );
     }
     final message = event.message;
@@ -621,18 +622,22 @@ class AwikiImCoreMappers {
       if (event.kind == 'group_updated') {
         return RealtimeUpdate(
           group: null,
+          domains: _syncDomainsFromCore(
+            event.sync?.domains,
+          ).union(const <SyncDomain>{SyncDomain.message}),
+          reason: _nonEmpty(event.sync?.reason),
           syncDirty: event.sync?.syncDirty ?? true,
           gapDetected: event.sync?.gapDetected ?? false,
-          syncEventSeq: event.sync?.eventSeq,
-          syncEventType: event.sync?.eventType,
+          hasUnknownDomain: event.sync?.hasUnknownDomain ?? false,
         );
       }
       if (event.sync != null) {
         return RealtimeUpdate(
+          domains: _syncDomainsFromCore(event.sync!.domains),
+          reason: _nonEmpty(event.sync!.reason),
           syncDirty: event.sync!.syncDirty,
           gapDetected: event.sync!.gapDetected,
-          syncEventSeq: event.sync!.eventSeq,
-          syncEventType: event.sync!.eventType,
+          hasUnknownDomain: event.sync!.hasUnknownDomain,
         );
       }
       return null;
@@ -684,20 +689,22 @@ class AwikiImCoreMappers {
         agentControlPayload:
             AgentControlPayloads.decode(chatMessage.payloadJson) ??
             const <String, Object?>{},
+        domains: _syncDomainsFromCore(event.sync?.domains),
+        reason: _nonEmpty(event.sync?.reason),
         syncDirty: event.sync?.syncDirty ?? false,
         gapDetected: event.sync?.gapDetected ?? false,
-        syncEventSeq: event.sync?.eventSeq,
-        syncEventType: event.sync?.eventType,
+        hasUnknownDomain: event.sync?.hasUnknownDomain ?? false,
       );
     }
     return RealtimeUpdate(
       message: chatMessage,
       conversationHint: conversation,
       group: group,
+      domains: _syncDomainsFromCore(event.sync?.domains),
+      reason: _nonEmpty(event.sync?.reason),
       syncDirty: event.sync?.syncDirty ?? false,
       gapDetected: event.sync?.gapDetected ?? false,
-      syncEventSeq: event.sync?.eventSeq,
-      syncEventType: event.sync?.eventType,
+      hasUnknownDomain: event.sync?.hasUnknownDomain ?? false,
     );
   }
 
@@ -707,6 +714,20 @@ class AwikiImCoreMappers {
     return _connectionStatusFromString(state.state);
   }
 }
+
+Set<SyncDomain> _syncDomainsFromCore(Set<core.SyncDomain>? domains) =>
+    domains
+        ?.map(
+          (domain) => switch (domain) {
+            core.SyncDomain.message => SyncDomain.message,
+            core.SyncDomain.profile => SyncDomain.profile,
+            core.SyncDomain.agentInventory => SyncDomain.agentInventory,
+            core.SyncDomain.agentStatus => SyncDomain.agentStatus,
+            core.SyncDomain.deviceRegistry => SyncDomain.deviceRegistry,
+          },
+        )
+        .toSet() ??
+    const <SyncDomain>{};
 
 DateTime _parseDateTime(String? raw) {
   return _tryParseDateTime(raw) ?? DateTime.fromMillisecondsSinceEpoch(0);

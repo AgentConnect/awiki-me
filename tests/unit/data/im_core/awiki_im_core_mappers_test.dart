@@ -6,6 +6,7 @@ import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
+import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -903,10 +904,11 @@ void main() {
       title: 'must not become chat',
       body: 'must not become chat preview',
       sync: core.RealtimeSyncHint(
+        domains: <core.SyncDomain>{core.SyncDomain.deviceRegistry},
+        reason: 'device_registry_changed',
         syncDirty: true,
         gapDetected: false,
-        eventSeq: '42',
-        eventType: 'system_notification_changed',
+        hasUnknownDomain: false,
       ),
     );
 
@@ -916,7 +918,9 @@ void main() {
     expect(update!.systemNotificationChanged, isTrue);
     expect(update.needsReliableSync, isTrue);
     expect(update.syncDirty, isTrue);
-    expect(update.syncEventSeq, '42');
+    expect(update.domains, <SyncDomain>{SyncDomain.deviceRegistry});
+    expect(update.reason, 'device_registry_changed');
+    expect(update.hasUnknownDomain, isFalse);
     expect(update.message, isNull);
     expect(update.conversation, isNull);
     expect(update.conversationHint, isNull);
@@ -927,10 +931,11 @@ void main() {
     const event = core.RealtimeEvent(
       kind: 'unknown_notification',
       sync: core.RealtimeSyncHint(
+        domains: <core.SyncDomain>{core.SyncDomain.message},
+        reason: 'message_available',
         syncDirty: true,
         gapDetected: false,
-        eventSeq: '43',
-        eventType: 'message.created',
+        hasUnknownDomain: true,
       ),
     );
 
@@ -939,8 +944,9 @@ void main() {
     expect(update, isNotNull);
     expect(update!.needsReliableSync, isTrue);
     expect(update.syncDirty, isTrue);
-    expect(update.syncEventSeq, '43');
-    expect(update.syncEventType, 'message.created');
+    expect(update.domains, <SyncDomain>{SyncDomain.message});
+    expect(update.reason, 'message_available');
+    expect(update.hasUnknownDomain, isTrue);
     expect(update.message, isNull);
     expect(update.conversation, isNull);
     expect(update.conversationHint, isNull);

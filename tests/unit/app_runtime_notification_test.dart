@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
@@ -39,6 +40,38 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 import 'devices/device_test_support.dart';
 
+class _RecordingAccountStateSyncRequestBus extends AccountStateSyncRequestBus {
+  final List<String> reasons = <String>[];
+  int failuresRemaining = 0;
+
+  void clear() {
+    reasons.clear();
+    failuresRemaining = 0;
+  }
+
+  @override
+  bool get hasHandler => true;
+
+  @override
+  void attach(AccountStateSyncRequestHandler handler) {}
+
+  @override
+  void detach() {}
+
+  @override
+  Future<void> request(
+    String reason, {
+    bool force = false,
+    AccountStateVersionFloor? minimumVersion,
+  }) async {
+    reasons.add(reason);
+    if (failuresRemaining > 0) {
+      failuresRemaining -= 1;
+      throw StateError('account state sync failed');
+    }
+  }
+}
+
 void main() {
   group('AppRuntime notifications', () {
     late FakeAwikiGateway gateway;
@@ -46,6 +79,7 @@ void main() {
     late FakeNotificationFacade notificationFacade;
     late FakeMessageSyncService messageSyncService;
     late FakeDeviceManagementCore deviceCore;
+    late _RecordingAccountStateSyncRequestBus accountStateRequests;
     late ProviderContainer container;
 
     setUp(() {
@@ -53,6 +87,7 @@ void main() {
       realtimeGateway = FakeRealtimeGateway();
       notificationFacade = FakeNotificationFacade();
       messageSyncService = FakeMessageSyncService();
+      accountStateRequests = _RecordingAccountStateSyncRequestBus();
       deviceCore = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
           did: 'did:test:me',
@@ -88,6 +123,22 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
+          accountStateSyncRequestBusProvider.overrideWithValue(
+            accountStateRequests,
+          ),
+          appRuntimeProvider.overrideWith(
+            (ref) => AppRuntimeController(
+              ref,
+              realtimeSyncRetryBaseDelay: Duration.zero,
+            ),
+          ),
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => MessageSyncCoordinator(
+              ref,
+              minInterval: Duration.zero,
+              failureBackoff: Duration.zero,
+            ),
+          ),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
@@ -106,6 +157,31 @@ void main() {
               displayName: 'Me',
               handle: 'me',
               jwtToken: 'token',
+            ),
+          );
+    }
+
+    Future<void> activateBound({
+      String ownerIdentityId = 'owner-identity-a',
+      String accountId = 'account-a',
+      String did = 'did:test:me',
+      String protocolDeviceId = 'device-a',
+    }) {
+      return container
+          .read(appRuntimeProvider.notifier)
+          .activateSession(
+            SessionIdentity(
+              did: did,
+              credentialName: ownerIdentityId,
+              displayName: 'Bound',
+              accountBinding: SessionAccountBinding(
+                ownerIdentityId: ownerIdentityId,
+                accountId: accountId,
+                currentDid: did,
+                protocolDeviceId: protocolDeviceId,
+                identityGeneration: '1',
+                deviceAuthGeneration: '1',
+              ),
             ),
           );
     }
@@ -652,10 +728,10 @@ void main() {
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         message: buildUpdate().message,
         conversationHint: buildUpdate().conversationHint,
+        domains: const <SyncDomain>{SyncDomain.message},
+        reason: 'message_available',
         syncDirty: true,
         gapDetected: true,
-        syncEventSeq: '42',
-        syncEventType: 'message.created',
       );
 
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
@@ -669,16 +745,248 @@ void main() {
       await activate();
       messageSyncService.syncReasons.clear();
       gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.message},
+        reason: 'message_available',
         syncDirty: true,
-        syncEventSeq: '43',
-        syncEventType: 'message.created',
       );
 
       await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
       await pumpEventQueue();
 
-      expect(messageSyncService.syncReasons, contains('realtime_dirty'));
+      expect(messageSyncService.syncReasons, contains('message_available'));
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+    });
+
+    test('v2 多域 hint 合并后分别路由消息与账号状态协调器', () async {
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      accountStateRequests.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{
+          SyncDomain.message,
+          SyncDomain.profile,
+          SyncDomain.agentInventory,
+        },
+        reason: 'account_and_message_changed',
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, <String>[
+        'account_and_message_changed',
+      ]);
+      expect(accountStateRequests.reasons, <String>[
+        'account_and_message_changed',
+      ]);
+      expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+    });
+
+    test('未知 v2 domain 只触发账号 Manifest 对账', () async {
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      accountStateRequests.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        reason: 'unknown_domain_changed',
+        syncDirty: true,
+        hasUnknownDomain: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, isEmpty);
+      expect(accountStateRequests.reasons, <String>['unknown_domain_changed']);
+    });
+
+    test('消息域同步失败后按 session fence 退避重试且不并发', () async {
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      messageSyncService.nextDeltaError = StateError('temporary delta failure');
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.message},
+        reason: 'message_retry',
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, <String>[
+        'message_retry',
+        'message_retry',
+      ]);
+      expect(messageSyncService.maxActiveSyncNowCalls, 1);
+    });
+
+    test('账号域 request bus 抛错后由 runtime 有界退避重试', () async {
+      await activateBound();
+      await pumpEventQueue();
+      accountStateRequests.clear();
+      accountStateRequests.failuresRemaining = 1;
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.profile},
+        reason: 'profile_retry',
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(accountStateRequests.reasons, <String>[
+        'profile_retry',
+        'profile_retry',
+      ]);
+    });
+
+    test('session 切换会取消旧 owner 已排队的失败重试', () async {
+      container.dispose();
+      container = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          accountStateSyncRequestBusProvider.overrideWithValue(
+            accountStateRequests,
+          ),
+          appRuntimeProvider.overrideWith(
+            (ref) => AppRuntimeController(
+              ref,
+              realtimeSyncRetryBaseDelay: const Duration(milliseconds: 30),
+            ),
+          ),
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => MessageSyncCoordinator(
+              ref,
+              minInterval: Duration.zero,
+              failureBackoff: Duration.zero,
+            ),
+          ),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+      addTearDown(container.dispose);
+      await activateBound();
+      await pumpEventQueue();
+      accountStateRequests.clear();
+      accountStateRequests.failuresRemaining = 1;
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.profile},
+        reason: 'old_owner_retry',
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+      expect(accountStateRequests.reasons, <String>['old_owner_retry']);
+
+      await activateBound(
+        ownerIdentityId: 'owner-identity-b',
+        accountId: 'account-b',
+        did: 'did:test:next',
+        protocolDeviceId: 'device-b',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await pumpEventQueue();
+
+      expect(accountStateRequests.reasons, <String>['old_owner_retry']);
+      expect(
+        container.read(sessionProvider).session?.ownerIdentityId,
+        'owner-identity-b',
+      );
+    });
+
+    test('重复乱序多域 hint 保持跨协调器单飞并合并 follow-up', () async {
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      accountStateRequests.clear();
+      final firstSync = Completer<void>();
+      messageSyncService.syncNowCompleter = firstSync;
+
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.message},
+        reason: 'message_available',
+        syncDirty: true,
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.agentStatus, SyncDomain.profile},
+        reason: 'account_changed',
+        syncDirty: true,
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.message, SyncDomain.profile},
+        reason: 'message_available',
+        syncDirty: true,
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.activeSyncNowCalls, 1);
+      expect(messageSyncService.maxActiveSyncNowCalls, 1);
+      firstSync.complete();
+      await pumpEventQueue();
+
+      expect(messageSyncService.maxActiveSyncNowCalls, 1);
+      expect(messageSyncService.syncReasons, hasLength(2));
+      expect(accountStateRequests.reasons, <String>['message_available']);
+    });
+
+    test('旧 owner hint 完成后不能清空或代替新 session 调度', () async {
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      accountStateRequests.clear();
+      final oldSync = Completer<void>();
+      messageSyncService.syncNowCompleter = oldSync;
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.message},
+        reason: 'old_owner_message',
+        syncDirty: true,
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      await activateBound(
+        ownerIdentityId: 'owner-identity-b',
+        accountId: 'account-b',
+        did: 'did:test:next',
+        protocolDeviceId: 'device-b',
+      );
+      accountStateRequests.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        domains: <SyncDomain>{SyncDomain.deviceRegistry},
+        reason: 'new_owner_registry',
+        syncDirty: true,
+      );
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+      expect(accountStateRequests.reasons, isEmpty);
+
+      messageSyncService.syncNowCompleter = null;
+      oldSync.complete();
+      await pumpEventQueue();
+
+      expect(accountStateRequests.reasons, <String>['new_owner_registry']);
+      expect(
+        container.read(sessionProvider).session?.ownerIdentityId,
+        'owner-identity-b',
+      );
     });
 
     test('后台收到消息时触发系统通知', () async {
@@ -1111,7 +1419,7 @@ void main() {
         eventsApplied: 0,
         pagesFetched: 0,
       );
-      for (final eventType in <String>[
+      for (final reason in <String>[
         'group.member_changed',
         'group.profile_updated',
       ]) {
@@ -1125,8 +1433,9 @@ void main() {
             lastMessageAt: DateTime.utc(2026, 7, 28, 1),
             myRole: 'member',
           ),
+          domains: const <SyncDomain>{SyncDomain.message},
+          reason: reason,
           syncDirty: true,
-          syncEventType: eventType,
         );
         await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
         await pumpEventQueue();
@@ -1206,7 +1515,7 @@ void main() {
           myRole: 'member',
         ),
         syncDirty: true,
-        syncEventType: 'group.e2ee.update',
+        reason: 'group.e2ee.update',
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'group'});
       await pumpEventQueue();
