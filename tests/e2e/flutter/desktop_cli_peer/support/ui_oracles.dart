@@ -963,7 +963,7 @@ void expectExactConversationRowUi({
 
   final unread = find.descendant(
     of: row,
-    matching: find.byKey(const Key('conversation-preview-tag-unread')),
+    matching: find.byKey(const Key('conversation-row-unread-badge')),
   );
   if (expectedUnreadLabel == null) {
     expect(unread, findsNothing);

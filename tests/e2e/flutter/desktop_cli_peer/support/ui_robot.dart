@@ -647,7 +647,7 @@ class _DesktopAppRobot {
     );
     final unreadBadge = find.descendant(
       of: row,
-      matching: find.byKey(const Key('conversation-preview-tag-unread')),
+      matching: find.byKey(const Key('conversation-row-unread-badge')),
     );
     if (unreadCount == 0) {
       E2eObservation observeNoBadge() {
@@ -679,9 +679,7 @@ class _DesktopAppRobot {
       unreadBadge,
       description: 'conversation row unread badge',
     );
-    final l10n = AppLocalizations.of(tester.element(unreadBadge));
-    final countLabel = unreadCount > 999 ? '999+' : '$unreadCount';
-    final expectedLabel = l10n.conversationsUnreadTag(countLabel);
+    final expectedLabel = unreadCount > 99 ? '99+' : '$unreadCount';
     final exactLabel = find.descendant(
       of: unreadBadge,
       matching: find.text(expectedLabel),
@@ -728,9 +726,9 @@ class _DesktopAppRobot {
         : expectedPreview;
     final unreadLabel = unreadCount <= 0
         ? null
-        : l10n.conversationsUnreadTag(
-            unreadCount > 999 ? '999+' : '$unreadCount',
-          );
+        : unreadCount > 99
+        ? '99+'
+        : '$unreadCount';
     expectExactConversationRowUi(
       conversationId: conversationId,
       expectedTitle: expectedTitle,
