@@ -24,6 +24,8 @@ import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/thread_message_patch.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/relationship_core_port.dart';
 import 'package:awiki_me/src/application/relationship_application_service.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
@@ -42,6 +44,7 @@ import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
@@ -207,7 +210,11 @@ void runDesktopCliPeerE2e({
       final preparedSession = selectedCase.runsPerformance
           ? null
           : identitySwitchSessions?.primary ??
-                await _prepareAppIdentity(bootstrap.onboardingService!, config);
+                await _prepareAppIdentity(
+                  bootstrap.onboardingService!,
+                  bootstrap.onboardingSupportService!,
+                  config,
+                );
       if (selectedCase.runsIdentitySwitch) {
         await _verifyIdentitySwitchRegression(
           bootstrap: bootstrap,
@@ -249,7 +256,7 @@ void runDesktopCliPeerE2e({
           providerOverrides: appProviderOverrides,
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
       shellWatch.stop();
       expect(find.byType(AppShell), findsOneWidget);
 
@@ -592,10 +599,12 @@ Future<void> _attestPassedCases(Map<String, List<String>> cases) async {
 
 Future<AppSession> _prepareAppIdentity(
   OnboardingService onboarding,
+  OnboardingSupportService onboardingSupport,
   _DesktopCliPeerSmokeConfig config,
 ) {
   return _prepareAppIdentityForHandle(
     onboarding,
+    onboardingSupport,
     config,
     handle: config.appHandle,
     displayLabel: '',
@@ -604,27 +613,17 @@ Future<AppSession> _prepareAppIdentity(
 
 Future<AppSession> _prepareAppIdentityForHandle(
   OnboardingService onboarding,
+  OnboardingSupportService onboardingSupport,
   _DesktopCliPeerSmokeConfig config, {
   required String handle,
   required String displayLabel,
 }) async {
-  final recover = await _tryAppIdentityAction(
-    () => onboarding.recoverHandle(
-      phone: config.otpPhone,
-      otp: config.otpCode,
-      handle: handle,
-    ),
+  await onboardingSupport.sendRegistrationOtp(
+    phone: config.otpPhone,
+    handle: handle,
+    domain: config.environment.didDomain,
+    fullHandle: '$handle.${config.environment.didDomain}',
   );
-  if (recover.session != null) {
-    return recover.session!;
-  }
-  if (!_looksRecoverableForRegister(recover.errorText)) {
-    throw StateError(
-      'App recover failed and did not look like a missing-handle error: '
-      '${_sanitizeDiagnostic(recover.errorText, secrets: config.secrets)}',
-    );
-  }
-
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
@@ -677,6 +676,7 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
   try {
     final session = await _prepareAppIdentity(
       bootstrap.onboardingService!,
+      bootstrap.onboardingSupportService!,
       config,
     );
     final datasetWatch = Stopwatch()..start();
@@ -895,10 +895,16 @@ class _PerformanceDatasetPrepareResult {
 }
 
 Future<_AppIdentityAttempt> _tryAppIdentityAction(
-  Future<AppSession> Function() action,
+  Future<IdentityRegistrationResult> Function() action,
 ) async {
   try {
-    return _AppIdentityAttempt.session(await action());
+    final result = await action();
+    final session = result.identity;
+    if (result.status == IdentityRegistrationStatus.registered &&
+        session != null) {
+      return _AppIdentityAttempt.session(session);
+    }
+    return _AppIdentityAttempt.error('join_required');
   } on Object catch (error) {
     return _AppIdentityAttempt.error(error.toString());
   }

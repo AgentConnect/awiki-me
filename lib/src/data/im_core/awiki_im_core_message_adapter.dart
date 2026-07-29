@@ -19,6 +19,7 @@ class AwikiImCoreMessageAdapter
         MessageCorePort,
         LocalHistoryMessageCorePort,
         ThreadPatchMessageCorePort,
+        ControlThreadPatchMessageCorePort,
         ConversationTimelineMessageCorePort {
   AwikiImCoreMessageAdapter({
     required AwikiImCoreRuntime runtime,
@@ -42,6 +43,7 @@ class AwikiImCoreMessageAdapter
         core.SendTextRequest(
           target: _mappers.messageTargetToCore(thread),
           text: content,
+          security: _securityMode(isDirect: thread is AppDirectThreadRef),
         ),
       );
       return _mappers.chatMessageFromCore(result.message, ownerDid: ownerDid);
@@ -138,9 +140,10 @@ class AwikiImCoreMessageAdapter
         core.SendPayloadRequest(
           target: _mappers.messageTargetToCore(thread),
           payloadJson: jsonEncode(payload),
-          security: secure
-              ? core.MessageSecurityMode.secureDirect
-              : core.MessageSecurityMode.defaultPlain,
+          security: _securityMode(
+            isDirect: thread is AppDirectThreadRef,
+            secureRequested: secure,
+          ),
           idempotencyKey: idempotencyKey,
         ),
       );
@@ -163,6 +166,9 @@ class AwikiImCoreMessageAdapter
             conversationId: conversation.conversationId,
           ),
           text: content,
+          security: _securityMode(
+            isDirect: conversation.conversationId.startsWith('dm:'),
+          ),
           clientMessageId: clientMessageId,
           idempotencyKey: idempotencyKey,
         ),
@@ -190,6 +196,9 @@ class AwikiImCoreMessageAdapter
             conversationId: conversation.conversationId,
           ),
           payloadJson: jsonEncode(payload),
+          security: _securityMode(
+            isDirect: conversation.conversationId.startsWith('dm:'),
+          ),
           clientMessageId: clientMessageId,
           idempotencyKey: idempotencyKey,
         ),
@@ -200,6 +209,15 @@ class AwikiImCoreMessageAdapter
         expectedConversationId: conversation.conversationId,
       );
     });
+  }
+
+  core.MessageSecurityMode _securityMode({
+    required bool isDirect,
+    bool secureRequested = true,
+  }) {
+    return isDirect && secureRequested && _runtime.multiDeviceDirectE2eeEnabled
+        ? core.MessageSecurityMode.secureDirect
+        : core.MessageSecurityMode.defaultPlain;
   }
 
   @override
@@ -431,6 +449,24 @@ class AwikiImCoreMessageAdapter
   }
 
   @override
+  Stream<ThreadMessagePatch> watchControlThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) async* {
+    final client = await _runtime.currentClient();
+    final ownerDid = await _currentOwnerDid(client);
+    yield* client.messages
+        .watchThreadPatches(_mappers.threadRefToCore(thread), limit: limit)
+        .map(
+          (patch) => _threadPatchFromCore(
+            patch,
+            ownerDid: ownerDid,
+            includeControlPayloads: true,
+          ),
+        );
+  }
+
+  @override
   Future<ThreadMessagePatch> repairThreadStore(
     AppThreadRef thread, {
     int limit = 100,
@@ -442,6 +478,25 @@ class AwikiImCoreMessageAdapter
         limit: limit,
       );
       return _threadPatchFromCore(patch, ownerDid: ownerDid);
+    });
+  }
+
+  @override
+  Future<ThreadMessagePatch> repairControlThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  }) async {
+    return _runtime.withCurrentClient((client) async {
+      final ownerDid = await _currentOwnerDid(client);
+      final patch = await client.messages.repairThreadStore(
+        _mappers.threadRefToCore(thread),
+        limit: limit,
+      );
+      return _threadPatchFromCore(
+        patch,
+        ownerDid: ownerDid,
+        includeControlPayloads: true,
+      );
     });
   }
 
@@ -525,13 +580,16 @@ class AwikiImCoreMessageAdapter
   ThreadMessagePatch _threadPatchFromCore(
     core.ThreadMessageStorePatch patch, {
     required String ownerDid,
+    bool includeControlPayloads = false,
   }) {
     final messages = patch.items
         .map(
           (message) =>
               _mappers.chatMessageFromCore(message, ownerDid: ownerDid),
         )
-        .where((message) => message.hasRenderableContent)
+        .where(
+          (message) => includeControlPayloads || message.hasRenderableContent,
+        )
         .toList();
     final message = patch.message == null
         ? null
@@ -555,7 +613,12 @@ class AwikiImCoreMessageAdapter
           message?.conversationId ??
           _firstConversationId(messages),
       messages: messages,
-      message: message == null || message.hasRenderableContent ? message : null,
+      message:
+          message == null ||
+              includeControlPayloads ||
+              message.hasRenderableContent
+          ? message
+          : null,
       index: patch.index,
       messageId: patch.messageId,
       reason: patch.reason,

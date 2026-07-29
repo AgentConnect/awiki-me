@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/agent/agent_control_status_store.dart';
 import '../../application/models/product_local_models.dart';
 import '../../core/app_error_classifier.dart';
 import '../../core/performance_logger.dart';
@@ -16,25 +18,30 @@ import '../../domain/entities/agent/agent_invocation_policy.dart';
 import '../../domain/entities/agent/agent_summary.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/install_command.dart';
-import '../../domain/entities/agent/message_agent_runtime_provider.dart';
+import '../../domain/entities/agent/personal_agent_runtime_provider.dart';
 import '../../domain/entities/session_identity.dart';
 import '../app_shell/providers/session_provider.dart';
+import '../app_shell/providers/app_lifecycle_provider.dart';
 import 'agent_display_name.dart';
 import 'agent_ui_messages.dart';
 
 const agentStatusQueryTimeout = Duration(seconds: 10);
 const agentRuntimeCreationTimeout = Duration(seconds: 45);
+const agentRuntimeCreationReconcileInterval = Duration(seconds: 2);
 const agentStatusRefreshMinimumIndicatorDuration = Duration(milliseconds: 1500);
 const agentDaemonUpgradeAckTimeout = Duration(seconds: 20);
 const agentDaemonUpgradeCancelAckTimeout = Duration(seconds: 12);
 const agentListLoadTimeout = Duration(seconds: 15);
+const agentIdentityRouteReconcileTimeout = Duration(seconds: 5);
 const agentInventoryAutoSyncInterval = Duration(seconds: 4);
 const agentInventoryAutoSyncMaxAttempts = 24;
+const agentInventoryObservationInterval = Duration(seconds: 30);
 const agentLocalCacheReadTimeout = Duration(milliseconds: 1200);
 const agentLocalCacheWriteTimeout = Duration(milliseconds: 2500);
 const agentStatusRequestSendTimeout = Duration(seconds: 8);
 const agentActionTimeout = Duration(seconds: 15);
-const agentMessageAgentBootstrapActionTimeout = Duration(seconds: 105);
+const agentPersonalAgentBootstrapActionTimeout = Duration(seconds: 105);
+const agentPersonalAgentRevokeActionTimeout = Duration(seconds: 75);
 const agentStatusQueryPollInterval = Duration(milliseconds: 700);
 const agentStatusQueryPollAttempts = 18;
 const agentStatusPayloadLookupTimeout = Duration(milliseconds: 1200);
@@ -49,17 +56,17 @@ final class AgentActionKeys {
 
   static String createRuntime(String daemonDid) => 'create-runtime:$daemonDid';
 
-  static String bootstrapMessageAgent(String daemonDid) =>
-      'message-agent-bootstrap:$daemonDid';
+  static String bootstrapPersonalAgent(String daemonDid) =>
+      'personal-agent-bootstrap:$daemonDid';
 
-  static String pauseMessageAgent(String daemonDid) =>
-      'message-agent-pause:$daemonDid';
+  static String pausePersonalAgent(String daemonDid) =>
+      'personal-agent-pause:$daemonDid';
 
-  static String deleteMessageAgent(String daemonDid) =>
-      'message-agent-delete:$daemonDid';
+  static String deletePersonalAgent(String daemonDid) =>
+      'personal-agent-delete:$daemonDid';
 
-  static String revokeMessageAgent(String daemonDid) =>
-      'message-agent-revoke:$daemonDid';
+  static String revokePersonalAgent(String daemonDid) =>
+      'personal-agent-revoke:$daemonDid';
 
   static String rename(String agentDid) => 'rename:$agentDid';
 
@@ -300,9 +307,9 @@ class AgentsState {
       .where((agent) => agent.isRuntime && agent.daemonAgentDid == daemonDid)
       .toList();
 
-  AgentSummary? messageAgentRuntimeFor(String daemonDid) {
+  AgentSummary? personalAgentRuntimeFor(String daemonDid) {
     for (final runtime in runtimesFor(daemonDid)) {
-      if (_isMessageAgentRuntime(runtime)) {
+      if (_isPersonalAgentRuntime(runtime)) {
         return runtime;
       }
     }
@@ -346,6 +353,11 @@ class AgentsState {
       return AgentDeleteAction.controlledDelete;
     }
     return AgentDeleteAction.removeFromAccount;
+  }
+
+  bool canCreateRuntimeAgent(AgentSummary daemon) {
+    return !statusQueryErrors.containsKey(daemon.agentDid) &&
+        _daemonCanCreateRuntime(daemon);
   }
 
   bool isStatusQueryPending(String daemonDid) {
@@ -452,19 +464,31 @@ final class _AgentsOwnerOperation {
 }
 
 class AgentsController extends StateNotifier<AgentsState> {
-  AgentsController(this.ref) : super(const AgentsState());
+  AgentsController(
+    this.ref, {
+    Duration inventoryObservationInterval = agentInventoryObservationInterval,
+  }) : _inventoryObservationInterval = inventoryObservationInterval,
+       super(const AgentsState());
 
   final Ref ref;
+  final Duration _inventoryObservationInterval;
   final Map<String, Timer> _statusQueryTimeouts = <String, Timer>{};
   final Map<String, Timer> _statusQueryClearTimers = <String, Timer>{};
   final Map<String, Timer> _statusQueryPollTimers = <String, Timer>{};
   final Map<String, String> _statusQueryCommandIds = <String, String>{};
   final Map<String, Timer> _runtimeCreationTimeouts = <String, Timer>{};
+  final Map<String, Timer> _runtimeCreationReconcileTimers = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _daemonUpgradeCancelAckTimeouts = <String, Timer>{};
   final Map<String, Timer> _deletionRefreshTimers = <String, Timer>{};
+  final Map<String, StreamSubscription<AgentControlEvent>>
+  _controlEventSubscriptions =
+      <String, StreamSubscription<AgentControlEvent>>{};
+  final Map<String, Map<String, Object?>> _topologyControlOverlays =
+      <String, Map<String, Object?>>{};
   Timer? _inventoryAutoSyncTimer;
   _AgentsOwnerOperation? _inventoryAutoSyncOperation;
+  Timer? _inventoryObservationTimer;
   Future<void>? _loadOperation;
   Future<void> _cacheWriteTail = Future<void>.value();
   String? _loadOperationOwner;
@@ -472,9 +496,12 @@ class AgentsController extends StateNotifier<AgentsState> {
   String? _loadedCacheOwner;
   _AgentsOwnerOperation? _loadedCacheOperation;
   int _stateEpoch = 0;
+  int _inventoryGeneration = 0;
+  bool _inventoryReconcileRequested = false;
   int _inventoryAutoSyncAttempts = 0;
   bool _inventoryAutoSyncInFlight = false;
   String? _inventoryAutoSyncExhaustedOwner;
+  final Map<String, String> _runtimeAgentRouteFingerprints = <String, String>{};
 
   bool get _agentsAvailable => ref.read(agentImEnabledProvider);
 
@@ -506,7 +533,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stateEpoch += 1;
     _inventoryAutoSyncExhaustedOwner = null;
     _stopInventoryAutoSync();
+    _stopInventoryObservation();
     _cancelStatusTimers();
+    _cancelControlEventSubscriptions();
+    _topologyControlOverlays.clear();
+    _inventoryReconcileRequested = false;
     state = const AgentsState(error: AgentUiMessageCodes.tenantUnsupported);
   }
 
@@ -525,6 +556,9 @@ class AgentsController extends StateNotifier<AgentsState> {
       _loadedCacheOwner = null;
       _loadedCacheOperation = null;
       _stateEpoch += 1;
+      _cancelControlEventSubscriptions();
+      _topologyControlOverlays.clear();
+      _inventoryReconcileRequested = false;
       return Future<void>.value();
     }
     final cacheOwner = _agentCacheOwner(session);
@@ -583,6 +617,12 @@ class AgentsController extends StateNotifier<AgentsState> {
         _loadOperation = null;
         _loadOperationOwner = null;
         _loadOwnerOperation = null;
+        if (_inventoryReconcileRequested &&
+            mounted &&
+            ref.read(sessionProvider).session != null) {
+          _inventoryReconcileRequested = false;
+          unawaited(load(showLoading: false, surfaceError: false));
+        }
       }
     }
   }
@@ -618,12 +658,17 @@ class AgentsController extends StateNotifier<AgentsState> {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       _stopInventoryAutoSync();
+      _stopInventoryObservation();
+      _cancelControlEventSubscriptions();
+      _topologyControlOverlays.clear();
+      _inventoryReconcileRequested = false;
       state = const AgentsState();
       _loadedCacheOwner = null;
       _loadedCacheOperation = null;
       _stateEpoch += 1;
       return;
     }
+    final startedInventoryGeneration = _inventoryGeneration;
     final cacheOwner = _agentCacheOwner(session);
     state = state.copyWith(isLoading: showLoading, clearError: surfaceError);
     await AwikiPerformanceLogger.async(
@@ -633,6 +678,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
       return;
     }
+    _syncControlEventSubscriptions(state.agents);
     try {
       final remoteAgents = await AwikiPerformanceLogger.async(
         'agents.load.remote_list',
@@ -641,7 +687,7 @@ class AgentsController extends StateNotifier<AgentsState> {
             .listAgents()
             .timeout(agentListLoadTimeout),
       );
-      final agents = await AwikiPerformanceLogger.async(
+      final statusMergedAgents = await AwikiPerformanceLogger.async(
         'agents.load.order',
         () async => _stableAgentOrder(
           await _mergeLatestDaemonStatusPayloads(remoteAgents),
@@ -651,7 +697,19 @@ class AgentsController extends StateNotifier<AgentsState> {
       if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
         return;
       }
-      final pendingRuntimeCreations = _pendingCreationsAfterAgents(agents);
+      if (startedInventoryGeneration != _inventoryGeneration) {
+        _inventoryReconcileRequested = true;
+        return;
+      }
+      _pruneConfirmedTopologyControlOverlays(remoteAgents);
+      final agents = _applyTopologyControlOverlays(statusMergedAgents);
+      await _reconcileRuntimeAgentIdentityRoutes(cacheOwner, agents);
+      if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
+        return;
+      }
+      final pendingRuntimeCreations = _pendingCreationsAfterAgents(
+        remoteAgents,
+      );
       final pendingDaemonUpgrades = _pendingDaemonUpgradesAfterAgents(agents);
       final cancellingDaemonUpgrades = _cancellingDaemonUpgradesAfterAgents(
         agents,
@@ -679,6 +737,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       _loadedCacheOwner = cacheOwner;
       _loadedCacheOperation = ownerOperation;
+      _syncControlEventSubscriptions(agents);
       if (hasDaemon) {
         _inventoryAutoSyncExhaustedOwner = null;
         _stopInventoryAutoSync();
@@ -724,6 +783,45 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void clearSelection() {
     state = state.copyWith(clearSelection: true);
+  }
+
+  Future<void> _reconcileRuntimeAgentIdentityRoutes(
+    String ownerDid,
+    List<AgentSummary> agents,
+  ) async {
+    final runtimeAgents = agents
+        .where(
+          (agent) =>
+              agent.isRuntime &&
+              agent.agentDid.trim().startsWith('did:') &&
+              agent.handle?.trim().isNotEmpty == true,
+        )
+        .toList(growable: false);
+    await Future.wait(
+      runtimeAgents.map((agent) async {
+        final agentDid = agent.agentDid.trim();
+        final fingerprint =
+            '$ownerDid|$agentDid|${agent.handle!.trim().toLowerCase()}';
+        if (_runtimeAgentRouteFingerprints[agentDid] == fingerprint) {
+          return;
+        }
+        try {
+          final resolved = await ref
+              .read(directoryApplicationServiceProvider)
+              .resolvePeer(agentDid)
+              .timeout(agentIdentityRouteReconcileTimeout);
+          if (resolved.did.trim() != agentDid ||
+              resolved.conversationId?.trim().startsWith('dm:peer-scope:v1:') !=
+                  true) {
+            return;
+          }
+          _runtimeAgentRouteFingerprints[agentDid] = fingerprint;
+        } catch (_) {
+          // Inventory remains visible; the next authoritative reconciliation
+          // retries projection of the Agent's canonical Direct route.
+        }
+      }),
+    );
   }
 
   Future<void> createDaemonInstallCommand() async {
@@ -804,6 +902,37 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void stopInventoryAutoSync() {
     _stopInventoryAutoSync();
+  }
+
+  void startInventoryObservation() {
+    if (!_agentsAvailable ||
+        _inventoryObservationInterval <= Duration.zero ||
+        _inventoryObservationTimer != null ||
+        ref.read(sessionProvider).session == null) {
+      return;
+    }
+    _inventoryObservationTimer = Timer.periodic(_inventoryObservationInterval, (
+      _,
+    ) {
+      if (!mounted || ref.read(sessionProvider).session == null) {
+        _stopInventoryObservation();
+        return;
+      }
+      if (ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+        return;
+      }
+      unawaited(
+        syncRemoteInventory(
+          quiet: true,
+          resetAutoSyncExhaustion: false,
+          surfaceError: false,
+        ),
+      );
+    });
+  }
+
+  void stopInventoryObservation() {
+    _stopInventoryObservation();
   }
 
   Future<void> refreshDaemonStatus(
@@ -911,10 +1040,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     final daemon = _agentByDid(daemonDid);
-    if (daemon == null ||
-        !daemon.isDaemon ||
-        state.statusQueryErrors.containsKey(daemonDid) ||
-        !_daemonCanCreateRuntime(daemon)) {
+    if (daemon == null || !state.canCreateRuntimeAgent(daemon)) {
       state = state.copyWith(error: AgentUiMessageCodes.selectDaemon);
       return;
     }
@@ -971,11 +1097,60 @@ class AgentsController extends StateNotifier<AgentsState> {
           requestId,
         ),
       );
-      unawaited(load());
+      unawaited(_reconcilePendingRuntimeCreation(requestId));
     }, expectedOperation: ownerOperation);
   }
 
-  Future<void> bootstrapMessageAgent({
+  Future<void> _reconcilePendingRuntimeCreation(String requestId) async {
+    _runtimeCreationReconcileTimers.remove(requestId)?.cancel();
+    if (!mounted) {
+      return;
+    }
+    final pending = _pendingRuntimeCreation(requestId);
+    if (ref.read(sessionProvider).session == null ||
+        pending == null ||
+        !DateTime.now().isBefore(
+          pending.createdAt.add(agentRuntimeCreationTimeout),
+        )) {
+      return;
+    }
+    await syncRemoteInventory(
+      quiet: true,
+      resetAutoSyncExhaustion: false,
+      surfaceError: false,
+    );
+    if (!mounted) {
+      return;
+    }
+    final remaining = _pendingRuntimeCreation(requestId);
+    if (ref.read(sessionProvider).session == null ||
+        remaining == null ||
+        !DateTime.now().isBefore(
+          remaining.createdAt.add(agentRuntimeCreationTimeout),
+        )) {
+      return;
+    }
+    _runtimeCreationReconcileTimers[requestId] = Timer(
+      agentRuntimeCreationReconcileInterval,
+      () {
+        _runtimeCreationReconcileTimers.remove(requestId);
+        if (mounted) {
+          unawaited(_reconcilePendingRuntimeCreation(requestId));
+        }
+      },
+    );
+  }
+
+  PendingRuntimeCreation? _pendingRuntimeCreation(String requestId) {
+    for (final pending in state.pendingRuntimeCreations) {
+      if (pending.requestId == requestId) {
+        return pending;
+      }
+    }
+    return null;
+  }
+
+  Future<void> bootstrapPersonalAgent({
     required String daemonDid,
     UserSubkeyPackage? userSubkeyPackage,
     String? appInstanceId,
@@ -990,7 +1165,7 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     if (!ref.read(agentImEnabledProvider)) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentDisabled);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentDisabled);
       return;
     }
     final ownerOperation = _captureOwnerOperation();
@@ -1013,9 +1188,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final resolvedAppInstanceId =
         appInstanceId ?? _defaultAppInstanceId(session.credentialName);
-    final existingMessageAgent = state.messageAgentRuntimeFor(daemonDid);
+    final existingPersonalAgent = state.personalAgentRuntimeFor(daemonDid);
     await _runAction(
-      AgentActionKeys.bootstrapMessageAgent(daemonDid),
+      AgentActionKeys.bootstrapPersonalAgent(daemonDid),
       (operation) async {
         final subkeyPackage =
             userSubkeyPackage ??
@@ -1025,13 +1200,13 @@ class AgentsController extends StateNotifier<AgentsState> {
         if (!_isOwnerOperationCurrent(operation)) {
           return;
         }
-        if (existingMessageAgent != null) {
+        if (existingPersonalAgent != null) {
           await ref
-              .read(messageAgentBindingPortProvider)
+              .read(personalAgentBindingPortProvider)
               .ensureBinding(
                 userDid: subkeyPackage.userDid,
                 daemonAgentDid: daemonDid,
-                messageAgentDid: existingMessageAgent.agentDid,
+                personalAgentDid: existingPersonalAgent.agentDid,
                 runtimeProvider: appMessageHandlerRuntimeProvider,
                 runtimeProfile: const <String, Object?>{
                   'profile': appMessageHandlerRuntimeProfile,
@@ -1043,7 +1218,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
         await ref
             .read(agentControlServiceProvider)
-            .ensureMessageAgentBootstrap(
+            .ensurePersonalAgentBootstrap(
               daemonAgentDid: daemonDid,
               controllerDid: session.did,
               appInstanceId: resolvedAppInstanceId,
@@ -1052,7 +1227,7 @@ class AgentsController extends StateNotifier<AgentsState> {
               userHandle: session.handle,
             );
       },
-      timeout: agentMessageAgentBootstrapActionTimeout,
+      timeout: agentPersonalAgentBootstrapActionTimeout,
       expectedOperation: ownerOperation,
     );
   }
@@ -1483,40 +1658,40 @@ class AgentsController extends StateNotifier<AgentsState> {
     );
   }
 
-  Future<void> pauseMessageAgentForDaemon(String daemonDid) async {
+  Future<void> pausePersonalAgentForDaemon(String daemonDid) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
-    final target = _messageAgentTargetForDaemon(daemonDid);
+    final target = _personalAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentMissing);
       return;
     }
-    await _runAction(AgentActionKeys.pauseMessageAgent(daemonDid), (_) async {
+    await _runAction(AgentActionKeys.pausePersonalAgent(daemonDid), (_) async {
       await ref
           .read(agentControlServiceProvider)
-          .pauseMessageAgent(
+          .pausePersonalAgent(
             daemonAgentDid: daemonDid,
-            messageAgentDid: target.agentDid,
+            personalAgentDid: target.agentDid,
           );
     });
   }
 
-  Future<void> deleteMessageAgentForDaemon(String daemonDid) async {
+  Future<void> deletePersonalAgentForDaemon(String daemonDid) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
-    final target = _messageAgentTargetForDaemon(daemonDid);
+    final target = _personalAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentMissing);
       return;
     }
     if (state.isDeletingAgent(target.agentDid)) {
       return;
     }
-    final actionKey = AgentActionKeys.deleteMessageAgent(daemonDid);
+    final actionKey = AgentActionKeys.deletePersonalAgent(daemonDid);
     if (state.isActionPending(actionKey)) {
       return;
     }
@@ -1532,9 +1707,9 @@ class AgentsController extends StateNotifier<AgentsState> {
     try {
       await ref
           .read(agentControlServiceProvider)
-          .deleteMessageAgent(
+          .deletePersonalAgent(
             daemonAgentDid: daemonDid,
-            messageAgentDid: target.agentDid,
+            personalAgentDid: target.agentDid,
           )
           .timeout(agentActionTimeout);
       if (!_isOwnerOperationCurrent(operation)) {
@@ -1571,26 +1746,30 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
-  Future<void> revokeMessageAgentAuthorizationForDaemon(
+  Future<void> revokePersonalAgentAuthorizationForDaemon(
     String daemonDid,
   ) async {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
     }
-    final target = _messageAgentTargetForDaemon(daemonDid);
+    final target = _personalAgentTargetForDaemon(daemonDid);
     if (target == null) {
-      state = state.copyWith(error: AgentUiMessageCodes.messageAgentMissing);
+      state = state.copyWith(error: AgentUiMessageCodes.personalAgentMissing);
       return;
     }
-    await _runAction(AgentActionKeys.revokeMessageAgent(daemonDid), (_) async {
-      await ref
-          .read(agentControlServiceProvider)
-          .revokeMessageAgentAuthorization(
-            daemonAgentDid: daemonDid,
-            messageAgentDid: target.agentDid,
-          );
-    });
+    await _runAction(
+      AgentActionKeys.revokePersonalAgent(daemonDid),
+      (_) async {
+        await ref
+            .read(agentControlServiceProvider)
+            .revokePersonalAgentAuthorization(
+              daemonAgentDid: daemonDid,
+              personalAgentDid: target.agentDid,
+            );
+      },
+      timeout: agentPersonalAgentRevokeActionTimeout,
+    );
   }
 
   Future<void> renameSelected(String displayName) async {
@@ -1757,8 +1936,231 @@ class AgentsController extends StateNotifier<AgentsState> {
     _stateEpoch += 1;
     _inventoryAutoSyncExhaustedOwner = null;
     _stopInventoryAutoSync();
+    _stopInventoryObservation();
     _cancelStatusTimers();
+    _cancelControlEventSubscriptions();
+    _topologyControlOverlays.clear();
+    _inventoryReconcileRequested = false;
     state = const AgentsState();
+  }
+
+  void _syncControlEventSubscriptions(List<AgentSummary> agents) {
+    final store = ref.read(agentControlStatusStoreProvider);
+    if (store is! AgentControlEventStore) {
+      _cancelControlEventSubscriptions();
+      return;
+    }
+    final eventStore = store as AgentControlEventStore;
+    final daemonDids = agents
+        .where((agent) => agent.isDaemon)
+        .map((agent) => agent.agentDid)
+        .toSet();
+    for (final daemonDid
+        in _controlEventSubscriptions.keys
+            .where((daemonDid) => !daemonDids.contains(daemonDid))
+            .toList(growable: false)) {
+      unawaited(_controlEventSubscriptions.remove(daemonDid)?.cancel());
+    }
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      _cancelControlEventSubscriptions();
+      return;
+    }
+    final owner = _agentCacheOwner(session);
+    final operation = _captureOwnerOperation();
+    for (final daemonDid in daemonDids) {
+      if (_controlEventSubscriptions.containsKey(daemonDid)) {
+        continue;
+      }
+      _controlEventSubscriptions[daemonDid] = eventStore
+          .watchDaemonControlEvents(daemonAgentDid: daemonDid)
+          .listen(
+            (event) {
+              if (_isCurrentCacheOwner(owner, operation: operation)) {
+                _applyCommittedControlEvent(event, operation);
+              }
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              AwikiPerformanceLogger.log(
+                'agents.control_projection.error',
+                fields: <String, Object?>{
+                  'daemon_hash': AwikiPerformanceLogger.safeHash(daemonDid),
+                  'error': error.runtimeType.toString(),
+                },
+              );
+            },
+          );
+    }
+  }
+
+  void _cancelControlEventSubscriptions() {
+    for (final subscription in _controlEventSubscriptions.values) {
+      unawaited(subscription.cancel());
+    }
+    _controlEventSubscriptions.clear();
+  }
+
+  void _applyCommittedControlEvent(
+    AgentControlEvent event,
+    _AgentsOwnerOperation operation,
+  ) {
+    if (state.seenControlEventIds.contains(event.deduplicationKey)) {
+      return;
+    }
+    final payload = event.payload;
+    final result = _readMap(payload['result']);
+    final command = _string(result['command']);
+    final matchingPending = command == 'runtime.agent.create'
+        ? _matchingPendingRuntimeCreation(payload)
+        : null;
+    final agentDidsBefore = state.agents.map((agent) => agent.agentDid).toSet();
+    _applyControlPayload(
+      payload,
+      operation,
+      controlEventId: event.deduplicationKey,
+      allowNewAgents: matchingPending != null,
+    );
+    _syncControlEventSubscriptions(state.agents);
+    final shouldReconcile = _recordTopologyControlOverlay(
+      event,
+      matchingPending: matchingPending,
+      agentDidsBefore: agentDidsBefore,
+    );
+    if (shouldReconcile) {
+      _requestInventoryReconciliation();
+    }
+  }
+
+  PendingRuntimeCreation? _matchingPendingRuntimeCreation(
+    Map<String, Object?> payload,
+  ) {
+    for (final pending in state.pendingRuntimeCreations) {
+      if (_controlPayloadMatchesPendingRuntimeCreation(payload, pending)) {
+        return pending;
+      }
+    }
+    return null;
+  }
+
+  bool _controlPayloadMatchesPendingRuntimeCreation(
+    Map<String, Object?> payload,
+    PendingRuntimeCreation pending,
+  ) {
+    final result = _readMap(payload['result']);
+    if (_string(result['command']) != 'runtime.agent.create') {
+      return false;
+    }
+    final clientRequestId =
+        _string(result['client_request_id']) ??
+        _string(result['request_id']) ??
+        _string(_readMap(result['args'])['client_request_id']);
+    final daemonDid =
+        _string(result['daemon_agent_did']) ??
+        _string(payload['daemon_agent_did']);
+    final runtime =
+        _string(result['runtime']) ?? _string(result['runtime_alias']);
+    return clientRequestId == pending.requestId &&
+        daemonDid == pending.daemonAgentDid &&
+        _string(result['handle']) == pending.handle &&
+        runtime == pending.runtime;
+  }
+
+  bool _recordTopologyControlOverlay(
+    AgentControlEvent event, {
+    required PendingRuntimeCreation? matchingPending,
+    required Set<String> agentDidsBefore,
+  }) {
+    final payload = event.payload;
+    final result = _readMap(payload['result']);
+    final command = _string(result['command']);
+    if (command == 'runtime.agent.create') {
+      final runtimeDid =
+          _string(result['runtime_agent_did']) ?? _string(result['agent_did']);
+      if (runtimeDid == null) {
+        return false;
+      }
+      if (matchingPending != null) {
+        _topologyControlOverlays[event.deduplicationKey] = payload;
+      }
+      return true;
+    }
+    if (command == 'runtime.agent.delete') {
+      final runtimeDid =
+          _string(result['runtime_agent_did']) ?? _string(result['agent_did']);
+      final archived =
+          _string(payload['state']) == 'archived' ||
+          _string(result['active_state']) == 'archived';
+      if (runtimeDid == null || !archived) {
+        return false;
+      }
+      if (!event.isReplay || agentDidsBefore.contains(runtimeDid)) {
+        _topologyControlOverlays[event.deduplicationKey] = payload;
+        return true;
+      }
+      return false;
+    }
+    if (command == 'daemon.delete') {
+      final daemonDid =
+          _string(result['daemon_agent_did']) ??
+          _string(payload['daemon_agent_did']);
+      final archived =
+          _string(payload['state']) == 'archived' ||
+          _string(result['active_state']) == 'archived';
+      if (daemonDid == null || !archived) {
+        return false;
+      }
+      if (!event.isReplay || agentDidsBefore.contains(daemonDid)) {
+        _topologyControlOverlays[event.deduplicationKey] = payload;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _requestInventoryReconciliation() {
+    _inventoryGeneration += 1;
+    _inventoryReconcileRequested = true;
+    if (_loadOperation == null &&
+        mounted &&
+        ref.read(sessionProvider).session != null) {
+      _inventoryReconcileRequested = false;
+      unawaited(load(showLoading: false, surfaceError: false));
+    }
+  }
+
+  List<AgentSummary> _applyTopologyControlOverlays(List<AgentSummary> agents) {
+    var merged = agents;
+    for (final payload in _topologyControlOverlays.values) {
+      merged = _mergeControlPayload(merged, payload, allowNewAgents: true);
+    }
+    return _stableAgentOrder(merged);
+  }
+
+  void _pruneConfirmedTopologyControlOverlays(List<AgentSummary> remoteAgents) {
+    final remoteDids = remoteAgents.map((agent) => agent.agentDid).toSet();
+    _topologyControlOverlays.removeWhere((_, payload) {
+      final result = _readMap(payload['result']);
+      final command = _string(result['command']);
+      if (command == 'runtime.agent.create') {
+        final runtimeDid =
+            _string(result['runtime_agent_did']) ??
+            _string(result['agent_did']);
+        return runtimeDid != null && remoteDids.contains(runtimeDid);
+      }
+      if (command == 'runtime.agent.delete') {
+        final runtimeDid =
+            _string(result['runtime_agent_did']) ??
+            _string(result['agent_did']);
+        return runtimeDid != null && !remoteDids.contains(runtimeDid);
+      }
+      if (command == 'daemon.delete') {
+        final daemonDid =
+            _string(result['daemon_agent_did']) ??
+            _string(payload['daemon_agent_did']);
+        return daemonDid != null && !remoteDids.contains(daemonDid);
+      }
+      return true;
+    });
   }
 
   void applyControlPayload(Map<String, Object?> payload) {
@@ -1767,8 +2169,10 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void _applyControlPayload(
     Map<String, Object?> payload,
-    _AgentsOwnerOperation operation,
-  ) {
+    _AgentsOwnerOperation operation, {
+    String? controlEventId,
+    bool allowNewAgents = true,
+  }) {
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
@@ -1779,11 +2183,15 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (payload['schema'] != AgentControlPayloads.statusSchema) {
       return;
     }
-    final eventId = _string(payload['event_id']);
+    final eventId = controlEventId ?? _string(payload['event_id']);
     if (eventId != null && state.seenControlEventIds.contains(eventId)) {
       return;
     }
-    final merged = _mergeControlPayload(state.agents, payload);
+    final merged = _mergeControlPayload(
+      state.agents,
+      payload,
+      allowNewAgents: allowNewAgents,
+    );
     if (merged.any((agent) => agent.isDaemon)) {
       _stopInventoryAutoSync();
     }
@@ -2132,7 +2540,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (!_isOwnerOperationCurrent(operation) || payload == null) {
       return false;
     }
-    _applyControlPayload(payload, operation);
+    _applyControlPayload(payload, operation, allowNewAgents: false);
     return true;
   }
 
@@ -2553,7 +2961,9 @@ class AgentsController extends StateNotifier<AgentsState> {
   @override
   void dispose() {
     _stopInventoryAutoSync();
+    _stopInventoryObservation();
     _cancelStatusTimers();
+    _cancelControlEventSubscriptions();
     super.dispose();
   }
 
@@ -2637,6 +3047,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
   }
 
+  void _stopInventoryObservation() {
+    _inventoryObservationTimer?.cancel();
+    _inventoryObservationTimer = null;
+  }
+
   void _cancelStatusTimers() {
     for (final timer in _statusQueryTimeouts.values) {
       timer.cancel();
@@ -2655,6 +3070,10 @@ class AgentsController extends StateNotifier<AgentsState> {
       timer.cancel();
     }
     _runtimeCreationTimeouts.clear();
+    for (final timer in _runtimeCreationReconcileTimers.values) {
+      timer.cancel();
+    }
+    _runtimeCreationReconcileTimers.clear();
     for (final timer in _daemonUpgradeAckTimeouts.values) {
       timer.cancel();
     }
@@ -2817,7 +3236,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         continue;
       }
       payloadCount += 1;
-      merged = _mergeControlPayload(merged, payload);
+      merged = _mergeControlPayload(merged, payload, allowNewAgents: false);
     }
     final ordered = _stableAgentOrder(merged);
     totalWatch.stop();
@@ -2855,7 +3274,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     return null;
   }
 
-  AgentSummary? _messageAgentTargetForDaemon(String daemonDid) {
+  AgentSummary? _personalAgentTargetForDaemon(String daemonDid) {
     final daemon = _agentByDid(daemonDid);
     if (daemon == null ||
         !daemon.isDaemon ||
@@ -2863,7 +3282,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         !_daemonAcceptsControlCommands(daemon)) {
       return null;
     }
-    return state.messageAgentRuntimeFor(daemonDid);
+    return state.personalAgentRuntimeFor(daemonDid);
   }
 
   DaemonBootstrapPublicKey? _daemonBootstrapPublicKey(AgentSummary daemon) {
@@ -2879,8 +3298,9 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   List<AgentSummary> _mergeControlPayload(
     List<AgentSummary> current,
-    Map<String, Object?> payload,
-  ) {
+    Map<String, Object?> payload, {
+    bool allowNewAgents = true,
+  }) {
     final eventAt = _dateTime(payload['sent_at']);
     final statusScope = _string(payload['status_scope']);
     final payloadDaemonDid =
@@ -2893,7 +3313,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     final daemonPayload = _readMap(payload['daemon']);
     if (daemonPayload.isNotEmpty) {
       final daemonDid = _string(daemonPayload['agent_did']) ?? payloadDaemonDid;
-      if (daemonDid != null) {
+      if (daemonDid != null &&
+          (allowNewAgents || byDid.containsKey(daemonDid))) {
         byDid[daemonDid] = _mergeAgent(
           byDid[daemonDid],
           agentDid: daemonDid,
@@ -2916,6 +3337,9 @@ class AgentsController extends StateNotifier<AgentsState> {
           byDid.remove(runtimeDid);
           continue;
         }
+        if (!allowNewAgents && !byDid.containsKey(runtimeDid)) {
+          continue;
+        }
         byDid[runtimeDid] = _mergeAgent(
           byDid[runtimeDid],
           agentDid: runtimeDid,
@@ -2933,7 +3357,9 @@ class AgentsController extends StateNotifier<AgentsState> {
         }
       }
     }
-    if (statusScope == 'snapshot' && payloadDaemonDid != null) {
+    if (statusScope == 'snapshot' &&
+        payloadDaemonDid != null &&
+        snapshotRuntimeDids.isNotEmpty) {
       final pruned = <String, AgentSummary>{};
       for (final entry in byDid.entries) {
         final agent = entry.value;
@@ -2955,7 +3381,8 @@ class AgentsController extends StateNotifier<AgentsState> {
     if (command == 'runtime.agent.create') {
       final runtimeDid =
           _string(result['runtime_agent_did']) ?? _string(result['agent_did']);
-      if (runtimeDid != null) {
+      if (runtimeDid != null &&
+          (allowNewAgents || byDid.containsKey(runtimeDid))) {
         byDid[runtimeDid] = _mergeAgent(
           byDid[runtimeDid],
           agentDid: runtimeDid,
@@ -3034,40 +3461,47 @@ class AgentsController extends StateNotifier<AgentsState> {
   List<PendingRuntimeCreation> _pendingCreationsAfterAgents(
     List<AgentSummary> agents,
   ) {
-    return _pendingCreationsAfterControlPayloadAndAgents(
-      state.pendingRuntimeCreations,
-      const <String, Object?>{},
-      agents,
-    );
-  }
-
-  List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
-    List<PendingRuntimeCreation> current,
-    Map<String, Object?> payload,
-    List<AgentSummary> agents,
-  ) {
-    final completedRequestIds = <String>{};
-    final result = _readMap(payload['result']);
-    if (_string(result['command']) == 'runtime.agent.create') {
-      final clientRequestId =
-          _string(result['client_request_id']) ??
-          _string(result['request_id']) ??
-          _string(_readMap(result['args'])['client_request_id']);
-      if (clientRequestId != null) {
-        completedRequestIds.add(clientRequestId);
-      }
-    }
-
     final retained = <PendingRuntimeCreation>[];
-    for (final pending in current) {
-      if (completedRequestIds.contains(pending.requestId) ||
-          _hasMatchingRuntimeAgent(agents, pending)) {
+    for (final pending in state.pendingRuntimeCreations) {
+      if (_hasMatchingRuntimeAgentWithConfirmedRoute(agents, pending)) {
         _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
         continue;
       }
       retained.add(pending);
     }
     return retained;
+  }
+
+  List<PendingRuntimeCreation> _pendingCreationsAfterControlPayloadAndAgents(
+    List<PendingRuntimeCreation> current,
+    Map<String, Object?> _,
+    List<AgentSummary> _,
+  ) {
+    // Control events accelerate display, but only authoritative Inventory plus
+    // a projected Core route may complete the creation transaction.
+    return current;
+  }
+
+  bool _hasMatchingRuntimeAgentWithConfirmedRoute(
+    List<AgentSummary> agents,
+    PendingRuntimeCreation pending,
+  ) {
+    final session = ref.read(sessionProvider).session;
+    if (session == null) {
+      return false;
+    }
+    final owner = _agentCacheOwner(session);
+    return agents.any((agent) {
+      if (!_runtimeAgentMatchesPending(agent, pending)) {
+        return false;
+      }
+      final handle = agent.handle?.trim().toLowerCase();
+      if (handle == null || handle.isEmpty) {
+        return false;
+      }
+      final expected = '$owner|${agent.agentDid.trim()}|$handle';
+      return _runtimeAgentRouteFingerprints[agent.agentDid.trim()] == expected;
+    });
   }
 
   Set<String> _pendingDeletionAfterAgents(List<AgentSummary> agents) {
@@ -3457,18 +3891,20 @@ bool _canUnbindUnfinishedDaemonInstall(AgentSummary agent) {
   return agent.latest.lastSeenAt == null;
 }
 
-bool _isMessageAgentRuntime(AgentSummary agent) {
+bool _isPersonalAgentRuntime(AgentSummary agent) {
   if (!agent.isRuntime) {
     return false;
   }
-  final provider = MessageAgentRuntimeProviders.byRuntime(agent.runtime);
+  final provider = PersonalAgentRuntimeProviders.byRuntime(agent.runtime);
   if (provider == null || !provider.enabled) {
     return false;
   }
   final display = agent.displayName.trim().toLowerCase();
   final handle = agent.handle?.trim() ?? '';
-  return display.contains('message agent') ||
-      display.contains('消息处理') ||
+  return display.contains('personal agent') ||
+      display.contains('个人助理') ||
+      display == legacyPersonalAgentRuntimeDisplayName.toLowerCase() ||
+      display.contains(legacyPersonalAgentChineseDisplayMarker) ||
       provider.matchesHandle(handle);
 }
 
@@ -3805,22 +4241,20 @@ bool _samePendingRuntimeTarget(
           _normalizedAgentHandle(right.handle);
 }
 
-bool _hasMatchingRuntimeAgent(
-  List<AgentSummary> agents,
+bool _runtimeAgentMatchesPending(
+  AgentSummary agent,
   PendingRuntimeCreation pending,
 ) {
-  return agents.any((agent) {
-    if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
-      return false;
-    }
-    final agentHandle = _normalizedAgentHandle(agent.handle);
-    final pendingHandle = _normalizedAgentHandle(pending.handle);
-    if (agentHandle != null && pendingHandle != null) {
-      return agentHandle == pendingHandle;
-    }
-    final agentName = agent.displayName.trim();
-    return agentName.isNotEmpty && agentName == pending.displayName.trim();
-  });
+  if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
+    return false;
+  }
+  final agentHandle = _normalizedAgentHandle(agent.handle);
+  final pendingHandle = _normalizedAgentHandle(pending.handle);
+  if (agentHandle != null && pendingHandle != null) {
+    return agentHandle == pendingHandle;
+  }
+  final agentName = agent.displayName.trim();
+  return agentName.isNotEmpty && agentName == pending.displayName.trim();
 }
 
 String? _normalizedAgentHandle(String? value) {

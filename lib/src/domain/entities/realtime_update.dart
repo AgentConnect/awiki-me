@@ -10,6 +10,7 @@ class RealtimeUpdate {
     this.conversation,
     this.group,
     this.agentControlPayload,
+    this.systemNotificationChanged = false,
     this.syncDirty = false,
     this.gapDetected = false,
     this.syncEventSeq,
@@ -22,11 +23,13 @@ class RealtimeUpdate {
   final ConversationSummary? conversation;
   final GroupSummary? group;
   final Map<String, Object?>? agentControlPayload;
+  final bool systemNotificationChanged;
   final bool syncDirty;
   final bool gapDetected;
   final String? syncEventSeq;
   final String? syncEventType;
 
   bool get isAgentControl => agentControlPayload != null;
-  bool get needsReliableSync => syncDirty || gapDetected;
+  bool get needsReliableSync =>
+      systemNotificationChanged || syncDirty || gapDetected;
 }

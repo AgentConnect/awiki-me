@@ -120,35 +120,35 @@ void main() {
     );
   });
 
-  test('app action result payload mirrors daemon routing context', () {
-    const requestPayload =
-        '{"schema":"awiki.app.action.v1","action_id":"act_draft","action":"message.create_draft","state":"requires_confirmation","binding_id":"binding_1","owner_did":"did:human:alice","app_instance_id":"app_1","daemon_agent_did":"did:agent:daemon","runtime_agent_did":"did:agent:runtime","runtime_profile_id":"profile_1","run_id":"run_1","source_message_id":"msg_1","conversation_id":"direct:did:human:bob","requires_confirmation":true,"args":{"draft_text":"Looks good"}}';
-    final request = AgentControlPayloads.decodeAppAction(requestPayload)!;
+  test(
+    'app action result payload mirrors daemon routing context without draft body',
+    () {
+      const requestPayload =
+          '{"schema":"awiki.app.action.v1","action_id":"act_draft","action":"message.create_draft","state":"requires_confirmation","binding_id":"binding_1","owner_did":"did:human:alice","app_instance_id":"app_1","daemon_agent_did":"did:agent:daemon","runtime_agent_did":"did:agent:runtime","runtime_profile_id":"profile_1","run_id":"run_1","source_message_id":"msg_1","conversation_id":"direct:did:human:bob","requires_confirmation":true,"args":{"draft_text":"Looks good"}}';
+      final request = AgentControlPayloads.decodeAppAction(requestPayload)!;
 
-    final result = appActionResultPayload(
-      request: request,
-      state: appActionStateSucceeded,
-      result: const <String, Object?>{'draft_text': 'Looks good'},
-    );
+      final result = appActionResultPayload(
+        request: request,
+        state: appActionStateSucceeded,
+      );
 
-    expect(result['schema'], AgentControlPayloads.appActionResultSchema);
-    expect(result['action_id'], 'act_draft');
-    expect(result['action'], 'message.create_draft');
-    expect(result['state'], appActionStateSucceeded);
-    expect(result['binding_id'], 'binding_1');
-    expect(result['owner_did'], 'did:human:alice');
-    expect(result['app_instance_id'], 'app_1');
-    expect(result['daemon_agent_did'], 'did:agent:daemon');
-    expect(result['runtime_agent_did'], 'did:agent:runtime');
-    expect(result['runtime_profile_id'], 'profile_1');
-    expect(result['run_id'], 'run_1');
-    expect(result['source_message_id'], 'msg_1');
-    expect(result['conversation_id'], 'direct:did:human:bob');
-    expect(
-      (result['result']! as Map<String, Object?>)['draft_text'],
-      'Looks good',
-    );
-  });
+      expect(result['schema'], AgentControlPayloads.appActionResultSchema);
+      expect(result['action_id'], 'act_draft');
+      expect(result['action'], 'message.create_draft');
+      expect(result['state'], appActionStateSucceeded);
+      expect(result['binding_id'], 'binding_1');
+      expect(result['owner_did'], 'did:human:alice');
+      expect(result['app_instance_id'], 'app_1');
+      expect(result['daemon_agent_did'], 'did:agent:daemon');
+      expect(result['runtime_agent_did'], 'did:agent:runtime');
+      expect(result['runtime_profile_id'], 'profile_1');
+      expect(result['run_id'], 'run_1');
+      expect(result['source_message_id'], 'msg_1');
+      expect(result['conversation_id'], 'direct:did:human:bob');
+      expect(result.containsKey('result'), isFalse);
+      expect(result.toString(), isNot(contains('draft_text')));
+    },
+  );
 
   test('message sync schema decodes as hidden system payload', () {
     const payload =
@@ -176,13 +176,13 @@ void main() {
       'error',
     ]) {
       final payload =
-          '{"schema":"awiki.message.sync.v1","kind":"$kind","message_id":"msg_1","runtime_provider":"hermes","runtime_profile":"message_agent"}';
+          '{"schema":"awiki.message.sync.v1","kind":"$kind","message_id":"msg_1","runtime_provider":"hermes","runtime_profile":"personal_agent"}';
       final sync = AgentControlPayloads.decodeMessageSync(payload);
 
       expect(sync, isNotNull, reason: kind);
       expect(sync!.payload['kind'], kind);
       expect(sync.payload['runtime_provider'], 'hermes');
-      expect(sync.payload['runtime_profile'], 'message_agent');
+      expect(sync.payload['runtime_profile'], 'personal_agent');
       expect(AgentControlPayloads.isControl(payload), isTrue);
     }
   });

@@ -1,7 +1,12 @@
+// [INPUT]: Group application state, membership snapshots, and redacted encryption readiness.
+// [OUTPUT]: Group list/detail/member actions and minimal group-encryption status UI.
+// [POS]: Group presentation boundary; group/MLS durable truth remains in IM Core.
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
+import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
@@ -21,6 +26,7 @@ import '../app_shell/providers/session_provider.dart';
 import '../profile/peer_display_profile_provider.dart';
 import 'create_group_dialog.dart';
 import 'group_chat_navigation.dart';
+import 'group_encryption_status_card.dart';
 import 'group_member_invite_dialog.dart';
 import 'group_provider.dart';
 
@@ -176,6 +182,30 @@ class GroupListPage extends ConsumerWidget {
                       );
                     },
                   ),
+                ),
+              ),
+            if (state.groupsHasMore)
+              Center(
+                child: CupertinoButton(
+                  key: const Key('group-list-load-more'),
+                  onPressed: state.isLoadingMoreGroups
+                      ? null
+                      : () async {
+                          try {
+                            await ref
+                                .read(groupProvider.notifier)
+                                .loadMoreGroups();
+                          } catch (error) {
+                            if (context.mounted) {
+                              ref
+                                  .read(uiFeedbackProvider.notifier)
+                                  .showError(AppMessage.fromError(error));
+                            }
+                          }
+                        },
+                  child: state.isLoadingMoreGroups
+                      ? const CupertinoActivityIndicator()
+                      : Text(context.l10n.commonLoadMore),
                 ),
               ),
           ],
@@ -421,6 +451,7 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
     _requestGroup(_group.groupId);
     _requestMembers(_group.groupId);
     final members = ref.watch(groupMembersProvider(_group.groupId));
+    final memberPage = ref.watch(groupProvider).memberPages[_group.groupId];
     final currentDid = ref.watch(sessionProvider).session?.did;
     final canManageMembers = canManageGroupMembers(_group);
     final theme = context.awikiTheme;
@@ -524,6 +555,10 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                     ],
                   ),
                 ),
+                if (ref.watch(multiDeviceGroupE2eeEnabledProvider)) ...<Widget>[
+                  const SizedBox(height: 16),
+                  GroupEncryptionStatusCard(groupDid: _group.groupId),
+                ],
                 const SizedBox(height: 16),
                 AppCardSection(
                   color: members.isEmpty ? theme.subtleSurface : theme.surface,
@@ -587,6 +622,33 @@ class _GroupDetailPageState extends ConsumerState<GroupDetailPage> {
                                 ),
                               )
                               .toList(),
+                        ),
+                      if (memberPage?.hasMore == true)
+                        Align(
+                          alignment: Alignment.center,
+                          child: CupertinoButton(
+                            key: const Key('group-members-load-more'),
+                            onPressed: memberPage!.isLoadingMore
+                                ? null
+                                : () async {
+                                    try {
+                                      await ref
+                                          .read(groupProvider.notifier)
+                                          .loadMoreGroupMembers(_group.groupId);
+                                    } catch (error) {
+                                      if (context.mounted) {
+                                        ref
+                                            .read(uiFeedbackProvider.notifier)
+                                            .showError(
+                                              AppMessage.fromError(error),
+                                            );
+                                      }
+                                    }
+                                  },
+                            child: memberPage.isLoadingMore
+                                ? const CupertinoActivityIndicator()
+                                : Text(context.l10n.commonLoadMore),
+                          ),
                         ),
                     ],
                   ),

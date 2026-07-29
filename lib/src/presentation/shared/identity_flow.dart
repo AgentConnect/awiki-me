@@ -269,6 +269,7 @@ Future<void> openDirectConversationForDid(
   String? avatarSeed,
   String? conversationId,
   SessionEpoch? expectedEpoch,
+  bool popCurrentRouteOnTwoPane = false,
 }) async {
   final operationEpoch = expectedEpoch ?? ref.read(sessionProvider).activeEpoch;
   if (operationEpoch == null) {
@@ -361,6 +362,14 @@ Future<void> openDirectConversationForDid(
         ShellDestination.messages,
         expanded: context.awikiResponsive.usesDesktopLayout,
       );
+  if (popCurrentRouteOnTwoPane &&
+      context.awikiResponsive.supportsTwoPane &&
+      context.mounted) {
+    await Navigator.of(context).maybePop();
+  }
+  if (!context.mounted) {
+    return;
+  }
   final navigator = Navigator.of(context);
   if (navigator.canPop()) {
     navigator.popUntil((route) => route.isFirst);

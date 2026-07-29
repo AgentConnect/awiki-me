@@ -31,7 +31,7 @@ Future<Map<String, Object?>> _run(List<String> args) async {
   final options = _parseOptions(args.skip(1).toList(growable: false));
   return switch (command) {
     'create-agent' => _createAgent(options),
-    'message-agent-bootstrap' => await _messageAgentBootstrap(options),
+    'personal-agent-bootstrap' => await _personalAgentBootstrap(options),
     'submit-task' => _submitTask(options),
     'parse-status' => await _parseStatus(options),
     'classify-payload' => await _classifyPayload(options),
@@ -60,7 +60,7 @@ Map<String, Object?> _createAgent(Map<String, String> options) {
   return <String, Object?>{'payload': payload};
 }
 
-Future<Map<String, Object?>> _messageAgentBootstrap(
+Future<Map<String, Object?>> _personalAgentBootstrap(
   Map<String, String> options,
 ) async {
   final controllerDid = _required(options, 'controller-did');
@@ -76,15 +76,15 @@ Future<Map<String, Object?>> _messageAgentBootstrap(
     keyAlgorithm: options['key-algorithm'] ?? 'Ed25519',
     privateKeyEncoding: options['private-key-encoding'] ?? 'pem',
     allowedScopes:
-        _csvOption(options, 'allowed-scopes') ?? defaultMessageAgentScopes,
+        _csvOption(options, 'allowed-scopes') ?? defaultPersonalAgentScopes,
   );
   final envelope = DaemonBootstrapEnvelope(
-    bootstrapId: messageAgentBootstrapAttemptId(
+    bootstrapId: personalAgentBootstrapAttemptId(
       userDid: controllerDid,
       appInstanceId: appInstanceId,
       runId: runId,
     ),
-    idempotencyKey: messageAgentBootstrapAttemptIdempotencyKey(
+    idempotencyKey: personalAgentBootstrapAttemptIdempotencyKey(
       userDid: controllerDid,
       appInstanceId: appInstanceId,
       runId: runId,
@@ -94,9 +94,9 @@ Future<Map<String, Object?>> _messageAgentBootstrap(
     userHandle: options['user-handle'],
     runId: runId,
     userSubkeyPackage: userSubkeyPackage,
-    desiredMessageAgent: DesiredMessageAgent(
+    desiredPersonalAgent: DesiredPersonalAgent(
       preferredLanguage: options['preferred-language'] ?? 'zh-Hans',
-      ensureOnceKey: messageAgentEnsureOnceKey(
+      ensureOnceKey: personalAgentEnsureOnceKey(
         userDid: controllerDid,
         appInstanceId: appInstanceId,
       ),
@@ -290,7 +290,7 @@ const _usageLines = <String>[
   '',
   'Commands:',
   '  create-agent --controller-did DID --registration-token TOKEN [--daemon-agent-did DID] [--runtime RUNTIME] [--driver-id DRIVER] [--name NAME] [--client-request-id ID] [--handle HANDLE] [--workspace PATH] [--workspace-mode MODE] [--default-sandbox MODE] [--default-model MODEL] [--driver-config-json JSON]',
-  '  message-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --private-key-pem-file PATH --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
+  '  personal-agent-bootstrap --controller-did DID --daemon-agent-did DID --app-instance-id ID --verification-method DID#daemon-key-1 --public-key-multibase KEY --private-key-pem-file PATH --recipient-key-id DID#key-3 --recipient-public-key-b64u KEY [--runtime-registration-token TOKEN] [--run-id ID]',
   '  submit-task --runtime-agent-did DID --text TEXT [--command-id ID] [--task-id ID] [--conversation-id ID]',
   '  parse-status (--json JSON | --json-file PATH | --stdin)',
   '  classify-payload (--json JSON | --json-file PATH | --stdin)',

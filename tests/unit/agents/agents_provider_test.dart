@@ -2,27 +2,74 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
+import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
-import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
+import 'package:awiki_me/src/application/ports/directory_core_port.dart';
+import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/peer_display_profile.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/presentation/agents/agent_ui_messages.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../test_support.dart';
 
 void main() {
+  test(
+    'load projects runtime Agent route before publishing inventory',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'codex',
+            handle: 'runtime-codex',
+            displayName: 'Codex',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final directory = _BlockingDirectoryApplicationService();
+      final container = _container(control, directory: directory);
+      addTearDown(container.dispose);
+
+      final load = container.read(agentsProvider.notifier).load();
+      await directory.resolveStarted.future;
+
+      expect(container.read(agentsProvider).agents, isEmpty);
+      directory.complete(
+        const DirectoryPeerResolution(
+          input: 'did:agent:runtime',
+          did: 'did:agent:runtime',
+          handle: 'runtime-codex.awiki.info',
+          conversationId: 'dm:peer-scope:v1:runtime-codex',
+        ),
+      );
+      await load;
+
+      expect(directory.resolvedPeers, <String>['did:agent:runtime']);
+      expect(
+        container.read(agentsProvider).agents.single.agentDid,
+        'did:agent:runtime',
+      );
+    },
+  );
+
   test(
     'load restores UserService inventory without explicit selection',
     () async {
@@ -181,6 +228,60 @@ void main() {
     expect(state.agents.map((agent) => agent.agentDid), ['did:agent:daemon']);
     expect(state.isAutoSyncingInventory, isFalse);
   });
+
+  test(
+    'foreground Agent page observation reconciles Inventory and pauses in background',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        displayName: 'Daemon 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'claude-code',
+        displayName: 'Claude',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final container = _container(
+        control,
+        controllerFactory: (ref) => AgentsController(
+          ref,
+          inventoryObservationInterval: const Duration(milliseconds: 10),
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+      controller.startInventoryObservation();
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await control.waitForListCalls(2);
+      control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains(runtime.agentDid),
+      );
+
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final callsWhenPaused = control.listAgentsCalls;
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+      expect(control.listAgentsCalls, callsWhenPaused);
+    },
+  );
 
   test(
     'auto sync keeps empty state clean when a background poll fails',
@@ -864,7 +965,7 @@ void main() {
   });
 
   test(
-    'createHermesRuntime shows pending creation until daemon result returns',
+    'createHermesRuntime keeps pending until authoritative route projection',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -920,13 +1021,386 @@ void main() {
       );
 
       final state = container.read(agentsProvider);
-      expect(state.pendingRuntimeCreations, isEmpty);
+      expect(state.pendingRuntimeCreations, hasLength(1));
       final runtime = state.agents.singleWhere(
         (agent) => agent.agentDid == 'did:agent:runtime-new',
       );
       expect(runtime.displayName, 'Alice Hermes');
       expect(runtime.handle, 'alice-hermes');
       expect(runtime.daemonAgentDid, 'did:agent:daemon');
+    },
+  );
+
+  test(
+    'committed create event survives stale inventory and reconciles without manual refresh',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        handle: 'awiki-daemon-test',
+        displayName: '代理 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime-new',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'hermes',
+        handle: 'alice-hermes',
+        displayName: 'Alice Hermes',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final events = _StreamingAgentControlStatusStore();
+      final directory = _EventuallyAvailableDirectoryApplicationService(
+        failuresBeforeSuccess: 0,
+      );
+      final container = _container(
+        control,
+        statusStore: events,
+        directory: directory,
+      );
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+
+      await controller.createHermesRuntime(
+        daemon.agentDid,
+        handle: runtime.handle!,
+        displayName: runtime.displayName,
+      );
+      expect(
+        control.listAgentsCalls,
+        1,
+        reason: 'sending create must not trigger a blind inventory reload',
+      );
+      final pending = container
+          .read(agentsProvider)
+          .pendingRuntimeCreations
+          .single;
+
+      final staleLoad = controller.load(showLoading: false);
+      await control.waitForListCalls(2);
+      events.emit(
+        AgentControlEvent(
+          messageId: 'msg-create-1',
+          daemonAgentDid: daemon.agentDid,
+          isReplay: false,
+          payload: <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'event_id': 'evt-create-1',
+            'status_scope': 'runtime',
+            'daemon_agent_did': daemon.agentDid,
+            'state': 'ready',
+            'result': <String, Object?>{
+              'command': 'runtime.agent.create',
+              'client_request_id': pending.requestId,
+              'runtime_agent_did': runtime.agentDid,
+              'daemon_agent_did': daemon.agentDid,
+              'runtime': runtime.runtime,
+              'handle': runtime.handle,
+              'display_name': runtime.displayName,
+            },
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains(runtime.agentDid),
+      );
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+      );
+
+      control.completeListCall(2, const <AgentSummary>[daemon]);
+      await staleLoad;
+      await control.waitForListCalls(3);
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        contains(runtime.agentDid),
+        reason: 'a pre-ACK inventory response must not erase the projection',
+      );
+
+      control.completeListCall(3, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        containsAll(<String>[daemon.agentDid, runtime.agentDid]),
+      );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+    },
+  );
+
+  test(
+    'accepted local create reconciles authoritative inventory without a control event',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        handle: 'awiki-daemon-test',
+        displayName: '代理 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime-new',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'codex',
+        handle: 'alice-codex',
+        displayName: 'Alice Codex',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final directory = _EventuallyAvailableDirectoryApplicationService();
+      final container = _container(control, directory: directory);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+
+      await controller.createRuntimeAgent(
+        daemon.agentDid,
+        options: const RuntimeAgentCreateOptions(
+          kind: RuntimeAgentKind.codex,
+          handle: 'alice-codex',
+          displayName: 'Alice Codex',
+        ),
+      );
+      await control.waitForListCalls(2);
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+      );
+
+      control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+
+      expect(directory.resolveAttempts, 1);
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+        reason:
+            'inventory presence alone must not complete creation before the '
+            'canonical Direct route is projected',
+      );
+      await Future<void>.delayed(
+        agentRuntimeCreationReconcileInterval +
+            const Duration(milliseconds: 100),
+      );
+      await control.waitForListCalls(3);
+      control.completeListCall(3, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+
+      expect(directory.resolveAttempts, 2);
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        containsAll(<String>[daemon.agentDid, runtime.agentDid]),
+      );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+    },
+  );
+
+  test(
+    'committed create replay cannot complete a different pending intent',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            handle: 'awiki-daemon-test',
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final events = _StreamingAgentControlStatusStore();
+      final container = _container(control, statusStore: events);
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+      await controller.createHermesRuntime(
+        'did:agent:daemon',
+        handle: 'alice-hermes',
+        displayName: 'Alice Hermes',
+      );
+      final pending = container
+          .read(agentsProvider)
+          .pendingRuntimeCreations
+          .single;
+
+      events.emit(
+        AgentControlEvent(
+          messageId: 'msg-stale-create',
+          daemonAgentDid: 'did:agent:daemon',
+          isReplay: true,
+          payload: <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'event_id': 'evt-stale-create',
+            'status_scope': 'runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'state': 'ready',
+            'result': <String, Object?>{
+              'command': 'runtime.agent.create',
+              'client_request_id': pending.requestId,
+              'runtime_agent_did': 'did:agent:runtime-other',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'hermes',
+              'handle': 'different-handle',
+              'display_name': 'Different Runtime',
+            },
+          },
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations.single.requestId,
+        pending.requestId,
+      );
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        isNot(contains('did:agent:runtime-other')),
+      );
+    },
+  );
+
+  test(
+    'committed create replay invalidates remote inventory on another device',
+    () async {
+      const daemon = AgentSummary(
+        agentDid: 'did:agent:daemon',
+        kind: AgentKind.daemon,
+        handle: 'awiki-daemon-test',
+        displayName: '代理 1',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      const runtime = AgentSummary(
+        agentDid: 'did:agent:runtime-remote',
+        kind: AgentKind.runtime,
+        daemonAgentDid: 'did:agent:daemon',
+        runtime: 'claude-code',
+        handle: 'remote-claude',
+        displayName: 'Remote Claude',
+        activeState: 'active',
+        latest: AgentLatestStatus(status: 'ready'),
+      );
+      final control = _ControlledInventoryAgentControlService();
+      final events = _StreamingAgentControlStatusStore();
+      final container = _container(control, statusStore: events);
+      addTearDown(container.dispose);
+      addTearDown(events.close);
+      final controller = container.read(agentsProvider.notifier);
+
+      final initialLoad = controller.load();
+      await control.waitForListCalls(1);
+      control.completeListCall(1, const <AgentSummary>[daemon]);
+      await initialLoad;
+
+      events.emit(
+        AgentControlEvent(
+          messageId: 'msg-remote-create',
+          daemonAgentDid: daemon.agentDid,
+          isReplay: true,
+          payload: const <String, Object?>{
+            'schema': AgentControlPayloads.statusSchema,
+            'event_id': 'evt-remote-create',
+            'status_scope': 'runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'state': 'ready',
+            'result': <String, Object?>{
+              'command': 'runtime.agent.create',
+              'client_request_id': 'request-from-another-device',
+              'runtime_agent_did': 'did:agent:runtime-remote',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'claude-code',
+              'handle': 'remote-claude',
+              'display_name': 'Remote Claude',
+            },
+          },
+        ),
+      );
+
+      await control.waitForListCalls(2);
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        isNot(contains(runtime.agentDid)),
+        reason: 'a replay is an invalidation, not an optimistic projection',
+      );
+      control.completeListCall(2, const <AgentSummary>[daemon, runtime]);
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        containsAll(<String>[daemon.agentDid, runtime.agentDid]),
+      );
+      expect(container.read(agentsProvider).pendingRuntimeCreations, isEmpty);
+    },
+  );
+
+  test(
+    'daemon status lookup cannot create an Agent absent from Inventory',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      const statusStore = _StaticAgentControlStatusStore(
+        daemonStatusPayload: <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'status_scope': 'daemon',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime-status-only',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'codex',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      final container = _container(control, statusStore: statusStore);
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+      await controller.load();
+
+      await controller.refreshDaemonStatus('did:agent:daemon');
+      await Future<void>.delayed(
+        agentStatusQueryPollInterval + const Duration(milliseconds: 100),
+      );
+
+      expect(
+        container.read(agentsProvider).agents.map((agent) => agent.agentDid),
+        ['did:agent:daemon'],
+      );
     },
   );
 
@@ -2359,7 +2833,7 @@ void main() {
   );
 
   test(
-    'message Agent lifecycle actions target Hermes message runtime',
+    'personal agent lifecycle actions target Hermes message runtime',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2376,7 +2850,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-app-1',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -2387,27 +2861,27 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .pauseMessageAgentForDaemon('did:agent:daemon');
+          .pausePersonalAgentForDaemon('did:agent:daemon');
       await container
           .read(agentsProvider.notifier)
-          .deleteMessageAgentForDaemon('did:agent:daemon');
+          .deletePersonalAgentForDaemon('did:agent:daemon');
       await container
           .read(agentsProvider.notifier)
-          .revokeMessageAgentAuthorizationForDaemon('did:agent:daemon');
+          .revokePersonalAgentAuthorizationForDaemon('did:agent:daemon');
 
-      expect(control.lastPausedMessageAgentDaemonDid, 'did:agent:daemon');
-      expect(control.lastPausedMessageAgentDid, 'did:agent:message');
-      expect(control.lastDeletedMessageAgentDaemonDid, 'did:agent:daemon');
-      expect(control.lastDeletedMessageAgentDid, 'did:agent:message');
+      expect(control.lastPausedPersonalAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastPausedPersonalAgentDid, 'did:agent:message');
+      expect(control.lastDeletedPersonalAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastDeletedPersonalAgentDid, 'did:agent:message');
       expect(control.lastDeletedRuntimeDaemonDid, 'did:agent:daemon');
       expect(control.lastDeletedRuntimeDid, 'did:agent:message');
-      expect(control.lastRevokedMessageAgentDaemonDid, 'did:agent:daemon');
-      expect(control.lastRevokedMessageAgentDid, 'did:agent:message');
+      expect(control.lastRevokedPersonalAgentDaemonDid, 'did:agent:daemon');
+      expect(control.lastRevokedPersonalAgentDid, 'did:agent:message');
     },
   );
 
   test(
-    'future provider runtime is not treated as enabled message Agent',
+    'future provider runtime is not treated as enabled personal agent',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2424,7 +2898,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'codex',
             handle: 'codex-msg-app-1',
-            displayName: 'Codex Message Agent',
+            displayName: 'Codex Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -2435,12 +2909,12 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .pauseMessageAgentForDaemon('did:agent:daemon');
+          .pausePersonalAgentForDaemon('did:agent:daemon');
 
-      expect(control.lastPausedMessageAgentDid, isNull);
+      expect(control.lastPausedPersonalAgentDid, isNull);
       expect(
         container.read(agentsProvider).error,
-        AgentUiMessageCodes.messageAgentMissing,
+        AgentUiMessageCodes.personalAgentMissing,
       );
     },
   );
@@ -2607,7 +3081,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent ensures daemon subkey and delegates desired state',
+    'bootstrapPersonalAgent ensures daemon subkey and delegates desired state',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2643,7 +3117,7 @@ void main() {
       addTearDown(container.dispose);
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2666,7 +3140,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent reuses existing Hermes message runtime for binding',
+    'bootstrapPersonalAgent reuses existing Hermes message runtime for binding',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2691,7 +3165,7 @@ void main() {
             daemonAgentDid: 'did:agent:daemon',
             runtime: 'hermes',
             handle: 'hermes-msg-app-1',
-            displayName: 'Hermes Message Agent',
+            displayName: 'Hermes Personal Agent',
             activeState: 'active',
             latest: AgentLatestStatus(status: 'ready'),
           ),
@@ -2704,17 +3178,17 @@ void main() {
           privateKeyMultibase: 'zPrivate',
         ),
       );
-      final bindings = _MessageAgentBindingsStub();
+      final bindings = _PersonalAgentBindingsStub();
       final container = _container(
         control,
         identities: identities,
-        messageAgentBindings: bindings,
+        personalAgentBindings: bindings,
       );
       addTearDown(container.dispose);
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2723,7 +3197,7 @@ void main() {
       expect(control.lastBootstrapDaemonDid, isNull);
       expect(bindings.lastUserDid, 'did:human:me');
       expect(bindings.lastDaemonAgentDid, 'did:agent:daemon');
-      expect(bindings.lastMessageAgentDid, 'did:agent:message');
+      expect(bindings.lastPersonalAgentDid, 'did:agent:message');
       expect(
         bindings.lastDelegatedKeyVerificationMethod,
         'did:human:me#daemon-key-1',
@@ -2732,7 +3206,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent keeps raw diagnostic error while showing friendly text',
+    'bootstrapPersonalAgent keeps raw diagnostic error while showing friendly text',
     () async {
       final control =
           _FailingBootstrapAgentControlService(
@@ -2762,7 +3236,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2775,7 +3249,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent is blocked before delegated subkey when feature flag is off',
+    'bootstrapPersonalAgent is blocked before delegated subkey when feature flag is off',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2812,7 +3286,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2827,7 +3301,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent accepts nested bootstrap key diagnostics',
+    'bootstrapPersonalAgent accepts nested bootstrap key diagnostics',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2869,7 +3343,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2884,7 +3358,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent accepts flat config summary bootstrap key diagnostics',
+    'bootstrapPersonalAgent accepts flat config summary bootstrap key diagnostics',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2924,7 +3398,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -2939,7 +3413,7 @@ void main() {
   );
 
   test(
-    'bootstrapMessageAgent requires daemon bootstrap public key before delegated subkey',
+    'bootstrapPersonalAgent requires daemon bootstrap public key before delegated subkey',
     () async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
@@ -2968,7 +3442,7 @@ void main() {
 
       await container
           .read(agentsProvider.notifier)
-          .bootstrapMessageAgent(
+          .bootstrapPersonalAgent(
             daemonDid: 'did:agent:daemon',
             appInstanceId: 'app_1',
           );
@@ -3413,6 +3887,66 @@ void main() {
     });
   });
 
+  test(
+    'empty daemon snapshot keeps inventory runtime during Personal Agent bootstrap',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:daemon',
+            kind: AgentKind.daemon,
+            displayName: '代理 1',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: DateTime.parse('2026-06-03T09:10:00Z'),
+            ),
+          ),
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            daemonAgentDid: 'did:agent:daemon',
+            runtime: 'hermes',
+            handle: 'hermes-msg-controller-001',
+            displayName: 'Hermes Personal Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(
+              status: 'ready',
+              lastSeenAt: DateTime.parse('2026-06-03T09:10:01Z'),
+            ),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+
+      container.read(agentsProvider.notifier).applyControlPayload(
+        <String, Object?>{
+          'schema': AgentControlPayloads.statusSchema,
+          'event_id': 'evt_empty_snapshot',
+          'sent_at': '2026-06-03T09:10:02Z',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': const <Object?>[],
+        },
+      );
+
+      final state = container.read(agentsProvider);
+      expect(
+        state.runtimesFor('did:agent:daemon').map((agent) => agent.agentDid),
+        ['did:agent:runtime'],
+      );
+      expect(
+        state.personalAgentRuntimeFor('did:agent:daemon')?.agentDid,
+        'did:agent:runtime',
+      );
+    },
+  );
+
   test('stale snapshot does not prune newer runtime state', () async {
     final control = FakeAgentControlService()
       ..agents = <AgentSummary>[
@@ -3666,8 +4200,10 @@ ProviderContainer _container(
   FakeAgentControlService control, {
   FakeProductLocalStore? localStore,
   FakeIdentityCorePort? identities,
-  MessageAgentBindingPort? messageAgentBindings,
+  PersonalAgentBindingPort? personalAgentBindings,
   AgentControlStatusStore? statusStore,
+  DirectoryApplicationService? directory,
+  AgentsController Function(Ref ref)? controllerFactory,
   bool agentImEnabled = true,
   SessionIdentity session = const SessionIdentity(
     did: 'did:human:me',
@@ -3679,16 +4215,22 @@ ProviderContainer _container(
   return ProviderContainer(
     overrides: <Override>[
       agentControlServiceProvider.overrideWithValue(control),
+      if (directory != null)
+        directoryApplicationServiceProvider.overrideWithValue(directory),
       identityCorePortProvider.overrideWithValue(
         identities ?? FakeIdentityCorePort(),
       ),
       productLocalStoreProvider.overrideWithValue(
         localStore ?? FakeProductLocalStore(),
       ),
-      if (messageAgentBindings != null)
-        messageAgentBindingPortProvider.overrideWithValue(messageAgentBindings),
+      if (personalAgentBindings != null)
+        personalAgentBindingPortProvider.overrideWithValue(
+          personalAgentBindings,
+        ),
       if (statusStore != null)
         agentControlStatusStoreProvider.overrideWithValue(statusStore),
+      if (controllerFactory != null)
+        agentsProvider.overrideWith(controllerFactory),
       agentImEnabledProvider.overrideWithValue(agentImEnabled),
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
@@ -3697,10 +4239,79 @@ ProviderContainer _container(
   );
 }
 
+class _BlockingDirectoryApplicationService
+    implements DirectoryApplicationService {
+  final Completer<void> resolveStarted = Completer<void>();
+  final Completer<DirectoryPeerResolution> _resolution =
+      Completer<DirectoryPeerResolution>();
+  final List<String> resolvedPeers = <String>[];
+
+  void complete(DirectoryPeerResolution resolution) {
+    _resolution.complete(resolution);
+  }
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    return resolvePeer(handle);
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) {
+    resolvedPeers.add(peer);
+    if (!resolveStarted.isCompleted) {
+      resolveStarted.complete();
+    }
+    return _resolution.future;
+  }
+}
+
+class _EventuallyAvailableDirectoryApplicationService
+    implements DirectoryApplicationService {
+  _EventuallyAvailableDirectoryApplicationService({
+    this.failuresBeforeSuccess = 1,
+  });
+
+  final int failuresBeforeSuccess;
+  int resolveAttempts = 0;
+
+  @override
+  Future<List<PeerDisplayProfile>> loadCachedDisplayProfiles(
+    Iterable<String> dids,
+  ) async => const <PeerDisplayProfile>[];
+
+  @override
+  Future<DirectoryPeerResolution> lookupHandle(String handle) {
+    return resolvePeer(handle);
+  }
+
+  @override
+  Future<DirectoryPeerResolution> resolvePeer(String peer) async {
+    resolveAttempts += 1;
+    if (resolveAttempts <= failuresBeforeSuccess) {
+      throw StateError('route not committed yet');
+    }
+    return DirectoryPeerResolution(
+      input: peer,
+      did: peer,
+      handle: 'alice-codex.awiki.info',
+      conversationId: 'dm:peer-scope:v1:alice-codex',
+    );
+  }
+}
+
 class _StaticAgentControlStatusStore implements AgentControlStatusStore {
-  const _StaticAgentControlStatusStore({this.latestDaemonPayload});
+  const _StaticAgentControlStatusStore({
+    this.latestDaemonPayload,
+    this.daemonStatusPayload,
+  });
 
   final Map<String, Object?>? latestDaemonPayload;
+  final Map<String, Object?>? daemonStatusPayload;
 
   @override
   Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
@@ -3714,7 +4325,7 @@ class _StaticAgentControlStatusStore implements AgentControlStatusStore {
     required String daemonAgentDid,
     required String requestId,
   }) async {
-    return null;
+    return daemonStatusPayload;
   }
 
   @override
@@ -3791,34 +4402,34 @@ class _HangingAgentControlStatusStore implements AgentControlStatusStore {
   }
 }
 
-class _MessageAgentBindingsStub implements MessageAgentBindingPort {
+class _PersonalAgentBindingsStub implements PersonalAgentBindingPort {
   String? lastUserDid;
   String? lastDaemonAgentDid;
-  String? lastMessageAgentDid;
+  String? lastPersonalAgentDid;
   String? lastRuntimeProvider;
   Map<String, Object?>? lastRuntimeProfile;
   String? lastDelegatedKeyVerificationMethod;
 
   @override
-  Future<MessageAgentBinding> ensureBinding({
+  Future<PersonalAgentBinding> ensureBinding({
     required String userDid,
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
     required String runtimeProvider,
     required Map<String, Object?> runtimeProfile,
     required String delegatedKeyVerificationMethod,
   }) async {
     lastUserDid = userDid;
     lastDaemonAgentDid = daemonAgentDid;
-    lastMessageAgentDid = messageAgentDid;
+    lastPersonalAgentDid = personalAgentDid;
     lastRuntimeProvider = runtimeProvider;
     lastRuntimeProfile = runtimeProfile;
     lastDelegatedKeyVerificationMethod = delegatedKeyVerificationMethod;
-    return MessageAgentBinding(
+    return PersonalAgentBinding(
       id: 'binding-1',
       userDid: userDid,
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       runtimeProvider: runtimeProvider,
       runtimeProfile: runtimeProfile,
       delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
@@ -3827,20 +4438,20 @@ class _MessageAgentBindingsStub implements MessageAgentBindingPort {
   }
 
   @override
-  Future<MessageAgentBinding?> getActiveBinding() async => null;
+  Future<PersonalAgentBinding?> getActiveBinding() async => null;
 
   @override
-  Future<MessageAgentBinding> disableBinding({
+  Future<PersonalAgentBinding> disableBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
     throw UnimplementedError();
   }
 
   @override
-  Future<MessageAgentBinding> revokeBinding({
+  Future<PersonalAgentBinding> revokeBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
     throw UnimplementedError();
   }
@@ -3863,7 +4474,7 @@ class _FailingBootstrapAgentControlService extends FakeAgentControlService {
   final Object error;
 
   @override
-  Future<void> ensureMessageAgentBootstrap({
+  Future<void> ensurePersonalAgentBootstrap({
     required String daemonAgentDid,
     required String controllerDid,
     required String appInstanceId,
@@ -3955,6 +4566,81 @@ class _SequencedAgentControlService extends FakeAgentControlService {
     }
     final index = (listAgentsCalls - 1).clamp(0, responses.length - 1);
     return responses[index];
+  }
+}
+
+class _ControlledInventoryAgentControlService extends FakeAgentControlService {
+  final List<Completer<List<AgentSummary>>> _listCalls =
+      <Completer<List<AgentSummary>>>[];
+
+  int get listAgentsCalls => _listCalls.length;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    final completer = Completer<List<AgentSummary>>();
+    _listCalls.add(completer);
+    return completer.future;
+  }
+
+  void completeListCall(int call, List<AgentSummary> agents) {
+    _listCalls[call - 1].complete(agents);
+  }
+
+  Future<void> waitForListCalls(int expected) async {
+    for (var attempt = 0; attempt < 100; attempt += 1) {
+      if (listAgentsCalls >= expected) {
+        return;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    fail(
+      'Timed out waiting for $expected inventory calls; '
+      'observed $listAgentsCalls.',
+    );
+  }
+}
+
+class _StreamingAgentControlStatusStore
+    implements AgentControlStatusStore, AgentControlEventStore {
+  final StreamController<AgentControlEvent> _events =
+      StreamController<AgentControlEvent>.broadcast();
+
+  void emit(AgentControlEvent event) => _events.add(event);
+
+  Future<void> close() => _events.close();
+
+  @override
+  Stream<AgentControlEvent> watchDaemonControlEvents({
+    required String daemonAgentDid,
+  }) {
+    return _events.stream.where(
+      (event) => event.daemonAgentDid == daemonAgentDid,
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>?> findLatestDaemonStatusPayload({
+    required String daemonAgentDid,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findDaemonStatusPayload({
+    required String daemonAgentDid,
+    required String requestId,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<Map<String, Object?>?> findStatusPayload({
+    required String daemonAgentDid,
+    required String runtimeAgentDid,
+    required String requestId,
+    required String statusScope,
+  }) async {
+    return null;
   }
 }
 

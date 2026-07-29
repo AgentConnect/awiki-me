@@ -1,15 +1,15 @@
-# Message Agent MVP 优化方案
+# Personal Agent MVP 优化方案
 
 ## 背景
 
-Message Agent 是用户授权后，帮助 Human App DID 处理 IM 消息的独立 Agent。它运行在用户选择的 daemon 中，但不等同于 daemon，也不直接使用 daemon DID 作为消息处理身份。
+Personal Agent 是用户授权后，帮助 Human App DID 处理 IM 消息的独立 Agent。它运行在用户选择的 daemon 中，但不等同于 daemon，也不直接使用 daemon DID 作为消息处理身份。
 
-本文沉淀 Message Agent 的 MVP 版本方案。MVP 的目标是尽快上线并跑通端到端闭环：Human App 发起启用，daemon 创建并运行消息处理 Agent，user-service 记录 owner 与 binding，message Agent 接入 Human DID 的消息流，对会话消息进行分析、总结、草稿生成和 App action 请求，并把处理结果回收到 Human App。
+本文沉淀 Personal Agent 的 MVP 版本方案。Personal Agent 的长期定位是用户的个人管家与助理，未来可以扩展到管理其他 Agent 等能力；本阶段不实现这些扩展，只保留并完善已有的消息处理闭环。MVP 的目标是尽快上线并跑通端到端闭环：Human App 发起启用，daemon 创建并运行个人助理，user-service 记录 owner 与 binding，Personal Agent 接入 Human DID 的消息流，对会话消息进行分析、总结、草稿生成和 App action 请求，并把处理结果回收到 Human App。
 
 本轮 MVP 做三个重要收口：
 
-- message Agent 可以处理所有会话，不再要求用户逐个手动开启会话。
-- MVP 先不开放 message Agent 代发消息，也不承诺自动回复。
+- Personal Agent 可以处理所有会话，不再要求用户逐个手动开启会话。
+- MVP 先不开放 Personal Agent 代发消息，也不承诺自动回复。
 - bootstrap / delegated key 传输安全纳入本次 MVP，不能继续以 `secure:false` 普通 payload 传递敏感授权材料。
 - 当前只支持 Hermes 作为消息处理运行引擎，但产品和数据模型需要预留未来支持 Codex、Claude Code 或其他 runtime provider。
 
@@ -17,53 +17,81 @@ Message Agent 是用户授权后，帮助 Human App DID 处理 IM 消息的独�
 
 MVP 每一项方案先按以下口径收口：
 
-- 入口：提供独立 Message Agent 设置页，创建 Agent 流程只作为可选入口。
+- 入口：提供独立 Personal Agent 设置页，创建 Agent 流程只作为可选入口。
 - 开关：`AWIKI_AGENT_IM_ENABLED` 默认开启；显式设置为 `false` 时隐藏入口或显示实验功能关闭，不暴露半成品流程。
 - daemon 选择：用户先选择运行 daemon，App 展示 daemon 在线状态、版本和可用能力。
-- 运行引擎：MVP 只启用 Hermes Message Agent，但模型中保留 `runtime_provider`，未来可扩展 Codex、Claude Code。
-- 身份模型：Human DID 是用户身份，Daemon Agent DID 是运行环境，Message Agent DID 是 daemon 内独立 runtime agent。
-- delegated key：message Agent 使用 Human DID 下的 delegated key 接入 Human DID 消息流，Human App 不持有 Agent 私钥。
+- 运行引擎：MVP 只启用 Hermes Personal Agent，但模型中保留 `runtime_provider`，未来可扩展 Codex、Claude Code。
+- 身份模型：Human DID 是用户身份，Daemon Agent DID 是运行环境，Personal Agent DID 是 daemon 内独立 runtime agent。
+- delegated key：Personal Agent 使用 Human DID 下的 delegated key 接入 Human DID 消息流，Human App 不持有 Agent 私钥。
 - 安全 bootstrap：delegated private package、bootstrap secret 和 WSS credential 必须通过安全 envelope 或等价安全通道传递。
-- binding：user-service 记录 Human owner、daemon、Message Agent、delegated key 和 active binding。
-- 消息路由：message Agent 使用 Human delegated key 建立 message-service WSS，接收 Human DID 的消息流。
+- binding：user-service 记录 Human owner、daemon、Personal Agent、delegated key 和 active binding。
+- 消息路由：Personal Agent 使用 Human delegated key 建立 message-service WSS，接收 Human DID 的消息流。
 - 处理范围：MVP 默认处理所有可处理会话，不做逐会话开启、白名单、黑名单或规则路由。
 - 处理能力：MVP 做分析、总结、草稿生成和 App action 请求，不开放自动回复或代发。
 - App 回收：`message.sync`、`runtime_final`、`app.action.requires_confirmation` 必须回收到 App。
 - 用户确认：Human 确认后的发送由 Human App 现有发送链路完成，并回传 `awiki.app.action.result.v1`。
 - IM 展示：绑定成功可以显示为一条 IM 消息，但授权事实来自 binding handshake。
-- 停用删除：停用先停 binding 和处理 loop，删除 Message Agent 前必须先解除 active binding。
+- 停用删除：停用先停 binding 和处理 loop，删除 Personal Agent 前必须先解除 active binding。
 - 授权撤销：预留 delegated key revoke / DID Document 移除入口，不能把停用误描述为永久撤销 key。
 - 技术债：协议级 `from: Agent DID`、`on_behalf_of: Human DID`、双 proof 和跨域 delegation 验证后续补齐。
 
+## Agent 管理投影与创建收敛
+
+Agent 页面采用三层投影，而不是把创建命令发送、WebSocket hint 或某一次列表响应
+单独当成最终事实：
+
+```text
+Agent 页面 = User Service Inventory 基线
+           + IM Core committed control overlay
+           + App pending intent
+```
+
+- User Service Inventory 是 daemon/runtime 存在性、owner 和 binding 的 SoT。
+- daemon 发出的 `awiki.agent.status.v1` 必须先由 reliable sync 提交到 IM Core；
+  App 通过 Core thread patch 消费同一已提交控制消息。WebSocket payload 只调度
+  reliable sync，不直接改 Agent 页面。
+- App pending intent 只表示用户刚发起的创建操作。只有
+  `client_request_id + daemon DID + handle + runtime` 与本地 pending 精确匹配时，
+  committed create ACK 才能在 Inventory 确认前生成短期可见卡片。
+- `runtime.agent.create` 在 daemon 完成 registration token exchange、User Service
+  Inventory 事务提交后才返回 ACK。App 收到 committed ACK 后递增 Inventory
+  generation 并启动因果重载；任何在 ACK 前启动的旧列表响应都必须丢弃。
+- 与本地 pending 精确匹配的 create overlay，以及已存在 Agent 的 delete overlay，
+  一直保留到 Inventory 确认对应 DID 已出现/消失，避免旧响应覆盖新拓扑。
+  Inventory 确认后移除 overlay，不建立第二套 durable Agent registry。
+
+因此 Codex、Claude Code、Hermes runtime 创建后必须在 Agent 页面自动收敛；实现不得
+依赖创建后盲目 `load()`、固定 sleep、更短轮询、会话列表推断或 raw SQLite 查询。
+
 ## 核心产品规则
 
-Message Agent 涉及四类身份和一个 delegated key：
+Personal Agent 涉及四类身份和一个 delegated key：
 
 ```text
 Human DID = 用户的人类身份，也是 Human App 登录和 IM 消息归属身份
 Daemon Agent DID = 某台本机或远端 daemon 的运行环境身份
 Runtime Agent DID = daemon 内创建的具体 Agent 身份
-Message Agent DID = 被绑定为消息处理 Agent 的 Runtime Agent DID
+Personal Agent DID = 被绑定为个人助理的 Runtime Agent DID
 user_did#daemon-key-1 = Human DID 授权 daemon 读取普通 inbox / 建立 delegated WSS 的 delegated key
 ```
 
 UI 命名必须避免混用：
 
 - daemon 在产品上称为「设备 Daemon」或「运行 Daemon」。
-- message Agent 在产品上称为「消息处理 Agent」。
-- 不把 daemon 叫成消息 Agent，也不把消息处理 Agent 的 DID 和 daemon DID 混在一起。
+- Personal Agent 在产品上称为「个人助理」。
+- 不把 daemon 叫成个人助理，也不把个人助理的 DID 和 daemon DID 混在一起。
 
 长期推荐关系是：
 
 ```text
 Human DID
   授权
-Message Agent DID
+Personal Agent DID
   运行在
 Daemon Agent DID
 ```
 
-MVP 里，message Agent 仍然有独立 `Message Agent DID`，但消息接入链路为了复用当前 message-service 能力，会使用 Human DID 下的 delegated key 建立 WSS 连接。这个 delegated key 只能作为 Human DID 的授权接入凭据使用，不应被产品解释为 daemon 或 Agent 的独立消息身份。
+MVP 里，Personal Agent 仍然有独立 `Personal Agent DID`，但消息接入链路为了复用当前 message-service 能力，会使用 Human DID 下的 delegated key 建立 WSS 连接。这个 delegated key 只能作为 Human DID 的授权接入凭据使用，不应被产品解释为 daemon 或 Agent 的独立消息身份。
 
 ## MVP 目标
 
@@ -71,41 +99,41 @@ MVP 第一版以可上线、可观察、可停用为目标，而不是一次性�
 
 需要跑通的用户可见结果：
 
-- 用户可以从明确的 Message Agent 设置入口启用能力。
-- 用户可以选择一个 daemon 来运行消息处理 Agent。
-- daemon 内创建并运行一个独立的 Message Agent。
-- user-service 记录 Human owner、daemon、message Agent 和 binding。
-- message Agent 使用 Human delegated key 接入 message-service WSS。
-- message Agent 默认处理 Human DID 消息流里的所有可处理会话。
-- message Agent 不直接代发消息，只生成分析、总结、草稿或 App action 请求。
+- 用户可以从明确的 Personal Agent 设置入口启用能力。
+- 用户可以选择一个 daemon 来运行个人助理。
+- daemon 内创建并运行一个独立的 Personal Agent。
+- user-service 记录 Human owner、daemon、Personal Agent 和 binding。
+- Personal Agent 使用 Human delegated key 接入 message-service WSS。
+- Personal Agent 默认处理 Human DID 消息流里的所有可处理会话。
+- Personal Agent 不直接代发消息，只生成分析、总结、草稿或 App action 请求。
 - Human App 能展示 Agent 处理状态、结果摘要、草稿和需要确认的 action。
-- 用户可以停用或删除 Message Agent，并停止消息处理链路。
+- 用户可以停用或删除 Personal Agent，并停止消息处理链路。
 - bootstrap / delegated key 敏感材料必须通过安全通道或加密 envelope 传递。
 
 MVP 不追求：
 
-- 多个 active message Agent 并存。
+- 多个 active Personal Agent 并存。
 - 按联系人、群聊、规则路由到不同 Agent。
 - Agent 协议级 `from: Agent DID` / `on_behalf_of: Human DID` 双 proof。
 - 跨域可独立验证的 `delegation_proof`。
-- message Agent 自动回复或无确认代发。
+- Personal Agent 自动回复或无确认代发。
 - E2EE 明文处理能力。
 
 ## 产品入口
 
-MVP 应提供明确的 Message Agent 设置页，而不是把入口隐藏在普通 Agent 列表里。
+MVP 应提供明确的 Personal Agent 设置页，而不是把入口隐藏在普通 Agent 列表里。
 
 推荐入口：
 
 ```text
-Settings / Message Agent
+Settings / Personal Agent
 ```
 
 设置页展示：
 
-- 当前是否已启用 Message Agent。
+- 当前是否已启用 Personal Agent。
 - 当前绑定的 daemon。
-- 当前消息处理 Agent。
+- 当前个人助理。
 - 当前运行引擎 / runtime provider。
 - daemon 在线状态、版本、能力。
 - delegated key / bootstrap 安全状态。
@@ -113,12 +141,20 @@ Settings / Message Agent
 - 最近处理状态或错误。
 - 停用、删除、重新连接等操作。
 
-创建 Agent 流程可以保留「作为消息处理 Agent」的选项，但它不是唯一入口。两个入口最终进入同一套启用流程。
+当前实现状态（2026-07-01）：
+
+- App Settings 已提供 `Personal Agent` 稳定入口，进入独立的「个人助理」设置页。
+- Agents tab 的 daemon detail 只提供「配置个人助理」摘要跳转卡，不再暴露旧的内嵌生命周期管理面板。
+- 独立设置页展示运行 daemon、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
+- 启用按钮仅在 `AWIKI_AGENT_IM_ENABLED=true`、daemon ready 且 daemon 已上报 bootstrap public key 时可用；缺 key 或 daemon 未就绪时提示刷新 daemon 状态。
+- 页面文案必须持续强调「只生成草稿，发送前需用户确认」「不会自动发送消息」「不处理 E2EE 明文」。
+
+创建 Agent 流程可以保留「作为个人助理」的选项，但它不是唯一入口。两个入口最终进入同一套启用流程。
 
 如果 `AWIKI_AGENT_IM_ENABLED=false`：
 
-- UI 应隐藏 Message Agent 设置入口，或只显示「实验功能未开启」。
-- 当前产品 UI 已先隐藏 Agent/daemon 详情页内的 Message Agent 设置面板；底层 bootstrap、binding、revoke 能力保留，等待独立设置页或后续灰度入口重新开放。
+- UI 应隐藏 Personal Agent 设置入口，或只显示「实验功能未开启」。
+- 当前产品 UI 在 Settings 显示「实验功能未开启」，且 Agents/daemon detail 不展示可触发生命周期请求的管理按钮。
 - 不展示半成品创建、绑定、配置入口。
 - 不能让用户进入会失败或不可完成的流程。
 
@@ -127,22 +163,22 @@ Settings / Message Agent
 MVP 推荐启用流程：
 
 ```text
-进入 Message Agent 设置页
+进入 Personal Agent 设置页
   -> 选择 daemon
   -> 展示 daemon 在线状态 / 版本 / 可用能力
-  -> 选择或创建 Hermes Message Agent
+  -> 选择或创建 Hermes Personal Agent
   -> 展示处理范围：所有会话
   -> 展示权限摘要和安全说明
   -> 建立安全 bootstrap / delegated key 通道
   -> daemon 创建并持有 Agent runtime identity
-  -> user-service 记录 owner + daemon + message-agent binding
-  -> daemon 启动 message Agent runtime
-  -> message Agent 使用 Human delegated key 连接 message-service WSS
+  -> user-service 记录 owner + daemon + personal-agent binding
+  -> daemon 启动 Personal Agent runtime
+  -> Personal Agent 使用 Human delegated key 连接 message-service WSS
   -> binding handshake 完成
   -> Human App 中展示绑定成功 IM 消息
 ```
 
-启用时可以复用现有 `bootstrapMessageAgent`，但它必须满足本方案的安全要求：
+启用时可以复用现有 `bootstrapPersonalAgent`，但它必须满足本方案的安全要求：
 
 - bootstrap 中不得以 `secure:false` 普通 payload 传递 delegated private package。
 - delegated key 私钥不应进入 user-service。
@@ -153,7 +189,7 @@ MVP 中运行引擎固定为 Hermes，但启用流程不要把概念写死为「
 
 ```text
 runtime_provider = hermes
-runtime_profile = message_agent
+runtime_profile = personal_agent
 ```
 
 未来可以扩展：
@@ -169,15 +205,15 @@ MVP UI 可以只展示 Hermes 一个选项，或者直接默认选择 Hermes；�
 
 已确认的身份与 key 决策：
 
-- Human App 发起 Message Agent 创建和绑定流程。
-- 如果 daemon 下已存在可识别的 Hermes Message Agent runtime，Human App 应复用该 runtime 并补齐/激活 user-service binding，不应重复签发 runtime registration token。
+- Human App 发起 Personal Agent 创建和绑定流程。
+- 如果 daemon 下已存在可识别的 Hermes Personal Agent runtime，Human App 应复用该 runtime 并补齐/激活 user-service binding，不应重复签发 runtime registration token。
 - daemon 负责生成并持有 Agent runtime identity。
-- Message Agent 有独立 `Runtime Agent DID`。
+- Personal Agent 有独立 `Runtime Agent DID`。
 - daemon DID 不作为处理消息的 Agent。
-- user-service 记录 owner 和 message-agent binding。
+- user-service 记录 owner 和 personal-agent binding。
 - Human App 不直接持有 Agent 私钥。
 - Human App 不导出 Agent 私钥。
-- message Agent 通过 Human DID 下的 delegated key 接入 Human DID 的消息流。
+- Personal Agent 通过 Human DID 下的 delegated key 接入 Human DID 的消息流。
 
 推荐 delegated key 生成与注册方式：
 
@@ -220,10 +256,10 @@ Human App 生成 delegated key pair
 recipient: Daemon Agent DID
 recipient_key_id: daemon bootstrap key id
 sender: Human DID
-operation: message_agent.bootstrap
+operation: personal_agent.bootstrap
 expires_at: short ttl
 ciphertext: encrypted delegated package / bootstrap secret
-aad: human_did + daemon_did + operation_id + message_agent_binding_id
+aad: human_did + daemon_did + operation_id + personal_agent_binding_id
 ```
 
 MVP 实施契约采用两个层次，当前落地方案已经使用 daemon `#key-3`
@@ -254,7 +290,7 @@ awiki.daemon.bootstrap.v1 = daemon 解密后的内部 bootstrap payload
 
 安全验收口径：
 
-- 代码中不再出现 message-agent bootstrap private package 通过 `secure:false` 普通 payload 明文发送的路径。
+- 代码中不再出现 personal-agent bootstrap private package 通过 `secure:false` 普通 payload 明文发送的路径。
 - daemon 不能解密非发给自己的 bootstrap envelope。
 - 过期、重复使用、daemon DID 不匹配、key id 不匹配的 bootstrap 请求必须失败。
 - 停用或删除后，不再允许使用旧 bootstrap token 重放创建绑定。
@@ -264,12 +300,12 @@ awiki.daemon.bootstrap.v1 = daemon 解密后的内部 bootstrap payload
 MVP 消息路由采用当前最短闭环：
 
 ```text
-message Agent runtime
+Personal Agent runtime
   -> 使用 Human DID delegated key 建立 WSS
   -> message-service 将连接视为 Human DID 的 delegated client
-  -> message Agent 接收 Human DID 的消息流
-  -> message Agent 对消息进行分析 / 总结 / 草稿生成 / action 判断
-  -> message Agent 将处理状态和结果同步回 Human App
+  -> Personal Agent 接收 Human DID 的消息流
+  -> Personal Agent 对消息进行分析 / 总结 / 草稿生成 / action 判断
+  -> Personal Agent 将处理状态和结果同步回 Human App
 ```
 
 处理范围：
@@ -280,7 +316,7 @@ message Agent runtime
 - 不做联系人级 Agent 路由。
 - 不做群聊级 Agent 路由。
 
-这里的「所有会话」表示：对 Human DID 消息流中 message-service 能通过 delegated WSS / inbox 提供给 message Agent 的所有可处理会话，默认进入处理范围。
+这里的「所有会话」表示：对 Human DID 消息流中 message-service 能通过 delegated WSS / inbox 提供给 Personal Agent 的所有可处理会话，默认进入处理范围。
 
 MVP 仍需要遵守内容能力边界：
 
@@ -290,9 +326,9 @@ MVP 仍需要遵守内容能力边界：
 
 ## MVP 发送与回复策略
 
-MVP 先不开放 message Agent 代发消息，也不承诺自动回复。
+MVP 先不开放 Personal Agent 代发消息，也不承诺自动回复。
 
-message Agent 可以做：
+Personal Agent 可以做：
 
 - 分析消息。
 - 总结会话。
@@ -301,13 +337,13 @@ message Agent 可以做：
 - 发起 `app.action.requires_confirmation`。
 - 把处理结果通过 `message.sync` / `runtime_final` 同步回 Human App。
 
-message Agent 不做：
+Personal Agent 不做：
 
 - 不直接调用 outbound send 代替 Human DID 发 IM。
 - 不自动回复联系人。
 - 不在用户无感知的情况下发送消息。
 - 不把 daemon/runtime outbound send 打开成默认能力。
-- 默认 delegated key scope 不包含 `message.send.plain`；如果历史数据或测试 fixture 仍出现该 scope，MVP Message Agent bootstrap validation 必须拒绝它或把它视为 legacy 非生产路径。user-service delegated key 默认 scope 应只包含 `message.inbox.read.plain` 和 `message.history.read.plain`。
+- 默认 delegated key scope 不包含 `message.send.plain`；如果历史数据或测试 fixture 仍出现该 scope，MVP Personal Agent bootstrap validation 必须拒绝它或把它视为 legacy 非生产路径。user-service delegated key 默认 scope 应只包含 `message.inbox.read.plain` 和 `message.history.read.plain`。
 
 如果用户确认草稿或 action：
 
@@ -318,7 +354,7 @@ Human App 展示草稿 / action
   -> Human App 将 awiki.app.action.result.v1 回传 daemon
 ```
 
-这不是 message Agent 代发，而是 Human App 在用户确认后发送。这样可以先跑通处理闭环，同时避免 MVP 里混淆 Agent 发送身份。
+这不是 Personal Agent 代发，而是 Human App 在用户确认后发送。这样可以先跑通处理闭环，同时避免 MVP 里混淆 Agent 发送身份。
 
 长期代发模型仍应升级为：
 
@@ -357,10 +393,10 @@ MVP UI 不需要复杂，但必须让用户看到：
 
 ## Binding Handshake 与 IM 展示
 
-产品表现上，Message Agent 创建 / 绑定成功后，应在 Human App 中表现为一条 IM 消息，例如：
+产品表现上，Personal Agent 创建 / 绑定成功后，应在 Human App 中表现为一条 IM 消息，例如：
 
 ```text
-我是你的消息处理 Agent，已准备好处理消息。
+我是你的个人助理，已准备好处理消息。
 ```
 
 这条消息用于让用户感知绑定完成，但底层不能只依赖普通文本消息作为授权事实。
@@ -371,8 +407,8 @@ MVP UI 不需要复杂，但必须让用户看到：
 Human App 确认绑定意图
   -> daemon 准备 secure bootstrap
   -> delegated key 注册 / 更新完成
-  -> daemon 启动 message Agent
-  -> message Agent 建立 delegated WSS
+  -> daemon 启动 Personal Agent
+  -> Personal Agent 建立 delegated WSS
   -> user-service 记录 active binding
   -> Human App 收到绑定成功状态
   -> IM 中展示绑定成功消息
@@ -384,7 +420,7 @@ binding 至少应记录：
 
 - Human DID
 - Daemon Agent DID
-- Message Agent DID
+- Personal Agent DID
 - runtime provider
 - runtime profile
 - delegated key id
@@ -398,13 +434,13 @@ binding 至少应记录：
 
 ## 设置页状态
 
-Message Agent 设置页建议展示以下状态：
+Personal Agent 设置页建议展示以下状态：
 
 ```text
 未启用
 正在连接 daemon
 正在安全授权
-正在创建消息处理 Agent
+正在创建个人助理
 正在建立消息连接
 已启用
 处理中
@@ -438,7 +474,7 @@ revoked
 
 ```text
 暂停处理消息
-删除消息处理 Agent
+删除个人助理
 移除此 daemon
 撤销读取我消息的授权
 ```
@@ -446,19 +482,19 @@ revoked
 MVP 第一版至少要支持：
 
 ```text
-停用 Message Agent
-删除 Message Agent
+停用 Personal Agent
+删除 Personal Agent
 ```
 
-停用 Message Agent 表示停止让该 Agent 处理 Human DID 消息。停用后：
+停用 Personal Agent 表示停止让该 Agent 处理 Human DID 消息。停用后：
 
-- user-service 将 message-agent binding 标记为 disabled / revoked。
-- daemon 停止 message Agent 的消息处理 loop。
+- user-service 将 personal-agent binding 标记为 disabled / revoked。
+- daemon 停止 Personal Agent 的消息处理 loop。
 - daemon 断开或停止使用 delegated WSS 连接。
 - Human App 不再展示该 Agent 为 active。
 - 后续消息不再进入该 Agent 处理。
 
-删除 Message Agent 表示删除 Agent 本身。如果被删除的 Agent 当前是 Message Agent，需要先停用 binding，再 archive runtime。
+删除 Personal Agent 表示删除 Agent 本身。如果被删除的 Agent 当前是 Personal Agent，需要先停用 binding，再 archive runtime。
 
 撤销读取我消息的授权是更强动作：
 
@@ -471,10 +507,10 @@ MVP 第一版至少要支持：
 推荐 MVP 按钮：
 
 - 「暂停处理消息」：停 binding 和处理 loop。
-- 「删除消息处理 Agent」：先停用，再 archive runtime。
+- 「删除个人助理」：先停用，再 archive runtime。
 - 「撤销 Daemon 消息授权」：撤销 delegated key，影响该 daemon 后续读取消息。
 
-Daemon 本身的「删除代理」入口与 Message Agent 生命周期分开处理：
+Daemon 本身的「删除代理」入口与 Personal Agent 生命周期分开处理：
 
 - 正常已上线 daemon 通过 daemon control payload 执行自删除，避免 App 绕过运行端清理本地状态。
 - 如果 daemon 注册后从未完成首个心跳（`status = registering` 且 `last_seen_at = null`），App 允许直接调用 `unbind_agent` 清理这条未完成安装记录；这种记录没有可达 daemon，不能依赖 control payload 删除。
@@ -483,27 +519,27 @@ Daemon 本身的「删除代理」入口与 Message Agent 生命周期分开处�
 
 第一版约束：
 
-- 一个 Human DID 同时只能有一个 active Message Agent。
-- 一个 Message Agent 必须绑定一个 daemon 运行。
-- Message Agent 必须有独立 Runtime Agent DID。
+- 一个 Human DID 同时只能有一个 active Personal Agent。
+- 一个 Personal Agent 必须绑定一个 daemon 运行。
+- Personal Agent 必须有独立 Runtime Agent DID。
 - MVP 只支持 Hermes runtime provider，但 provider 字段必须预留。
-- daemon DID 不能作为 Message Agent DID。
+- daemon DID 不能作为 Personal Agent DID。
 - Human App 不直接持有 Agent 私钥。
-- message Agent 使用 Human DID delegated key 接入 message-service WSS。
-- message Agent 默认处理所有可处理会话。
-- message Agent 不自动回复，不直接代发。
+- Personal Agent 使用 Human DID delegated key 接入 message-service WSS。
+- Personal Agent 默认处理所有可处理会话。
+- Personal Agent 不自动回复，不直接代发。
 - Human 确认后的发送由 Human App 正常发送链路完成。
 - bootstrap / delegated key 敏感材料必须安全传输。
 - 创建 / 绑定成功可以表现为 IM 消息，但授权事实必须来自 binding handshake。
-- 停用 Message Agent 时必须解除消息代理 binding，并停止处理 loop。
-- 第一版可以先支持创建时绑定为 Message Agent，后续再补已有 Agent 设置为 Message Agent。
+- 停用 Personal Agent 时必须解除 Personal Agent binding，并停止处理 loop。
+- 第一版可以先支持创建时绑定为 Personal Agent，后续再补已有 Agent 设置为 Personal Agent。
 
 ## 已知技术债与后续演进
 
 MVP 仍有这些技术债：
 
 - WSS 接入身份仍复用 Human DID delegated key，message-service 尚未原生理解 `Agent DID on behalf of Human DID`。
-- 当前消息 envelope 不能表达真实处理主体是 Message Agent。
+- 当前消息 envelope 不能表达真实处理主体是 Personal Agent。
 - 对端看不到 `from: Agent DID` / `on_behalf_of: Human DID`。
 - 缺少协议级双 proof 和 `delegation_proof`。
 - 跨域服务不能独立验证 Human 授权 Agent 的事实和范围。
@@ -520,7 +556,7 @@ MVP 仍有这些技术债：
 - user-service 或授权服务提供可跨域验证的 binding / delegation 状态。
 - 审计系统记录 Human、Agent、daemon、授权范围、处理时间、action 结果和撤销状态。
 - 支持联系人白名单 / 黑名单、群聊策略、会话级策略。
-- 支持多个 Message Agent 和规则路由。
+- 支持多个 Personal Agent 和规则路由。
 - 在清晰授权和确认模型下，再逐步开放受控代发或自动回复。
 
 ## MVP 验收标准
@@ -528,66 +564,113 @@ MVP 仍有这些技术债：
 MVP 完成时，应能验证：
 
 - `AWIKI_AGENT_IM_ENABLED=false` 时，没有半成品入口。
-- 用户能从 Message Agent 设置页完成 daemon 选择、权限摘要确认和启用。
+- 用户能从 Personal Agent 设置页完成 daemon 选择、权限摘要确认和启用。
 - daemon 在线状态、版本和能力能被展示。
 - bootstrap / delegated key 敏感材料不再通过 `secure:false` 普通 payload 发送。
 - delegated private key 不进入 user-service。
-- daemon 能启动独立 Message Agent runtime，并返回 Message Agent DID。
+- daemon 能启动独立 Personal Agent runtime，并返回 Personal Agent DID。
 - user-service 能记录 active binding。
-- message Agent 能使用 Human DID delegated key 建立 WSS。
-- message Agent 能接收 Human DID 的消息流。
-- message Agent 默认处理所有可处理会话。
-- message Agent 能把处理状态、结果摘要、草稿或 action 请求回收到 App。
+- Personal Agent 能使用 Human DID delegated key 建立 WSS。
+- Personal Agent 能接收 Human DID 的消息流。
+- Personal Agent 默认处理所有可处理会话。
+- Personal Agent 能把处理状态、结果摘要、草稿或 action 请求回收到 App。
 - App 能确认 / 拒绝 action，并把 `awiki.app.action.result.v1` 回传 daemon。
-- message Agent 不直接代发 IM 消息。
-- 停用后，binding 失效，daemon 停止处理 loop，WSS 不再继续作为 active message Agent 工作。
-- 删除 Message Agent 时不会保留 active binding。
+- Personal Agent 不直接代发 IM 消息。
+- 停用后，binding 失效，daemon 停止处理 loop，WSS 不再继续作为 active Personal Agent 工作。
+- 删除 Personal Agent 时不会保留 active binding。
 
 ## 当前落地状态
 
-截至 2026-06-19，MVP 已按以下仓库切片落地：
+截至 2026-07-01，MVP 已按以下仓库切片落地：
 
-- `awiki-me-message-agent`
-  - Message Agent 设置能力已在 Agent/daemon 页面完成过接入验证，但当前产品 UI 隐藏 daemon 详情页的 Message Agent 面板；底层 bootstrap、binding、revoke 与 App 回收能力保留。
-  - `AWIKI_AGENT_IM_ENABLED` 关闭时阻断 bootstrap action；当前 UI 不再展示半成品入口。
+- `awiki-me`
+  - App Settings 已提供稳定 `Personal Agent` 入口，进入独立「个人助理」设置页；Agents tab 的 daemon detail 只保留摘要和跳转，不再把旧内嵌面板作为唯一入口。
+  - `AWIKI_AGENT_IM_ENABLED=false` 时不触发生命周期请求；当前 UI 显示实验功能关闭或隐藏触发入口，不暴露半成品启用流程。
+  - 设置页可以选择 daemon，展示 daemon ready、Hermes runtime provider、普通 `direct text` 处理范围、安全 bootstrap 公钥状态、授权状态和权限摘要。
   - App 能从 daemon diagnostics 读取 `bootstrap_key_id`、`bootstrap_public_key_b64u`、`bootstrap_key_algorithm`，并使用 daemon `#key-3` X25519 公钥生成 `awiki.daemon.bootstrap.secure.v1`。
-  - App 回收 `awiki.message.sync.v1`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
-  - MVP 只允许 `message.create_draft` 写入草稿；用户确认后的发送仍由 Human App 发送链路负责。
-- `awiki-cli-rs2-message-agent`
-  - daemon 发布 bootstrap public key diagnostics。
+  - App 回收 `awiki.message.sync.v1`、`runtime_final`、`awiki.app.action.v1`、`awiki.app.action.result.v1`，在聊天中展示处理状态、草稿和确认 / 拒绝 UI；raw JSON 不作为普通消息显示。
+  - MVP 只允许 `message.create_draft` 写入输入框草稿；用户点击「使用草稿」只填充 composer，不自动发送普通 IM 消息，发送仍由 Human App 现有链路负责。
+  - `personal-agent` E2E runner 已具备 real-backend fail-fast gate：选择该 case 后必须提供 backend、daemon、CLI、OTP、fake Hermes gateway 和 `personalAgent.realBackend=true`，不能退化成静默 skip。
+- `awiki-cli-rs2`
+  - daemon 在 status query、latest-status 和 heartbeat 中都发布 bootstrap public key diagnostics，避免 App 本地 cache 被不含 key 的轻量心跳覆盖。
   - daemon 接收 secure bootstrap envelope，校验 recipient、key id、TTL、nonce/replay、payload hash 和 canonical AAD，再解密内部 bootstrap payload。
-  - 旧明文 `awiki.daemon.bootstrap.v1` 在 Message Agent bootstrap 路径 fail closed。
-  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox。
-  - active Message Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发。
-- `user-service-message-agent`
-  - `/user-service/message-agent/rpc` 成为 owner + daemon + runtime Message Agent binding 的服务端事实源。
+  - 旧明文 `awiki.daemon.bootstrap.v1` 在 Personal Agent bootstrap 路径 fail closed。
+  - daemon 处理 delegated inbox 后写入 `message.sync` / `runtime_final` / `app.action` durable outbox；`awiki.app.action.v1` 会携带 `daemon_agent_did` 与 `runtime_agent_did`，App 可稳定把 action result 定向回 daemon controller DID；App 回传 action result 是 daemon-readable 的 redacted control ack，不携带 `result.draft_text`，daemon audit 只记录 action id、state 和错误摘要，不记录草稿正文或 result body。
+  - active Personal Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发；唯一 host 内部 final outbox 仍只能把 runtime final 转为发给 owner 的 message sync。
+  - revoked / disabled binding 会 fail closed，不再继续拉取 delegated inbox 或启动 runtime。
+- `user-service`
+  - `/user-service/personal-agent/rpc` 是 owner + daemon + runtime Personal Agent binding 的服务端事实源。
   - `ensure_binding` 校验 Human ownership、active daemon、daemon 托管 runtime、`runtime_provider`、active delegated key 和敏感字段拒收。
   - `disable_binding` 只停 binding；`revoke_binding` 要求 delegated key registry 已经 revoked，否则 fail closed。
   - delegated key public registration 默认是 read-only scope：`message.inbox.read.plain`、`message.history.read.plain`；不默认包含 `message.send.plain`。
-- `awiki-system-test-message-agent`
-  - 新增 Message Agent MVP focused acceptance：App recovery payload classification、user-service binding lifecycle、daemon 明文 bootstrap fail-closed。
-  - 当前环境未部署 Message Agent RPC 或未启动本地 message-service 时，系统测试会显式 skip 并输出配置和原因。
+- `awiki-system-test`
+  - 保留 focused acceptance：App recovery payload classification、user-service binding lifecycle、daemon 明文 bootstrap fail-closed。
+  - 新增 full UI real backend 产品级 gate：由 `awiki-me/tests/e2e/runner.dart --case personal-agent` 驱动完整 App UI，覆盖 daemon 选择、启用、CLI peer 发消息、daemon `runtime_final`、App 草稿确认、redacted action result 回传和撤销 Daemon 消息授权。
+  - 该 gate 的可执行 case 仅为 `PERSONALAGENT-E2E-001`、`PERSONALAGENT-E2E-002` 和 `PERSONALAGENT-E2E-004`，报告中的 `uiEnabled`、`runtimeFinalReceived`、`authorizationRevoked` 必须分别来自对应 case 的 passed attestation；草稿确认虽是当前流程的支持步骤，但尚未形成独立且可接受的 `PERSONALAGENT-E2E-003` attestation，因此 `003` 仍是 planned，当前也不存在 `PERSONALAGENT-E2E-005`。被选中时缺少前置条件必须 fail fast，不能用 skipped evidence 代表产品验收完成。
+
+## 产品级验收 gate
+
+App 侧直接运行：
+
+```bash
+cd awiki-me
+flutter pub run tests/e2e/runner.dart \
+  --case personal-agent \
+  --config tests/e2e/configs/e2e.local.yaml
+```
+
+`personal-agent` case 的 YAML 必须包含：
+
+- `service.messageServiceUrl`
+- `service.messageServiceWsUrl`
+- `daemon.rustRepo`
+- `daemon.binary`
+- `daemon.stateRoot`
+- `daemon.readyFile`
+- `daemon.fakeHermesGatewayCommand`
+- `personalAgent.runtimeProvider: hermes`
+- `personalAgent.realBackend: true`
+
+系统测试侧运行：
+
+```bash
+cd awiki-system-test
+AWIKI_DAEMON_RUST_REPO=../awiki-cli-rs2 \
+AWIKI_ME_REPO=../awiki-me \
+AWIKI_SYSTEM_TEST_MODE=local \
+uv run --no-sync pytest \
+  tests_v2/daemon/test_personal_agent_full_ui_real_backend_e2e.py \
+  -q -rs --tb=short
+```
+
+remote / staging 运行需要显式提供 `E2E_DID_DOMAIN`、`E2E_USER_SERVICE_URL`、
+`E2E_MESSAGE_SERVICE_URL`、`E2E_MESSAGE_SERVICE_WS_URL`。如果固定测试手机号的
+handle 配额已满，可以用 `AWIKI_PERSONAL_AGENT_E2E_APP_HANDLE`、
+`AWIKI_PERSONAL_AGENT_E2E_CLI_HANDLE`、`AWIKI_PERSONAL_AGENT_E2E_DAEMON_HANDLE`
+指定隔离 handle；remote cleanup 当前只记录资源，不能保证删除远端历史配额。
 
 ## 发布与回滚
 
 发布建议：
 
-- 当前默认构建保留 Message Agent 底层能力，但不展示 daemon 详情页入口；后续独立设置页或灰度入口开放前，无需依赖用户手工点击启用。
-- 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement 和 App outbox 回收。
-- 发布默认开启构建前确认 user-service 已部署 `/user-service/message-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
+- 当前默认构建可以展示独立 Personal Agent 设置入口，但仍应受 `AWIKI_AGENT_IM_ENABLED` 灰度开关约束；关闭时不能触发生命周期请求。
+- 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement、inactive binding fail-closed 和 App outbox 回收。
+- 发布默认开启构建前确认 user-service 已部署 `/user-service/personal-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
 - 发布默认开启构建前确认 message-service 能接受 Human DID `#daemon-key-1` 作为当前 DID Document authentication 中的 delegated client。
-- 监控 binding 创建失败、bootstrap 解密失败、daemon `mark_seen`、runtime_final outbox retry、action result 回传失败和 delegated WSS 连接失败。
+- 发布候选必须运行 full UI real backend gate。当前 gate 已不再 skip；如果失败，应按真实 blocker 处理，而不是降低断言或改回 focused probe。
+- 监控 binding 创建失败、bootstrap 解密失败、daemon `mark_seen`、Hermes session 创建失败、runtime_final outbox retry、action result 回传失败和 delegated WSS 连接失败。
 
 回滚方式：
 
 - 关闭 `AWIKI_AGENT_IM_ENABLED`，App 不再暴露新启用入口。
-- 对已启用用户调用 `disable_binding`，daemon 停止 active Message Agent 处理 loop。
+- 对已启用用户调用 `disable_binding`，daemon 停止 active Personal Agent 处理 loop。
 - 如需要强回收授权，先提交 signed DID Document update 移除 `user_did#daemon-key-1`，再调用 delegated key revoke / `revoke_binding`。
 - daemon 保留 runtime archive 能力，但删除 runtime 前必须先停用 binding。
 
 ## 当前剩余风险
 
-- 完整 App -> daemon -> user-service -> message-service -> App 的 happy path 尚需在部署了 Step 06 user-service RPC 且启动 message-service v2 的环境补跑；当前 Linux 容器只能提供 focused component / acceptance 证据。
+- 完整 App -> daemon -> user-service -> message-service -> App 的 full UI gate 当前已经启用且 fail-fast；通过报告必须包含 `PERSONALAGENT-E2E-001`、`PERSONALAGENT-E2E-002` 和 `PERSONALAGENT-E2E-004` 的逐 case passed attestation，不能根据 runner 总体成功推导 evidence。可见草稿/action 确认对应的 `PERSONALAGENT-E2E-003` 仍是 planned，当前套件没有 `PERSONALAGENT-E2E-005`。
+- local full UI gate 依赖本地 user-service / message-service / MySQL 等环境；缺少 MySQL 等基础服务时必须 fail-fast，不能用 skip 代替通过。
 - 当前 message-service 仍将 delegated WSS 视为 Human DID delegated client，协议层尚不能表达 `from: Agent DID` / `on_behalf_of: Human DID` 双 proof。
 - `runtime_final` 当前按 `hash_only` retention 展示完成/有结果状态；完整草稿内容依赖 `message.create_draft` action payload。
 - 撤销 delegated key 的强语义依赖 signed DID Document update 和 message-service DID Document cache 刷新，单纯 disable binding 不是永久撤销授权。
@@ -598,16 +681,16 @@ MVP 完成时，应能验证：
 MVP 推荐采用以下产品定义：
 
 ```text
-用户从 Message Agent 设置页启用能力；
+用户从 Personal Agent 设置页启用能力；
 用户选择一个 daemon 作为运行环境；
-daemon 创建并运行一个独立 DID 的消息处理 Agent；
+daemon 创建并运行一个独立 DID 的个人助理；
 Human App 发起创建和授权；
-user-service 记录 owner、daemon、Message Agent 和 binding；
+user-service 记录 owner、daemon、Personal Agent 和 binding；
 bootstrap / delegated key 敏感材料通过安全 envelope 或等价安全通道传递；
-message Agent 使用 Human DID delegated key 连接 message-service WSS；
-message Agent 默认处理所有可处理会话；
-message Agent 只做分析、总结、草稿和 App action 请求；
-MVP 不开放 message Agent 代发和自动回复；
+Personal Agent 使用 Human DID delegated key 连接 message-service WSS；
+Personal Agent 默认处理所有可处理会话；
+Personal Agent 只做分析、总结、草稿和 App action 请求；
+MVP 不开放 Personal Agent 代发和自动回复；
 Human 确认后的发送由 Human App 正常发送链路完成；
 创建 / 绑定成功以 IM 消息形式展示，但底层事实来自 binding handshake；
 停用或删除时，解除 binding 并停止消息处理链路。

@@ -134,8 +134,8 @@ String localizeAgentUiMessage(AppLocalizations l10n, String message) {
   return switch (message) {
     AgentUiMessageCodes.loginRequired => l10n.agentErrorLoginRequired,
     AgentUiMessageCodes.handleUnavailable => l10n.agentErrorHandleUnavailable,
-    AgentUiMessageCodes.messageAgentDisabled =>
-      l10n.agentErrorMessageAgentDisabled,
+    AgentUiMessageCodes.personalAgentDisabled =>
+      l10n.agentErrorPersonalAgentDisabled,
     AgentUiMessageCodes.tenantUnsupported => l10n.agentErrorTenantUnsupported,
     AgentUiMessageCodes.selectDaemon => l10n.agentErrorSelectDaemon,
     AgentUiMessageCodes.daemonBootstrapMissing =>
@@ -144,8 +144,8 @@ String localizeAgentUiMessage(AppLocalizations l10n, String message) {
       l10n.agentErrorDaemonUnreachableDelete,
     AgentUiMessageCodes.daemonUnreachableUpgrade =>
       l10n.agentErrorDaemonUnreachableUpgrade,
-    AgentUiMessageCodes.messageAgentMissing =>
-      l10n.agentErrorMessageAgentMissing,
+    AgentUiMessageCodes.personalAgentMissing =>
+      l10n.agentErrorPersonalAgentMissing,
     AgentUiMessageCodes.statusSyncWaiting => l10n.agentStatusSyncStillWaiting,
     AgentUiMessageCodes.upgradeCancelNoResponse =>
       l10n.agentUpgradeCancelNoResponse,

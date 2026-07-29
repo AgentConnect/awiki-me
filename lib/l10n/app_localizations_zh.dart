@@ -211,10 +211,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingNoVerificationHint => '当前服务器不需要短信或邮箱验证码，可直接创建新身份。';
 
   @override
-  String get handleAlreadyRegisteredImportCredential =>
-      '这个 handle 已经存在。当前服务器不支持无验证码恢复，请导入已有身份凭证或联系服务器管理员。';
-
-  @override
   String get registrationMethodUnavailable => '当前服务器不支持所选注册方式，请刷新后重试。';
 
   @override
@@ -681,6 +677,241 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsTitle => '设置';
 
   @override
+  String get settingsDevices => '设备';
+
+  @override
+  String get settingsDevicesSubtitle => '查看已授权设备并审批新设备';
+
+  @override
+  String get devicesTitle => '设备管理';
+
+  @override
+  String get devicesAuthorizedTitle => '已授权设备';
+
+  @override
+  String get devicesPendingTitle => '待审批';
+
+  @override
+  String get devicesEmpty => '暂无设备信息';
+
+  @override
+  String get devicesPendingEmpty => '当前没有待审批请求';
+
+  @override
+  String get deviceCurrent => '当前设备';
+
+  @override
+  String get deviceRoleMember => '普通设备';
+
+  @override
+  String get deviceRoleAdmin => '管理设备';
+
+  @override
+  String get deviceStatusActive => '有效';
+
+  @override
+  String get deviceStatusRevoked => '已撤销';
+
+  @override
+  String get deviceManagementReady => '可管理其他设备';
+
+  @override
+  String get deviceManagementPending => '等待管理能力就绪';
+
+  @override
+  String get deviceManagementAwaitingRoot => '管理设备等待根密钥';
+
+  @override
+  String get deviceManagementActionDisabled => '需要已就绪的管理设备处理';
+
+  @override
+  String get deviceRootTransferGrantManagement => '继续授予管理权限';
+
+  @override
+  String get deviceRootTransferPreparing => '正在准备安全传输…';
+
+  @override
+  String get deviceRootTransferConfirm => '确认并发送根密钥';
+
+  @override
+  String get deviceRootTransferSending => '正在发送根密钥…';
+
+  @override
+  String deviceRootTransferTarget(
+    String deviceId,
+    String signingKeyId,
+    String e2eeKeyId,
+  ) {
+    return '目标设备：$deviceId\n签名密钥：$signingKeyId\n端到端加密密钥：$e2eeKeyId';
+  }
+
+  @override
+  String get deviceRootTransferSent => '根密钥已发送';
+
+  @override
+  String get deviceRootTransferFailed => '设备已加入，新设备未获得管理权限，请稍后重试。';
+
+  @override
+  String get deviceRootTransferPresenceReason => '确认安全传输根密钥';
+
+  @override
+  String get deviceRevokeAction => '撤销';
+
+  @override
+  String get deviceRevokeSubmitting => '正在撤销设备…';
+
+  @override
+  String get deviceRevokeConfirmingAction => '再次确认';
+
+  @override
+  String get deviceRevokeSucceeded => '设备已撤销。';
+
+  @override
+  String get deviceRevokeSucceededGroupsSyncing => '设备已撤销，受影响的群正在同步安全状态。';
+
+  @override
+  String get deviceRevokeOutcomeUnknown => '撤销结果暂未确认，请刷新设备列表。';
+
+  @override
+  String get deviceRevokeRejected => '未能撤销设备，请稍后重试。';
+
+  @override
+  String get deviceRevokeConfirmTitle => '撤销此设备？';
+
+  @override
+  String deviceRevokeConfirmDetail(String deviceId) {
+    return '将永久撤销 $deviceId。该设备会失去未来访问权限，但已经取得的数据无法远程清除。此操作不可撤销。';
+  }
+
+  @override
+  String get deviceRevokeConfirmAction => '永久撤销';
+
+  @override
+  String get deviceRevokePresenceReason => '确认永久撤销设备';
+
+  @override
+  String get deviceRevokeProtectionHint => '当前设备不能撤销自身，系统始终保护最后一台可用管理设备。';
+
+  @override
+  String get deviceRevokeProtected =>
+      '该设备受保护，或当前设备尚未具备管理能力。当前设备和最后一台可用管理设备不能撤销。';
+
+  @override
+  String get deviceReviewAction => '查看并验证';
+
+  @override
+  String get deviceJoinEntry => '将此设备加入已有账户';
+
+  @override
+  String get deviceJoinEntrySubtitle => '需要已有管理设备确认两端的 6 位验证码';
+
+  @override
+  String get deviceJoinTitle => '添加新设备';
+
+  @override
+  String get deviceJoinHandle => '已有 Handle';
+
+  @override
+  String get deviceJoinPhone => '已绑定手机号';
+
+  @override
+  String get deviceJoinOtp => '短信验证码';
+
+  @override
+  String get deviceJoinSendOtp => '发送验证码';
+
+  @override
+  String get deviceJoinStart => '开始关联';
+
+  @override
+  String get deviceJoinWaiting => '等待管理设备响应';
+
+  @override
+  String get deviceJoinRefresh => '刷新状态';
+
+  @override
+  String get deviceJoinSasTitle => '6 位验证码';
+
+  @override
+  String get deviceJoinSasHint => '请确认两台设备独立显示的数字完全一致。验证码不会通过服务器传输。';
+
+  @override
+  String get deviceJoinApprovalTitle => '确认新设备';
+
+  @override
+  String get deviceJoinSasMatches => '我已确认两台设备的 6 位验证码一致';
+
+  @override
+  String get deviceJoinRequestReady => '可以开始验证';
+
+  @override
+  String get deviceJoinStartVerification => '开始验证';
+
+  @override
+  String get deviceJoinClaimedByOther => '另一台管理设备正在处理此请求';
+
+  @override
+  String get deviceJoinReject => '拒绝请求';
+
+  @override
+  String get deviceJoinRejected => '设备请求已拒绝';
+
+  @override
+  String get deviceJoinSasMismatch => '验证码不一致';
+
+  @override
+  String deviceJoinFingerprint(String fingerprint) {
+    return '密钥指纹：$fingerprint';
+  }
+
+  @override
+  String deviceJoinRequestWindow(String issuedAt, String expiresAt) {
+    return '发起时间：$issuedAt；过期时间：$expiresAt';
+  }
+
+  @override
+  String get deviceJoinApprove => '确认并授权';
+
+  @override
+  String get deviceJoinCancel => '取消关联';
+
+  @override
+  String get deviceJoinAuthorized => '设备已加入';
+
+  @override
+  String get deviceJoinCancelled => '设备关联已取消';
+
+  @override
+  String get deviceJoinExpired => '设备关联已过期，请重新发起';
+
+  @override
+  String get deviceJoinActivating => '正在激活此设备…';
+
+  @override
+  String get deviceJoinActivationRetry => '重试设备激活';
+
+  @override
+  String get deviceJoinUserPresenceReason => '确认授权新设备';
+
+  @override
+  String get deviceJoinErrorUnavailable => '多设备功能当前未开放';
+
+  @override
+  String get deviceJoinErrorConflict => '状态已发生变化，请刷新后重试';
+
+  @override
+  String get deviceJoinErrorSas => '验证码状态不一致，已停止授权';
+
+  @override
+  String get deviceJoinErrorPresence => '未完成系统身份确认，设备未获授权';
+
+  @override
+  String get deviceJoinErrorNetwork => '网络连接失败，请稍后重试';
+
+  @override
+  String get deviceJoinErrorFailed => '设备操作失败，请刷新后重试';
+
+  @override
   String get settingsLanguage => '语言';
 
   @override
@@ -1016,6 +1247,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get groupRecoveryRetry => '重试群身份恢复';
+
+  @override
+  String get groupEncryptionPreparingTitle => '正在同步群加密';
+
+  @override
+  String get groupEncryptionPreparingDetail => '此群正在同步安全状态，完成前暂停发送。';
+
+  @override
+  String get groupEncryptionNeedsRetryTitle => '群加密需要重试';
+
+  @override
+  String get groupEncryptionNeedsRetryDetail => '请在持有当前群安全状态的管理设备上重试修复。';
+
+  @override
+  String get groupEncryptionReadyTitle => '群加密已就绪';
+
+  @override
+  String get groupEncryptionReadyDetail => '此设备已具备本群的独立加密状态，可以安全收发新消息。';
+
+  @override
+  String get groupEncryptionUnavailableTitle => '群加密暂不可用';
+
+  @override
+  String get groupEncryptionUnavailableDetail => '当前环境尚未提供此设备所需的群加密能力。';
+
+  @override
+  String get groupEncryptionRetry => '重试';
 
   @override
   String get groupFieldName => '名称';
@@ -1551,6 +1809,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentCopyInstallCommand => '复制安装命令';
 
   @override
+  String get agentSkillCreateInstruction => '生成 Skill Agent 安装指令';
+
+  @override
+  String get agentSkillInstallTitle => '连接 Skill Agent';
+
+  @override
+  String get agentSkillControllerHandle => '你的 Handle';
+
+  @override
+  String get agentSkillAgentHandle => 'Agent Handle';
+
+  @override
+  String get agentSkillCopyInstruction => '复制安装指令';
+
+  @override
+  String get agentSkillRegenerate => '重新生成安装指令';
+
+  @override
+  String get agentSkillSecretNotice => '有效期 30 分钟。复制内容包含一次性密钥，只发送给你要连接的 Agent。';
+
+  @override
+  String get agentSkillExpired => '这条安装指令已过期或已清除，请重新生成。';
+
+  @override
   String get agentCleanupHostTitle => '清理宿主机';
 
   @override
@@ -1735,7 +2017,17 @@ class AppLocalizationsZh extends AppLocalizations {
       '当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。';
 
   @override
-  String get agentErrorMessageAgentDisabled => '消息处理 Agent 功能未开启。';
+  String get agentSkillUnsupportedTenant =>
+      'Skill Agent onboarding 当前仅支持 awiki.info。';
+
+  @override
+  String get agentSkillInvalidResponse => '服务端返回的注册范围与当前账号不一致。';
+
+  @override
+  String get agentSkillRequestFailed => '暂时无法生成 Skill Agent 安装指令，请重试。';
+
+  @override
+  String get agentErrorPersonalAgentDisabled => '个人助理功能未开启。';
 
   @override
   String get agentTenantUnsupportedTitle => '当前租户暂不支持智能体';
@@ -1762,7 +2054,7 @@ class AppLocalizationsZh extends AppLocalizations {
       'Daemon 当前不可达，暂时不能升级。请先刷新状态或重新安装。';
 
   @override
-  String get agentErrorMessageAgentMissing => '当前 Daemon 尚未创建消息处理 Agent。';
+  String get agentErrorPersonalAgentMissing => '当前 Daemon 尚未创建个人助理。';
 
   @override
   String get agentStatusSyncStillWaiting => '状态同步仍在等待，请稍后刷新查看。';
@@ -1931,146 +2223,271 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentDiagnosticActiveSessionCount => '活跃会话';
 
   @override
-  String get messageAgentSkipped => '消息 Agent 跳过此消息';
+  String get personalAgentSkipped => '个人助理跳过此消息';
 
   @override
-  String get messageAgentFailed => '消息 Agent 处理失败';
+  String get personalAgentFailed => '个人助理处理失败';
 
   @override
-  String get messageAgentCompleted => '消息 Agent 已完成处理';
+  String get personalAgentCompleted => '个人助理已完成处理';
 
   @override
-  String get messageAgentProcessing => '消息 Agent 正在处理';
+  String get personalAgentProcessing => '个人助理正在处理';
 
   @override
-  String get messageAgentReceived => '消息 Agent 已收到消息';
+  String get personalAgentReceived => '个人助理已收到消息';
 
   @override
-  String get messageAgentResultGenerated => '已生成处理结果';
+  String get personalAgentResultGenerated => '已生成处理结果';
 
   @override
-  String get messageAgentDraftApplied => '草稿已放入输入框';
+  String get personalAgentDraftApplied => '草稿已放入输入框';
 
   @override
-  String get messageAgentAppActionCompleted => 'App action 已完成';
+  String get personalAgentAppActionCompleted => 'App action 已完成';
 
   @override
-  String get messageAgentRequestRejected => '已拒绝消息 Agent 请求';
+  String get personalAgentRequestRejected => '已拒绝个人助理请求';
 
   @override
-  String get messageAgentAppActionFailed => 'App action 处理失败';
+  String get personalAgentAppActionFailed => 'App action 处理失败';
 
   @override
-  String get messageAgentWaitingConfirmation => '等待确认';
+  String get personalAgentWaitingConfirmation => '等待确认';
 
   @override
-  String get messageAgentUseDraft => '使用草稿';
+  String get personalAgentUseDraft => '使用草稿';
 
   @override
-  String get messageAgentActionCreateDraft => '消息 Agent 生成了草稿';
+  String get personalAgentActionCreateDraft => '个人助理生成了草稿';
 
   @override
-  String get messageAgentActionSummarize => '消息 Agent 生成了摘要';
+  String get personalAgentActionSummarize => '个人助理生成了摘要';
 
   @override
-  String get messageAgentActionReadContact => '消息 Agent 请求读取联系人';
+  String get personalAgentActionReadContact => '个人助理请求读取联系人';
 
   @override
-  String get messageAgentActionUpdateDisplayName => '消息 Agent 请求修改联系人名称';
+  String get personalAgentActionUpdateDisplayName => '个人助理请求修改联系人名称';
 
   @override
-  String get messageAgentActionUpdateNote => '消息 Agent 请求修改联系人备注';
+  String get personalAgentActionUpdateNote => '个人助理请求修改联系人备注';
 
   @override
-  String get messageAgentActionGeneric => '消息 Agent 请求 App action';
+  String get personalAgentActionGeneric => '个人助理请求 App action';
 
   @override
-  String get messageAgentTitle => '消息处理 Agent';
+  String get personalAgentTitle => '个人助理';
 
   @override
-  String messageAgentRuntimeSubtitle(Object provider) {
+  String personalAgentRuntimeSubtitle(Object provider) {
     return '运行 Daemon 内创建 $provider runtime';
   }
 
   @override
-  String get messageAgentExperimentDisabled => '实验功能关闭';
+  String get personalAgentExperimentDisabled => '实验功能关闭';
 
   @override
-  String get messageAgentReadyToEnable => '可启用';
+  String get personalAgentReadyToEnable => '可启用';
 
   @override
-  String get messageAgentNotReady => '未就绪';
+  String get personalAgentNotReady => '未就绪';
 
   @override
-  String get messageAgentRunningDaemon => '运行 Daemon';
+  String get personalAgentRunningDaemon => '运行 Daemon';
 
   @override
-  String get messageAgentEngine => '引擎';
+  String get personalAgentEngine => '引擎';
 
   @override
-  String get messageAgentScope => '处理范围';
+  String get personalAgentScope => '处理范围';
 
   @override
-  String get messageAgentAllProcessableConversations => '所有可处理会话';
+  String get personalAgentAllProcessableConversations => '所有可处理会话';
 
   @override
-  String get messageAgentDaemonVersion => 'Daemon 版本';
+  String get personalAgentDaemonVersion => 'Daemon 版本';
 
   @override
-  String get messageAgentCapabilities => '可用能力';
+  String get personalAgentCapabilities => '可用能力';
 
   @override
-  String get messageAgentSecureBootstrap => '安全 bootstrap';
+  String get personalAgentSecureBootstrap => '安全 bootstrap';
 
   @override
-  String get messageAgentPublicKeyReported => '已上报公钥';
+  String get personalAgentPublicKeyReported => '已上报公钥';
 
   @override
-  String get messageAgentWaitingStatusRefresh => '等待刷新状态';
+  String get personalAgentWaitingStatusRefresh => '等待刷新状态';
 
   @override
-  String get messageAgentEnable => '启用消息处理 Agent';
+  String get personalAgentEnable => '启用个人助理';
 
   @override
-  String get messageAgentEnabling => '启用中';
+  String get personalAgentEnabling => '启用中';
 
   @override
-  String get messageAgentPause => '暂停处理消息';
+  String get personalAgentPause => '暂停处理消息';
 
   @override
-  String get messageAgentDelete => '删除消息处理 Agent';
+  String get personalAgentDelete => '删除个人助理';
 
   @override
-  String get messageAgentRevokeAuthorization => '撤销 Daemon 消息授权';
+  String get personalAgentRevokeAuthorization => '撤销 Daemon 消息授权';
 
   @override
-  String get messageAgentPermissionSummaryEnabled =>
-      '权限摘要：读取普通消息，分析、总结、生成草稿，并向 App 请求需要确认的 action。';
+  String get personalAgentPermissionSummaryEnabled =>
+      '权限摘要：读取普通消息，分析、总结并生成草稿；不会自动发送消息，也不处理 E2EE 明文。';
 
   @override
-  String get messageAgentPermissionSummaryDisabled =>
-      '切换到已批准 AWiki 域名的租户后可配置消息处理 Agent。';
+  String get personalAgentPermissionSummaryDisabled =>
+      '切换到已批准 AWiki 域名的租户后可配置个人助理。';
 
   @override
-  String get messageAgentPauseTitle => '暂停处理消息';
+  String get personalAgentPauseTitle => '暂停处理消息';
 
   @override
-  String get messageAgentPauseMessage =>
-      '暂停后，消息处理 Agent 不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。';
+  String get personalAgentPauseMessage =>
+      '暂停后，个人助理不再读取和处理新消息；runtime 和授权仍会保留，可以重新启用。';
 
   @override
-  String get messageAgentDeleteTitle => '删除消息处理 Agent';
+  String get personalAgentDeleteTitle => '删除个人助理';
 
   @override
-  String get messageAgentDeleteMessage =>
+  String get personalAgentDeleteMessage =>
       '删除前会先暂停消息处理，然后归档对应 runtime。Daemon 和授权不会被删除。';
 
   @override
-  String get messageAgentRevokeTitle => '撤销 Daemon 消息授权';
+  String get personalAgentRevokeTitle => '撤销 Daemon 消息授权';
 
   @override
-  String get messageAgentRevokeMessage =>
+  String get personalAgentRevokeMessage =>
       '撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。';
+
+  @override
+  String get personalAgentSettingsSubtitle => '配置个人助理的启用、暂停和 Daemon 消息授权。';
+
+  @override
+  String get personalAgentSettingsDisabledSubtitle =>
+      '个人助理已关闭，不会发送 bootstrap 或授权请求。';
+
+  @override
+  String get personalAgentNoDaemonSelected => '未选择运行 Daemon';
+
+  @override
+  String personalAgentSelectedDaemon(Object name) {
+    return '当前运行 Daemon：$name';
+  }
+
+  @override
+  String get personalAgentDescription =>
+      '读取普通 direct text，为你整理并生成草稿；发送前必须由你确认。';
+
+  @override
+  String get personalAgentDisabledDescription =>
+      '实验功能未开启，当前不会发送 bootstrap 或授权请求。';
+
+  @override
+  String get personalAgentDaemonStatus => 'Daemon 状态';
+
+  @override
+  String get personalAgentAuthorizationStatus => '授权状态';
+
+  @override
+  String get personalAgentDirectTextScope => '普通 direct text';
+
+  @override
+  String get personalAgentNotSelected => '未选择';
+
+  @override
+  String get personalAgentNoDaemon => '无可用 Daemon';
+
+  @override
+  String get personalAgentNotBound => '尚未绑定';
+
+  @override
+  String personalAgentBound(Object name) {
+    return '已绑定 $name';
+  }
+
+  @override
+  String get personalAgentRefreshDaemonStatus => '刷新 Daemon 状态';
+
+  @override
+  String get personalAgentSelectDaemon => '选择运行 Daemon';
+
+  @override
+  String get personalAgentRunsOnSelectedDaemon => '个人助理会运行在你选择的 Daemon 内。';
+
+  @override
+  String get personalAgentNoDaemons => '暂无可用 Daemon，请先在智能体页创建或安装 Daemon。';
+
+  @override
+  String personalAgentSelectDaemonSemantic(Object name) {
+    return '选择 $name';
+  }
+
+  @override
+  String get personalAgentReadyWithPublicKey => 'Ready · 已上报公钥';
+
+  @override
+  String get personalAgentReadyWaitingPublicKey => 'Ready · 等待 bootstrap 公钥';
+
+  @override
+  String personalAgentDaemonNeedsAttention(Object status) {
+    return '$status · 需刷新或检查 Daemon';
+  }
+
+  @override
+  String get personalAgentFeatureDisabledNotice =>
+      'AWIKI_AGENT_IM_ENABLED=false，入口只显示状态，不会发送 bootstrap、binding 或身份授权请求。';
+
+  @override
+  String get personalAgentNoDaemonNotice => '没有可用 Daemon。请先安装并启动 Daemon。';
+
+  @override
+  String get personalAgentDaemonNotReadyNotice =>
+      '当前 Daemon 未 ready，请刷新状态或检查 Daemon 运行情况。';
+
+  @override
+  String get personalAgentBootstrapKeyMissingNotice =>
+      '运行 Daemon 尚未上报安全 bootstrap 公钥，请先刷新 Daemon 状态。';
+
+  @override
+  String get personalAgentCanEnableNotice => '可以启用个人助理。';
+
+  @override
+  String get personalAgentSafetyTitle => '安全边界';
+
+  @override
+  String get personalAgentSafetyPlainText =>
+      '只读取可处理的普通 direct text；不处理 E2EE 明文（Direct / Group）。';
+
+  @override
+  String get personalAgentSafetyDraftOnly => '只生成草稿和需要确认的 action；不会自动发送消息。';
+
+  @override
+  String get personalAgentSafetyNoPrimaryKey =>
+      'runtime 不持有 DID 主私钥，不直连 message-service。';
+
+  @override
+  String get personalAgentSafetyFeatureDisabled =>
+      '实验功能关闭时不会触发授权、bootstrap 或 delegated key 操作。';
+
+  @override
+  String get personalAgentBusy => '处理中';
+
+  @override
+  String get personalAgentDaemonNotReady => 'Daemon 未就绪';
+
+  @override
+  String get personalAgentEnabledState => '已启用';
+
+  @override
+  String get personalAgentCreated => '已创建个人助理';
+
+  @override
+  String get personalAgentConfigure => '配置个人助理';
 
   @override
   String get agentInboxTitle => 'Agent 收件箱';
@@ -2221,10 +2638,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activationEmailSent => '激活邮件已发送，请查收邮箱。';
-
-  @override
-  String get emailLoginUnsupportedForRegisteredHandle =>
-      '该 handle 已注册。邮箱当前仅支持新注册，请使用手机号验证码登录或导入身份凭证。';
 
   @override
   String get emailNotActivatedClickLink => '邮箱尚未激活，请先点击邮件中的激活链接。';
@@ -2383,4 +2796,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatGroupProfileUpdated => '群信息已更新';
+
+  @override
+  String get handleRecoveryUnavailable => '当前版本不支持 Handle 恢复，未对身份做任何更改。';
+
+  @override
+  String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
 }

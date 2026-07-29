@@ -1,7 +1,5 @@
 import '../entities/session_identity.dart';
 
-enum HandleRegistrationStatus { registered, notRegistered }
-
 class HandleAvailability {
   const HandleAvailability({
     required this.handle,
@@ -53,10 +51,6 @@ abstract class AwikiAccountGateway {
     required String handle,
   });
 
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  });
-
   Future<SessionIdentity> registerHandle({
     required String phone,
     required String otp,
@@ -72,11 +66,5 @@ abstract class AwikiAccountGateway {
     String? inviteCode,
     String? nickName,
     String? profileMarkdown,
-  });
-
-  Future<SessionIdentity> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
   });
 }

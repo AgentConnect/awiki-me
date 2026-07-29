@@ -13,6 +13,7 @@ import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
+import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
@@ -21,9 +22,9 @@ import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
-import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/notification_target.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
@@ -39,6 +40,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_navigation_provider.dart';
+import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter/widgets.dart';
@@ -46,6 +48,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'devices/device_test_support.dart';
 
 void main() {
   group('Notification facade lifecycle', () {
@@ -98,6 +101,7 @@ void main() {
     late FakeNotificationFacade notificationFacade;
     late FakeMessageSyncService messageSyncService;
     late _FakeDesktopShellService desktopShell;
+    late FakeDeviceManagementCore deviceCore;
     late ProviderContainer container;
 
     setUp(() {
@@ -106,6 +110,21 @@ void main() {
       notificationFacade = FakeNotificationFacade();
       messageSyncService = FakeMessageSyncService();
       desktopShell = _FakeDesktopShellService();
+      deviceCore = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: 'did:test:me',
+          devices: <DeviceSummary>[
+            DeviceSummary(
+              protocolDeviceId: 'admin-current',
+              signingKeyId: 'did:test:me#admin-sign',
+              e2eeKeyId: 'did:test:me#admin-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+          ],
+        );
       gateway.myProfile = const UserProfile(
         did: 'did:test:me',
         nickName: 'Me',
@@ -127,6 +146,7 @@ void main() {
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           desktopShellServiceProvider.overrideWithValue(desktopShell),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
         ],
@@ -784,6 +804,104 @@ void main() {
       expect(container.read(appRuntimeProvider).isBusy, isFalse);
     });
 
+    test('系统通知变化独立刷新可信 Join 收件箱，不依赖消息同步成功', () async {
+      await activate();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      final joinRequestCallsBeforeEvent = deviceCore.joinRequestCalls;
+      deviceCore.joinRequests = <DeviceJoinRequestNotice>[
+        DeviceJoinRequestNotice(
+          eventId: 'event-join-1',
+          joinSessionId: 'join-1',
+          did: 'did:test:me',
+          protocolDeviceId: 'device-new',
+          candidateKeyFingerprint: 'sha256:abc123',
+          issuedAt: DateTime.utc(2026, 7, 26, 10),
+          expiresAt: DateTime.utc(2030),
+          state: DeviceJoinRemoteState.pending,
+          claimedByCurrentDevice: false,
+          canStartVerification: true,
+        ),
+      ];
+      messageSyncService.nextDeltaError = StateError('sync unavailable');
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        ownerDid: 'did:test:me',
+        systemNotificationChanged: true,
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{
+        'type': 'system_notification_changed',
+      });
+      await pumpEventQueue();
+
+      expect(
+        messageSyncService.syncReasons,
+        contains('system_notification_changed'),
+      );
+      expect(
+        deviceCore.joinRequestCalls,
+        greaterThan(joinRequestCallsBeforeEvent),
+      );
+      expect(
+        container
+            .read(devicesProvider)
+            .visibleJoinRequests
+            .map((request) => request.joinSessionId),
+        contains('join-1'),
+      );
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+      expect(container.read(conversationListProvider).conversations, isEmpty);
+    });
+
+    test('已授权成员设备按精确 DID 单飞激活一次', () async {
+      const joinedDid = 'did:test:joined-member';
+      gateway.loginResult = const SessionIdentity(
+        did: joinedDid,
+        credentialName: 'joined-local',
+        displayName: 'Joined',
+        handle: 'joined',
+      );
+      final runtime = container.read(appRuntimeProvider.notifier);
+
+      await Future.wait(<Future<void>>[
+        runtime.activateJoinedMember(joinedDid),
+        runtime.activateJoinedMember(joinedDid),
+      ]);
+
+      expect(gateway.loginCalls, 1);
+      expect(gateway.lastLoginCredentialName, joinedDid);
+      expect(container.read(sessionProvider).session?.did, joinedDid);
+      expect(container.read(appRuntimeProvider).activatedDid, joinedDid);
+    });
+
+    test('成员设备激活遇到错误 DID 时失败关闭并登出', () async {
+      gateway.loginResult = const SessionIdentity(
+        did: 'did:test:wrong',
+        credentialName: 'wrong-local',
+        displayName: 'Wrong',
+        handle: 'wrong',
+      );
+
+      await expectLater(
+        container
+            .read(appRuntimeProvider.notifier)
+            .activateJoinedMember('did:test:expected'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            'joined_identity_did_mismatch',
+          ),
+        ),
+      );
+
+      expect(gateway.loginCalls, 1);
+      expect(gateway.logoutCalls, 1);
+      expect(container.read(sessionProvider).session, isNull);
+    });
+
     test('恢复前台时调度 app_resumed 可靠同步', () async {
       await activate();
       messageSyncService.syncReasons.clear();
@@ -797,6 +915,58 @@ void main() {
       await pumpEventQueue();
 
       expect(messageSyncService.syncReasons, contains('app_resumed'));
+    });
+
+    test('前台周期对账弥补丢失的实时提示并在后台停止', () async {
+      final periodicSync = FakeMessageSyncService();
+      final periodicContainer = ProviderContainer(
+        overrides: <Override>[
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: periodicSync,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+          appRuntimeProvider.overrideWith(
+            (ref) => AppRuntimeController(
+              ref,
+              foregroundCatchUpInterval: const Duration(milliseconds: 10),
+            ),
+          ),
+        ],
+      );
+      addTearDown(periodicContainer.dispose);
+
+      await _activateRuntimeSession(
+        periodicContainer,
+        const SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+          jwtToken: 'token',
+        ),
+      );
+      await pumpEventQueue();
+      periodicSync.syncReasons.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+
+      expect(periodicSync.syncReasons, contains('foreground_catch_up'));
+
+      periodicContainer
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      await pumpEventQueue();
+      periodicSync.syncReasons.clear();
+      await Future<void>.delayed(const Duration(milliseconds: 35));
+
+      expect(periodicSync.syncReasons, isEmpty);
     });
 
     test('恢复前台时不强制刷新已加载的智能体列表', () async {
@@ -1019,6 +1189,23 @@ void main() {
       await pumpEventQueue();
 
       expect(messageSyncService.syncReasons, contains('realtime_gap'));
+      expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+    });
+
+    test('realtime sync-only hint 调度 delta，不直接构造消息', () async {
+      await activate();
+      messageSyncService.syncReasons.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        ownerDid: 'did:test:me',
+        syncDirty: true,
+        syncEventSeq: '43',
+        syncEventType: 'message.created',
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, contains('realtime_dirty'));
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
     });
 
@@ -1274,15 +1461,7 @@ void main() {
       expect(conversations, hasLength(1));
       expect(conversations.single.unreadCount, 1);
       expect(conversations.single.lastMessagePreview, 'new identity unread');
-      expect(messageSyncService.conversationAfterRequests, hasLength(1));
-      expect(
-        messageSyncService
-            .conversationAfterRequests
-            .single
-            .conversation
-            .conversationId,
-        conversations.single.conversationId,
-      );
+      expect(messageSyncService.conversationAfterRequests, isEmpty);
     });
 
     test('realtime recovery is isolated by session epoch', () async {
@@ -2223,12 +2402,22 @@ void main() {
       expect(notificationFacade.lastInAppTitle, 'Hermes');
     });
 
-    test('实时控制状态只更新智能体状态', () async {
+    test('实时控制状态只调度可靠同步，不直接更新智能体投影', () async {
       container
           .read(appLifecycleProvider.notifier)
           .setLifecycle(AppLifecycleState.resumed);
       await activate();
       await Future<void>.delayed(Duration.zero);
+      messageSyncService.syncReasons.clear();
+      final agentsBeforeHint = container
+          .read(agentsProvider)
+          .agents
+          .map(
+            (agent) =>
+                '${agent.agentDid}|${agent.latest.status}|'
+                '${agent.latest.version ?? ''}',
+          )
+          .toList(growable: false);
 
       gateway.nextRealtimeUpdate = const RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2254,16 +2443,22 @@ void main() {
       );
       await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
 
-      final agents = container.read(agentsProvider).agents;
-      final daemon = agents.singleWhere((agent) => agent.isDaemon);
-      final runtime = agents.singleWhere((agent) => agent.isRuntime);
-      expect(daemon.agentDid, 'did:agent:daemon');
-      expect(daemon.latest.status, 'ready');
-      expect(daemon.latest.version, '0.2.0');
-      expect(runtime.agentDid, 'did:agent:runtime');
-      expect(runtime.kind, AgentKind.runtime);
-      expect(runtime.daemonAgentDid, 'did:agent:daemon');
-      expect(runtime.latest.status, 'needs_config');
+      expect(
+        container
+            .read(agentsProvider)
+            .agents
+            .map(
+              (agent) =>
+                  '${agent.agentDid}|${agent.latest.status}|'
+                  '${agent.latest.version ?? ''}',
+            )
+            .toList(growable: false),
+        agentsBeforeHint,
+      );
+      expect(
+        messageSyncService.syncReasons,
+        contains('realtime_agent_control'),
+      );
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(
         container.read(chatThreadProvider('did:agent:daemon')).messages,
@@ -2316,7 +2511,7 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('实时 Message Agent 控制 payload 回收到 chat provider', () async {
+    test('实时 Personal Agent 控制 payload 回收到 chat provider', () async {
       final conversation = ConversationSummary(
         threadId: 'direct:did:human:bob',
         conversationId: 'direct:did:human:bob',
@@ -2361,7 +2556,7 @@ void main() {
               'daemon_agent_did': 'did:agent:daemon',
               'runtime': 'hermes',
               'status': 'ready',
-              'display_name': 'Hermes Message Agent',
+              'display_name': 'Hermes Personal Agent',
             },
           ],
         },
@@ -2714,21 +2909,35 @@ class _EpochProfileService implements ProfileApplicationService {
 class _EpochGroupService extends FakeGroupApplicationService {
   _EpochGroupService() : super(FakeAwikiGateway());
 
-  final Completer<List<GroupSummary>> _first = Completer<List<GroupSummary>>();
+  final Completer<GroupCollectionPage<GroupSummary>> _first =
+      Completer<GroupCollectionPage<GroupSummary>>();
   int loadCalls = 0;
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) {
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) {
     loadCalls += 1;
     if (loadCalls == 1) {
       return _first.future;
     }
-    return Future<List<GroupSummary>>.value(<GroupSummary>[_group('second')]);
+    return Future<GroupCollectionPage<GroupSummary>>.value(
+      GroupCollectionPage<GroupSummary>(
+        items: <GroupSummary>[_group('second')],
+        hasMore: false,
+      ),
+    );
   }
 
   void completeFirst() {
     if (!_first.isCompleted) {
-      _first.complete(<GroupSummary>[_group('first')]);
+      _first.complete(
+        GroupCollectionPage<GroupSummary>(
+          items: <GroupSummary>[_group('first')],
+          hasMore: false,
+        ),
+      );
     }
   }
 
@@ -2817,7 +3026,7 @@ class _IdentitySwitchUnreadMessageSyncService extends FakeMessageSyncService {
           threadId: _conversationId,
           conversationId: _conversationId,
           displayName: 'First identity',
-          lastMessagePreview: 'previous preview',
+          lastMessagePreview: 'new identity unread',
           lastMessageAt: DateTime.utc(2026, 7, 26),
           unreadCount: 1,
           isGroup: false,
@@ -2830,40 +3039,6 @@ class _IdentitySwitchUnreadMessageSyncService extends FakeMessageSyncService {
       pagesFetched: 1,
       hasMore: false,
       snapshotRequired: false,
-      hydrationRequiredConversationIds: _calls == 2
-          ? const <String>[_conversationId]
-          : const <String>[],
-    );
-  }
-
-  @override
-  Future<MessageSyncThreadAfterResult> syncConversationAfter({
-    required AppConversationReadRef conversation,
-    String? afterServerSeq,
-    int limit = 100,
-  }) async {
-    conversationAfterRequests.add(
-      FakeConversationAfterRequest(
-        conversation: conversation,
-        afterServerSeq: afterServerSeq,
-        limit: limit,
-      ),
-    );
-    gateway.conversations = <ConversationSummary>[
-      ConversationSummary(
-        threadId: _conversationId,
-        conversationId: _conversationId,
-        displayName: 'First identity',
-        lastMessagePreview: 'new identity unread',
-        lastMessageAt: DateTime.utc(2026, 7, 26),
-        unreadCount: 1,
-        isGroup: false,
-        targetDid: 'did:test:first',
-      ),
-    ];
-    return const MessageSyncThreadAfterResult(
-      messages: <ChatMessage>[],
-      hasMore: false,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -91,12 +92,18 @@ class _DelayedRefreshGroupService extends FakeGroupApplicationService {
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   }) {
     listMembersCalls += 1;
-    return Future<List<GroupMemberSummary>>.value(const <GroupMemberSummary>[]);
+    return Future<GroupCollectionPage<GroupMemberSummary>>.value(
+      const GroupCollectionPage<GroupMemberSummary>(
+        items: <GroupMemberSummary>[],
+        hasMore: false,
+      ),
+    );
   }
 }
 
@@ -129,12 +136,18 @@ class _DelayedMemberMutationGroupService extends FakeGroupApplicationService {
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   }) {
     listMembersCalls += 1;
-    return Future<List<GroupMemberSummary>>.value(const <GroupMemberSummary>[]);
+    return Future<GroupCollectionPage<GroupMemberSummary>>.value(
+      const GroupCollectionPage<GroupMemberSummary>(
+        items: <GroupMemberSummary>[],
+        hasMore: false,
+      ),
+    );
   }
 }
 
@@ -145,13 +158,19 @@ class _QueuedGroupMemberService extends FakeGroupApplicationService {
   int listMembersCalls = 0;
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
-  }) {
+    String? cursor,
+  }) async {
     final result = results[listMembersCalls];
     listMembersCalls += 1;
-    return result.future;
+    return GroupCollectionPage<GroupMemberSummary>(
+      items: await result.future,
+      hasMore: false,
+      pageGroupDid: groupDid,
+      groupStateVersion: '1',
+    );
   }
 }
 

@@ -16,6 +16,31 @@ abstract interface class AgentControlStatusStore {
   });
 }
 
+final class AgentControlEvent {
+  const AgentControlEvent({
+    required this.messageId,
+    required this.daemonAgentDid,
+    required this.payload,
+    required this.isReplay,
+  });
+
+  final String messageId;
+  final String daemonAgentDid;
+  final Map<String, Object?> payload;
+  final bool isReplay;
+
+  String get deduplicationKey {
+    final eventId = payload['event_id']?.toString().trim();
+    return eventId == null || eventId.isEmpty ? messageId : eventId;
+  }
+}
+
+abstract interface class AgentControlEventStore {
+  Stream<AgentControlEvent> watchDaemonControlEvents({
+    required String daemonAgentDid,
+  });
+}
+
 class NoopAgentControlStatusStore implements AgentControlStatusStore {
   const NoopAgentControlStatusStore();
 

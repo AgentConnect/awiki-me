@@ -1,3 +1,7 @@
+// [INPUT]: Tenant scope, environment gates, platform secret storage, and native IM Core.
+// [OUTPUT]: Fully composed AWiki Me adapters/services for one immutable storage scope.
+// [POS]: Production composition root; device secrets remain owned by Vault-backed IM Core.
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -18,8 +22,11 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/device_management_core_port.dart';
+import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
-import '../application/ports/message_agent_binding_port.dart';
+import '../application/ports/personal_agent_binding_port.dart';
+import '../application/ports/root_key_transfer_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
@@ -28,19 +35,22 @@ import '../data/compat/compat_awiki_account_gateway.dart';
 import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
-import '../data/agent/user_service_message_agent_binding_adapter.dart';
+import '../data/agent/user_service_personal_agent_binding_adapter.dart';
 import '../data/im_core/awiki_im_core_auth_adapter.dart';
 import '../data/im_core/awiki_im_core_agent_control_status_store.dart';
 import '../data/im_core/awiki_im_core_config.dart';
 import '../data/im_core/awiki_im_core_conversation_adapter.dart';
 import '../data/im_core/awiki_im_core_directory_adapter.dart';
+import '../data/im_core/awiki_im_core_device_management_adapter.dart';
 import '../data/im_core/awiki_im_core_group_adapter.dart';
+import '../data/im_core/awiki_im_core_group_encryption_adapter.dart';
 import '../data/im_core/awiki_im_core_identity_adapter.dart';
 import '../data/im_core/awiki_im_core_message_adapter.dart';
 import '../data/im_core/awiki_im_core_message_sync_adapter.dart';
 import '../data/im_core/awiki_im_core_paths.dart';
 import '../data/im_core/awiki_im_core_profile_adapter.dart';
 import '../data/im_core/awiki_im_core_realtime_adapter.dart';
+import '../data/im_core/awiki_im_core_root_key_transfer_adapter.dart';
 import '../data/im_core/awiki_im_core_relationship_adapter.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
@@ -87,13 +97,16 @@ class AppBootstrap {
     this.desktopShellService = const NoopDesktopShellService(),
     this.appSessionService,
     this.identityCorePort,
+    this.deviceManagementCorePort,
+    this.rootKeyTransferPort,
+    this.groupEncryptionCorePort,
     this.onboardingService,
     this.onboardingSupportService,
     this.messagingService,
     this.messageSyncService,
     this.conversationService,
     this.agentInventoryPort,
-    this.messageAgentBindingPort,
+    this.personalAgentBindingPort,
     this.agentControlService,
     this.agentControlStatusStore,
     this.groupApplicationService,
@@ -119,13 +132,16 @@ class AppBootstrap {
   final DesktopShellService desktopShellService;
   final AppSessionService? appSessionService;
   final IdentityCorePort? identityCorePort;
+  final DeviceManagementCorePort? deviceManagementCorePort;
+  final RootKeyTransferPort? rootKeyTransferPort;
+  final GroupEncryptionCorePort? groupEncryptionCorePort;
   final OnboardingService? onboardingService;
   final OnboardingSupportService? onboardingSupportService;
   final MessagingService? messagingService;
   final MessageSyncService? messageSyncService;
   final ConversationService? conversationService;
   final AgentInventoryPort? agentInventoryPort;
-  final MessageAgentBindingPort? messageAgentBindingPort;
+  final PersonalAgentBindingPort? personalAgentBindingPort;
   final AgentControlService? agentControlService;
   final AgentControlStatusStore? agentControlStatusStore;
   final GroupApplicationService? groupApplicationService;
@@ -201,6 +217,12 @@ class AppBootstrap {
       vaultSecretProvider: ScopeAwikiImCoreVaultSecretProvider(
         repository: scopeSecretRepository,
       ),
+      multiDeviceDeviceRevokeEnabled:
+          effectiveEnvironment.multiDeviceDeviceRevokeEnabled,
+      multiDeviceDirectE2eeEnabled:
+          effectiveEnvironment.multiDeviceDirectE2eeEnabled,
+      multiDeviceGroupE2eeEnabled:
+          effectiveEnvironment.multiDeviceGroupE2eeEnabled,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
           onProgress?.call(AppBootstrapProgress.upgradingLocalState);
@@ -235,6 +257,14 @@ class AppBootstrap {
       );
 
       final identityAdapter = AwikiImCoreIdentityAdapter(runtime: runtime);
+      final deviceManagementAdapter = AwikiImCoreDeviceManagementAdapter(
+        runtime: runtime,
+        userServiceUrl: effectiveEnvironment.userServiceUrl,
+        targetHandleDomain: effectiveEnvironment.didDomain,
+      );
+      final rootKeyTransferAdapter = AwikiImCoreRootKeyTransferAdapter(
+        runtime: runtime,
+      );
       final authAdapter = AwikiImCoreAuthAdapter(runtime: runtime);
       final messageAdapter = AwikiImCoreMessageAdapter(runtime: runtime);
       final messageSyncAdapter = AwikiImCoreMessageSyncAdapter(
@@ -244,6 +274,10 @@ class AppBootstrap {
         runtime: runtime,
       );
       final groupAdapter = AwikiImCoreGroupAdapter(runtime: runtime);
+      final groupEncryptionAdapter =
+          effectiveEnvironment.multiDeviceGroupE2eeEnabled
+          ? AwikiImCoreGroupEncryptionAdapter(runtime: runtime)
+          : null;
       final profileAdapter = AwikiImCoreProfileAdapter(runtime: runtime);
       final directoryAdapter = AwikiImCoreDirectoryAdapter(runtime: runtime);
       final relationshipAdapter = AwikiImCoreRelationshipAdapter(
@@ -258,7 +292,7 @@ class AppBootstrap {
           UserServiceAgentInventoryAdapter.fromEnvironment(
             environment: effectiveEnvironment,
           );
-      final messageAgentBindingPort = UserServiceMessageAgentBindingAdapter(
+      final personalAgentBindingPort = UserServicePersonalAgentBindingAdapter(
         userServiceUrl: effectiveEnvironment.userServiceUrl,
       );
       final conversationService = ImCoreConversationService(
@@ -269,7 +303,7 @@ class AppBootstrap {
       final agentControlService = DefaultAgentControlService(
         inventory: agentInventoryPort,
         messages: messagingService,
-        messageAgentBindings: messageAgentBindingPort,
+        personalAgentBindings: personalAgentBindingPort,
         identities: identityAdapter,
         environment: effectiveEnvironment,
       );
@@ -302,6 +336,7 @@ class AppBootstrap {
       );
       final onboardingService = ImCoreOnboardingService(
         identities: identityAdapter,
+        legacyUpgrades: identityAdapter,
         sessions: appSessionService,
         profiles: profileAdapter,
       );
@@ -349,13 +384,16 @@ class AppBootstrap {
         desktopShellService: shell,
         appSessionService: appSessionService,
         identityCorePort: identityAdapter,
+        deviceManagementCorePort: deviceManagementAdapter,
+        rootKeyTransferPort: rootKeyTransferAdapter,
+        groupEncryptionCorePort: groupEncryptionAdapter,
         onboardingService: onboardingService,
         onboardingSupportService: onboardingSupportService,
         messagingService: messagingService,
         messageSyncService: messageSyncService,
         conversationService: conversationService,
         agentInventoryPort: agentInventoryPort,
-        messageAgentBindingPort: messageAgentBindingPort,
+        personalAgentBindingPort: personalAgentBindingPort,
         agentControlService: agentControlService,
         agentControlStatusStore: agentControlStatusStore,
         groupApplicationService: groupApplicationService,

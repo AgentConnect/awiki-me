@@ -829,6 +829,7 @@ class _ActionButton extends StatelessWidget {
     this.primary = false,
     this.danger = false,
     this.isLoading = false,
+    this.semanticsIdentifier,
   });
 
   final IconData icon;
@@ -837,6 +838,7 @@ class _ActionButton extends StatelessWidget {
   final bool primary;
   final bool danger;
   final bool isLoading;
+  final String? semanticsIdentifier;
 
   @override
   Widget build(BuildContext context) {
@@ -860,6 +862,7 @@ class _ActionButton extends StatelessWidget {
     return AppPressable(
       onTap: isLoading ? null : onPressed,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: label,
       enabled: onPressed != null && !isLoading,
       scaleOnPress: true,

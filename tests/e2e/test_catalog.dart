@@ -306,8 +306,10 @@ class AppTestCatalog {
       ..writeln()
       ..writeln(
         '- `full` means the audited Direct, Group, P9 Mention, Contacts and '
-        'Attachment product slices only. It does **not** claim onboarding, '
-        'profile editing/search, group role/remove/leave, '
+        'Attachment product slices plus one real App-admin/CLI-member Join and '
+        '`ROOT-TRANSFER-E2E-001` readiness-completion lifecycle. It does '
+        '**not** claim onboarding beyond that isolated lifecycle, '
+        'profile editing/search, identity switching, group role/remove/leave, '
         'secure-trust UI, mobile-device, or optional runtime-provider coverage.',
       )
       ..writeln(
@@ -320,13 +322,70 @@ class AppTestCatalog {
         'through application services; it is not required UI acceptance.',
       )
       ..writeln(
-        '- Message Agent, Codex and Claude Code remain `optional_nightly`. A '
+        '- `multi-device` is currently a no-service device-entry E2E only. '
+        'It opens an isolated production AppBootstrap/native Core scope, '
+        'checks the default device-management composition, and opens the public Join form. '
+        'It does not claim OTP, SAS, approval, root import, revoke, MLS, or '
+        'Handle Recovery acceptance.',
+      )
+      ..writeln(
+        '- `multi-device-remote-join` is a separate, operator-confirmed '
+        '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002` only. It runs both '
+        'App-new-device/CLI-admin and App-admin/CLI-new-device directions '
+        'with independent native roots, dynamically resolved one-time OTPs, '
+        'SAS comparison, pending-session App restart coverage, the production '
+        'CLI foreground contract, fixed member authorization, CLI listener '
+        'host wake, App global review entry, and real macOS user presence '
+        'where the App approves. The tests do not directly call Message Inbox '
+        'hydration, requestSync(), or refreshJoinInbox() to discover Join. '
+        'It does not execute root transfer, revoke, or MLS; the root lifecycle '
+        'is registered by `full`. A checked-in '
+        'implementation is not evidence of a remote pass while the dedicated '
+        'account allowlist or operator prerequisites are unavailable.',
+      )
+      ..writeln(
+        '- `multi-device-app-pair` is the one-host/two-process App↔App mode. '
+        'It builds two Debug bundles with stable distinct bundle identifiers, '
+        'isolated Flutter build directories, and independent native Core '
+        'state roots, then concurrently drives their visible Join UI. The '
+        'loopback coordinator carries only lifecycle checkpoints and compares '
+        'transient SAS values in memory; it cannot call product APIs or write '
+        'SAS evidence. This mode currently covers only '
+        '`DEVICE-JOIN-E2E-004` and retains real macOS user presence.',
+      )
+      ..writeln(
+        '- `multi-device-app-pair-functional` reuses the same two isolated '
+        'App processes but injects an E2E-only `UserPresencePort` so Agent '
+        'inventory and Direct-message convergence can run unattended. It '
+        'covers one shared Daemon plus Codex/Claude runtime projection, '
+        'bidirectional App outbound own-sync, and one required-secure CLI '
+        'peer reply on both Apps. It does not attest LocalAuthentication and never '
+        'changes the production user-presence implementation.',
+      )
+      ..writeln(
+        '- `DEVICE-JOIN-E2E-003`, `ROOT-TRANSFER-E2E-002`, '
+        '`DEVICE-REVOKE-E2E-001`, and `MLS-MULTI-DEVICE-E2E-001/002` are '
+        'planned, non-executable boundaries. The old Root/Revoke/MLS Dart '
+        'implementations depended on direct-admin Join and have been deleted. '
+        'A later version must supply accepted contracts, independent '
+        'device roots, real one-time OTPs, user presence where required, '
+        'scenario-owned oracles, cleanup, and explicit suite registration. '
+        '`ROOT-TRANSFER-E2E-002` is receiver-local completion recovery only; '
+        'it cannot restore sender retry, imported ACK/Reply, a second '
+        'user-presence prompt, or public original-message-ID semantics. '
+        '`001` covers one pending App restart; standalone cancellation and the '
+        'real expiration path remain fail-closed rather than adding a test-only '
+        'TTL or time bypass.',
+      )
+      ..writeln(
+        '- Personal Agent, Codex and Claude Code remain `optional_nightly`. A '
         'missing provider/configuration is reported as skipped/not-run, never passed.',
       )
       ..writeln(
-        '- `MSGAGENT-E2E-003` is cataloged as planned, not executable: the current '
-        'real flow has no visible confirmation/draft action. The runnable Message '
-        'Agent suite attests enable, receive/process and exact revoke convergence.',
+        '- `PERSONALAGENT-E2E-003` is cataloged as planned, not executable: the '
+        'supporting confirmation/draft step does not yet have its own accepted '
+        'case attestation. The runnable Personal Agent suite attests enable, '
+        'receive/process and exact revoke convergence.',
       )
       ..writeln(
         '- The latest recorded `awiki.info` conversation-correctness evidence '

@@ -7,6 +7,8 @@ class _AgentListPane extends StatelessWidget {
     required this.pendingAgentDids,
     required this.selectedAgentDid,
     required this.onCreateDaemon,
+    required this.onCreateSkill,
+    required this.isCreatingSkill,
     required this.onRefreshDaemon,
     required this.onSelect,
     required this.onSyncInventory,
@@ -17,6 +19,8 @@ class _AgentListPane extends StatelessWidget {
   final Set<String> pendingAgentDids;
   final String? selectedAgentDid;
   final VoidCallback onCreateDaemon;
+  final VoidCallback onCreateSkill;
+  final bool isCreatingSkill;
   final ValueChanged<AgentSummary> onRefreshDaemon;
   final ValueChanged<String> onSelect;
   final VoidCallback onSyncInventory;
@@ -34,9 +38,11 @@ class _AgentListPane extends StatelessWidget {
           children: <Widget>[
             _AgentListHeader(
               isLoading: state.isLoading,
+              isCreatingSkill: isCreatingSkill,
               isInstalling: state.isActionPending(
                 AgentActionKeys.installCommand,
               ),
+              onCreateSkill: onCreateSkill,
               onRefresh: onSyncInventory,
               onInstall: onCreateDaemon,
             ),
@@ -85,13 +91,17 @@ class _AgentListPane extends StatelessWidget {
 class _AgentListHeader extends StatelessWidget {
   const _AgentListHeader({
     required this.isLoading,
+    required this.isCreatingSkill,
     required this.isInstalling,
+    required this.onCreateSkill,
     required this.onRefresh,
     required this.onInstall,
   });
 
   final bool isLoading;
+  final bool isCreatingSkill;
   final bool isInstalling;
+  final VoidCallback onCreateSkill;
   final VoidCallback onRefresh;
   final VoidCallback onInstall;
 
@@ -121,13 +131,24 @@ class _AgentListHeader extends StatelessWidget {
         ),
         child: AwikiMeTopBar(
           title: context.l10n.agentPageTitle,
-          leadingWidth: 96,
-          trailingWidth: 96,
+          leadingWidth: 136,
+          trailingWidth: 136,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           leading: const SizedBox.shrink(),
           trailing: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
+              TopBarActionButton(
+                key: const Key('agent-skill-onboarding-button'),
+                onTap: isCreatingSkill ? null : onCreateSkill,
+                semanticsLabel: context.l10n.agentSkillCreateInstruction,
+                tooltip: context.l10n.agentSkillCreateInstruction,
+                child: isCreatingSkill
+                    ? CupertinoActivityIndicator(
+                        radius: responsive.displayScaled(7),
+                      )
+                    : const Icon(CupertinoIcons.command),
+              ),
               TopBarActionButton(
                 key: const Key('agents-list-refresh-button'),
                 onTap: isLoading ? null : onRefresh,
@@ -154,6 +175,17 @@ class _AgentListHeader extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
+          AppIconButton(
+            key: const Key('agent-skill-onboarding-button'),
+            onPressed: isCreatingSkill ? null : onCreateSkill,
+            semanticLabel: context.l10n.agentSkillCreateInstruction,
+            tooltip: context.l10n.agentSkillCreateInstruction,
+            size: responsive.displayScaled(32),
+            isLoading: isCreatingSkill,
+            borderRadius: BorderRadius.circular(responsive.radius(8)),
+            child: const Icon(CupertinoIcons.command),
+          ),
+          SizedBox(width: responsive.spacing(4)),
           AppIconButton(
             key: const Key('agents-list-refresh-button'),
             onPressed: isLoading ? null : onRefresh,

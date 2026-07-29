@@ -73,6 +73,18 @@ void main() {
     expect(handshakeMessage, AppMessage.networkUnavailableRetry());
   });
 
+  test('normalizes Dart ArgumentError before mapping handle validation', () {
+    final message = AppMessage.fromError(
+      ArgumentError('handle_invalid_pattern'),
+    );
+
+    expect(message, AppMessage.handleInvalidPattern());
+    expect(
+      message.resolve(AppLocalizationsZh()),
+      'handle 仅支持小写字母、数字、中划线，长度 2-32，不能包含下划线',
+    );
+  });
+
   test('maps screenshot permission errors to actionable localized copy', () {
     final message = AppMessage.fromError(
       StateError('screenshot_screen_recording_permission_required'),

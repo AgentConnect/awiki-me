@@ -59,18 +59,6 @@ class OnboardingServerInfo {
             ),
           ],
         ),
-        handleRecovery: OnboardingHandleRecoveryCapabilities(
-          methods: <OnboardingIdentityMethod>[
-            OnboardingIdentityMethod(
-              id: OnboardingIdentityMethodId.phone,
-              enabled: true,
-              verification: OnboardingVerificationRequirement(
-                required: true,
-                type: OnboardingVerificationType.smsOtp,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -99,9 +87,6 @@ class OnboardingServerInfo {
               ),
             ),
           ],
-        ),
-        handleRecovery: OnboardingHandleRecoveryCapabilities(
-          methods: <OnboardingIdentityMethod>[],
         ),
       ),
       deployment: <String, Object?>{'did_domain': didDomain},
@@ -160,16 +145,6 @@ class OnboardingServerInfo {
         phone.verification.type == OnboardingVerificationType.none &&
         !phone.verification.required;
   }
-
-  bool get supportsPhoneOtpRecovery {
-    for (final method in identity.handleRecovery.enabledMethods) {
-      if (method.id == OnboardingIdentityMethodId.phone &&
-          method.verification.type == OnboardingVerificationType.smsOtp) {
-        return true;
-      }
-    }
-    return false;
-  }
 }
 
 class OnboardingServerServiceInfo {
@@ -187,13 +162,9 @@ class OnboardingServerServiceInfo {
 }
 
 class OnboardingIdentityCapabilities {
-  const OnboardingIdentityCapabilities({
-    required this.handleRegistration,
-    required this.handleRecovery,
-  });
+  const OnboardingIdentityCapabilities({required this.handleRegistration});
 
   final OnboardingHandleRegistrationCapabilities handleRegistration;
-  final OnboardingHandleRecoveryCapabilities handleRecovery;
 
   factory OnboardingIdentityCapabilities.fromJson(Map<String, Object?> json) {
     return OnboardingIdentityCapabilities(
@@ -202,9 +173,6 @@ class OnboardingIdentityCapabilities {
           json['handle_registration'],
           'identity.handle_registration',
         ),
-      ),
-      handleRecovery: OnboardingHandleRecoveryCapabilities.fromJson(
-        _objectValue(json['handle_recovery'], 'identity.handle_recovery'),
       ),
     );
   }
@@ -240,24 +208,6 @@ class OnboardingHandleRegistrationCapabilities {
         json['methods'],
         'identity.handle_registration.methods',
       ),
-    );
-  }
-}
-
-class OnboardingHandleRecoveryCapabilities {
-  const OnboardingHandleRecoveryCapabilities({required this.methods});
-
-  final List<OnboardingIdentityMethod> methods;
-
-  List<OnboardingIdentityMethod> get enabledMethods {
-    return methods.where((method) => method.enabled).toList(growable: false);
-  }
-
-  factory OnboardingHandleRecoveryCapabilities.fromJson(
-    Map<String, Object?> json,
-  ) {
-    return OnboardingHandleRecoveryCapabilities(
-      methods: _methodList(json['methods'], 'identity.handle_recovery.methods'),
     );
   }
 }

@@ -2,6 +2,7 @@ import '../../application/app_session_service.dart';
 import '../../application/models/app_session.dart';
 import '../../application/onboarding_service.dart';
 import '../../application/onboarding_support_service.dart';
+import '../../application/ports/identity_core_port.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/repositories/awiki_account_gateway.dart';
 
@@ -123,20 +124,6 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
   }
 
   @override
-  Future<HandleRegistrationStatus> lookupHandleRegistration({
-    required String handle,
-  }) {
-    final support = _onboardingSupport;
-    if (support == null) {
-      // TODO(im-core): expose unauthenticated handle lookup or onboarding lookup.
-      throw UnsupportedError(
-        'IM Core lookupHandleRegistration is not available yet',
-      );
-    }
-    return support.lookupHandleRegistration(handle: handle);
-  }
-
-  @override
   Future<SessionIdentity> registerHandle({
     required String phone,
     required String otp,
@@ -145,7 +132,7 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
     String? nickName,
     String? profileMarkdown,
   }) async {
-    final session = await _onboarding.registerHandleWithPhone(
+    final result = await _onboarding.registerHandleWithPhone(
       phone: phone,
       otp: otp,
       handle: handle,
@@ -153,6 +140,11 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
       nickName: nickName,
       profileMarkdown: profileMarkdown,
     );
+    final session = result.identity;
+    if (result.status != IdentityRegistrationStatus.registered ||
+        session == null) {
+      throw StateError('Device Join is required to complete registration.');
+    }
     return session.toLegacySessionIdentity();
   }
 
@@ -164,27 +156,18 @@ class CompatAwikiAccountGateway implements AwikiAccountGateway {
     String? nickName,
     String? profileMarkdown,
   }) async {
-    final session = await _onboarding.registerHandleWithEmail(
+    final result = await _onboarding.registerHandleWithEmail(
       email: email,
       handle: handle,
       inviteCode: inviteCode,
       nickName: nickName,
       profileMarkdown: profileMarkdown,
     );
-    return session.toLegacySessionIdentity();
-  }
-
-  @override
-  Future<SessionIdentity> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    final session = await _onboarding.recoverHandle(
-      phone: phone,
-      otp: otp,
-      handle: handle,
-    );
+    final session = result.identity;
+    if (result.status != IdentityRegistrationStatus.registered ||
+        session == null) {
+      throw StateError('Device Join is required to complete registration.');
+    }
     return session.toLegacySessionIdentity();
   }
 }

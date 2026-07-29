@@ -19,6 +19,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.localeMode,
     required this.onLanguagePressed,
     required this.onTenantPressed,
+    this.onJoinDevice,
   });
 
   final OnboardingState onboarding;
@@ -38,6 +39,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final AppLocaleMode localeMode;
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
+  final VoidCallback? onJoinDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +68,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
             onCheckEmailActivation: onCheckEmailActivation,
             onRegisterStepChanged: onRegisterStepChanged,
             onSubmitRegister: onSubmitRegister,
+            onJoinDevice: onJoinDevice,
           );
           if (useCompactLayout) {
             return DecoratedBox(
@@ -385,6 +388,7 @@ class _MacAuthCard extends StatelessWidget {
     required this.onCheckEmailActivation,
     required this.onRegisterStepChanged,
     required this.onSubmitRegister,
+    this.onJoinDevice,
   });
 
   final double maxHeight;
@@ -403,6 +407,7 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onCheckEmailActivation;
   final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
+  final VoidCallback? onJoinDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -478,6 +483,14 @@ class _MacAuthCard extends StatelessWidget {
                   onSubmitRegister: onSubmitRegister,
                 ),
               ),
+              if (onJoinDevice != null) ...<Widget>[
+                const SizedBox(height: 18),
+                AppSecondaryButton(
+                  label: context.l10n.deviceJoinEntry,
+                  semanticsIdentifier: 'multi-device-join-entry',
+                  onPressed: onJoinDevice,
+                ),
+              ],
               if (credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _OnboardingLocalIdentitySection(
@@ -931,6 +944,13 @@ class _MacRegisterForm extends StatelessWidget {
             placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
             prefix: const _MacPhonePrefix(),
+          ),
+          const SizedBox(height: 16),
+          _MacOutlinedField(
+            controller: handleController,
+            label: context.l10n.onboardingHandle,
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            icon: CupertinoIcons.at,
           ),
           const SizedBox(height: 16),
           _MacOutlinedField(

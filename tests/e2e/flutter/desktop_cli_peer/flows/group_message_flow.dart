@@ -417,7 +417,7 @@ Future<GroupMemberSummary> _findGroupMember({
   await _poll(
     description: 'Group contains exactly one member "$memberRef"',
     action: () async {
-      final members = await groups.listMembers(groupDid, limit: 50);
+      final members = (await groups.listMembers(groupDid, limit: 50)).items;
       final normalizedRef = _normalizeIdentityRef(memberRef);
       final exact = members
           .where((member) {

@@ -343,6 +343,7 @@ class ImCoreAppSessionService
       );
     } catch (error) {
       if (!isTransientNetworkAppError(error)) {
+        _current = null;
         rethrow;
       }
       _requireCurrentTransition(transition);
@@ -356,7 +357,21 @@ class ImCoreAppSessionService
       await initializeIdentitySession(candidate);
       _requireCurrentTransition(transition);
     }
-    await _activeSessionStore?.writeActiveIdentityId(identity.identityId);
+    try {
+      await _activeSessionStore?.writeActiveIdentityId(identity.identityId);
+    } catch (error, stackTrace) {
+      _current = null;
+      try {
+        final persistedIdentityId = await _activeSessionStore
+            ?.readActiveIdentityId();
+        if (persistedIdentityId != previousActiveIdentityId) {
+          await _activeSessionStore?.clearActiveIdentityId();
+        }
+      } catch (_) {
+        // Preserve the authoritative activation write failure.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     if (!isSessionTransitionCurrent(transition)) {
       if (previousActiveIdentityId == null) {
         await _activeSessionStore?.clearActiveIdentityId();
@@ -475,10 +490,12 @@ class ImCoreAppSessionService
     final current = _current;
     final deletingCurrent =
         current != null && _matchesIdentity(current, selector);
+    Future<void>? realtimeCleanup;
     if (deletingCurrent) {
       _current = null;
       clearCommittedSessionTransition();
-      await _stopRealtimeBestEffort();
+      await _activeSessionStore?.clearActiveIdentityId();
+      realtimeCleanup = _stopRealtimeBestEffort();
     }
     final deleted = await _identities.deleteLocalIdentity(identityIdOrAlias);
     if (current != null &&
@@ -489,13 +506,8 @@ class ImCoreAppSessionService
                 _matchesIdentity(current, deleted.localAlias!)) ||
             (deleted.handle != null &&
                 _matchesIdentity(current, deleted.handle!)))) {
-      try {
-        await _activeSessionStore?.clearActiveIdentityId();
-        await _runtime.dispose();
-      } finally {
-        _current = null;
-        clearCommittedSessionTransition();
-      }
+      _current = null;
+      unawaited(_cleanupRetiredRuntimeBestEffort(realtimeCleanup));
     } else {
       final activeIdentityId = await _activeSessionStore
           ?.readActiveIdentityId();
@@ -614,6 +626,23 @@ class ImCoreAppSessionService
         rethrow;
       }
     });
+  }
+
+  Future<void> _disposeRuntimeBestEffort() async {
+    try {
+      await _runtime.dispose().timeout(_realtimeCleanupTimeout);
+    } on TimeoutException {
+      return;
+    } catch (_) {
+      return;
+    }
+  }
+
+  Future<void> _cleanupRetiredRuntimeBestEffort(
+    Future<void>? realtimeCleanup,
+  ) async {
+    await (realtimeCleanup ?? _stopRealtimeBestEffort());
+    await _disposeRuntimeBestEffort();
   }
 }
 

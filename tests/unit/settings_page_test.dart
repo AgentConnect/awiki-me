@@ -1,11 +1,15 @@
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
-  testWidgets('设置页不展示当前没有真实 SDK 能力的凭证导出入口', (tester) async {
+  testWidgets('设置页导出身份凭证显示暂未实现普通提示', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:123',
@@ -32,20 +36,31 @@ void main() {
       ),
     );
 
-    expect(find.text('导出身份凭证'), findsNothing);
+    expect(find.text('导出身份凭证'), findsOneWidget);
+
+    await tester.tap(find.text('导出身份凭证'));
+    await tester.pump();
+
     expect(gateway.exportCalls, 0);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsPage)),
+    );
+    final feedback = container.read(uiFeedbackProvider);
+    expect(feedback?.danger, isFalse);
+    expect(feedback?.message.id, 'featureNotImplemented');
   });
 
-  testWidgets('设置页未登录时隐藏凭证导出并禁用删除入口', (tester) async {
+  testWidgets('设置页未登录时禁用凭证导出和删除入口', (tester) async {
     final gateway = FakeAwikiGateway();
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const SettingsPage(), gateway: gateway),
     );
 
-    expect(find.text('当前暂无可导出的登录凭证'), findsNothing);
+    expect(find.text('当前暂无可导出的登录凭证'), findsOneWidget);
     expect(find.text('退出并删除当前登录凭证'), findsOneWidget);
 
+    await tester.tap(find.text('导出身份凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pump();
 
@@ -737,5 +752,270 @@ void main() {
     expect(find.text('English'), findsWidgets);
     expect(localePreferenceService.saveCalls, 1);
     expect(await localePreferenceService.loadMode(), AppLocaleMode.english);
+  });
+
+  testWidgets('设置页可进入 Personal Agent 独立设置页并从真实入口启用', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            version: '0.5.26',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('个人助理'), findsOneWidget);
+    await tester.tap(find.text('个人助理'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('personal-agent-settings-page')),
+      findsOneWidget,
+    );
+    expect(find.text('个人助理'), findsWidgets);
+    expect(find.text('运行 Daemon 1'), findsWidgets);
+    expect(find.text('已上报公钥'), findsOneWidget);
+    expect(find.text('可启用'), findsWidgets);
+    expect(find.textContaining('不会自动发送消息'), findsWidgets);
+    expect(find.textContaining('不处理 E2EE 明文'), findsWidgets);
+
+    await tester.tap(find.text('启用个人助理'));
+    await tester.pumpAndSettle();
+
+    expect(identities.lastEnsuredDaemonSubkeySelector, 'default');
+    expect(control.lastBootstrapDaemonDid, 'did:agent:daemon');
+    expect(control.lastBootstrapControllerDid, 'did:human:me');
+    expect(
+      control.lastBootstrapDaemonPublicKey?.keyId,
+      'did:agent:daemon#key-3',
+    );
+    expect(find.textContaining('自动回复'), findsNothing);
+    expect(find.textContaining('代发'), findsNothing);
+  });
+
+  testWidgets('Personal Agent feature 关闭时设置入口禁用且不触发授权', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(false),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Personal Agent'), findsNothing);
+    expect(find.text('实验功能关闭'), findsOneWidget);
+    expect(find.text('个人助理'), findsNothing);
+    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(control.lastBootstrapDaemonDid, isNull);
+  });
+
+  testWidgets('Personal Agent 设置页缺 bootstrap key 时禁用启用并提示刷新', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-test',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready', platform: 'linux-amd64'),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('个人助理'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('personal-agent-settings-page')),
+      findsOneWidget,
+    );
+    expect(find.text('未就绪'), findsOneWidget);
+    expect(find.text('等待刷新状态'), findsOneWidget);
+    expect(find.textContaining('尚未上报安全 bootstrap 公钥'), findsOneWidget);
+
+    await tester.tap(find.text('启用个人助理'));
+    await tester.pumpAndSettle();
+
+    expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
+    expect(control.lastBootstrapDaemonDid, isNull);
+  });
+
+  testWidgets('Personal Agent 设置页按当前 Daemon 执行撤销授权', (tester) async {
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: 'did:agent:daemon:one',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-one',
+          displayName: '运行 Daemon 1',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon:one#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:message:one',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:one',
+          runtime: 'hermes',
+          handle: 'hermes-msg-one',
+          displayName: 'Hermes Personal Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:daemon:two',
+          kind: AgentKind.daemon,
+          handle: 'awiki-daemon-two',
+          displayName: '运行 Daemon 2',
+          activeState: 'active',
+          latest: AgentLatestStatus(
+            status: 'ready',
+            platform: 'linux-amd64',
+            diagnosticsSummary: <String, Object?>{
+              'bootstrap_key_id': 'did:agent:daemon:two#key-3',
+              'bootstrap_public_key_b64u':
+                  'CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              'bootstrap_key_algorithm': 'x25519',
+            },
+          ),
+        ),
+        AgentSummary(
+          agentDid: 'did:agent:message:two',
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:agent:daemon:two',
+          runtime: 'hermes',
+          handle: 'hermes-msg-two',
+          displayName: 'Hermes Personal Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    final identities = FakeIdentityCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+          handle: 'me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+          identityCorePortProvider.overrideWithValue(identities),
+          agentImEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('个人助理'));
+    await tester.pumpAndSettle();
+    expect(find.text('当前运行 Daemon：运行 Daemon 1'), findsOneWidget);
+
+    await tester.tap(find.text('运行 Daemon 2').first);
+    await tester.pumpAndSettle();
+    expect(find.text('当前运行 Daemon：运行 Daemon 2'), findsOneWidget);
+
+    await tester.tap(find.text('撤销 Daemon 消息授权'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
+
+    await tester.tap(find.text('撤销授权'));
+    await tester.pumpAndSettle();
+
+    expect(control.lastRevokedPersonalAgentDaemonDid, 'did:agent:daemon:two');
+    expect(control.lastRevokedPersonalAgentDid, 'did:agent:message:two');
+    expect(identities.lastRevokedDaemonSubkeySelector, isNull);
   });
 }

@@ -9,6 +9,9 @@ import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
+import '../agents/agents_page.dart';
+import '../agents/agents_provider.dart';
+import '../devices/devices_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
 import '../shared/awiki_me_semantic_icon.dart';
@@ -38,6 +41,7 @@ class SettingsPage extends ConsumerWidget {
     final runtime = ref.read(appRuntimeProvider.notifier);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
+    final personalAgentEnabled = ref.watch(agentImEnabledProvider);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     Widget? leading(Widget icon) => responsive.usesDesktopLayout ? null : icon;
@@ -66,6 +70,48 @@ class SettingsPage extends ConsumerWidget {
         ),
         SizedBox(height: responsive.spacing(14)),
       ],
+      if (session != null) ...<Widget>[
+        _SettingsSection(
+          key: const Key('settings-devices-section'),
+          children: <Widget>[
+            AppListTile(
+              title: l10n.settingsDevices,
+              subtitle: l10n.settingsDevicesSubtitle,
+              leading: leading(
+                const _SettingsIcon(icon: CupertinoIcons.device_phone_portrait),
+              ),
+              onTap: () =>
+                  AppNavigator.push<void>(context, (_) => const DevicesPage()),
+            ),
+          ],
+        ),
+        SizedBox(height: responsive.spacing(14)),
+      ],
+      _SettingsSection(
+        key: const Key('settings-personal-agent-section'),
+        children: <Widget>[
+          AppListTile(
+            title: personalAgentEnabled
+                ? l10n.personalAgentTitle
+                : l10n.personalAgentExperimentDisabled,
+            subtitle: personalAgentEnabled
+                ? l10n.personalAgentSettingsSubtitle
+                : l10n.personalAgentSettingsDisabledSubtitle,
+            leading: leading(
+              const _SettingsIcon(
+                icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+              ),
+            ),
+            onTap: personalAgentEnabled
+                ? () => AppNavigator.push<void>(
+                    context,
+                    (_) => const PersonalAgentSettingsPage(),
+                  )
+                : null,
+          ),
+        ],
+      ),
+      SizedBox(height: responsive.spacing(14)),
       _SettingsSection(
         key: const Key('settings-general-section'),
         children: <Widget>[
@@ -112,6 +158,17 @@ class SettingsPage extends ConsumerWidget {
       _SettingsSection(
         key: const Key('settings-session-section'),
         children: <Widget>[
+          AppListTile(
+            title: l10n.settingsExportCredential,
+            subtitle: session?.credentialName != null
+                ? l10n.settingsExportCurrentCredential(session!.credentialName)
+                : l10n.settingsNoCredentialToExport,
+            leading: leading(
+              const _SettingsIcon(icon: CupertinoIcons.archivebox),
+            ),
+            onTap: session == null ? null : runtime.exportCurrentCredential,
+          ),
+          const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsLogout,
             subtitle: l10n.settingsLogoutSubtitle,

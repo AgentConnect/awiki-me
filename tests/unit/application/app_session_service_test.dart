@@ -140,6 +140,31 @@ void main() {
     );
 
     test(
+      'activateIdentity clears partial state when active-session persistence fails',
+      () async {
+        final runtime = _FakeRuntime();
+        final active = _FakeActiveSessionStore.failing('id-old');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(
+            defaultIdentity: _session('id-replacement'),
+          ),
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+        );
+
+        await expectLater(
+          service.loginWithIdentity('alice-local'),
+          throwsStateError,
+        );
+
+        expect(runtime.switchedIdentities, ['id-replacement']);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
       'explicit local identity login activates a matching local identity',
       () async {
         final runtime = _FakeRuntime();
@@ -434,10 +459,7 @@ void main() {
             defaultIdentity: first,
             extraIdentities: <AppSession>[second],
           ),
-          auth: _FakeAuth(
-            ensureCompleter: secondAuth,
-            ensureCompleterCall: 2,
-          ),
+          auth: _FakeAuth(ensureCompleter: secondAuth, ensureCompleterCall: 2),
           activeSessionStore: active,
           realtime: realtime,
         );
@@ -859,12 +881,53 @@ void main() {
 
         await service.restoreSession();
         final deleted = await service.deleteLocalIdentity('alice-local');
+        await pumpEventQueue();
 
         expect(deleted.identityId, identity.identityId);
         expect(identities.deletedSelectors, ['alice-local']);
         expect(realtime.stopCount, 1);
         expect(runtime.disposeCount, 1);
         expect(await service.currentSession(), isNull);
+      },
+    );
+
+    test(
+      'deleteLocalIdentity is offline-first when realtime and runtime cleanup are slow',
+      () async {
+        final realtimeStop = Completer<void>();
+        final runtimeDispose = Completer<void>();
+        final runtime = _FakeRuntime(
+          onDispose: () async => runtimeDispose.future,
+        );
+        final realtime = _FakeRealtime(onStop: () async => realtimeStop.future);
+        final identity = _session('id-default');
+        final identities = _FakeIdentities(defaultIdentity: identity);
+        final active = _FakeActiveSessionStore('id-default');
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+          activeSessionStore: active,
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        final deleted = await service
+            .deleteLocalIdentity('alice-local')
+            .timeout(const Duration(seconds: 1));
+
+        expect(deleted.identityId, identity.identityId);
+        expect(identities.deletedSelectors, ['alice-local']);
+        expect(await active.readActiveIdentityId(), isNull);
+        expect(await service.currentSession(), isNull);
+        expect(realtime.stopCount, 1);
+        expect(runtime.disposeCount, 0);
+
+        realtimeStop.complete();
+        await pumpEventQueue();
+        expect(runtime.disposeCount, 1);
+        runtimeDispose.complete();
+        await pumpEventQueue();
       },
     );
 
@@ -926,10 +989,15 @@ AppSession _session(String id) {
 }
 
 class _FakeRuntime implements ImCoreRuntimePort {
-  _FakeRuntime({this.vaultError, this.vaultErrorsByIdentity = const {}});
+  _FakeRuntime({
+    this.vaultError,
+    this.vaultErrorsByIdentity = const {},
+    this.onDispose,
+  });
 
   final Object? vaultError;
   final Map<String, Object> vaultErrorsByIdentity;
+  final Future<void> Function()? onDispose;
   int openCount = 0;
   int disposeCount = 0;
   final List<String> switchedIdentities = <String>[];
@@ -963,6 +1031,7 @@ class _FakeRuntime implements ImCoreRuntimePort {
   @override
   Future<void> dispose() async {
     disposeCount += 1;
+    await onDispose?.call();
   }
 }
 
@@ -991,35 +1060,37 @@ class _FakeIdentities implements IdentityCorePort {
   ];
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async => _session('recovered');
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('email');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('email'),
+  );
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('phone');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('phone'),
+  );
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,
-  }) async => _session('open');
+  }) async => IdentityRegistrationResult(
+    status: IdentityRegistrationStatus.registered,
+    identity: _session('open'),
+  );
 
   @override
   Future<AppSession> resolveIdentity(String identityIdOrAlias) async {
@@ -1054,11 +1125,19 @@ class _FakeIdentities implements IdentityCorePort {
 }
 
 class _FakeActiveSessionStore implements ActiveSessionStore {
-  _FakeActiveSessionStore([this.activeIdentityId]);
+  _FakeActiveSessionStore([this.activeIdentityId])
+    : failWriteOnce = false,
+      writeBeforeFailure = false;
+
+  _FakeActiveSessionStore.failing([this.activeIdentityId])
+    : failWriteOnce = true,
+      writeBeforeFailure = true;
 
   String? activeIdentityId;
   Object? clearError;
   Object? writeError;
+  bool failWriteOnce;
+  final bool writeBeforeFailure;
 
   @override
   Future<void> clearActiveIdentityId() async {
@@ -1077,6 +1156,13 @@ class _FakeActiveSessionStore implements ActiveSessionStore {
     final error = writeError;
     if (error != null) {
       throw error;
+    }
+    if (failWriteOnce) {
+      failWriteOnce = false;
+      if (writeBeforeFailure) {
+        activeIdentityId = identityId;
+      }
+      throw StateError('active_session_write_failed');
     }
     activeIdentityId = identityId;
   }

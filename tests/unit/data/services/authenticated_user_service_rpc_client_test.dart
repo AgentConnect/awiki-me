@@ -57,6 +57,57 @@ void main() {
     expect(publishedRefreshes, 1);
   });
 
+  test('concurrent forced renewals share one refresh operation', () async {
+    final sessions = _FakeSessions(
+      current: _session(jwtToken: 'expired-token'),
+      refreshed: _session(jwtToken: 'fresh-token'),
+    )..refreshBlock = Completer<void>();
+    final coordinator = AuthSessionCoordinator(sessions: sessions);
+
+    final first = coordinator.ensureBearerToken(forceRefresh: true);
+    final second = coordinator.ensureBearerToken(forceRefresh: true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(sessions.refreshCount, 1);
+    sessions.refreshBlock!.complete();
+    expect(await Future.wait(<Future<String>>[first, second]), <String>[
+      'fresh-token',
+      'fresh-token',
+    ]);
+    expect(sessions.refreshCount, 1);
+  });
+
+  test('a second 401 is propagated without another renewal or replay', () async {
+    final sessions = _FakeSessions(
+      current: _session(jwtToken: 'expired-token'),
+      refreshed: _session(jwtToken: 'fresh-token'),
+    );
+    final unauthorized = http.Response(
+      '{"jsonrpc":"2.0","result":null,"error":{"code":-32000,"message":"Missing or invalid Authorization header","data":null},"id":"req-1"}',
+      401,
+    );
+    final httpClient = _QueueHttpClient([unauthorized, unauthorized]);
+    final client = AuthenticatedUserServiceRpcClient(
+      client: AwikiOnboardingUtilityHttpClient(
+        baseUrl: 'https://example.test',
+        httpClient: httpClient,
+      ),
+      sessions: AuthSessionCoordinator(sessions: sessions),
+    );
+
+    await expectLater(
+      client.rpcCall(
+        path: '/user-service/agent-inventory/rpc',
+        method: 'list_agents',
+        params: const <String, Object?>{'include_inactive': false},
+      ),
+      throwsA(isA<AwikiOnboardingUtilityError>()),
+    );
+
+    expect(sessions.refreshCount, 1);
+    expect(httpClient.requests, hasLength(2));
+  });
+
   test(
     'refreshes before request when local token is already expired',
     () async {
@@ -232,6 +283,7 @@ class _FakeSessions
   final AppSession _refreshed;
   final Completer<AppSession?>? refreshCompleter;
   int refreshCount = 0;
+  Completer<void>? refreshBlock;
 
   @override
   Future<AppSession> activateIdentity(
@@ -283,6 +335,7 @@ class _FakeSessions
     if (completer != null) {
       return completer.future;
     }
+    await refreshBlock?.future;
     _current = _refreshed;
     return _current;
   }

@@ -21,9 +21,15 @@ Future<_IdentitySwitchSessions> _prepareIdentitySwitchSessions(
     );
   }
   final onboarding = bootstrap.onboardingService!;
-  final primary = await _prepareAppIdentity(onboarding, config);
+  final onboardingSupport = bootstrap.onboardingSupportService!;
+  final primary = await _prepareAppIdentity(
+    onboarding,
+    onboardingSupport,
+    config,
+  );
   final secondary = await _prepareAppIdentityForHandle(
     onboarding,
+    onboardingSupport,
     config,
     handle: secondaryHandle,
     displayLabel: 'Secondary',

@@ -170,10 +170,13 @@ See the [Security Model Overview](docs/security-overview.md) and [SECURITY.md](S
 | [Platform and Service Compatibility](docs/compatibility.md) | Platform, service, Agent, and encryption boundaries. |
 | [Security Model Overview](docs/security-overview.md) | Storage Scope, SecretVault, tenant switching, and security invariants. |
 | [Development Guide](docs/development.md) | Architecture, repository structure, testing, and packaging. |
+| [Android Remote Push](docs/android-remote-push.md) | EMAS Android transport setup, validation, and current delivery boundary. |
+| [iOS Remote Push](docs/ios-remote-push.md) | EMAS/APNs iOS transport setup, signing requirements, validation, and current delivery boundary. |
 | [Screenshot Plan](docs/screenshot-plan.md) | Required README screenshots and GIFs. |
 | [Product Requirements](docs/awiki-me-prd.md) | Product position, core objects, user flows, and MVP acceptance. |
 | [Testing Strategy](docs/testing.md) | Unit, Smoke E2E, and real App + CLI E2E. |
 | [Identity Secret Storage](docs/identity-secret-storage.md) | Authoritative app-side SecretVault boundaries. |
+| [Multi-device Join UI](docs/multi-device-join-ui.md) | Message-driven member Join, six-digit SAS flow, and App/Core security boundary. |
 | [Storage Scope and Vault Contract](docs/storage-scope-vault-contract.md) | Stable Storage Scope, Keychain locator, and release/0710 upgrade contract. |
 | [Conversation Presentation Ownership](docs/conversation-presentation-ownership.md) | Canonical conversation identity and App/Core presentation ownership. |
 

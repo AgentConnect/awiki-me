@@ -77,7 +77,7 @@ AWiki Me 当前聚焦：
 - Direct/Group 消息、本地投影、未读、read ack、realtime hint 与可靠 sync；
 - 附件/Object Transfer 方向；
 - 群消息 Mention；
-- Agent/Daemon/Message Agent 产品入口。
+- Agent/Daemon/Personal Agent 产品入口。
 
 不应宣称一次覆盖：
 

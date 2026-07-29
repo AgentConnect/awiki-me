@@ -1,4 +1,9 @@
 PODS:
+  - AlicloudELS (1.0.4)
+  - AlicloudPush (3.2.4):
+    - AlicloudELS (= 1.0.4)
+    - AlicloudUTDID (= 1.6.1.1)
+  - AlicloudUTDID (1.6.1.1)
   - awiki_im_core (0.1.0)
   - file_selector_ios (0.0.1):
     - Flutter
@@ -9,6 +14,9 @@ PODS:
     - Flutter
   - integration_test (0.0.1):
     - Flutter
+  - local_auth_darwin (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - package_info_plus (0.4.5):
     - Flutter
   - pasteboard (0.0.1):
@@ -45,12 +53,14 @@ PODS:
     - Flutter
 
 DEPENDENCIES:
+  - AlicloudPush (< 4.0, >= 3.2.4)
   - awiki_im_core (from `.symlinks/plugins/awiki_im_core/ios`)
   - file_selector_ios (from `.symlinks/plugins/file_selector_ios/ios`)
   - Flutter (from `Flutter`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
   - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - local_auth_darwin (from `.symlinks/plugins/local_auth_darwin/darwin`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - pasteboard (from `.symlinks/plugins/pasteboard/ios`)
   - sqflite_darwin (from `.symlinks/plugins/sqflite_darwin/darwin`)
@@ -58,6 +68,10 @@ DEPENDENCIES:
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
 
 SPEC REPOS:
+  https://github.com/aliyun/aliyun-specs.git:
+    - AlicloudELS
+    - AlicloudPush
+    - AlicloudUTDID
   trunk:
     - sqlite3
 
@@ -74,6 +88,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_secure_storage/ios"
   integration_test:
     :path: ".symlinks/plugins/integration_test/ios"
+  local_auth_darwin:
+    :path: ".symlinks/plugins/local_auth_darwin/darwin"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
   pasteboard:
@@ -86,12 +102,16 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
 
 SPEC CHECKSUMS:
+  AlicloudELS: 775f227430b3477b75cc9dcdf3072a6ecfc9577e
+  AlicloudPush: 902e627305ad8793bbf3acc2eb4e640917bbf078
+  AlicloudUTDID: f0cde02afb754d7d3591d2a21bfe0cae8c89bce5
   awiki_im_core: b5cae393f999ac5c0a867b7f95f837e2a33b7987
   file_selector_ios: ec57ec07954363dd730b642e765e58f199bb621a
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_local_notifications: 643a3eda1ce1c0599413ca31672536d423dee214
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+  local_auth_darwin: c3ee6cce0a8d56be34c8ccb66ba31f7f180aaebb
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   pasteboard: 3913b69d3f2be214970a8ae94e7e87fe76e47e98
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
@@ -99,6 +119,6 @@ SPEC CHECKSUMS:
   sqlite3_flutter_libs: b3e120efe9a82017e5552a620f696589ed4f62ab
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
-PODFILE CHECKSUM: 6ffbbc12f6521af5d2b516261f294d6c0f8e9bfd
+PODFILE CHECKSUM: 0bdbb148a7ad1936c2c8f12d07e902a96d64b4cc
 
 COCOAPODS: 1.16.2

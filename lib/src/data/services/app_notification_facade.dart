@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../../application/desktop_shell_service.dart';
 import '../../domain/entities/notification_target.dart';
 import '../../domain/services/notification_facade.dart';
+import '../../domain/services/notification_channels.dart';
 import 'mac_menu_bar_status_service.dart';
 
 class AppNotificationFacade implements NotificationFacade {
@@ -137,9 +138,9 @@ class AppNotificationFacade implements NotificationFacade {
       final id =
           DateTime.now().millisecondsSinceEpoch & Random().nextInt(0x7fffffff);
       const android = AndroidNotificationDetails(
-        'awiki_me_messages',
-        'Messages',
-        channelDescription: 'AWiki Me message notifications',
+        awikiMessageNotificationChannelId,
+        awikiMessageNotificationChannelName,
+        channelDescription: awikiMessageNotificationChannelDescription,
         importance: Importance.max,
         priority: Priority.high,
       );

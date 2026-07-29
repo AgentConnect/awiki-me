@@ -3,6 +3,8 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
@@ -929,6 +931,88 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
+  });
+
+  testWidgets('Linux 宽屏从完整联系人列表查看资料并打开会话', (tester) async {
+    const peerDid = 'did:test:alice';
+    final gateway = FakeAwikiGateway()
+      ..followers = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: peerDid,
+          displayName: 'Alice',
+          relationship: 'follower',
+        ),
+      ]
+      ..directoryConversationIdsByQuery = const <String, String>{
+        peerDid: 'dm:peer-scope:v1:alice',
+      }
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        peerDid: UserProfile(
+          did: peerDid,
+          displayName: 'Alice',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+        ),
+      };
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AwikiShellNavigationScope(child: FriendsWorkspacePage()),
+        gateway: gateway,
+        session: const SessionIdentity(
+          did: 'did:test:me',
+          credentialName: 'default',
+          handle: 'me',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          friendsProvider.overrideWith(
+            (ref) => _StaticFriendsController(
+              ref,
+              const FriendsState(
+                followers: <RelationshipSummary>[
+                  RelationshipSummary(
+                    did: peerDid,
+                    displayName: 'Alice',
+                    relationship: 'follower',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(FriendsWorkspacePage)),
+    );
+
+    await tester.tap(find.byKey(const Key('friends-followers-view-all')));
+    await tester.pumpAndSettle();
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+
+    final fullListRow = find.descendant(
+      of: find.byType(RelationshipListPage),
+      matching: find.byKey(const Key('contact-row:$peerDid')),
+    );
+    expect(fullListRow, findsOneWidget);
+    await tester.tap(fullListRow);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RelationshipListPage), findsNothing);
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('peer-profile-send-message')));
+    await tester.pumpAndSettle();
+
+    expect(
+      container.read(selectedConversationProvider),
+      'dm:peer-scope:v1:alice',
+    );
   });
 
   testWidgets('查看全部会并发补齐缺失 profile 并显示昵称', (tester) async {

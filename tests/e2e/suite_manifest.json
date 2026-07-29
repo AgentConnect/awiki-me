@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-24.identity-switch-hydration-v1",
+  "sourceRevision": "2026-07-29.release0714-merge-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -18,6 +18,136 @@
       "caseIds": [
         "SMOKE-E2E-001",
         "NATIVE-E2E-001"
+      ]
+    },
+    "multi-device": {
+      "tier": "product_ui",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 6,
+      "timeoutMinutes": 8,
+      "cleanupPolicy": "test_owned_temporary_scope_delete",
+      "allowedHosts": [],
+      "allowedDidDomains": [],
+      "resourceCategories": [
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "MULTI-DEVICE-CAPABILITY-GATE-E2E-001"
+      ]
+    },
+    "multi-device-remote-join": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 20,
+      "timeoutMinutes": 30,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state"
+      ],
+      "caseIds": [
+        "DEVICE-JOIN-E2E-001",
+        "DEVICE-JOIN-E2E-002"
+      ]
+    },
+    "multi-device-app-pair": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 20,
+      "timeoutMinutes": 30,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "DEVICE-JOIN-E2E-004"
+      ]
+    },
+    "multi-device-app-pair-functional": {
+      "tier": "remote_product_ui",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents+awiki-me-messaging",
+      "estimatedMinutes": 24,
+      "timeoutMinutes": 35,
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state",
+        "agent_inventory"
+      ],
+      "caseIds": [
+        "DEVICE-AGENT-SYNC-E2E-001",
+        "DEVICE-AGENT-MESSAGE-SYNC-E2E-001",
+        "DEVICE-MESSAGE-SYNC-E2E-001",
+        "DEVICE-MESSAGE-SYNC-E2E-002"
+      ]
+    },
+    "step4-revoke-mls": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-me-groups",
+      "estimatedMinutes": 24,
+      "timeoutMinutes": 30,
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "device_join_session",
+        "groups",
+        "isolated_app_state",
+        "isolated_cli_state"
+      ],
+      "caseIds": [
+        "STEP4-GROUP-PAGINATION-E2E-001",
+        "DEVICE-REVOKE-E2E-001",
+        "MLS-MULTI-DEVICE-E2E-002"
       ]
     },
     "production-keychain": {
@@ -45,21 +175,27 @@
         "release"
       ],
       "owner": "awiki-me-messaging",
-      "estimatedMinutes": 25,
-      "timeoutMinutes": 30,
+      "estimatedMinutes": 40,
+      "timeoutMinutes": 45,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
         "groups",
         "relationships",
         "attachments",
-        "read_state"
+        "read_state",
+        "dedicated_test_identity",
+        "device_join_session",
+        "isolated_app_state",
+        "isolated_cli_state"
       ],
       "caseIds": [
         "AUTH-E2E-001",
@@ -85,7 +221,8 @@
         "ATTACH-E2E-001",
         "ATTACH-E2E-002",
         "ATTACH-REG-001",
-        "DISPLAY-NAME-E2E-004"
+        "DISPLAY-NAME-E2E-004",
+        "ROOT-TRANSFER-E2E-001"
       ]
     },
     "direct": {
@@ -99,10 +236,12 @@
       "timeoutMinutes": 10,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -128,10 +267,12 @@
       "timeoutMinutes": 14,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "groups",
@@ -159,10 +300,12 @@
       "timeoutMinutes": 12,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "attachments",
@@ -187,10 +330,12 @@
       "timeoutMinutes": 10,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "relationships",
@@ -217,10 +362,12 @@
       "timeoutMinutes": 10,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -266,10 +413,12 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -278,7 +427,8 @@
         "read_state"
       ],
       "caseIds": [
-        "PROCESS-RESTART-E2E-001"
+        "PROCESS-RESTART-E2E-001",
+        "IDENTITY-DELETE-E2E-001"
       ]
     },
     "display-name-fallback": {
@@ -292,10 +442,12 @@
       "timeoutMinutes": 18,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -319,10 +471,12 @@
       "timeoutMinutes": 35,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "direct_messages",
@@ -343,7 +497,7 @@
         "PERF-E2E-012"
       ]
     },
-    "message-agent": {
+    "personal-agent": {
       "tier": "optional_provider_product_ui",
       "requiredFor": [
         "optional_nightly"
@@ -353,19 +507,21 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
-        "message_agent_bindings",
+        "personal_agent_bindings",
         "direct_messages"
       ],
       "caseIds": [
-        "MSGAGENT-E2E-001",
-        "MSGAGENT-E2E-002",
-        "MSGAGENT-E2E-004"
+        "PERSONALAGENT-E2E-001",
+        "PERSONALAGENT-E2E-002",
+        "PERSONALAGENT-E2E-004"
       ]
     },
     "codex-agent": {
@@ -378,10 +534,12 @@
       "timeoutMinutes": 15,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "runtime_agents",
@@ -404,10 +562,12 @@
       "timeoutMinutes": 20,
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
       "allowedHosts": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "allowedDidDomains": [
-        "awiki.info"
+        "awiki.info",
+        "agentwiki.info"
       ],
       "resourceCategories": [
         "runtime_agents",

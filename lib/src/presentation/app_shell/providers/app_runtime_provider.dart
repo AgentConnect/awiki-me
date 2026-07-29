@@ -25,6 +25,7 @@ import '../../agents/agents_provider.dart';
 import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_provider.dart';
 import '../../friends/friends_navigation_provider.dart';
+import '../../devices/devices_provider.dart';
 import '../../friends/friends_provider.dart';
 import '../../group/group_provider.dart';
 import '../../profile/peer_display_profile_provider.dart';
@@ -44,16 +45,30 @@ const bool _runtimeTraceEnabled = bool.fromEnvironment(
   defaultValue: false,
 );
 
+const Object _unsetActivatedDid = Object();
+
 class AppRuntimeState {
-  const AppRuntimeState({this.isInitialized = false, this.isBusy = false});
+  const AppRuntimeState({
+    this.isInitialized = false,
+    this.isBusy = false,
+    this.activatedDid,
+  });
 
   final bool isInitialized;
   final bool isBusy;
+  final String? activatedDid;
 
-  AppRuntimeState copyWith({bool? isInitialized, bool? isBusy}) {
+  AppRuntimeState copyWith({
+    bool? isInitialized,
+    bool? isBusy,
+    Object? activatedDid = _unsetActivatedDid,
+  }) {
     return AppRuntimeState(
       isInitialized: isInitialized ?? this.isInitialized,
       isBusy: isBusy ?? this.isBusy,
+      activatedDid: identical(activatedDid, _unsetActivatedDid)
+          ? this.activatedDid
+          : activatedDid as String?,
     );
   }
 }
@@ -62,7 +77,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   AppRuntimeController(
     this.ref, {
     Duration requestTimeout = const Duration(seconds: 20),
+    Duration foregroundCatchUpInterval = const Duration(seconds: 30),
   }) : _requestTimeout = requestTimeout,
+       _foregroundCatchUpInterval = foregroundCatchUpInterval,
        super(const AppRuntimeState()) {
     _lifecycleSubscription = ref.listen<AppLifecycleState>(
       appLifecycleProvider,
@@ -83,6 +100,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   final Ref ref;
   final Duration _requestTimeout;
+  final Duration _foregroundCatchUpInterval;
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isLoggingOut = false;
   _SessionEpochOperation? _authenticatedRefreshOperation;
@@ -90,7 +108,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   int _busyOperationCount = 0;
   Future<void> _e2eeInitializationTail = Future<void>.value();
   SessionEpoch? _lastAuthenticatedRefreshEpoch;
+  Future<void>? _joinedMemberActivation;
+  String? _joinedMemberActivationDid;
   DateTime? _lastAuthenticatedRefreshStartedAt;
+  Timer? _foregroundCatchUpTimer;
   late final ProviderSubscription<AppLifecycleState> _lifecycleSubscription;
   late final ProviderSubscription<AsyncValue<RealtimeConnectionStatus>>
   _realtimeStatusSubscription;
@@ -144,6 +165,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final session = _legacySessionFromAppSession(lease.session);
     final totalWatch = Stopwatch()..start();
     _beginBusyOperation();
+    state = state.copyWith(activatedDid: null);
     try {
       final currentSession = ref.read(sessionProvider).session;
       if (currentSession != null) {
@@ -178,7 +200,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       unawaited(
         _refreshAuthenticatedDataInBackground(epoch: epoch, debounce: false),
       );
+      _isLoggingOut = false;
+      state = state.copyWith(isInitialized: true, activatedDid: session.did);
       _scheduleReliableSync('startup', immediate: true);
+      _startForegroundCatchUp();
       _ensureRealtimeConnected(epoch);
     } on TimeoutException {
       if (!_isSessionLeaseTransitionCurrent(lease)) {
@@ -203,6 +228,26 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         elapsed: totalWatch.elapsed,
       );
     }
+  }
+
+  Future<void> prepareIdentityActivation() async {
+    _isLoggingOut = true;
+    _clearAuthenticatedUiState();
+    state = state.copyWith(
+      isBusy: true,
+      isInitialized: true,
+      activatedDid: null,
+    );
+    try {
+      await ref.read(realtimeApplicationServiceProvider).stop();
+    } catch (error, stackTrace) {
+      await _rollbackSessionActivationBestEffort();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  Future<void> rollbackIdentityActivation() {
+    return _rollbackSessionActivationBestEffort();
   }
 
   Future<void> loginWithLocalCredential(String credentialName) async {
@@ -312,6 +357,50 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }();
   }
 
+  Future<void> activateJoinedMember(String expectedDid) {
+    final normalizedDid = expectedDid.trim();
+    if (normalizedDid.isEmpty) {
+      return Future<void>.error(StateError('joined_identity_did_missing'));
+    }
+    if (state.activatedDid == normalizedDid &&
+        ref.read(sessionProvider).session?.did == normalizedDid) {
+      return Future<void>.value();
+    }
+    final active = _joinedMemberActivation;
+    if (active != null) {
+      if (_joinedMemberActivationDid != normalizedDid) {
+        return Future<void>.error(
+          StateError('joined_identity_activation_conflict'),
+        );
+      }
+      return active;
+    }
+
+    late final Future<void> operation;
+    operation =
+        (() async {
+          final sessions = ref.read(appSessionServiceProvider);
+          final session = await sessions.loginWithIdentity(normalizedDid);
+          if (session.did.trim() != normalizedDid) {
+            await sessions.logout();
+            throw StateError('joined_identity_did_mismatch');
+          }
+          await activateCommittedSession(session);
+          if (state.activatedDid != normalizedDid ||
+              ref.read(sessionProvider).session?.did != normalizedDid) {
+            throw StateError('joined_identity_activation_incomplete');
+          }
+        })().whenComplete(() {
+          if (identical(_joinedMemberActivation, operation)) {
+            _joinedMemberActivation = null;
+            _joinedMemberActivationDid = null;
+          }
+        });
+    _joinedMemberActivationDid = normalizedDid;
+    _joinedMemberActivation = operation;
+    return operation;
+  }
+
   Future<void> refreshLocalCredentials() async {
     await _runBusy(() async {
       final credentials = await _localCredentialsFor(ref);
@@ -330,7 +419,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     _isLoggingOut = true;
     _clearAuthenticatedUiState();
-    state = state.copyWith(isInitialized: true);
+    state = state.copyWith(
+      isBusy: false,
+      isInitialized: true,
+      activatedDid: null,
+    );
     try {
       await ref.read(appSessionServiceProvider).logout();
     } finally {
@@ -343,23 +436,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (current == null) {
       return;
     }
-    await _runBusy(() async {
+    state = state.copyWith(isBusy: true);
+    try {
       _isLoggingOut = true;
       try {
-        ref.read(sessionProvider.notifier).clear();
-        _invalidateSessionOperations();
-        _cancelRealtimeUpdates();
-        ref.read(profileProvider.notifier).clear();
-        ref.read(agentsProvider.notifier).clear();
-        ref.read(agentInboxProvider.notifier).clear();
-        ref.read(selectedConversationProvider.notifier).clearSelection();
-        await ref.read(conversationListProvider.notifier).clear();
-        ref.read(chatThreadsProvider.notifier).clear();
-        ref.read(friendsProvider.notifier).clear();
-        ref.read(friendsWorkspaceNavigationProvider.notifier).reset();
-        ref.read(peerDisplayProfileProvider.notifier).clear();
-        ref.invalidate(peerProfileProvider);
-        ref.read(groupProvider.notifier).clear();
+        state = state.copyWith(activatedDid: null);
+        _clearAuthenticatedUiState();
         await ref
             .read(appSessionServiceProvider)
             .deleteLocalIdentity(current.credentialName);
@@ -368,10 +450,19 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       } finally {
         _isLoggingOut = false;
       }
-    });
+    } catch (error) {
+      final message = AppMessage.fromError(error);
+      ref.read(uiFeedbackProvider.notifier).showError(message);
+      if (message == AppMessage.sessionExpiredRelogin()) {
+        await logout();
+      }
+    } finally {
+      state = state.copyWith(isBusy: false);
+    }
   }
 
   void _clearAuthenticatedUiState() {
+    _stopForegroundCatchUp();
     ref.read(sessionProvider.notifier).clear();
     _invalidateSessionOperations();
     _cancelRealtimeUpdates();
@@ -386,6 +477,22 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ref.read(peerDisplayProfileProvider.notifier).clear();
     ref.invalidate(peerProfileProvider);
     ref.read(groupProvider.notifier).clear();
+  }
+
+  Future<void> _rollbackSessionActivationBestEffort() async {
+    _clearAuthenticatedUiState();
+    state = state.copyWith(
+      isBusy: false,
+      isInitialized: true,
+      activatedDid: null,
+    );
+    try {
+      await ref.read(appSessionServiceProvider).logout();
+    } catch (_) {
+      // Keep the original activation failure authoritative.
+    } finally {
+      _isLoggingOut = false;
+    }
   }
 
   Future<void> exportCurrentCredential() async {
@@ -532,6 +639,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (next == AppLifecycleState.paused ||
         next == AppLifecycleState.inactive ||
         next == AppLifecycleState.hidden) {
+      _stopForegroundCatchUp();
       ref.read(chatThreadsProvider.notifier).trimForAppBackground();
       return;
     }
@@ -542,6 +650,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (epoch == null) {
       return;
     }
+    _startForegroundCatchUp();
     _ensureRealtimeConnected(epoch);
     _scheduleReliableSync('app_resumed');
     unawaited(_refreshAuthenticatedDataInBackground());
@@ -588,6 +697,32 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
     unawaited(realtime.start().catchError((_) {}));
+  }
+
+  void _startForegroundCatchUp() {
+    _foregroundCatchUpTimer?.cancel();
+    _foregroundCatchUpTimer = null;
+    if (_foregroundCatchUpInterval <= Duration.zero ||
+        _isLoggingOut ||
+        ref.read(sessionProvider).session == null ||
+        ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+      return;
+    }
+    _foregroundCatchUpTimer = Timer.periodic(_foregroundCatchUpInterval, (_) {
+      if (!mounted ||
+          _isLoggingOut ||
+          ref.read(sessionProvider).session == null ||
+          ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+        _stopForegroundCatchUp();
+        return;
+      }
+      _scheduleReliableSync('foreground_catch_up');
+    });
+  }
+
+  void _stopForegroundCatchUp() {
+    _foregroundCatchUpTimer?.cancel();
+    _foregroundCatchUpTimer = null;
   }
 
   Future<void> _recoverRealtimeSession() {
@@ -701,6 +836,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       'realtime.update',
       fields: <String, Object?>{
         'control': update.agentControlPayload != null,
+        'system_notification': update.systemNotificationChanged,
         'message': update.message != null,
         'conversation': traceConversation != null,
         'conversation_hint': update.conversationHint != null,
@@ -718,6 +854,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       },
     );
     final reliableSyncReason = _reliableSyncReasonFor(update);
+    if (update.systemNotificationChanged) {
+      unawaited(
+        ref
+            .read(devicesProvider.notifier)
+            .refreshJoinInbox()
+            .catchError((_) {}),
+      );
+    }
     if (reliableSyncReason != null) {
       _runtimeTrace(
         'reliable_sync.schedule',
@@ -730,16 +874,15 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     final controlPayload = update.agentControlPayload;
     if (controlPayload != null) {
-      ref.read(agentsProvider.notifier).applyControlPayload(controlPayload);
       ref.read(agentInboxProvider.notifier).applyControlPayload(controlPayload);
       ref
           .read(chatThreadsProvider.notifier)
           .applyAgentRunStatusPayload(controlPayload);
       ref
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(controlPayload);
+          .applyPersonalAgentControlPayload(controlPayload);
       _runtimeTrace(
-        'realtime.control_applied',
+        'realtime.control_hint',
         fields: <String, Object?>{
           'conversation': update.conversation != null,
           'thread_hash': _runtimeSafeHash(update.conversation?.threadId),
@@ -908,6 +1051,12 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   String? _reliableSyncReasonFor(RealtimeUpdate update) {
+    if (update.agentControlPayload != null) {
+      return 'realtime_agent_control';
+    }
+    if (update.systemNotificationChanged) {
+      return 'system_notification_changed';
+    }
     if (update.gapDetected) {
       return 'realtime_gap';
     }
@@ -1023,6 +1172,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   @override
   void dispose() {
     _invalidateSessionOperations();
+    _stopForegroundCatchUp();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
     _cancelRealtimeUpdates();

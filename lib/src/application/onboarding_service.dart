@@ -1,11 +1,19 @@
 import '../domain/entities/profile_patch.dart';
 import 'app_session_service.dart';
-import 'models/app_session.dart';
 import 'ports/identity_core_port.dart';
+import 'ports/legacy_identity_upgrade_port.dart';
 import 'ports/profile_core_port.dart';
 
 abstract interface class OnboardingService {
-  Future<AppSession> registerHandleWithPhone({
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  );
+
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  );
+
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -15,7 +23,7 @@ abstract interface class OnboardingService {
     AppSessionTransition? transition,
   });
 
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
@@ -24,7 +32,7 @@ abstract interface class OnboardingService {
     AppSessionTransition? transition,
   });
 
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String phone,
     required String handle,
     String? inviteCode,
@@ -32,30 +40,40 @@ abstract interface class OnboardingService {
     String? profileMarkdown,
     AppSessionTransition? transition,
   });
-
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-    AppSessionTransition? transition,
-  });
 }
 
 class ImCoreOnboardingService implements OnboardingService {
   ImCoreOnboardingService({
     required IdentityCorePort identities,
+    required LegacyIdentityUpgradePort legacyUpgrades,
     required AppSessionService sessions,
     ProfileCorePort? profiles,
   }) : _identities = identities,
+       _legacyUpgrades = legacyUpgrades,
        _sessions = sessions,
        _profiles = profiles;
 
   final IdentityCorePort _identities;
+  final LegacyIdentityUpgradePort _legacyUpgrades;
   final AppSessionService _sessions;
   final ProfileCorePort? _profiles;
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) {
+    return _legacyUpgrades.legacyUpgradeStatus(identityIdOrAlias);
+  }
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) {
+    return _legacyUpgrades.upgradeLegacyIdentity(identityIdOrAlias);
+  }
+
+  @override
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -68,7 +86,7 @@ class ImCoreOnboardingService implements OnboardingService {
     final normalizedOtp = _sanitizeOtp(otp);
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
-      final identity = await _identities.registerHandleWithPhone(
+      final result = await _identities.registerHandleWithPhone(
         phone: normalizedPhone,
         otp: normalizedOtp,
         handle: normalizedHandle,
@@ -76,7 +94,7 @@ class ImCoreOnboardingService implements OnboardingService {
         displayName: _nonEmpty(nickName),
       );
       return _activateAndPatchProfile(
-        identity,
+        result,
         transition: requestedTransition,
         nickName: nickName,
         profileMarkdown: profileMarkdown,
@@ -85,7 +103,7 @@ class ImCoreOnboardingService implements OnboardingService {
   }
 
   @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
@@ -96,14 +114,14 @@ class ImCoreOnboardingService implements OnboardingService {
     final normalizedEmail = email.trim().toLowerCase();
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
-      final identity = await _identities.registerHandleWithEmail(
+      final result = await _identities.registerHandleWithEmail(
         email: normalizedEmail,
         handle: normalizedHandle,
         inviteCode: _nonEmpty(inviteCode),
         displayName: _nonEmpty(nickName),
       );
       return _activateAndPatchProfile(
-        identity,
+        result,
         transition: requestedTransition,
         nickName: nickName,
         profileMarkdown: profileMarkdown,
@@ -112,30 +130,7 @@ class ImCoreOnboardingService implements OnboardingService {
   }
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-    AppSessionTransition? transition,
-  }) async {
-    final normalizedPhone = _normalizePhone(phone);
-    final normalizedOtp = _sanitizeOtp(otp);
-    final normalizedHandle = _normalizeHandle(handle);
-    return _runSessionTransition(transition, (requestedTransition) async {
-      final identity = await _identities.recoverHandle(
-        phone: normalizedPhone,
-        otp: normalizedOtp,
-        handle: normalizedHandle,
-      );
-      return _sessions.activateIdentity(
-        identity,
-        transition: requestedTransition,
-      );
-    });
-  }
-
-  @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String phone,
     required String handle,
     String? inviteCode,
@@ -146,14 +141,13 @@ class ImCoreOnboardingService implements OnboardingService {
     _normalizePhone(phone);
     final normalizedHandle = _normalizeHandle(handle);
     return _runSessionTransition(transition, (requestedTransition) async {
-      final identity = await _identities
-          .registerHandleWithoutContactVerification(
-            handle: normalizedHandle,
-            inviteCode: _nonEmpty(inviteCode),
-            displayName: _nonEmpty(nickName),
-          );
+      final result = await _identities.registerHandleWithoutContactVerification(
+        handle: normalizedHandle,
+        inviteCode: _nonEmpty(inviteCode),
+        displayName: _nonEmpty(nickName),
+      );
       return _activateAndPatchProfile(
-        identity,
+        result,
         transition: requestedTransition,
         nickName: nickName,
         profileMarkdown: profileMarkdown,
@@ -161,14 +155,27 @@ class ImCoreOnboardingService implements OnboardingService {
     });
   }
 
-  Future<AppSession> _activateAndPatchProfile(
-    AppSession identity, {
+  Future<IdentityRegistrationResult> _activateAndPatchProfile(
+    IdentityRegistrationResult result, {
     required AppSessionTransition transition,
     String? nickName,
     String? profileMarkdown,
   }) async {
+    if (result.status == IdentityRegistrationStatus.joinRequired) {
+      if (result.joinProgress == null) {
+        throw StateError(
+          'Join-required registration did not include Join progress.',
+        );
+      }
+      _sessions.cancelPendingSessionTransition(transition);
+      return result;
+    }
+    final identity = result.identity;
+    if (identity == null) {
+      throw StateError('Registered result did not include an identity.');
+    }
     final markdown = _nonEmpty(profileMarkdown);
-    return _sessions.activateIdentity(
+    final session = await _sessions.activateIdentity(
       identity,
       transition: transition,
       initializeIdentitySession: markdown == null || _profiles == null
@@ -182,11 +189,16 @@ class ImCoreOnboardingService implements OnboardingService {
               );
             },
     );
+    return IdentityRegistrationResult(
+      status: IdentityRegistrationStatus.registered,
+      identity: session,
+    );
   }
 
-  Future<AppSession> _runSessionTransition(
+  Future<IdentityRegistrationResult> _runSessionTransition(
     AppSessionTransition? transition,
-    Future<AppSession> Function(AppSessionTransition transition) action,
+    Future<IdentityRegistrationResult> Function(AppSessionTransition transition)
+    action,
   ) async {
     final requestedTransition =
         transition ?? _sessions.beginSessionTransition();

@@ -1,3 +1,7 @@
+// [INPUT]: Bootstrap-owned adapters, runtime configuration, and Riverpod lifecycle.
+// [OUTPUT]: Application service and capability providers used by product surfaces.
+// [POS]: Composition boundary; high-risk device operations stay behind typed ports and user presence.
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
@@ -11,6 +15,7 @@ import '../application/agent/agent_control_status_store.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
+import '../application/device_management_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
@@ -18,15 +23,21 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/device_management_core_port.dart';
+import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
-import '../application/ports/message_agent_binding_port.dart';
+import '../application/ports/personal_agent_binding_port.dart';
+import '../application/ports/root_key_transfer_port.dart';
+import '../application/ports/user_presence_port.dart';
 import '../application/product_local_store.dart';
 import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
 import '../data/services/flutter_attachment_image_dimension_probe.dart';
+import '../application/root_key_transfer_service.dart';
 import '../data/services/locale_preference_service.dart';
+import '../data/services/local_auth_user_presence_port.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
@@ -73,6 +84,49 @@ final identityCorePortProvider = Provider<IdentityCorePort>(
       throw UnimplementedError('identityCorePortProvider must be overridden'),
 );
 
+final deviceManagementCorePortProvider = Provider<DeviceManagementCorePort>(
+  (ref) => throw UnimplementedError(
+    'deviceManagementCorePortProvider must be overridden',
+  ),
+);
+
+final multiDeviceDeviceRevokeEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDeviceRevokeEnabled,
+);
+
+final multiDeviceDirectE2eeEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceDirectE2eeEnabled,
+);
+
+final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
+  (ref) =>
+      ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
+);
+
+final groupEncryptionCorePortProvider = Provider<GroupEncryptionCorePort>(
+  (ref) => throw StateError('group_encryption_unavailable'),
+);
+
+final rootKeyTransferPortProvider = Provider<RootKeyTransferPort>(
+  (ref) => throw StateError('root_key_transfer_unavailable'),
+);
+
+final rootKeyTransferServiceProvider = Provider<RootKeyTransferService>(
+  (ref) => RootKeyTransferService(
+    transfer: ref.watch(rootKeyTransferPortProvider),
+    userPresence: ref.watch(userPresencePortProvider),
+  ),
+);
+
+final deviceManagementServiceProvider = Provider<DeviceManagementService>(
+  (ref) => DeviceManagementService(
+    core: ref.watch(deviceManagementCorePortProvider),
+    userPresence: ref.watch(userPresencePortProvider),
+  ),
+);
+
 final onboardingServiceProvider = Provider<OnboardingService>(
   (ref) =>
       throw UnimplementedError('onboardingServiceProvider must be overridden'),
@@ -111,9 +165,9 @@ final agentControlServiceProvider = Provider<AgentControlService>(
   ),
 );
 
-final messageAgentBindingPortProvider = Provider<MessageAgentBindingPort>(
+final personalAgentBindingPortProvider = Provider<PersonalAgentBindingPort>(
   (ref) => throw UnimplementedError(
-    'messageAgentBindingPortProvider must be overridden',
+    'personalAgentBindingPortProvider must be overridden',
   ),
 );
 
@@ -193,6 +247,10 @@ final localePreferenceServiceProvider = Provider<LocalePreferenceService>(
 
 final updateServiceProvider = Provider<UpdateService>(
   (ref) => throw UnimplementedError('updateServiceProvider must be overridden'),
+);
+
+final userPresencePortProvider = Provider<UserPresencePort>(
+  (ref) => LocalAuthUserPresencePort(),
 );
 
 final attachmentPickerServiceProvider = Provider<AttachmentPickerService>(

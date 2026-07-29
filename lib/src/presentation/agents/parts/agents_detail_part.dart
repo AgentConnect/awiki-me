@@ -14,11 +14,12 @@ class _AgentDetailPane extends StatelessWidget {
     required this.onUpgrade,
     required this.onCancelUpgrade,
     required this.onDelete,
-    required this.messageAgentEnabled,
-    required this.onBootstrapMessageAgent,
-    required this.onPauseMessageAgent,
-    required this.onDeleteMessageAgent,
-    required this.onRevokeMessageAgentAuthorization,
+    required this.personalAgentEnabled,
+    required this.onOpenPersonalAgentSettings,
+    required this.onBootstrapPersonalAgent,
+    required this.onPausePersonalAgent,
+    required this.onDeletePersonalAgent,
+    required this.onRevokePersonalAgentAuthorization,
     required this.onSaveInvocationPolicy,
   });
 
@@ -34,11 +35,12 @@ class _AgentDetailPane extends StatelessWidget {
   final ValueChanged<AgentSummary> onUpgrade;
   final ValueChanged<AgentSummary> onCancelUpgrade;
   final ValueChanged<AgentSummary> onDelete;
-  final bool messageAgentEnabled;
-  final ValueChanged<AgentSummary> onBootstrapMessageAgent;
-  final ValueChanged<AgentSummary> onPauseMessageAgent;
-  final ValueChanged<AgentSummary> onDeleteMessageAgent;
-  final ValueChanged<AgentSummary> onRevokeMessageAgentAuthorization;
+  final bool personalAgentEnabled;
+  final ValueChanged<AgentSummary> onOpenPersonalAgentSettings;
+  final ValueChanged<AgentSummary> onBootstrapPersonalAgent;
+  final ValueChanged<AgentSummary> onPausePersonalAgent;
+  final ValueChanged<AgentSummary> onDeletePersonalAgent;
+  final ValueChanged<AgentSummary> onRevokePersonalAgentAuthorization;
   final Future<bool> Function(String agentDid, AgentInvocationPolicy policy)
   onSaveInvocationPolicy;
 
@@ -98,9 +100,7 @@ class _AgentDetailPane extends StatelessWidget {
             agent.latest.needsUpgrade ||
                 agent.latest.status.trim().toLowerCase() == 'needs_upgrade');
     final daemonCanCreateRuntime =
-        !agent.isDaemon ||
-        (!state.statusQueryErrors.containsKey(agent.agentDid) &&
-            (agent.daemonEffectiveStatus?.isActionable ?? true));
+        agent.isDaemon && state.canCreateRuntimeAgent(agent);
     final actions = <Widget>[
       if (agent.isDaemon && showPersistentHeader)
         _ActionButton(
@@ -252,30 +252,37 @@ class _AgentDetailPane extends StatelessWidget {
             onPressed: onInstallDaemon,
           ),
         ],
-        if (_shouldShowMessageAgentSettingsPanel() &&
+        if (_shouldShowPersonalAgentSettingsPanel() &&
             agent.isDaemon) ...<Widget>[
           SizedBox(height: responsive.spacing(14)),
-          _MessageAgentSettingsPanel(
+          _PersonalAgentSettingsPanel(
             daemon: agent,
-            messageAgent: state.messageAgentRuntimeFor(agent.agentDid),
-            enabled: messageAgentEnabled,
+            personalAgent: state.personalAgentRuntimeFor(agent.agentDid),
+            enabled: personalAgentEnabled,
             isEnablePending: state.isActionPending(
-              AgentActionKeys.bootstrapMessageAgent(agent.agentDid),
+              AgentActionKeys.bootstrapPersonalAgent(agent.agentDid),
             ),
             isManagementPending:
                 state.isActionPending(
-                  AgentActionKeys.pauseMessageAgent(agent.agentDid),
+                  AgentActionKeys.pausePersonalAgent(agent.agentDid),
                 ) ||
                 state.isActionPending(
-                  AgentActionKeys.deleteMessageAgent(agent.agentDid),
+                  AgentActionKeys.deletePersonalAgent(agent.agentDid),
                 ) ||
                 state.isActionPending(
-                  AgentActionKeys.revokeMessageAgent(agent.agentDid),
+                  AgentActionKeys.revokePersonalAgent(agent.agentDid),
                 ),
-            onEnable: () => onBootstrapMessageAgent(agent),
-            onPause: () => onPauseMessageAgent(agent),
-            onDelete: () => onDeleteMessageAgent(agent),
-            onRevoke: () => onRevokeMessageAgentAuthorization(agent),
+            onEnable: () => onBootstrapPersonalAgent(agent),
+            onPause: () => onPausePersonalAgent(agent),
+            onDelete: () => onDeletePersonalAgent(agent),
+            onRevoke: () => onRevokePersonalAgentAuthorization(agent),
+          ),
+        ] else if (personalAgentEnabled && agent.isDaemon) ...<Widget>[
+          SizedBox(height: responsive.spacing(14)),
+          _PersonalAgentSettingsEntryCard(
+            daemon: agent,
+            personalAgent: state.personalAgentRuntimeFor(agent.agentDid),
+            onOpen: () => onOpenPersonalAgentSettings(agent),
           ),
         ],
       ],
@@ -519,8 +526,8 @@ class _InstallDaemonPanel extends StatelessWidget {
   }
 }
 
-bool _shouldShowMessageAgentSettingsPanel() {
-  // Keep the Message Agent management implementation available for future
+bool _shouldShowPersonalAgentSettingsPanel() {
+  // Keep the Personal Agent management implementation available for future
   // rollout, but hide the daemon detail entry from the current product UI.
   return false;
 }
@@ -536,6 +543,100 @@ String _agentDeleteButtonLabel(
   return agent.isDaemon
       ? context.l10n.agentDeleteDaemon
       : context.l10n.agentDeleteRuntime;
+}
+
+class _PersonalAgentSettingsEntryCard extends StatelessWidget {
+  const _PersonalAgentSettingsEntryCard({
+    required this.daemon,
+    required this.personalAgent,
+    required this.onOpen,
+  });
+
+  final AgentSummary daemon;
+  final AgentSummary? personalAgent;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final responsive = context.awikiResponsive;
+    final diagnostics = daemon.latest.diagnosticsSummary;
+    final hasBootstrapKey = _daemonHasBootstrapPublicKey(daemon, diagnostics);
+    final stateText = personalAgent != null
+        ? l10n.personalAgentCreated
+        : hasBootstrapKey
+        ? l10n.personalAgentReadyToEnable
+        : l10n.personalAgentWaitingStatusRefresh;
+    final stateActive = personalAgent != null || hasBootstrapKey;
+    return AppPressableTile(
+      key: const Key('personal-agent-settings-entry-card'),
+      onTap: onOpen,
+      semanticLabel: l10n.personalAgentConfigure,
+      semanticsIdentifier: 'personal-agent-settings-entry',
+      borderRadius: BorderRadius.circular(responsive.radius(10)),
+      backgroundColor: CupertinoColors.white,
+      border: Border.all(color: const Color(0xFFE4EAF3)),
+      child: Padding(
+        padding: EdgeInsets.all(responsive.spacing(16)),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: responsive.displayScaled(34),
+              height: responsive.displayScaled(34),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F7F4),
+                borderRadius: BorderRadius.circular(responsive.radius(9)),
+              ),
+              child: Icon(
+                CupertinoIcons.bubble_left_bubble_right,
+                color: const Color(0xFF1B7A43),
+                size: responsive.iconMd,
+              ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    l10n.personalAgentTitle,
+                    style: TextStyle(
+                      color: const Color(0xFF101B32),
+                      fontSize: responsive.bodyMd,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(3)),
+                  Text(
+                    l10n.personalAgentSettingsSubtitle,
+                    style: TextStyle(
+                      color: const Color(0xFF66728A),
+                      fontSize: responsive.metaSm,
+                      height: 1.35,
+                    ),
+                  ),
+                  SizedBox(height: responsive.spacing(7)),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _PersonalAgentStatePill(
+                      text: stateText,
+                      active: stateActive,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: responsive.spacing(10)),
+            Icon(
+              CupertinoIcons.chevron_right,
+              color: const Color(0xFF8A96AA),
+              size: responsive.iconSm,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _AgentDeletingNotice extends StatelessWidget {
@@ -578,10 +679,10 @@ class _AgentDeletingNotice extends StatelessWidget {
   }
 }
 
-class _MessageAgentSettingsPanel extends StatelessWidget {
-  const _MessageAgentSettingsPanel({
+class _PersonalAgentSettingsPanel extends StatelessWidget {
+  const _PersonalAgentSettingsPanel({
     required this.daemon,
-    required this.messageAgent,
+    required this.personalAgent,
     required this.enabled,
     required this.isEnablePending,
     required this.isManagementPending,
@@ -592,7 +693,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
   });
 
   final AgentSummary daemon;
-  final AgentSummary? messageAgent;
+  final AgentSummary? personalAgent;
   final bool enabled;
   final bool isEnablePending;
   final bool isManagementPending;
@@ -609,12 +710,13 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
     final daemonReady =
         daemon.latest.status.trim().toLowerCase() == 'ready' ||
         daemon.latest.status.trim().toLowerCase() == 'needs_upgrade';
-    const provider = defaultMessageAgentRuntimeProvider;
+    const provider = defaultPersonalAgentRuntimeProvider;
     final isBusy = isEnablePending || isManagementPending;
     final canEnable = enabled && daemonReady && hasBootstrapKey && !isBusy;
-    final canManage = enabled && daemonReady && messageAgent != null && !isBusy;
+    final canManage =
+        enabled && daemonReady && personalAgent != null && !isBusy;
     return Container(
-      key: const Key('message-agent-settings-panel'),
+      key: const Key('personal-agent-settings-panel'),
       padding: EdgeInsets.all(responsive.spacing(16)),
       decoration: BoxDecoration(
         color: CupertinoColors.white,
@@ -645,7 +747,7 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      context.l10n.messageAgentTitle,
+                      context.l10n.personalAgentTitle,
                       style: TextStyle(
                         color: AwikiMePalette.inkNeutral,
                         fontSize: responsive.bodyMd,
@@ -655,10 +757,10 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                     SizedBox(height: responsive.spacing(2)),
                     Text(
                       enabled
-                          ? context.l10n.messageAgentRuntimeSubtitle(
+                          ? context.l10n.personalAgentRuntimeSubtitle(
                               provider.displayLabel,
                             )
-                          : context.l10n.messageAgentExperimentDisabled,
+                          : context.l10n.personalAgentExperimentDisabled,
                       style: TextStyle(
                         color: AwikiMePalette.mutedNeutral,
                         fontSize: responsive.metaSm,
@@ -667,49 +769,49 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                   ],
                 ),
               ),
-              _MessageAgentStatePill(
+              _PersonalAgentStatePill(
                 text: enabled && hasBootstrapKey
-                    ? context.l10n.messageAgentReadyToEnable
-                    : context.l10n.messageAgentNotReady,
+                    ? context.l10n.personalAgentReadyToEnable
+                    : context.l10n.personalAgentNotReady,
                 active: enabled && hasBootstrapKey,
               ),
             ],
           ),
           SizedBox(height: responsive.spacing(14)),
           SelectionContainer.disabled(
-            child: _MessageAgentFactGrid(
-              rows: <_MessageAgentFact>[
-                _MessageAgentFact(
-                  context.l10n.messageAgentRunningDaemon,
+            child: _PersonalAgentFactGrid(
+              rows: <_PersonalAgentFact>[
+                _PersonalAgentFact(
+                  context.l10n.personalAgentRunningDaemon,
                   localizeAgentTitle(context.l10n, daemon),
                 ),
-                _MessageAgentFact(
-                  context.l10n.messageAgentEngine,
+                _PersonalAgentFact(
+                  context.l10n.personalAgentEngine,
                   provider.displayLabel,
                 ),
-                _MessageAgentFact(
-                  context.l10n.messageAgentScope,
-                  context.l10n.messageAgentAllProcessableConversations,
+                _PersonalAgentFact(
+                  context.l10n.personalAgentScope,
+                  context.l10n.personalAgentAllProcessableConversations,
                 ),
-                _MessageAgentFact(
-                  context.l10n.messageAgentDaemonVersion,
+                _PersonalAgentFact(
+                  context.l10n.personalAgentDaemonVersion,
                   _daemonRuntimeSummary(context, daemon),
                 ),
-                _MessageAgentFact(
-                  context.l10n.messageAgentCapabilities,
+                _PersonalAgentFact(
+                  context.l10n.personalAgentCapabilities,
                   provider.capabilityLabel,
                 ),
-                _MessageAgentFact(
-                  context.l10n.messageAgentSecureBootstrap,
+                _PersonalAgentFact(
+                  context.l10n.personalAgentSecureBootstrap,
                   hasBootstrapKey
-                      ? context.l10n.messageAgentPublicKeyReported
-                      : context.l10n.messageAgentWaitingStatusRefresh,
+                      ? context.l10n.personalAgentPublicKeyReported
+                      : context.l10n.personalAgentWaitingStatusRefresh,
                 ),
               ],
             ),
           ),
           SizedBox(height: responsive.spacing(12)),
-          _MessageAgentPermissionSummary(enabled: enabled),
+          _PersonalAgentPermissionSummary(enabled: enabled),
           SizedBox(height: responsive.spacing(12)),
           SelectionContainer.disabled(
             child: Wrap(
@@ -719,24 +821,24 @@ class _MessageAgentSettingsPanel extends StatelessWidget {
                 _ActionButton(
                   icon: CupertinoIcons.check_mark_circled,
                   label: isEnablePending
-                      ? context.l10n.messageAgentEnabling
-                      : context.l10n.messageAgentEnable,
+                      ? context.l10n.personalAgentEnabling
+                      : context.l10n.personalAgentEnable,
                   onPressed: canEnable ? onEnable : null,
                 ),
                 _ActionButton(
                   icon: CupertinoIcons.pause_circle,
-                  label: context.l10n.messageAgentPause,
+                  label: context.l10n.personalAgentPause,
                   onPressed: canManage ? onPause : null,
                 ),
                 _ActionButton(
                   icon: CupertinoIcons.trash,
-                  label: context.l10n.messageAgentDelete,
+                  label: context.l10n.personalAgentDelete,
                   danger: true,
                   onPressed: canManage ? onDelete : null,
                 ),
                 _ActionButton(
                   icon: CupertinoIcons.lock_slash,
-                  label: context.l10n.messageAgentRevokeAuthorization,
+                  label: context.l10n.personalAgentRevokeAuthorization,
                   danger: true,
                   onPressed: canManage ? onRevoke : null,
                 ),
@@ -870,8 +972,8 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
   }
 }
 
-class _MessageAgentStatePill extends StatelessWidget {
-  const _MessageAgentStatePill({required this.text, required this.active});
+class _PersonalAgentStatePill extends StatelessWidget {
+  const _PersonalAgentStatePill({required this.text, required this.active});
 
   final String text;
   final bool active;
@@ -924,10 +1026,10 @@ class _DaemonUpgradeProgressBar extends StatelessWidget {
   }
 }
 
-class _MessageAgentFactGrid extends StatelessWidget {
-  const _MessageAgentFactGrid({required this.rows});
+class _PersonalAgentFactGrid extends StatelessWidget {
+  const _PersonalAgentFactGrid({required this.rows});
 
-  final List<_MessageAgentFact> rows;
+  final List<_PersonalAgentFact> rows;
 
   @override
   Widget build(BuildContext context) {
@@ -970,8 +1072,8 @@ class _MessageAgentFactGrid extends StatelessWidget {
   }
 }
 
-class _MessageAgentPermissionSummary extends StatelessWidget {
-  const _MessageAgentPermissionSummary({required this.enabled});
+class _PersonalAgentPermissionSummary extends StatelessWidget {
+  const _PersonalAgentPermissionSummary({required this.enabled});
 
   final bool enabled;
 
@@ -987,8 +1089,8 @@ class _MessageAgentPermissionSummary extends StatelessWidget {
       ),
       child: Text(
         enabled
-            ? context.l10n.messageAgentPermissionSummaryEnabled
-            : context.l10n.messageAgentPermissionSummaryDisabled,
+            ? context.l10n.personalAgentPermissionSummaryEnabled
+            : context.l10n.personalAgentPermissionSummaryDisabled,
         style: TextStyle(
           color: AwikiMePalette.mutedNeutral,
           fontSize: responsive.bodySm,
@@ -999,8 +1101,8 @@ class _MessageAgentPermissionSummary extends StatelessWidget {
   }
 }
 
-class _MessageAgentFact {
-  const _MessageAgentFact(this.label, this.value);
+class _PersonalAgentFact {
+  const _PersonalAgentFact(this.label, this.value);
 
   final String label;
   final String value;

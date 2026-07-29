@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
-import 'package:awiki_me/src/application/models/app_conversation_read_ref.dart';
-import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -16,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+import 'devices/device_test_support.dart';
 
 void main() {
   test('single-flight coalesces concurrent sync requests', () async {
@@ -147,116 +147,6 @@ void main() {
         committed,
       );
       expect(container.read(messageSyncCoordinatorProvider).lastError, isNull);
-    },
-  );
-
-  test(
-    'metadata-only identity-switch message hydrates before recents publish',
-    () async {
-      final stale = _conversation();
-      final metadataOnly = stale.copyWith(
-        lastMessageAt: stale.lastMessageAt.add(const Duration(seconds: 1)),
-        unreadCount: 1,
-      );
-      final hydrated = metadataOnly.copyWith(
-        lastMessagePreview: 'new hydrated preview',
-      );
-      final gateway = FakeAwikiGateway()
-        ..conversations = <ConversationSummary>[stale];
-      final sync = _PagedHydrationMessageSyncService(
-        gateway: gateway,
-        metadataOnly: metadataOnly,
-        hydrated: hydrated,
-      );
-      final container = _container(gateway, sync);
-      addTearDown(container.dispose);
-
-      await container
-          .read(messageSyncCoordinatorProvider.notifier)
-          .requestSync('identity_switch_startup', immediate: true);
-
-      expect(sync.conversationAfterRequests, hasLength(2));
-      expect(sync.conversationAfterRequests.first.afterServerSeq, isNull);
-      expect(sync.conversationAfterRequests.last.afterServerSeq, '10');
-      expect(
-        container.read(conversationListProvider).conversations.single,
-        hydrated,
-      );
-      expect(container.read(conversationListProvider).unreadCount, 1);
-      expect(container.read(messageSyncCoordinatorProvider).lastError, isNull);
-    },
-  );
-
-  test(
-    'failed metadata hydration is retried from the next durable sync hint',
-    () async {
-      final stale = _conversation();
-      final metadataOnly = stale.copyWith(
-        lastMessageAt: stale.lastMessageAt.add(const Duration(seconds: 1)),
-        unreadCount: 1,
-      );
-      final hydrated = metadataOnly.copyWith(
-        lastMessagePreview: 'preview after retry',
-      );
-      final gateway = FakeAwikiGateway()
-        ..conversations = <ConversationSummary>[stale];
-      final sync = _RetryingHydrationMessageSyncService(
-        gateway: gateway,
-        metadataOnly: metadataOnly,
-        hydrated: hydrated,
-      );
-      final container = _container(gateway, sync);
-      addTearDown(container.dispose);
-      final coordinator = container.read(
-        messageSyncCoordinatorProvider.notifier,
-      );
-
-      await coordinator.requestSync('startup', immediate: true);
-      expect(sync.conversationAfterRequests, hasLength(1));
-      expect(
-        container
-            .read(conversationListProvider)
-            .conversations
-            .single
-            .lastMessagePreview,
-        stale.lastMessagePreview,
-      );
-      expect(container.read(conversationListProvider).unreadCount, 1);
-
-      await coordinator.requestSync('app_resumed', immediate: true);
-      expect(sync.conversationAfterRequests, hasLength(2));
-      expect(
-        container.read(conversationListProvider).conversations.single,
-        hydrated,
-      );
-    },
-  );
-
-  test(
-    'hydration hint fails closed when conversation sync is unavailable',
-    () async {
-      final conversation = _conversation();
-      final gateway = FakeAwikiGateway()
-        ..conversations = <ConversationSummary>[conversation];
-      final sync = _ThreadOnlyHydrationMessageSyncService(
-        conversation.conversationId,
-      );
-      final container = _container(gateway, sync);
-      addTearDown(container.dispose);
-
-      await container
-          .read(messageSyncCoordinatorProvider.notifier)
-          .requestSync('startup', immediate: true);
-
-      expect(
-        container.read(messageSyncCoordinatorProvider).lastError,
-        isA<UnsupportedError>().having(
-          (error) => error.message,
-          'message',
-          'Reliable message sync requires conversation hydration support.',
-        ),
-      );
-      expect(gateway.listConversationsCalls, 0);
     },
   );
 
@@ -446,19 +336,134 @@ void main() {
       'carol_startup',
     );
   });
+
+  test('successful reliable sync refreshes the verified Join inbox', () async {
+    final gateway = FakeAwikiGateway();
+    final sync = FakeMessageSyncService();
+    final devices = FakeDeviceManagementCore()
+      ..registry = const DeviceRegistrySnapshot(
+        did: 'did:test:me',
+        devices: <DeviceSummary>[
+          DeviceSummary(
+            protocolDeviceId: 'admin-current',
+            signingKeyId: 'did:test:me#admin-sign',
+            e2eeKeyId: 'did:test:me#admin-e2ee',
+            status: DeviceStatus.active,
+            role: DeviceRole.admin,
+            managementReady: true,
+            isCurrent: true,
+          ),
+        ],
+      );
+    final container = _container(gateway, sync, devices: devices);
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('system_notification_changed', immediate: true);
+
+    expect(devices.registryCalls, 1);
+    expect(devices.joinRequestCalls, 1);
+  });
+
+  test('failed reliable sync does not refresh the Join inbox', () async {
+    final gateway = FakeAwikiGateway();
+    final devices = FakeDeviceManagementCore();
+    final container = _container(
+      gateway,
+      _FailingMessageSyncService(),
+      devices: devices,
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('system_notification_changed', immediate: true);
+
+    expect(devices.registryCalls, 0);
+    expect(devices.joinRequestCalls, 0);
+    expect(
+      container.read(messageSyncCoordinatorProvider).lastError,
+      isA<StateError>(),
+    );
+  });
+
+  test(
+    'identity change while Join inbox waits stops the stale sync projection',
+    () async {
+      final gateway = FakeAwikiGateway()
+        ..conversations = <ConversationSummary>[_conversation()];
+      final sync = FakeMessageSyncService();
+      final joinInbox = Completer<List<DeviceJoinRequestNotice>>();
+      final joinInboxStarted = Completer<void>();
+      final devices = FakeDeviceManagementCore()
+        ..registry = const DeviceRegistrySnapshot(
+          did: 'did:test:me',
+          devices: <DeviceSummary>[
+            DeviceSummary(
+              protocolDeviceId: 'admin-current',
+              signingKeyId: 'did:test:me#admin-sign',
+              e2eeKeyId: 'did:test:me#admin-e2ee',
+              status: DeviceStatus.active,
+              role: DeviceRole.admin,
+              managementReady: true,
+              isCurrent: true,
+            ),
+          ],
+        )
+        ..joinRequestsLoader = (selector) {
+          joinInboxStarted.complete();
+          return joinInbox.future;
+        };
+      final container = _container(gateway, sync, devices: devices);
+      addTearDown(() {
+        if (!joinInbox.isCompleted) {
+          joinInbox.complete(const <DeviceJoinRequestNotice>[]);
+        }
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      final staleSync = coordinator.requestSync(
+        'alice_system_notification',
+        immediate: true,
+      );
+      await joinInboxStarted.future;
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:test:bob',
+              credentialName: 'bob',
+              displayName: 'Bob',
+            ),
+          );
+      joinInbox.complete(const <DeviceJoinRequestNotice>[]);
+      await staleSync;
+
+      expect(gateway.listConversationsCalls, 0);
+      expect(container.read(messageSyncCoordinatorProvider).lastReason, isNull);
+      expect(container.read(messageSyncCoordinatorProvider).lastError, isNull);
+    },
+  );
 }
 
 ProviderContainer _container(
   FakeAwikiGateway gateway,
   MessageSyncService sync, {
   Duration minInterval = Duration.zero,
+  FakeDeviceManagementCore? devices,
 }) {
   return ProviderContainer(
     overrides: <Override>[
       awikiGatewayProvider.overrideWithValue(gateway),
       notificationFacadeProvider.overrideWithValue(FakeNotificationFacade()),
-      ...fakeApplicationServiceOverrides(gateway),
-      messageSyncServiceProvider.overrideWithValue(sync),
+      deviceManagementCorePortProvider.overrideWithValue(
+        devices ?? FakeDeviceManagementCore(),
+      ),
+      ...fakeApplicationServiceOverrides(gateway, messageSyncService: sync),
       messageSyncCoordinatorProvider.overrideWith(
         (ref) => MessageSyncCoordinator(
           ref,
@@ -606,143 +611,13 @@ class _PublishingMessageSyncService extends FakeMessageSyncService {
   }
 }
 
-class _PagedHydrationMessageSyncService extends FakeMessageSyncService {
-  _PagedHydrationMessageSyncService({
-    required this.gateway,
-    required this.metadataOnly,
-    required this.hydrated,
-  });
-
-  final FakeAwikiGateway gateway;
-  final ConversationSummary metadataOnly;
-  final ConversationSummary hydrated;
-
+class _FailingMessageSyncService extends FakeMessageSyncService {
   @override
   Future<MessageSyncDeltaResult> syncNow({
     required String reason,
     int limit = 100,
   }) async {
     syncReasons.add(reason);
-    gateway.conversations = <ConversationSummary>[metadataOnly];
-    return MessageSyncDeltaResult(
-      eventsApplied: 1,
-      pagesFetched: 1,
-      hasMore: false,
-      snapshotRequired: false,
-      hydrationRequiredConversationIds: <String>[metadataOnly.conversationId],
-    );
-  }
-
-  @override
-  Future<MessageSyncThreadAfterResult> syncConversationAfter({
-    required AppConversationReadRef conversation,
-    String? afterServerSeq,
-    int limit = 100,
-  }) async {
-    conversationAfterRequests.add(
-      FakeConversationAfterRequest(
-        conversation: conversation,
-        afterServerSeq: afterServerSeq,
-        limit: limit,
-      ),
-    );
-    if (afterServerSeq == null) {
-      return const MessageSyncThreadAfterResult(
-        messages: <ChatMessage>[],
-        nextAfterServerSeq: '10',
-        hasMore: true,
-      );
-    }
-    gateway.conversations = <ConversationSummary>[hydrated];
-    return const MessageSyncThreadAfterResult(
-      messages: <ChatMessage>[],
-      nextAfterServerSeq: '11',
-      hasMore: false,
-    );
-  }
-}
-
-class _RetryingHydrationMessageSyncService extends FakeMessageSyncService {
-  _RetryingHydrationMessageSyncService({
-    required this.gateway,
-    required this.metadataOnly,
-    required this.hydrated,
-  });
-
-  final FakeAwikiGateway gateway;
-  final ConversationSummary metadataOnly;
-  final ConversationSummary hydrated;
-  var _hydrationAttempts = 0;
-
-  @override
-  Future<MessageSyncDeltaResult> syncNow({
-    required String reason,
-    int limit = 100,
-  }) async {
-    syncReasons.add(reason);
-    gateway.conversations = <ConversationSummary>[metadataOnly];
-    return MessageSyncDeltaResult(
-      eventsApplied: 0,
-      pagesFetched: 1,
-      hasMore: false,
-      snapshotRequired: false,
-      hydrationRequiredConversationIds: <String>[metadataOnly.conversationId],
-    );
-  }
-
-  @override
-  Future<MessageSyncThreadAfterResult> syncConversationAfter({
-    required AppConversationReadRef conversation,
-    String? afterServerSeq,
-    int limit = 100,
-  }) async {
-    conversationAfterRequests.add(
-      FakeConversationAfterRequest(
-        conversation: conversation,
-        afterServerSeq: afterServerSeq,
-        limit: limit,
-      ),
-    );
-    _hydrationAttempts += 1;
-    if (_hydrationAttempts == 1) {
-      throw StateError('temporary_hydration_failure');
-    }
-    gateway.conversations = <ConversationSummary>[hydrated];
-    return const MessageSyncThreadAfterResult(
-      messages: <ChatMessage>[],
-      hasMore: false,
-    );
-  }
-}
-
-class _ThreadOnlyHydrationMessageSyncService implements MessageSyncService {
-  _ThreadOnlyHydrationMessageSyncService(this.conversationId);
-
-  final String conversationId;
-
-  @override
-  Future<MessageSyncDeltaResult> syncNow({
-    required String reason,
-    int limit = 100,
-  }) async {
-    return MessageSyncDeltaResult(
-      eventsApplied: 1,
-      pagesFetched: 1,
-      hasMore: false,
-      snapshotRequired: false,
-      hydrationRequiredConversationIds: <String>[conversationId],
-    );
-  }
-
-  @override
-  Future<MessageSyncThreadAfterResult> syncThreadAfter({
-    required AppThreadRef thread,
-    String? afterServerSeq,
-    int limit = 100,
-  }) async {
-    return const MessageSyncThreadAfterResult(
-      messages: <ChatMessage>[],
-      hasMore: false,
-    );
+    throw StateError('sync_failed');
   }
 }

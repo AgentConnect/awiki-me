@@ -93,6 +93,22 @@ abstract interface class ThreadPatchMessageCorePort {
   });
 }
 
+/// Dedicated committed-message projection for application control consumers.
+///
+/// User-visible timelines must continue to use [ThreadPatchMessageCorePort],
+/// which filters control payloads from chat presentation.
+abstract interface class ControlThreadPatchMessageCorePort {
+  Stream<ThreadMessagePatch> watchControlThreadPatches(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+
+  Future<ThreadMessagePatch> repairControlThreadStore(
+    AppThreadRef thread, {
+    int limit = 100,
+  });
+}
+
 abstract interface class ConversationTimelineMessageCorePort {
   Future<List<ChatMessage>> loadConversationTimeline(
     AppConversationReadRef conversation, {

@@ -10,7 +10,7 @@ catalog or coverage gate.
 |---|---|---|---|
 | `tests/unit/chat_provider_open_test.dart` (6643 lines) | open/hydrate; pending/send lifecycle; dedupe/replay; attachment/agent payload; read projection | `awiki-me-messaging` | before/after test-name set identical; full unit + coverage floors pass |
 | `tests/unit/chat_page_test.dart` (5380 lines) | composer/send; failure/retry; attachment pick/drop/paste; mention UI; timeline/read/scroll; responsive states | `awiki-me-ui` | widget test-name parity; targeted golden/layout review; no shared mutable fixture ordering |
-| `tests/unit/agents/agents_provider_test.dart` (3522 lines) | inventory/load; daemon actions; Message Agent binding/recovery; runtime lifecycle; error/idempotency | `awiki-me-agents` | provider test-name parity; optional E2E case IDs unchanged |
+| `tests/unit/agents/agents_provider_test.dart` (3522 lines) | inventory/load; daemon actions; Personal Agent binding/recovery; runtime lifecycle; error/idempotency | `awiki-me-agents` | provider test-name parity; optional E2E case IDs unchanged |
 | `tests/unit/test_support.dart` (3902 lines) | account/session fakes; messaging/conversation fakes; group/relationship fakes; agent/runtime fakes; widget harness builders | `awiki-me-test-infra` | no circular imports; fake ownership documented; full unit count/IDs unchanged |
 
 ## Rules for each split

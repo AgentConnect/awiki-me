@@ -14,14 +14,16 @@ import 'package:awiki_me/src/application/models/attachment_models.dart';
 import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revoke_result.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
-import 'package:awiki_me/src/application/ports/message_agent_binding_port.dart';
+import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_invocation_policy.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
-import 'package:awiki_me/src/domain/entities/agent/message_agent_binding.dart';
+import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/chat_mention.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -43,9 +45,11 @@ import '../../../unit/test_support.dart' as test_support;
 import '../support/fake_app_bootstrap.dart';
 import '../../case_attestation.dart';
 
-const String _messageAgentRunConfigPath =
+const String _personalAgentRunConfigPath =
+    '.e2e/personal-agent/current/run_config.json';
+const String _legacyPersonalAgentRunConfigPath =
     '.e2e/message-agent/current/run_config.json';
-const String _messageAgentE2eExpectedReply = 'MESSAGE_AGENT_E2E_REPLY_OK';
+const String _personalAgentE2eExpectedReply = 'PERSONAL_AGENT_E2E_REPLY_OK';
 
 class _StaticConversationListController extends ConversationListController {
   _StaticConversationListController(
@@ -59,12 +63,14 @@ class _StaticConversationListController extends ConversationListController {
   Future<void> refresh() async {}
 }
 
+enum _PersonalAgentRealBackendMode { notSelected, disabled, realBackend }
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  runMessageAgentRealBackendE2e();
+  runPersonalAgentRealBackendE2e();
 
-  testWidgets('Message Agent management UI is hidden on daemon detail', (
+  testWidgets('Personal Agent settings entry opens without lifecycle payloads', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -81,7 +87,7 @@ void main() {
         harness.bootstrap.agentControlService!
             as test_support.FakeAgentControlService;
     final inventory = _UiAgentInventoryPort(() => control.agents);
-    final bindings = _UiMessageAgentBindingPort();
+    final bindings = _UiPersonalAgentBindingPort();
     final identities = _UiIdentityCorePort();
     final messages = _UiMessagingService();
     control.agents = const <AgentSummary>[
@@ -108,16 +114,16 @@ void main() {
     try {
       await tester.pumpWidget(
         AwikiMeApp(
-          bootstrap: _copyBootstrapForMessageAgentUiTest(
+          bootstrap: _copyBootstrapForPersonalAgentUiTest(
             harness.bootstrap,
             agentInventoryPort: inventory,
-            messageAgentBindingPort: bindings,
+            personalAgentBindingPort: bindings,
             identityCorePort: identities,
             messagingService: messages,
             agentControlService: DefaultAgentControlService(
               inventory: inventory,
               messages: messages,
-              messageAgentBindings: bindings,
+              personalAgentBindings: bindings,
               identities: identities,
               agentImEnabled: false,
             ),
@@ -141,13 +147,32 @@ void main() {
       await _pumpFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(
+        find.byKey(const Key('personal-agent-settings-panel')),
+        findsNothing,
+      );
+      expect(
+        find.bySemanticsIdentifier('personal-agent-settings-entry'),
+        findsOneWidget,
+      );
+      expect(find.text('个人助理'), findsOneWidget);
+      await tester.tap(
+        find.bySemanticsIdentifier('personal-agent-settings-entry'),
+      );
+      await _pumpFrame(tester);
+
+      expect(
+        find.byKey(const Key('personal-agent-settings-page')),
+        findsOneWidget,
+      );
+      expect(find.text('个人助理'), findsWidgets);
+      expect(find.text('已上报公钥'), findsOneWidget);
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
-      expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
-      expect(find.text('撤销 Daemon 消息授权'), findsNothing);
+      expect(find.text('启用个人助理'), findsOneWidget);
+      expect(find.text('暂停处理消息'), findsOneWidget);
+      expect(find.text('删除个人助理'), findsOneWidget);
+      expect(find.text('撤销 Daemon 消息授权'), findsOneWidget);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
       final nonStatusPayloads = messages.recordedPayloads.where(
@@ -157,7 +182,7 @@ void main() {
         nonStatusPayloads,
         isEmpty,
         reason:
-            'Hidden Message Agent management UI must not send bootstrap or '
+            'Hidden Personal Agent management UI must not send bootstrap or '
             'lifecycle payloads. Payloads: ${messages.recordedPayloadsSummary()}',
       );
       expect(bindings.calls, isEmpty);
@@ -169,7 +194,7 @@ void main() {
   });
 
   testWidgets(
-    'Message Agent full UI recovers runtime result and draft action',
+    'Personal Agent full UI recovers runtime result and draft action',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -225,7 +250,7 @@ void main() {
           kind: AgentKind.runtime,
           daemonAgentDid: 'did:agent:daemon',
           runtime: 'hermes',
-          displayName: 'Hermes Message Agent',
+          displayName: 'Hermes Personal Agent',
           activeState: 'active',
           latest: AgentLatestStatus(status: 'ready'),
         ),
@@ -265,7 +290,7 @@ void main() {
         );
         container
             .read(chatThreadsProvider.notifier)
-            .applyMessageAgentControlPayload(const <String, Object?>{
+            .applyPersonalAgentControlPayload(const <String, Object?>{
               'schema': 'awiki.message.sync.v1',
               'sync_type': 'runtime_final',
               'runtime_agent_did': 'did:agent:runtime',
@@ -278,7 +303,7 @@ void main() {
             });
         container
             .read(chatThreadsProvider.notifier)
-            .applyMessageAgentControlPayload(const <String, Object?>{
+            .applyPersonalAgentControlPayload(const <String, Object?>{
               'schema': 'awiki.app.action.v1',
               'action_id': 'act_draft',
               'action': 'message.create_draft',
@@ -292,14 +317,32 @@ void main() {
             });
         await _pumpFrame(tester);
 
-        expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
-        expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
-        await tester.tap(find.text('使用草稿'));
+        expect(find.text('个人助理已完成处理'), findsOneWidget);
+        expect(find.text('个人助理生成了草稿'), findsOneWidget);
+        await tester.tap(
+          find.byKey(const Key('personal-agent-action-confirm:act_draft')),
+        );
         await _pumpFrame(tester);
 
         expect(find.text('草稿已放入输入框'), findsOneWidget);
+        final input = tester.widget<CupertinoTextField>(
+          find.byKey(const Key('chat-composer-input')),
+        );
+        expect(input.controller?.text, '收到，我会处理。');
         expect(harness.gateway.lastSentPayloadPeerDid, 'did:agent:daemon');
+        expect(
+          harness.gateway.lastSentPayload?['schema'],
+          AgentControlPayloads.appActionResultSchema,
+        );
+        expect(harness.gateway.lastSentPayload?['action_id'], 'act_draft');
         expect(harness.gateway.lastSentPayload?['state'], 'succeeded');
+        expect(harness.gateway.lastSentPayload?.containsKey('result'), isFalse);
+        expect(
+          jsonEncode(harness.gateway.lastSentPayload),
+          isNot(contains('draft_text')),
+        );
+        expect(harness.gateway.lastSentContent, isEmpty);
+        expect(harness.gateway.sendTextMessageCalls, 1);
       } finally {
         debugDefaultTargetPlatformOverride = null;
         await tester.binding.setSurfaceSize(null);
@@ -308,17 +351,15 @@ void main() {
   );
 }
 
-void runMessageAgentRealBackendE2e() {
+void runPersonalAgentRealBackendE2e() {
   testWidgets(
-    'Message Agent full UI drives real backend daemon and recovery',
+    'Personal Agent full UI drives real backend daemon and recovery',
     (tester) async {
-      final config = _MessageAgentRealBackendConfig.tryLoad();
-      if (config == null || !config.realBackend) {
-        fail(
-          'Message Agent full UI acceptance requires a real-backend runner '
-          'config and cannot pass as a skipped/no-op test.',
-        );
+      final mode = _PersonalAgentRealBackendConfig.selectedMode();
+      if (mode == _PersonalAgentRealBackendMode.notSelected) {
+        return;
       }
+      final config = _PersonalAgentRealBackendConfig.loadForSelectedGate();
       if (!File(config.daemonBinary).existsSync()) {
         fail('daemon binary was not found: ${config.daemonBinary}');
       }
@@ -344,6 +385,7 @@ void runMessageAgentRealBackendE2e() {
 
         final session = await _prepareRealAppIdentity(
           bootstrap.onboardingService!,
+          bootstrap.onboardingSupportService!,
           config,
         );
         await ProviderScope.containerOf(
@@ -362,7 +404,7 @@ void runMessageAgentRealBackendE2e() {
         daemon = await _startRealDaemon(config: config);
         await _waitForFile(config.daemonReadyFile);
 
-        final bindingPort = appContainer.read(messageAgentBindingPortProvider);
+        final bindingPort = appContainer.read(personalAgentBindingPortProvider);
         final agents = appContainer.read(agentsProvider.notifier);
         await _waitForAgentInventoryEntry(
           tester: tester,
@@ -371,65 +413,60 @@ void runMessageAgentRealBackendE2e() {
           handle: install.handle,
         );
 
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('e2e-agents-tab'),
-          find.bySemanticsLabel('智能体'),
-          find.bySemanticsLabel('Agents'),
-          find.text('智能体'),
-          find.text('Agents'),
-        ]);
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-
         await _waitForDaemonBootstrapKey(
           tester: tester,
           agents: agents,
           daemonDid: install.daemonDid,
         );
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-        expect(find.text('消息处理 Agent'), findsOneWidget);
+        await _openPersonalAgentSettingsForDaemon(
+          tester: tester,
+          container: appContainer,
+          agents: agents,
+          daemonDid: install.daemonDid,
+        );
+        expect(
+          find.byKey(const Key('personal-agent-settings-page')),
+          findsOneWidget,
+        );
+        expect(find.text('个人助理'), findsWidgets);
         expect(find.text('已上报公钥'), findsOneWidget);
         expect(find.text('可启用'), findsWidgets);
-        expect(find.text('启用消息处理 Agent'), findsOneWidget);
-        await tester.tap(find.text('启用消息处理 Agent'));
-        await _pumpUntil(
-          tester,
-          () => !ProviderScope.containerOf(
-            tester.element(find.byType(AppShell)),
-          ).read(agentsProvider).isActing,
-          timeout: const Duration(seconds: 25),
-          description: 'message agent enable action to finish',
+        expect(find.text('启用个人助理'), findsOneWidget);
+        await _runAgentUiActionWithRetry(
+          tester: tester,
+          container: appContainer,
+          actionLabel: '启用个人助理',
+          actionDescription: 'Personal Agent enable',
+          timeout: const Duration(seconds: 120),
+          actionFinders: <Finder>[
+            find.bySemanticsIdentifier('personal-agent-enable-action'),
+          ],
         );
-        final stateAfterEnable = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(agentsProvider);
-        if (stateAfterEnable.error != null) {
-          fail(
-            'Message Agent enable failed: ${stateAfterEnable.error}. '
-            'Raw error: ${stateAfterEnable.debugLastError}. '
-            'Agents: ${_agentsDebugSummary(stateAfterEnable)}',
-          );
-        }
 
         await _waitForUserServiceBindingActive(
           binding: bindingPort,
           daemonDid: install.daemonDid,
         );
         await agents.load();
+        await _waitForPersonalAgentRuntimeInApp(
+          tester: tester,
+          container: appContainer,
+          daemonDid: install.daemonDid,
+        );
         await _pumpFrame(tester);
-        expect(find.text('Hermes Message Agent'), findsWidgets);
+        expect(find.textContaining('Hermes Personal Agent'), findsWidgets);
+        expect(find.textContaining('已绑定'), findsWidgets);
         await E2eCaseAttestationWriter.markPassed(
-          'MSGAGENT-E2E-001',
+          'PERSONALAGENT-E2E-001',
           phases: const <String>[
             'daemon_selected_in_ui',
-            'message_agent_enabled_in_ui',
+            'personal_agent_enabled_in_ui',
             'binding_active_verified',
           ],
         );
 
         final sourceText =
-            'message agent ui real backend ${config.runId} ${DateTime.now().millisecondsSinceEpoch}';
+            'personal agent ui real backend ${config.runId} ${DateTime.now().millisecondsSinceEpoch}';
         final cliSend = await _runCli(config, <String>[
           '--format',
           'json',
@@ -452,21 +489,21 @@ void runMessageAgentRealBackendE2e() {
         final finalText = await _waitForDaemonRuntimeFinalSent(
           daemonStateRoot: config.daemonStateRoot,
           sourceText: sourceText,
-          expectedFinalText: _messageAgentE2eExpectedReply,
+          expectedFinalText: _personalAgentE2eExpectedReply,
         );
-        expect(finalText, _messageAgentE2eExpectedReply);
+        expect(finalText, _personalAgentE2eExpectedReply);
         await _openRealCliConversation(
           tester: tester,
           container: appContainer,
           cliHandle: config.cliHandle,
           sourceText: sourceText,
         );
-        await _waitForMessageAgentRuntimeFinalInApp(
+        await _waitForPersonalAgentRuntimeFinalInApp(
           tester: tester,
           sourceText: sourceText,
         );
         await E2eCaseAttestationWriter.markPassed(
-          'MSGAGENT-E2E-002',
+          'PERSONALAGENT-E2E-002',
           phases: const <String>[
             'cli_peer_message_sent',
             'app_history_exact_source_verified',
@@ -474,39 +511,28 @@ void runMessageAgentRealBackendE2e() {
           ],
         );
 
-        await _tapFirstFound(tester, <Finder>[
-          find.bySemanticsIdentifier('e2e-agents-tab'),
-          find.bySemanticsLabel('智能体'),
-          find.bySemanticsLabel('Agents'),
-          find.text('智能体'),
-          find.text('Agents'),
-        ]);
-        await _pumpFrame(tester);
-        await agents.load();
-        agents.select(install.daemonDid);
-        await _pumpFrame(tester);
-        await tester.tap(find.text('撤销 Daemon 消息授权'));
-        await _pumpFrame(tester);
-        expect(find.textContaining('签名 DID Document 更新'), findsOneWidget);
-        await tester.tap(find.text('撤销授权'));
-        await _pumpFrame(tester);
-        await _pumpUntil(
-          tester,
-          () => !ProviderScope.containerOf(
-            tester.element(find.byType(AppShell)),
-          ).read(agentsProvider).isActing,
-          timeout: const Duration(seconds: 25),
+        await _openPersonalAgentSettingsForDaemon(
+          tester: tester,
+          container: appContainer,
+          agents: agents,
+          daemonDid: install.daemonDid,
         );
-        final stateAfterRevoke = ProviderScope.containerOf(
-          tester.element(find.byType(AppShell)),
-        ).read(agentsProvider);
-        if (stateAfterRevoke.error != null) {
-          fail(
-            'Message Agent revoke failed: ${stateAfterRevoke.error}. '
-            'Raw error: ${stateAfterRevoke.debugLastError}. '
-            'Agents: ${_agentsDebugSummary(stateAfterRevoke)}',
-          );
-        }
+        expect(
+          find.byKey(const Key('personal-agent-settings-page')),
+          findsOneWidget,
+        );
+        await _runAgentUiActionWithRetry(
+          tester: tester,
+          container: appContainer,
+          actionLabel: '撤销 Daemon 消息授权',
+          actionDescription: 'Personal Agent revoke',
+          timeout: const Duration(seconds: 90),
+          dialogText: '签名 DID Document 更新',
+          confirmLabel: '撤销授权',
+          actionFinders: <Finder>[
+            find.bySemanticsIdentifier('personal-agent-revoke-action'),
+          ],
+        );
         await _waitForUserServiceBindingRevoked(binding: bindingPort);
         await _waitForDaemonBindingRevoked(
           daemonStateRoot: config.daemonStateRoot,
@@ -514,7 +540,7 @@ void runMessageAgentRealBackendE2e() {
           daemonDid: install.daemonDid,
         );
         await E2eCaseAttestationWriter.markPassed(
-          'MSGAGENT-E2E-004',
+          'PERSONALAGENT-E2E-004',
           phases: const <String>[
             'revoke_action_confirmed_in_ui',
             'user_service_binding_revoked',
@@ -534,10 +560,10 @@ void runMessageAgentRealBackendE2e() {
   );
 }
 
-AppBootstrap _copyBootstrapForMessageAgentUiTest(
+AppBootstrap _copyBootstrapForPersonalAgentUiTest(
   AppBootstrap source, {
   required AgentInventoryPort agentInventoryPort,
-  required MessageAgentBindingPort messageAgentBindingPort,
+  required PersonalAgentBindingPort personalAgentBindingPort,
   required IdentityCorePort identityCorePort,
   required MessagingService messagingService,
   required AgentControlService agentControlService,
@@ -558,7 +584,7 @@ AppBootstrap _copyBootstrapForMessageAgentUiTest(
     messagingService: messagingService,
     conversationService: source.conversationService,
     agentInventoryPort: agentInventoryPort,
-    messageAgentBindingPort: messageAgentBindingPort,
+    personalAgentBindingPort: personalAgentBindingPort,
     agentControlService: agentControlService,
     agentControlStatusStore: source.agentControlStatusStore,
     groupApplicationService: source.groupApplicationService,
@@ -573,29 +599,21 @@ AppBootstrap _copyBootstrapForMessageAgentUiTest(
 
 Future<AppSession> _prepareRealAppIdentity(
   OnboardingService onboarding,
-  _MessageAgentRealBackendConfig config,
+  OnboardingSupportService onboardingSupport,
+  _PersonalAgentRealBackendConfig config,
 ) async {
-  final recover = await _tryAppIdentityAction(
-    () => onboarding.recoverHandle(
-      phone: config.otpPhone,
-      otp: config.otpCode,
-      handle: config.appHandle,
-    ),
+  await onboardingSupport.sendRegistrationOtp(
+    phone: config.otpPhone,
+    handle: config.appHandle,
+    domain: config.environment.didDomain,
+    fullHandle: '${config.appHandle}.${config.environment.didDomain}',
   );
-  if (recover.session != null) {
-    return recover.session!;
-  }
-  if (!_looksRecoverableForRegister(recover.errorText)) {
-    throw StateError(
-      'App recover failed: ${_sanitizeDiagnostic(recover.errorText, config)}',
-    );
-  }
   final register = await _tryAppIdentityAction(
     () => onboarding.registerHandleWithPhone(
       phone: config.otpPhone,
       otp: config.otpCode,
       handle: config.appHandle,
-      nickName: 'Message Agent E2E ${config.runId}',
+      nickName: 'Personal Agent E2E ${config.runId}',
     ),
   );
   if (register.session != null) {
@@ -607,23 +625,29 @@ Future<AppSession> _prepareRealAppIdentity(
 }
 
 Future<_AppIdentityAttempt> _tryAppIdentityAction(
-  Future<AppSession> Function() action,
+  Future<IdentityRegistrationResult> Function() action,
 ) async {
   try {
-    return _AppIdentityAttempt.session(await action());
+    final result = await action();
+    final session = result.identity;
+    if (result.status == IdentityRegistrationStatus.registered &&
+        session != null) {
+      return _AppIdentityAttempt.session(session);
+    }
+    return _AppIdentityAttempt.error('join_required');
   } on Object catch (error) {
     return _AppIdentityAttempt.error(error.toString());
   }
 }
 
 Future<_DaemonInstallResult> _installRealDaemon({
-  required _MessageAgentRealBackendConfig config,
+  required _PersonalAgentRealBackendConfig config,
   required AgentInventoryPort inventory,
   required String controllerDid,
 }) async {
   final token = await inventory.issueDaemonToken(
     controllerDid: controllerDid,
-    clientPlatform: 'linux',
+    clientPlatform: config.platform,
     controllerHandle: config.appHandle,
   );
   final result = await _runProcess(
@@ -659,7 +683,7 @@ Future<_DaemonInstallResult> _installRealDaemon({
 }
 
 Future<Process> _startRealDaemon({
-  required _MessageAgentRealBackendConfig config,
+  required _PersonalAgentRealBackendConfig config,
 }) async {
   final readyFile = File(config.daemonReadyFile);
   if (readyFile.existsSync()) {
@@ -674,7 +698,7 @@ Future<Process> _startRealDaemon({
       '--ready-file',
       config.daemonReadyFile,
       '--max-runtime-ms',
-      '180000',
+      '1200000',
       '--poll-interval-ms',
       '100',
     ],
@@ -687,7 +711,7 @@ Future<Process> _startRealDaemon({
   return process;
 }
 
-Map<String, String> _daemonEnvironment(_MessageAgentRealBackendConfig config) {
+Map<String, String> _daemonEnvironment(_PersonalAgentRealBackendConfig config) {
   return <String, String>{
     'AWIKI_DAEMON_SERVICE_BASE_URL': config.environment.baseUrl,
     'AWIKI_DAEMON_USER_SERVICE_BASE_URL': config.environment.userServiceUrl,
@@ -701,7 +725,7 @@ Map<String, String> _daemonEnvironment(_MessageAgentRealBackendConfig config) {
 }
 
 Future<void> _waitForUserServiceBindingActive({
-  required MessageAgentBindingPort binding,
+  required PersonalAgentBindingPort binding,
   required String daemonDid,
 }) async {
   await _poll(
@@ -793,7 +817,7 @@ Future<void> _waitForAppHistory({
 }
 
 Future<void> _waitForUserServiceBindingRevoked({
-  required MessageAgentBindingPort binding,
+  required PersonalAgentBindingPort binding,
 }) async {
   await _poll(
     description: 'user-service active binding is revoked',
@@ -812,7 +836,7 @@ Future<String> _waitForDaemonRuntimeFinalSent({
   String? matchedFinalText;
   await _poll(
     description:
-        'daemon queued Message Agent runtime final for CLI message with expected content',
+        'daemon queued Personal Agent runtime final for CLI message with expected content',
     action: () async {
       final dbFile = File(dbPath);
       if (!dbFile.existsSync()) {
@@ -873,7 +897,7 @@ Future<void> _waitForDaemonBindingRevoked({
   final dbPath = '${daemonStateRoot.replaceAll(RegExp(r'/+$'), '')}/daemon.db';
   String lastState = 'daemon.db not found';
   await _poll(
-    description: 'daemon local Message Agent binding is revoked',
+    description: 'daemon local Personal Agent binding is revoked',
     action: () async {
       final dbFile = File(dbPath);
       if (!dbFile.existsSync()) {
@@ -889,7 +913,7 @@ Future<void> _waitForDaemonBindingRevoked({
           '''
           SELECT binding_id, user_did, daemon_agent_did, runtime_agent_did,
                  status, revoked_at_ms
-          FROM app_message_agent_binding
+          FROM app_personal_agent_binding
           WHERE user_did = ? AND daemon_agent_did = ?
           ORDER BY created_at_ms DESC
           LIMIT 1
@@ -902,7 +926,7 @@ Future<void> _waitForDaemonBindingRevoked({
         }
         final row = rows.first;
         lastState = jsonEncode(row);
-        return row['status'] == 'message_agent_revoked' &&
+        return row['status'] == 'personal_agent_revoked' &&
             row['revoked_at_ms'] != null;
       } finally {
         await db.close();
@@ -938,6 +962,7 @@ Future<void> _openRealCliConversation({
     ),
   );
   final selected = conversation!;
+  await _returnFromPersonalAgentSettingsIfNeeded(tester);
   await _tapFirstFound(tester, <Finder>[
     find.bySemanticsIdentifier('e2e-messages-tab'),
     find.bySemanticsLabel('消息'),
@@ -950,10 +975,181 @@ Future<void> _openRealCliConversation({
   container
       .read(selectedConversationProvider.notifier)
       .selectConversation(selected);
-  await _pumpFrame(tester);
+  await _pumpUntil(
+    tester,
+    () => find.byKey(const Key('chat-composer-input')).evaluate().isNotEmpty,
+    timeout: const Duration(seconds: 30),
+    description: 'CLI conversation opens in chat workspace',
+    lastError: () =>
+        _personalAgentSyncDebugSummary(container.read(chatThreadsProvider)),
+  );
 }
 
-Future<void> _waitForMessageAgentRuntimeFinalInApp({
+Future<void> _returnFromPersonalAgentSettingsIfNeeded(
+  WidgetTester tester,
+) async {
+  if (find
+      .byKey(const Key('personal-agent-settings-page'))
+      .evaluate()
+      .isEmpty) {
+    return;
+  }
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsLabel('返回'),
+    find.byTooltip('返回'),
+  ]);
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const Key('personal-agent-settings-page'))
+        .evaluate()
+        .isEmpty,
+    timeout: const Duration(seconds: 10),
+    description: 'Personal Agent settings page returns to App shell',
+  );
+}
+
+Future<void> _openPersonalAgentSettingsForDaemon({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required AgentsController agents,
+  required String daemonDid,
+}) async {
+  await _returnFromPersonalAgentSettingsIfNeeded(tester);
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsIdentifier('e2e-agents-tab'),
+    find.bySemanticsLabel('智能体'),
+    find.bySemanticsLabel('Agents'),
+    find.text('智能体'),
+    find.text('Agents'),
+  ]);
+  await _pumpFrame(tester);
+  await agents.load();
+  agents.select(daemonDid);
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(agentsProvider);
+      return state.selectedAgentDid == daemonDid &&
+          _agentByDid(state, daemonDid) != null &&
+          find
+              .bySemanticsIdentifier('personal-agent-settings-entry')
+              .evaluate()
+              .isNotEmpty;
+    },
+    timeout: const Duration(seconds: 30),
+    description: 'Personal Agent settings entry is bound to installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+  await _tapFirstFound(tester, <Finder>[
+    find.bySemanticsIdentifier('personal-agent-settings-entry'),
+    find.byKey(const Key('personal-agent-settings-entry-card')),
+  ]);
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const Key('personal-agent-settings-page'))
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 15),
+    description: 'Personal Agent settings page opens for installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+  await _pumpUntil(
+    tester,
+    () => find
+        .bySemanticsIdentifier('personal-agent-selected-daemon:$daemonDid')
+        .evaluate()
+        .isNotEmpty,
+    timeout: const Duration(seconds: 15),
+    description: 'Personal Agent settings page selects installed daemon',
+    lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+  );
+}
+
+Future<void> _runAgentUiActionWithRetry({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String actionLabel,
+  required String actionDescription,
+  required Duration timeout,
+  List<Finder> actionFinders = const <Finder>[],
+  String? dialogText,
+  String? confirmLabel,
+  int attempts = 3,
+}) async {
+  for (var attempt = 1; attempt <= attempts; attempt += 1) {
+    await _tapFirstFound(
+      tester,
+      actionFinders.isEmpty ? <Finder>[find.text(actionLabel)] : actionFinders,
+    );
+    await _pumpFrame(tester);
+    if (dialogText != null) {
+      expect(find.textContaining(dialogText), findsOneWidget);
+      await _tapFirstFound(tester, <Finder>[find.text(confirmLabel!)]);
+      await _pumpFrame(tester);
+    }
+    await _pumpUntil(
+      tester,
+      () => !container.read(agentsProvider).isActing,
+      timeout: timeout,
+      description: '$actionDescription action to finish',
+      lastError: () => _agentsDebugSummary(container.read(agentsProvider)),
+    );
+    final stateAfterAction = container.read(agentsProvider);
+    if (stateAfterAction.error == null) {
+      return;
+    }
+    final failureSummary =
+        '$actionDescription failed on attempt $attempt/$attempts: '
+        '${stateAfterAction.error}. Raw error: '
+        '${stateAfterAction.debugLastError}. Agents: '
+        '${_agentsDebugSummary(stateAfterAction)}';
+    if (attempt >= attempts ||
+        !_isRetryableAgentActionError(stateAfterAction)) {
+      fail(failureSummary);
+    }
+    await tester.pump(const Duration(seconds: 2));
+  }
+}
+
+bool _isRetryableAgentActionError(AgentsState state) {
+  final raw = '${state.error ?? ''}\n${state.debugLastError ?? ''}'
+      .trim()
+      .toLowerCase();
+  return raw.contains('transport_unavailable') ||
+      raw.contains('transport unavailable') ||
+      raw.contains('error sending request for url') ||
+      raw.contains('connection reset') ||
+      raw.contains('connection refused') ||
+      raw.contains('timed out') ||
+      raw.contains('timeout') ||
+      raw.contains('网络连接暂时不可用');
+}
+
+Future<AgentSummary> _waitForPersonalAgentRuntimeInApp({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required String daemonDid,
+}) async {
+  AgentSummary? runtime;
+  Object? lastState;
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(agentsProvider);
+      lastState = _agentsDebugSummary(state);
+      runtime = state.personalAgentRuntimeFor(daemonDid);
+      return runtime != null;
+    },
+    timeout: const Duration(seconds: 60),
+    description: 'App applies Personal Agent runtime inventory after enable',
+    lastError: () => lastState,
+  );
+  return runtime!;
+}
+
+Future<void> _waitForPersonalAgentRuntimeFinalInApp({
   required WidgetTester tester,
   required String sourceText,
 }) async {
@@ -965,19 +1161,19 @@ Future<void> _waitForMessageAgentRuntimeFinalInApp({
         tester.element(find.byType(AppShell)),
       );
       final threads = container.read(chatThreadsProvider);
-      lastState = _messageAgentSyncDebugSummary(threads);
+      lastState = _personalAgentSyncDebugSummary(threads);
       return threads.values.any(
         (thread) =>
             thread.messages.any((message) => message.content == sourceText) &&
-            thread.messageAgentSyncs.any((sync) => sync.isRuntimeFinal),
+            thread.personalAgentSyncs.any((sync) => sync.isRuntimeFinal),
       );
     },
     timeout: const Duration(seconds: 120),
-    description: 'App applies Message Agent runtime_final recovery state',
+    description: 'App applies Personal Agent runtime_final recovery state',
     lastError: () => lastState,
   );
   await _pumpFrame(tester);
-  expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
+  expect(find.text('个人助理已完成处理'), findsOneWidget);
 }
 
 ConversationSummary? _conversationForCliMessage(
@@ -1023,7 +1219,7 @@ String _conversationDebugSummary(List<ConversationSummary> conversations) {
   );
 }
 
-String _messageAgentSyncDebugSummary(Map<String, ChatThreadState> threads) {
+String _personalAgentSyncDebugSummary(Map<String, ChatThreadState> threads) {
   return jsonEncode(
     threads.entries
         .map(
@@ -1038,7 +1234,7 @@ String _messageAgentSyncDebugSummary(Map<String, ChatThreadState> threads) {
                   },
                 )
                 .toList(),
-            'syncs': entry.value.messageAgentSyncs
+            'syncs': entry.value.personalAgentSyncs
                 .map(
                   (sync) => <String, Object?>{
                     'type': sync.type,
@@ -1057,7 +1253,7 @@ String _messageAgentSyncDebugSummary(Map<String, ChatThreadState> threads) {
 }
 
 Future<_CliResult> _runCli(
-  _MessageAgentRealBackendConfig config,
+  _PersonalAgentRealBackendConfig config,
   List<String> args, {
   Duration timeout = const Duration(seconds: 45),
 }) async {
@@ -1201,18 +1397,9 @@ Future<void> _poll({
   );
 }
 
-bool _looksRecoverableForRegister(String output) {
-  final lower = output.toLowerCase();
-  return lower.contains('not found') ||
-      lower.contains('handle_not_found') ||
-      lower.contains('not_registered') ||
-      lower.contains('not registered') ||
-      lower.contains('404');
-}
-
 String _sanitizeDiagnostic(
   String input,
-  _MessageAgentRealBackendConfig config,
+  _PersonalAgentRealBackendConfig config,
 ) {
   var output = input;
   for (final secret in config.secrets) {
@@ -1237,8 +1424,8 @@ void _terminateProcess(Process process) {
   process.kill(ProcessSignal.sigkill);
 }
 
-class _MessageAgentRealBackendConfig {
-  const _MessageAgentRealBackendConfig({
+class _PersonalAgentRealBackendConfig {
+  const _PersonalAgentRealBackendConfig({
     required this.runId,
     required this.platform,
     required this.environment,
@@ -1258,23 +1445,56 @@ class _MessageAgentRealBackendConfig {
     this.fakeHermesGatewayCommand,
   });
 
-  static _MessageAgentRealBackendConfig? tryLoad() {
-    final file = File(_messageAgentRunConfigPath);
-    if (!file.existsSync()) {
-      return null;
+  static _PersonalAgentRealBackendMode selectedMode() {
+    final file = _selectedPersonalAgentRunConfigFile();
+    if (file == null) {
+      return _PersonalAgentRealBackendMode.notSelected;
     }
     final raw = jsonDecode(file.readAsStringSync());
     if (raw is! Map) {
-      throw StateError('$_messageAgentRunConfigPath must be a JSON object.');
+      throw StateError('$_personalAgentRunConfigPath must be a JSON object.');
     }
-    final map = _stringKeyMap(raw, path: _messageAgentRunConfigPath);
-    final messageAgent = _optionalMapAt(map, 'messageAgent');
+    final map = _stringKeyMap(raw, path: _personalAgentRunConfigPath);
+    final selectedCase = _optionalConfig(map, 'case');
+    if (selectedCase != 'personal-agent' && selectedCase != 'message-agent') {
+      return _PersonalAgentRealBackendMode.notSelected;
+    }
+    final personalAgent = _personalAgentConfig(map);
     final realBackend =
-        messageAgent['realBackend'] == true ||
-        messageAgent['realBackend']?.toString().toLowerCase() == 'true';
+        personalAgent['realBackend'] == true ||
+        personalAgent['realBackend']?.toString().toLowerCase() == 'true';
     if (!realBackend) {
-      return null;
+      return _PersonalAgentRealBackendMode.disabled;
     }
+    return _PersonalAgentRealBackendMode.realBackend;
+  }
+
+  static _PersonalAgentRealBackendConfig loadForSelectedGate() {
+    final mode = selectedMode();
+    if (mode == _PersonalAgentRealBackendMode.notSelected) {
+      throw StateError('Personal Agent run config is not selected.');
+    }
+    if (mode == _PersonalAgentRealBackendMode.disabled) {
+      throw StateError(
+        'personalAgent.realBackend must be true in $_personalAgentRunConfigPath '
+        'when --case personal-agent is selected.',
+      );
+    }
+    final file = _selectedPersonalAgentRunConfigFile();
+    if (file == null) {
+      throw StateError(
+        '$_personalAgentRunConfigPath is required when --case personal-agent is selected.',
+      );
+    }
+    final raw = jsonDecode(file.readAsStringSync());
+    if (raw is! Map) {
+      throw StateError('$_personalAgentRunConfigPath must be a JSON object.');
+    }
+    final map = _stringKeyMap(raw, path: _personalAgentRunConfigPath);
+    final personalAgent = _personalAgentConfig(map);
+    final realBackend =
+        personalAgent['realBackend'] == true ||
+        personalAgent['realBackend']?.toString().toLowerCase() == 'true';
     final service = _mapAt(map, 'service');
     final otp = _mapAt(map, 'otp');
     final accounts = _mapAt(map, 'accounts');
@@ -1289,7 +1509,7 @@ class _MessageAgentRealBackendConfig {
       'didDomain',
       'service.didDomain',
     );
-    return _MessageAgentRealBackendConfig(
+    return _PersonalAgentRealBackendConfig(
       runId: _requiredConfig(map, 'runId', 'runId'),
       platform: _requiredConfig(map, 'platform', 'platform'),
       environment: AwikiEnvironmentConfig(
@@ -1322,7 +1542,7 @@ class _MessageAgentRealBackendConfig {
       daemonReadyFile: _requiredConfig(daemon, 'readyFile', 'daemon.readyFile'),
       daemonHandle:
           _optionalConfig(daemon, 'handle') ??
-          'message-agent-daemon-${DateTime.now().millisecondsSinceEpoch}',
+          'personal-agent-daemon-${DateTime.now().millisecondsSinceEpoch}',
       fakeHermesGatewayCommand: _optionalConfig(
         daemon,
         'fakeHermesGatewayCommand',
@@ -1364,6 +1584,26 @@ class _MessageAgentRealBackendConfig {
   ].where((value) => value.trim().isNotEmpty).toList(growable: false);
 }
 
+File? _selectedPersonalAgentRunConfigFile() {
+  for (final path in <String>[
+    _personalAgentRunConfigPath,
+    _legacyPersonalAgentRunConfigPath,
+  ]) {
+    final file = File(path);
+    if (file.existsSync()) {
+      return file;
+    }
+  }
+  return null;
+}
+
+Map<String, Object?> _personalAgentConfig(Map<String, Object?> map) {
+  if (map.containsKey('personalAgent')) {
+    return _optionalMapAt(map, 'personalAgent');
+  }
+  return _optionalMapAt(map, 'messageAgent');
+}
+
 class _DaemonInstallResult {
   const _DaemonInstallResult({required this.daemonDid, required this.handle});
 
@@ -1399,7 +1639,7 @@ class _ProcessResult {
   final String stderr;
   final List<String> secrets;
 
-  String sanitizedSummary(_MessageAgentRealBackendConfig config) {
+  String sanitizedSummary(_PersonalAgentRealBackendConfig config) {
     return _sanitizeDiagnostic(
       'exit=$exitCode stdout=$stdout stderr=$stderr',
       config,
@@ -1418,7 +1658,7 @@ class _CliResult {
   final String stdout;
   final String stderr;
 
-  String sanitizedSummary(_MessageAgentRealBackendConfig config) {
+  String sanitizedSummary(_PersonalAgentRealBackendConfig config) {
     return _sanitizeDiagnostic(
       'exit=$exitCode stdout=$stdout stderr=$stderr',
       config,
@@ -1457,7 +1697,7 @@ Map<String, Object?> _optionalMapAt(Map<String, Object?> map, String key) {
 String _requiredConfig(Map<String, Object?> map, String key, String name) {
   final value = _optionalConfig(map, key);
   if (value == null) {
-    throw StateError('$name is required in $_messageAgentRunConfigPath.');
+    throw StateError('$name is required in $_personalAgentRunConfigPath.');
   }
   return value;
 }
@@ -1544,24 +1784,24 @@ class _UiAgentInventoryPort implements AgentInventoryPort {
   }
 }
 
-class _UiMessageAgentBindingPort implements MessageAgentBindingPort {
+class _UiPersonalAgentBindingPort implements PersonalAgentBindingPort {
   final List<String> calls = <String>[];
 
   @override
-  Future<MessageAgentBinding> ensureBinding({
+  Future<PersonalAgentBinding> ensureBinding({
     required String userDid,
     required String daemonAgentDid,
-    required String messageAgentDid,
+    required String personalAgentDid,
     required String runtimeProvider,
     required Map<String, Object?> runtimeProfile,
     required String delegatedKeyVerificationMethod,
   }) async {
-    calls.add('ensure:$messageAgentDid');
-    return MessageAgentBinding(
+    calls.add('ensure:$personalAgentDid');
+    return PersonalAgentBinding(
       id: 'binding_1',
       userDid: userDid,
       daemonAgentDid: daemonAgentDid,
-      messageAgentDid: messageAgentDid,
+      personalAgentDid: personalAgentDid,
       runtimeProvider: runtimeProvider,
       runtimeProfile: runtimeProfile,
       delegatedKeyVerificationMethod: delegatedKeyVerificationMethod,
@@ -1570,51 +1810,51 @@ class _UiMessageAgentBindingPort implements MessageAgentBindingPort {
   }
 
   @override
-  Future<MessageAgentBinding?> getActiveBinding() async {
+  Future<PersonalAgentBinding?> getActiveBinding() async {
     calls.add('get_active');
-    return const MessageAgentBinding(
+    return const PersonalAgentBinding(
       id: 'binding_1',
       userDid: 'did:test:me',
       daemonAgentDid: 'did:test:daemon:message',
-      messageAgentDid: 'did:test:agent:message',
+      personalAgentDid: 'did:test:agent:message',
       runtimeProvider: 'hermes',
-      runtimeProfile: <String, Object?>{'profile': 'message_agent'},
+      runtimeProfile: <String, Object?>{'profile': 'personal_agent'},
       delegatedKeyVerificationMethod: 'did:test:me#daemon-key-1',
       status: 'active',
     );
   }
 
   @override
-  Future<MessageAgentBinding> disableBinding({
+  Future<PersonalAgentBinding> disableBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
-    calls.add('disable:${bindingId ?? messageAgentDid}');
-    return const MessageAgentBinding(
+    calls.add('disable:${bindingId ?? personalAgentDid}');
+    return const PersonalAgentBinding(
       id: 'binding_1',
       userDid: 'did:test:me',
       daemonAgentDid: 'did:test:daemon:message',
-      messageAgentDid: 'did:test:agent:message',
+      personalAgentDid: 'did:test:agent:message',
       runtimeProvider: 'hermes',
-      runtimeProfile: <String, Object?>{'profile': 'message_agent'},
+      runtimeProfile: <String, Object?>{'profile': 'personal_agent'},
       delegatedKeyVerificationMethod: 'did:test:me#daemon-key-1',
       status: 'disabled',
     );
   }
 
   @override
-  Future<MessageAgentBinding> revokeBinding({
+  Future<PersonalAgentBinding> revokeBinding({
     String? bindingId,
-    String? messageAgentDid,
+    String? personalAgentDid,
   }) async {
-    calls.add('revoke:${bindingId ?? messageAgentDid}');
-    return const MessageAgentBinding(
+    calls.add('revoke:${bindingId ?? personalAgentDid}');
+    return const PersonalAgentBinding(
       id: 'binding_1',
       userDid: 'did:test:me',
       daemonAgentDid: 'did:test:daemon:message',
-      messageAgentDid: 'did:test:agent:message',
+      personalAgentDid: 'did:test:agent:message',
       runtimeProvider: 'hermes',
-      runtimeProfile: <String, Object?>{'profile': 'message_agent'},
+      runtimeProfile: <String, Object?>{'profile': 'personal_agent'},
       delegatedKeyVerificationMethod: 'did:test:me#daemon-key-1',
       status: 'revoked',
     );
@@ -1672,16 +1912,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> recoverHandle({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<AppSession> registerHandleWithEmail({
+  Future<IdentityRegistrationResult> registerHandleWithEmail({
     required String email,
     required String handle,
     String? inviteCode,
@@ -1691,7 +1922,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithPhone({
+  Future<IdentityRegistrationResult> registerHandleWithPhone({
     required String phone,
     required String otp,
     required String handle,
@@ -1702,7 +1933,7 @@ class _UiIdentityCorePort implements IdentityCorePort {
   }
 
   @override
-  Future<AppSession> registerHandleWithoutContactVerification({
+  Future<IdentityRegistrationResult> registerHandleWithoutContactVerification({
     required String handle,
     String? inviteCode,
     String? displayName,

@@ -1,9 +1,31 @@
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_support_service.dart';
-import 'package:awiki_me/src/domain/repositories/awiki_account_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('sends the closed Manifest registration OTP RPC payload', () async {
+    final rpc = _RecordingRpcClient();
+    final client = AwikiOnboardingUtilityClient(serviceClient: rpc);
+
+    await client.sendRegistrationOtp(
+      phone: '+8613800138000',
+      purpose: AwikiOnboardingUtilityClient.registrationOtpPurpose,
+      handle: 'alice',
+      domain: 'awiki.ai',
+      fullHandle: 'alice.awiki.ai',
+    );
+
+    expect(rpc.path, AwikiOnboardingUtilityClient.handleRpcEndpoint);
+    expect(rpc.method, 'send_otp');
+    expect(rpc.params, <String, Object?>{
+      'phone': '+8613800138000',
+      'purpose': 'awiki.identity.register.v1',
+      'handle': 'alice',
+      'domain': 'awiki.ai',
+      'full_handle': 'alice.awiki.ai',
+    });
+  });
+
   test('delegates onboarding utility calls with normalized inputs', () async {
     final userClient = _FakeUserClient();
     final service = AwikiOnboardingSupportService(
@@ -11,7 +33,12 @@ void main() {
       userClient: userClient,
     );
 
-    await service.sendOtp(phone: '13800138000');
+    await service.sendRegistrationOtp(
+      phone: '13800138000',
+      handle: ' Alice ',
+      domain: ' AWIKI.AI ',
+      fullHandle: 'alice.awiki.ai',
+    );
     await service.sendEmailVerification(
       email: ' Alice@Example.Test ',
       handle: ' Alice ',
@@ -21,9 +48,12 @@ void main() {
       email: ' Alice@Example.Test ',
       handle: ' Alice ',
     );
-    final status = await service.lookupHandleRegistration(handle: ' Alice ');
 
     expect(userClient.sentOtpPhones, ['+8613800138000']);
+    expect(userClient.sentOtpPurposes, ['awiki.identity.register.v1']);
+    expect(userClient.sentOtpHandles, ['alice']);
+    expect(userClient.sentOtpDomains, ['awiki.ai']);
+    expect(userClient.sentOtpFullHandles, ['alice.awiki.ai']);
     expect(userClient.sentEmailBaseUrls, ['https://example.test']);
     expect(userClient.sentEmails, ['alice@example.test']);
     expect(userClient.sentEmailHandles, ['alice']);
@@ -32,8 +62,6 @@ void main() {
     expect(verified, isTrue);
     expect(userClient.checkedEmails, ['alice@example.test']);
     expect(userClient.checkedEmailHandles, ['alice']);
-    expect(userClient.lookups, ['alice']);
-    expect(status, HandleRegistrationStatus.registered);
   });
 
   test('rejects invalid phone without calling utility client', () async {
@@ -44,182 +72,16 @@ void main() {
     );
 
     expect(
-      () => service.sendOtp(phone: 'not-a-phone'),
+      () => service.sendRegistrationOtp(
+        phone: 'not-a-phone',
+        handle: 'alice',
+        domain: 'awiki.ai',
+        fullHandle: 'alice.awiki.ai',
+      ),
       throwsA(isA<ArgumentError>()),
     );
 
     expect(userClient.sentOtpPhones, isEmpty);
-  });
-
-  test('rejects invalid handle without calling utility client', () async {
-    final userClient = _FakeUserClient();
-    final service = AwikiOnboardingSupportService(
-      userServiceUrl: 'https://example.test',
-      userClient: userClient,
-    );
-
-    await expectLater(
-      service.lookupHandleRegistration(handle: 'alice_test'),
-      throwsA(isA<ArgumentError>()),
-    );
-
-    expect(userClient.lookups, isEmpty);
-  });
-
-  test('maps structured handle_not_found into notRegistered', () async {
-    final service = AwikiOnboardingSupportService(
-      userServiceUrl: 'https://example.test',
-      userClient: _FakeUserClient(
-        lookupError: const AwikiOnboardingUtilityError(
-          rpcCode: -32004,
-          message: 'not_found',
-          data: <String, Object?>{'code': 'handle_not_found'},
-        ),
-      ),
-    );
-
-    expect(
-      await service.lookupHandleRegistration(handle: 'missing'),
-      HandleRegistrationStatus.notRegistered,
-    );
-  });
-
-  test(
-    'does not map generic open-server rpc not found into notRegistered',
-    () async {
-      final service = AwikiOnboardingSupportService(
-        userServiceUrl: 'https://example.test',
-        userClient: _FakeUserClient(
-          lookupError: const AwikiOnboardingUtilityError(
-            rpcCode: -32004,
-            message: 'not_found',
-          ),
-        ),
-      );
-
-      await expectLater(
-        service.lookupHandleRegistration(handle: 'missing'),
-        throwsA(isA<AwikiOnboardingUtilityError>()),
-      );
-    },
-  );
-
-  test('maps user-service lookup not found into notRegistered', () async {
-    final service = AwikiOnboardingSupportService(
-      userServiceUrl: 'https://example.test',
-      userClient: _FakeUserClient(
-        lookupError: const AwikiOnboardingUtilityError(
-          rpcCode: -32002,
-          message: 'Handle not found',
-          data: <String, Object?>{'code': 'handle_not_found'},
-        ),
-      ),
-    );
-
-    expect(
-      await service.lookupHandleRegistration(handle: 'missing'),
-      HandleRegistrationStatus.notRegistered,
-    );
-  });
-
-  test(
-    'does not map generic user-service rpc not found into notRegistered',
-    () async {
-      final service = AwikiOnboardingSupportService(
-        userServiceUrl: 'https://example.test',
-        userClient: _FakeUserClient(
-          lookupError: const AwikiOnboardingUtilityError(
-            rpcCode: -32002,
-            message: 'Not found',
-          ),
-        ),
-      );
-
-      await expectLater(
-        service.lookupHandleRegistration(handle: 'missing'),
-        throwsA(isA<AwikiOnboardingUtilityError>()),
-      );
-    },
-  );
-
-  test(
-    'maps exact legacy handle_not_found machine message into notRegistered',
-    () async {
-      final service = AwikiOnboardingSupportService(
-        userServiceUrl: 'https://example.test',
-        userClient: _FakeUserClient(
-          lookupError: const AwikiOnboardingUtilityError(
-            message: 'handle_not_found',
-          ),
-        ),
-      );
-
-      expect(
-        await service.lookupHandleRegistration(handle: 'missing'),
-        HandleRegistrationStatus.notRegistered,
-      );
-    },
-  );
-
-  test(
-    'does not classify explanatory not found text as handle state',
-    () async {
-      final service = AwikiOnboardingSupportService(
-        userServiceUrl: 'https://example.test',
-        userClient: _FakeUserClient(
-          lookupError: const AwikiOnboardingUtilityError(
-            message: 'handle does not exist',
-          ),
-        ),
-      );
-
-      await expectLater(
-        service.lookupHandleRegistration(handle: 'missing'),
-        throwsA(isA<AwikiOnboardingUtilityError>()),
-      );
-    },
-  );
-
-  test('rejects non-e1 DID from handle lookup response', () async {
-    final service = AwikiOnboardingSupportService(
-      userServiceUrl: 'https://example.test',
-      userClient: _FakeUserClient(
-        lookupProfile: const <String, Object?>{
-          'did': 'did:wba:awiki.ai:alice:k1_123',
-        },
-      ),
-    );
-
-    await expectLater(
-      service.lookupHandleRegistration(handle: 'alice'),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          'Only e1 DID identities are supported.',
-        ),
-      ),
-    );
-  });
-
-  test('rejects handle lookup response without DID', () async {
-    final service = AwikiOnboardingSupportService(
-      userServiceUrl: 'https://example.test',
-      userClient: _FakeUserClient(
-        lookupProfile: const <String, Object?>{'handle': 'alice'},
-      ),
-    );
-
-    await expectLater(
-      service.lookupHandleRegistration(handle: 'alice'),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          'Handle lookup response did not include a DID.',
-        ),
-      ),
-    );
   });
 
   test('normalizes handle availability input and maps result fields', () async {
@@ -253,29 +115,47 @@ void main() {
   });
 }
 
-class _FakeUserClient extends AwikiOnboardingUtilityClient {
-  _FakeUserClient({
-    this.lookupError,
-    this.lookupProfile = const <String, Object?>{
-      'did': 'did:wba:awiki.ai:alice:e1_123',
-    },
-    this.availabilityResult = const <String, Object?>{},
-  }) : super(
-         serviceClient: AwikiOnboardingUtilityHttpClient(
-           baseUrl: 'https://example.test',
-         ),
-       );
+class _RecordingRpcClient extends AwikiOnboardingUtilityHttpClient {
+  _RecordingRpcClient() : super(baseUrl: 'https://example.test');
 
-  final AwikiOnboardingUtilityError? lookupError;
-  final Map<String, Object?> lookupProfile;
+  String? path;
+  String? method;
+  Map<String, Object?>? params;
+
+  @override
+  Future<Map<String, Object?>> rpcCall({
+    required String path,
+    required String method,
+    required Map<String, Object?> params,
+    String? bearerToken,
+    String requestId = 'req-1',
+  }) async {
+    this.path = path;
+    this.method = method;
+    this.params = params;
+    return const <String, Object?>{'ok': true};
+  }
+}
+
+class _FakeUserClient extends AwikiOnboardingUtilityClient {
+  _FakeUserClient({this.availabilityResult = const <String, Object?>{}})
+    : super(
+        serviceClient: AwikiOnboardingUtilityHttpClient(
+          baseUrl: 'https://example.test',
+        ),
+      );
+
   final Map<String, Object?> availabilityResult;
   final List<String> sentOtpPhones = <String>[];
+  final List<String> sentOtpPurposes = <String>[];
+  final List<String> sentOtpHandles = <String>[];
+  final List<String> sentOtpDomains = <String>[];
+  final List<String> sentOtpFullHandles = <String>[];
   final List<String> sentEmailBaseUrls = <String>[];
   final List<String> sentEmails = <String>[];
   final List<String> sentEmailHandles = <String>[];
   final List<String> checkedEmails = <String>[];
   final List<String> checkedEmailHandles = <String>[];
-  final List<String> lookups = <String>[];
   final List<String> validateHandleCalls = <String>[];
   int loadServerInfoCalls = 0;
 
@@ -321,8 +201,18 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
   }
 
   @override
-  Future<void> sendOtp({required String phone}) async {
+  Future<void> sendRegistrationOtp({
+    required String phone,
+    required String purpose,
+    required String handle,
+    required String domain,
+    required String fullHandle,
+  }) async {
     sentOtpPhones.add(phone);
+    sentOtpPurposes.add(purpose);
+    sentOtpHandles.add(handle);
+    sentOtpDomains.add(domain);
+    sentOtpFullHandles.add(fullHandle);
   }
 
   @override
@@ -345,19 +235,6 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
     checkedEmails.add(email);
     checkedEmailHandles.add(handle);
     return true;
-  }
-
-  @override
-  Future<Map<String, Object?>> getPublicProfile({
-    required String didOrHandle,
-    String? bearerToken,
-  }) async {
-    lookups.add(didOrHandle);
-    final lookupError = this.lookupError;
-    if (lookupError != null) {
-      throw lookupError;
-    }
-    return lookupProfile;
   }
 
   @override

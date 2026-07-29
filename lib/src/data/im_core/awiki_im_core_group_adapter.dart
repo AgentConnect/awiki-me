@@ -1,6 +1,7 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/ports/group_core_port.dart';
+import '../../application/models/group_collection_page.dart';
 import '../../domain/entities/chat_message.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
@@ -33,15 +34,15 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     }
     final result = await _runtime.withCurrentClient(
       (client) => client.groups.createGroup(
-        core.CreateGroupRequest(
+        mapCoreCreateGroupRequest(
           name: name,
-          identityMode: _coreIdentityMode(identity.mode),
-          identityHandle: identity.handle,
           slug: slug,
           description: description,
           goal: goal,
           rules: rules,
           messagePrompt: messagePrompt,
+          identity: identity,
+          secureRequired: _runtime.multiDeviceGroupE2eeEnabled,
         ),
       ),
     );
@@ -97,22 +98,37 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
   }
 
   @override
-  Future<List<GroupSummary>> listGroups({int limit = 100}) async {
+  Future<GroupCollectionPage<GroupSummary>> listGroups({
+    int limit = 100,
+    String? cursor,
+  }) async {
     final result = await _runtime.withCurrentClient(
-      (client) => client.groups.listGroups(limit: limit),
+      (client) => client.groups.listGroups(limit: limit, cursor: cursor),
     );
-    return result.groups.map(_mappers.groupFromCoreSummary).toList();
+    return GroupCollectionPage<GroupSummary>(
+      items: result.groups.map(_mappers.groupFromCoreSummary).toList(),
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
+    );
   }
 
   @override
-  Future<List<GroupMemberSummary>> listMembers(
+  Future<GroupCollectionPage<GroupMemberSummary>> listMembers(
     String groupDid, {
     int limit = 100,
+    String? cursor,
   }) async {
     final result = await _runtime.withCurrentClient(
-      (client) => client.groups.listMembers(groupDid, limit: limit),
+      (client) =>
+          client.groups.listMembers(groupDid, limit: limit, cursor: cursor),
     );
-    return result.members.map(_mappers.groupMemberFromCore).toList();
+    return GroupCollectionPage<GroupMemberSummary>(
+      items: result.members.map(_mappers.groupMemberFromCore).toList(),
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
+      pageGroupDid: result.pageGroupDid,
+      groupStateVersion: result.groupStateVersion,
+    );
   }
 
   @override
@@ -179,6 +195,33 @@ class AwikiImCoreGroupAdapter implements GroupCorePort {
     }
     throw StateError('IM Core group response did not include a group.');
   }
+}
+
+core.CreateGroupRequest mapCoreCreateGroupRequest({
+  required String name,
+  required String slug,
+  required String description,
+  required String goal,
+  required String rules,
+  required String? messagePrompt,
+  required GroupIdentitySelection identity,
+  required bool secureRequired,
+}) {
+  return core.CreateGroupRequest(
+    name: name,
+    identityMode: _coreIdentityMode(identity.mode),
+    identityHandle: identity.handle,
+    slug: slug,
+    description: description,
+    goal: goal,
+    rules: rules,
+    messagePrompt: messagePrompt,
+    messageSecurityProfile: secureRequired
+        ? core.GroupMessageSecurityProfile.groupE2ee
+        : null,
+    e2ee: secureRequired,
+    attachmentsAllowed: secureRequired ? true : null,
+  );
 }
 
 core.JoinGroupRequest mapCoreJoinGroupRequest(

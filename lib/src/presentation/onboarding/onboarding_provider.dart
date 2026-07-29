@@ -5,12 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/app_session_service.dart';
-import '../../application/models/app_session.dart';
 import '../../application/models/onboarding_server_info.dart';
-import '../../domain/repositories/awiki_account_gateway.dart';
+import '../../application/ports/identity_core_port.dart';
+import '../../application/ports/legacy_identity_upgrade_port.dart';
+import '../../domain/entities/session_identity.dart';
 import '../../l10n/app_message.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
-import '../group/group_provider.dart';
+import '../devices/devices_provider.dart';
 
 const Object _unset = Object();
 
@@ -18,23 +19,29 @@ enum OnboardingServerInfoStatus { loading, ready, failed }
 
 class OnboardingState {
   const OnboardingState({
+    this.entryMode = 'register',
     this.authMode = 'phone',
     this.registerStep = 1,
     this.emailVerified = false,
     this.otpResendCountdown = 0,
     this.emailResendCountdown = 0,
     this.isBusy = false,
+    this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
+    this.otpTargetFullHandle,
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
   });
 
+  final String entryMode;
   final String authMode;
   final int registerStep;
   final bool emailVerified;
   final int otpResendCountdown;
   final int emailResendCountdown;
   final bool isBusy;
+  final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
+  final String? otpTargetFullHandle;
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
@@ -47,6 +54,10 @@ class OnboardingState {
       serverInfoStatus == OnboardingServerInfoStatus.ready;
   bool get isServerInfoFailed =>
       serverInfoStatus == OnboardingServerInfoStatus.failed;
+  bool get isLegacyUpgradeRunning =>
+      legacyUpgradeStatus.phase == LegacyIdentityUpgradePhase.running;
+  bool get isLegacyUpgradeRetryRequired =>
+      legacyUpgradeStatus.phase == LegacyIdentityUpgradePhase.retryRequired;
   bool get hasRegistrationMethods => registrationMethods.isNotEmpty;
 
   List<OnboardingIdentityMethod> get registrationMethods {
@@ -78,10 +89,6 @@ class OnboardingState {
     return serverInfo?.supportsPhoneNoVerificationRegistration ?? false;
   }
 
-  bool get supportsPhoneOtpRecovery {
-    return serverInfo?.supportsPhoneOtpRecovery ?? false;
-  }
-
   bool get usesNoVerificationRegistration {
     final method = selectedRegistrationMethod;
     return method != null &&
@@ -90,23 +97,31 @@ class OnboardingState {
   }
 
   OnboardingState copyWith({
+    String? entryMode,
     String? authMode,
     int? registerStep,
     bool? emailVerified,
     int? otpResendCountdown,
     int? emailResendCountdown,
     bool? isBusy,
+    LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
+    Object? otpTargetFullHandle = _unset,
     OnboardingServerInfoStatus? serverInfoStatus,
     Object? serverInfo = _unset,
     Object? serverInfoError = _unset,
   }) {
     return OnboardingState(
+      entryMode: entryMode ?? this.entryMode,
       authMode: authMode ?? this.authMode,
       registerStep: registerStep ?? this.registerStep,
       emailVerified: emailVerified ?? this.emailVerified,
       otpResendCountdown: otpResendCountdown ?? this.otpResendCountdown,
       emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
       isBusy: isBusy ?? this.isBusy,
+      legacyUpgradeStatus: legacyUpgradeStatus ?? this.legacyUpgradeStatus,
+      otpTargetFullHandle: identical(otpTargetFullHandle, _unset)
+          ? this.otpTargetFullHandle
+          : otpTargetFullHandle as String?,
       serverInfoStatus: serverInfoStatus ?? this.serverInfoStatus,
       serverInfo: identical(serverInfo, _unset)
           ? this.serverInfo
@@ -130,7 +145,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   late final AppSessionService _sessionService = ref.read(
     appSessionServiceProvider,
   );
-  static const Duration _groupRecoveryTimeout = Duration(seconds: 8);
   static const int _otpResendCooldownSeconds = 60;
   static const int _emailResendCooldownSeconds = 60;
   Timer? _otpResendTimer;
@@ -149,6 +163,32 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     _otpResendTimer?.cancel();
     _emailResendTimer?.cancel();
     super.dispose();
+  }
+
+  void setEntryMode(String value) {
+    _setEntryMode(value);
+  }
+
+  void setEntryModeFromLocalCredentials(List<SessionIdentity> credentials) {
+    final nextMode = credentials.isEmpty ? 'register' : 'login';
+    if (state.entryMode == nextMode) {
+      return;
+    }
+    _setEntryMode(nextMode);
+  }
+
+  void _setEntryMode(String value) {
+    state = state.copyWith(
+      entryMode: value,
+      registerStep: value == 'login' ? 1 : state.registerStep,
+      emailVerified: value == 'login' ? false : state.emailVerified,
+      otpResendCountdown: value == 'login' ? 0 : state.otpResendCountdown,
+      emailResendCountdown: value == 'login' ? 0 : state.emailResendCountdown,
+    );
+    if (value == 'login') {
+      _cancelOtpResendCountdown();
+      _cancelEmailResendCountdown();
+    }
   }
 
   void setAuthMode(String value) {
@@ -203,22 +243,46 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
   }
 
-  Future<void> requestOtp(String phone) async {
+  Future<void> requestOtp({
+    required String phone,
+    required String handle,
+    required String handleDomain,
+  }) async {
     if (!state.supportsPhoneOtpRegistration) {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
       return;
     }
+    String? fullHandle;
     var success = false;
     await _runBusy(() async {
-      await ref.read(onboardingSupportServiceProvider).sendOtp(phone: phone);
+      final normalizedHandle = _normalizeHandleForOtp(handle);
+      final domain = _normalizeHandleDomain(handleDomain);
+      fullHandle = '$normalizedHandle.$domain';
+      await ref
+          .read(onboardingSupportServiceProvider)
+          .sendRegistrationOtp(
+            phone: phone,
+            handle: normalizedHandle,
+            domain: domain,
+            fullHandle: fullHandle!,
+          );
       success = true;
     });
     if (success) {
+      state = state.copyWith(otpTargetFullHandle: fullHandle!);
       _startOtpResendCountdown();
       ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.otpSent());
     }
+  }
+
+  void resetPhoneOtpTarget() {
+    if (state.otpResendCountdown == 0 && state.otpTargetFullHandle == null) {
+      return;
+    }
+    _cancelOtpResendCountdown();
+    state = state.copyWith(otpResendCountdown: 0, otpTargetFullHandle: null);
   }
 
   Future<void> requestEmailActivation({
@@ -234,10 +298,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     var success = false;
     await _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
-      final status = await support.lookupHandleRegistration(handle: handle);
-      if (status == HandleRegistrationStatus.registered) {
-        throw StateError('email_login_unsupported_for_registered_handle');
-      }
       await support.sendEmailVerification(email: email, handle: handle);
       success = true;
     });
@@ -282,10 +342,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     state = state.copyWith(emailVerified: false, emailResendCountdown: 0);
   }
 
-  Future<void> registerWithPhone({
+  Future<IdentityRegistrationStatus?> registerWithPhone({
     required String phone,
     required String otp,
     required String handle,
+    required String handleDomain,
     required String nickName,
     required String profileMarkdown,
   }) async {
@@ -293,11 +354,19 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
-      return;
+      return null;
     }
-    final transition = _beginSessionTransition();
-    await _runBusy(() async {
-      final session = await ref
+    final domain = _normalizeHandleDomain(handleDomain);
+    final normalizedHandle = handle.trim().toLowerCase();
+    if (state.otpTargetFullHandle != '$normalizedHandle.$domain') {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showError(AppMessage.operationFailedRetry());
+      return null;
+    }
+    final transition = _sessionService.beginSessionTransition();
+    return _runBusy(() async {
+      final result = await ref
           .read(onboardingServiceProvider)
           .registerHandleWithPhone(
             phone: phone,
@@ -307,130 +376,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             profileMarkdown: profileMarkdown,
             transition: transition,
           );
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      await _activateCommittedSession(session, transition);
+      return _activateRegistrationResult(result, transition);
     }, sessionTransition: transition);
   }
 
-  Future<void> loginOrRegisterWithPhone({
-    required String phone,
-    required String otp,
-    required String handle,
-    required String nickName,
-    required String profileMarkdown,
-  }) async {
-    if (!state.supportsPhoneOtpRegistration) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.registrationMethodUnavailable());
-      return;
-    }
-    final transition = _beginSessionTransition();
-    var recovered = false;
-    await _runBusy(() async {
-      final support = ref.read(onboardingSupportServiceProvider);
-      final onboarding = ref.read(onboardingServiceProvider);
-      final status = await support.lookupHandleRegistration(handle: handle);
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      recovered = status == HandleRegistrationStatus.registered;
-      final session = switch (status) {
-        HandleRegistrationStatus.registered =>
-          state.supportsPhoneOtpRecovery
-              ? await onboarding.recoverHandle(
-                  phone: phone,
-                  otp: otp,
-                  handle: handle,
-                  transition: transition,
-                )
-              : throw StateError('handle_recovery_unsupported'),
-        HandleRegistrationStatus.notRegistered =>
-          await onboarding.registerHandleWithPhone(
-            phone: phone,
-            otp: otp,
-            handle: handle,
-            nickName: nickName,
-            profileMarkdown: profileMarkdown,
-            transition: transition,
-          ),
-      };
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      await _activateCommittedSession(session, transition);
-    }, sessionTransition: transition);
-    if (recovered && _isSessionTransitionCurrent(transition)) {
-      await _resumeGroupRecoveryBestEffort(transition: transition);
-    }
-  }
-
-  Future<void> _resumeGroupRecoveryBestEffort({
-    required AppSessionTransition transition,
-  }) async {
-    if (!_isSessionTransitionCurrent(transition)) {
-      return;
-    }
-    try {
-      final summary = await ref
-          .read(groupProvider.notifier)
-          .resumeRebindRecovery()
-          .timeout(_groupRecoveryTimeout);
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      final feedback = ref.read(uiFeedbackProvider.notifier);
-      if (summary.hasBlocked) {
-        feedback.showInfo(AppMessage.groupRecoveryBlocked(summary.blocked));
-      } else if (summary.hasPending) {
-        feedback.showInfo(AppMessage.groupRecoveryPending(summary.pending));
-      } else if (summary.completed > 0) {
-        feedback.showInfo(AppMessage.groupRecoveryCompleted());
-      }
-    } catch (_) {
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showInfo(AppMessage.groupRecoveryStatusUnavailable());
-    }
-  }
-
-  Future<void> loginExistingWithOtp({
-    required String phone,
-    required String otp,
-    required String handle,
-  }) async {
-    if (!state.supportsPhoneOtpRecovery) {
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showError(AppMessage.registrationMethodUnavailable());
-      return;
-    }
-    final transition = _beginSessionTransition();
-    await _runBusy(() async {
-      final session = await ref
-          .read(onboardingServiceProvider)
-          .recoverHandle(
-            phone: phone,
-            otp: otp,
-            handle: handle,
-            transition: transition,
-          );
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      await _activateCommittedSession(session, transition);
-    }, sessionTransition: transition);
-    if (_isSessionTransitionCurrent(transition)) {
-      await _resumeGroupRecoveryBestEffort(transition: transition);
-    }
-  }
-
-  Future<void> registerWithEmail({
+  Future<IdentityRegistrationStatus?> registerWithEmail({
     required String email,
     required String handle,
     required String nickName,
@@ -440,29 +390,19 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
-      return;
+      return null;
     }
-    final transition = _beginSessionTransition();
-    await _runBusy(() async {
+    final transition = _sessionService.beginSessionTransition();
+    return _runBusy(() async {
       final support = ref.read(onboardingSupportServiceProvider);
-      final status = await support.lookupHandleRegistration(handle: handle);
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      if (status == HandleRegistrationStatus.registered) {
-        throw StateError('email_login_unsupported_for_registered_handle');
-      }
       final verified = await support.checkEmailVerified(
         email: email,
         handle: handle,
       );
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
       if (!verified) {
         throw StateError('email_not_activated');
       }
-      final session = await ref
+      final result = await ref
           .read(onboardingServiceProvider)
           .registerHandleWithEmail(
             email: email,
@@ -471,14 +411,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             profileMarkdown: profileMarkdown,
             transition: transition,
           );
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      await _activateCommittedSession(session, transition);
+      return _activateRegistrationResult(result, transition);
     }, sessionTransition: transition);
   }
 
-  Future<void> registerWithoutContactVerification({
+  Future<IdentityRegistrationStatus?> registerWithoutContactVerification({
     required String phone,
     required String handle,
     required String nickName,
@@ -488,19 +425,11 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.registrationMethodUnavailable());
-      return;
+      return null;
     }
-    final transition = _beginSessionTransition();
-    await _runBusy(() async {
-      final support = ref.read(onboardingSupportServiceProvider);
-      final status = await support.lookupHandleRegistration(handle: handle);
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      if (status == HandleRegistrationStatus.registered) {
-        throw StateError('handle_already_registered_import_credential');
-      }
-      final session = await ref
+    final transition = _sessionService.beginSessionTransition();
+    return _runBusy(() async {
+      final result = await ref
           .read(onboardingServiceProvider)
           .registerHandleWithoutContactVerification(
             phone: phone,
@@ -509,32 +438,106 @@ class OnboardingController extends StateNotifier<OnboardingState> {
             profileMarkdown: profileMarkdown,
             transition: transition,
           );
-      if (!_isSessionTransitionCurrent(transition)) {
-        return;
-      }
-      await _activateCommittedSession(session, transition);
+      return _activateRegistrationResult(result, transition);
     }, sessionTransition: transition);
   }
 
-  AppSessionTransition _beginSessionTransition() {
-    return _sessionService.beginSessionTransition();
-  }
-
-  bool _isSessionTransitionCurrent(AppSessionTransition transition) {
-    return mounted && _sessionService.isSessionTransitionCurrent(transition);
-  }
-
-  Future<void> _activateCommittedSession(
-    AppSession session,
+  Future<IdentityRegistrationStatus> _activateRegistrationResult(
+    IdentityRegistrationResult result,
     AppSessionTransition transition,
   ) async {
+    if (result.status == IdentityRegistrationStatus.joinRequired) {
+      if (!_sessionService.isLatestSessionTransition(transition)) {
+        throw const AppSessionTransitionSuperseded();
+      }
+      final progress = result.joinProgress;
+      if (progress == null) {
+        throw StateError(
+          'Join-required registration did not include Join progress.',
+        );
+      }
+      ref.read(devicesProvider.notifier).resumeNewDevice(progress);
+      return IdentityRegistrationStatus.joinRequired;
+    }
+    final session = result.identity;
+    if (session == null) {
+      throw StateError('Registered result did not include an identity.');
+    }
+    if (!_sessionService.isSessionTransitionCurrent(transition)) {
+      throw const AppSessionTransitionSuperseded();
+    }
     await ref
         .read(appRuntimeProvider.notifier)
         .activateCommittedSession(session, expectedTransition: transition);
+    return IdentityRegistrationStatus.registered;
   }
 
-  Future<void> _runBusy(
-    Future<void> Function() action, {
+  Future<void> loginWithLocalCredential(String identityIdOrAlias) {
+    return _resumeLegacyUpgradeAndLogin(
+      identityIdOrAlias,
+      inspectBeforeUpgrade: true,
+    );
+  }
+
+  Future<void> retryLegacyUpgrade() async {
+    final identityId = state.legacyUpgradeStatus.identityId;
+    if (identityId == null || identityId.isEmpty) {
+      return;
+    }
+    await _resumeLegacyUpgradeAndLogin(identityId, inspectBeforeUpgrade: false);
+  }
+
+  Future<void> _resumeLegacyUpgradeAndLogin(
+    String identityIdOrAlias, {
+    required bool inspectBeforeUpgrade,
+  }) async {
+    if (state.isLegacyUpgradeRunning) {
+      return;
+    }
+    state = state.copyWith(
+      legacyUpgradeStatus: const LegacyIdentityUpgradeStatus.running(),
+    );
+    try {
+      var status = inspectBeforeUpgrade
+          ? await ref
+                .read(onboardingServiceProvider)
+                .legacyUpgradeStatus(identityIdOrAlias)
+          : const LegacyIdentityUpgradeStatus.idle();
+      if (status.phase == LegacyIdentityUpgradePhase.idle ||
+          status.phase == LegacyIdentityUpgradePhase.running) {
+        status = await ref
+            .read(onboardingServiceProvider)
+            .upgradeLegacyIdentity(identityIdOrAlias);
+      }
+      switch (status.phase) {
+        case LegacyIdentityUpgradePhase.completed:
+          state = state.copyWith(legacyUpgradeStatus: status);
+          await ref
+              .read(appRuntimeProvider.notifier)
+              .loginWithLocalCredential(identityIdOrAlias);
+        case LegacyIdentityUpgradePhase.retryRequired:
+          state = state.copyWith(legacyUpgradeStatus: status);
+        case LegacyIdentityUpgradePhase.idle:
+        case LegacyIdentityUpgradePhase.running:
+          state = state.copyWith(
+            legacyUpgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
+              identityId: identityIdOrAlias,
+              failureCode: status.failureCode ?? 'legacy_upgrade_failed',
+            ),
+          );
+      }
+    } on Object {
+      state = state.copyWith(
+        legacyUpgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
+          identityId: identityIdOrAlias,
+          failureCode: 'legacy_upgrade_failed',
+        ),
+      );
+    }
+  }
+
+  Future<T?> _runBusy<T>(
+    Future<T> Function() action, {
     AppSessionTransition? sessionTransition,
   }) async {
     final generation = ++_busyGeneration;
@@ -543,22 +546,22 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     state = state.copyWith(isBusy: true);
     try {
-      await action().timeout(_requestTimeout);
+      return await action().timeout(_requestTimeout);
     } on TimeoutException {
       await _cancelOrAbortSessionTransition(sessionTransition);
       if (generation != _busyGeneration) {
-        return;
+        return null;
       }
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.requestTimeoutRetry());
     } on AppSessionTransitionSuperseded {
       await _cancelOrAbortSessionTransition(sessionTransition);
-      return;
+      return null;
     } catch (error) {
       await _cancelOrAbortSessionTransition(sessionTransition);
       if (generation != _busyGeneration) {
-        return;
+        return null;
       }
       ref
           .read(uiFeedbackProvider.notifier)
@@ -571,6 +574,7 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         state = state.copyWith(isBusy: false);
       }
     }
+    return null;
   }
 
   Future<void> _cancelOrAbortSessionTransition(
@@ -645,6 +649,9 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       otpResendCountdown: authChanged || method == null
           ? 0
           : state.otpResendCountdown,
+      otpTargetFullHandle: authChanged || method == null
+          ? null
+          : state.otpTargetFullHandle,
       emailResendCountdown: authChanged || method == null
           ? 0
           : state.emailResendCountdown,
@@ -669,6 +676,25 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     return state.serverInfo?.registrationMethod(id);
   }
+}
+
+String _normalizeHandleForOtp(String handle) {
+  final raw = handle.trim().toLowerCase();
+  if (!RegExp(r'^[a-z0-9-]{2,32}$').hasMatch(raw)) {
+    throw ArgumentError('handle_invalid_pattern');
+  }
+  return raw;
+}
+
+String _normalizeHandleDomain(String domain) {
+  final normalized = domain.trim().toLowerCase().replaceFirst(
+    RegExp(r'\.$'),
+    '',
+  );
+  if (normalized.isEmpty || !normalized.contains('.')) {
+    throw ArgumentError('did_domain_invalid');
+  }
+  return normalized;
 }
 
 final onboardingProvider =

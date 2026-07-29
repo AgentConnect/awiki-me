@@ -593,6 +593,16 @@ class AwikiImCoreMappers {
     core.RealtimeEvent event, {
     required String ownerDid,
   }) {
+    if (event.isSystemNotificationChanged) {
+      return RealtimeUpdate(
+        ownerDid: ownerDid,
+        systemNotificationChanged: true,
+        syncDirty: event.sync?.syncDirty ?? false,
+        gapDetected: event.sync?.gapDetected ?? false,
+        syncEventSeq: event.sync?.eventSeq,
+        syncEventType: event.sync?.eventType,
+      );
+    }
     final message = event.message;
     if (message == null) {
       if (event.kind == 'group_updated') {
@@ -603,6 +613,15 @@ class AwikiImCoreMappers {
           gapDetected: event.sync?.gapDetected ?? false,
           syncEventSeq: event.sync?.eventSeq,
           syncEventType: event.sync?.eventType,
+        );
+      }
+      if (event.sync != null) {
+        return RealtimeUpdate(
+          ownerDid: ownerDid,
+          syncDirty: event.sync!.syncDirty,
+          gapDetected: event.sync!.gapDetected,
+          syncEventSeq: event.sync!.eventSeq,
+          syncEventType: event.sync!.eventType,
         );
       }
       return null;

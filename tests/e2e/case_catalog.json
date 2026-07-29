@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-28.attachment-read-watermark-v1",
+  "sourceRevision": "2026-07-29.release0714-merge-v1",
   "cases": [
     {
       "caseId": "ATTACH-E2E-001",
@@ -107,10 +107,11 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Create/select a Claude Code runtime Agent and open chat through UI.",
       "exactOracles": [
+        "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "One canonical runtime Agent is selected and its chat is visible."
       ],
       "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, duplicate result, or backend/UI divergence fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -195,10 +196,11 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Create/select a Codex runtime Agent and open its chat through UI.",
       "exactOracles": [
+        "The committed daemon create status converges the Agent page without a manual inventory refresh.",
         "One canonical runtime Agent is selected and its chat is visible."
       ],
       "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, duplicate result, or backend/UI divergence fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -1296,11 +1298,11 @@
       }
     },
     {
-      "caseId": "MSGAGENT-E2E-001",
-      "feature": "Message Agent enable UI",
+      "caseId": "PERSONALAGENT-E2E-001",
+      "feature": "Personal Agent enable UI",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
-      "action": "Select the daemon and enable Message Agent through visible UI.",
+      "action": "Select the daemon and enable Personal Agent through visible UI.",
       "exactOracles": [
         "Daemon selection, active binding and enabled UI agree."
       ],
@@ -1313,13 +1315,13 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
     },
     {
-      "caseId": "MSGAGENT-E2E-002",
-      "feature": "Message Agent receive/process",
+      "caseId": "PERSONALAGENT-E2E-002",
+      "feature": "Personal Agent receive/process",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Send from CLI and wait for App/runtime recovery.",
@@ -1335,13 +1337,13 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
     },
     {
-      "caseId": "MSGAGENT-E2E-003",
-      "feature": "Message Agent confirmation/result",
+      "caseId": "PERSONALAGENT-E2E-003",
+      "feature": "Personal Agent confirmation/result",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Confirm the visible draft/action and await its result.",
@@ -1357,13 +1359,13 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "planned"
     },
     {
-      "caseId": "MSGAGENT-E2E-004",
-      "feature": "Message Agent revoke lifecycle",
+      "caseId": "PERSONALAGENT-E2E-004",
+      "feature": "Personal Agent revoke lifecycle",
       "layer": "optional_provider_product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Revoke Daemon message authorization through the visible confirmation flow.",
@@ -1379,7 +1381,7 @@
         "optional_nightly"
       ],
       "owner": "awiki-me-agents",
-      "implementationPath": "tests/e2e/flutter/app/message_agent_full_ui_test.dart",
+      "implementationPath": "tests/e2e/flutter/app/personal_agent_full_ui_test.dart",
       "evidenceType": "case_attestation",
       "catalogStatus": "active"
     },
@@ -1697,6 +1699,53 @@
       "catalogStatus": "active"
     },
     {
+      "caseId": "IDENTITY-DELETE-E2E-001",
+      "feature": "Current credential deletion across idle Patch and cold restart",
+      "layer": "product_ui",
+      "preconditions": "A real native Core identity is active in an isolated App state root, the committed conversation Patch stream is attached and idle, and the runner can launch a third independent Flutter process against that same root.",
+      "action": "After the normal cold-restart conversation assertions, delete the current credential while the conversation Patch stream is idle; then start another Flutter process against the same App state root.",
+      "exactOracles": [
+        "Deletion completes without waiting for presentation-stream cancellation, the native identity is absent, the active identity is not restored after cold start, and onboarding is visible without a persistent loading mask."
+      ],
+      "negativeChecks": [
+        "A hanging Patch cancellation, retained native identity, retained active pointer, automatic relogin, same-process-only reopen, or persistent busy/loading state fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-identity+awiki-im-core-dart",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/process_restart_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "IDENTITY-DELETE-E2E-001:idle_conversation_patch_delete_completed",
+          "IDENTITY-DELETE-E2E-001:native_identity_absent_after_delete",
+          "IDENTITY-DELETE-E2E-001:distinct_flutter_process_same_state_root",
+          "IDENTITY-DELETE-E2E-001:active_identity_not_restored_after_cold_start",
+          "IDENTITY-DELETE-E2E-001:onboarding_visible_without_loading_mask"
+        ],
+        "exactOracleAssertions": [
+          [
+            "IDENTITY-DELETE-E2E-001:native_identity_absent_after_delete",
+            "IDENTITY-DELETE-E2E-001:active_identity_not_restored_after_cold_start",
+            "IDENTITY-DELETE-E2E-001:onboarding_visible_without_loading_mask"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "IDENTITY-DELETE-E2E-001:idle_conversation_patch_delete_completed",
+            "IDENTITY-DELETE-E2E-001:native_identity_absent_after_delete",
+            "IDENTITY-DELETE-E2E-001:distinct_flutter_process_same_state_root",
+            "IDENTITY-DELETE-E2E-001:active_identity_not_restored_after_cold_start",
+            "IDENTITY-DELETE-E2E-001:onboarding_visible_without_loading_mask"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "PROCESS-RESTART-E2E-001",
       "feature": "Canonical conversation cold-process restart",
       "layer": "product_ui",
@@ -1755,10 +1804,11 @@
       "exactOracles": [
         "App shell and onboarding are visible exactly once.",
         "The onboarding authentication entry is visible; macOS exposes the single phone, email, and identity-credential method selector.",
+        "On macOS, the phone OTP form submits the same-step handle and its tenant-qualified full handle.",
         "Unauthenticated realtime remains disconnected."
       ],
       "negativeChecks": [
-        "A missing shell/onboarding/authentication-entry surface or an unexpected realtime connection fails the case."
+        "A missing shell/onboarding/authentication-entry surface, a dropped OTP handle scope, or an unexpected realtime connection fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",
@@ -1904,6 +1954,769 @@
         "negativeCheckAssertions": [
           [
             "GROUP-CANON-E2E-001:duplicate_disappearing_or_changed_group_rejected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-001",
+      "feature": "AWiki Me new-device Join with CLI admin",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; AWiki Me and an exact-revision CLI admin use independent fresh native Core roots; purpose-bound OTPs are resolved through validated fixed argv; the CLI admin runs its production foreground listener with the dedicated file host-notification sink before Join starts.",
+      "action": "Bootstrap the existing CLI admin, start its real listener, start Join through the real AWiki Me onboarding UI, restart the App while Join is pending, require the CLI listener to emit the redacted im.device.join.requested event before reading the local Core projection or starting verification, compare the independently displayed six-digit SAS, approve through the foreground CLI as a member, and wait for AWiki Me to re-resolve authorization.",
+      "exactOracles": [
+        "The independently bootstrapped CLI admin and App requester use distinct fresh native Core roots; the OTP-authenticated App request remains pending before the admin starts verification, an App restart restores that same pending session without persisting SAS, and the listener emits exactly the dedicated redacted Join wake before any admin mutation.",
+        "The App-visible and CLI-derived six-digit SAS match without recording either value, and the production foreground CLI contract approves the fixed member role without an admin-role choice.",
+        "Both Registries contain exactly two devices: AWiki Me is the current active member with management_ready false only after authoritative re-resolution, while the CLI remains the current active management-ready admin."
+      ],
+      "negativeChecks": [
+        "A fake provider, copied state, static OTP, unsafe resolver argv, malformed SMS-error response, missing listener host wake, direct Message Inbox hydration, unapproved host-event fields, split claim or admin polling, missing pending phase, changed or terminal Join after restart, persisted SAS, mismatched SAS/session/device, non-foreground approval, retained terminal SAS, admin role, or server success without final Registry authorization prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
+          "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+          "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
+          "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received",
+          "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
+          "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed",
+          "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+            "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
+            "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received"
+          ],
+          [
+            "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed"
+          ],
+          [
+            "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-001:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-001:app_otp_left_join_pending",
+            "DEVICE-JOIN-E2E-001:app_restart_restored_pending_without_sas",
+            "DEVICE-JOIN-E2E-001:cli_listener_join_wake_received",
+            "DEVICE-JOIN-E2E-001:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-001:cli_foreground_member_approval_completed",
+            "DEVICE-JOIN-E2E-001:app_joined_after_authority_reresolution"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-002",
+      "feature": "AWiki Me admin-side approval defaults to member",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; macOS can present real LocalAuthentication; AWiki Me and an exact-revision CLI use independent native Core roots; OTPs are resolved through validated fixed argv; the authenticated App runtime is connected before the CLI starts Join. SMS request delivery is 200-only unless the explicit operator staged-OTP flag and exact reviewed SSH resolver are used.",
+      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, approve the fixed member role through one real operating-system user-presence prompt, and poll the new-device result.",
+      "exactOracles": [
+        "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
+        "The App-visible and CLI-derived six-digit SAS match without recording either value, and exactly one delegated real user-presence confirmation succeeds.",
+        "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active member with management_ready false, while the original App device remains the unique current active management-ready admin."
+      ],
+      "negativeChecks": [
+        "A fake provider, copied or non-fresh local state, static OTP, unsafe resolver argv, unapproved or malformed SMS-error response, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-002:independent_native_devices_bootstrapped",
+          "DEVICE-JOIN-E2E-002:otp_left_join_pending",
+          "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
+          "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
+          "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed",
+          "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-002:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-002:otp_left_join_pending",
+            "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received"
+          ],
+          [
+            "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed"
+          ],
+          [
+            "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-002:independent_native_devices_bootstrapped",
+            "DEVICE-JOIN-E2E-002:otp_left_join_pending",
+            "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
+            "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
+            "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed",
+            "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-004",
+      "feature": "Two isolated AWiki Me Apps complete member Join on one macOS host",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; macOS can present real LocalAuthentication; the runner builds two Debug App bundles with distinct stable bundle identifiers, build directories, and fresh native Core state roots; OTPs are resolved through validated fixed argv.",
+      "action": "Launch and concurrently drive one admin App and one joining App, start Join through the joining App UI, require the authenticated admin runtime to expose the listener-delivered global review entry without test-side inbox refresh, explicitly start verification, compare both locally rendered SAS values only in the loopback coordinator memory, approve through one real operating-system user-presence prompt, and wait for both Registry projections.",
+      "exactOracles": [
+        "Two real AWiki Me processes use distinct bundle identifiers, build products, and fresh native Core roots; the joining App remains pending without SAS until the admin user explicitly starts verification from the global Join review entry.",
+        "The two App-rendered six-digit SAS values match only inside the authenticated loopback coordinator, no SAS is written to config, logs, attestation, or reports, and exactly one real user-presence confirmation succeeds.",
+        "Both App Core Registries converge to exactly the same two devices: the original App remains the management-ready admin and the joining App becomes the current active rootless member."
+      ],
+      "negativeChecks": [
+        "A copied/shared state root, shared bundle or build product, fake Core, direct requestSync/refreshJoinInbox calls, pre-opened Devices page, implicit or repeated verification, persisted or reported SAS, mismatched SAS/session/device, approval before explicit SAS confirmation, denied or repeated user presence, admin-role joining result, or either Registry failing exact two-device convergence prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-004:two_isolated_app_processes_bootstrapped",
+          "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
+          "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received",
+          "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
+          "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed",
+          "DEVICE-JOIN-E2E-004:both_app_registries_converged"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-004:two_isolated_app_processes_bootstrapped",
+            "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
+            "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received"
+          ],
+          [
+            "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
+            "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed"
+          ],
+          [
+            "DEVICE-JOIN-E2E-004:both_app_registries_converged"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-004:two_isolated_app_processes_bootstrapped",
+            "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
+            "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received",
+            "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
+            "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed",
+            "DEVICE-JOIN-E2E-004:both_app_registries_converged"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-JOIN-E2E-003",
+      "feature": "AWiki Me Join restart and terminal-state convergence",
+      "layer": "product_ui",
+      "preconditions": "AWiki Me has a non-terminal Join checkpoint in an isolated Core data root and the matching awiki.info Join session can be polled, cancelled, or allowed to expire.",
+      "action": "Restart AWiki Me during Join, resume from Core state, then exercise cancellation and expiration as separate isolated runs.",
+      "exactOracles": [
+        "The resumed screen projects the same session without persisting SAS in App state, and cancellation or expiration reaches one terminal state without authorizing a device."
+      ],
+      "negativeChecks": [
+        "A duplicated device, stale approval action, raw token or OTP in reports, a persisted SAS, silent retry authorization, or a false passed attestation fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "ROOT-TRANSFER-E2E-001",
+      "feature": "AWiki Me management-device root import",
+      "layer": "product_ui",
+      "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots, exact protocol device IDs, and macOS can present real LocalAuthentication.",
+      "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, confirm operating-system user presence once, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
+      "exactOracles": [
+        "Before receiver completion, the exact recipient remains active member with management_ready false; no Init-only pending, sender waiting, or App-owned transfer state is projected.",
+        "The App displays only Core's safe recipient summary, delegates exactly one real user-presence check, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
+        "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox."
+      ],
+      "negativeChecks": [
+        "A wrong or ineligible target, caller-supplied message ID, old list/retry/pending state, a second user-presence action, treating accepted as receiver readiness, waiting for or emitting an imported ACK/Reply, root/control JSON in inbox or UI, Root bytes in logs/errors/reports, or management actions before Registry readiness fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
+          "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
+          "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
+          "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
+          "ROOT-TRANSFER-E2E-001:root_p5_not_projected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
+            "ROOT-TRANSFER-E2E-001:sender_accepted_terminal"
+          ],
+          [
+            "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
+            "ROOT-TRANSFER-E2E-001:root_p5_not_projected"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "ROOT-TRANSFER-E2E-001:member_not_ready_before_completion",
+            "ROOT-TRANSFER-E2E-001:safe_summary_single_presence",
+            "ROOT-TRANSFER-E2E-001:sender_accepted_terminal",
+            "ROOT-TRANSFER-E2E-001:receiver_completion_ready",
+            "ROOT-TRANSFER-E2E-001:root_p5_not_projected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "ROOT-TRANSFER-E2E-002",
+      "feature": "Receiver-local root completion recovery",
+      "layer": "product_ui",
+      "preconditions": "A future focused receiver fixture has already consumed one accepted Root P5 envelope and persisted receiver-local completion-pending state before process restart.",
+      "action": "Restart only the receiving device, let Core resume its local HTTPS completion coordinator, obtain fresh device auth, read Registry once, and promote the already sealed pending root after authoritative admin-ready convergence.",
+      "exactOracles": [
+        "Receiver-local recovery is idempotent across response loss, produces one readiness transition, projects ready only from fresh auth plus Registry, and promotes the pending root without any sender participation."
+      ],
+      "negativeChecks": [
+        "Sender retry, a second user-presence prompt, an imported ACK/Reply, public original-message-ID retry semantics, duplicate readiness generation, a second App-owned state store, false ready before Registry, or raw transport error text fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_session_and_identity_cleanup",
+      "requiredFor": [
+        "nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "STEP4-GROUP-PAGINATION-E2E-001",
+      "feature": "AWiki Me explicit group inventory pagination",
+      "layer": "remote_product_ui_security",
+      "preconditions": "A real isolated awiki.info App identity owns at least two groups and uses the production IM Core group adapter.",
+      "action": "Read the first group page with limit one, retain its opaque cursor, and explicitly request the next page.",
+      "exactOracles": [
+        "The first page has one item, has_more and a non-empty opaque cursor; the explicit next request returns a distinct stable group projection."
+      ],
+      "negativeChecks": [
+        "Offset pagination, cursor parsing, automatic unbounded collection, duplicate items, or fake service data fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active"
+    },
+    {
+      "caseId": "DEVICE-REVOKE-E2E-001",
+      "feature": "AWiki Me permanent device revoke",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The same isolated awiki.info identity has two active management-ready devices after encrypted root import; the current AWiki Me device is a ready admin and real macOS user presence is available.",
+      "action": "From the real Devices page, select the non-current device, accept the visible destructive confirmation, complete one fresh operating-system user-presence check, and wait for the authoritative Registry projection.",
+      "exactOracles": [
+        "The target becomes revoked and loses its destructive action only after the Core mutation and Registry refresh, while the current AWiki Me device remains the active management-ready admin."
+      ],
+      "negativeChecks": [
+        "Self revoke, revoking the final ready admin, cancellation, missing or repeated user presence, button-only success, an active target after refresh, or internal proof/version/key material in UI or evidence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
+          "DEVICE-REVOKE-E2E-001:single_fresh_user_presence_confirmed",
+          "DEVICE-REVOKE-E2E-001:registry_projected_target_revoked",
+          "DEVICE-REVOKE-E2E-001:current_ready_admin_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
+            "DEVICE-REVOKE-E2E-001:single_fresh_user_presence_confirmed",
+            "DEVICE-REVOKE-E2E-001:registry_projected_target_revoked",
+            "DEVICE-REVOKE-E2E-001:current_ready_admin_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-REVOKE-E2E-001:destructive_confirmation_visible",
+            "DEVICE-REVOKE-E2E-001:single_fresh_user_presence_confirmed",
+            "DEVICE-REVOKE-E2E-001:registry_projected_target_revoked",
+            "DEVICE-REVOKE-E2E-001:current_ready_admin_retained"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "MLS-MULTI-DEVICE-E2E-001",
+      "feature": "AWiki Me same-DID second-device MLS lifecycle",
+      "layer": "remote_product_ui_security",
+      "preconditions": "A real AWiki Me owner device and an independently initialized CLI member device use distinct fresh native Core roots against audited awiki.info P6 v2 endpoints.",
+      "action": "Create a required-E2EE group in AWiki Me, join the CLI as the same DID, run production App MLS reconciliation, consume Welcome on the CLI, then exchange future group text and one group attachment.",
+      "exactOracles": [
+        "Before Welcome, the independent CLI root reports missing local MLS state and cannot see the App pre-Welcome application.",
+        "The App visibly projects preparing during production reconciliation and ready only after Add, Commit, and Welcome converge.",
+        "Future secure group text travels App-to-CLI and CLI-to-App exactly once.",
+        "One CLI group attachment object is projected once and decrypts to the exact plaintext in AWiki Me.",
+        "The same DID remains one owner business member throughout the second-device lifecycle."
+      ],
+      "negativeChecks": [
+        "Copied native state, pre-Welcome history, stale ready during reconciliation, duplicate messages or business members, wrong attachment bytes, or MLS control/private fields in App or CLI public projections fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/planned/multi_device_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned",
+      "assertionContract": {
+        "assertionIds": [
+          "MLS-MULTI-DEVICE-E2E-001:independent_roots_and_pre_welcome_isolation",
+          "MLS-MULTI-DEVICE-E2E-001:app_reconciliation_add_welcome_ready",
+          "MLS-MULTI-DEVICE-E2E-001:bidirectional_future_group_message_once",
+          "MLS-MULTI-DEVICE-E2E-001:group_attachment_decrypted_once",
+          "MLS-MULTI-DEVICE-E2E-001:single_business_member_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-001:independent_roots_and_pre_welcome_isolation"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:app_reconciliation_add_welcome_ready"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:bidirectional_future_group_message_once"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:group_attachment_decrypted_once"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-001:single_business_member_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-001:independent_roots_and_pre_welcome_isolation",
+            "MLS-MULTI-DEVICE-E2E-001:app_reconciliation_add_welcome_ready",
+            "MLS-MULTI-DEVICE-E2E-001:bidirectional_future_group_message_once",
+            "MLS-MULTI-DEVICE-E2E-001:group_attachment_decrypted_once",
+            "MLS-MULTI-DEVICE-E2E-001:single_business_member_retained"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "MLS-MULTI-DEVICE-E2E-002",
+      "feature": "AWiki Me exact-device MLS revoke convergence",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The App owner and independent CLI endpoint are active devices of one DID and have distinct MLS state in one required-E2EE group.",
+      "action": "Revoke the CLI device through the real AWiki Me Devices UI, wait for the exact Remove and Commit convergence, then send a future secure group application from the surviving App device.",
+      "exactOracles": [
+        "The selected CLI device is authoritatively revoked and its exact MLS endpoint is removed.",
+        "The surviving App endpoint visibly reports ready only after Remove and Commit converge.",
+        "The revoked CLI endpoint is rejected at authorization before it can retrieve future group data.",
+        "The App continues secure group messaging while the DID remains one owner business member."
+      ],
+      "negativeChecks": [
+        "Removing the surviving App endpoint or DID business membership, stale ready before removal convergence, recreating the revoked endpoint, future CLI access, duplicate messages, or MLS private fields in UI/evidence fails."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_multi_device_group_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-groups",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit",
+          "MLS-MULTI-DEVICE-E2E-002:app_ready_only_after_remove_convergence",
+          "MLS-MULTI-DEVICE-E2E-002:revoked_endpoint_rejected_future_group_data",
+          "MLS-MULTI-DEVICE-E2E-002:surviving_app_leaf_and_business_member_retained"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-002:app_ready_only_after_remove_convergence"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-002:revoked_endpoint_rejected_future_group_data"
+          ],
+          [
+            "MLS-MULTI-DEVICE-E2E-002:surviving_app_leaf_and_business_member_retained"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MLS-MULTI-DEVICE-E2E-002:exact_device_revoked_with_remove_commit",
+            "MLS-MULTI-DEVICE-E2E-002:app_ready_only_after_remove_convergence",
+            "MLS-MULTI-DEVICE-E2E-002:revoked_endpoint_rejected_future_group_data",
+            "MLS-MULTI-DEVICE-E2E-002:surviving_app_leaf_and_business_member_retained"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "MULTI-DEVICE-CAPABILITY-GATE-E2E-001",
+      "feature": "AWiki Me default device entry and independent security gates",
+      "layer": "product_ui",
+      "preconditions": "Flutter desktop and debug native IM Core artifacts are available; no backend, OTP, CLI peer, or pre-existing identity is used.",
+      "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and open the public onboarding Join entry without submitting an OTP.",
+      "exactOracles": [
+        "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
+        "With default configuration the production device-management adapter and public Join entry exist.",
+        "The public entry opens the real Handle/phone/OTP Join form, while root transfer, revoke, Direct multi-device, and group multi-device remain closed behind independent security gates; Handle Recovery has no executable V1 flow."
+      ],
+      "negativeChecks": [
+        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry hidden behind the removed broad gate, hidden enablement of a high-risk capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
+      ],
+      "environment": "no_service",
+      "cleanupPolicy": "test_owned_temporary_scope_delete",
+      "requiredFor": [
+        "pull_request",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_capability_gate_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scopes_opened",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:default_capabilities_failed_closed",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
+          "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scopes_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+          ],
+          [
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:default_capabilities_failed_closed"
+          ],
+          [
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:isolated_scopes_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:default_capabilities_failed_closed",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:join_only_public_entry_opened",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:high_risk_capabilities_stayed_closed",
+            "MULTI-DEVICE-CAPABILITY-GATE-E2E-001:temporary_scopes_deleted"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-SYNC-E2E-001",
+      "feature": "Two joined AWiki Me Apps converge the same account Agent inventory",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated macOS App processes complete member Join against awiki.info; the functional App-pair suite uses an E2E-only user-presence provider and starts one real local Daemon with Codex and Claude Code drivers.",
+      "action": "Open the Agents workspace on the joining App before the admin App installs the Daemon and creates one Codex plus one Claude Code runtime Agent, then wait only on the joining App provider/UI convergence path.",
+      "exactOracles": [
+        "Both Apps project the exact same Daemon DID and Handle from the account-level User Service Agent Inventory.",
+        "Both Apps project the exact same Codex and Claude Code runtime DIDs, Handles, runtime kinds, and parent Daemon DID.",
+        "The joining App renders both runtime display names without the test directly invoking its inventory refresh after creation."
+      ],
+      "negativeChecks": [
+        "A copied App/Core root, a second Daemon installation, a test-side inventory refresh after runtime creation, duplicate Agent rows, mismatched DIDs/Handles/parent topology, or either runtime name not becoming visible prevents pass attestation.",
+        "This case cannot attest macOS LocalAuthentication because the functional suite intentionally uses an E2E-only UserPresencePort."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+          "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected",
+          "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+          "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected",
+          "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected"
+          ],
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected"
+          ],
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+            "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+            "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+          ],
+          [
+            "DEVICE-AGENT-SYNC-E2E-001:joiner_inventory_observation_started",
+            "DEVICE-AGENT-SYNC-E2E-001:same_daemon_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_codex_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:same_claude_runtime_projected",
+            "DEVICE-AGENT-SYNC-E2E-001:both_runtime_agents_visible"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-AGENT-MESSAGE-SYNC-E2E-001",
+      "feature": "A joined App sends a default-plain runtime Agent prompt that converges on the other App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated App devices share one joined account identity with the production-default Direct E2EE gate disabled; both Apps have converged the same real Codex runtime Agent and the joining App is displaying the normal Agents workspace.",
+      "action": "On the joining App, select the existing Codex runtime Agent, open its chat through visible UI, send one exact prompt through the real composer, then observe the exact canonical own-sync message on the admin App.",
+      "exactOracles": [
+        "The joining App opens the already-converged runtime Agent chat and commits the exact prompt through the visible composer as a sent default-plain Direct message with the account DID and runtime Agent DID.",
+        "The admin App projects the same canonical conversation and exact message ID as isMine=true and visibly renders the prompt."
+      ],
+      "negativeChecks": [
+        "Enabling Direct E2EE, calling MessagingService directly on the joining App, creating a test-only conversation, duplicate content, canonical ID mismatch, wrong sender or receiver, failed send state, missing own-sync semantics, or a non-visible admin-App message prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-agents+awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_opened_existing_runtime_agent_chat",
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_agent_prompt_committed_default_plain",
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_conversation_projected",
+          "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_own_sync_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_opened_existing_runtime_agent_chat",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_agent_prompt_committed_default_plain"
+          ],
+          [
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_conversation_projected",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_own_sync_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_opened_existing_runtime_agent_chat",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:joining_app_agent_prompt_committed_default_plain",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_conversation_projected",
+            "DEVICE-AGENT-MESSAGE-SYNC-E2E-001:admin_app_agent_own_sync_visible"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-SYNC-E2E-001",
+      "feature": "Direct messages sent on either joined App converge as own-sync on the other App",
+      "layer": "remote_product_ui",
+      "preconditions": "Two isolated App devices share one joined account identity with the production-default Direct E2EE gate disabled, and an independent fresh CLI identity is available as the remote peer.",
+      "action": "Send one exact Direct text from the admin App to the CLI peer and observe it on the joining App, then send a second exact Direct text from the joining App through the same canonical conversation and observe it on the admin App.",
+      "exactOracles": [
+        "The admin App commits exactly one sent message with the account DID, peer DID, exact content, canonical message ID, and canonical conversation ID.",
+        "The joining App projects the first message as one canonical isMine own-sync message and renders it in the selected conversation.",
+        "The joining App signs and commits a second default-plain outbound message with its own joined-device signing key, the same account DID, and canonical conversation ID.",
+        "The admin App projects the second message as the exact canonical isMine own-sync message and renders it under the same conversation."
+      ],
+      "negativeChecks": [
+        "A direct provider refresh that manufactures either conversation, duplicate body delivery, canonical ID mismatch, wrong direction, wrong peer conversation, missing own-sync semantics, or a non-visible bubble prevents pass attestation.",
+        "A joined-device outbound rejected because its Origin Proof keyid does not match its device signing private key prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible",
+          "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed",
+          "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_outbound_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_conversation_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_own_sync_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_message_visible",
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-001:joining_app_outbound_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-001:admin_app_reverse_own_sync_projected"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-SYNC-E2E-002",
+      "feature": "A remote Direct reply converges on both joined Apps",
+      "layer": "remote_product_ui",
+      "preconditions": "The default-plain two-App own-sync case has established the canonical peer conversation and the independent CLI peer can send an ordinary Direct message.",
+      "action": "Send one exact default-plain reply from the CLI peer and observe the same canonical incoming message on both App device histories plus the joining App conversation list and visible timeline.",
+      "exactOracles": [
+        "The admin App receives the exact CLI reply with the CLI DID, account DID, canonical reply ID, sent state, and isMine=false.",
+        "The joining App updates the same peer conversation preview without creating a second conversation.",
+        "The joining App receives the exact incoming reply with the same canonical ID and renders it in the already-open timeline."
+      ],
+      "negativeChecks": [
+        "Unexpected secure-mode activation, duplicate reply delivery, canonical ID mismatch, wrong direction, a second peer conversation, only one App receiving the reply, or a non-visible reply prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-SYNC-E2E-002:cli_peer_reply_committed",
+          "DEVICE-MESSAGE-SYNC-E2E-002:admin_app_received_exact_reply",
+          "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated",
+          "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
+          "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:cli_peer_reply_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-002:admin_app_received_exact_reply"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated"
+          ],
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-SYNC-E2E-002:cli_peer_reply_committed",
+            "DEVICE-MESSAGE-SYNC-E2E-002:admin_app_received_exact_reply",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_conversation_updated",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_incoming_history_projected",
+            "DEVICE-MESSAGE-SYNC-E2E-002:joining_app_reply_visible"
           ]
         ]
       }

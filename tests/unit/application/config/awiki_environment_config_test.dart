@@ -1,4 +1,6 @@
+import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -28,6 +30,9 @@ void main() {
     expect(config.updateManifestUrl, '$baseUrl/downloads/awiki-me/latest.json');
     expect(config.releasesUrl, '$baseUrl/#download');
     expect(config.agentImEnabled, isTrue);
+    expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
+    expect(config.multiDeviceDirectE2eeEnabled, isFalse);
+    expect(config.multiDeviceGroupE2eeEnabled, isFalse);
   });
 
   test('bundled realm allowlist enables Agent and Daemon capabilities', () {
@@ -74,7 +79,7 @@ void main() {
     expect(config.releasesUrl, 'https://anpclaw.com/#download');
   });
 
-  test('explicit Message Agent flag override can disable IM agent', () {
+  test('explicit Personal Agent flag override can disable IM agent', () {
     final config = AwikiEnvironmentConfig(agentImEnabled: false);
 
     expect(config.agentImEnabled, isFalse);
@@ -93,6 +98,9 @@ void main() {
       updateManifestUrl: 'https://updates.example.test/app/latest.json',
       releasesUrl: 'https://download.example.test/releases/',
       agentImEnabled: true,
+      multiDeviceDeviceRevokeEnabled: true,
+      multiDeviceDirectE2eeEnabled: true,
+      multiDeviceGroupE2eeEnabled: true,
     );
 
     expect(config.baseUrl, 'https://anpclaw.com');
@@ -109,6 +117,9 @@ void main() {
     );
     expect(config.releasesUrl, 'https://download.example.test/releases');
     expect(config.agentImEnabled, isTrue);
+    expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
+    expect(config.multiDeviceDirectE2eeEnabled, isTrue);
+    expect(config.multiDeviceGroupE2eeEnabled, isTrue);
   });
 
   test('network route config has no local storage locator', () {
@@ -123,5 +134,19 @@ void main() {
 
     expect(first.baseUrl, isNot(second.baseUrl));
     expect(first.didDomain, isNot(second.didDomain));
+  });
+
+  test('Direct rollout provider is independent from other device gates', () {
+    final config = AwikiEnvironmentConfig(multiDeviceDirectE2eeEnabled: true);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(config),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
+    expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
+    expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
   });
 }

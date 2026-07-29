@@ -1,13 +1,17 @@
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -17,8 +21,9 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart' show Key, ListView, Size, Text;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,6 +87,19 @@ void main() {
         find.byKey(const Key('onboarding-mac-credential-mode')),
         findsNothing,
       );
+      final fields = find.byType(CupertinoTextField);
+      expect(fields, findsNWidgets(3));
+      await tester.enterText(fields.at(0), '13800138000');
+      await tester.enterText(fields.at(1), 'smoke-otp');
+      await tester.tap(find.text('发送验证码'));
+      await tester.pump();
+      expect(harness.gateway.lastRegistrationOtpPhone, '13800138000');
+      expect(harness.gateway.lastRegistrationOtpHandle, 'smoke-otp');
+      expect(harness.gateway.lastRegistrationOtpDomain, 'awiki.ai');
+      expect(
+        harness.gateway.lastRegistrationOtpFullHandle,
+        'smoke-otp.awiki.ai',
+      );
     } else {
       expect(
         find.byKey(const Key('onboarding-compact-auth-card')),
@@ -101,6 +119,7 @@ void main() {
         'app_shell_visible',
         'onboarding_visible',
         'onboarding_auth_entry_visible',
+        'mac_phone_otp_handle_scope_preserved',
         'unauthenticated_realtime_disconnected',
       ],
     );
@@ -367,7 +386,7 @@ void main() {
     }
   });
 
-  testWidgets('AwikiMeApp authenticated smoke hides Message Agent settings', (
+  testWidgets('AwikiMeApp authenticated smoke hides Personal Agent settings', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -427,12 +446,12 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('消息处理 Agent'), findsNothing);
+      expect(find.text('个人助理'), findsNothing);
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
-      expect(find.text('启用消息处理 Agent'), findsNothing);
+      expect(find.text('启用个人助理'), findsNothing);
       expect(find.text('暂停处理消息'), findsNothing);
-      expect(find.text('删除消息处理 Agent'), findsNothing);
+      expect(find.text('删除个人助理'), findsNothing);
       expect(find.text('撤销 Daemon 消息授权'), findsNothing);
       expect(find.textContaining('自动回复'), findsNothing);
       expect(find.textContaining('代发'), findsNothing);
@@ -440,6 +459,88 @@ void main() {
       expect(control.lastBootstrapControllerDid, isNull);
       expect(control.lastBootstrapDaemonPublicKey, isNull);
     } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('AwikiMeApp copies domestic Skill Agent onboarding prompt', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    const session = SessionIdentity(
+      did: 'did:wba:awiki.info:user:alice',
+      credentialName: 'alice',
+      handle: 'alice.awiki.info',
+      displayName: 'Alice',
+      jwtToken: 'test-jwt',
+    );
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    final control =
+        harness.bootstrap.agentControlService!
+            as test_support.FakeAgentControlService;
+    final skillPort = _SmokeSkillOnboardingPort();
+    String? clipboardText;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          final data = call.arguments as Map<Object?, Object?>;
+          clipboardText = data['text'] as String?;
+        }
+        return null;
+      },
+    );
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            awikiEnvironmentConfigProvider.overrideWithValue(
+              AwikiEnvironmentConfig(
+                baseUrl: 'https://awiki.info',
+                didDomain: 'awiki.info',
+              ),
+            ),
+            agentImEnabledProvider.overrideWithValue(true),
+            skillOnboardingPortProvider.overrideWithValue(skillPort),
+          ],
+        ),
+      );
+      await _pumpSmokeFrame(tester);
+
+      await _tapFirstFound(tester, <Finder>[
+        find.bySemanticsIdentifier('e2e-agents-tab'),
+        find.bySemanticsLabel('智能体'),
+        find.bySemanticsLabel('Agents'),
+        find.text('智能体'),
+        find.text('Agents'),
+      ]);
+      await _pumpSmokeFrame(tester);
+      await tester.tap(find.byKey(const Key('agent-skill-onboarding-button')));
+      await tester.pumpAndSettle();
+
+      final copyButton = find.byKey(const Key('agent-skill-copy-button'));
+      await tester.ensureVisible(copyButton);
+      await tester.pumpAndSettle();
+      await tester.tap(copyButton);
+      await tester.pump();
+
+      expect(skillPort.calls, 1);
+      expect(clipboardText, contains('AWIKI_SKILL_ONBOARDING_V1'));
+      expect(clipboardText, contains('token=awsk1_smoke_secret_value'));
+      expect(clipboardText, isNot(contains(session.did)));
+      expect(control.lastInstallCommand, isNull);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+    } finally {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
       debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
@@ -601,7 +702,7 @@ void main() {
     }
   });
 
-  testWidgets('AwikiMeApp smoke recovers Message Agent action into chat', (
+  testWidgets('AwikiMeApp smoke recovers Personal Agent action into chat', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(1400, 900));
@@ -657,7 +758,7 @@ void main() {
         kind: AgentKind.runtime,
         daemonAgentDid: 'did:agent:daemon',
         runtime: 'hermes',
-        displayName: 'Hermes Message Agent',
+        displayName: 'Hermes Personal Agent',
         activeState: 'active',
         latest: AgentLatestStatus(status: 'ready'),
       ),
@@ -705,7 +806,7 @@ void main() {
       );
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.message.sync.v1',
             'sync_type': 'runtime_final',
             'runtime_agent_did': 'did:agent:runtime',
@@ -718,7 +819,7 @@ void main() {
           });
       container
           .read(chatThreadsProvider.notifier)
-          .applyMessageAgentControlPayload(const <String, Object?>{
+          .applyPersonalAgentControlPayload(const <String, Object?>{
             'schema': 'awiki.app.action.v1',
             'action_id': 'act_draft',
             'action': 'message.create_draft',
@@ -732,8 +833,8 @@ void main() {
           });
       await _pumpSmokeFrame(tester);
 
-      expect(find.text('消息 Agent 已完成处理'), findsOneWidget);
-      expect(find.text('消息 Agent 生成了草稿'), findsOneWidget);
+      expect(find.text('个人助理 已完成处理'), findsOneWidget);
+      expect(find.text('个人助理 生成了草稿'), findsOneWidget);
       await tester.tap(find.text('使用草稿'));
       await _pumpSmokeFrame(tester);
 
@@ -928,6 +1029,27 @@ void main() {
       }
     },
   );
+}
+
+class _SmokeSkillOnboardingPort implements SkillOnboardingPort {
+  int calls = 0;
+
+  @override
+  Future<SkillOnboardingGrant> issueSkillToken({
+    required String controllerDid,
+    required String controllerHandle,
+    required String clientPlatform,
+  }) async {
+    calls += 1;
+    return SkillOnboardingGrant(
+      token: 'awsk1_smoke_secret_value',
+      tokenId: 'agtok_smoke_$calls',
+      controllerHandle: controllerHandle,
+      agentHandle: 'skill-smoke.awiki.info',
+      serviceOrigin: 'https://awiki.info',
+      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+    );
+  }
 }
 
 Future<void> _pumpSmokeFrame(WidgetTester tester) async {
