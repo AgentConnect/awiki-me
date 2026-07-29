@@ -116,6 +116,9 @@ void main() {
       gateway.conversations = const <ConversationSummary>[];
       container = ProviderContainer(
         overrides: <Override>[
+          awikiEnvironmentConfigProvider.overrideWithValue(
+            AwikiEnvironmentConfig(messageSyncV2ReadEnabled: false),
+          ),
           awikiGatewayProvider.overrideWithValue(gateway),
           awikiAccountGatewayProvider.overrideWithValue(gateway),
           ...fakeApplicationServiceOverrides(

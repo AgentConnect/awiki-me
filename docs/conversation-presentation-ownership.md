@@ -18,6 +18,9 @@
 6. `ConversationListProvider` 只发布 recents、unread 和 badge 状态；base row 来自 core conversation read model，App 只叠加 product overlay 和短生命周期 read presentation waterline。发布状态是一次替换的 `entitiesById + orderedIds + loadState + version`，不允许 Map、排序和 patch version 分帧更新。
 7. `ChatThreadsProvider` / `ChatThreadsController` 只拥有当前 `conversationId` 的 UI window 和短生命周期 read intent drain，不拥有消息归属、durable read watermark、send correctness 或 realtime correctness。
 8. `ChatPage` 只渲染当前 selected conversation 并声明可见性；持久 read intent 由 `ChatThreadsController` 根据可见状态建立，不能依赖 Widget 的一次性 post-frame 回调。`ChatPage` 不得因为 conversation summary 变化反向拉取 history。
+9. 普通消息 v2 同步对所有已认证账号和有效设备默认开启；App 不维护账号/设备灰度名单。
+   `AWIKI_SYNC_V2_READ=false` 仅是全局应急回滚，不能改变 Core owner/cursor 语义，也不影响
+   独立默认关闭的 P5/P6 E2EE 开关。
 
 App list/detail/read/send/realtime 主链路必须通过 `ConversationIdentity.conversationId` / `AppConversationReadRef` 消费 core projection。`ThreadRef`、alias、targetPeer/targetDid、visibility key 只允许作为 legacy adapter、migration fallback 或 diagnostic input，不再作为消息归属、read correctness、send correctness 或 realtime correctness 的机制。
 

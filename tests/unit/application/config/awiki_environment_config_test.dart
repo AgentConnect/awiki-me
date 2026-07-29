@@ -33,7 +33,7 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
-    expect(config.messageSyncV2ReadEnabled, isFalse);
+    expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
   test('bundled realm allowlist enables Agent and Daemon capabilities', () {
@@ -151,11 +151,11 @@ void main() {
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
-    expect(container.read(messageSyncV2ReadEnabledProvider), isFalse);
+    expect(container.read(messageSyncV2ReadEnabledProvider), isTrue);
   });
 
-  test('message sync v2 reader gate is independent and default-off', () {
-    final config = AwikiEnvironmentConfig(messageSyncV2ReadEnabled: true);
+  test('message sync v2 reader is default-on and can be disabled', () {
+    final config = AwikiEnvironmentConfig(messageSyncV2ReadEnabled: false);
     final container = ProviderContainer(
       overrides: <Override>[
         awikiEnvironmentConfigProvider.overrideWithValue(config),
@@ -163,7 +163,7 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    expect(container.read(messageSyncV2ReadEnabledProvider), isTrue);
+    expect(container.read(messageSyncV2ReadEnabledProvider), isFalse);
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
   });

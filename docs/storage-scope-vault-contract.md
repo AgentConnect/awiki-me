@@ -35,6 +35,9 @@ Tenant Profile（App 业务连接配置）
 - 删除单个本地身份由 im-core identity-retirement 事务负责；它不删除 scope
   Keychain item，也不等价于删除整个 Storage Scope。App 只负责先脱离 active session，
   realtime/runtime teardown 不能成为该离线事务的网络前置条件。
+- 每个有效 scope/account/device binding 默认参加普通消息与账号状态同步，不按本地 scope、
+  账号或设备做产品灰度；raw cursor、recovery 和 mutation outbox 仍只属于该 scope 的 Core
+  SQLite。测试 operator allowlist 不得写入 scope registry 或业务 cache。
 
 ## 2. 不可变 ID
 
