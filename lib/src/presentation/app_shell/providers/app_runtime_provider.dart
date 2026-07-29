@@ -738,7 +738,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       await AwikiPerformanceLogger.async(label, action);
     } finally {
-      if (!_isCurrentAuthenticatedRefresh(fence) && mounted) {
+      if (!_isCurrentAuthenticatedRefresh(fence) &&
+          mounted &&
+          ref.read(sessionProvider).session == null) {
         clearStale();
       }
     }

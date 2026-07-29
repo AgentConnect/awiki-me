@@ -235,23 +235,22 @@ void main() {
       String protocolDeviceId = 'device-a',
     }) {
       boundConversationService.prepareOwner(ownerIdentityId);
-      return container
-          .read(appRuntimeProvider.notifier)
-          .activateSession(
-            SessionIdentity(
-              did: did,
-              credentialName: ownerIdentityId,
-              displayName: 'Bound',
-              accountBinding: SessionAccountBinding(
-                ownerIdentityId: ownerIdentityId,
-                accountId: accountId,
-                currentDid: did,
-                protocolDeviceId: protocolDeviceId,
-                identityGeneration: '1',
-                deviceAuthGeneration: '1',
-              ),
-            ),
-          );
+      return _activateRuntimeSession(
+        container,
+        SessionIdentity(
+          did: did,
+          credentialName: ownerIdentityId,
+          displayName: 'Bound',
+          accountBinding: SessionAccountBinding(
+            ownerIdentityId: ownerIdentityId,
+            accountId: accountId,
+            currentDid: did,
+            protocolDeviceId: protocolDeviceId,
+            identityGeneration: '1',
+            deviceAuthGeneration: '1',
+          ),
+        ),
+      );
     }
 
     Future<void> settleAgentInventoryRefresh() {
@@ -359,7 +358,10 @@ void main() {
     };
 
     Future<void> emitControl(Map<String, Object?> payload) async {
-      gateway.nextRealtimeUpdate = RealtimeUpdate(agentControlPayload: payload);
+      gateway.nextRealtimeUpdate = RealtimeUpdate(
+        ownerDid: 'did:test:me',
+        agentControlPayload: payload,
+      );
       await realtimeGateway.emit(const <String, Object?>{'type': 'status'});
       await pumpEventQueue();
     }
@@ -990,7 +992,7 @@ void main() {
       await pumpEventQueue();
 
       expect(messageSyncService.syncReasons, contains('startup'));
-      expect(gateway.listConversationsCalls, 1);
+      expect(gateway.listConversationsCalls, 2);
       expect(container.read(appRuntimeProvider).isBusy, isFalse);
     });
 
@@ -1024,7 +1026,7 @@ void main() {
 
         expect(
           container.read(messageSyncCoordinatorProvider).status,
-          MessageSyncCoordinatorStatus.authRevoked,
+          MessageSyncCoordinatorStatus.idle,
         );
         expect(container.read(appRuntimeProvider).authRevoked, isTrue);
         expect(container.read(sessionProvider).session, isNull);
@@ -1891,7 +1893,15 @@ void main() {
 
       await runtime.logout();
       await _activateRuntimeSession(container, _epochSession('second'));
-      await _pumpUntil(() => profiles.loadCalls == 2 && groups.loadCalls == 2);
+      await _pumpUntil(
+        () =>
+            profiles.loadCalls == 2 &&
+            groups.loadCalls == 2 &&
+            container.read(profileProvider).profile?.did == 'did:test:second' &&
+            container.read(groupProvider).groups.length == 1 &&
+            container.read(groupProvider).groups.single.groupId ==
+                'group-second',
+      );
 
       expect(container.read(profileProvider).profile?.did, 'did:test:second');
       expect(
@@ -3930,6 +3940,7 @@ Future<AppSession> _commitRuntimeSession(
           localAlias: session.credentialName,
           authenticated: session.jwtToken != null,
           jwtToken: session.jwtToken,
+          accountBinding: session.accountBinding,
         ),
       );
 }
