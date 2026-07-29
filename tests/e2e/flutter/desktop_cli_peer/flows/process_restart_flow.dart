@@ -33,7 +33,7 @@ void runDesktopCliPeerProcessRestartPhaseA() {
       config,
     );
     await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
     await robot.awaitRestoredSession(session);
@@ -288,7 +288,7 @@ void runDesktopCliPeerProcessRestartPhaseB() {
     }
 
     await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
     await robot.awaitRestoredSession(restored);
