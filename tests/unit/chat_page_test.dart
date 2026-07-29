@@ -28,6 +28,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_control_payloads.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
@@ -2192,6 +2193,70 @@ void main() {
     expect(controller.hiddenThreadIds, <String>[
       conversationA.threadId,
       conversationB.threadId,
+    ]);
+  });
+
+  testWidgets('ChatView 在消息页保留挂载时跟随导航更新会话可见性', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:retained-navigation',
+      conversationId: 'dm:retained-navigation',
+      displayName: 'Alice',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:alice',
+    );
+    late _StaticChatThreadsController controller;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          chatThreadsProvider.overrideWith((ref) {
+            controller = _StaticChatThreadsController(
+              ref,
+              const <String, List<ChatMessage>>{},
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    expect(controller.visibleThreadIds, <String>[conversation.threadId]);
+    expect(controller.hiddenThreadIds, isEmpty);
+
+    container
+        .read(shellDestinationProvider.notifier)
+        .select(ShellDestination.contacts);
+    await tester.pumpAndSettle();
+
+    expect(controller.hiddenThreadIds, <String>[conversation.threadId]);
+
+    container
+        .read(shellDestinationProvider.notifier)
+        .select(ShellDestination.messages);
+    await tester.pumpAndSettle();
+
+    expect(controller.visibleThreadIds, <String>[
+      conversation.threadId,
+      conversation.threadId,
     ]);
   });
 

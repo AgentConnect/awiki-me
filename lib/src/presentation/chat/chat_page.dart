@@ -55,6 +55,7 @@ import '../agents/agent_runtime_display.dart';
 import '../agents/agent_visual_status.dart';
 import '../agents/agents_provider.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
+import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../conversation_list/conversation_peer_classifier.dart';
 import '../conversation_list/conversation_provider.dart';
@@ -643,7 +644,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
   late final _ChatTimelineScrollController scrollController;
   late final ChatThreadsController _chatThreadsController;
   ProviderSubscription<ConversationListState>? _conversationListSubscription;
+  ProviderSubscription<ShellDestination>? _shellDestinationSubscription;
   late String _displayThreadId;
+  late bool _messagesDestinationActive;
   AttachmentDraft? _pendingAttachment;
   bool _isApplyingComposerDraft = false;
   bool _didRequestAgents = false;
@@ -683,15 +686,23 @@ class _ChatViewState extends ConsumerState<ChatView> {
       resolveLayoutCorrection: _resolveLayoutCorrection,
     );
     _chatThreadsController = ref.read(chatThreadsProvider.notifier);
+    _messagesDestinationActive =
+        ref.read(shellDestinationProvider) == ShellDestination.messages;
     _conversationListSubscription = ref.listenManual<ConversationListState>(
       conversationListProvider,
       (_, next) => _handleConversationListChanged(next),
     );
-    _beginOpeningBottomAnchor();
-    _scheduleConversationVisible(
-      widget.conversation,
-      displayThreadId: _displayThreadId,
+    _shellDestinationSubscription = ref.listenManual<ShellDestination>(
+      shellDestinationProvider,
+      _handleShellDestinationChanged,
     );
+    _beginOpeningBottomAnchor();
+    if (_messagesDestinationActive) {
+      _scheduleConversationVisible(
+        widget.conversation,
+        displayThreadId: _displayThreadId,
+      );
+    }
     _restoreComposerDraft(widget.conversation);
     textController.addListener(_persistComposerText);
     scrollController.addListener(_handleScrollPositionChanged);
@@ -701,10 +712,13 @@ class _ChatViewState extends ConsumerState<ChatView> {
   void dispose() {
     _conversationVisibilityToken += 1;
     _cancelPendingScrollRequests();
-    _markConversationHidden(
-      widget.conversation,
-      displayThreadId: _displayThreadId,
-    );
+    if (_messagesDestinationActive) {
+      _markConversationHidden(
+        widget.conversation,
+        displayThreadId: _displayThreadId,
+      );
+    }
+    _shellDestinationSubscription?.close();
     _conversationListSubscription?.close();
     textController.removeListener(_persistComposerText);
     scrollController.removeListener(_handleScrollPositionChanged);
@@ -722,21 +736,46 @@ class _ChatViewState extends ConsumerState<ChatView> {
     )) {
       _composerFocusRequestId += 1;
       _conversationVisibilityToken += 1;
-      _markConversationHidden(
-        oldWidget.conversation,
-        displayThreadId: _displayThreadId,
-      );
+      if (_messagesDestinationActive) {
+        _markConversationHidden(
+          oldWidget.conversation,
+          displayThreadId: _displayThreadId,
+        );
+      }
       _displayThreadId = _timelineDisplayThreadId(widget.conversation);
-      _scheduleConversationVisible(
-        widget.conversation,
-        displayThreadId: _displayThreadId,
-      );
+      if (_messagesDestinationActive) {
+        _scheduleConversationVisible(
+          widget.conversation,
+          displayThreadId: _displayThreadId,
+        );
+      }
       _restoreComposerDraft(widget.conversation, updateState: true);
       _hasDeferredBottomNotice = false;
       _userAwayFromBottom = false;
       _cancelPendingScrollRequests();
       _beginOpeningBottomAnchor();
     }
+  }
+
+  void _handleShellDestinationChanged(
+    ShellDestination? _,
+    ShellDestination next,
+  ) {
+    final messagesDestinationActive = next == ShellDestination.messages;
+    if (messagesDestinationActive == _messagesDestinationActive) {
+      return;
+    }
+    _messagesDestinationActive = messagesDestinationActive;
+    _conversationVisibilityToken += 1;
+    final conversation = _currentConversationSnapshot();
+    if (messagesDestinationActive) {
+      _scheduleConversationVisible(
+        conversation,
+        displayThreadId: _displayThreadId,
+      );
+      return;
+    }
+    _markConversationHidden(conversation, displayThreadId: _displayThreadId);
   }
 
   void _markConversationVisible(
