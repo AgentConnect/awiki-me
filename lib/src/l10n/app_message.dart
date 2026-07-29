@@ -27,6 +27,24 @@ class AppMessage {
   factory AppMessage.newMessageArrived() =>
       const AppMessage._('newMessageArrived');
 
+  factory AppMessage.agentTerminalCompleted(String summary) =>
+      AppMessage._('agentTerminalCompleted', value: summary);
+
+  factory AppMessage.agentTerminalBlocked(String summary, String nextStep) =>
+      AppMessage._('agentTerminalBlocked', value: summary, detail: nextStep);
+
+  factory AppMessage.agentTerminalActionRequired(
+    String summary,
+    String nextStep,
+  ) => AppMessage._(
+    'agentTerminalActionRequired',
+    value: summary,
+    detail: nextStep,
+  );
+
+  factory AppMessage.agentTerminalRuntimeFailed() =>
+      const AppMessage._('agentTerminalRuntimeFailed');
+
   factory AppMessage.updateAlreadyLatest() =>
       const AppMessage._('updateAlreadyLatest');
 
@@ -350,6 +368,16 @@ class AppMessage {
         return l10n.noLocalCredentialsFound;
       case 'newMessageArrived':
         return l10n.newMessageArrived;
+      case 'agentTerminalCompleted':
+        return '${l10n.personalAgentCompleted}: ${value ?? ''}';
+      case 'agentTerminalBlocked':
+        return '${l10n.groupRecoveryPhaseBlocked}: ${value ?? ''}. '
+            '${l10n.commonNext}: ${detail ?? ''}';
+      case 'agentTerminalActionRequired':
+        return '${l10n.personalAgentWaitingConfirmation}: ${value ?? ''}. '
+            '${l10n.commonNext}: ${detail ?? ''}';
+      case 'agentTerminalRuntimeFailed':
+        return l10n.personalAgentFailed;
       case 'updateAlreadyLatest':
         return l10n.updateAlreadyLatest;
       case 'updateCheckFailed':
@@ -479,6 +507,14 @@ class AppMessage {
     switch (id) {
       case 'newMessageArrived':
         return 'You received a new message';
+      case 'agentTerminalCompleted':
+        return 'Agent task completed: ${value ?? ''}';
+      case 'agentTerminalBlocked':
+        return 'Agent task blocked: ${value ?? ''}. Next: ${detail ?? ''}';
+      case 'agentTerminalActionRequired':
+        return 'Agent task needs your action: ${value ?? ''}. ${detail ?? ''}';
+      case 'agentTerminalRuntimeFailed':
+        return 'Agent task failed. Open AWiki Me to review the status.';
       case 'requestTimeoutRetry':
         return 'The request timed out. Please check your network and try again.';
       case 'daemonUpgradeStarted':

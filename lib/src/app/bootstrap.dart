@@ -2,6 +2,7 @@
 // [OUTPUT]: Fully composed AWiki Me adapters/services for one immutable storage scope.
 // [POS]: Production composition root; device secrets remain owned by Vault-backed IM Core.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -75,6 +76,7 @@ import '../application/tenant/app_tenant.dart';
 import '../data/storage/awiki_storage_scope_layout.dart';
 import '../data/storage/scope_secret_repository_factory.dart';
 import '../data/tenant/app_tenant_store.dart';
+import 'macos_notification_smoke.dart';
 
 enum AppBootstrapProgress {
   preparing,
@@ -355,6 +357,17 @@ class AppBootstrap {
       );
 
       final notificationFacade = await AppNotificationFacade.create();
+      unawaited(
+        runMacosNotificationSmoke(
+          notificationFacade: notificationFacade,
+          enabled: const bool.fromEnvironment(
+            'AWIKI_MACOS_NOTIFICATION_SMOKE',
+          ),
+          isMacOS: Platform.isMacOS,
+          isReleaseMode: kReleaseMode,
+          delay: const Duration(seconds: 8),
+        ),
+      );
       final e2eeFacade = NoopE2eeFacade();
       final localePreferenceService = LocalePreferenceService(
         storage: preferenceStorage,

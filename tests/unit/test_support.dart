@@ -4069,6 +4069,8 @@ class FakeNotificationFacade implements NotificationFacade {
   String? lastInAppBody;
   String? lastSystemTitle;
   String? lastSystemBody;
+  int inAppNotificationCount = 0;
+  int systemNotificationCount = 0;
   int lastBadgeCount = 0;
 
   @override
@@ -4076,6 +4078,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String title,
     required String body,
   }) async {
+    systemNotificationCount += 1;
     lastSystemTitle = title;
     lastSystemBody = body;
   }
@@ -4085,6 +4088,7 @@ class FakeNotificationFacade implements NotificationFacade {
     required String title,
     required String body,
   }) async {
+    inAppNotificationCount += 1;
     lastInAppTitle = title;
     lastInAppBody = body;
   }

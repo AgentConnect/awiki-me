@@ -207,6 +207,17 @@ Agent / Personal Agent control payload 是控制面事件，不是普通聊天�
 
 `realtimeUpdateFromCore` 对 control payload 的处理也遵守该边界：有可见 preview 才返回 conversation update；结构化 payload 放在 `RealtimeUpdate.agentControlPayload`，普通 `message` 为空。
 
+### 8.1 Coding Agent 终态通知
+
+`awiki.agent.status.v1` 的 Coding Agent 终态属于短生命周期通知投影，不是 conversation 或 timeline truth：
+
+1. App 保留并继续投影 `pending / running / finished / failed` 运行状态；仅当 `state=finished` 且 `business_outcome` 严格属于 `completed / blocked / action_required` 时生成业务终态通知。`state=failed` 且没有业务 outcome 表示真实运行失败。畸形、未知、超限或含敏感摘要的 payload fail closed，不猜测结果。
+2. `running / queued` 不通知。前台终态写入 `UiFeedbackProvider`，由 `AppShell` 通过 `AwikiMeToast` 真实展示；后台调用既有本地系统通知。文案经 `AppMessage` 和现有 localization getter 解析，不显示 daemon 诊断。
+3. 进程内以 `run_id + terminal kind` 去重，而不是只相信可能变化的 realtime delivery id；终态 key、终态 message ID 与普通 message ID 分别使用有序上限 512 / 512 / 256 的 recent ledger，并在身份清理时清空。稳定 `event_id` 仍是 transport replay 的协议幂等键；App ledger 只负责有界的进程内 replay protection，不替代 transport 持久幂等。
+4. daemon 提供的 `final_message_id` 与普通 realtime 消息的 remote/local id 双向关联。终态先到时立即显示语义终态并抑制随后匹配的普通最终回复通知；已由 canonical Agent inventory 识别的 Runtime Agent 普通消息先到时，App 最多暂存 64 个通知意图并等待 1 秒，窗口内匹配终态会取消普通通知并由 `completed / blocked / action_required` 语义通知胜出。窗口到期则释放普通通知，并抑制之后才到的匹配终态，保证只响一次；超过容量时最旧意图立即按普通通知释放，不丢通知。普通非 Runtime Agent 消息保持立即通知，Runtime Agent 非终态消息在 1 秒后保持原通知内容与前后台策略。
+5. control payload 继续交给既有 Agent/Chat projection，但终态通知器不写 conversation list、timeline 或 message truth。普通 status 以及 payload-only control 仍不进入聊天气泡。
+6. 当前只保证 App 在线或进程仍存活时的 realtime 加本地通知；不包含 User Service Push installation、Message Service Push worker 或移动端真离线 Push。
+
 通用系统通知同样不是聊天消息。Core 只有在完成 P3 envelope、service DID/proof、
 audience、expiry 和业务 payload 验证并提交本地投影后，才向 App 发出
 `system_notification_changed`。`AwikiImCoreMappers` 将它映射为纯同步信号：
@@ -375,7 +386,9 @@ AWiki Me 不再新增 Flutter 侧 message/conversation/group 主数据 cache，�
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
-- `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state。
+- `tests/unit/agents/agent_terminal_notification_test.dart`：用 fake time 验证三种业务终态、真实运行失败、严格 fail-closed、message-first / status-first、1 秒 timeout fallback、clear timer cleanup、有界 replay ledger 和普通最终回复关联。
+- `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，并覆盖终态前后台策略、三种 outcome 的 message-first exact-once、status-first、timeout fallback、logout cleanup 和不写 list/detail authoritative state。
+- `tests/unit/agent_terminal_notification_widget_test.dart`：验证所有业务终态与真实运行失败经真实 `AppShell` listener 形成可见 Toast，并覆盖 message-first 语义胜出和 dispose timer cleanup，而不是只停留在 facade/debug 输出。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
 - `tests/e2e/flutter/app/app_smoke_test.dart`：验证真实 App UI 从完整 Handle 发起空私聊后，Core committed row 在首条消息前可见，recents 与 selected ID 始终指向同一个 canonical conversation。
 - `tests/e2e/flutter/desktop_cli_peer/flows/direct_message_flow.dart`：direct App + CLI peer E2E 在 CLI -> App 消息后，先等 conversation refresh 返回 `ConversationSummary`，再验证 list latest message 能在 `conversationId` 对应的 canonical timeline 中唯一出现；同正文双消息还必须在 realtime 首次可见、sync sequence 收敛、重连和重启后保持不同 canonical ID 与严格递增顺序。

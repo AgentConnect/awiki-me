@@ -13,6 +13,7 @@ import '../../../application/models/app_session.dart';
 import '../../../application/agent/agent_control_projection.dart';
 import '../../../domain/entities/bridge_capabilities.dart';
 import '../../../domain/entities/conversation_summary.dart';
+import '../../../domain/entities/agent/agent_terminal_notification.dart';
 import '../../../domain/entities/realtime_update.dart';
 import '../../../domain/entities/session_identity.dart';
 import '../../../domain/services/realtime_gateway.dart';
@@ -94,6 +95,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   static const Duration _refreshDebounceWindow = Duration(seconds: 2);
   bool _isRecoveringRealtimeSession = false;
   bool _isLoggingOut = false;
+  final AgentTerminalNotificationDeduplicator
+  _agentTerminalNotificationDeduplicator =
+      AgentTerminalNotificationDeduplicator();
   Future<void>? _joinedMemberActivation;
   String? _joinedMemberActivationDid;
   Future<void>? _authenticatedRefreshOperation;
@@ -146,6 +150,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   Future<void> activateSession(SessionIdentity session) async {
     final totalWatch = Stopwatch()..start();
+    _agentTerminalNotificationDeduplicator.clear();
     state = state.copyWith(isBusy: true, activatedDid: null);
     try {
       ref.read(selectedConversationProvider.notifier).clearSelection();
@@ -289,6 +294,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     try {
       _isLoggingOut = true;
       try {
+        _agentTerminalNotificationDeduplicator.clear();
         state = state.copyWith(activatedDid: null);
         _clearAuthenticatedUiState();
         await ref
@@ -312,6 +318,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   void _clearAuthenticatedUiState() {
     _stopForegroundCatchUp();
+    _agentTerminalNotificationDeduplicator.clear();
     ref.read(sessionProvider.notifier).clear();
     ref.read(profileProvider.notifier).clear();
     ref.read(agentsProvider.notifier).clear();
@@ -648,6 +655,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref
           .read(chatThreadsProvider.notifier)
           .applyPersonalAgentControlPayload(controlPayload);
+      final terminalNotification = _agentTerminalNotificationDeduplicator
+          .acceptStatus(controlPayload);
+      if (terminalNotification != null) {
+        _showAgentTerminalNotification(terminalNotification);
+      }
       _runtimeTrace(
         'realtime.control_hint',
         fields: <String, Object?>{
@@ -700,51 +712,121 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         ),
       },
     );
-    if (!message.isMine) {
-      final title = _notificationTitle(update, normalizedConversationHint);
-      final l10n = _currentLocalizations();
-      final systemEvent = message.groupSystemEvent;
-      final actorName = systemEvent == null
-          ? null
-          : ref.read(
-              publicIdentityDisplayNameProvider(
-                PublicIdentityDisplayNameRequest(
-                  did: systemEvent.actorDid,
-                  unknownLabel: l10n.commonUnknown,
-                ),
-              ),
-            );
-      final subjectName = systemEvent == null
-          ? null
-          : ref.read(
-              publicIdentityDisplayNameProvider(
-                PublicIdentityDisplayNameRequest(
-                  did: systemEvent.subjectDid,
-                  unknownLabel: l10n.commonUnknown,
-                ),
-              ),
-            );
-      final preview = localizeMessagePreview(
-        l10n,
-        message,
-        groupEventActorName: actorName,
-        groupEventSubjectName: subjectName,
-      );
-      final body = preview.isNotEmpty
-          ? preview
-          : AppMessage.newMessageArrived().resolveForFallback();
-      final isForeground =
-          ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
-      if (isForeground) {
-        ref
-            .read(notificationFacadeProvider)
-            .showInAppBanner(title: title, body: body);
-      } else {
-        ref
-            .read(notificationFacadeProvider)
-            .showSystemNotification(title: title, body: body);
-      }
+    if (message.isMine) {
+      return;
     }
+    final messageIds = <String?>[message.remoteId, message.localId];
+    final isRuntimeAgentMessage = ref
+        .read(agentsProvider)
+        .agents
+        .any((agent) => agent.isRuntime && agent.agentDid == message.senderDid);
+    if (isRuntimeAgentMessage) {
+      _agentTerminalNotificationDeduplicator.acceptRuntimeMessageIds(
+        messageIds,
+        releaseNotification: () {
+          if (!mounted ||
+              _isLoggingOut ||
+              ref.read(sessionProvider).session == null) {
+            return;
+          }
+          _showOrdinaryMessageNotification(update, normalizedConversationHint);
+        },
+      );
+      return;
+    }
+    if (_agentTerminalNotificationDeduplicator.acceptMessageIds(messageIds)) {
+      _showOrdinaryMessageNotification(update, normalizedConversationHint);
+    }
+  }
+
+  void _showOrdinaryMessageNotification(
+    RealtimeUpdate update,
+    ConversationSummary conversationHint,
+  ) {
+    final message = update.message;
+    if (message == null) {
+      return;
+    }
+    final title = _notificationTitle(update, conversationHint);
+    final l10n = _currentLocalizations();
+    final systemEvent = message.groupSystemEvent;
+    final actorName = systemEvent == null
+        ? null
+        : ref.read(
+            publicIdentityDisplayNameProvider(
+              PublicIdentityDisplayNameRequest(
+                did: systemEvent.actorDid,
+                unknownLabel: l10n.commonUnknown,
+              ),
+            ),
+          );
+    final subjectName = systemEvent == null
+        ? null
+        : ref.read(
+            publicIdentityDisplayNameProvider(
+              PublicIdentityDisplayNameRequest(
+                did: systemEvent.subjectDid,
+                unknownLabel: l10n.commonUnknown,
+              ),
+            ),
+          );
+    final preview = localizeMessagePreview(
+      l10n,
+      message,
+      groupEventActorName: actorName,
+      groupEventSubjectName: subjectName,
+    );
+    final body = preview.isNotEmpty
+        ? preview
+        : AppMessage.newMessageArrived().resolveForFallback();
+    final isForeground =
+        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
+    if (isForeground) {
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(AppMessage.newMessageArrived(), detail: '$title：$body');
+    } else {
+      ref
+          .read(notificationFacadeProvider)
+          .showSystemNotification(title: title, body: body);
+    }
+  }
+
+  void _showAgentTerminalNotification(AgentTerminalNotification notification) {
+    final l10n = _currentLocalizations();
+    final message = switch (notification.kind) {
+      AgentTerminalKind.completed => AppMessage.agentTerminalCompleted(
+        notification.summary!,
+      ),
+      AgentTerminalKind.blocked => AppMessage.agentTerminalBlocked(
+        notification.summary!,
+        notification.nextStep!,
+      ),
+      AgentTerminalKind.actionRequired =>
+        AppMessage.agentTerminalActionRequired(
+          notification.summary!,
+          notification.nextStep!,
+        ),
+      AgentTerminalKind.runtimeFailed =>
+        AppMessage.agentTerminalRuntimeFailed(),
+    };
+    final body = message.resolve(l10n);
+    final isForeground =
+        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
+    if (isForeground) {
+      final feedback = ref.read(uiFeedbackProvider.notifier);
+      if (notification.kind == AgentTerminalKind.runtimeFailed) {
+        feedback.showError(message);
+      } else {
+        feedback.showInfo(message);
+      }
+      return;
+    }
+    unawaited(
+      ref
+          .read(notificationFacadeProvider)
+          .showSystemNotification(title: l10n.personalAgentTitle, body: body),
+    );
   }
 
   void _scheduleReliableSync(String reason, {bool immediate = false}) {
@@ -838,6 +920,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   @override
   void dispose() {
     _stopForegroundCatchUp();
+    _agentTerminalNotificationDeduplicator.clear();
     _lifecycleSubscription.close();
     _realtimeStatusSubscription.close();
     _realtimeUpdateSubscription.cancel();
