@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_catalog.dart';
@@ -50,5 +52,16 @@ Future<void> complete() async {
         isTrue,
       );
     });
+  });
+
+  test('desktop robot waits for the App to restore its active session', () {
+    final source = File(
+      'tests/e2e/flutter/desktop_cli_peer/support/ui_robot.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('awaitRestoredSession'));
+    expect(source, isNot(contains('.activateSession(')));
+    expect(source, contains('ownerIdentityId: ownerIdentityId'));
+    expect(source, contains('ownerIdentityId: patch.ownerIdentityId'));
   });
 }

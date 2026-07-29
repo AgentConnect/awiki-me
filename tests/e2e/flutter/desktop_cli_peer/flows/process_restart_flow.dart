@@ -36,7 +36,7 @@ void runDesktopCliPeerProcessRestartPhaseA() {
     await tester.pumpAndSettle();
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
-    await robot.activate(session);
+    await robot.awaitRestoredSession(session);
 
     final canonicalCliDid = await _currentCliDid(config);
     final nonce = _messageNonce();
@@ -291,7 +291,7 @@ void runDesktopCliPeerProcessRestartPhaseB() {
     await tester.pumpAndSettle();
     expect(find.byType(AppShell), findsOneWidget);
     final robot = _DesktopAppRobot(tester);
-    await robot.activate(restored);
+    await robot.awaitRestoredSession(restored);
     final startupPatchObservation = robot.container
         .read(conversationListProvider.notifier)
         .patchStartupObservation;

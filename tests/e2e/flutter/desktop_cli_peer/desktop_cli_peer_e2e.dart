@@ -211,6 +211,7 @@ void runDesktopCliPeerE2e({
           : _FailOnceMessagingService(
               delegate: bootstrap.messagingService!,
               ownerDid: preparedSession.did,
+              ownerIdentityId: preparedSession.ownerIdentityId ?? '',
             );
       final attachmentOpenRecorder = _RecordingAttachmentOpenService();
       final appProviderOverrides = <Override>[
@@ -249,7 +250,7 @@ void runDesktopCliPeerE2e({
             ? 'DISPLAY-NAME-E2E-002'
             : null,
       );
-      await robot.activate(session);
+      await robot.awaitRestoredSession(session);
       if (!selectedCase.runsPerformance) {
         await E2eCaseAttestationWriter.markPassed(
           'AUTH-E2E-001',

@@ -858,12 +858,12 @@ E2eObservation _observeConversationProjection({
       return const E2eObservation.fatal('duplicate_persona_conversation');
     }
   }
-  if (conversation.unreadCount != expectedUnread) {
-    return const E2eObservation.pending('conversation_unread_not_converged');
-  }
   if (expectedLastMessage != null &&
       conversation.lastMessagePreview.trim() != expectedLastMessage.trim()) {
     return const E2eObservation.pending('conversation_preview_not_converged');
+  }
+  if (conversation.unreadCount != expectedUnread) {
+    return const E2eObservation.pending('conversation_unread_not_converged');
   }
   return const E2eObservation.pass();
 }
