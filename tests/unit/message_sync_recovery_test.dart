@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
@@ -76,7 +77,7 @@ void main() {
         container.read(messageSyncCoordinatorProvider).lastStatus,
         MessageSyncStatus.changed,
       );
-      expect(gateway.listConversationsCalls, 1);
+      expect(gateway.listConversationsCalls, 0);
     },
   );
 
@@ -177,7 +178,11 @@ ProviderContainer _container(
       deviceManagementCorePortProvider.overrideWithValue(
         FakeDeviceManagementCore(),
       ),
-      ...fakeApplicationServiceOverrides(gateway, messageSyncService: sync),
+      ...fakeApplicationServiceOverrides(
+        gateway,
+        messageSyncService: sync,
+        conversationService: _ReadyRecoveryConversationService(gateway),
+      ),
       messageSyncCoordinatorProvider.overrideWith(
         (ref) => MessageSyncCoordinator(
           ref,
@@ -188,17 +193,36 @@ ProviderContainer _container(
       sessionProvider.overrideWith((ref) {
         final controller = SessionController();
         controller.setSession(
-          const SessionIdentity(
-            did: 'did:test:me',
-            credentialName: 'default',
-            displayName: 'Me',
-            handle: 'me',
-          ),
+          _boundSession(owner: 'owner-old', account: 'account-old'),
         );
         return controller;
       }),
     ],
   );
+}
+
+class _ReadyRecoveryConversationService extends FakeConversationService {
+  const _ReadyRecoveryConversationService(super.gateway);
+
+  @override
+  Stream<ConversationListPatch> watchConversationPatches({
+    required String ownerDid,
+  }) {
+    return Stream<ConversationListPatch>.multi((controller) {
+      scheduleMicrotask(() {
+        controller.add(
+          ConversationListPatch(
+            kind: ConversationListPatchKind.reset,
+            ownerIdentityId: ownerDid.replaceFirst('did:test:', ''),
+            ownerDid: ownerDid,
+            version: 1,
+            unreadTotal: 0,
+            items: gateway.conversations,
+          ),
+        );
+      });
+    });
+  }
 }
 
 ConversationSummary _conversation() {
