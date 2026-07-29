@@ -455,9 +455,7 @@ DeviceRegistrySnapshot deviceRegistryFromCore(
   return DeviceRegistrySnapshot(
     did: value.did,
     registryVersion: value.registryVersion,
-    devices: value.devices
-        .map(_registryDeviceFromCore)
-        .toList(growable: false),
+    devices: value.devices.map(_registryDeviceFromCore).toList(growable: false),
   );
 }
 
