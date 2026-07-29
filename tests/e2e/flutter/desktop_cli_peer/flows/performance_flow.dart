@@ -49,8 +49,7 @@ Future<void> _verifyPerformanceRegression({
     fields: <String, Object?>{
       'eventsApplied': warmup.eventsApplied,
       'pagesFetched': warmup.pagesFetched,
-      'snapshotRequired': warmup.snapshotRequired,
-      'hasMore': warmup.hasMore,
+      'recoveryRequired': warmup.recoveryRequired,
       'warnings': warmup.warnings,
     },
   );
@@ -67,12 +66,8 @@ Future<void> _verifyPerformanceRegression({
   recorder.counter('message_sync.warmup_events_applied', warmup.eventsApplied);
   recorder.counter('message_sync.warmup_pages_fetched', warmup.pagesFetched);
   recorder.counter(
-    'message_sync.warmup_snapshot_required_count',
-    warmup.snapshotRequired ? 1 : 0,
-  );
-  recorder.counter(
-    'message_sync.warmup_has_more_count',
-    warmup.hasMore ? 1 : 0,
+    'message_sync.warmup_recovery_required_count',
+    warmup.recoveryRequired ? 1 : 0,
   );
 
   final initialConversations = await recorder.measureList(
@@ -899,14 +894,16 @@ class _E2ePerformanceRecorder {
     final file = File(path);
     await file.parent.create(recursive: true);
     await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(<String, Object?>{
-        'runId': config.runId,
-        'case': config.e2eCase.name,
-        'dataset': _dataset,
-        'metrics': _metrics,
-        'counters': _counters,
-        'appProductTimings': _timings,
-      }),
+      const JsonEncoder.withIndent('  ').convert(
+        buildDesktopE2ePerformanceProductReport(
+          runId: config.runId,
+          caseName: config.e2eCase.name,
+          dataset: _dataset,
+          metrics: _metrics,
+          counters: _counters,
+          appProductTimings: _timings,
+        ),
+      ),
       flush: true,
     );
   }

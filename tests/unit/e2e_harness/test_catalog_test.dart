@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(86));
+      expect(catalog.cases, hasLength(90));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -25,6 +25,10 @@ void main() {
           'DEVICE-MESSAGE-SYNC-E2E-002',
           'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
           'DEVICE-MESSAGE-RECONNECT-E2E-001',
+          'DEVICE-MESSAGE-PATCH-READY-E2E-001',
+          'DEVICE-MESSAGE-DIAGNOSTICS-E2E-001',
+          'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
+          'MESSAGE-PATCH-RESTART-E2E-001',
           'DEVICE-REVOKE-E2E-001',
           'STEP4-GROUP-PAGINATION-E2E-001',
           'MLS-MULTI-DEVICE-E2E-001',
@@ -75,14 +79,17 @@ void main() {
         'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001',
         'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
         'DEVICE-MESSAGE-RECONNECT-E2E-001',
+        'DEVICE-MESSAGE-PATCH-READY-E2E-001',
+        'DEVICE-MESSAGE-DIAGNOSTICS-E2E-001',
         'DEVICE-AGENT-ADD-SYNC-E2E-001',
         'DEVICE-AGENT-RENAME-SYNC-E2E-001',
         'DEVICE-AGENT-DELETE-SYNC-E2E-001',
         'DEVICE-AGENT-UNBIND-SYNC-E2E-001',
         'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001',
         'DEVICE-PROFILE-SYNC-E2E-001',
-        'DEVICE-REGISTRY-SYNC-E2E-001',
         'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
+        'DEVICE-REGISTRY-SYNC-E2E-001',
+        'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['full'], contains('ROOT-TRANSFER-E2E-001'));
       expect(catalog.suiteCaseIds['step4-revoke-mls'], <String>[

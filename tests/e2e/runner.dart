@@ -7,6 +7,7 @@ import 'package:yaml/yaml.dart';
 
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
+import 'performance_contract.dart';
 import 'remote_multi_device_join_contract.dart';
 
 const String _defaultDesktopE2eConfigPath = 'tests/e2e/configs/e2e.local.yaml';
@@ -125,14 +126,19 @@ const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-MESSAGE-TAIL-ONLY-E2E-001',
   'DEVICE-MESSAGE-READ-SYNC-E2E-001',
   'DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001',
+  'DEVICE-MESSAGE-HINT-LOSS-E2E-001',
+  'DEVICE-MESSAGE-RECONNECT-E2E-001',
+  'DEVICE-MESSAGE-PATCH-READY-E2E-001',
+  'DEVICE-MESSAGE-DIAGNOSTICS-E2E-001',
   'DEVICE-AGENT-ADD-SYNC-E2E-001',
   'DEVICE-AGENT-RENAME-SYNC-E2E-001',
   'DEVICE-AGENT-DELETE-SYNC-E2E-001',
   'DEVICE-AGENT-UNBIND-SYNC-E2E-001',
   'DEVICE-AGENT-ARCHIVE-SYNC-E2E-001',
   'DEVICE-PROFILE-SYNC-E2E-001',
-  'DEVICE-REGISTRY-SYNC-E2E-001',
   'DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001',
+  'DEVICE-REGISTRY-SYNC-E2E-001',
+  'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001',
 ];
 const List<String> _step4RevokeMlsCaseIds = <String>[
   'STEP4-GROUP-PAGINATION-E2E-001',
@@ -176,6 +182,7 @@ const List<String> _desktopCliPeerInboundCaseIds = <String>[
 ];
 const List<String> _desktopCliPeerRestartCaseIds = <String>[
   'PROCESS-RESTART-E2E-001',
+  'MESSAGE-PATCH-RESTART-E2E-001',
   'IDENTITY-DELETE-E2E-001',
 ];
 const List<String> _desktopCliPeerDisplayNameFallbackCaseIds = <String>[
@@ -231,34 +238,6 @@ const Set<String> _desktopCliPeerPerformanceRequiredMetrics = <String>{
   'cache.total_retained_messages',
   'cache.active_patch_subscription_count',
   'cache.message_route_entry_count',
-  'cache.trimmed_message_count',
-  'cache.evicted_thread_count',
-  'cache.protected_overflow_count',
-};
-const Set<String> _desktopCliPeerPerformanceRequiredDatasetFields = <String>{
-  'conversationCountTarget',
-  'conversationCountObserved',
-  'warmupConversationCountObserved',
-  'visibleConversationCountObserved',
-  'longThreadMessageCountTarget',
-  'longThreadMessageCountObserved',
-};
-const Set<String> _desktopCliPeerPerformanceRequiredCounters = <String>{
-  'performance_dataset.existing_count',
-  'performance_dataset.created_count',
-  'performance_dataset.long_thread_initial_count',
-  'performance_dataset.long_thread_created_count',
-  'performance_dataset.long_thread_observed_count',
-  'message_sync.warmup_events_applied',
-  'message_sync.warmup_pages_fetched',
-  'message_sync.warmup_snapshot_required_count',
-  'message_sync.warmup_has_more_count',
-  'conversation_list.fast_local_pages_fetched',
-  'conversation_list.full_pages_fetched',
-  'conversation.full_refresh_during_send_receive_count',
-  'conversation.list_conversations_calls_total',
-  'conversation.patch_apply_count',
-  'conversation.patch_repair_count',
   'cache.trimmed_message_count',
   'cache.evicted_thread_count',
   'cache.protected_overflow_count',
@@ -4690,12 +4669,12 @@ class DesktopPerformanceBudgetResult {
         hardFailures.add('missing required metric $metric');
       }
     }
-    for (final field in _desktopCliPeerPerformanceRequiredDatasetFields) {
+    for (final field in desktopE2ePerformanceRequiredDatasetFields) {
       if (!report.dataset.containsKey(field)) {
         hardFailures.add('missing required dataset field $field');
       }
     }
-    for (final counter in _desktopCliPeerPerformanceRequiredCounters) {
+    for (final counter in desktopE2ePerformanceRequiredCounters) {
       if (!report.counters.containsKey(counter)) {
         hardFailures.add('missing required counter $counter');
       }

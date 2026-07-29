@@ -1744,6 +1744,64 @@
       }
     },
     {
+      "caseId": "MESSAGE-PATCH-RESTART-E2E-001",
+      "feature": "Cold restart closes a message gap committed while Patch subscription is unavailable",
+      "layer": "product_ui",
+      "preconditions": "Phase A has a real bound App/Core session, the runner can stop realtime and launch a distinct Flutter process against the same isolated state root, and the CLI peer is independently authenticated.",
+      "action": "Pause Phase A, stop realtime, destroy its App ProviderContainer and native bootstrap, prove Patch/sync providers are unavailable, then commit one Direct message from the CLI and start Phase B normally.",
+      "exactOracles": [
+        "The gap message is accepted by the real backend only after Phase A realtime and its Patch/recovery coordinator container are destroyed.",
+        "Before Phase B mounts the App, its canonical local timeline lacks the gap; the distinct process then proves subscribe-reset-sync startup order and projects the gap exactly once alongside the pre-existing timeline."
+      ],
+      "negativeChecks": [
+        "Leaving any old Patch/pull/recovery scheduler alive, committing before container disposal, finding the gap before Phase B startup, same-process rebuild, missing startup order evidence, lost/duplicate gap, or duplicate old rows prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "fixed_account_pool_residual_ledger",
+      "requiredFor": [
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/desktop_cli_peer/flows/process_restart_flow.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "MESSAGE-PATCH-RESTART-E2E-001:phase_a_realtime_stopped_before_gap_commit",
+          "MESSAGE-PATCH-RESTART-E2E-001:phase_a_patch_and_sync_container_disposed_before_gap_commit",
+          "MESSAGE-PATCH-RESTART-E2E-001:gap_message_committed_after_old_process_quiesced",
+          "MESSAGE-PATCH-RESTART-E2E-001:distinct_process_restored_bound_session",
+          "MESSAGE-PATCH-RESTART-E2E-001:gap_absent_before_phase_b_startup_sync",
+          "MESSAGE-PATCH-RESTART-E2E-001:phase_b_startup_order_projected_gap_once",
+          "MESSAGE-PATCH-RESTART-E2E-001:restart_gap_did_not_duplicate_existing_timeline"
+        ],
+        "exactOracleAssertions": [
+          [
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_realtime_stopped_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_patch_and_sync_container_disposed_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_message_committed_after_old_process_quiesced"
+          ],
+          [
+            "MESSAGE-PATCH-RESTART-E2E-001:distinct_process_restored_bound_session",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_absent_before_phase_b_startup_sync",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_b_startup_order_projected_gap_once",
+            "MESSAGE-PATCH-RESTART-E2E-001:restart_gap_did_not_duplicate_existing_timeline"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_realtime_stopped_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_a_patch_and_sync_container_disposed_before_gap_commit",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_message_committed_after_old_process_quiesced",
+            "MESSAGE-PATCH-RESTART-E2E-001:distinct_process_restored_bound_session",
+            "MESSAGE-PATCH-RESTART-E2E-001:gap_absent_before_phase_b_startup_sync",
+            "MESSAGE-PATCH-RESTART-E2E-001:phase_b_startup_order_projected_gap_once",
+            "MESSAGE-PATCH-RESTART-E2E-001:restart_gap_did_not_duplicate_existing_timeline"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "SMOKE-E2E-001",
       "feature": "App shell smoke",
       "layer": "product_ui",
@@ -2997,6 +3055,172 @@
       }
     },
     {
+      "caseId": "DEVICE-MESSAGE-PATCH-READY-E2E-001",
+      "feature": "Bound App startup establishes committed Patch readiness before reliable pull",
+      "layer": "remote_product_ui",
+      "preconditions": "A freshly joined App has a real native Core root, stable account binding, tail-only bootstrap, and the production committed conversation Patch stream.",
+      "action": "Complete normal App activation, inspect the product-owned payload-free startup ordering observation without calling the barrier from the test, receive the first post-Join sibling message, then repeat reliable HTTP sync.",
+      "exactOracles": [
+        "The normal bound startup records Patch subscription start, committed reset readiness, and first reliable sync start in that strict order without a test-owned barrier call, cursor, or projection.",
+        "The first post-startup committed sibling message appears exactly once and a repeated reliable pull keeps exactly one canonical message."
+      ],
+      "negativeChecks": [
+        "A post-bootstrap test call to ensurePatchReady, unbound session, test-owned checkpoint, direct cache write, missing or reordered startup observation, duplicate projection, or repeat full-refresh substitute prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_patch_subscription_started",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_committed_reset_ready_before_first_pull",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:first_reliable_sync_started_after_patch_ready",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:post_startup_message_projected_once",
+          "DEVICE-MESSAGE-PATCH-READY-E2E-001:repeat_reliable_pull_kept_exact_one"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_patch_subscription_started",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_committed_reset_ready_before_first_pull",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:first_reliable_sync_started_after_patch_ready"
+          ],
+          [
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:post_startup_message_projected_once",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:repeat_reliable_pull_kept_exact_one"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_patch_subscription_started",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:startup_committed_reset_ready_before_first_pull",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:first_reliable_sync_started_after_patch_ready",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:post_startup_message_projected_once",
+            "DEVICE-MESSAGE-PATCH-READY-E2E-001:repeat_reliable_pull_kept_exact_one"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001",
+      "feature": "Real recovery exposes only typed product-safe sync diagnostics",
+      "layer": "remote_product_ui",
+      "preconditions": "An existing joined replica enters the reviewed real compact-recovery flow through normal App lifecycle resume.",
+      "action": "Observe the product coordinator across recovery, then inspect only its typed diagnostics projection after the reliable chain completes.",
+      "exactOracles": [
+        "Recovery-required, recovering, or Core recovering mode is observed and the coordinator returns to a successful idle state.",
+        "Diagnostics expose a non-negative pending mutation count, closed dirty-domain/retry values, and last-success time.",
+        "The product refresh attempt and success sequences both advance after recovery, are equal, and mark the serialized observation current.",
+        "The E2E-safe diagnostics projection contains no cursor, epoch, account/device identifier, recovery token, message content, or payload field."
+      ],
+      "negativeChecks": [
+        "A test-created allowlist map, stale diagnostics retained after refresh failure, reading raw SQLite, serializing IDs/cursors/content, accepting a negative count, or treating catalog text as runtime evidence prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery"
+          ],
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync"
+          ],
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery"
+          ],
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001",
+      "feature": "Same-DID revoked device is auth-fenced from later reliable sync",
+      "layer": "remote_product_ui",
+      "preconditions": "The joining App is an active real device for the same DID until the admin revokes that exact protocol device as the final shared-account action.",
+      "action": "Capture the exact joined-device account/auth binding, revoke that device, commit a new ordinary Direct message for the account, verify the original local binding remains in place, then trigger one normal reliable pull.",
+      "exactOracles": [
+        "The real Registry mutation revokes the exact same-DID device after the E2E captured its original account and device-auth binding, before the post-revoke message is committed.",
+        "The revoked App does not project the post-revoke committed message before or after its subsequent reliable pull, and that pull ends in product auth fencing."
+      ],
+      "negativeChecks": [
+        "Claiming direct stale-Patch injection, forging a binding, projecting the post-revoke message, allowing the revoked token to pull, revoking a different device, or running another shared-account case afterward prevents pass."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-messaging+awiki-me-account-state",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_binding_captured_before_revoke",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:same_did_exact_device_revoked",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:post_revoke_message_committed_for_account",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_message_not_projected",
+          "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_reliable_pull_auth_fenced"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_binding_captured_before_revoke",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:same_did_exact_device_revoked",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:post_revoke_message_committed_for_account"
+          ],
+          [
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_message_not_projected",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_reliable_pull_auth_fenced"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_binding_captured_before_revoke",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:same_did_exact_device_revoked",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:post_revoke_message_committed_for_account",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_message_not_projected",
+            "DEVICE-MESSAGE-GENERATION-FENCE-E2E-001:revoked_device_reliable_pull_auth_fenced"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "DEVICE-AGENT-ADD-SYNC-E2E-001",
       "feature": "A runtime Agent added on one App converges to the joined sibling App",
       "layer": "remote_product_ui",
@@ -3186,16 +3410,18 @@
     },
     {
       "caseId": "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001",
-      "feature": "A deleted Agent remains an archived topology fact while disappearing from UI",
+      "feature": "A daemon-backed runtime delete archives an independent Agent across Apps",
       "layer": "remote_product_ui",
-      "preconditions": "A real runtime delete has reached User Service Agent Inventory and the joining App has not been given direct storage access by the test.",
-      "action": "Reconcile the joining App and inspect its ProductLocalStore through the typed repository alongside the visible Agents projection.",
+      "preconditions": "The admin App has created a third independent runtime through the real daemon and both Apps have converged it as active.",
+      "action": "Select that runtime in the product Agents controller and execute the normal daemon-backed runtime delete, whose authoritative remote lifecycle result is archived, then reconcile the sibling App.",
       "exactOracles": [
-        "The durable full Inventory snapshot contains exactly one archived row for the deleted Agent DID at a higher version.",
+        "The independent runtime is created through the product daemon path and is visible as active on the sibling before deletion.",
+        "The writing App submits the daemon-backed runtime delete rather than a test operator, direct storage write, or reuse of the separate Codex deletion.",
+        "The durable full Inventory snapshot contains exactly one archived row for the archived Agent DID at the higher version.",
         "The visible Agents projection excludes the archived row."
       ],
       "negativeChecks": [
-        "Physical deletion of the row, a tombstone/message-event substitute, a visible archived Agent, duplicate rows, or using only the admin App as an oracle prevents pass."
+        "A test-only operator, direct storage mutation, reuse of the separate Codex deletion, physical row loss, visible archived Agent, duplicate row, or writing-side-only assertion prevents pass."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -3209,24 +3435,34 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:delete_committed_authoritative_archived_topology",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:independent_runtime_created_through_product",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_converged_runtime_active",
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:admin_app_submitted_daemon_backed_runtime_delete",
           "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_cached_archived_row_at_higher_inventory_version",
-          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_agent_from_visible_projection"
+          "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_runtime_from_visible_projection"
         ],
         "exactOracleAssertions": [
           [
-            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:delete_committed_authoritative_archived_topology",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:independent_runtime_created_through_product",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_converged_runtime_active"
+          ],
+          [
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:admin_app_submitted_daemon_backed_runtime_delete"
+          ],
+          [
             "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_cached_archived_row_at_higher_inventory_version"
           ],
           [
-            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_agent_from_visible_projection"
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_runtime_from_visible_projection"
           ]
         ],
         "negativeCheckAssertions": [
           [
-            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:delete_committed_authoritative_archived_topology",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:independent_runtime_created_through_product",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_converged_runtime_active",
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:admin_app_submitted_daemon_backed_runtime_delete",
             "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_cached_archived_row_at_higher_inventory_version",
-            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_agent_from_visible_projection"
+            "DEVICE-AGENT-ARCHIVE-SYNC-E2E-001:joining_app_filtered_archived_runtime_from_visible_projection"
           ]
         ]
       }

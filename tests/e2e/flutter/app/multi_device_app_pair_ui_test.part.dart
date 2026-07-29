@@ -2,6 +2,10 @@ part of 'multi_device_join_ui_test.dart';
 
 const String _appPairHintLossCaseId = 'DEVICE-MESSAGE-HINT-LOSS-E2E-001';
 const String _appPairReconnectCaseId = 'DEVICE-MESSAGE-RECONNECT-E2E-001';
+const String _appPairPatchReadyCaseId = 'DEVICE-MESSAGE-PATCH-READY-E2E-001';
+const String _appPairDiagnosticsCaseId = 'DEVICE-MESSAGE-DIAGNOSTICS-E2E-001';
+const String _appPairGenerationFenceCaseId =
+    'DEVICE-MESSAGE-GENERATION-FENCE-E2E-001';
 
 void appPairAdminMain() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -552,6 +556,9 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairOfflineRecoveryV2CaseId) ||
       _invocationExpects(_appPairHintLossCaseId) ||
       _invocationExpects(_appPairReconnectCaseId) ||
+      _invocationExpects(_appPairPatchReadyCaseId) ||
+      _invocationExpects(_appPairDiagnosticsCaseId) ||
+      _invocationExpects(_appPairGenerationFenceCaseId) ||
       _invocationExpects(_appPairAgentAddSyncCaseId) ||
       _invocationExpects(_appPairAgentRenameSyncCaseId) ||
       _invocationExpects(_appPairAgentDeleteSyncCaseId) ||
@@ -792,6 +799,23 @@ Future<void> _runAppPairAdminFunctional({
     handle: claudeHandle,
     runtime: RuntimeAgentKind.claudeCode.runtime,
   );
+  final archiveHandle = _appPairRuntimeHandle(config.runId, 'archive');
+  const archiveDisplayName = 'Pair Archive Fixture';
+  await agents.createRuntimeAgent(
+    install.daemonDid,
+    options: RuntimeAgentCreateOptions(
+      kind: RuntimeAgentKind.codex,
+      handle: archiveHandle,
+      displayName: archiveDisplayName,
+    ),
+  );
+  final archiveFixture = await _waitForAppPairRuntime(
+    tester: tester,
+    container: container,
+    daemonDid: install.daemonDid,
+    handle: archiveHandle,
+    runtime: RuntimeAgentKind.codex.runtime,
+  );
   await config.coordinator.publish(
     'admin',
     'functional_agents_created',
@@ -802,6 +826,8 @@ Future<void> _runAppPairAdminFunctional({
       'codexHandle': codexHandle,
       'claudeDid': claude.agentDid,
       'claudeHandle': claudeHandle,
+      'archiveDid': archiveFixture.agentDid,
+      'archiveHandle': archiveHandle,
     },
   );
   await config.coordinator.waitFor(
@@ -846,6 +872,7 @@ Future<void> _runAppPairAdminFunctional({
     agents: agents,
     codex: codex,
     claude: claude,
+    archiveFixture: archiveFixture,
   );
 }
 
@@ -913,6 +940,26 @@ Future<void> _runAppPairJoinerFunctional({
   if (historicalConversationVisible || historicalMessageVisible) {
     fail('The joining App received a message committed before device Join.');
   }
+  final activeSession = container.read(sessionProvider).session;
+  final activeBinding = activeSession?.accountBinding;
+  if (activeSession?.did != accountDid ||
+      activeBinding == null ||
+      activeBinding.currentDid != accountDid ||
+      activeBinding.ownerIdentityId.trim().isEmpty ||
+      activeBinding.accountId.trim().isEmpty ||
+      activeBinding.deviceAuthGeneration.trim().isEmpty) {
+    fail('The joining App startup did not establish a bound sync session.');
+  }
+  final startupPatchObservation = container
+      .read(conversationListProvider.notifier)
+      .patchStartupObservation;
+  if (startupPatchObservation == null ||
+      !startupPatchObservation.provesSubscribeBeforeFirstReliableSync) {
+    fail(
+      'The normal startup path did not prove Patch subscription and committed '
+      'reset before its first reliable sync.',
+    );
+  }
   await config.coordinator.publish('joiner', 'functional_tail_only_verified');
   final outbound = await config.coordinator.waitFor(
     'admin',
@@ -943,6 +990,26 @@ Future<void> _runAppPairJoinerFunctional({
     tester: tester,
     conversationId: conversationId,
     content: outboundText,
+  );
+  await container
+      .read(messageSyncCoordinatorProvider.notifier)
+      .requestSync('e2e_patch_ready_exact_once', immediate: true);
+  await _assertAppPairMessageCount(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: outboundText,
+    messageId: outboundId,
+    expectedCount: 1,
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairPatchReadyCaseId,
+    phases: const <String>[
+      'startup_patch_subscription_started',
+      'startup_committed_reset_ready_before_first_pull',
+      'first_reliable_sync_started_after_patch_ready',
+      'post_startup_message_projected_once',
+      'repeat_reliable_pull_kept_exact_one',
+    ],
   );
   await config.coordinator.publish('joiner', 'functional_own_sync_visible');
 
@@ -1203,6 +1270,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
   required AgentsController agents,
   required AgentSummary codex,
   required AgentSummary claude,
+  required AgentSummary archiveFixture,
 }) async {
   final accountId = _requireAppPairAccountId(container);
 
@@ -1246,6 +1314,39 @@ Future<void> _runAppPairAdminAccountStateDomains({
     timeout: const Duration(minutes: 2),
   );
 
+  await config.coordinator.publish(
+    'admin',
+    'account_state_archive_fixture_ready',
+    data: <String, Object?>{
+      'agentDid': archiveFixture.agentDid,
+      'displayName': archiveFixture.displayName,
+      'handle': archiveFixture.handle,
+    },
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_archive_fixture_converged_active',
+    timeout: const Duration(minutes: 2),
+  );
+  agents.select(archiveFixture.agentDid);
+  await agents.deleteSelected();
+  await _waitForAppPairAgentAbsent(
+    tester: tester,
+    container: container,
+    agentDid: archiveFixture.agentDid,
+    timeout: const Duration(minutes: 2),
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_archive_product_delete_completed',
+    data: <String, Object?>{'agentDid': archiveFixture.agentDid},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_archive_converged',
+    timeout: const Duration(minutes: 2),
+  );
+
   agents.select(codex.agentDid);
   await agents.deleteSelected();
   await _waitForAppPairAgentAbsent(
@@ -1261,7 +1362,7 @@ Future<void> _runAppPairAdminAccountStateDomains({
   );
   await config.coordinator.waitFor(
     'joiner',
-    'account_state_agent_archive_converged',
+    'account_state_agent_delete_converged',
     timeout: const Duration(minutes: 2),
   );
   await E2eCaseAttestationWriter.markPassed(
@@ -1507,7 +1608,22 @@ Future<void> _runAppPairAdminAccountStateDomains({
   await config.coordinator.publish('admin', 'account_state_registry_revoked');
   await config.coordinator.waitFor(
     'joiner',
-    'account_state_registry_fenced',
+    'account_state_registry_fence_observed',
+    timeout: const Duration(minutes: 2),
+  );
+  final postRevokeText = _appPairMessage(config.runId, 'post-revoke-fence');
+  final postRevokeMessageId = await peer.sendDirectText(
+    to: accountDid,
+    text: postRevokeText,
+  );
+  await config.coordinator.publish(
+    'admin',
+    'account_state_post_revoke_message_committed',
+    data: <String, Object?>{'messageId': postRevokeMessageId},
+  );
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_revoked_device_auth_fenced',
     timeout: const Duration(minutes: 2),
   );
   await E2eCaseAttestationWriter.markPassed(
@@ -1517,6 +1633,16 @@ Future<void> _runAppPairAdminAccountStateDomains({
       'admin_revoked_exact_active_sibling_with_user_presence',
       'active_admin_registry_cache_converged_higher_version',
       'revoked_sibling_product_request_was_fenced',
+    ],
+  );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairGenerationFenceCaseId,
+    phases: const <String>[
+      'revoked_device_binding_captured_before_revoke',
+      'same_did_exact_device_revoked',
+      'post_revoke_message_committed_for_account',
+      'revoked_device_message_not_projected',
+      'revoked_device_reliable_pull_auth_fenced',
     ],
   );
 }
@@ -1531,6 +1657,16 @@ Future<void> _runAppPairJoinerAccountStateDomains({
   required String peerDid,
   required String conversationId,
 }) async {
+  final preRevokeSessionState = container.read(sessionProvider);
+  final preRevokeBinding = preRevokeSessionState.session?.accountBinding;
+  if (preRevokeSessionState.session?.did != accountDid ||
+      preRevokeBinding == null ||
+      preRevokeBinding.currentDid != accountDid ||
+      preRevokeBinding.protocolDeviceId != joinedDeviceId ||
+      preRevokeBinding.accountId.trim().isEmpty ||
+      preRevokeBinding.deviceAuthGeneration.trim().isEmpty) {
+    fail('The joining App lacked the exact bound device before revoke.');
+  }
   var versions = (await _requestAppPairAccountState(
     tester: tester,
     container: container,
@@ -1616,19 +1752,83 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     'account_state_agent_unbind_converged',
   );
 
+  final archiveFixture = await config.coordinator.waitFor(
+    'admin',
+    'account_state_archive_fixture_ready',
+    timeout: const Duration(minutes: 2),
+  );
+  final archiveAgentDid = _required(archiveFixture, 'agentDid');
+  await _waitForAppPairAgentDisplayName(
+    tester: tester,
+    container: container,
+    agentDid: archiveAgentDid,
+    displayName: _required(archiveFixture, 'displayName'),
+  );
+  await _waitForCachedAgentState(
+    tester: tester,
+    container: container,
+    agentDid: archiveAgentDid,
+    activeState: 'active',
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_archive_fixture_converged_active',
+  );
+  final archived = await config.coordinator.waitFor(
+    'admin',
+    'account_state_archive_product_delete_completed',
+    timeout: const Duration(minutes: 2),
+  );
+  if (_required(archived, 'agentDid') != archiveAgentDid) {
+    fail('The product runtime delete targeted a different archive fixture.');
+  }
+  final archiveAfter = await _requestAppPairAccountState(
+    tester: tester,
+    container: container,
+    reason: 'e2e_agent_archive_product_delete',
+  );
+  _requireDomainAdvanced(
+    versions,
+    archiveAfter.domainVersions,
+    ProductAccountDomain.agentInventory,
+  );
+  await _waitForAppPairAgentAbsent(
+    tester: tester,
+    container: container,
+    agentDid: archiveAgentDid,
+  );
+  await _waitForCachedAgentState(
+    tester: tester,
+    container: container,
+    agentDid: archiveAgentDid,
+    activeState: 'archived',
+  );
+  versions = archiveAfter.domainVersions;
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairAgentArchiveSyncCaseId,
+    phases: const <String>[
+      'independent_runtime_created_through_product',
+      'joining_app_converged_runtime_active',
+      'admin_app_submitted_daemon_backed_runtime_delete',
+      'joining_app_cached_archived_row_at_higher_inventory_version',
+      'joining_app_filtered_archived_runtime_from_visible_projection',
+    ],
+  );
+  await config.coordinator.publish('joiner', 'account_state_archive_converged');
+
   final deleted = await config.coordinator.waitFor(
     'admin',
     'account_state_agent_deleted',
     timeout: const Duration(minutes: 2),
   );
-  final archiveAfter = await _requestAppPairAccountState(
+  final deleteAfter = await _requestAppPairAccountState(
     tester: tester,
     container: container,
-    reason: 'e2e_agent_archive',
+    reason: 'e2e_agent_delete',
   );
   _requireDomainAdvanced(
     versions,
-    archiveAfter.domainVersions,
+    deleteAfter.domainVersions,
     ProductAccountDomain.agentInventory,
   );
   final deletedDid = _required(deleted, 'agentDid');
@@ -1643,18 +1843,10 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     agentDid: deletedDid,
     activeState: 'archived',
   );
-  versions = archiveAfter.domainVersions;
-  await E2eCaseAttestationWriter.markPassed(
-    _appPairAgentArchiveSyncCaseId,
-    phases: const <String>[
-      'delete_committed_authoritative_archived_topology',
-      'joining_app_cached_archived_row_at_higher_inventory_version',
-      'joining_app_filtered_archived_agent_from_visible_projection',
-    ],
-  );
+  versions = deleteAfter.domainVersions;
   await config.coordinator.publish(
     'joiner',
-    'account_state_agent_archive_converged',
+    'account_state_agent_delete_converged',
   );
 
   final profile = await config.coordinator.waitFor(
@@ -1831,7 +2023,66 @@ Future<void> _runAppPairJoinerAccountStateDomains({
   if (!fenced) {
     fail('The revoked joining App retained a successful Registry request.');
   }
-  await config.coordinator.publish('joiner', 'account_state_registry_fenced');
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_registry_fence_observed',
+  );
+  final postRevoke = await config.coordinator.waitFor(
+    'admin',
+    'account_state_post_revoke_message_committed',
+    timeout: const Duration(minutes: 2),
+  );
+  final postRevokeText = _appPairMessage(config.runId, 'post-revoke-fence');
+  final postRevokeMessageId = _required(postRevoke, 'messageId');
+  final stillRevokedBinding = container.read(sessionProvider);
+  final currentBinding = stillRevokedBinding.session?.accountBinding;
+  if (stillRevokedBinding.generation != preRevokeSessionState.generation ||
+      currentBinding == null ||
+      currentBinding.ownerIdentityId != preRevokeBinding.ownerIdentityId ||
+      currentBinding.accountId != preRevokeBinding.accountId ||
+      currentBinding.currentDid != preRevokeBinding.currentDid ||
+      currentBinding.protocolDeviceId != preRevokeBinding.protocolDeviceId ||
+      currentBinding.identityGeneration !=
+          preRevokeBinding.identityGeneration ||
+      currentBinding.deviceAuthGeneration !=
+          preRevokeBinding.deviceAuthGeneration) {
+    fail(
+      'The revoked-device pull oracle lost the original bound session before '
+      'the reliable pull was attempted.',
+    );
+  }
+  await tester.pump(const Duration(seconds: 1));
+  await _assertAppPairMessageAbsent(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: postRevokeText,
+    messageId: postRevokeMessageId,
+  );
+  await container
+      .read(messageSyncCoordinatorProvider.notifier)
+      .requestSync('e2e_revoked_generation_fence', immediate: true);
+  await _pumpUntil(
+    tester,
+    () {
+      final sync = container.read(messageSyncCoordinatorProvider);
+      final runtime = container.read(appRuntimeProvider);
+      return sync.isAuthRevoked ||
+          runtime.authRevoked ||
+          container.read(sessionProvider).session == null;
+    },
+    timeout: const Duration(seconds: 45),
+    failure: 'The old auth generation was not fenced from reliable pull.',
+  );
+  await _assertAppPairMessageAbsent(
+    messaging: bootstrap.messagingService!,
+    conversationId: conversationId,
+    content: postRevokeText,
+    messageId: postRevokeMessageId,
+  );
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_revoked_device_auth_fenced',
+  );
 }
 
 Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({
@@ -3018,12 +3269,31 @@ Future<void> _runAppPairJoinerReadAndRecovery({
   );
   final recoveryMessageId = _required(recovery, 'messageId');
   final recoveryText = _appPairMessage(config.runId, 'offline-recovery');
-  await _resumeAppPairAndWaitForSync(
-    tester: tester,
-    container: container,
-    timeout: const Duration(minutes: 2),
-    failure: 'The joining App did not finish its Core-owned recovery chain.',
+  final diagnosticsSuccessSequenceBeforeRecovery = container
+      .read(messageSyncCoordinatorProvider)
+      .safeDiagnostics
+      .refreshSuccessSequence;
+  var recoveryStateObserved = false;
+  final recoverySubscription = container.listen<MessageSyncCoordinatorState>(
+    messageSyncCoordinatorProvider,
+    (previous, next) {
+      if (next.recoveryRequired ||
+          next.status == MessageSyncCoordinatorStatus.recovering ||
+          next.mode == AppMessageSyncMode.recovering) {
+        recoveryStateObserved = true;
+      }
+    },
   );
+  try {
+    await _resumeAppPairAndWaitForSync(
+      tester: tester,
+      container: container,
+      timeout: const Duration(minutes: 2),
+      failure: 'The joining App did not finish its Core-owned recovery chain.',
+    );
+  } finally {
+    recoverySubscription.close();
+  }
   await _waitForAppPairMessage(
     container: container,
     messaging: bootstrap.messagingService!,
@@ -3050,6 +3320,11 @@ Future<void> _runAppPairJoinerReadAndRecovery({
     conversationId: conversationId,
     matches: (count) => count == 0,
     failure: 'The joining App did not converge the current read state.',
+  );
+  _requireSafeAppPairSyncDiagnostics(
+    container.read(messageSyncCoordinatorProvider),
+    recoveryStateObserved: recoveryStateObserved,
+    priorSuccessSequence: diagnosticsSuccessSequenceBeforeRecovery,
   );
   await config.coordinator.publish('joiner', 'functional_recovery_completed');
   final postAnchor = await config.coordinator.waitFor(
@@ -3080,6 +3355,51 @@ Future<void> _runAppPairJoinerReadAndRecovery({
       'current_state_and_post_anchor_delta_converged',
     ],
   );
+  await E2eCaseAttestationWriter.markPassed(
+    _appPairDiagnosticsCaseId,
+    phases: const <String>[
+      'typed_diagnostics_refreshed_after_real_sync',
+      'pending_mutation_count_reported_as_non_negative_count',
+      'recovery_state_observed_during_compact_recovery',
+      'diagnostics_refresh_sequence_advanced_after_recovery',
+      'diagnostics_projection_excluded_sensitive_fields',
+    ],
+  );
+}
+
+void _requireSafeAppPairSyncDiagnostics(
+  MessageSyncCoordinatorState state, {
+  required bool recoveryStateObserved,
+  required int priorSuccessSequence,
+}) {
+  final diagnostics = state.safeDiagnostics;
+  if (!recoveryStateObserved ||
+      !diagnostics.isCurrent ||
+      diagnostics.refreshSuccessSequence <= priorSuccessSequence ||
+      diagnostics.lastSuccessAt == null ||
+      diagnostics.pendingMutationCount < 0 ||
+      diagnostics.dirtyDomains.toSet().length !=
+          diagnostics.dirtyDomains.length ||
+      state.status != MessageSyncCoordinatorStatus.idle ||
+      diagnostics.mode != AppMessageSyncMode.idle ||
+      diagnostics.retryState != AppMessageSyncRetryState.none ||
+      diagnostics.nextRetryAt != null) {
+    fail('The product-safe sync diagnostics did not reach a closed state.');
+  }
+  final encoded = jsonEncode(diagnostics.toJson()).toLowerCase();
+  const forbidden = <String>[
+    'cursor',
+    'scan_seq',
+    'stream_epoch',
+    'account_id',
+    'device_id',
+    'recovery_token',
+    'message_content',
+    'payload',
+  ];
+  if (forbidden.any(encoded.contains)) {
+    fail('The product-safe sync diagnostics exposed a forbidden field.');
+  }
 }
 
 Future<void> _waitForAppPairUnreadCount({

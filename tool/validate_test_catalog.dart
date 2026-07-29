@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../tests/e2e/runner.dart' as e2e_runner;
 import '../tests/e2e/test_catalog.dart';
 
 Future<void> main(List<String> args) async {
@@ -26,6 +27,10 @@ Future<void> main(List<String> args) async {
     }
     final root = Directory.current;
     final catalog = AppTestCatalog.load(root);
+    final suiteManifest = e2e_runner.DesktopE2eSuiteManifest.load(root);
+    for (final e2eCase in e2e_runner.DesktopE2eCase.values) {
+      suiteManifest.definitionFor(e2eCase).validateCodeCaseIds(e2eCase.caseIds);
+    }
     final document = File('${root.path}/$appCaseCatalogDocumentPath');
     final rendered = catalog.renderMarkdown();
     if (write) {

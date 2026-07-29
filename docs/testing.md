@@ -96,6 +96,25 @@ flutter test tests/unit/data/im_core/awiki_im_core_device_management_adapter_tes
   tests/unit/devices/devices_ui_test.dart
 ```
 
+多设备消息与状态同步的 Stage 6 focused selector 固定为：
+
+```bash
+flutter test \
+  tests/unit/message_sync_coordinator_test.dart \
+  tests/unit/conversation_list_provider_test.dart \
+  tests/unit/chat_provider_open_test.dart \
+  tests/unit/app_runtime_notification_test.dart
+
+flutter test \
+  tests/unit/data/im_core/awiki_im_core_conversation_adapter_test.dart \
+  tests/unit/data/im_core/awiki_im_core_message_adapter_test.dart
+```
+
+这些测试分别覆盖 patch-ready 启动屏障、session/account/device-generation fence、首次有界
+seed、committed conversation/timeline patch、gap repair、同 generation 不重复全量
+refresh/prewarm，以及产品安全 diagnostics mapping。selector 必须实际发现测试；0 tests
+不能作为通过。它们是确定性 App 层证据，不替代真实多设备 UI/backend E2E。
+
 `--case multi-device` 目前是可执行的本地设备入口 E2E：它使用独立临时 Storage Scope、
 production `AppBootstrap` 和 native Core，验证默认组合设备管理 adapter 和 onboarding
 Join 入口，同时 root transfer、revoke、Direct/Group E2EE 仍由独立门禁关闭。它不发送
@@ -132,11 +151,11 @@ sender-side reliable sync 收敛同一 `message_id`。这里的 canonical conver
 只是 App 展示/存储路由；Core 仍须把普通 Direct 历史保存为 `direct + peer DID` wire
 identity，再与发送设备的本地投影合并，不能通过放宽 wire-conflict 校验让用例通过。
 
-`DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-001/002`、
-`DEVICE-REVOKE-E2E-001` 和 `MLS-MULTI-DEVICE-E2E-001/002` 均为 planned、不可执行边界。
-旧 Root/Revoke/MLS Dart 实现依赖 direct-admin Join，已经删除；第三步或后续版本必须重新
-实现并显式注册 suite。不得把 planning 文档、本地 capability gate、Widget fake 或手工演示
-记录为远端 E2E pass。
+`DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-002` 和
+`MLS-MULTI-DEVICE-E2E-001` 为 planned、不可执行边界。`ROOT-TRANSFER-E2E-001`
+已由独立 Root transfer suite 注册；`DEVICE-REVOKE-E2E-001` 与
+`MLS-MULTI-DEVICE-E2E-002` 已由 `step4-revoke-mls` 注册为 active。不得把 planning
+文档、本地 capability gate、Widget fake 或手工演示记录为远端 E2E pass。
 
 聊天附件入口需要同时覆盖按钮、桌面拖拽、剪贴板粘贴和 macOS 交互式截图；
 图片附件还要覆盖内联显示、远端下载到 App cache 与文件卡回退。Composer 工具栏
@@ -175,6 +194,46 @@ through `hooks.user_defines.sqlite3.source: system`. This keeps the test gates
 from downloading a prebuilt SQLite dylib from GitHub during native asset build
 hooks. macOS provides SQLite by default. Linux runners need `libsqlite3-dev` or
 an equivalent package that exposes `libsqlite3.so`.
+
+## 多设备同步 Stage 1–6 E2E 边界
+
+`tests/e2e/suite_manifest.json` 和 `tests/e2e/case_catalog.json` 中的
+`multi-device-app-pair-functional` 是当前普通消息与账号状态同步的 active App E2E
+边界。这里的 `active` 表示 case 已登记且 runner 可执行，不表示当前工作区已经运行或通过。
+它需要准备好的 macOS operator host、两个隔离 App/Core、远端 `awiki.info`、受审计 CLI
+revision、专用账号/OTP 和测试 scoped user-presence。普通 ECS 静态/单元验证不能生成这些
+UI pass attestations。
+
+| 阶段 | Active E2E 边界 | 说明 |
+| --- | --- | --- |
+| 1：稳定身份与数据库骨架 | 无独立产品 UI case；作为本 suite 全部 case 的 preflight | 必须先取得合法 `ActiveSyncAccountBinding`，并由 Core 持有 stable owner、replica 与 cursor；迁移/fixture 证据不能冒充 UI E2E。 |
+| 2：在线普通消息 | `DEVICE-MESSAGE-SYNC-E2E-001`、`DEVICE-MESSAGE-SYNC-E2E-002`、`DEVICE-MESSAGE-ONLINE-SYNC-E2E-001`、`DEVICE-AGENT-MESSAGE-SYNC-E2E-001` | 覆盖 joined Apps 双向 own-sync、远端回复、sender/recipient sibling exact-once 和默认普通 Agent 消息；不创建 P5/E2EE session。 |
+| 3：已读、离线与 Snapshot | `DEVICE-MESSAGE-READ-SYNC-E2E-001`、`DEVICE-MESSAGE-OFFLINE-RECOVERY-E2E-001`、`DEVICE-MESSAGE-TAIL-ONLY-E2E-001` | 覆盖单调已读、新设备 tail-only、已有设备 compact recovery 和保留窗口外本地消息。47:59/48:00/48:01 与 499/500/501 精确边界仍由隔离 Message Service/Core 测试证明，不能在共享远端造数替代。 |
+| 4：账号状态域 | `DEVICE-AGENT-SYNC-E2E-001`、`DEVICE-AGENT-ADD-SYNC-E2E-001`、`DEVICE-AGENT-RENAME-SYNC-E2E-001`、`DEVICE-AGENT-UNBIND-SYNC-E2E-001`、`DEVICE-AGENT-DELETE-SYNC-E2E-001`、`DEVICE-AGENT-ARCHIVE-SYNC-E2E-001`、`DEVICE-PROFILE-SYNC-E2E-001`、`DEVICE-REGISTRY-SYNC-E2E-001`、`DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001` | Agent topology/current status、Profile 和 Registry 使用独立 versioned snapshot；一个域失败不能阻止消息或其他域收敛。Archive case 创建第三个独立 runtime，再经 App `deleteSelected` → daemon runtime delete → User Service archive 的真实产品链路验证 active→archived，不能使用 test operator 或复用 Codex 删除。 |
+| 5：Dirty Hint | `DEVICE-MESSAGE-HINT-LOSS-E2E-001`、`DEVICE-MESSAGE-RECONNECT-E2E-001` | WebSocket 只作 dirty hint；断线或提示丢失后必须由前台/重连 HTTP pull exact-once 恢复。Push wake-up 当前为 `DEFERRED`，没有 active pass case。 |
+| 6：体验、观测与发布验收 | `DEVICE-MESSAGE-PATCH-READY-E2E-001`、`DEVICE-MESSAGE-DIAGNOSTICS-E2E-001`、`DEVICE-MESSAGE-GENERATION-FENCE-E2E-001`、`MESSAGE-PATCH-RESTART-E2E-001`，以及上述 active case 的完整、顺序一致 schema-v2 attestation | 覆盖产品观测的 subscribe→reset→first-sync 顺序、diagnostics 成功刷新序列与脱敏、同 DID revoked-device auth fencing，以及 Phase A 完全销毁后提交 gap 的跨进程恢复；不宣称测试直接注入了旧 generation Patch。 |
+
+本同步方案的共同 oracle：
+
+- HTTP 服务端事实加 Core SQLite 原子 commit 是可靠 truth；WebSocket payload、Push、App
+  memory state 或 CLI 输出都不能替代。
+- 新设备只从 tail 开始；已有设备自动恢复只包含服务端当前时间最近 48 小时内、最多 500
+  条普通逻辑消息。Agent/Profile/Registry 当前快照不受该窗口限制。
+- App 必须先订阅 committed patch 并完成当前 session generation 的一次 bounded seed，
+  再执行首次 `syncNow`。普通 delta/hint/reconnect 后不得做全 conversation refresh、
+  20×50 history prewarm 或 forced visible refresh。
+- Direct E2EE、Group MLS、PreKey/Ratchet、密钥、密文和加密历史不参加普通同步验收。
+- 当前产品不支持普通消息编辑、撤回、删除和消息 tombstone；不存在这些 producer/reducer
+  不是覆盖缺口，也不能新增虚假 E2E case。
+- 产品诊断只允许 typed last success、mode、pending mutation count、dirty domains、
+  retry state/next retry；raw cursor/epoch、完整账号/设备 ID、recovery token、正文和 payload
+  不得进入 UI 报告。
+
+登记状态可用以下命令校验；catalog 通过只证明定义与 selector 一致，不是 UI pass：
+
+```bash
+dart run tool/validate_test_catalog.dart
+```
 
 ## E2E Gate
 

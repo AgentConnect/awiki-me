@@ -365,10 +365,11 @@ class AppTestCatalog {
         'changes the production user-presence implementation.',
       )
       ..writeln(
-        '- `DEVICE-JOIN-E2E-003`, `ROOT-TRANSFER-E2E-002`, '
-        '`DEVICE-REVOKE-E2E-001`, and `MLS-MULTI-DEVICE-E2E-001/002` are '
-        'planned, non-executable boundaries. The old Root/Revoke/MLS Dart '
-        'implementations depended on direct-admin Join and have been deleted. '
+        '- `DEVICE-JOIN-E2E-003`, `ROOT-TRANSFER-E2E-002`, and '
+        '`MLS-MULTI-DEVICE-E2E-001` are planned, non-executable boundaries. '
+        '`ROOT-TRANSFER-E2E-001` is active in its dedicated suite; '
+        '`DEVICE-REVOKE-E2E-001` and `MLS-MULTI-DEVICE-E2E-002` are active in '
+        '`step4-revoke-mls`. '
         'A later version must supply accepted contracts, independent '
         'device roots, real one-time OTPs, user presence where required, '
         'scenario-owned oracles, cleanup, and explicit suite registration. '

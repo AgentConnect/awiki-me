@@ -6,9 +6,7 @@ test fixtures, or claim remote pass evidence.
 The following cases remain intentionally planned for a later version:
 
 - `ROOT-TRANSFER-E2E-002`: receiver-local completion recovery after restart.
-- `DEVICE-REVOKE-E2E-001`: permanent exact-device revocation after readiness.
 - `MLS-MULTI-DEVICE-E2E-001`: same-DID multi-device MLS lifecycle.
-- `MLS-MULTI-DEVICE-E2E-002`: exact-device MLS removal convergence.
 
 Their previous executable Dart implementations depended on the retired
 direct-admin Join flow and have been deleted. A future implementation must use
