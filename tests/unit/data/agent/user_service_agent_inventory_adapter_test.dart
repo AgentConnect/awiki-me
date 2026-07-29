@@ -79,12 +79,13 @@ void main() {
       bearerTokenProvider: () => 'device-access-token',
     );
 
-    final agent = await adapter.updateDisplayName(
+    final mutation = await adapter.updateDisplayNameVersioned(
       agentDid: 'did:agent:one',
       displayName: 'Renamed',
     );
 
-    expect(agent.displayName, 'Renamed');
+    expect(mutation.value.displayName, 'Renamed');
+    expect(mutation.inventoryVersion, '18446744073709551615');
   });
 
   test('mutation rejects numeric inventory_version', () async {

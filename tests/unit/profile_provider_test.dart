@@ -1,8 +1,15 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/ports/account_state_sync_port.dart';
+import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/profile_homepage_resolver.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
+import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -148,4 +155,170 @@ void main() {
     );
     expect(controller.visibleProfileContent(), serverProfile.profileMarkdown);
   });
+
+  test(
+    'profile mutation forwards its independent version as a floor',
+    () async {
+      final profiles = _VersionedProfileService(
+        result: const ProfileMutationResult(
+          profile: UserProfile(
+            did: 'did:test:alice',
+            displayName: 'Alice 2',
+            bio: 'Updated',
+            tags: <String>[],
+            profileMarkdown: '',
+            profileVersion: '7',
+          ),
+          profileVersion: '7',
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: <Override>[
+          profileApplicationServiceProvider.overrideWithValue(profiles),
+        ],
+      );
+      addTearDown(container.dispose);
+      container.read(sessionProvider.notifier).setSession(_boundSession('one'));
+      AccountStateVersionFloor? observedFloor;
+      container.read(accountStateSyncRequestBusProvider).attach((
+        reason, {
+        force = false,
+        minimumVersion,
+      }) async {
+        expect(reason, 'profile_updated');
+        expect(force, isTrue);
+        observedFloor = minimumVersion;
+      });
+
+      await container
+          .read(profileProvider.notifier)
+          .updateProfile(const ProfilePatch(displayName: 'Alice 2'));
+
+      expect(observedFloor?.domain, ProductAccountDomain.profile);
+      expect(observedFloor?.version, '7');
+      expect(container.read(profileProvider).profile?.profileVersion, '7');
+    },
+  );
+
+  test('profile mutation response is fenced after a session switch', () async {
+    final completer = Completer<ProfileMutationResult>();
+    final profiles = _VersionedProfileService(completer: completer);
+    final container = ProviderContainer(
+      overrides: <Override>[
+        profileApplicationServiceProvider.overrideWithValue(profiles),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).setSession(_boundSession('one'));
+    var requestCount = 0;
+    container.read(accountStateSyncRequestBusProvider).attach((
+      _, {
+      force = false,
+      minimumVersion,
+    }) async {
+      requestCount += 1;
+    });
+
+    final operation = container
+        .read(profileProvider.notifier)
+        .updateProfile(const ProfilePatch(displayName: 'Stale'));
+    await profiles.started.future;
+    container.read(sessionProvider.notifier).setSession(_boundSession('two'));
+    completer.complete(
+      const ProfileMutationResult(
+        profile: UserProfile(
+          did: 'did:test:alice',
+          displayName: 'Stale',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          profileVersion: '8',
+        ),
+        profileVersion: '8',
+      ),
+    );
+    await operation;
+
+    expect(container.read(profileProvider).profile, isNull);
+    expect(requestCount, 0);
+  });
+
+  test('unbound profile mutation keeps the legacy delegate path', () async {
+    const updated = UserProfile(
+      did: 'did:test:legacy',
+      displayName: 'Legacy',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      profileVersion: '5',
+    );
+    final gateway = FakeAwikiGateway()..updatedProfile = updated;
+    final service = AccountStateProfileApplicationService(
+      delegate: FakeProfileApplicationService(gateway),
+      mutations: _UnexpectedProfileMutationPort(),
+      sessionProvider: () => null,
+    );
+
+    final result = await service.updateProfileVersioned(
+      const ProfilePatch(displayName: 'Legacy'),
+    );
+
+    expect(result.profile, same(updated));
+    expect(result.profileVersion, '5');
+    expect(gateway.lastProfilePatch?.displayName, 'Legacy');
+  });
+}
+
+SessionIdentity _boundSession(String accountId) {
+  return SessionIdentity(
+    did: 'did:test:alice',
+    credentialName: accountId,
+    displayName: 'Alice',
+    accountBinding: SessionAccountBinding(
+      ownerIdentityId: 'owner-$accountId',
+      accountId: 'account-$accountId',
+      currentDid: 'did:test:alice',
+      protocolDeviceId: 'device-$accountId',
+      identityGeneration: '1',
+      deviceAuthGeneration: '1',
+    ),
+  );
+}
+
+class _VersionedProfileService
+    implements ProfileApplicationService, VersionedProfileApplicationService {
+  _VersionedProfileService({this.result, this.completer});
+
+  final ProfileMutationResult? result;
+  final Completer<ProfileMutationResult>? completer;
+  final Completer<void> started = Completer<void>();
+
+  @override
+  Future<UserProfile> loadMyProfile() => throw UnimplementedError();
+
+  @override
+  Future<UserProfile> loadPublicProfile(String didOrHandle) =>
+      throw UnimplementedError();
+
+  @override
+  Future<UserProfile> updateProfile(ProfilePatch patch) async =>
+      (await updateProfileVersioned(patch)).profile;
+
+  @override
+  Future<ProfileMutationResult> updateProfileVersioned(ProfilePatch patch) {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    return completer?.future ?? Future<ProfileMutationResult>.value(result!);
+  }
+}
+
+class _UnexpectedProfileMutationPort
+    implements AccountStateProfileMutationPort {
+  @override
+  Future<AccountStateProfileMutationResult> updateAccountProfile(
+    ProfilePatch patch,
+  ) {
+    throw StateError('account-state mutation must not run while unbound');
+  }
 }

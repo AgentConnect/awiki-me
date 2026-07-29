@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../app/app_services.dart';
+import '../../application/account_state_sync_request_bus.dart';
 import '../../application/models/product_local_models.dart';
+import '../../application/profile_application_service.dart';
 import '../../domain/entities/profile_patch.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
@@ -137,13 +139,40 @@ class ProfileController extends StateNotifier<ProfileState> {
 
   Future<void> updateProfile(ProfilePatch patch) async {
     state = state.copyWith(isSaving: true);
-    final profile = await ref
-        .read(profileApplicationServiceProvider)
-        .updateProfile(patch);
+    final sessionBefore = ref.read(sessionProvider);
+    final profiles = ref.read(profileApplicationServiceProvider);
+    final UserProfile profile;
+    final String? profileVersion;
+    if (profiles is VersionedProfileApplicationService) {
+      final mutation = await (profiles as VersionedProfileApplicationService)
+          .updateProfileVersioned(patch);
+      profile = mutation.profile;
+      profileVersion = mutation.profileVersion;
+    } else {
+      profile = await profiles.updateProfile(patch);
+      profileVersion = profile.profileVersion;
+    }
+    if (!_sameProfileProviderSession(
+      sessionBefore,
+      ref.read(sessionProvider),
+    )) {
+      return;
+    }
     state = _profileStateAfterRefresh(profile, isSaving: false);
     await ref
         .read(accountStateSyncRequestBusProvider)
-        .request('profile_updated', force: true);
+        .request(
+          'profile_updated',
+          force: true,
+          minimumVersion:
+              profileVersion == null ||
+                  !isCanonicalProductDecimal(profileVersion)
+              ? null
+              : AccountStateVersionFloor(
+                  domain: ProductAccountDomain.profile,
+                  version: profileVersion,
+                ),
+        );
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
   }
 
@@ -162,6 +191,7 @@ class ProfileController extends StateNotifier<ProfileState> {
       profileMarkdown: _optionalString(payload['profile_md']) ?? '',
       handle: session.handle,
       avatarUri: _optionalString(payload['avatar_url']),
+      profileVersion: snapshot.domainVersion,
     );
     state = _profileStateAfterRefresh(
       profile,
@@ -206,6 +236,23 @@ class ProfileController extends StateNotifier<ProfileState> {
     }
     return profile.bio.trim();
   }
+}
+
+bool _sameProfileProviderSession(SessionState before, SessionState after) {
+  final beforeSession = before.session;
+  final afterSession = after.session;
+  final beforeBinding = beforeSession?.accountBinding;
+  final afterBinding = afterSession?.accountBinding;
+  return before.generation == after.generation &&
+      beforeSession != null &&
+      afterSession != null &&
+      beforeSession.did == afterSession.did &&
+      beforeBinding?.ownerIdentityId == afterBinding?.ownerIdentityId &&
+      beforeBinding?.accountId == afterBinding?.accountId &&
+      beforeBinding?.currentDid == afterBinding?.currentDid &&
+      beforeBinding?.protocolDeviceId == afterBinding?.protocolDeviceId &&
+      beforeBinding?.identityGeneration == afterBinding?.identityGeneration &&
+      beforeBinding?.deviceAuthGeneration == afterBinding?.deviceAuthGeneration;
 }
 
 final profileProvider = StateNotifierProvider<ProfileController, ProfileState>(

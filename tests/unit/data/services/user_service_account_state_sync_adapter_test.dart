@@ -7,6 +7,7 @@ import 'package:awiki_me/src/application/ports/account_state_sync_port.dart';
 import 'package:awiki_me/src/data/services/authenticated_user_service_rpc_client.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/data/services/user_service_account_state_sync_adapter.dart';
+import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
@@ -88,36 +89,112 @@ void main() {
       expect(registry.registryVersion, '18446744073709551615');
     },
   );
+
+  test('profile mutation preserves canonical response version', () async {
+    final httpClient = _RpcHttpClient(
+      result: <String, Object?>{
+        'nick_name': 'Alice 2',
+        'avatar_url': null,
+        'gender': null,
+        'tags': <String>['sync'],
+        'bio': 'updated',
+        'profile_md': '# Alice',
+        'profile_url': 'https://example.test/alice',
+        'profile_version': '18446744073709551615',
+      },
+    );
+    final utility = AwikiOnboardingUtilityHttpClient(
+      baseUrl: 'https://example.test',
+      httpClient: httpClient,
+    );
+    final adapter = UserServiceAccountStateSyncAdapter(
+      userServiceUrl: 'https://example.test',
+      client: utility,
+      authenticatedClient: AuthenticatedUserServiceRpcClient(
+        client: utility,
+        sessions: AuthSessionCoordinator(sessions: _Sessions()),
+      ),
+    );
+
+    final mutation = await adapter.updateAccountProfile(
+      const ProfilePatch(displayName: 'Alice 2', bio: 'updated'),
+    );
+
+    expect(mutation.profileVersion, '18446744073709551615');
+    expect(mutation.profile.nickName, 'Alice 2');
+    expect(httpClient.lastPath, '/user-service/me/rpc');
+    expect(httpClient.lastMethod, 'update_me');
+  });
+
+  test('profile mutation rejects numeric response version', () async {
+    final httpClient = _RpcHttpClient(
+      result: <String, Object?>{
+        'nick_name': 'Alice 2',
+        'avatar_url': null,
+        'gender': null,
+        'tags': <String>[],
+        'bio': null,
+        'profile_md': null,
+        'profile_url': null,
+        'profile_version': 2,
+      },
+    );
+    final utility = AwikiOnboardingUtilityHttpClient(
+      baseUrl: 'https://example.test',
+      httpClient: httpClient,
+    );
+    final adapter = UserServiceAccountStateSyncAdapter(
+      userServiceUrl: 'https://example.test',
+      client: utility,
+      authenticatedClient: AuthenticatedUserServiceRpcClient(
+        client: utility,
+        sessions: AuthSessionCoordinator(sessions: _Sessions()),
+      ),
+    );
+
+    await expectLater(
+      adapter.updateAccountProfile(const ProfilePatch(displayName: 'Alice 2')),
+      throwsFormatException,
+    );
+  });
 }
 
 class _RpcHttpClient extends http.BaseClient {
-  _RpcHttpClient({this.extraManifestKey = false});
+  _RpcHttpClient({this.extraManifestKey = false, this.result});
 
   final bool extraManifestKey;
+  final Map<String, Object?>? result;
   String? lastAuthorization;
   String? lastPath;
+  String? lastMethod;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     lastAuthorization = request.headers['Authorization'];
     lastPath = request.url.path;
-    final result = <String, Object?>{
-      'account_id': 'account-1',
-      'current_did': 'did:wba:example.test:alice',
-      'identity_generation': '999999999999999999999999999999999999',
-      'versions': <String, Object?>{
-        'profile': '1',
-        'agent_inventory': '2',
-        'agent_status': '3',
-        'device_registry': '4',
-      },
-      'server_time': '2026-07-29T00:00:00Z',
-      if (extraManifestKey) 'unexpected': true,
-    };
+    if (request is http.Request) {
+      final body = jsonDecode(request.body) as Map;
+      lastMethod = body['method']?.toString();
+    }
+    final responseResult =
+        result ??
+        <String, Object?>{
+          'account_id': 'account-1',
+          'current_did': 'did:wba:example.test:alice',
+          'identity_generation': '999999999999999999999999999999999999',
+          'versions': <String, Object?>{
+            'profile': '1',
+            'agent_inventory': '2',
+            'agent_status': '3',
+            'device_registry': '4',
+          },
+          'server_time': '2026-07-29T00:00:00Z',
+          if (extraManifestKey) 'unexpected': true,
+        };
     final bytes = utf8.encode(
       jsonEncode(<String, Object?>{
         'jsonrpc': '2.0',
-        'result': result,
+        'result': responseResult,
         'id': 'req-1',
       }),
     );

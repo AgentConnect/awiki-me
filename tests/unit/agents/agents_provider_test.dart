@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/agent/agent_control_service.dart';
 import 'package:awiki_me/src/application/agent/agent_control_status_store.dart';
 import 'package:awiki_me/src/application/directory_application_service.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/directory_core_port.dart';
+import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/personal_agent_binding_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
@@ -1195,7 +1197,7 @@ void main() {
   test(
     'versioned policy mutation awaits account-state reconcile request',
     () async {
-      final control = FakeAgentControlService()
+      final control = _VersionedAgentControlService()
         ..agents = const <AgentSummary>[
           AgentSummary(
             agentDid: 'did:agent:runtime',
@@ -1230,9 +1232,12 @@ void main() {
       container.read(accountStateSyncRequestBusProvider).attach((
         reason, {
         force = false,
+        minimumVersion,
       }) async {
         expect(reason, 'agent_invocation_policy_updated');
         expect(force, isTrue);
+        expect(minimumVersion?.domain, ProductAccountDomain.agentInventory);
+        expect(minimumVersion?.version, '9');
         requested.complete();
       });
 
@@ -3862,6 +3867,53 @@ void main() {
       expect(runtime.recentRuns.single.triggerKind, 'external_direct');
     },
   );
+}
+
+class _VersionedAgentControlService extends FakeAgentControlService
+    implements VersionedAgentControlService {
+  @override
+  Future<AgentInventoryMutationResult<AgentSummary>>
+  updateDisplayNameVersioned({
+    required String agentDid,
+    required String displayName,
+  }) async {
+    return AgentInventoryMutationResult<AgentSummary>(
+      value: await updateDisplayName(
+        agentDid: agentDid,
+        displayName: displayName,
+      ),
+      inventoryVersion: '9',
+    );
+  }
+
+  @override
+  Future<AgentInventoryMutationReceipt> unbindAgentVersioned(
+    String agentDid,
+  ) async {
+    await unbindAgent(agentDid);
+    return const AgentInventoryMutationReceipt(inventoryVersion: '9');
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<List<AgentSummary>>>
+  removeAgentFromAccountVersioned(String agentDid) async {
+    return AgentInventoryMutationResult<List<AgentSummary>>(
+      value: await removeAgentFromAccount(agentDid),
+      inventoryVersion: '9',
+    );
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<AgentInvocationPolicy>>
+  updateInvocationPolicyVersioned({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    return AgentInventoryMutationResult<AgentInvocationPolicy>(
+      value: await updateInvocationPolicy(agentDid: agentDid, policy: policy),
+      inventoryVersion: '9',
+    );
+  }
 }
 
 ProviderContainer _container(

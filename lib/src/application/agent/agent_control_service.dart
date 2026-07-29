@@ -101,7 +101,27 @@ abstract interface class AgentControlService {
   });
 }
 
-class DefaultAgentControlService implements AgentControlService {
+abstract interface class VersionedAgentControlService {
+  Future<AgentInventoryMutationResult<AgentSummary>>
+  updateDisplayNameVersioned({
+    required String agentDid,
+    required String displayName,
+  });
+
+  Future<AgentInventoryMutationReceipt> unbindAgentVersioned(String agentDid);
+
+  Future<AgentInventoryMutationResult<List<AgentSummary>>>
+  removeAgentFromAccountVersioned(String agentDid);
+
+  Future<AgentInventoryMutationResult<AgentInvocationPolicy>>
+  updateInvocationPolicyVersioned({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  });
+}
+
+class DefaultAgentControlService
+    implements AgentControlService, VersionedAgentControlService {
   DefaultAgentControlService({
     required AgentInventoryPort inventory,
     required MessagingService messages,
@@ -592,15 +612,68 @@ class DefaultAgentControlService implements AgentControlService {
   }
 
   @override
+  Future<AgentInventoryMutationResult<AgentSummary>>
+  updateDisplayNameVersioned({
+    required String agentDid,
+    required String displayName,
+  }) async {
+    _requireAgentsEnabled();
+    final inventory = _inventory;
+    if (inventory is VersionedAgentInventoryMutationPort) {
+      return (inventory as VersionedAgentInventoryMutationPort)
+          .updateDisplayNameVersioned(
+            agentDid: agentDid,
+            displayName: displayName,
+          );
+    }
+    return AgentInventoryMutationResult<AgentSummary>(
+      value: await inventory.updateDisplayName(
+        agentDid: agentDid,
+        displayName: displayName,
+      ),
+      inventoryVersion: null,
+    );
+  }
+
+  @override
   Future<void> unbindAgent(String agentDid) {
     _requireAgentsEnabled();
     return _inventory.unbindAgent(agentDid: agentDid);
   }
 
   @override
+  Future<AgentInventoryMutationReceipt> unbindAgentVersioned(
+    String agentDid,
+  ) async {
+    _requireAgentsEnabled();
+    final inventory = _inventory;
+    if (inventory is VersionedAgentInventoryMutationPort) {
+      return (inventory as VersionedAgentInventoryMutationPort)
+          .unbindAgentVersioned(agentDid: agentDid);
+    }
+    await inventory.unbindAgent(agentDid: agentDid);
+    return const AgentInventoryMutationReceipt(inventoryVersion: null);
+  }
+
+  @override
   Future<List<AgentSummary>> removeAgentFromAccount(String agentDid) {
     _requireAgentsEnabled();
     return _inventory.removeAgentFromAccount(agentDid: agentDid);
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<List<AgentSummary>>>
+  removeAgentFromAccountVersioned(String agentDid) async {
+    _requireAgentsEnabled();
+    final inventory = _inventory;
+    if (inventory is VersionedAgentInventoryMutationPort) {
+      return (inventory as VersionedAgentInventoryMutationPort)
+          .removeAgentFromAccountVersioned(agentDid: agentDid);
+    }
+    return AgentInventoryMutationResult<List<AgentSummary>>(
+      value: await inventory.removeAgentFromAccount(agentDid: agentDid),
+      inventoryVersion: null,
+    );
   }
 
   @override
@@ -618,6 +691,27 @@ class DefaultAgentControlService implements AgentControlService {
     return _inventory.updateInvocationPolicy(
       agentDid: agentDid,
       policy: policy,
+    );
+  }
+
+  @override
+  Future<AgentInventoryMutationResult<AgentInvocationPolicy>>
+  updateInvocationPolicyVersioned({
+    required String agentDid,
+    required AgentInvocationPolicy policy,
+  }) async {
+    _requireAgentsEnabled();
+    final inventory = _inventory;
+    if (inventory is VersionedAgentInventoryMutationPort) {
+      return (inventory as VersionedAgentInventoryMutationPort)
+          .updateInvocationPolicyVersioned(agentDid: agentDid, policy: policy);
+    }
+    return AgentInventoryMutationResult<AgentInvocationPolicy>(
+      value: await inventory.updateInvocationPolicy(
+        agentDid: agentDid,
+        policy: policy,
+      ),
+      inventoryVersion: null,
     );
   }
 

@@ -30,6 +30,8 @@ class AccountStateSyncCoordinatorState {
     this.lastReason,
     this.lastCompletedAt,
     this.domainVersions = const <ProductAccountDomain, String>{},
+    this.minimumVersions = const <ProductAccountDomain, String>{},
+    this.unmetMinimumVersions = const <ProductAccountDomain, String>{},
     this.domainErrors = const <ProductAccountDomain, Object>{},
     this.warnings = const <AccountStateSyncWarning>[],
   });
@@ -39,6 +41,8 @@ class AccountStateSyncCoordinatorState {
   final String? lastReason;
   final DateTime? lastCompletedAt;
   final Map<ProductAccountDomain, String> domainVersions;
+  final Map<ProductAccountDomain, String> minimumVersions;
+  final Map<ProductAccountDomain, String> unmetMinimumVersions;
   final Map<ProductAccountDomain, Object> domainErrors;
   final List<AccountStateSyncWarning> warnings;
 
@@ -50,10 +54,21 @@ class AccountStateSyncCoordinator
   AccountStateSyncCoordinator(
     this.ref, {
     this.failureBackoff = const Duration(seconds: 8),
-  }) : super(const AccountStateSyncCoordinatorState()) {
+    Duration? versionFloorBackoff,
+    this.maximumVersionFloorAttempts = 3,
+  }) : versionFloorBackoff = versionFloorBackoff ?? failureBackoff,
+       super(const AccountStateSyncCoordinatorState()) {
+    if (maximumVersionFloorAttempts < 1) {
+      throw ArgumentError.value(
+        maximumVersionFloorAttempts,
+        'maximumVersionFloorAttempts',
+        'must be positive',
+      );
+    }
     _requestBus = ref.read(accountStateSyncRequestBusProvider);
     _requestBus.attach(
-      (reason, {force = false}) => request(reason, force: force),
+      (reason, {force = false, minimumVersion}) =>
+          request(reason, force: force, minimumVersion: minimumVersion),
     );
     _sessionSubscription = ref.listen<SessionState>(
       sessionProvider,
@@ -63,6 +78,8 @@ class AccountStateSyncCoordinator
 
   final Ref ref;
   final Duration failureBackoff;
+  final Duration versionFloorBackoff;
+  final int maximumVersionFloorAttempts;
 
   late final ProviderSubscription<SessionState> _sessionSubscription;
   late final AccountStateSyncRequestBus _requestBus;
@@ -70,15 +87,29 @@ class AccountStateSyncCoordinator
   Timer? _retryTimer;
   bool _followUpRequested = false;
   String? _followUpReason;
+  final Map<ProductAccountDomain, String> _requiredMinimumVersions =
+      <ProductAccountDomain, String>{};
   bool _disposed = false;
 
-  Future<void> request(String reason, {bool force = false}) {
+  Future<void> request(
+    String reason, {
+    bool force = false,
+    AccountStateVersionFloor? minimumVersion,
+  }) {
     if (_disposed) {
       return Future<void>.value();
     }
     final normalizedReason = reason.trim().isEmpty
         ? 'unspecified'
         : reason.trim();
+    if (minimumVersion != null) {
+      final current = _requiredMinimumVersions[minimumVersion.domain];
+      if (current == null ||
+          compareProductDecimalVersions(minimumVersion.version, current) > 0) {
+        _requiredMinimumVersions[minimumVersion.domain] =
+            minimumVersion.version;
+      }
+    }
     final active = _activeOperation;
     if (active != null) {
       _followUpRequested = true;
@@ -89,6 +120,8 @@ class AccountStateSyncCoordinator
         lastReason: state.lastReason,
         lastCompletedAt: state.lastCompletedAt,
         domainVersions: state.domainVersions,
+        minimumVersions: state.minimumVersions,
+        unmetMinimumVersions: state.unmetMinimumVersions,
         domainErrors: state.domainErrors,
         warnings: state.warnings,
       );
@@ -112,20 +145,45 @@ class AccountStateSyncCoordinator
     _retryTimer = null;
     _followUpRequested = false;
     _followUpReason = null;
+    _requiredMinimumVersions.clear();
     state = const AccountStateSyncCoordinatorState();
   }
 
   Future<void> _drain(String initialReason) async {
     var reason = initialReason;
+    var versionFloorAttempts = 0;
     do {
       _followUpRequested = false;
       _followUpReason = null;
-      await _runOnce(reason);
+      final minimumVersions = Map<ProductAccountDomain, String>.from(
+        _requiredMinimumVersions,
+      );
+      await _runOnce(reason, minimumVersions: minimumVersions);
+      if (_requiredMinimumVersions.isNotEmpty && !_disposed) {
+        versionFloorAttempts += 1;
+        if (versionFloorAttempts >= maximumVersionFloorAttempts) {
+          final unmet = Map<ProductAccountDomain, String>.from(
+            _requiredMinimumVersions,
+          );
+          _scheduleFloorRetry();
+          throw AccountStateVersionFloorNotReached(unmet);
+        }
+        _followUpRequested = true;
+        _followUpReason = 'version_floor_follow_up';
+        if (versionFloorBackoff > Duration.zero) {
+          await Future<void>.delayed(versionFloorBackoff);
+        }
+      } else {
+        versionFloorAttempts = 0;
+      }
       reason = _followUpReason ?? 'coalesced_follow_up';
     } while (_followUpRequested && !_disposed);
   }
 
-  Future<void> _runOnce(String reason) async {
+  Future<void> _runOnce(
+    String reason, {
+    required Map<ProductAccountDomain, String> minimumVersions,
+  }) async {
     final fence = _AccountStateSessionFence.captureOrNull(
       ref.read(sessionProvider),
     );
@@ -138,6 +196,8 @@ class AccountStateSyncCoordinator
       lastReason: reason,
       lastCompletedAt: state.lastCompletedAt,
       domainVersions: state.domainVersions,
+      minimumVersions: minimumVersions,
+      unmetMinimumVersions: state.unmetMinimumVersions,
       domainErrors: state.domainErrors,
       warnings: state.warnings,
     );
@@ -159,6 +219,7 @@ class AccountStateSyncCoordinator
             sessionGeneration: fence.sessionGeneration,
             isSessionCurrent: (binding, generation) =>
                 fence.matchesBinding(binding, generation) && _isCurrent(fence),
+            minimumVersions: minimumVersions,
           );
     } on Object catch (error) {
       if (!_isCurrent(fence)) {
@@ -172,6 +233,8 @@ class AccountStateSyncCoordinator
         reason,
         domainErrors: failures,
         warnings: const <AccountStateSyncWarning>[],
+        minimumVersions: minimumVersions,
+        unmetMinimumVersions: minimumVersions,
       );
       return;
     }
@@ -191,6 +254,8 @@ class AccountStateSyncCoordinator
         ...projectionErrors,
       },
       warnings: result.warnings,
+      minimumVersions: result.minimumVersions,
+      unmetMinimumVersions: result.unmetMinimumVersions,
     );
   }
 
@@ -281,6 +346,8 @@ class AccountStateSyncCoordinator
     String reason, {
     required Map<ProductAccountDomain, Object> domainErrors,
     required List<AccountStateSyncWarning> warnings,
+    required Map<ProductAccountDomain, String> minimumVersions,
+    required Map<ProductAccountDomain, String> unmetMinimumVersions,
   }) async {
     final store = ref.read(productLocalStoreProvider);
     final stateEntries =
@@ -298,7 +365,25 @@ class AccountStateSyncCoordinator
         if (entry != null && entry.value != null)
           entry.key: entry.value!.domainVersion,
     };
-    final hasFailures = domainErrors.isNotEmpty;
+    final unmet = <ProductAccountDomain, String>{
+      for (final entry in unmetMinimumVersions.entries)
+        if (versions[entry.key] == null ||
+            compareProductDecimalVersions(versions[entry.key]!, entry.value) <
+                0)
+          entry.key: entry.value,
+    };
+    for (final entry in minimumVersions.entries) {
+      final committedVersion = versions[entry.key];
+      if (committedVersion != null &&
+          compareProductDecimalVersions(committedVersion, entry.value) >= 0) {
+        final required = _requiredMinimumVersions[entry.key];
+        if (required != null &&
+            compareProductDecimalVersions(committedVersion, required) >= 0) {
+          _requiredMinimumVersions.remove(entry.key);
+        }
+      }
+    }
+    final hasFailures = domainErrors.isNotEmpty || unmet.isNotEmpty;
     state = AccountStateSyncCoordinatorState(
       status: hasFailures
           ? AccountStateSyncCoordinatorStatus.partialFailure
@@ -306,14 +391,20 @@ class AccountStateSyncCoordinator
       lastReason: reason,
       lastCompletedAt: DateTime.now().toUtc(),
       domainVersions: versions,
+      minimumVersions: Map<ProductAccountDomain, String>.unmodifiable(
+        minimumVersions,
+      ),
+      unmetMinimumVersions: Map<ProductAccountDomain, String>.unmodifiable(
+        unmet,
+      ),
       domainErrors: Map<ProductAccountDomain, Object>.unmodifiable(
         domainErrors,
       ),
       warnings: List<AccountStateSyncWarning>.unmodifiable(warnings),
     );
-    if (hasFailures) {
+    if (domainErrors.isNotEmpty && unmet.isEmpty) {
       _scheduleRetry(fence);
-    } else {
+    } else if (!hasFailures) {
       _retryTimer?.cancel();
       _retryTimer = null;
     }
@@ -365,6 +456,8 @@ class AccountStateSyncCoordinator
       lastReason: state.lastReason,
       lastCompletedAt: state.lastCompletedAt,
       domainVersions: state.domainVersions,
+      minimumVersions: state.minimumVersions,
+      unmetMinimumVersions: state.unmetMinimumVersions,
       domainErrors: state.domainErrors,
       warnings: state.warnings,
     );
@@ -372,6 +465,30 @@ class AccountStateSyncCoordinator
       _retryTimer = null;
       if (_isCurrent(fence)) {
         request('failure_retry');
+      }
+    });
+  }
+
+  void _scheduleFloorRetry() {
+    if (_retryTimer != null || _disposed) {
+      return;
+    }
+    state = AccountStateSyncCoordinatorState(
+      status: AccountStateSyncCoordinatorStatus.retryWaiting,
+      lastReason: state.lastReason,
+      lastCompletedAt: state.lastCompletedAt,
+      domainVersions: state.domainVersions,
+      minimumVersions: state.minimumVersions,
+      unmetMinimumVersions: state.unmetMinimumVersions,
+      domainErrors: state.domainErrors,
+      warnings: state.warnings,
+    );
+    _retryTimer = Timer(failureBackoff, () {
+      _retryTimer = null;
+      if (_requiredMinimumVersions.isNotEmpty && !_disposed) {
+        unawaited(
+          request('version_floor_retry', force: true).catchError((_) {}),
+        );
       }
     });
   }

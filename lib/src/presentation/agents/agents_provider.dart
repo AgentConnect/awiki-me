@@ -5,8 +5,11 @@ import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_services.dart';
+import '../../application/account_state_sync_request_bus.dart';
+import '../../application/agent/agent_control_service.dart';
 import '../../application/agent/agent_control_status_store.dart';
 import '../../application/models/product_local_models.dart';
+import '../../application/ports/agent_inventory_port.dart';
 import '../../core/app_error_classifier.dart';
 import '../../core/performance_logger.dart';
 import '../../data/agent/user_service_agent_inventory_adapter.dart';
@@ -1378,10 +1381,21 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
-      await ref
-          .read(agentControlServiceProvider)
-          .unbindAgent(selected.agentDid);
-      await load();
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final AgentInventoryMutationReceipt receipt;
+      if (control is VersionedAgentControlService) {
+        receipt = await (control as VersionedAgentControlService)
+            .unbindAgentVersioned(selected.agentDid);
+      } else {
+        await control.unbindAgent(selected.agentDid);
+        receipt = const AgentInventoryMutationReceipt(inventoryVersion: null);
+      }
+      await _reconcileInventoryMutation(
+        reason: 'agent_unbound',
+        inventoryVersion: receipt.inventoryVersion,
+        sessionBefore: before,
+      );
     });
   }
 
@@ -1406,10 +1420,21 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     if (deleteAction == AgentDeleteAction.unregister) {
       await _runAction(AgentActionKeys.unbind(selected.agentDid), () async {
-        await ref
-            .read(agentControlServiceProvider)
-            .unbindAgent(selected.agentDid);
-        await load();
+        final before = ref.read(sessionProvider);
+        final control = ref.read(agentControlServiceProvider);
+        final AgentInventoryMutationReceipt receipt;
+        if (control is VersionedAgentControlService) {
+          receipt = await (control as VersionedAgentControlService)
+              .unbindAgentVersioned(selected.agentDid);
+        } else {
+          await control.unbindAgent(selected.agentDid);
+          receipt = const AgentInventoryMutationReceipt(inventoryVersion: null);
+        }
+        await _reconcileInventoryMutation(
+          reason: 'agent_unbound',
+          inventoryVersion: receipt.inventoryVersion,
+          sessionBefore: before,
+        );
       });
       return;
     }
@@ -1516,10 +1541,22 @@ class AgentsController extends StateNotifier<AgentsState> {
       clearError: true,
     );
     try {
-      final removed = await ref
-          .read(agentControlServiceProvider)
-          .removeAgentFromAccount(selected.agentDid)
-          .timeout(agentActionTimeout);
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final mutation = control is VersionedAgentControlService
+          ? await (control as VersionedAgentControlService)
+                .removeAgentFromAccountVersioned(selected.agentDid)
+                .timeout(agentActionTimeout)
+          : AgentInventoryMutationResult<List<AgentSummary>>(
+              value: await control
+                  .removeAgentFromAccount(selected.agentDid)
+                  .timeout(agentActionTimeout),
+              inventoryVersion: null,
+            );
+      if (!_sameAgentMutationSession(before, ref.read(sessionProvider))) {
+        return;
+      }
+      final removed = mutation.value;
       final removedDids = {
         ...removingDids,
         ...removed.map((agent) => agent.agentDid),
@@ -1536,7 +1573,11 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         clearError: true,
       );
-      await load(showLoading: false, surfaceError: false);
+      await _reconcileInventoryMutation(
+        reason: 'agent_removed_from_account',
+        inventoryVersion: mutation.inventoryVersion,
+        sessionBefore: before,
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -1756,13 +1797,26 @@ class AgentsController extends StateNotifier<AgentsState> {
       return;
     }
     await _runAction(AgentActionKeys.rename(normalizedAgentDid), () async {
-      await ref
-          .read(agentControlServiceProvider)
-          .updateDisplayName(
-            agentDid: normalizedAgentDid,
-            displayName: normalizedDisplayName,
-          );
-      await load();
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final mutation = control is VersionedAgentControlService
+          ? await (control as VersionedAgentControlService)
+                .updateDisplayNameVersioned(
+                  agentDid: normalizedAgentDid,
+                  displayName: normalizedDisplayName,
+                )
+          : AgentInventoryMutationResult<AgentSummary>(
+              value: await control.updateDisplayName(
+                agentDid: normalizedAgentDid,
+                displayName: normalizedDisplayName,
+              ),
+              inventoryVersion: null,
+            );
+      await _reconcileInventoryMutation(
+        reason: 'agent_display_name_updated',
+        inventoryVersion: mutation.inventoryVersion,
+        sessionBefore: before,
+      );
     });
   }
 
@@ -1841,9 +1895,25 @@ class AgentsController extends StateNotifier<AgentsState> {
       ),
     );
     try {
-      final saved = await ref
-          .read(agentControlServiceProvider)
-          .updateInvocationPolicy(agentDid: normalized, policy: policy);
+      final before = ref.read(sessionProvider);
+      final control = ref.read(agentControlServiceProvider);
+      final mutation = control is VersionedAgentControlService
+          ? await (control as VersionedAgentControlService)
+                .updateInvocationPolicyVersioned(
+                  agentDid: normalized,
+                  policy: policy,
+                )
+          : AgentInventoryMutationResult<AgentInvocationPolicy>(
+              value: await control.updateInvocationPolicy(
+                agentDid: normalized,
+                policy: policy,
+              ),
+              inventoryVersion: null,
+            );
+      if (!_sameAgentMutationSession(before, ref.read(sessionProvider))) {
+        return false;
+      }
+      final saved = mutation.value;
       state = state.copyWith(
         invocationPolicies: <String, AgentInvocationPolicy>{
           ...state.invocationPolicies,
@@ -1854,13 +1924,11 @@ class AgentsController extends StateNotifier<AgentsState> {
           normalized,
         ),
       );
-      final requests = ref.read(accountStateSyncRequestBusProvider);
-      if (requests.hasHandler &&
-          ref.read(sessionProvider).session?.accountBinding != null) {
-        await requests.request('agent_invocation_policy_updated', force: true);
-      } else {
-        await load(showLoading: false, surfaceError: false);
-      }
+      await _reconcileInventoryMutation(
+        reason: 'agent_invocation_policy_updated',
+        inventoryVersion: mutation.inventoryVersion,
+        sessionBefore: before,
+      );
       return true;
     } catch (error) {
       state = state.copyWith(
@@ -1875,6 +1943,31 @@ class AgentsController extends StateNotifier<AgentsState> {
       );
       return false;
     }
+  }
+
+  Future<void> _reconcileInventoryMutation({
+    required String reason,
+    required String? inventoryVersion,
+    required SessionState sessionBefore,
+  }) async {
+    if (!_sameAgentMutationSession(sessionBefore, ref.read(sessionProvider))) {
+      return;
+    }
+    final requests = ref.read(accountStateSyncRequestBusProvider);
+    if (requests.hasHandler && sessionBefore.session?.accountBinding != null) {
+      await requests.request(
+        reason,
+        force: true,
+        minimumVersion: inventoryVersion == null
+            ? null
+            : AccountStateVersionFloor(
+                domain: ProductAccountDomain.agentInventory,
+                version: inventoryVersion,
+              ),
+      );
+      return;
+    }
+    await load(showLoading: false, surfaceError: false);
   }
 
   void clearInstallCommand() {
@@ -4146,6 +4239,23 @@ AgentInventoryAutoSyncReason _preferredInventoryAutoSyncReason(
 
 DateTime? _dateTime(Object? value) {
   return parseAgentStatusTimestamp(value);
+}
+
+bool _sameAgentMutationSession(SessionState before, SessionState after) {
+  final beforeSession = before.session;
+  final afterSession = after.session;
+  final beforeBinding = beforeSession?.accountBinding;
+  final afterBinding = afterSession?.accountBinding;
+  return before.generation == after.generation &&
+      beforeSession != null &&
+      afterSession != null &&
+      beforeSession.did == afterSession.did &&
+      beforeBinding?.ownerIdentityId == afterBinding?.ownerIdentityId &&
+      beforeBinding?.accountId == afterBinding?.accountId &&
+      beforeBinding?.currentDid == afterBinding?.currentDid &&
+      beforeBinding?.protocolDeviceId == afterBinding?.protocolDeviceId &&
+      beforeBinding?.identityGeneration == afterBinding?.identityGeneration &&
+      beforeBinding?.deviceAuthGeneration == afterBinding?.deviceAuthGeneration;
 }
 
 String _agentErrorMessage(Object error) {

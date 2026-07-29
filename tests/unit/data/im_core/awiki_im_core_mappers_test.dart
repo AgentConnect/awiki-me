@@ -1153,6 +1153,8 @@ void main() {
         avatarUri: 'https://cdn.example/alice.png',
         profileUri: 'https://profiles.example/alice',
         subjectType: 'person',
+        versionId: '7',
+        profileVersion: '18446744073709551615',
       ),
     );
     final patch = mapper.profilePatchToCore(
@@ -1160,6 +1162,13 @@ void main() {
         displayName: 'New Alice',
         profileMarkdown: 'new md',
         avatarUri: 'https://cdn.example/new-alice.png',
+      ),
+    );
+    final invalidProfileVersion = mapper.userProfileFromCore(
+      const core.UserProfile(
+        subject: 'did:alice',
+        versionId: '7',
+        profileVersion: 'profile-v9',
       ),
     );
     final relationship = mapper.relationshipFromCore(
@@ -1197,6 +1206,8 @@ void main() {
     expect(profile.avatarUri, 'https://cdn.example/alice.png');
     expect(profile.profileUri, 'https://profiles.example/alice');
     expect(profile.subjectType, 'person');
+    expect(profile.profileVersion, '18446744073709551615');
+    expect(invalidProfileVersion.profileVersion, isNull);
     expect(profile.handle, 'alice.awiki');
     expect(profile.fullHandle, 'alice.awiki');
     expect(profile.profileMarkdown, '# Alice');

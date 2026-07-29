@@ -12,6 +12,7 @@ class UserProfile {
     this.subjectType,
     this.fullHandle,
     this.region,
+    this.profileVersion,
   }) : displayName = displayName ?? nickName ?? '';
 
   final String did;
@@ -25,6 +26,7 @@ class UserProfile {
   final String? subjectType;
   final String? fullHandle;
   final String? region;
+  final String? profileVersion;
 
   String get nickName => displayName;
 
@@ -40,6 +42,7 @@ class UserProfile {
     String? subjectType,
     String? fullHandle,
     String? region,
+    String? profileVersion,
   }) {
     return UserProfile(
       did: did,
@@ -53,6 +56,7 @@ class UserProfile {
       subjectType: subjectType ?? this.subjectType,
       fullHandle: fullHandle ?? this.fullHandle,
       region: region ?? this.region,
+      profileVersion: profileVersion ?? this.profileVersion,
     );
   }
 }

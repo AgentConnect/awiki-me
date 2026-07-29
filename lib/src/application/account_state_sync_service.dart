@@ -27,6 +27,8 @@ class AccountStateSyncService {
     required String expectedIdentityGeneration,
     required int sessionGeneration,
     required AccountStateSessionValidator isSessionCurrent,
+    Map<ProductAccountDomain, String> minimumVersions =
+        const <ProductAccountDomain, String>{},
   }) async {
     validateProductAccountBinding(binding);
     if (expectedCurrentDid.isEmpty ||
@@ -51,7 +53,16 @@ class AccountStateSyncService {
         'must be non-negative',
       );
     }
-    final accumulator = _ReconcileAccumulator();
+    for (final version in minimumVersions.values) {
+      if (!isCanonicalProductDecimal(version)) {
+        throw ArgumentError.value(
+          version,
+          'minimumVersions',
+          'must contain only canonical decimal strings',
+        );
+      }
+    }
+    final accumulator = _ReconcileAccumulator(minimumVersions: minimumVersions);
     if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
       return accumulator.result(sessionInvalidated: true);
     }
@@ -81,6 +92,7 @@ class AccountStateSyncService {
           isSessionCurrent: isSessionCurrent,
           manifest: firstManifest,
           localState: initialStates[domain],
+          minimumVersion: minimumVersions[domain],
           accumulator: accumulator,
         ),
     ]);
@@ -100,23 +112,24 @@ class AccountStateSyncService {
       expectedIdentityGeneration,
     );
 
+    final currentStates = await _loadDomainStatesIsolated(binding, accumulator);
+    if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
+      return accumulator.result(sessionInvalidated: true);
+    }
     final secondPassDomains = <ProductAccountDomain>[
       for (final domain in ProductAccountDomain.values)
         if (compareProductDecimalVersions(
-              secondManifest.versionFor(domain),
-              firstManifest.versionFor(domain),
-            ) >
-            0)
+                  secondManifest.versionFor(domain),
+                  firstManifest.versionFor(domain),
+                ) >
+                0 ||
+            !_stateMeetsMinimumVersion(
+              currentStates[domain],
+              minimumVersions[domain],
+            ))
           domain,
     ];
     if (secondPassDomains.isNotEmpty) {
-      final currentStates = await _loadDomainStatesIsolated(
-        binding,
-        accumulator,
-      );
-      if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
-        return accumulator.result(sessionInvalidated: true);
-      }
       await Future.wait<void>([
         for (final domain in secondPassDomains)
           _reconcileDomainIfNeeded(
@@ -126,9 +139,18 @@ class AccountStateSyncService {
             isSessionCurrent: isSessionCurrent,
             manifest: secondManifest,
             localState: currentStates[domain],
+            minimumVersion: minimumVersions[domain],
             accumulator: accumulator,
           ),
       ]);
+    }
+
+    if (minimumVersions.isNotEmpty) {
+      final finalStates = await _loadDomainStatesIsolated(binding, accumulator);
+      if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
+        return accumulator.result(sessionInvalidated: true);
+      }
+      accumulator.recordUnmetMinimumVersions(finalStates);
     }
 
     return accumulator.result(
@@ -180,12 +202,14 @@ class AccountStateSyncService {
     required AccountStateSessionValidator isSessionCurrent,
     required AccountStateManifest manifest,
     required ProductAccountDomainSyncState? localState,
+    required String? minimumVersion,
     required _ReconcileAccumulator accumulator,
   }) async {
     if (accumulator.sessionInvalidated) {
       return;
     }
     final remoteVersion = manifest.versionFor(domain);
+    final requiredVersion = _maxVersion(remoteVersion, minimumVersion);
     final localVersion = localState?.domainVersion;
     final isNonAuthoritativeLegacySeed =
         domain == ProductAccountDomain.agentInventory &&
@@ -202,9 +226,8 @@ class AccountStateSyncService {
           localVersion: localVersion,
           remoteVersion: remoteVersion,
         );
-        return;
       }
-      if (comparison == 0) {
+      if (compareProductDecimalVersions(localVersion, requiredVersion) >= 0) {
         accumulator.unchanged.add(domain);
         return;
       }
@@ -262,23 +285,29 @@ class AccountStateSyncService {
           );
           return;
         }
-        if (comparison == 0) {
-          accumulator.unchanged.add(domain);
-          return;
-        }
       }
 
-      final manifestComparison = compareProductDecimalVersions(
+      final requiredComparison = compareProductDecimalVersions(
         snapshotVersion,
-        remoteVersion,
+        requiredVersion,
       );
-      if (manifestComparison < 0) {
+      if (requiredComparison < 0) {
         accumulator.warn(
           domain,
-          AccountStateSyncWarningCode.snapshotOlderThanManifest,
+          minimumVersion != null &&
+                  compareProductDecimalVersions(minimumVersion, remoteVersion) >
+                      0
+              ? AccountStateSyncWarningCode.snapshotOlderThanRequiredFloor
+              : AccountStateSyncWarningCode.snapshotOlderThanManifest,
           localVersion: currentVersion,
           remoteVersion: snapshotVersion,
         );
+        return;
+      }
+      if (currentVersion != null &&
+          !currentIsNonAuthoritativeLegacySeed &&
+          compareProductDecimalVersions(snapshotVersion, currentVersion) == 0) {
+        accumulator.unchanged.add(domain);
         return;
       }
       await _commitDomain(binding, domain, snapshot);
@@ -382,6 +411,8 @@ class AccountStateReconcileResult {
     required Set<ProductAccountDomain> unchangedDomains,
     required List<AccountStateSyncWarning> warnings,
     required Map<ProductAccountDomain, Object> failures,
+    required Map<ProductAccountDomain, String> minimumVersions,
+    required Map<ProductAccountDomain, String> unmetMinimumVersions,
     required this.sessionInvalidated,
   }) : committedDomains = UnmodifiableSetView<ProductAccountDomain>(
          committedDomains,
@@ -390,12 +421,20 @@ class AccountStateReconcileResult {
          unchangedDomains,
        ),
        warnings = List<AccountStateSyncWarning>.unmodifiable(warnings),
-       failures = UnmodifiableMapView<ProductAccountDomain, Object>(failures);
+       failures = UnmodifiableMapView<ProductAccountDomain, Object>(failures),
+       minimumVersions = UnmodifiableMapView<ProductAccountDomain, String>(
+         minimumVersions,
+       ),
+       unmetMinimumVersions = UnmodifiableMapView<ProductAccountDomain, String>(
+         unmetMinimumVersions,
+       );
 
   final Set<ProductAccountDomain> committedDomains;
   final Set<ProductAccountDomain> unchangedDomains;
   final List<AccountStateSyncWarning> warnings;
   final Map<ProductAccountDomain, Object> failures;
+  final Map<ProductAccountDomain, String> minimumVersions;
+  final Map<ProductAccountDomain, String> unmetMinimumVersions;
   final bool sessionInvalidated;
 }
 
@@ -403,6 +442,7 @@ enum AccountStateSyncWarningCode {
   manifestVersionRegressed,
   snapshotVersionRegressed,
   snapshotOlderThanManifest,
+  snapshotOlderThanRequiredFloor,
 }
 
 class AccountStateSyncWarning {
@@ -429,12 +469,33 @@ class AccountStateSyncProtocolException implements Exception {
 }
 
 class _ReconcileAccumulator {
+  _ReconcileAccumulator({
+    required Map<ProductAccountDomain, String> minimumVersions,
+  }) : minimumVersions = Map<ProductAccountDomain, String>.from(
+         minimumVersions,
+       );
+
   final Set<ProductAccountDomain> committed = <ProductAccountDomain>{};
   final Set<ProductAccountDomain> unchanged = <ProductAccountDomain>{};
   final List<AccountStateSyncWarning> warnings = <AccountStateSyncWarning>[];
   final Map<ProductAccountDomain, Object> failures =
       <ProductAccountDomain, Object>{};
+  final Map<ProductAccountDomain, String> minimumVersions;
+  final Map<ProductAccountDomain, String> unmetMinimumVersions =
+      <ProductAccountDomain, String>{};
   bool sessionInvalidated = false;
+
+  void recordUnmetMinimumVersions(
+    Map<ProductAccountDomain, ProductAccountDomainSyncState> states,
+  ) {
+    unmetMinimumVersions
+      ..clear()
+      ..addEntries(
+        minimumVersions.entries.where(
+          (entry) => !_stateMeetsMinimumVersion(states[entry.key], entry.value),
+        ),
+      );
+  }
 
   void warn(
     ProductAccountDomain domain,
@@ -458,9 +519,30 @@ class _ReconcileAccumulator {
       unchangedDomains: Set<ProductAccountDomain>.from(unchanged),
       warnings: List<AccountStateSyncWarning>.from(warnings),
       failures: Map<ProductAccountDomain, Object>.from(failures),
+      minimumVersions: Map<ProductAccountDomain, String>.from(minimumVersions),
+      unmetMinimumVersions: Map<ProductAccountDomain, String>.from(
+        unmetMinimumVersions,
+      ),
       sessionInvalidated: sessionInvalidated,
     );
   }
+}
+
+bool _stateMeetsMinimumVersion(
+  ProductAccountDomainSyncState? state,
+  String? minimumVersion,
+) {
+  return minimumVersion == null ||
+      (state != null &&
+          compareProductDecimalVersions(state.domainVersion, minimumVersion) >=
+              0);
+}
+
+String _maxVersion(String first, String? second) {
+  if (second == null || compareProductDecimalVersions(first, second) >= 0) {
+    return first;
+  }
+  return second;
 }
 
 bool _isCurrent(

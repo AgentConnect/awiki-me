@@ -523,6 +523,7 @@ class AwikiImCoreMappers {
       profileUri: _nonEmpty(profile.profileUri),
       subjectType: _nonEmpty(profile.subjectType),
       fullHandle: profile.fullHandle,
+      profileVersion: _canonicalDecimal(profile.profileVersion),
     );
   }
 
@@ -1365,6 +1366,14 @@ int? _intFromString(String? raw) {
     return null;
   }
   return int.tryParse(value);
+}
+
+String? _canonicalDecimal(String? raw) {
+  final value = raw?.trim();
+  if (value == null || !RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(value)) {
+    return null;
+  }
+  return value;
 }
 
 RealtimeConnectionStatus _connectionStatusFromString(String raw) {

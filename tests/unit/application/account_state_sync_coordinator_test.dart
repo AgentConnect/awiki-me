@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/account_state_sync_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
@@ -72,7 +73,13 @@ void main() {
         .setSession(_session(accountId: 'account-1'));
     final operation = container
         .read(accountStateSyncCoordinatorProvider.notifier)
-        .request('blocked');
+        .request(
+          'blocked',
+          minimumVersion: AccountStateVersionFloor(
+            domain: ProductAccountDomain.profile,
+            version: '2',
+          ),
+        );
     await remote.manifestStarted.future;
 
     container
@@ -87,6 +94,97 @@ void main() {
       container.read(accountStateSyncCoordinatorProvider).status,
       AccountStateSyncCoordinatorStatus.idle,
     );
+  });
+
+  test('mutation floor follows up until committed cache reaches it', () async {
+    final remote = _CoordinatorRemote(
+      version: '1',
+      floorVersion: '2',
+      floorAvailableAfterManifestCalls: 3,
+    );
+    final container = ProviderContainer(
+      overrides: <Override>[
+        productLocalStoreProvider.overrideWithValue(
+          InMemoryAwikiProductLocalStore(),
+        ),
+        accountStateSyncPortProvider.overrideWithValue(remote),
+        accountStateSyncCoordinatorProvider.overrideWith(
+          (ref) =>
+              AccountStateSyncCoordinator(ref, failureBackoff: Duration.zero),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(_session(accountId: 'account-1'));
+
+    await container
+        .read(accountStateSyncCoordinatorProvider.notifier)
+        .request(
+          'profile_mutated',
+          minimumVersion: AccountStateVersionFloor(
+            domain: ProductAccountDomain.profile,
+            version: '2',
+          ),
+        );
+
+    final state = container.read(accountStateSyncCoordinatorProvider);
+    expect(state.domainVersions[ProductAccountDomain.profile], '2');
+    expect(state.minimumVersions[ProductAccountDomain.profile], '2');
+    expect(state.unmetMinimumVersions, isEmpty);
+    expect(remote.manifestCalls, 4);
+  });
+
+  test('bounded floor attempts report typed unmet diagnostic', () async {
+    final remote = _CoordinatorRemote(version: '1');
+    final container = ProviderContainer(
+      overrides: <Override>[
+        productLocalStoreProvider.overrideWithValue(
+          InMemoryAwikiProductLocalStore(),
+        ),
+        accountStateSyncPortProvider.overrideWithValue(remote),
+        accountStateSyncCoordinatorProvider.overrideWith(
+          (ref) => AccountStateSyncCoordinator(
+            ref,
+            failureBackoff: const Duration(hours: 1),
+            versionFloorBackoff: Duration.zero,
+            maximumVersionFloorAttempts: 2,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(_session(accountId: 'account-1'));
+
+    await expectLater(
+      container
+          .read(accountStateSyncCoordinatorProvider.notifier)
+          .request(
+            'profile_mutated',
+            minimumVersion: AccountStateVersionFloor(
+              domain: ProductAccountDomain.profile,
+              version: '2',
+            ),
+          ),
+      throwsA(
+        isA<AccountStateVersionFloorNotReached>().having(
+          (error) => error.minimumVersions,
+          'minimumVersions',
+          const <ProductAccountDomain, String>{
+            ProductAccountDomain.profile: '2',
+          },
+        ),
+      ),
+    );
+
+    final state = container.read(accountStateSyncCoordinatorProvider);
+    expect(state.status, AccountStateSyncCoordinatorStatus.retryWaiting);
+    expect(state.unmetMinimumVersions, const <ProductAccountDomain, String>{
+      ProductAccountDomain.profile: '2',
+    });
   });
 
   test('concurrent requests coalesce behind one active reconcile', () async {
@@ -235,17 +333,32 @@ class _CoordinatorRemote implements AccountStateSyncPort {
     this.blockManifest = false,
     this.withAgents = false,
     this.version = '1',
+    this.floorVersion,
+    this.floorAvailableAfterManifestCalls,
   });
 
   final bool blockManifest;
   final bool withAgents;
   final String version;
+  final String? floorVersion;
+  final int? floorAvailableAfterManifestCalls;
   final Completer<void> manifestStarted = Completer<void>();
   final Completer<void> releaseManifest = Completer<void>();
   int manifestCalls = 0;
   int concurrentManifestLoads = 0;
   int maxConcurrentManifestLoads = 0;
   int inventoryCalls = 0;
+
+  String get currentVersion {
+    final floor = floorVersion;
+    final availableAfter = floorAvailableAfterManifestCalls;
+    if (floor != null &&
+        availableAfter != null &&
+        manifestCalls >= availableAfter) {
+      return floor;
+    }
+    return version;
+  }
 
   @override
   Future<AccountStateManifest> loadManifest() async {
@@ -261,12 +374,14 @@ class _CoordinatorRemote implements AccountStateSyncPort {
       await releaseManifest.future;
     }
     concurrentManifestLoads -= 1;
+    final responseVersion = currentVersion;
     return AccountStateManifest(
       accountId: 'account-1',
       currentDid: 'did:wba:example.test:alice',
       identityGeneration: '1',
       versions: <ProductAccountDomain, String>{
-        for (final domain in ProductAccountDomain.values) domain: version,
+        for (final domain in ProductAccountDomain.values)
+          domain: responseVersion,
       },
       serverTime: DateTime.utc(2026, 7, 29),
     );
@@ -277,7 +392,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
     inventoryCalls += 1;
     return AccountStateAgentInventorySnapshot(
       accountId: 'account-1',
-      inventoryVersion: version,
+      inventoryVersion: currentVersion,
       agents: withAgents
           ? <AccountStateAgentInventoryEntry>[
               for (final state in <String>['active', 'archived'])
@@ -289,7 +404,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
                   profileSummary: const <String, Object?>{},
                   activeState: state,
                   invocationPolicy: const <String, Object?>{},
-                  inventoryVersion: version,
+                  inventoryVersion: currentVersion,
                 ),
             ]
           : const <AccountStateAgentInventoryEntry>[],
@@ -300,7 +415,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
   Future<AccountStateAgentStatusSnapshot> loadAgentStatus() async {
     return AccountStateAgentStatusSnapshot(
       accountId: 'account-1',
-      agentStatusVersion: version,
+      agentStatusVersion: currentVersion,
       statuses: const <AccountStateAgentStatusEntry>[],
     );
   }
@@ -309,7 +424,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
   Future<AccountStateProfileSnapshot> loadProfile() async {
     return AccountStateProfileSnapshot(
       accountId: 'account-1',
-      profileVersion: version,
+      profileVersion: currentVersion,
       profile: AccountStateProfile(
         nickName: 'Alice v1',
         tags: const <String>[],
@@ -321,7 +436,7 @@ class _CoordinatorRemote implements AccountStateSyncPort {
   Future<AccountStateDeviceRegistrySnapshot> loadDeviceRegistry() async {
     return AccountStateDeviceRegistrySnapshot(
       did: 'did:wba:example.test:alice',
-      registryVersion: version,
+      registryVersion: currentVersion,
       devices: <AccountStateDeviceRegistryEntry>[
         const AccountStateDeviceRegistryEntry(
           protocolDeviceId: 'device-1',

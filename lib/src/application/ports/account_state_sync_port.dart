@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import '../models/product_local_models.dart';
+import '../../domain/entities/profile_patch.dart';
 
 abstract interface class AccountStateSyncPort {
   Future<AccountStateManifest> loadManifest();
@@ -12,6 +13,24 @@ abstract interface class AccountStateSyncPort {
   Future<AccountStateProfileSnapshot> loadProfile();
 
   Future<AccountStateDeviceRegistrySnapshot> loadDeviceRegistry();
+}
+
+abstract interface class AccountStateProfileMutationPort {
+  Future<AccountStateProfileMutationResult> updateAccountProfile(
+    ProfilePatch patch,
+  );
+}
+
+class AccountStateProfileMutationResult {
+  const AccountStateProfileMutationResult({
+    required this.profile,
+    required this.profileVersion,
+    this.profileUri,
+  });
+
+  final AccountStateProfile profile;
+  final String profileVersion;
+  final String? profileUri;
 }
 
 class AccountStateManifest {

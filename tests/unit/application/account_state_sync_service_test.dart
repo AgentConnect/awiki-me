@@ -126,6 +126,66 @@ void main() {
   });
 
   test(
+    'mutation floor commits a snapshot newer than a stale manifest',
+    () async {
+      final remote = _Remote(version: '1', inventorySnapshotVersion: '2');
+      final store = InMemoryAwikiProductLocalStore();
+
+      final result = await AccountStateSyncService(remote: remote, local: store)
+          .reconcile(
+            binding: binding,
+            expectedCurrentDid: did,
+            expectedIdentityGeneration: '1',
+            sessionGeneration: 1,
+            isSessionCurrent: (_, __) => true,
+            minimumVersions: const <ProductAccountDomain, String>{
+              ProductAccountDomain.agentInventory: '2',
+            },
+          );
+
+      expect(result.unmetMinimumVersions, isEmpty);
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '2',
+      );
+    },
+  );
+
+  test(
+    'snapshot below mutation floor remains unmet after M2 follow-up',
+    () async {
+      final remote = _Remote(version: '1');
+      final result =
+          await AccountStateSyncService(
+            remote: remote,
+            local: InMemoryAwikiProductLocalStore(),
+          ).reconcile(
+            binding: binding,
+            expectedCurrentDid: did,
+            expectedIdentityGeneration: '1',
+            sessionGeneration: 1,
+            isSessionCurrent: (_, __) => true,
+            minimumVersions: const <ProductAccountDomain, String>{
+              ProductAccountDomain.agentInventory: '2',
+            },
+          );
+
+      expect(remote.inventoryCalls, 2);
+      expect(result.unmetMinimumVersions, const <ProductAccountDomain, String>{
+        ProductAccountDomain.agentInventory: '2',
+      });
+      expect(
+        result.warnings.map((warning) => warning.code),
+        everyElement(
+          AccountStateSyncWarningCode.snapshotOlderThanRequiredFloor,
+        ),
+      );
+    },
+  );
+
+  test(
     'non-authoritative legacy version zero always fetches authoritative zero',
     () async {
       final remote = _Remote(version: '0', emptyInventory: true);
@@ -216,7 +276,8 @@ class _Remote implements AccountStateSyncPort {
     this.emptyInventory = false,
     this.advanceProfileAtM2 = false,
     this.onInventoryLoaded,
-  });
+    String? inventorySnapshotVersion,
+  }) : inventorySnapshotVersion = inventorySnapshotVersion ?? version;
 
   final String version;
   final String currentDid;
@@ -224,6 +285,7 @@ class _Remote implements AccountStateSyncPort {
   final bool emptyInventory;
   final bool advanceProfileAtM2;
   final void Function()? onInventoryLoaded;
+  final String inventorySnapshotVersion;
   int manifestCalls = 0;
   int inventoryCalls = 0;
   int profileCalls = 0;
@@ -254,7 +316,7 @@ class _Remote implements AccountStateSyncPort {
     onInventoryLoaded?.call();
     return AccountStateAgentInventorySnapshot(
       accountId: 'account-1',
-      inventoryVersion: version,
+      inventoryVersion: inventorySnapshotVersion,
       agents: emptyInventory
           ? const <AccountStateAgentInventoryEntry>[]
           : <AccountStateAgentInventoryEntry>[
@@ -265,7 +327,7 @@ class _Remote implements AccountStateSyncPort {
                 profileSummary: const <String, Object?>{},
                 activeState: 'active',
                 invocationPolicy: const <String, Object?>{},
-                inventoryVersion: version,
+                inventoryVersion: inventorySnapshotVersion,
               ),
             ],
     );

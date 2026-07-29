@@ -1,13 +1,15 @@
 import '../../application/config/awiki_environment_config.dart';
 import '../../application/models/product_local_models.dart';
 import '../../application/ports/account_state_sync_port.dart';
+import '../../domain/entities/profile_patch.dart';
 import 'authenticated_user_service_rpc_client.dart';
 import 'awiki_onboarding_utility_client.dart';
 
 typedef AccountStateDeviceRegistryLoader =
     Future<AccountStateDeviceRegistrySnapshot> Function();
 
-class UserServiceAccountStateSyncAdapter implements AccountStateSyncPort {
+class UserServiceAccountStateSyncAdapter
+    implements AccountStateSyncPort, AccountStateProfileMutationPort {
   UserServiceAccountStateSyncAdapter({
     required String userServiceUrl,
     AwikiOnboardingUtilityHttpClient? client,
@@ -29,6 +31,7 @@ class UserServiceAccountStateSyncAdapter implements AccountStateSyncPort {
 
   static const String accountStateEndpoint = '/user-service/account-state/rpc';
   static const String deviceAuthEndpoint = '/user-service/did-auth/rpc';
+  static const String profileEndpoint = '/user-service/me/rpc';
 
   final AwikiOnboardingUtilityHttpClient _client;
   final AuthenticatedUserServiceRpcClient? _authenticatedClient;
@@ -238,6 +241,40 @@ class UserServiceAccountStateSyncAdapter implements AccountStateSyncPort {
     );
   }
 
+  @override
+  Future<AccountStateProfileMutationResult> updateAccountProfile(
+    ProfilePatch patch,
+  ) async {
+    final result = await _rpcCall(
+      path: profileEndpoint,
+      method: 'update_me',
+      params: <String, Object?>{
+        if (patch.effectiveDisplayName != null)
+          'nick_name': patch.effectiveDisplayName,
+        if (patch.avatarUri != null) 'avatar_url': patch.avatarUri,
+        if (patch.tags != null) 'tags': patch.tags,
+        if (patch.bio != null) 'bio': patch.bio,
+        if (patch.profileMarkdown != null) 'profile_md': patch.profileMarkdown,
+      },
+    );
+    return AccountStateProfileMutationResult(
+      profileVersion: _requiredDecimalString(
+        result,
+        'profile_version',
+        'profile_mutation',
+      ),
+      profile: AccountStateProfile(
+        nickName: _nullableString(result, 'nick_name', 'profile_mutation'),
+        avatarUrl: _nullableString(result, 'avatar_url', 'profile_mutation'),
+        gender: _nullableString(result, 'gender', 'profile_mutation'),
+        tags: _requiredStringList(result, 'tags', 'profile_mutation'),
+        bio: _nullableString(result, 'bio', 'profile_mutation'),
+        profileMd: _nullableString(result, 'profile_md', 'profile_mutation'),
+      ),
+      profileUri: _nullableString(result, 'profile_url', 'profile_mutation'),
+    );
+  }
+
   Future<Map<String, Object?>> _accountStateCall(String method) {
     return _rpcCall(path: accountStateEndpoint, method: method);
   }
@@ -245,13 +282,14 @@ class UserServiceAccountStateSyncAdapter implements AccountStateSyncPort {
   Future<Map<String, Object?>> _rpcCall({
     required String path,
     required String method,
+    Map<String, Object?> params = const <String, Object?>{},
   }) {
     final authenticatedClient = _authenticatedClient;
     if (authenticatedClient != null) {
       return authenticatedClient.rpcCall(
         path: path,
         method: method,
-        params: const <String, Object?>{},
+        params: params,
       );
     }
     throw StateError('account_state_device_access_auth_required');

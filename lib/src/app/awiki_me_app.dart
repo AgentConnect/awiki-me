@@ -14,6 +14,7 @@ import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
 import '../application/models/app_session.dart';
 import '../application/ports/account_state_sync_port.dart';
+import '../application/profile_application_service.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
 import '../data/agent/user_service_personal_agent_binding_adapter.dart';
 import '../data/services/authenticated_user_service_rpc_client.dart';
@@ -236,9 +237,18 @@ class AwikiMeApp extends StatelessWidget {
             bootstrap.groupApplicationService!,
           ),
         if (bootstrap.profileApplicationService != null)
-          profileApplicationServiceProvider.overrideWithValue(
-            bootstrap.profileApplicationService!,
-          ),
+          profileApplicationServiceProvider.overrideWith((ref) {
+            final profiles = bootstrap.profileApplicationService!;
+            final accountState = ref.watch(accountStateSyncPortProvider);
+            if (accountState is AccountStateProfileMutationPort) {
+              return AccountStateProfileApplicationService(
+                delegate: profiles,
+                mutations: accountState as AccountStateProfileMutationPort,
+                sessionProvider: () => ref.read(sessionProvider).session,
+              );
+            }
+            return profiles;
+          }),
         if (bootstrap.peerIdentityService != null)
           peerIdentityServiceProvider.overrideWithValue(
             bootstrap.peerIdentityService!,
