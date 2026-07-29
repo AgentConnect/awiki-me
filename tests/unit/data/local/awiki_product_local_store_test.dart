@@ -320,6 +320,7 @@ void main() {
         legacyOwnerDid: legacyOwnerDid,
       );
       expect(copied?.domainVersion, '0');
+      expect(copied?.payloadHash, productLegacyAgentSeedPayloadHash);
       expect(copied?.agents.single.activeState, 'inactive');
       expect(
         await store.loadAgentStates(ownerDid: legacyOwnerDid),

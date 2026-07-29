@@ -120,6 +120,13 @@ enum ProductAccountDomain {
   };
 }
 
+/// One-way legacy Agent seeds are display fallbacks, never remote truth.
+///
+/// Even when the first server manifest is version `0`, this marker forces one
+/// authoritative Inventory fetch so removed legacy Agents cannot survive.
+const String productLegacyAgentSeedPayloadHash =
+    'legacy_agent_seed_non_authoritative_v1';
+
 class ProductAccountBinding {
   const ProductAccountBinding({
     required this.ownerIdentityId,

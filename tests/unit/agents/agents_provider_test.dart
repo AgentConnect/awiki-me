@@ -1192,6 +1192,62 @@ void main() {
     },
   );
 
+  test(
+    'versioned policy mutation awaits account-state reconcile request',
+    () async {
+      final control = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: 'did:agent:runtime',
+            kind: AgentKind.runtime,
+            displayName: 'Runtime',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final container = _container(control);
+      addTearDown(container.dispose);
+      await container.read(agentsProvider.notifier).load();
+      final current = container.read(sessionProvider).session!;
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: current.did,
+              credentialName: current.credentialName,
+              displayName: current.displayName,
+              accountBinding: const SessionAccountBinding(
+                ownerIdentityId: 'owner-1',
+                accountId: 'account-1',
+                currentDid: 'did:human:alice',
+                protocolDeviceId: 'device-1',
+                identityGeneration: '1',
+                deviceAuthGeneration: '1',
+              ),
+            ),
+          );
+      final requested = Completer<void>();
+      container.read(accountStateSyncRequestBusProvider).attach((
+        reason, {
+        force = false,
+      }) async {
+        expect(reason, 'agent_invocation_policy_updated');
+        expect(force, isTrue);
+        requested.complete();
+      });
+
+      final saved = await container
+          .read(agentsProvider.notifier)
+          .saveInvocationPolicy(
+            'did:agent:runtime',
+            const AgentInvocationPolicy(),
+          );
+
+      expect(saved, isTrue);
+      await requested.future;
+    },
+  );
+
   test('does not load or save invocation policy for daemon agents', () async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[

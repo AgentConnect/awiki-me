@@ -21,6 +21,7 @@ import '../application/onboarding_service.dart';
 import '../application/onboarding_support_service.dart';
 import '../application/peer_identity_service.dart';
 import '../application/ports/agent_inventory_port.dart';
+import '../application/ports/account_state_sync_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
@@ -59,6 +60,7 @@ import '../data/services/app_key_value_store.dart';
 import '../data/services/app_notification_facade.dart';
 import '../data/services/app_update_service.dart';
 import '../data/services/awiki_onboarding_support_service.dart';
+import '../data/services/user_service_account_state_sync_adapter.dart';
 import '../data/services/key_value_active_session_store.dart';
 import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/locale_preference_service.dart';
@@ -104,6 +106,7 @@ class AppBootstrap {
     this.messageSyncService,
     this.conversationService,
     this.agentInventoryPort,
+    this.accountStateSyncPort,
     this.personalAgentBindingPort,
     this.agentControlService,
     this.agentControlStatusStore,
@@ -137,6 +140,7 @@ class AppBootstrap {
   final MessageSyncService? messageSyncService;
   final ConversationService? conversationService;
   final AgentInventoryPort? agentInventoryPort;
+  final AccountStateSyncPort? accountStateSyncPort;
   final PersonalAgentBindingPort? personalAgentBindingPort;
   final AgentControlService? agentControlService;
   final AgentControlStatusStore? agentControlStatusStore;
@@ -283,6 +287,10 @@ class AppBootstrap {
           UserServiceAgentInventoryAdapter.fromEnvironment(
             environment: effectiveEnvironment,
           );
+      final accountStateSyncPort =
+          UserServiceAccountStateSyncAdapter.fromEnvironment(
+            environment: effectiveEnvironment,
+          );
       final personalAgentBindingPort = UserServicePersonalAgentBindingAdapter(
         userServiceUrl: effectiveEnvironment.userServiceUrl,
       );
@@ -381,6 +389,7 @@ class AppBootstrap {
         messageSyncService: messageSyncService,
         conversationService: conversationService,
         agentInventoryPort: agentInventoryPort,
+        accountStateSyncPort: accountStateSyncPort,
         personalAgentBindingPort: personalAgentBindingPort,
         agentControlService: agentControlService,
         agentControlStatusStore: agentControlStatusStore,

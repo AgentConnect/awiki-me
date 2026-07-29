@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart' show AppLifecycleState;
 
 import '../../app/app_services.dart';
 import '../../application/device_management_service.dart';
+import '../../application/models/product_local_models.dart';
 import '../../application/models/device_revoke_outcome.dart';
 import '../../application/ports/root_key_transfer_port.dart';
 import '../../application/root_key_transfer_service.dart';
@@ -39,6 +40,7 @@ enum DeviceManagementErrorKind {
 class DevicesState {
   const DevicesState({
     this.registry,
+    this.cachedRegistry,
     this.joinRequests = const <DeviceJoinRequestNotice>[],
     this.localJoins = const <DeviceJoinProgress>[],
     this.activeJoin,
@@ -53,6 +55,12 @@ class DevicesState {
   });
 
   final DeviceRegistrySnapshot? registry;
+
+  /// Account-state cache used only for rendering the device list.
+  ///
+  /// Security decisions and mutations continue to use [registry], which is
+  /// loaded directly from IM Core for the current session.
+  final DeviceRegistrySnapshot? cachedRegistry;
   final List<DeviceJoinRequestNotice> joinRequests;
   final List<DeviceJoinProgress> localJoins;
   final DeviceJoinProgress? activeJoin;
@@ -71,6 +79,24 @@ class DevicesState {
 
   bool get currentDeviceCanManage =>
       registry?.currentDevice?.canManageDevices == true;
+
+  DeviceRegistrySnapshot? get displayRegistry {
+    final fresh = registry;
+    final cached = cachedRegistry;
+    if (fresh == null) return cached;
+    if (cached == null) return fresh;
+    if (!isCanonicalProductDecimal(fresh.registryVersion) ||
+        !isCanonicalProductDecimal(cached.registryVersion)) {
+      return fresh;
+    }
+    return compareProductDecimalVersions(
+              cached.registryVersion,
+              fresh.registryVersion,
+            ) >
+            0
+        ? cached
+        : fresh;
+  }
 
   DeviceManagementReadiness? readinessFor(DeviceSummary device) {
     if (device.role != DeviceRole.admin ||
@@ -102,6 +128,8 @@ class DevicesState {
   DevicesState copyWith({
     DeviceRegistrySnapshot? registry,
     bool clearRegistry = false,
+    DeviceRegistrySnapshot? cachedRegistry,
+    bool clearCachedRegistry = false,
     List<DeviceJoinRequestNotice>? joinRequests,
     List<DeviceJoinProgress>? localJoins,
     DeviceJoinProgress? activeJoin,
@@ -123,6 +151,9 @@ class DevicesState {
   }) {
     return DevicesState(
       registry: clearRegistry ? null : (registry ?? this.registry),
+      cachedRegistry: clearCachedRegistry
+          ? null
+          : (cachedRegistry ?? this.cachedRegistry),
       joinRequests: joinRequests ?? this.joinRequests,
       localJoins: localJoins ?? this.localJoins,
       activeJoin: clearActiveJoin ? null : (activeJoin ?? this.activeJoin),
@@ -275,6 +306,7 @@ class DevicesController extends StateNotifier<DevicesState> {
           _registrySecurityFingerprint(registry);
       state = DevicesState(
         registry: registry,
+        cachedRegistry: state.cachedRegistry,
         joinRequests: joinRequests,
         localJoins: localJoins,
         activeJoin: state.activeJoin,
@@ -307,6 +339,25 @@ class DevicesController extends StateNotifier<DevicesState> {
         error: _classifyDeviceError(error),
       );
     }
+  }
+
+  /// Publishes a durable account-state Registry snapshot for display only.
+  ///
+  /// This intentionally does not update [DevicesState.registry] or the
+  /// security-facts revision. Join, revoke, and root-transfer flows must load a
+  /// fresh Registry through IM Core before making authorization decisions.
+  void applyCachedRegistry(DeviceRegistrySnapshot registry) {
+    if (!mounted) {
+      return;
+    }
+    state = state.copyWith(cachedRegistry: registry);
+  }
+
+  void clearAccountStateProjection() {
+    if (!mounted || state.cachedRegistry == null) {
+      return;
+    }
+    state = state.copyWith(clearCachedRegistry: true);
   }
 
   Future<void> refreshJoinInbox() async {
@@ -557,6 +608,11 @@ class DevicesController extends StateNotifier<DevicesState> {
       );
       if (next.phase == DeviceJoinPhase.authorized && _selector != null) {
         await loadManagement();
+        unawaited(
+          ref
+              .read(accountStateSyncRequestBusProvider)
+              .request('device_join_authorized', force: true),
+        );
       }
     } catch (error) {
       if (!mounted) return;
@@ -590,6 +646,11 @@ class DevicesController extends StateNotifier<DevicesState> {
       if (!mounted) return false;
       state = state.copyWith(activeJoin: next, isActionPending: false);
       await loadManagement();
+      unawaited(
+        ref
+            .read(accountStateSyncRequestBusProvider)
+            .request('device_join_approved', force: true),
+      );
       return true;
     } catch (error) {
       if (!mounted) return false;
@@ -897,6 +958,11 @@ class DevicesController extends StateNotifier<DevicesState> {
           clearRevokeRetryAllowed: true,
           revokeNotice: DeviceRevokeNotice.revokedGroupsSyncing,
           clearError: true,
+        );
+        unawaited(
+          ref
+              .read(accountStateSyncRequestBusProvider)
+              .request('device_revoked', force: true),
         );
         return true;
       }

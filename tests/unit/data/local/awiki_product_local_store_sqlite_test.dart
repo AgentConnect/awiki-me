@@ -717,6 +717,7 @@ void main() {
         legacyOwnerDid: legacyOwnerDid,
       );
       expect(copied?.domainVersion, '0');
+      expect(copied?.payloadHash, productLegacyAgentSeedPayloadHash);
       expect(copied?.agents.single.agentDid, 'did:agent:legacy');
       expect(copied?.agents.single.activeState, 'inactive');
       expect(

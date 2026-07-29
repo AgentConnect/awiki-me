@@ -96,6 +96,14 @@ abstract interface class ProductLocalStore {
     required String agentDid,
   });
 
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  });
+
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding});
+
   /// Loads the stable-owner Inventory snapshot. [legacyOwnerDid] opts into the
   /// one-way v3 copy-on-read bridge; omitting it never consults DID-keyed rows.
   Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({

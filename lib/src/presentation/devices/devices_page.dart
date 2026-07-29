@@ -40,7 +40,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(devicesProvider);
-    final registry = state.registry;
+    final registry = state.displayRegistry;
     final canManage = state.currentDeviceCanManage;
     final deviceRevokeEnabled = ref.watch(
       multiDeviceDeviceRevokeEnabledProvider,

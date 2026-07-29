@@ -13,9 +13,12 @@ import '../application/agent/agent_control_service.dart';
 import '../application/auth/auth_session_coordinator.dart';
 import '../application/conversation_service.dart';
 import '../application/models/app_session.dart';
+import '../application/ports/account_state_sync_port.dart';
 import '../data/agent/user_service_agent_inventory_adapter.dart';
 import '../data/agent/user_service_personal_agent_binding_adapter.dart';
 import '../data/services/authenticated_user_service_rpc_client.dart';
+import '../data/services/user_service_account_state_sync_adapter.dart';
+import '../domain/entities/device_management.dart';
 import '../presentation/app_shell/app_shell.dart';
 import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
@@ -116,6 +119,48 @@ class AwikiMeApp extends StatelessWidget {
               );
             }
             return inventory;
+          }),
+        if (bootstrap.accountStateSyncPort != null)
+          accountStateSyncPortProvider.overrideWith((ref) {
+            final accountState = bootstrap.accountStateSyncPort!;
+            if (accountState is UserServiceAccountStateSyncAdapter &&
+                bootstrap.appSessionService != null) {
+              // AppSessionService obtains this bearer from IM Core's
+              // device-bound messaging session. Never fall back to an
+              // ordinary account JWT for account-state RPCs.
+              final sessions = ref.read(appSessionServiceProvider);
+              final coordinator = AuthSessionCoordinator(
+                sessions: sessions,
+                onSessionUpdated: (session) {
+                  ref
+                      .read(sessionProvider.notifier)
+                      .setSession(session.toLegacySessionIdentity());
+                },
+              );
+              final authenticated = accountState.withAuthenticatedClient(
+                AuthenticatedUserServiceRpcClient(
+                  client: accountState.httpClient,
+                  sessions: coordinator,
+                ),
+              );
+              return authenticated.withDeviceRegistryLoader(() async {
+                final session = ref.read(sessionProvider).session;
+                final binding = session?.accountBinding;
+                if (session == null ||
+                    binding == null ||
+                    session.did != binding.currentDid) {
+                  throw StateError('account_state_session_binding_required');
+                }
+                final registry = await ref
+                    .read(deviceManagementCorePortProvider)
+                    .identityDeviceRegistry(binding.currentDid);
+                if (registry.did != binding.currentDid) {
+                  throw StateError('account_state_registry_did_mismatch');
+                }
+                return _accountStateRegistryFromCore(registry);
+              });
+            }
+            return accountState;
           }),
         if (bootstrap.personalAgentBindingPort != null)
           personalAgentBindingPortProvider.overrideWith((ref) {
@@ -219,6 +264,26 @@ class AwikiMeApp extends StatelessWidget {
       child: const _AwikiMeRoot(),
     );
   }
+}
+
+AccountStateDeviceRegistrySnapshot _accountStateRegistryFromCore(
+  DeviceRegistrySnapshot registry,
+) {
+  return AccountStateDeviceRegistrySnapshot(
+    did: registry.did,
+    registryVersion: registry.registryVersion,
+    devices: registry.devices.map(
+      (device) => AccountStateDeviceRegistryEntry(
+        protocolDeviceId: device.protocolDeviceId,
+        signingKeyId: device.signingKeyId,
+        e2eeKeyId: device.e2eeKeyId,
+        status: device.status.name,
+        role: device.role.name,
+        managementReady: device.managementReady,
+        authGeneration: device.authGeneration,
+      ),
+    ),
+  );
 }
 
 class _AwikiMeRoot extends ConsumerStatefulWidget {

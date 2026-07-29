@@ -1,11 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
 import '../../app/app_services.dart';
+import '../../application/models/product_local_models.dart';
 import '../../domain/entities/profile_patch.dart';
+import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../l10n/app_message.dart';
 import '../../app/ui_feedback.dart';
+import '../app_shell/providers/session_provider.dart';
 import 'profile_markdown.dart';
 
 typedef HomepageMarkdownLoader = Future<String?> Function(String url);
@@ -81,6 +86,12 @@ class ProfileController extends StateNotifier<ProfileState> {
   final Ref ref;
 
   Future<void> refresh() async {
+    final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
+    if (accountStateRequests.hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      await accountStateRequests.request('profile_manual_refresh', force: true);
+      return;
+    }
     state = state.copyWith(isLoading: true);
     final profile = await ref
         .read(profileApplicationServiceProvider)
@@ -130,7 +141,33 @@ class ProfileController extends StateNotifier<ProfileState> {
         .read(profileApplicationServiceProvider)
         .updateProfile(patch);
     state = _profileStateAfterRefresh(profile, isSaving: false);
+    await ref
+        .read(accountStateSyncRequestBusProvider)
+        .request('profile_updated', force: true);
     ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.profileUpdated());
+  }
+
+  void applyAccountStateSnapshot(
+    ProductProfileSnapshot snapshot, {
+    required SessionIdentity session,
+  }) {
+    final payload = snapshot.payloadJson == null
+        ? const <String, Object?>{}
+        : _readJsonObject(snapshot.payloadJson!);
+    final profile = UserProfile(
+      did: session.did,
+      displayName: _optionalString(payload['nick_name']) ?? '',
+      bio: _optionalString(payload['bio']) ?? '',
+      tags: _stringList(payload['tags']),
+      profileMarkdown: _optionalString(payload['profile_md']) ?? '',
+      handle: session.handle,
+      avatarUri: _optionalString(payload['avatar_url']),
+    );
+    state = _profileStateAfterRefresh(
+      profile,
+      isLoading: false,
+      isSaving: false,
+    );
   }
 
   void clear() {
@@ -174,3 +211,28 @@ class ProfileController extends StateNotifier<ProfileState> {
 final profileProvider = StateNotifierProvider<ProfileController, ProfileState>(
   (ref) => ProfileController(ref),
 );
+
+Map<String, Object?> _readJsonObject(String value) {
+  final decoded = jsonDecode(value);
+  if (decoded is! Map) {
+    throw const FormatException('account_profile_payload_not_object');
+  }
+  return decoded.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+}
+
+String? _optionalString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  return value
+      .map((item) => item?.toString().trim() ?? '')
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}

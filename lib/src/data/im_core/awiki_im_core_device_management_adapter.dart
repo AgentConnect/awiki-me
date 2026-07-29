@@ -454,7 +454,28 @@ DeviceRegistrySnapshot deviceRegistryFromCore(
 ) {
   return DeviceRegistrySnapshot(
     did: value.did,
-    devices: value.devices.map(_deviceFromCore).toList(growable: false),
+    registryVersion: value.registryVersion,
+    devices: value.devices
+        .map(_registryDeviceFromCore)
+        .toList(growable: false),
+  );
+}
+
+DeviceSummary _registryDeviceFromCore(
+  core.DeviceRegistryAuthorizedDeviceSummary value,
+) {
+  return DeviceSummary(
+    protocolDeviceId: value.protocolDeviceId,
+    signingKeyId: value.signingKeyId,
+    e2eeKeyId: value.e2eeKeyId,
+    status: switch (value.status) {
+      core.DeviceJoinAuthorizationStatus.active => DeviceStatus.active,
+      core.DeviceJoinAuthorizationStatus.revoked => DeviceStatus.revoked,
+    },
+    role: _roleFromCore(value.role),
+    managementReady: value.managementReady,
+    isCurrent: value.isCurrent,
+    authGeneration: value.authGeneration,
   );
 }
 

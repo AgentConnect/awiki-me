@@ -258,6 +258,27 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   }
 
   @override
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  }) async {
+    validateProductAccountBinding(binding);
+    _assertAccountBinding(binding);
+    return _domainSyncState(binding, domain);
+  }
+
+  @override
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding}) async {
+    validateProductAccountBinding(binding);
+    _assertAccountBinding(binding);
+    return <ProductAccountDomain, ProductAccountDomainSyncState>{
+      for (final domain in ProductAccountDomain.values)
+        if (_domainSyncState(binding, domain) case final state?) domain: state,
+    };
+  }
+
+  @override
   Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
     required ProductAccountBinding binding,
     String? legacyOwnerDid,
@@ -278,6 +299,7 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
     final snapshot = ProductAgentInventorySnapshot(
       binding: binding,
       domainVersion: '0',
+      payloadHash: productLegacyAgentSeedPayloadHash,
       refreshedAt: _legacyRefreshedAt(legacy.map((state) => state.updatedAt)),
       agents: legacy.map(
         (state) => ProductAgentInventoryItem(
@@ -391,6 +413,22 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
 
   void _claimAccountBinding(ProductAccountBinding binding) {
     _accountIdsByOwnerIdentity[binding.ownerIdentityId] = binding.accountId;
+  }
+
+  ProductAccountDomainSyncState? _domainSyncState(
+    ProductAccountBinding binding,
+    ProductAccountDomain domain,
+  ) {
+    return switch (domain) {
+      ProductAccountDomain.agentInventory =>
+        _agentInventorySnapshots[binding.ownerIdentityId]?.syncState,
+      ProductAccountDomain.agentStatus =>
+        _agentStatusSnapshots[binding.ownerIdentityId]?.syncState,
+      ProductAccountDomain.profile =>
+        _profileSnapshots[binding.ownerIdentityId]?.syncState,
+      ProductAccountDomain.deviceRegistry =>
+        _deviceRegistrySnapshots[binding.ownerIdentityId]?.syncState,
+    };
   }
 
   ProductConversationOverlay? _firstOverlayWhere(

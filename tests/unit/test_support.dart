@@ -3093,6 +3093,23 @@ class FakeProductLocalStore implements ProductLocalStore {
   }
 
   @override
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  }) {
+    return _accountDomainStore.loadDomainSyncState(
+      binding: binding,
+      domain: domain,
+    );
+  }
+
+  @override
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding}) {
+    return _accountDomainStore.loadDomainSyncStates(binding: binding);
+  }
+
+  @override
   Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
     required ProductAccountBinding binding,
     String? legacyOwnerDid,

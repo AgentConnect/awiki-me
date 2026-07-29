@@ -116,6 +116,7 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
         'display_name': displayName,
       },
     );
+    _requiredMutationVersion(result, 'inventory_version');
     final agent = result['agent'];
     if (agent is Map) {
       return AgentSummary.fromJson(
@@ -129,11 +130,12 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
 
   @override
   Future<void> unbindAgent({required String agentDid}) async {
-    await _rpcCall(
+    final result = await _rpcCall(
       path: inventoryEndpoint,
       method: 'unbind_agent',
       params: <String, Object?>{'agent_did': agentDid},
     );
+    _requiredMutationVersion(result, 'inventory_version');
   }
 
   @override
@@ -145,6 +147,7 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
       method: 'remove_agent_from_account',
       params: <String, Object?>{'agent_did': agentDid},
     );
+    _requiredMutationVersion(result, 'inventory_version');
     final removed = result['removed'];
     if (removed is! List) {
       return const <AgentSummary>[];
@@ -188,6 +191,7 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
         'blacklist_handles': policy.blacklistHandles,
       },
     );
+    _requiredMutationVersion(result, 'inventory_version');
     return AgentInvocationPolicy.fromJson(result);
   }
 
@@ -306,6 +310,14 @@ class UserServiceAgentInventoryAdapter implements AgentInventoryPort {
     final token = rawToken?.trim();
     return token == null || token.isEmpty ? null : token;
   }
+}
+
+String _requiredMutationVersion(Map<String, Object?> result, String field) {
+  final value = result[field];
+  if (value is! String || !RegExp(r'^(0|[1-9][0-9]*)$').hasMatch(value)) {
+    throw FormatException('$field must be a canonical decimal string');
+  }
+  return value;
 }
 
 Map<String, Object?> _runtimeTokenDriverConfig(

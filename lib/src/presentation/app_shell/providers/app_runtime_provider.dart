@@ -30,6 +30,7 @@ import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
 import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
+import 'account_state_sync_coordinator_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
@@ -171,6 +172,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       ref.read(selectedConversationProvider.notifier).clearSelection();
       ref.read(sessionProvider.notifier).setSession(session);
       ref.read(messageSyncCoordinatorProvider.notifier).resetForSession();
+      ref.read(accountStateSyncCoordinatorProvider.notifier).resetForSession();
       _syncAuthRevoked = false;
       await AwikiPerformanceLogger.async(
         'app_runtime.activate_session.e2ee',
@@ -344,8 +346,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _clearAuthenticatedProjection() {
+    ref.read(accountStateSyncCoordinatorProvider.notifier).resetForSession();
     ref.read(profileProvider.notifier).clear();
     ref.read(agentsProvider.notifier).clear();
+    ref.read(devicesProvider.notifier).clearAccountStateProjection();
     ref.read(selectedConversationProvider.notifier).clearSelection();
     ref.read(conversationListProvider.notifier).clearLocal();
     ref.read(chatThreadsProvider.notifier).clear();
@@ -464,19 +468,36 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       return;
     }
 
+    final hasStableAccountBinding =
+        sessionFence.ownerIdentityId != null && sessionFence.accountId != null;
     final domainsCurrent = await Future.wait<bool>(<Future<bool>>[
-      _runAuthenticatedRefreshDomain(
-        sessionFence,
-        label: 'app_refresh.profile',
-        action: () => ref.read(profileProvider.notifier).refresh(),
-        clearStale: () => ref.read(profileProvider.notifier).clear(),
-      ),
-      _runAuthenticatedRefreshDomain(
-        sessionFence,
-        label: 'app_refresh.agents',
-        action: () => ref.read(agentsProvider.notifier).syncRemoteInventory(),
-        clearStale: () => ref.read(agentsProvider.notifier).clear(),
-      ),
+      if (hasStableAccountBinding)
+        _runAuthenticatedRefreshDomain(
+          sessionFence,
+          label: 'app_refresh.account_state',
+          action: () => ref
+              .read(accountStateSyncCoordinatorProvider.notifier)
+              .request('authenticated_refresh'),
+          clearStale: () {
+            ref.read(profileProvider.notifier).clear();
+            ref.read(agentsProvider.notifier).clear();
+            ref.read(devicesProvider.notifier).clearAccountStateProjection();
+          },
+        )
+      else ...<Future<bool>>[
+        _runAuthenticatedRefreshDomain(
+          sessionFence,
+          label: 'app_refresh.profile_legacy_unbound',
+          action: () => ref.read(profileProvider.notifier).refresh(),
+          clearStale: () => ref.read(profileProvider.notifier).clear(),
+        ),
+        _runAuthenticatedRefreshDomain(
+          sessionFence,
+          label: 'app_refresh.agents_legacy_unbound',
+          action: () => ref.read(agentsProvider.notifier).syncRemoteInventory(),
+          clearStale: () => ref.read(agentsProvider.notifier).clear(),
+        ),
+      ],
       _runAuthenticatedRefreshDomain(
         sessionFence,
         label: 'app_refresh.friends',
@@ -710,6 +731,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         return;
       }
       _scheduleReliableSync('foreground_catch_up');
+      unawaited(
+        ref
+            .read(accountStateSyncCoordinatorProvider.notifier)
+            .request('foreground_catch_up'),
+      );
     });
   }
 

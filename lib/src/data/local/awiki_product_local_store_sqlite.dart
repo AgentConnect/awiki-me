@@ -897,6 +897,33 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
   }
 
   @override
+  Future<ProductAccountDomainSyncState?> loadDomainSyncState({
+    required ProductAccountBinding binding,
+    required ProductAccountDomain domain,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    return _loadDomainState(db, binding, domain);
+  }
+
+  @override
+  Future<Map<ProductAccountDomain, ProductAccountDomainSyncState>>
+  loadDomainSyncStates({required ProductAccountBinding binding}) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    final states = <ProductAccountDomain, ProductAccountDomainSyncState>{};
+    for (final domain in ProductAccountDomain.values) {
+      final state = await _loadDomainState(db, binding, domain);
+      if (state != null) {
+        states[domain] = state;
+      }
+    }
+    return states;
+  }
+
+  @override
   Future<ProductAgentInventorySnapshot?> loadAgentInventorySnapshot({
     required ProductAccountBinding binding,
     String? legacyOwnerDid,
@@ -923,6 +950,7 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
       final snapshot = ProductAgentInventorySnapshot(
         binding: binding,
         domainVersion: '0',
+        payloadHash: productLegacyAgentSeedPayloadHash,
         refreshedAt: _legacyRefreshedAt(
           legacyStates.map((state) => state.updatedAt),
         ),

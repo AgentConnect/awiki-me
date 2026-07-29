@@ -550,6 +550,15 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<void> load({bool showLoading = true, bool surfaceError = true}) async {
+    final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
+    if (accountStateRequests.hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      await accountStateRequests.request(
+        showLoading ? 'agent_load' : 'agent_background_load',
+        force: showLoading,
+      );
+      return;
+    }
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
@@ -592,6 +601,14 @@ class AgentsController extends StateNotifier<AgentsState> {
     bool resetAutoSyncExhaustion = true,
     bool surfaceError = true,
   }) {
+    final accountStateRequests = ref.read(accountStateSyncRequestBusProvider);
+    if (accountStateRequests.hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      return accountStateRequests.request(
+        quiet ? 'agent_background_refresh' : 'agent_manual_refresh',
+        force: !quiet,
+      );
+    }
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return Future<void>.value();
@@ -600,6 +617,58 @@ class AgentsController extends StateNotifier<AgentsState> {
       _inventoryAutoSyncExhaustedOwner = null;
     }
     return load(showLoading: !quiet, surfaceError: surfaceError);
+  }
+
+  Future<void> applyAccountStateSnapshots({
+    required ProductAgentInventorySnapshot inventory,
+    ProductAgentStatusSnapshot? status,
+    required bool Function() isSessionCurrent,
+  }) async {
+    if (!_agentsAvailable || !isSessionCurrent()) {
+      return;
+    }
+    _stopInventoryAutoSync();
+    _stopInventoryObservation();
+    final statusByDid = <String, Map<String, Object?>>{
+      for (final item in status?.statuses ?? const <ProductAgentStatusItem>[])
+        item.agentDid: _accountStateJsonMap(item.payloadJson),
+    };
+    final topology = inventory.agents
+        .map((item) {
+          final payload = _accountStateJsonMap(item.payloadJson);
+          final statusPayload = statusByDid[item.agentDid];
+          return AgentSummary.fromJson(<String, Object?>{
+            ...payload,
+            'agent_did': item.agentDid,
+            'active_state': item.activeState,
+            if (statusPayload != null) 'status': statusPayload,
+          });
+        })
+        .toList(growable: false);
+    if (!isSessionCurrent()) {
+      return;
+    }
+    _pruneConfirmedTopologyControlOverlays(topology);
+    final coreMerged = await _mergeLatestDaemonStatusPayloads(
+      topology,
+      isSessionCurrent: isSessionCurrent,
+    );
+    if (!isSessionCurrent()) {
+      return;
+    }
+    final fullyMerged = _applyTopologyControlOverlays(coreMerged);
+    final visible = fullyMerged
+        .where((agent) => agent.activeState == 'active')
+        .toList(growable: false);
+    state = state.copyWith(
+      agents: visible,
+      selectedAgentDid: _nextSelection(visible),
+      isLoading: false,
+      clearError: true,
+    );
+    _loadedCacheOwner =
+        'account:${inventory.binding.ownerIdentityId}:${inventory.binding.accountId}';
+    _syncControlEventSubscriptions(visible);
   }
 
   Future<void> _load({
@@ -811,6 +880,11 @@ class AgentsController extends StateNotifier<AgentsState> {
     AgentInventoryAutoSyncReason reason =
         AgentInventoryAutoSyncReason.backgroundDiscovery,
   }) {
+    if (ref.read(accountStateSyncRequestBusProvider).hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      _stopInventoryAutoSync();
+      return;
+    }
     if (!_agentsAvailable) {
       _setTenantUnsupported();
       return;
@@ -848,6 +922,11 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   void startInventoryObservation() {
+    if (ref.read(accountStateSyncRequestBusProvider).hasHandler &&
+        ref.read(sessionProvider).session?.accountBinding != null) {
+      _stopInventoryObservation();
+      return;
+    }
     if (!_agentsAvailable ||
         _inventoryObservationInterval <= Duration.zero ||
         _inventoryObservationTimer != null ||
@@ -1457,7 +1536,7 @@ class AgentsController extends StateNotifier<AgentsState> {
         ),
         clearError: true,
       );
-      unawaited(load(showLoading: false, surfaceError: false));
+      await load(showLoading: false, surfaceError: false);
     } catch (error) {
       if (!mounted) {
         return;
@@ -1775,6 +1854,13 @@ class AgentsController extends StateNotifier<AgentsState> {
           normalized,
         ),
       );
+      final requests = ref.read(accountStateSyncRequestBusProvider);
+      if (requests.hasHandler &&
+          ref.read(sessionProvider).session?.accountBinding != null) {
+        await requests.request('agent_invocation_policy_updated', force: true);
+      } else {
+        await load(showLoading: false, surfaceError: false);
+      }
       return true;
     } catch (error) {
       state = state.copyWith(
@@ -2924,14 +3010,18 @@ class AgentsController extends StateNotifier<AgentsState> {
   }
 
   Future<List<AgentSummary>> _mergeLatestDaemonStatusPayloads(
-    List<AgentSummary> agents,
-  ) async {
+    List<AgentSummary> agents, {
+    bool Function()? isSessionCurrent,
+  }) async {
     final totalWatch = Stopwatch()..start();
     var merged = _stableAgentOrder(agents);
     final store = ref.read(agentControlStatusStoreProvider);
     var daemonCount = 0;
     var payloadCount = 0;
     for (final daemon in agents.where((agent) => agent.isDaemon)) {
+      if (isSessionCurrent?.call() == false) {
+        return merged;
+      }
       final Map<String, Object?>? payload;
       daemonCount += 1;
       try {
@@ -2945,7 +3035,13 @@ class AgentsController extends StateNotifier<AgentsState> {
           },
         );
       } catch (_) {
+        if (isSessionCurrent?.call() == false) {
+          return merged;
+        }
         continue;
+      }
+      if (isSessionCurrent?.call() == false) {
+        return merged;
       }
       if (payload == null) {
         continue;
@@ -3505,6 +3601,16 @@ class AgentsController extends StateNotifier<AgentsState> {
     };
     return AgentLatestStatus.fromJson(merged);
   }
+}
+
+Map<String, Object?> _accountStateJsonMap(String value) {
+  final decoded = jsonDecode(value);
+  if (decoded is! Map) {
+    throw const FormatException('account_agent_payload_not_object');
+  }
+  return decoded.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
 }
 
 Set<String> _rememberControlEventId(Set<String> current, String eventId) {
