@@ -68,7 +68,7 @@ class GroupListPage extends ConsumerWidget {
               padding: EdgeInsets.zero,
               leadingWidth: embedded ? 0 : TopBarActionButton.minimumSize,
               trailingWidth: actionsWidth,
-              titleLayout: AwikiMeTopBarTitleLayout.betweenActions,
+              titleLayout: AwikiMeTopBarTitleLayout.adaptive,
               leading: embedded
                   ? const SizedBox.shrink()
                   : TopBarActionButton(

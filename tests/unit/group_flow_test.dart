@@ -19,6 +19,7 @@ import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_top_bar.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
@@ -262,6 +263,12 @@ void main() {
 
     final title = find.text('群聊列表');
     expect(title, findsOneWidget);
+    expect(tester.widget<Text>(title).textAlign, TextAlign.left);
+    final backButton = find.byType(TopBarActionButton).first;
+    expect(
+      tester.getTopLeft(title).dx,
+      closeTo(tester.getTopRight(backButton).dx, 0.01),
+    );
     expect(
       tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
       isFalse,
@@ -288,6 +295,11 @@ void main() {
 
     final title = find.text('群聊列表');
     expect(title, findsOneWidget);
+    expect(tester.widget<Text>(title).textAlign, TextAlign.center);
+    expect(
+      tester.getCenter(title).dx,
+      closeTo(tester.getCenter(find.byType(AwikiMeTopBar)).dx, 0.01),
+    );
     expect(
       tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
       isFalse,
@@ -315,6 +327,7 @@ void main() {
     final titleParagraph = tester.renderObject<RenderParagraph>(
       find.text('Group'),
     );
+    expect(tester.widget<Text>(find.text('Group')).textAlign, TextAlign.left);
     expect(
       titleParagraph.didExceedMaxLines,
       isFalse,

@@ -6,7 +6,7 @@ import 'awiki_me_semantic_icon.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
 
-enum AwikiMeTopBarTitleLayout { centered, betweenActions }
+enum AwikiMeTopBarTitleLayout { centered, adaptive }
 
 class AwikiMeTopBar extends StatelessWidget {
   const AwikiMeTopBar({
@@ -40,63 +40,102 @@ class AwikiMeTopBar extends StatelessWidget {
     final titleInset = leadingWidth > trailingWidth
         ? leadingWidth
         : trailingWidth;
-    final titlePadding = switch (titleLayout) {
-      AwikiMeTopBarTitleLayout.centered => EdgeInsets.symmetric(
-        horizontal: titleInset + 8,
-      ),
-      AwikiMeTopBarTitleLayout.betweenActions => EdgeInsets.only(
-        left: leadingWidth,
-        right: trailingWidth,
-      ),
-    };
+    final resolvedTitleStyle = AwikiMeTextStyles.navTitle.copyWith(
+      color: titleColor,
+      fontSize: titleFontSize ?? responsive.titleXl,
+      fontWeight: titleFontWeight,
+    );
     return Padding(
       padding: padding,
       child: SizedBox(
         height: responsive.isPhone ? 52 : 44,
-        child: Stack(
-          alignment: Alignment.center,
-          children: <Widget>[
-            Positioned.fill(
-              child: Padding(
-                padding: titlePadding,
-                child: Center(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: AwikiMeTextStyles.navTitle.copyWith(
-                      color: titleColor,
-                      fontSize: titleFontSize ?? responsive.titleXl,
-                      fontWeight: titleFontWeight,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final useCenteredTitle =
+                titleLayout == AwikiMeTopBarTitleLayout.centered ||
+                _canCenterTitle(
+                  context,
+                  maxWidth: constraints.maxWidth,
+                  style: resolvedTitleStyle,
+                );
+            final titlePadding =
+                titleLayout == AwikiMeTopBarTitleLayout.centered
+                ? EdgeInsets.symmetric(horizontal: titleInset + 8)
+                : useCenteredTitle
+                ? EdgeInsets.zero
+                : EdgeInsets.only(left: leadingWidth, right: trailingWidth);
+            return Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                Positioned.fill(
+                  child: Padding(
+                    padding: titlePadding,
+                    child: Align(
+                      alignment: useCenteredTitle
+                          ? Alignment.center
+                          : Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: useCenteredTitle
+                            ? TextAlign.center
+                            : TextAlign.left,
+                        style: resolvedTitleStyle,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: leadingWidth,
-                height: 44,
-                child: Align(alignment: Alignment.centerLeft, child: leading),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox(
-                width: trailingWidth,
-                height: 44,
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: trailing ?? const SizedBox.shrink(),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: leadingWidth,
+                    height: 44,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: leading,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ],
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: SizedBox(
+                    width: trailingWidth,
+                    height: 44,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: trailing ?? const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  bool _canCenterTitle(
+    BuildContext context, {
+    required double maxWidth,
+    required TextStyle style,
+  }) {
+    if (titleLayout != AwikiMeTopBarTitleLayout.adaptive ||
+        !maxWidth.isFinite) {
+      return true;
+    }
+    final painter = TextPainter(
+      text: TextSpan(text: title, style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.maybeLocaleOf(context),
+    )..layout();
+    final centeredLeft = (maxWidth - painter.width) / 2;
+    final centeredRight = centeredLeft + painter.width;
+    return centeredLeft >= leadingWidth &&
+        centeredRight <= maxWidth - trailingWidth;
   }
 }
 
