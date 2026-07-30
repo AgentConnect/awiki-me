@@ -35,12 +35,13 @@ const List<String> reviewedStagedOtpResolverCommand = <String>[
   '--',
   'sudo',
   '-n',
-  '--',
+  '/usr/bin/env',
+  'PYTHONDONTWRITEBYTECODE=1',
   '/opt/awiki/services/user-service/current/.venv/bin/python',
   '/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py',
-  '--apply',
   '--env-file',
   '/etc/awiki/user-service.env',
+  '--apply',
 ];
 
 enum RemoteMultiDeviceSmsDecision { delivered, stagedAfterSmsError }

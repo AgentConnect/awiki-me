@@ -62,6 +62,7 @@ import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 import 'package:local_auth/local_auth.dart';
 
+import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
 import '../../case_attestation.dart';
 import '../../remote_multi_device_join_contract.dart';
@@ -119,12 +120,6 @@ const List<String> _aliSyncRecoveryPrepareCommand = <String>[
   '/usr/bin/python3',
   '/home/ecs-user/awiki-space/message-service/scripts/'
       'prepare_sync_v2_recovery_test.py',
-];
-const List<String> _localAccountStateOperatorCommand = <String>[
-  '/home/ecs-user/awiki-space/user-service/.venv/bin/python',
-  '/home/ecs-user/awiki-space/user-service/scripts/'
-      'run_account_state_sync_test_action.py',
-  '--apply',
 ];
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
@@ -3208,19 +3203,14 @@ List<String> _requiredStringList(Map<String, Object?> map, String key) {
 void _requireAccountStateOperatorEnvironment(List<String> configuredCommand) {
   List<String>? environmentCommand;
   try {
-    final decoded = jsonDecode(
+    environmentCommand = parseAccountStateOperatorCommand(
       Platform.environment[_accountStateOperatorCommandEnv] ?? '',
     );
-    if (decoded is List &&
-        decoded.isNotEmpty &&
-        decoded.every((item) => item is String && item.trim().isNotEmpty)) {
-      environmentCommand = decoded.cast<String>().toList(growable: false);
-    }
   } on FormatException {
     environmentCommand = null;
   }
   if (Platform.environment[_accountStateEnableEnv]?.trim() != '1' ||
-      Platform.environment[_accountStateOperatorModeEnv]?.trim() != 'local' ||
+      Platform.environment[_accountStateOperatorModeEnv]?.trim() != 'ali' ||
       Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
           _syncRecoveryTarget ||
       Platform.environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
@@ -3229,9 +3219,12 @@ void _requireAccountStateOperatorEnvironment(List<String> configuredCommand) {
       environmentCommand == null ||
       !_sameOrderedText(
         environmentCommand,
-        _localAccountStateOperatorCommand,
+        reviewedAccountStateOperatorCommand,
       ) ||
-      !_sameOrderedText(configuredCommand, _localAccountStateOperatorCommand)) {
+      !_sameOrderedText(
+        configuredCommand,
+        reviewedAccountStateOperatorCommand,
+      )) {
     throw StateError('The App-pair Account State operator gate is incomplete.');
   }
 }

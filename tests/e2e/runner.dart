@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:yaml/yaml.dart';
 
+import 'account_state_operator_contract.dart';
 import 'app_pair_protocol.dart';
 import 'case_attestation.dart';
 import 'performance_contract.dart';
@@ -68,12 +69,6 @@ const Set<String> _accountStateRequiredTargetCapabilities = <String>{
   'message-sync-v2',
   'account-state-sync-v1',
 };
-const List<String> _localAccountStateOperatorCommand = <String>[
-  '/home/ecs-user/awiki-space/user-service/.venv/bin/python',
-  '/home/ecs-user/awiki-space/user-service/scripts/'
-      'run_account_state_sync_test_action.py',
-  '--apply',
-];
 const String _desktopCliPeerDisplayName = 'AWiki E2E CLI Peer';
 const String _personalAgentScenario = 'personal-agent-full-ui';
 const String _codexAgentScenario = 'codex-agent-full-ui';
@@ -774,7 +769,6 @@ class DesktopE2eRunner {
         }
         await commands.requireFile(pairConfig.cliBin!);
         await commands.requireFile(pairConfig.daemonBinary!);
-        await commands.requireFile(_localAccountStateOperatorCommand[1]);
         if (pairConfig.daemonEnvFile != null) {
           await commands.requireFile(pairConfig.daemonEnvFile!);
         }
@@ -2724,24 +2718,11 @@ void _requireAppPairRecoveryOperatorEnvironment(
 
 List<String> _accountStateOperatorCommand(Map<String, String> environment) {
   final raw = environment[_accountStateOperatorCommandEnv]?.trim() ?? '';
-  Object? decoded;
   try {
-    decoded = jsonDecode(raw);
-  } on FormatException {
-    throw E2eFailure('The App-pair Account State operator command is invalid.');
+    return parseAccountStateOperatorCommand(raw);
+  } on FormatException catch (error) {
+    throw E2eFailure(error.message);
   }
-  if (decoded is! List ||
-      decoded.isEmpty ||
-      decoded.any((value) => value is! String || value.trim().isEmpty)) {
-    throw E2eFailure('The App-pair Account State operator command is invalid.');
-  }
-  final command = decoded.cast<String>().toList(growable: false);
-  if (!_sameOrderedStrings(command, _localAccountStateOperatorCommand)) {
-    throw E2eFailure(
-      'The App-pair Account State operator command is not reviewed.',
-    );
-  }
-  return command;
 }
 
 void _requireAppPairAccountStateOperatorEnvironment({
@@ -2750,7 +2731,7 @@ void _requireAppPairAccountStateOperatorEnvironment({
 }) {
   if (environment[_accountStateEnableEnv]?.trim() != '1' ||
       environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
-      environment[_syncRecoveryOperatorModeEnv]?.trim() != 'local' ||
+      environment[_syncRecoveryOperatorModeEnv]?.trim() != 'ali' ||
       environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
       environment[_accountStateAllowlistEnv]?.trim().isNotEmpty != true) {
     throw E2eFailure(

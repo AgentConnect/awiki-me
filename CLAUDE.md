@@ -80,7 +80,8 @@ OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高
 user-presence。Join 请求发现必须分别经过 CLI foreground listener 的专用 host event 与
 App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 Inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()` 代替唤醒。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
-不证明短信送达。`multi-device-remote-recovery` 使用两个隔离账号/设备根，覆盖 durable 旧
+只执行 Ali 不可变发布、显式受保护配置并禁止写入 Python bytecode，不证明短信送达。
+`multi-device-remote-recovery` 使用两个隔离账号/设备根，覆盖 durable 旧
 管理设备通知与真实系统认证取消，以及请求设备真实冷静期、独立二次 OTP 和新 DID 激活；
 它明确拒绝 staged SMS error，必须证明产品发码路径成功。远端 rollout/账号前置条件未就绪
 时不得声称通过。其他真实
@@ -97,5 +98,7 @@ bundle ID、独立 Flutter build root 与独立 native Core state root 的管理
 `multi-device-app-pair-functional` 只在 integration-test provider override 中自动确认
 user presence，用真实双 App、Daemon、Agent Inventory、CLI peer 和远端消息链路验证
 Daemon/Codex/Claude Agent 跨设备收敛、普通 P3 消息的双向 sender-side sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
+其 Account State operator 固定为 Mac→`ssh ali` 的 managed-release argv，
+不得把本机误建模为 `/home/ecs-user/...` 服务主机。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

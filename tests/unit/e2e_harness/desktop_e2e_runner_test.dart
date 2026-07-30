@@ -610,7 +610,7 @@ void main() {
 
     test('staged OTP mode requires the exact reviewed resolver argv', () {
       const fixedResolver =
-          '["ssh","ali","--","sudo","-n","--","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--apply","--env-file","/etc/awiki/user-service.env"]';
+          '["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]';
       final config = RemoteMultiDeviceJoinConfig.from(
         fileConfig: fileConfig,
         environment: const <String, String>{
@@ -622,7 +622,7 @@ void main() {
       );
 
       expect(config.allowStagedOtpOnSmsError, isTrue);
-      expect(config.otpCommand, hasLength(11));
+      expect(config.otpCommand, hasLength(12));
       expect(
         () => RemoteMultiDeviceJoinConfig.from(
           fileConfig: fileConfig,

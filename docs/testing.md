@@ -288,7 +288,7 @@ after the dedicated ali deployment and account have been reviewed:
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","--","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--apply","--env-file","/etc/awiki/user-service.env"]' \
+AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
@@ -362,6 +362,16 @@ The functional suite still executes the real Join protocol, native Core,
 Daemon, User Service Agent Inventory, message service, realtime paths, and two
 visible App UIs; only the final local user-presence decision is replaced by the
 test-scoped port.
+
+The macOS runner is not the service host. Account State test actions therefore
+require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed
+Mac-to-Ali JSON argv. The command uses non-interactive sudo, immutable
+`/opt/awiki/services/user-service/current` code, the protected
+`/etc/awiki/user-service.env`, explicit deployed `PYTHONPATH`, and
+`PYTHONDONTWRITEBYTECODE=1`. The last setting is part of the integrity
+boundary: running Python without it can mutate bytecode beneath an otherwise
+immutable managed release and invalidate its artifact checksum. Local
+`/home/ecs-user/...` paths and environment-selected hosts/scripts are rejected.
 
 Staged-OTP mode proves only the explicitly reviewed operator test path; it does
 not prove SMS delivery, does not turn the 503 into a product-visible success,

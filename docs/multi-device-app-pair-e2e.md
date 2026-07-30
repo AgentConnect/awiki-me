@@ -108,6 +108,14 @@ embedded in that binary, and an x86_64 Debug `daemon.binary` plus a Daemon
 Handle. It injects an always-confirming `UserPresencePort` only through the
 compiled integration-test provider override. Production code and the security
 suite remain fail-closed and continue to use `LocalAuthUserPresencePort`.
+Because the runner executes on macOS while `awiki.info` is managed on Ali, its
+Account State fixture/fail-once action accepts only the reviewed
+`ssh ali -- sudo -n /usr/bin/env ...` argv. That argv runs the immutable
+`/opt/awiki/services/user-service/current` script, sets
+`PYTHONDONTWRITEBYTECODE=1` and the deployed `PYTHONPATH`, and loads only
+`/etc/awiki/user-service.env`. A local `/home/ecs-user/...` command, mutable
+source checkout, alternate host, shell, or implicit remote environment fails
+before either App starts.
 The functional suite keeps the production-default Direct E2EE gate disabled.
 Its ordinary Direct texts therefore use P3 Base on every participant; the test
 fails if multi-device synchronization silently creates a P5 session or upgrades
