@@ -46,6 +46,15 @@ void main() {
     }
   });
 
+  test('agent-connect.cn enables Agent and Daemon capabilities', () {
+    final config = AwikiEnvironmentConfig(
+      baseUrl: 'https://agent-connect.cn',
+    );
+
+    expect(config.didDomain, 'agent-connect.cn');
+    expect(config.agentImEnabled, isTrue);
+  });
+
   test('Agent and Daemon realm allowlist fails closed', () {
     for (final config in <AwikiEnvironmentConfig>[
       AwikiEnvironmentConfig(baseUrl: 'https://example.com'),

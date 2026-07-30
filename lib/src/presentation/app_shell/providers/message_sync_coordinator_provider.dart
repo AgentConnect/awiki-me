@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
@@ -16,6 +17,7 @@ import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/notification_target.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
+import '../../conversation_list/conversation_peer_classifier.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
 import '../../shared/formatters/localized_ui_formatters.dart';
@@ -443,11 +445,7 @@ class MessageSyncCoordinator
           if (!recovering && ref.read(messageSyncV2ReadEnabledProvider)) {
             _recoveryRetryPending = true;
             state = state.copyWith(pendingReason: reason);
-            _queueAfterActive(
-              epoch: epoch,
-              reason: reason,
-              immediate: true,
-            );
+            _queueAfterActive(epoch: epoch, reason: reason, immediate: true);
           } else {
             _runningRecoveryRetry = false;
           }
@@ -472,6 +470,10 @@ class MessageSyncCoordinator
           fields: <String, Object?>{
             'reason': reason,
             'error_type': error.runtimeType,
+            'error_code': switch (error) {
+              core.AwikiImCoreException(:final code) => code,
+              _ => null,
+            },
           },
         );
         if (!_isCurrentSync(epoch, sessionFence)) {
@@ -655,10 +657,7 @@ class MessageSyncCoordinator
     return !_disposed && fence.matches(ref.read(sessionProvider));
   }
 
-  bool _isCurrentSync(
-    SessionEpoch epoch,
-    _MessageSyncSessionFence fence,
-  ) {
+  bool _isCurrentSync(SessionEpoch epoch, _MessageSyncSessionFence fence) {
     return _isCurrentEpoch(epoch) && _isCurrentSession(fence);
   }
 
@@ -741,13 +740,17 @@ class MessageSyncCoordinator
       if (isRuntimeAgentMessage) {
         deduplicator.acceptRuntimeMessageIds(
           messageIds,
-          releaseNotification: () => _showCommittedMessageNotification(
-            message,
-            suppressWhenForeground: true,
-          ),
+          releaseNotification: () {
+            unawaited(
+              _showCommittedMessageNotification(
+                message,
+                suppressWhenForeground: true,
+              ),
+            );
+          },
         );
       } else if (deduplicator.acceptMessageIds(messageIds)) {
-        _showCommittedMessageNotification(message);
+        unawaited(_showCommittedMessageNotification(message));
       }
     }
   }
@@ -766,10 +769,10 @@ class MessageSyncCoordinator
     }
   }
 
-  void _showCommittedMessageNotification(
+  Future<void> _showCommittedMessageNotification(
     ChatMessage message, {
     bool suppressWhenForeground = false,
-  }) {
+  }) async {
     if (_disposed || ref.read(sessionProvider).session == null) {
       return;
     }
@@ -804,25 +807,61 @@ class MessageSyncCoordinator
     final body = preview.isNotEmpty
         ? preview
         : AppMessage.newMessageArrived().resolveForFallback();
+    var agentDisplayName = _agentDisplayNameForSender(l10n, message.senderDid);
+    if (agentDisplayName == null &&
+        conversationTargetDidLooksLikeAgent(message.senderDid)) {
+      try {
+        await ref.read(agentsProvider.notifier).ensureLoaded();
+      } catch (_) {
+        // Notification delivery remains best-effort when Agent inventory
+        // refresh is unavailable.
+      }
+      if (_disposed || ref.read(sessionProvider).session == null) {
+        return;
+      }
+      agentDisplayName = _agentDisplayNameForSender(l10n, message.senderDid);
+    }
     final title = DidDisplayFormatter.compactDisplayName(
-      displayName: message.senderName ?? '',
+      displayName: agentDisplayName?.isNotEmpty == true
+          ? agentDisplayName!
+          : message.senderName ?? '',
       fallbackDid: message.senderDid,
     ).trim();
     final resolvedTitle = title.isNotEmpty
         ? title
         : AppMessage.newMessageArrived().resolveForFallback();
     final notifications = ref.read(notificationFacadeProvider);
-    if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
+    final lifecycle = ref.read(appLifecycleProvider);
+    final nativePresentation = lifecycle == AppLifecycleState.resumed
+        ? await ref.read(appPresentationServiceProvider).currentState()
+        : null;
+    if (_disposed || ref.read(sessionProvider).session == null) {
+      return;
+    }
+    final isForeground =
+        lifecycle == AppLifecycleState.resumed &&
+        (nativePresentation?.isForeground ?? true);
+    _messageSyncTrace(
+      'notification.route',
+      fields: <String, Object?>{
+        'lifecycle': lifecycle.name,
+        'native_state_available': nativePresentation != null,
+        'application_active': nativePresentation?.applicationActive,
+        'window_visible': nativePresentation?.windowVisible,
+        'window_miniaturized': nativePresentation?.windowMiniaturized,
+        'route': isForeground ? 'foreground' : 'system',
+        'suppress_when_foreground': suppressWhenForeground,
+      },
+    );
+    if (isForeground) {
       if (suppressWhenForeground) {
         return;
       }
-      notifications.showInAppBanner(title: resolvedTitle, body: body);
+      await notifications.showInAppBanner(title: resolvedTitle, body: body);
     } else {
       final session = ref.read(sessionProvider).session;
       final conversationId = message.conversationId?.trim();
-      if (session == null ||
-          conversationId == null ||
-          conversationId.isEmpty) {
+      if (session == null || conversationId == null || conversationId.isEmpty) {
         return;
       }
       final target = NotificationTarget(
@@ -830,12 +869,23 @@ class MessageSyncCoordinator
         ownerDid: session.did,
         conversationId: conversationId,
       );
-      notifications.showSystemNotification(
+      await notifications.showSystemNotification(
         title: resolvedTitle,
         body: body,
         target: target,
       );
     }
+  }
+
+  String? _agentDisplayNameForSender(AppLocalizations l10n, String senderDid) {
+    final normalizedSenderDid = senderDid.trim();
+    for (final agent in ref.read(agentsProvider).agents) {
+      if (agent.agentDid.trim() == normalizedSenderDid) {
+        final title = localizeAgentTitle(l10n, agent).trim();
+        return title.isEmpty ? null : title;
+      }
+    }
+    return null;
   }
 
   AppLocalizations _currentLocalizations() {

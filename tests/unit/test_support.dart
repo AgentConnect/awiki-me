@@ -310,6 +310,7 @@ List<Override> fakeApplicationServiceOverrides(
   FakeMessagingService? messagingService,
   ConversationService? conversationService,
   AttachmentCacheService? attachmentCacheService,
+  AgentControlService? agentControlService,
 }) {
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
   final resolvedMessageSync = messageSyncService ?? FakeMessageSyncService();
@@ -346,7 +347,9 @@ List<Override> fakeApplicationServiceOverrides(
     ),
     productLocalStoreProvider.overrideWithValue(FakeProductLocalStore()),
     agentInventoryPortProvider.overrideWithValue(FakeAgentInventoryPort()),
-    agentControlServiceProvider.overrideWithValue(FakeAgentControlService()),
+    agentControlServiceProvider.overrideWithValue(
+      agentControlService ?? FakeAgentControlService(),
+    ),
     groupApplicationServiceProvider.overrideWithValue(
       FakeGroupApplicationService(gateway),
     ),

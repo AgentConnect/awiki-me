@@ -13,7 +13,9 @@
   with `awiki.agent.status.v1`.
 - Follow-up: add the cross-service fixture and case attestation, exercise
   `completed`, `blocked`, and `action_required` in both message-first and
-  status-first order, then register the case in an executable remote suite.
+  status-first order, assert that the visible banner title matches the current
+  Agent inventory display name rather than a raw `skill-*` identifier, then
+  register the case in an executable remote suite.
 
 The 2026-07-29 development-session observation used a non-production tenant and
 confirmed that a CLI message appeared in AWiki Me recents and chat content.
