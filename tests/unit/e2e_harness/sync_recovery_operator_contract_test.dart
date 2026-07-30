@@ -12,7 +12,7 @@ void main() {
       '-n',
       '/usr/bin/env',
       'PYTHONDONTWRITEBYTECODE=1',
-      '/usr/bin/python3',
+      '/usr/bin/python3.11',
       '/opt/awiki/services/message-service/current/scripts/'
           'prepare_sync_v2_recovery_test.py',
       '--config',

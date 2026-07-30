@@ -119,7 +119,8 @@ before either App starts.
 The Stage-3 retention-gap action follows the same reviewed boundary. It runs
 only through the fixed `ssh ali -- sudo -n /usr/bin/env ...` command, executes
 the immutable `/opt/awiki/services/message-service/current` helper with
-`--apply`, and reads only the root-owned, service-group-readable, non-group-writable
+`--apply`, pins the reviewed Ali `/usr/bin/python3.11` stdlib runtime, and reads
+only the root-owned, service-group-readable, non-group-writable
 `/etc/awiki/message-service.toml`.
 The server config must explicitly enable
 `testing.sync_v2_recovery_operator_enabled`. The helper accepts one exact
