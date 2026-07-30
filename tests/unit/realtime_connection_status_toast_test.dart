@@ -118,7 +118,7 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
   });
 
-  testWidgets('AppShell 可重试失败显示全局同步错误', (tester) async {
+  testWidgets('AppShell 首次可重试失败不显示全局同步错误', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
@@ -130,6 +130,32 @@ void main() {
               ref,
               const MessageSyncCoordinatorState(
                 status: MessageSyncCoordinatorStatus.retryableFailure,
+                consecutiveRetryableFailures: 1,
+                automaticRetryPending: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息同步中断，本地数据保持不变。'), findsNothing);
+  });
+
+  testWidgets('AppShell 连续可重试失败显示全局同步错误', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.retryableFailure,
+                consecutiveRetryableFailures: 2,
               ),
             ),
           ),

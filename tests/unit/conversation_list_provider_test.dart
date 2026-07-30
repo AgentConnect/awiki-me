@@ -2112,6 +2112,55 @@ void main() {
   );
 
   test(
+    'replacing an in-flight patch generation reports cancellation, not failure',
+    () async {
+      final service = _PatchConversationService(
+        conversations: const <ConversationSummary>[],
+      );
+      final container = _conversationContainer(
+        service: service,
+        notifications: FakeNotificationFacade(),
+        ownerDid: 'did:alice',
+        accountBinding: _accountBinding(),
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(conversationListProvider.notifier);
+
+      final replaced = notifier.preparePatchGeneration();
+      final replacedExpectation = expectLater(
+        replaced,
+        throwsA(isA<ConversationPatchGenerationReplaced>()),
+      );
+      await pumpEventQueue();
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            SessionIdentity(
+              did: 'did:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              accountBinding: _accountBinding(deviceAuthGeneration: '2'),
+            ),
+          );
+      final current = notifier.preparePatchGeneration();
+
+      await replacedExpectation;
+      await pumpEventQueue();
+      expect(service.watchCalls, 2);
+      service.emitPatch(
+        const ConversationListPatch(
+          kind: ConversationListPatchKind.reset,
+          ownerIdentityId: 'owner-alice',
+          ownerDid: 'did:alice',
+          version: 1,
+          unreadTotal: 0,
+        ),
+      );
+      await current;
+    },
+  );
+
+  test(
     'patch arriving during reset seed is applied once without extra seed',
     () async {
       final directory = _DelayedCachedDirectoryService();

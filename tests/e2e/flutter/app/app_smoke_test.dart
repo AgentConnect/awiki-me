@@ -17,6 +17,7 @@ import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart'
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
@@ -57,6 +58,17 @@ class _StaticFriendsController extends FriendsController {
   _StaticFriendsController(super.ref, FriendsState initialState) {
     state = initialState;
   }
+}
+
+class _ControllableMessageSyncCoordinator extends MessageSyncCoordinator {
+  _ControllableMessageSyncCoordinator(super.ref);
+
+  void publish(MessageSyncCoordinatorState next) {
+    state = next;
+  }
+
+  @override
+  Future<void> requestSync(String reason, {bool immediate = false}) async {}
 }
 
 Future<void> _activateRuntimeSession(
@@ -174,6 +186,53 @@ void main() {
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsNothing);
   });
+
+  testWidgets(
+    'AwikiMeApp suppresses a transient sync alert until retry also fails',
+    (tester) async {
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        handle: 'me',
+        displayName: 'Me',
+        jwtToken: 'test-jwt',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+      late _ControllableMessageSyncCoordinator coordinator;
+
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            messageSyncCoordinatorProvider.overrideWith(
+              (ref) => coordinator = _ControllableMessageSyncCoordinator(ref),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.retryableFailure,
+          consecutiveRetryableFailures: 1,
+          automaticRetryPending: true,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息同步中断，本地数据保持不变。'), findsNothing);
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.retryableFailure,
+          consecutiveRetryableFailures: 2,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+    },
+  );
 
   testWidgets('AwikiMeApp routes background Coding Agent terminal feedback', (
     tester,

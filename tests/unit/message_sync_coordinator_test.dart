@@ -727,6 +727,7 @@ void main() {
     await container
         .read(messageSyncCoordinatorProvider.notifier)
         .requestSync('system_notification_changed', immediate: true);
+    await pumpEventQueue();
 
     expect(devices.registryCalls, 0);
     expect(devices.joinRequestCalls, 0);
@@ -735,6 +736,51 @@ void main() {
       isA<StateError>(),
     );
   });
+
+  test(
+    'one retryable failure retries once without surfacing a global failure',
+    () async {
+      final sync = FakeMessageSyncService()
+        ..nextDeltaError = StateError('transient_sync_failure');
+      final container = _container(FakeAwikiGateway(), sync);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('foreground_periodic', immediate: true);
+      await pumpEventQueue();
+
+      final state = container.read(messageSyncCoordinatorProvider);
+      expect(sync.syncReasons, ['foreground_periodic', 'automatic_retry']);
+      expect(state.status, MessageSyncCoordinatorStatus.idle);
+      expect(state.consecutiveRetryableFailures, 0);
+      expect(state.automaticRetryPending, isFalse);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
+      expect(state.lastError, isNull);
+    },
+  );
+
+  test(
+    'two consecutive retryable failures stop automatic retry and surface error',
+    () async {
+      final sync = _FailingMessageSyncService();
+      final container = _container(FakeAwikiGateway(), sync);
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('foreground_periodic', immediate: true);
+      await pumpEventQueue();
+
+      final state = container.read(messageSyncCoordinatorProvider);
+      expect(sync.syncReasons, ['foreground_periodic', 'automatic_retry']);
+      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+      expect(state.consecutiveRetryableFailures, 2);
+      expect(state.automaticRetryPending, isFalse);
+      expect(state.shouldSurfaceRetryableFailure, isTrue);
+      expect(state.lastError, isA<StateError>());
+    },
+  );
 
   test(
     'identity change while Join inbox waits stops the stale sync projection',

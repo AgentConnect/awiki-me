@@ -27,6 +27,15 @@ const bool _conversationTraceEnabled = bool.fromEnvironment(
 
 enum ConversationListLoadState { initializing, ready, stale, error }
 
+/// Expected cancellation when a newer Patch generation replaces one that is
+/// still waiting for its initial reset.
+class ConversationPatchGenerationReplaced implements Exception {
+  const ConversationPatchGenerationReplaced();
+
+  @override
+  String toString() => 'conversation_patch_generation_replaced';
+}
+
 class ConversationListState {
   factory ConversationListState({
     List<ConversationSummary> conversations = const <ConversationSummary>[],
@@ -866,9 +875,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final completer = _patchReadyCompleter;
     _patchReadyCompleter = null;
     if (completer != null && !completer.isCompleted) {
-      completer.completeError(
-        StateError('conversation_patch_generation_replaced'),
-      );
+      completer.completeError(const ConversationPatchGenerationReplaced());
     }
     await subscription?.cancel();
   }

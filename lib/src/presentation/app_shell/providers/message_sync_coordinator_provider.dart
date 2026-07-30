@@ -55,6 +55,8 @@ class MessageSyncCoordinatorState {
     this.diagnosticsRefreshAttemptSequence = 0,
     this.diagnosticsRefreshSuccessSequence = 0,
     this.diagnosticsRefreshedAt,
+    this.consecutiveRetryableFailures = 0,
+    this.automaticRetryPending = false,
   });
 
   final MessageSyncCoordinatorStatus status;
@@ -71,6 +73,8 @@ class MessageSyncCoordinatorState {
   final int diagnosticsRefreshAttemptSequence;
   final int diagnosticsRefreshSuccessSequence;
   final DateTime? diagnosticsRefreshedAt;
+  final int consecutiveRetryableFailures;
+  final bool automaticRetryPending;
 
   bool get isSyncing =>
       status == MessageSyncCoordinatorStatus.syncing ||
@@ -80,6 +84,11 @@ class MessageSyncCoordinatorState {
       status == MessageSyncCoordinatorStatus.recoveryRequired;
 
   bool get isAuthRevoked => status == MessageSyncCoordinatorStatus.authRevoked;
+
+  bool get shouldSurfaceRetryableFailure =>
+      status == MessageSyncCoordinatorStatus.retryableFailure &&
+      consecutiveRetryableFailures >= 2 &&
+      !automaticRetryPending;
 
   AppMessageSyncSafeDiagnostics get safeDiagnostics =>
       AppMessageSyncSafeDiagnostics(
@@ -114,6 +123,8 @@ class MessageSyncCoordinatorState {
     int? diagnosticsRefreshAttemptSequence,
     int? diagnosticsRefreshSuccessSequence,
     Object? diagnosticsRefreshedAt = _unset,
+    int? consecutiveRetryableFailures,
+    bool? automaticRetryPending,
   }) {
     return MessageSyncCoordinatorState(
       status: status ?? this.status,
@@ -146,6 +157,10 @@ class MessageSyncCoordinatorState {
       diagnosticsRefreshedAt: identical(diagnosticsRefreshedAt, _unset)
           ? this.diagnosticsRefreshedAt
           : diagnosticsRefreshedAt as DateTime?,
+      consecutiveRetryableFailures:
+          consecutiveRetryableFailures ?? this.consecutiveRetryableFailures,
+      automaticRetryPending:
+          automaticRetryPending ?? this.automaticRetryPending,
     );
   }
 }
@@ -183,6 +198,7 @@ class MessageSyncCoordinator
   final Set<String> _notifiedCommittedMessageIds = <String>{};
   bool _recoveryRetryPending = false;
   bool _runningRecoveryRetry = false;
+  bool _patchReplacementRetryPending = false;
   bool _disposed = false;
 
   void resetForSession() {
@@ -195,6 +211,7 @@ class MessageSyncCoordinator
     _queuedAfterActive = null;
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
+    _patchReplacementRetryPending = false;
     _lastStartedAt = null;
     _lastFailedAt = null;
     _notifiedCommittedEventIds.clear();
@@ -365,6 +382,7 @@ class MessageSyncCoordinator
         if (!_isCurrentSync(epoch, sessionFence)) {
           return;
         }
+        _patchReplacementRetryPending = false;
         ref
             .read(conversationListProvider.notifier)
             .recordReliableSyncStartedForCurrentPatchGeneration();
@@ -393,10 +411,9 @@ class MessageSyncCoordinator
           _recoveryRetryPending = false;
         }
         if (result.status == MessageSyncStatus.retryableFailure) {
-          _lastFailedAt = DateTime.now();
-          state = state.copyWith(
-            status: MessageSyncCoordinatorStatus.retryableFailure,
-            lastError: MessageSyncCoordinatorFailure(
+          _recordRetryableFailure(
+            epoch: epoch,
+            error: MessageSyncCoordinatorFailure(
               result.errorCode ?? 'message_sync_retryable_failure',
             ),
           );
@@ -406,6 +423,7 @@ class MessageSyncCoordinator
           _cancelPendingTimerAndCompleteWaiters();
           _recoveryRetryPending = false;
           _runningRecoveryRetry = false;
+          _resetRetryableFailureTracking();
           state = state.copyWith(
             status: MessageSyncCoordinatorStatus.authRevoked,
             pendingReason: null,
@@ -418,6 +436,7 @@ class MessageSyncCoordinator
           return;
         }
         if (result.status == MessageSyncStatus.recoveryRequired) {
+          _resetRetryableFailureTracking();
           state = state.copyWith(
             status: MessageSyncCoordinatorStatus.recoveryRequired,
           );
@@ -445,6 +464,8 @@ class MessageSyncCoordinator
         if (!_isCurrentSync(epoch, sessionFence)) {
           return;
         }
+        _resetRetryableFailureTracking();
+        state = state.copyWith(lastError: null);
       } catch (error) {
         _messageSyncTrace(
           'run.failed',
@@ -456,19 +477,27 @@ class MessageSyncCoordinator
         if (!_isCurrentSync(epoch, sessionFence)) {
           return;
         }
+        if (error is ConversationPatchGenerationReplaced &&
+            !_patchReplacementRetryPending) {
+          _patchReplacementRetryPending = true;
+          state = state.copyWith(lastError: null);
+          _queueAfterActive(
+            epoch: epoch,
+            reason: 'patch_generation_replaced',
+            immediate: true,
+          );
+          return;
+        }
         if (!diagnosticsAttempted) {
           await _refreshDiagnosticsBestEffort(epoch, sessionFence);
           if (!_isCurrentSync(epoch, sessionFence)) {
             return;
           }
         }
-        _lastFailedAt = DateTime.now();
         _recoveryRetryPending = false;
         _runningRecoveryRetry = false;
-        state = state.copyWith(
-          status: MessageSyncCoordinatorStatus.retryableFailure,
-          lastError: error,
-        );
+        _patchReplacementRetryPending = false;
+        _recordRetryableFailure(epoch: epoch, error: error);
       } finally {
         if (identical(_activeSync?.future, operation)) {
           _activeSync = null;
@@ -531,6 +560,7 @@ class MessageSyncCoordinator
     _lastFailedAt = null;
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
+    _patchReplacementRetryPending = false;
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
     _cancelPendingTimerAndCompleteWaiters();
@@ -565,6 +595,36 @@ class MessageSyncCoordinator
     if (waiter != null) {
       queued.waiters.add(waiter);
     }
+  }
+
+  void _recordRetryableFailure({
+    required SessionEpoch epoch,
+    required Object error,
+  }) {
+    _lastFailedAt = DateTime.now();
+    final failureCount = state.consecutiveRetryableFailures + 1;
+    final scheduleAutomaticRetry = failureCount == 1;
+    state = state.copyWith(
+      status: MessageSyncCoordinatorStatus.retryableFailure,
+      lastError: error,
+      consecutiveRetryableFailures: failureCount,
+      automaticRetryPending: scheduleAutomaticRetry,
+    );
+    if (scheduleAutomaticRetry && _queuedAfterActive == null) {
+      _queueAfterActive(
+        epoch: epoch,
+        reason: 'automatic_retry',
+        immediate: false,
+      );
+    }
+  }
+
+  void _resetRetryableFailureTracking() {
+    _lastFailedAt = null;
+    state = state.copyWith(
+      consecutiveRetryableFailures: 0,
+      automaticRetryPending: false,
+    );
   }
 
   void _runQueuedAfterActive() {

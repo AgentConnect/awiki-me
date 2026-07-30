@@ -1455,8 +1455,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
               await ref
                   .read(messageSyncCoordinatorProvider.notifier)
                   .requestSync(reason);
-              if (ref.read(messageSyncCoordinatorProvider).status ==
-                  MessageSyncCoordinatorStatus.retryableFailure) {
+              if (ref
+                  .read(messageSyncCoordinatorProvider)
+                  .shouldSurfaceRetryableFailure) {
                 failedDomains.add(SyncDomain.message);
               }
             } on Object {
