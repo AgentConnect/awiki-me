@@ -302,11 +302,13 @@ class _AgentTreeGroup {
   const _AgentTreeGroup({
     required this.daemon,
     required this.runtimes,
+    required this.runtimeCreationOverlays,
     required this.pendingRuntimeCreations,
   });
 
   final AgentSummary? daemon;
   final List<AgentSummary> runtimes;
+  final Map<String, PendingRuntimeCreation> runtimeCreationOverlays;
   final List<PendingRuntimeCreation> pendingRuntimeCreations;
 
   static List<_AgentTreeGroup> fromState(AgentsState state) {
@@ -325,22 +327,46 @@ class _AgentTreeGroup {
         orphanRuntimes.add(runtime);
       }
     }
-    return <_AgentTreeGroup>[
-      for (final daemon in daemons)
+    final groups = <_AgentTreeGroup>[];
+    for (final daemon in daemons) {
+      final runtimes =
+          groupedRuntimes[daemon.agentDid] ?? const <AgentSummary>[];
+      final runtimeCreationOverlays = <String, PendingRuntimeCreation>{};
+      final unrepresentedPendingCreations = <PendingRuntimeCreation>[];
+      for (final pending in state.pendingRuntimeCreationsFor(daemon.agentDid)) {
+        AgentSummary? representedRuntime;
+        for (final runtime in runtimes) {
+          if (pending.matchesRuntimeAgent(runtime)) {
+            representedRuntime = runtime;
+            break;
+          }
+        }
+        if (representedRuntime == null) {
+          unrepresentedPendingCreations.add(pending);
+        } else {
+          runtimeCreationOverlays[representedRuntime.agentDid] = pending;
+        }
+      }
+      groups.add(
         _AgentTreeGroup(
           daemon: daemon,
-          runtimes: groupedRuntimes[daemon.agentDid] ?? const <AgentSummary>[],
-          pendingRuntimeCreations: state.pendingRuntimeCreationsFor(
-            daemon.agentDid,
-          ),
+          runtimes: runtimes,
+          runtimeCreationOverlays: runtimeCreationOverlays,
+          pendingRuntimeCreations: unrepresentedPendingCreations,
         ),
-      if (orphanRuntimes.isNotEmpty)
+      );
+    }
+    if (orphanRuntimes.isNotEmpty) {
+      groups.add(
         _AgentTreeGroup(
           daemon: null,
           runtimes: orphanRuntimes,
+          runtimeCreationOverlays: const <String, PendingRuntimeCreation>{},
           pendingRuntimeCreations: const <PendingRuntimeCreation>[],
         ),
-    ];
+      );
+    }
+    return groups;
   }
 }
 
@@ -416,6 +442,8 @@ class _AgentDaemonGroup extends StatelessWidget {
                 daemonUpgradeProgress: state.daemonUpgradeProgress,
                 statusQueryErrors: state.statusQueryErrors,
                 isDeleting: state.isDeletingAgent(runtime.agentDid),
+                pendingRuntimeCreation:
+                    group.runtimeCreationOverlays[runtime.agentDid],
                 selected: selectedAgentDid == runtime.agentDid,
                 onTap: () => onSelect(runtime.agentDid),
                 depth: 1,
@@ -544,14 +572,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final waiting = pending.isWaitingForStatus;
-    final runtimeDisplay = agentRuntimeDisplayFor(runtime: pending.runtime);
-    final visualStatus = waiting
-        ? const AgentVisualStatus(AgentVisualStatusKind.unknown)
-        : const AgentVisualStatus(
-            AgentVisualStatusKind.processing,
-            rawStatus: 'creating',
-          );
+    final visualStatus = _pendingRuntimeCreationVisualStatus(pending);
     return Padding(
       padding: EdgeInsets.only(
         left: responsive.isCompact ? 0 : responsive.spacing(26),
@@ -587,25 +608,30 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
               ),
               status: visualStatus,
               dotSize: responsive.displayScaled(responsive.isCompact ? 10 : 9),
-              child: Container(
-                width: responsive.displayScaled(responsive.isCompact ? 34 : 28),
-                height: responsive.displayScaled(
-                  responsive.isCompact ? 34 : 28,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.primarySoft,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: waiting
-                      ? Icon(
-                          CupertinoIcons.clock,
-                          color: theme.secondaryText,
-                          size: responsive.iconSm,
-                        )
-                      : CupertinoActivityIndicator(
-                          radius: responsive.displayScaled(7),
-                        ),
+              child: e2eSemantics(
+                identifier: _runtimeAgentRowE2eIdentifier(pending.handle),
+                child: Container(
+                  width: responsive.displayScaled(
+                    responsive.isCompact ? 34 : 28,
+                  ),
+                  height: responsive.displayScaled(
+                    responsive.isCompact ? 34 : 28,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.primarySoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: pending.isWaitingForStatus
+                        ? Icon(
+                            CupertinoIcons.clock,
+                            color: theme.secondaryText,
+                            size: responsive.iconSm,
+                          )
+                        : CupertinoActivityIndicator(
+                            radius: responsive.displayScaled(7),
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -626,13 +652,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
                   ),
                   SizedBox(height: responsive.spacing(2)),
                   Text(
-                    waiting
-                        ? context.l10n.agentListRuntimeWaitingStatus(
-                            runtimeDisplay.label,
-                          )
-                        : context.l10n.agentListRuntimeCreating(
-                            runtimeDisplay.label,
-                          ),
+                    _pendingRuntimeCreationSubtitle(context, pending),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -666,6 +686,7 @@ class _AgentListTile extends StatelessWidget {
     this.onRefresh,
     this.isRefreshing = false,
     this.isDeleting = false,
+    this.pendingRuntimeCreation,
   });
 
   final AgentSummary agent;
@@ -682,6 +703,7 @@ class _AgentListTile extends StatelessWidget {
   final VoidCallback? onRefresh;
   final bool isRefreshing;
   final bool isDeleting;
+  final PendingRuntimeCreation? pendingRuntimeCreation;
 
   @override
   Widget build(BuildContext context) {
@@ -691,16 +713,19 @@ class _AgentListTile extends StatelessWidget {
     final title = localizeAgentTitle(context.l10n, agent);
     final daemonUpgradeError = daemonUpgradeErrors[agent.agentDid];
     final daemonUpgradeProgress = this.daemonUpgradeProgress[agent.agentDid];
-    final visualStatus = AgentVisualStatus.fromAgent(
-      agent,
-      hasPendingTurn: isDeleting || pendingAgentDids.contains(agent.agentDid),
-      isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),
-      hasUpgradeError: pendingDaemonUpgrades.containsKey(agent.agentDid)
-          ? false
-          : daemonUpgradeError != null,
-      hasStatusQueryError:
-          agent.isDaemon && statusQueryErrors.containsKey(agent.agentDid),
-    );
+    final visualStatus = pendingRuntimeCreation == null
+        ? AgentVisualStatus.fromAgent(
+            agent,
+            hasPendingTurn:
+                isDeleting || pendingAgentDids.contains(agent.agentDid),
+            isPendingUpgrade: pendingDaemonUpgrades.containsKey(agent.agentDid),
+            hasUpgradeError: pendingDaemonUpgrades.containsKey(agent.agentDid)
+                ? false
+                : daemonUpgradeError != null,
+            hasStatusQueryError:
+                agent.isDaemon && statusQueryErrors.containsKey(agent.agentDid),
+          )
+        : _pendingRuntimeCreationVisualStatus(pendingRuntimeCreation!);
     return Padding(
       padding: EdgeInsets.only(
         left: responsive.isCompact
@@ -715,6 +740,9 @@ class _AgentListTile extends StatelessWidget {
         onTap: onTap,
         selected: selected,
         semanticLabel: title,
+        semanticsIdentifier: agent.isRuntime
+            ? _runtimeAgentRowE2eIdentifier(agent.handle)
+            : null,
         borderRadius: responsive.isCompact
             ? BorderRadius.zero
             : BorderRadius.circular(responsive.radius(10)),
@@ -788,6 +816,7 @@ class _AgentListTile extends StatelessWidget {
                           upgradeProgress: daemonUpgradeProgress,
                           upgradeError: daemonUpgradeError,
                           isDeleting: isDeleting,
+                          pendingRuntimeCreation: pendingRuntimeCreation,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -901,6 +930,7 @@ String _agentListSubtitle(
   DaemonUpgradeProgress? upgradeProgress,
   String? upgradeError,
   bool isDeleting = false,
+  PendingRuntimeCreation? pendingRuntimeCreation,
 }) {
   final l10n = context.l10n;
   if (agent.isDaemon) {
@@ -916,6 +946,9 @@ String _agentListSubtitle(
       isDeleting: isDeleting,
     );
   }
+  if (pendingRuntimeCreation != null) {
+    return _pendingRuntimeCreationSubtitle(context, pendingRuntimeCreation);
+  }
   return localizeAgentListSubtitle(
     l10n,
     agentRuntimeDisplay(agent),
@@ -923,6 +956,35 @@ String _agentListSubtitle(
     isRuntime: true,
     isDeleting: isDeleting,
   );
+}
+
+AgentVisualStatus _pendingRuntimeCreationVisualStatus(
+  PendingRuntimeCreation pending,
+) {
+  return pending.isWaitingForStatus
+      ? const AgentVisualStatus(AgentVisualStatusKind.unknown)
+      : const AgentVisualStatus(
+          AgentVisualStatusKind.processing,
+          rawStatus: 'creating',
+        );
+}
+
+String _pendingRuntimeCreationSubtitle(
+  BuildContext context,
+  PendingRuntimeCreation pending,
+) {
+  final runtimeDisplay = agentRuntimeDisplayFor(runtime: pending.runtime);
+  return pending.isWaitingForStatus
+      ? context.l10n.agentListRuntimeWaitingStatus(runtimeDisplay.label)
+      : context.l10n.agentListRuntimeCreating(runtimeDisplay.label);
+}
+
+String? _runtimeAgentRowE2eIdentifier(String? handle) {
+  final normalizedHandle = handle?.trim().toLowerCase();
+  if (normalizedHandle == null || normalizedHandle.isEmpty) {
+    return null;
+  }
+  return 'e2e-agent-runtime-row-$normalizedHandle';
 }
 
 String _formatBytes(int bytes) {

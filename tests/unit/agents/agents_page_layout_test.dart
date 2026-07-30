@@ -188,6 +188,83 @@ void main() {
     );
   });
 
+  testWidgets('正式 Runtime 接管创建投影后列表只显示一个智能体', (tester) async {
+    const daemonDid = 'did:agent:daemon:pending-overlap';
+    const runtimeDid = 'did:agent:runtime:pending-overlap';
+    const requestId = 'pending-overlap-request';
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentsProvider.overrideWith(
+            (ref) => _NoopSeededAgentsController(
+              ref,
+              AgentsState(
+                agents: const <AgentSummary>[
+                  AgentSummary(
+                    agentDid: daemonDid,
+                    kind: AgentKind.daemon,
+                    displayName: 'Overlap Daemon',
+                    activeState: 'active',
+                    latest: AgentLatestStatus(status: 'ready'),
+                  ),
+                  AgentSummary(
+                    agentDid: runtimeDid,
+                    kind: AgentKind.runtime,
+                    daemonAgentDid: daemonDid,
+                    runtime: 'hermes',
+                    handle: 'overlap-agent',
+                    displayName: 'Overlap Agent',
+                    activeState: 'active',
+                    latest: AgentLatestStatus(status: 'ready'),
+                  ),
+                ],
+                pendingRuntimeCreations: <PendingRuntimeCreation>[
+                  PendingRuntimeCreation(
+                    requestId: requestId,
+                    daemonAgentDid: daemonDid,
+                    handle: 'OVERLAP-AGENT',
+                    displayName: 'Overlap Agent',
+                    runtime: 'hermes',
+                    createdAt: DateTime(2026, 7, 30, 12),
+                    state: PendingRuntimeCreationState.waitingForStatus,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final listPane = find.byKey(const Key('agents-list-pane'));
+    expect(
+      find.byKey(const Key('agent-list-tile-$runtimeDid')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: listPane, matching: find.text('Overlap Agent')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('agent-list-status-anchor-pending-$requestId')),
+      findsNothing,
+    );
+    expect(find.textContaining('创建状态暂未返回'), findsOneWidget);
+  });
+
   testWidgets('agents workspace shows daemon actions', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
