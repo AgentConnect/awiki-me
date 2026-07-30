@@ -467,9 +467,9 @@
       "feature": "Contact-first canonical Direct creation",
       "layer": "product_ui",
       "preconditions": "The contacts-focused awiki.info run has an isolated App state root, the exact CLI peer is an inbound follower, and no Direct row exists for its current DID or Handle.",
-      "action": "Open the exact follower row before using identity lookup, recents, local search, or sending a first message.",
+      "action": "Open the exact follower row, verify its real peer profile, and use the profile send-message action before identity lookup, recents, local search, or sending a first message.",
       "exactOracles": [
-        "The visible contact row uses the deterministic nickname and opens one dm:peer-scope:v1 conversation with non-empty peerPersonaId.",
+        "The visible contact row uses the deterministic nickname, opens the same peer profile, and its explicit send-message action opens one dm:peer-scope:v1 conversation with non-empty peerPersonaId.",
         "The empty Direct remains exact-one by Persona before its first message and subsequent contact re-entry reuses the same canonical conversation ID."
       ],
       "negativeChecks": [
@@ -512,9 +512,9 @@
       "feature": "Contact row canonical Direct message closed loop",
       "layer": "product_ui",
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; the exact CLI peer is visible in the App Contacts UI after canonical relationship convergence.",
-      "action": "Click the exact visible contact row, send one run-unique message through the App, restart, then receive and read one run-unique CLI message.",
+      "action": "Click the exact visible contact row, use the peer profile send-message action, send one run-unique message through the App, restart, then receive and read one run-unique CLI message.",
       "exactOracles": [
-        "The exact contact row displays the same nickname-first title as identity lookup and opens the existing dm:peer-scope:v1 conversation for the same Persona.",
+        "The exact contact row displays the same nickname-first title as identity lookup, opens the same peer profile, and its explicit send-message action opens the existing dm:peer-scope:v1 conversation for that Persona.",
         "CLI inbox/history contain exactly one matching sender, receiver, body, type, message id, and thread.",
         "Core conversation summary, visible row/header, timeline message, and Product overlay each have exactly one canonical identity with no dm:<DID> overlay.",
         "Restart preserves one canonical row/message; closed-view incoming unread is exactly +1, restart preserves 1, and opening clears it to 0 without rebound."

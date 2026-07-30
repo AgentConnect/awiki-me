@@ -469,8 +469,9 @@ not a complete identity-presentation oracle.
 
 The focused `contacts` slice deliberately establishes the CLI peer as an
 inbound follower while the isolated App projection has no Direct for that DID
-or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row before
-identity lookup or a first message, then requires one empty canonical
+or Handle. `CONTACT-FIRST-CONV-E2E-001` opens the visible follower row, waits
+for the same peer's real profile, and uses the explicit send-message action
+before identity lookup or a first message. It then requires one empty canonical
 peer-scope conversation and reuses the same ID for the later contact message
 closed loop. The combined `full` slice does not attest this first-create case
 because it intentionally creates the Direct in the earlier Direct flow.
@@ -619,10 +620,12 @@ The product oracle is fail-closed:
   the App `friendsProvider` projection has been refreshed to that baseline;
 - contact-message checks must click the exact DID-keyed visible contact row,
   scope that row to the requested relationship section/detail pane because a
-  mutual contact legitimately appears in both following and followers,
-  keep one `dm:peer-scope:v1:*` identity across Core summary, UI row, timeline,
-  and Product overlay, reject a legacy `dm:<DID>` overlay, and preserve the
-  exact-one + unread/read result across an App-shell restart;
+  mutual contact legitimately appears in both following and followers, wait
+  for the same peer's profile, and use its explicit send-message action before
+  asserting the chat. They must keep one `dm:peer-scope:v1:*` identity across
+  Core summary, UI row, timeline, and Product overlay, reject a legacy
+  `dm:<DID>` overlay, and preserve the exact-one + unread/read result across an
+  App-shell restart;
 - group-member setup may perform one read-only resolver preflight and retry at
   most three visible search submissions, but the member action itself stays in the
   product dialog, selects one exact enabled candidate, and requires the selected

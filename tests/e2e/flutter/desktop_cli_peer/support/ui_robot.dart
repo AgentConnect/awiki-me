@@ -946,8 +946,19 @@ class _DesktopAppRobot {
     }
     final feedbackBefore = appContainer.read(uiFeedbackProvider)?.id;
     await tapOne(row, description: 'exact contact row');
+    final sendMessage = find.byKey(const Key('peer-profile-send-message'));
+    await pumpUntilFinder(
+      sendMessage,
+      description: 'contact peer profile send-message action',
+      timeout: const Duration(seconds: 90),
+      enabled: true,
+    );
+    await tapOne(
+      sendMessage,
+      description: 'contact peer profile send-message action',
+    );
     await pumpUntilObservation(
-      description: 'chat composer after contact-row open',
+      description: 'chat composer after contact profile send-message action',
       timeout: const Duration(seconds: 90),
       observe: () {
         if (find.bySemanticsIdentifier('e2e-chat-input').evaluate().length ==
