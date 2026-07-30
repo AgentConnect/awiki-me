@@ -3670,7 +3670,7 @@
       "caseId": "DEVICE-ACCOUNT-DOMAIN-ISOLATION-E2E-001",
       "feature": "One failed User domain does not block Profile or ordinary message convergence",
       "layer": "remote_product_ui",
-      "preconditions": "The reviewed awiki-info-testing target declares Account State v1 and enables the fixed exact-account/exact-device one-shot Inventory failpoint with a bounded allowlist and TTL.",
+      "preconditions": "The reviewed awiki-info-testing target declares Account State v1 and enables the fixed exact-account/exact-device one-shot Inventory failpoint with a bounded TTL; its managed User Service operator authorizes the ephemeral account through the active Handle phone binding and protected server-side test-phone digest allowlist.",
       "action": "Arm one Inventory read failure for the joining device, mutate Agent Inventory and Profile, send an ordinary Direct message, reconcile once, then retry normally.",
       "exactOracles": [
         "The first reconcile reports only Agent Inventory as failed while Profile advances and renders the exact new value.",

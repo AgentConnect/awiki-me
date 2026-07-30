@@ -139,7 +139,7 @@ roots, dynamically resolve purpose-bound OTPs, compare the independently
 derived SAS without recording it, and require the new device to converge as a
 non-admin member in both Registries. The App-new-device direction also restarts
 from the same pending Core session and rejects persisted SAS. The suite fails
-closed unless the dedicated account allowlist, JSON-argv OTP resolver, exact
+closed unless the dedicated server-side test-phone authorization, JSON-argv OTP resolver, exact
 CLI source revision, and manual system-auth prerequisites are explicit. The
 joining CLI exposes its SAS only through the foreground TTY prompt; JSON remains
 redacted and is used only for the public `response_verified` state. The

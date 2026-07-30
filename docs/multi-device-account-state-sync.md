@@ -19,9 +19,11 @@ percentage rollout. `AWIKI_SYNC_V2_READ=false` is reserved for a global
 emergency rollback; the separate Direct/Group E2EE flags remain default-off and
 do not control this plain synchronization path.
 
-Operator-only recovery fault injection, cleanup, and OTP tooling may still use
-dedicated test-account allowlists. Those controls protect destructive test
-actions and are not product entitlements.
+Operator-only recovery fault injection, cleanup, and OTP tooling remain
+fail-closed. Account State fixture/fault actions authorize each newly created
+account through its active persisted Handle phone binding and the protected
+server-side SHA-256 test-phone digest allowlist. These controls protect
+destructive test actions and are not product entitlements.
 
 ## Reconciliation contract
 

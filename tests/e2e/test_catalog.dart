@@ -348,7 +348,7 @@ class AppTestCatalog {
         'It does not execute root transfer, revoke, or MLS; the root lifecycle '
         'is registered by `full`. A checked-in '
         'implementation is not evidence of a remote pass while the dedicated '
-        'account allowlist or operator prerequisites are unavailable.',
+        'test-phone authorization or operator prerequisites are unavailable.',
       )
       ..writeln(
         '- `multi-device-app-pair` is the one-host/two-process App↔App mode. '

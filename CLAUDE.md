@@ -99,6 +99,8 @@ bundle ID、独立 Flutter build root 与独立 native Core state root 的管理
 user presence，用真实双 App、Daemon、Agent Inventory、CLI peer 和远端消息链路验证
 Daemon/Codex/Claude Agent 跨设备收敛、普通 P3 消息的双向 sender-side sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
 其 Account State operator 固定为 Mac→`ssh ali` 的 managed-release argv，
-不得把本机误建模为 `/home/ecs-user/...` 服务主机。
+不得把本机误建模为 `/home/ecs-user/...` 服务主机；临时 E2E account 由服务器通过
+active Handle 的手机号绑定和受保护的测试手机号摘要授权，App runner 不接收或转发动态
+account allowlist。
 
 ⚡触发器：App 目录职责、SDK/App 边界、tenant/state/vault 归属、测试结构或平台支持变化时同步更新本文件。

@@ -59,8 +59,6 @@ const String _accountStateOperatorCommandEnv =
     'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
 const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
-const String _accountStateAllowlistEnv =
-    'AWIKI_ACCOUNT_STATE_TEST_ACCOUNT_ALLOWLIST';
 const String _remoteTargetManifestEnv = 'AWIKI_SYSTEM_TEST_TARGET_MANIFEST';
 const String _defaultRemoteTargetManifestPath =
     '../awiki-system-test/suites/remote-test-targets.json';
@@ -871,8 +869,6 @@ class DesktopE2eRunner {
                 Platform.environment[_accountStateOperatorCommandEnv]!,
             _accountStateFailpointEnableEnv:
                 Platform.environment[_accountStateFailpointEnableEnv]!,
-            _accountStateAllowlistEnv:
-                Platform.environment[_accountStateAllowlistEnv]!,
           };
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
@@ -2732,11 +2728,10 @@ void _requireAppPairAccountStateOperatorEnvironment({
   if (environment[_accountStateEnableEnv]?.trim() != '1' ||
       environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
       environment[_syncRecoveryOperatorModeEnv]?.trim() != 'ali' ||
-      environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
-      environment[_accountStateAllowlistEnv]?.trim().isNotEmpty != true) {
+      environment[_accountStateFailpointEnableEnv]?.trim() != '1') {
     throw E2eFailure(
-      'The App-pair Account State capability, failpoint, target, mode, '
-      'and account allowlist gate is incomplete.',
+      'The App-pair Account State capability, failpoint, target, and mode '
+      'gate is incomplete.',
     );
   }
   _accountStateOperatorCommand(environment);

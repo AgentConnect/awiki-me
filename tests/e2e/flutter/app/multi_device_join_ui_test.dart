@@ -106,8 +106,6 @@ const String _accountStateOperatorCommandEnv =
     'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
 const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
-const String _accountStateAllowlistEnv =
-    'AWIKI_ACCOUNT_STATE_TEST_ACCOUNT_ALLOWLIST';
 const List<String> _localSyncRecoveryPrepareCommand = <String>[
   '/usr/bin/python3',
   '/home/ecs-user/awiki-space/message-service/scripts/'
@@ -3214,8 +3212,6 @@ void _requireAccountStateOperatorEnvironment(List<String> configuredCommand) {
       Platform.environment[_syncRecoveryTargetEnv]?.trim() !=
           _syncRecoveryTarget ||
       Platform.environment[_accountStateFailpointEnableEnv]?.trim() != '1' ||
-      Platform.environment[_accountStateAllowlistEnv]?.trim().isNotEmpty !=
-          true ||
       environmentCommand == null ||
       !_sameOrderedText(
         environmentCommand,
