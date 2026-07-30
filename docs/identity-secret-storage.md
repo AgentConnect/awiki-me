@@ -66,6 +66,13 @@ request timeout，因为 Dart timeout 不会取消 native upgrade，反而会在
 第二次重试。失败页只投影 allowlisted diagnostic code，不展示 document、key、proof、token
 或服务响应正文。
 
+冷启动恢复已持久化 active identity 时，会话服务必须先读取 Core 的 Legacy upgrade status；
+未完成时先恢复或执行同一 Core upgrade transaction，只有返回 `completed` 后才允许
+`switchIdentity` 和 JWT 刷新。升级完成后必须重新读取 identity projection，不能继续使用升级前
+缺少 VNext device state 的旧快照。若 Core 返回 `retryRequired`，本次冷启动不激活身份，也不
+清除 active identity 指针；Onboarding 保留本地凭证入口并继续使用 Core pending record 重试，
+不得绕过升级直接认证而把服务端拒绝误报为普通 `permission_denied`。
+
 ## 5. Tenant 切换与本地状态
 
 切换顺序是 stop realtime → 等待 active core operations → dispose client/core → close Product

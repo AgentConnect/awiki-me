@@ -8,6 +8,7 @@ import 'package:awiki_me/src/application/models/daemon_subkey_authorization_revo
 import 'package:awiki_me/src/application/ports/auth_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/im_core_runtime_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/ports/realtime_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
@@ -72,6 +73,61 @@ void main() {
         expect(runtime.vaultChecks, ['id-default']);
         expect(runtime.switchedIdentities, ['id-default']);
         expect(auth.ensureCount, 1);
+      },
+    );
+
+    test(
+      'restoreSession upgrades a legacy active identity before activation',
+      () async {
+        final identity = _session('id-legacy');
+        final legacyUpgrades = _FakeLegacyUpgrades(
+          initialStatus: const LegacyIdentityUpgradeStatus.idle(),
+          upgradeStatus: const LegacyIdentityUpgradeStatus.completed(),
+        );
+        final runtime = _FakeRuntime();
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          legacyUpgrades: legacyUpgrades,
+          activeSessionStore: _FakeActiveSessionStore(identity.identityId),
+        );
+
+        final restored = await service.restoreSession();
+
+        expect(restored?.identityId, identity.identityId);
+        expect(legacyUpgrades.statusSelectors, <String>[identity.identityId]);
+        expect(legacyUpgrades.upgradeSelectors, <String>[identity.identityId]);
+        expect(runtime.switchedIdentities, <String>[identity.identityId]);
+      },
+    );
+
+    test(
+      'restoreSession leaves retryable legacy identity inactive',
+      () async {
+        final identity = _session('id-legacy-retry');
+        final activeStore = _FakeActiveSessionStore(identity.identityId);
+        final runtime = _FakeRuntime();
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: _FakeIdentities(defaultIdentity: identity),
+          auth: _FakeAuth(),
+          legacyUpgrades: _FakeLegacyUpgrades(
+            initialStatus: const LegacyIdentityUpgradeStatus.idle(),
+            upgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
+              identityId: identity.identityId,
+              failureCode: 'permission_denied',
+            ),
+          ),
+          activeSessionStore: activeStore,
+        );
+
+        final restored = await service.restoreSession();
+
+        expect(restored, isNull);
+        expect(runtime.vaultChecks, isEmpty);
+        expect(runtime.switchedIdentities, isEmpty);
+        expect(activeStore.activeIdentityId, identity.identityId);
       },
     );
 
@@ -1305,6 +1361,34 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedSelectors.add(identityIdOrAlias);
     return _defaultIdentity ?? _session(identityIdOrAlias);
+  }
+}
+
+class _FakeLegacyUpgrades implements LegacyIdentityUpgradePort {
+  _FakeLegacyUpgrades({
+    required this.initialStatus,
+    required this.upgradeStatus,
+  });
+
+  final LegacyIdentityUpgradeStatus initialStatus;
+  final LegacyIdentityUpgradeStatus upgradeStatus;
+  final List<String> statusSelectors = <String>[];
+  final List<String> upgradeSelectors = <String>[];
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> legacyUpgradeStatus(
+    String identityIdOrAlias,
+  ) async {
+    statusSelectors.add(identityIdOrAlias);
+    return initialStatus;
+  }
+
+  @override
+  Future<LegacyIdentityUpgradeStatus> upgradeLegacyIdentity(
+    String identityIdOrAlias,
+  ) async {
+    upgradeSelectors.add(identityIdOrAlias);
+    return upgradeStatus;
   }
 }
 
