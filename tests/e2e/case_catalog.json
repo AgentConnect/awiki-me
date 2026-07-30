@@ -1143,8 +1143,8 @@
       "caseId": "IDENTITY-SWITCH-E2E-001",
       "feature": "Bidirectional local identity switch message recovery",
       "layer": "product_application",
-      "preconditions": "The awiki.info run has one isolated App state root containing two distinct local App identities plus a distinct CLI preflight identity.",
-      "action": "Send from primary App identity to secondary, logout and activate secondary, hydrate and read the exact message, then repeat in reverse and rapidly switch both identities once more.",
+      "preconditions": "The awiki.info run has one isolated App state root containing two distinct local App identities plus a distinct CLI preflight identity; both App identities establish their reliable-sync tail anchors before either test message is sent.",
+      "action": "Anchor both online App identities, send from primary to secondary, logout and activate secondary, hydrate and read the post-anchor exact message, then repeat in reverse and rapidly switch both identities once more.",
       "exactOracles": [
         "Each receiver first obtains exactly one owner-scoped unread conversation and then exactly one renderable canonical timeline message with the sent ID, body and sender after conversation catch-up.",
         "Read clearing is owner-scoped, the reverse direction behaves symmetrically, and rapid final switches preserve both messages with isMine projected relative to the active identity.",

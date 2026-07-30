@@ -403,10 +403,12 @@ dart run tests/e2e/runner.dart --case full
 dart run tests/e2e/runner.dart --case identity-switch
 ```
 
-该场景验证 A→B 和 B→A 在 logout/activate 后都先得到 owner-scoped unread，
-再通过 Core conversation catch-up 得到精确正文并清零未读；最后快速切换确认旧
-realtime stop 不会终止新身份 session。它是 application/runtime 闭环，不替代账户
-选择器的视觉人工验收。
+该场景先分别激活 A、B 并建立 reliable-sync tail anchor，再验证 anchor 之后产生的
+A→B 和 B→A 消息在 logout/activate 后都先得到 owner-scoped unread，再通过 Core
+conversation catch-up 得到精确正文并清零未读；最后快速切换确认旧 realtime stop
+不会终止新身份 session。预先建立 anchor 是为了遵守“离线/首次上线不回放全部历史”
+的产品语义，不能把 bootstrap 之前的消息误当成应由增量同步投影的数据。它是
+application/runtime 闭环，不替代账户选择器的视觉人工验收。
 
 `full` additionally runs the cross-conversation correctness slice: one Direct
 and one Group receive messages in alternating order, then the test verifies
@@ -785,6 +787,12 @@ current DID equals directory resolution of the configured CLI handle, that the
 App handle resolves, and that the two identities are distinct. This prevents a
 green result or opaque timeout caused by silently using the CLI default
 `awiki.ai` tenant or a stale fixed-account mapping.
+
+Ordinary App + CLI peer suites also select the CLI foreground HTTP runtime with
+the public `awiki-cli runtime mode set http` command. These suites exercise
+foreground product RPCs and must not depend on whether a newly built CLI
+defaults to HTTP or to its long-running WebSocket listener. Remote multi-device
+Join suites use separate listener-aware orchestration.
 
 Every run writes `resource_ledger.json` next to `timings.json`. When remote
 product actions may have created messages, groups, relationships, attachments,

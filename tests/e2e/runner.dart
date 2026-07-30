@@ -1292,6 +1292,14 @@ class DesktopE2eRunner {
     await _cli(const <String>['--format', 'json', 'init']);
     await _prepareCliTenant(workspaceDir: cliWorkspaceDir, homeDir: cliHomeDir);
     await _writeCliConfig(cliWorkspaceDir);
+    await _cli(const <String>[
+      '--format',
+      'json',
+      'runtime',
+      'mode',
+      'set',
+      'http',
+    ]);
     await _cli(const <String>['--format', 'json', 'config', 'show']);
   }
 

@@ -66,13 +66,39 @@ Future<void> _verifyIdentitySwitchRegression({
       'identity switch secondary to primary ${config.runId} $nonce';
 
   await sessions.activateIdentity(primary);
-  await realtime.start();
   final primaryConversation = await _identitySwitchConversation(
     directory: directory,
     conversations: conversations,
     ownerDid: primary.did,
     peerHandle: config.secondaryAppHandle!,
   );
+  await _anchorIdentitySwitchSync(
+    sync,
+    reason: 'identity_switch_primary_anchor',
+  );
+
+  await sessions.logout();
+  final activeSecondaryBeforeSend = await sessions.loginWithIdentity(
+    secondary.identityId,
+  );
+  expect(activeSecondaryBeforeSend.did, secondary.did);
+  final secondaryConversation = await _identitySwitchConversation(
+    directory: directory,
+    conversations: conversations,
+    ownerDid: secondary.did,
+    peerHandle: config.appHandle,
+  );
+  await _anchorIdentitySwitchSync(
+    sync,
+    reason: 'identity_switch_secondary_anchor',
+  );
+
+  await sessions.logout();
+  final activePrimaryBeforeSend = await sessions.loginWithIdentity(
+    primary.identityId,
+  );
+  expect(activePrimaryBeforeSend.did, primary.did);
+  await realtime.start();
   final primarySent = await messaging.sendConversationText(
     conversation: primaryConversation,
     content: primaryToSecondaryText,
@@ -85,12 +111,6 @@ Future<void> _verifyIdentitySwitchRegression({
     secondary.identityId,
   );
   expect(activeSecondary.did, secondary.did);
-  final secondaryConversation = await _identitySwitchConversation(
-    directory: directory,
-    conversations: conversations,
-    ownerDid: secondary.did,
-    peerHandle: config.appHandle,
-  );
   await _waitForIdentitySwitchUnread(
     sync: sync,
     conversations: conversations,
@@ -183,6 +203,18 @@ Future<void> _verifyIdentitySwitchRegression({
     isMine: false,
   );
   expect(realtime.isRunning, isTrue);
+}
+
+Future<void> _anchorIdentitySwitchSync(
+  MessageSyncService sync, {
+  required String reason,
+}) async {
+  final result = await sync.syncNow(reason: reason, limit: 100);
+  if (result.recoveryRequired) {
+    throw StateError(
+      'Identity-switch baseline requested an unavailable snapshot repair.',
+    );
+  }
 }
 
 Future<AppConversationReadRef> _identitySwitchConversation({

@@ -1891,6 +1891,7 @@ cliPeer:
           'xvfb-run: dry-run',
           'check file: <redacted>',
           r'$ <redacted> --format json init',
+          r'$ <redacted> --format json runtime mode set http',
           r'$ <redacted> --format json config show',
           r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted>',
           r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted> --otp <redacted>',
