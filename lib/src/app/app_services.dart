@@ -5,6 +5,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/attachment_picker_service.dart';
+import '../application/app_presentation_service.dart';
 import '../application/desktop_shell_service.dart';
 import '../application/attachment_cache_service.dart';
 import '../application/attachment_open_service.dart';
@@ -42,6 +43,7 @@ import '../application/root_key_transfer_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/local_auth_user_presence_port.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
+import '../data/services/method_channel_app_presentation_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
@@ -253,6 +255,10 @@ final accountStateSyncRequestBusProvider = Provider<AccountStateSyncRequestBus>(
 final notificationFacadeProvider = Provider<NotificationFacade>(
   (ref) =>
       throw UnimplementedError('notificationFacadeProvider must be overridden'),
+);
+
+final appPresentationServiceProvider = Provider<AppPresentationService>(
+  (ref) => MethodChannelAppPresentationService(),
 );
 
 final desktopShellServiceProvider = Provider<DesktopShellService>(

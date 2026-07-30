@@ -19,6 +19,8 @@ class FakeAwikiMeAppHarness {
     required this.bootstrap,
     required this.gateway,
     required this.realtimeGateway,
+    required this.messageSyncService,
+    required this.agentControlService,
     required this.notificationFacade,
     required this.providerOverrides,
   });
@@ -26,6 +28,8 @@ class FakeAwikiMeAppHarness {
   final AppBootstrap bootstrap;
   final FakeAwikiGateway gateway;
   final FakeRealtimeGateway realtimeGateway;
+  final FakeMessageSyncService messageSyncService;
+  final FakeAgentControlService agentControlService;
   final FakeNotificationFacade notificationFacade;
   final List<Override> providerOverrides;
 }
@@ -34,6 +38,7 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
   SessionIdentity? session,
   UserProfile? profile,
   AppLocaleMode localeMode = AppLocaleMode.zhHans,
+  bool messageSyncV2ReadEnabled = false,
 }) {
   final gateway = FakeAwikiGateway()
     ..myProfile = profile ?? _defaultProfile(session)
@@ -41,10 +46,15 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
         ? const <SessionIdentity>[]
         : <SessionIdentity>[session];
   final realtimeGateway = FakeRealtimeGateway();
+  final messageSyncService = FakeMessageSyncService();
+  final agentControlService = FakeAgentControlService();
   final notificationFacade = FakeNotificationFacade();
 
   final bootstrap = AppBootstrap(
-    environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+    environment: AwikiEnvironmentConfig(
+      baseUrl: 'https://awiki.ai',
+      messageSyncV2ReadEnabled: messageSyncV2ReadEnabled,
+    ),
     accountGateway: gateway,
     gateway: gateway,
     realtimeGateway: realtimeGateway,
@@ -59,10 +69,10 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
     onboardingService: FakeOnboardingService(gateway),
     onboardingSupportService: FakeOnboardingSupportService(gateway),
     messagingService: FakeMessagingService(gateway),
-    messageSyncService: FakeMessageSyncService(),
+    messageSyncService: messageSyncService,
     conversationService: FakeConversationService(gateway),
     agentInventoryPort: FakeAgentInventoryPort(),
-    agentControlService: FakeAgentControlService(),
+    agentControlService: agentControlService,
     groupApplicationService: FakeGroupApplicationService(gateway),
     profileApplicationService: FakeProfileApplicationService(gateway),
     peerIdentityService: FakePeerIdentityService(),
@@ -79,6 +89,8 @@ FakeAwikiMeAppHarness createFakeAwikiMeAppHarness({
     bootstrap: bootstrap,
     gateway: gateway,
     realtimeGateway: realtimeGateway,
+    messageSyncService: messageSyncService,
+    agentControlService: agentControlService,
     notificationFacade: notificationFacade,
     providerOverrides: <Override>[
       appLocaleModeProvider.overrideWith((ref) => localeMode),

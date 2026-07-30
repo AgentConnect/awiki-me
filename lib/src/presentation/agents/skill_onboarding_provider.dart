@@ -89,8 +89,8 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
       return;
     }
     final environment = ref.read(awikiEnvironmentConfigProvider);
-    if (environment.userServiceUrl != 'https://awiki.info' ||
-        environment.didDomain != 'awiki.info') {
+    if (!skillOnboardingTenantDomains.contains(environment.didDomain) ||
+        environment.userServiceUrl != 'https://${environment.didDomain}') {
       state = const SkillOnboardingState(
         error: SkillOnboardingError.unsupportedTenant,
       );

@@ -3,6 +3,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
+import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
@@ -295,6 +296,97 @@ void main() {
     );
     await tester.pump(const Duration(seconds: 5));
   });
+
+  testWidgets(
+    'AwikiMeApp uses Agent inventory display name for a background message',
+    (tester) async {
+      const session = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        handle: 'me',
+        displayName: 'Me',
+        jwtToken: 'test-jwt',
+      );
+      const skillDid =
+          'did:wba:agent-connect.cn:agent:skill:skill-test:e1_skill';
+      final harness = createFakeAwikiMeAppHarness(
+        session: session,
+        messageSyncV2ReadEnabled: true,
+      );
+      harness.agentControlService.agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: skillDid,
+          kind: AgentKind.runtime,
+          daemonAgentDid: 'did:test:daemon',
+          runtime: 'skill',
+          displayName: 'AWiki Skill Agent',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: harness.providerOverrides,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+        listen: false,
+      );
+      await _activateRuntimeSession(container, session);
+      expect(container.read(agentsProvider).agents, isEmpty);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      final message = ChatMessage(
+        localId: 'message-agent-name-e2e',
+        remoteId: 'message-agent-name-e2e',
+        conversationId: 'dm:skill-agent',
+        threadId: 'dm:skill-agent',
+        senderDid: skillDid,
+        senderName: 'skill-cc44721e0153c892',
+        receiverDid: 'did:test:me',
+        content: '后台 Agent 名称测试',
+        createdAt: DateTime.utc(2026, 7, 30, 12),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      harness.messageSyncService.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          CommittedIncomingMessage(
+            eventId: 'event-agent-name-e2e',
+            logicalMessageId: 'message-agent-name-e2e',
+            message: message,
+          ),
+        ],
+      );
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('realtime_message', immediate: true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
+      await tester.pump();
+
+      expect(
+        container
+            .read(agentsProvider)
+            .agents
+            .singleWhere((agent) => agent.agentDid == skillDid)
+            .displayName,
+        'AWiki Skill Agent',
+      );
+      expect(harness.notificationFacade.systemNotificationCount, 1);
+      expect(harness.notificationFacade.lastSystemTitle, 'AWiki Skill Agent');
+      expect(harness.notificationFacade.lastSystemBody, '后台 Agent 名称测试');
+    },
+  );
 
   testWidgets(
     'AwikiMeApp start conversation stays in recents before first send',

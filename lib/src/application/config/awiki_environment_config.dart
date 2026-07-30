@@ -26,6 +26,7 @@ const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
 );
 const Set<String> agentDaemonTenantDomainAllowlist = <String>{
   'awiki.ai',
+  'agent-connect.cn',
   'anpclaw.com',
   'awiki.info',
 };

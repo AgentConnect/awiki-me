@@ -71,6 +71,7 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     registerWindowChromeChannel(flutterViewController: flutterViewController)
+    registerAppPresentationChannel(flutterViewController: flutterViewController)
     registerMenuBarStatusChannel(flutterViewController: flutterViewController)
     registerAttachmentChannel(flutterViewController: flutterViewController)
     registerKeychainAccessChannel(flutterViewController: flutterViewController)
@@ -229,6 +230,37 @@ class MainFlutterWindow: NSWindow {
     trafficLightRailWidth = CGFloat(truncating: width)
     scheduleTrafficLightLayout()
     result(nil)
+  }
+
+  private func registerAppPresentationChannel(
+    flutterViewController: FlutterViewController
+  ) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/app_presentation",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(
+          FlutterError(
+            code: "window_unavailable",
+            message: "Main window is unavailable",
+            details: nil
+          )
+        )
+        return
+      }
+      switch call.method {
+      case "getState":
+        result([
+          "applicationActive": NSApp.isActive,
+          "windowVisible": self.isVisible,
+          "windowMiniaturized": self.isMiniaturized,
+        ])
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   private func registerMenuBarStatusChannel(flutterViewController: FlutterViewController) {

@@ -45,13 +45,20 @@ class SkillOnboardingInstruction {
   }
 }
 
+const Set<String> skillOnboardingTenantDomains = <String>{
+  'awiki.info',
+  'agent-connect.cn',
+};
+
 SkillOnboardingInstruction buildSkillOnboardingInstruction({
   required SkillOnboardingGrant grant,
   required String expectedControllerDid,
   required String expectedControllerHandle,
   DateTime Function()? now,
 }) {
-  const domesticOrigin = 'https://awiki.info';
+  final serviceOrigin = grant.serviceOrigin.trim();
+  final serviceUri = Uri.tryParse(serviceOrigin);
+  final serviceDomain = serviceUri?.host.trim().toLowerCase() ?? '';
   final controllerDid = expectedControllerDid.trim();
   final controllerHandle = _normalizeHandle(expectedControllerHandle);
   final responseControllerHandle = _normalizeHandle(grant.controllerHandle);
@@ -60,13 +67,16 @@ SkillOnboardingInstruction buildSkillOnboardingInstruction({
   final expiresAt = grant.expiresAt.toUtc();
   final currentTime = (now ?? DateTime.now)().toUtc();
 
-  if (grant.serviceOrigin.trim() != domesticOrigin ||
+  if (serviceUri == null ||
+      serviceUri.scheme != 'https' ||
+      serviceOrigin != 'https://$serviceDomain' ||
+      !skillOnboardingTenantDomains.contains(serviceDomain) ||
       controllerDid.isEmpty ||
       controllerHandle.isEmpty ||
       responseControllerHandle != controllerHandle ||
-      !controllerHandle.endsWith('.awiki.info') ||
+      !controllerHandle.endsWith('.$serviceDomain') ||
       agentHandle.isEmpty ||
-      !agentHandle.endsWith('.awiki.info') ||
+      !agentHandle.endsWith('.$serviceDomain') ||
       token.isEmpty ||
       token.contains(RegExp(r'\s')) ||
       !expiresAt.isAfter(currentTime)) {
@@ -75,10 +85,10 @@ SkillOnboardingInstruction buildSkillOnboardingInstruction({
 
   final expiresAtText = expiresAt.toIso8601String();
   final prompt =
-      '''Read https://awiki.info/cli/onboarding.md and follow the instructions to install AWiki CLI and Skill, initialize a new or empty workspace, then automatically claim the one-time Skill Agent registration below and complete first-use checks.
+      '''Read $serviceOrigin/cli/onboarding.md and follow the instructions to install AWiki CLI and Skill, initialize a new or empty workspace, then automatically claim the one-time Skill Agent registration below and complete first-use checks.
 
 AWIKI_SKILL_ONBOARDING_V1
-service_base_url=$domesticOrigin
+service_base_url=$serviceOrigin
 token=$token
 controller_handle=$controllerHandle
 agent_handle=$agentHandle
