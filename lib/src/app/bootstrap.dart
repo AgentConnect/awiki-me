@@ -341,6 +341,7 @@ class AppBootstrap {
         runtime: runtime,
         identities: identityAdapter,
         auth: authAdapter,
+        legacyUpgrades: identityAdapter,
         activeSessionStore: activeSessionStore,
         expectedDidDomain: effectiveEnvironment.didDomain,
         realtime: realtimeAdapter,

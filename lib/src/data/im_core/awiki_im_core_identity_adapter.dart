@@ -130,8 +130,9 @@ class AwikiImCoreIdentityAdapter
     String identityIdOrAlias,
   ) async {
     final coreInstance = await _runtime.coreInstance();
-    final status = await coreInstance.legacyUpgradeStatus(
-      _selectorFromString(identityIdOrAlias),
+    final status = await _withIdentitySelectorFallback(
+      identityIdOrAlias,
+      coreInstance.legacyUpgradeStatus,
     );
     return _legacyUpgradeStatus(status);
   }
@@ -141,8 +142,9 @@ class AwikiImCoreIdentityAdapter
     String identityIdOrAlias,
   ) async {
     final coreInstance = await _runtime.coreInstance();
-    final status = await coreInstance.upgradeLegacyIdentity(
-      _selectorFromString(identityIdOrAlias),
+    final status = await _withIdentitySelectorFallback(
+      identityIdOrAlias,
+      coreInstance.upgradeLegacyIdentity,
     );
     return _legacyUpgradeStatus(status);
   }
@@ -333,6 +335,34 @@ bool _shouldTryLocalAliasFallback(
 ) {
   return selector is core.IdIdentitySelector &&
       error.code == 'identity_not_found';
+}
+
+Future<T> _withIdentitySelectorFallback<T>(
+  String value,
+  Future<T> Function(core.IdentitySelector selector) action,
+) async {
+  final selectors = identitySelectorCandidates(value);
+  for (var index = 0; index < selectors.length; index += 1) {
+    try {
+      return await action(selectors[index]);
+    } on core.AwikiImCoreException catch (error) {
+      if (index + 1 == selectors.length || error.code != 'identity_not_found') {
+        rethrow;
+      }
+    }
+  }
+  throw StateError('identity_selector_candidates_exhausted');
+}
+
+List<core.IdentitySelector> identitySelectorCandidates(String value) {
+  final primary = _selectorFromString(value);
+  if (primary is! core.IdIdentitySelector) {
+    return <core.IdentitySelector>[primary];
+  }
+  return <core.IdentitySelector>[
+    primary,
+    core.IdentitySelector.localAlias(_trimLeadingAt(value.trim())),
+  ];
 }
 
 String _trimLeadingAt(String value) {

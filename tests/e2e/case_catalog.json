@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-30.onboarding-phone-single-stage-v1",
+  "sourceRevision": "2026-07-30.release0714-account-state+macos-agent-notification+agent-runtime-row+onboarding-phone-single-stage-v1",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -202,10 +202,11 @@
       "action": "Create/select a Claude Code runtime Agent and open chat through UI.",
       "exactOracles": [
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
+        "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
         "One canonical runtime Agent is selected and its chat is visible."
       ],
       "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -291,10 +292,11 @@
       "action": "Create/select a Codex runtime Agent and open its chat through UI.",
       "exactOracles": [
         "The committed daemon create status converges the Agent page without a manual inventory refresh.",
+        "From the optimistic pending intent through authoritative Inventory and canonical Direct route reconciliation, the exact runtime Handle has exactly one E2E-identified Agent row, including any pending-plus-Runtime overlap.",
         "One canonical runtime Agent is selected and its chat is visible."
       ],
       "negativeChecks": [
-        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, duplicate result, or backend/UI divergence fails."
+        "Missing/disabled UI, skipped real scenario, manual refresh dependency, wrong runtime identity, more or fewer than one target row at any observed creation phase, duplicate authoritative Runtime, or backend/UI divergence fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",

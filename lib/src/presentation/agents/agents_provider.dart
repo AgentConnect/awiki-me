@@ -107,6 +107,19 @@ class PendingRuntimeCreation {
   bool get isWaitingForStatus =>
       state == PendingRuntimeCreationState.waitingForStatus;
 
+  bool matchesRuntimeAgent(AgentSummary agent) {
+    if (!agent.isRuntime || agent.daemonAgentDid != daemonAgentDid) {
+      return false;
+    }
+    final agentHandle = _normalizedAgentHandle(agent.handle);
+    final pendingHandle = _normalizedAgentHandle(handle);
+    if (agentHandle != null && pendingHandle != null) {
+      return agentHandle == pendingHandle;
+    }
+    final agentName = agent.displayName.trim();
+    return agentName.isNotEmpty && agentName == displayName.trim();
+  }
+
   PendingRuntimeCreation copyWith({PendingRuntimeCreationState? state}) {
     return PendingRuntimeCreation(
       requestId: requestId,
@@ -3692,7 +3705,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     }
     final owner = _agentCacheOwner(session);
     return agents.any((agent) {
-      if (!_runtimeAgentMatchesPending(agent, pending)) {
+      if (!pending.matchesRuntimeAgent(agent)) {
         return false;
       }
       final handle = agent.handle?.trim().toLowerCase();
@@ -4449,22 +4462,6 @@ bool _samePendingRuntimeTarget(
   return left.daemonAgentDid == right.daemonAgentDid &&
       _normalizedAgentHandle(left.handle) ==
           _normalizedAgentHandle(right.handle);
-}
-
-bool _runtimeAgentMatchesPending(
-  AgentSummary agent,
-  PendingRuntimeCreation pending,
-) {
-  if (!agent.isRuntime || agent.daemonAgentDid != pending.daemonAgentDid) {
-    return false;
-  }
-  final agentHandle = _normalizedAgentHandle(agent.handle);
-  final pendingHandle = _normalizedAgentHandle(pending.handle);
-  if (agentHandle != null && pendingHandle != null) {
-    return agentHandle == pendingHandle;
-  }
-  final agentName = agent.displayName.trim();
-  return agentName.isNotEmpty && agentName == pending.displayName.trim();
 }
 
 String? _normalizedAgentHandle(String? value) {

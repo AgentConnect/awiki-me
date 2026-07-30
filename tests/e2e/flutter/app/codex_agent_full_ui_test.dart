@@ -105,7 +105,7 @@ void main() {
         );
 
         final runtimeHandle = _codexRuntimeHandle(config.runId);
-        await agents.createRuntimeAgent(
+        final createRuntimeFuture = agents.createRuntimeAgent(
           install.daemonDid,
           options: RuntimeAgentCreateOptions(
             kind: RuntimeAgentKind.codex,
@@ -114,6 +114,23 @@ void main() {
             workspaceMode: runtimeWorkspaceModeRouteRoot,
           ),
         );
+        await _pumpFrame(tester);
+        final pendingCreateState = ProviderScope.containerOf(
+          tester.element(find.byType(AppShell)),
+        ).read(agentsProvider);
+        expect(
+          pendingCreateState.pendingRuntimeCreations.any(
+            (pending) =>
+                pending.daemonAgentDid == install.daemonDid &&
+                pending.handle.trim().toLowerCase() ==
+                    runtimeHandle.trim().toLowerCase(),
+          ),
+          isTrue,
+          reason:
+              'the real creation path must expose its optimistic pending row',
+        );
+        _expectSingleRuntimeAgentRowForHandle(runtimeHandle);
+        await createRuntimeFuture;
         await _pumpUntil(
           tester,
           () => !ProviderScope.containerOf(
@@ -138,6 +155,7 @@ void main() {
           daemonDid: install.daemonDid,
           handle: runtimeHandle,
         );
+        await _expectSingleRuntimeAgentRow(tester: tester, runtime: runtime);
         agents.select(runtime.agentDid);
         await _pumpFrame(tester);
         await _tapFirstFound(tester, <Finder>[find.text('打开聊天')]);
@@ -148,6 +166,7 @@ void main() {
           phases: const <String>[
             'daemon_selected',
             'runtime_agent_created',
+            'runtime_creation_row_unique_throughout',
             'runtime_chat_opened',
           ],
         );
@@ -462,19 +481,62 @@ Future<AgentSummary> _waitForRuntimeAgentByHandle({
       tester.element(find.byType(AppShell)),
     ).read(agentsProvider);
     lastState = _agentsDebugSummary(state);
-    for (final agent in state.agents) {
-      if (agent.isRuntime &&
-          agent.daemonAgentDid == daemonDid &&
-          agent.handle == handle &&
-          (agent.runtime == 'codex' || agent.runtime == 'generic-cli')) {
-        return agent;
-      }
+    final matchingRuntimes = state.agents
+        .where(
+          (agent) =>
+              agent.isRuntime &&
+              agent.daemonAgentDid == daemonDid &&
+              agent.handle?.trim().toLowerCase() ==
+                  handle.trim().toLowerCase() &&
+              (agent.runtime == 'codex' || agent.runtime == 'generic-cli'),
+        )
+        .toList(growable: false);
+    final hasMatchingPending = state.pendingRuntimeCreations.any(
+      (pending) =>
+          pending.daemonAgentDid == daemonDid &&
+          pending.handle.trim().toLowerCase() == handle.trim().toLowerCase(),
+    );
+    if (hasMatchingPending || matchingRuntimes.isNotEmpty) {
+      _expectSingleRuntimeAgentRowForHandle(handle);
+    }
+    if (matchingRuntimes.length > 1) {
+      fail(
+        'Expected one canonical Codex runtime for handle=$handle, found '
+        '${matchingRuntimes.length}. Last agents: $lastState',
+      );
+    }
+    if (matchingRuntimes.length == 1) {
+      return matchingRuntimes.single;
     }
     await Future<void>.delayed(const Duration(seconds: 1));
   }
   fail(
     'Timed out waiting for Codex runtime handle=$handle. '
     'Last agents: ${lastState ?? '<none>'}',
+  );
+}
+
+Future<void> _expectSingleRuntimeAgentRow({
+  required WidgetTester tester,
+  required AgentSummary runtime,
+}) async {
+  final runtimeTile = find.byKey(Key('agent-list-tile-${runtime.agentDid}'));
+  await _pumpUntil(
+    tester,
+    () => runtimeTile.evaluate().length == 1,
+    timeout: const Duration(seconds: 10),
+    description: 'canonical Codex runtime row to become visible',
+  );
+  expect(runtimeTile, findsOneWidget);
+  _expectSingleRuntimeAgentRowForHandle(runtime.handle!);
+}
+
+void _expectSingleRuntimeAgentRowForHandle(String handle) {
+  expect(
+    find.bySemanticsIdentifier(
+      'e2e-agent-runtime-row-${handle.trim().toLowerCase()}',
+    ),
+    findsOneWidget,
   );
 }
 

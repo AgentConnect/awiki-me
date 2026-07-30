@@ -5,6 +5,7 @@ import 'models/app_session.dart';
 import 'ports/auth_core_port.dart';
 import 'ports/identity_core_port.dart';
 import 'ports/im_core_runtime_port.dart';
+import 'ports/legacy_identity_upgrade_port.dart';
 import 'ports/realtime_core_port.dart';
 import '../core/app_error_classifier.dart';
 import '../domain/entities/session_identity.dart';
@@ -140,6 +141,7 @@ class ImCoreAppSessionService
     required ImCoreRuntimePort runtime,
     required IdentityCorePort identities,
     required AuthCorePort auth,
+    LegacyIdentityUpgradePort? legacyUpgrades,
     ActiveSessionStore? activeSessionStore,
     String? expectedDidDomain,
     RealtimeCorePort? realtime,
@@ -147,6 +149,7 @@ class ImCoreAppSessionService
   }) : _runtime = runtime,
        _identities = identities,
        _auth = auth,
+       _legacyUpgrades = legacyUpgrades,
        _activeSessionStore = activeSessionStore,
        _expectedDidDomain = _normalizeDidDomain(expectedDidDomain),
        _realtime = realtime,
@@ -155,6 +158,7 @@ class ImCoreAppSessionService
   final ImCoreRuntimePort _runtime;
   final IdentityCorePort _identities;
   final AuthCorePort _auth;
+  final LegacyIdentityUpgradePort? _legacyUpgrades;
   final ActiveSessionStore? _activeSessionStore;
   final String? _expectedDidDomain;
   final RealtimeCorePort? _realtime;
@@ -185,7 +189,7 @@ class ImCoreAppSessionService
     if (activeIdentityId == null) {
       return null;
     }
-    final identity = await _localIdentityFor(
+    var identity = await _localIdentityFor(
       activeIdentityId,
       allowResolve: false,
       throwOnDomainMismatch: false,
@@ -195,7 +199,32 @@ class ImCoreAppSessionService
       await _activeSessionStore?.clearActiveIdentityId();
       return null;
     }
+    if (!await _ensureLegacyIdentityReady(identity.identityId)) {
+      return null;
+    }
+    _requireCurrentTransition(transition);
+    identity = await _localIdentityFor(
+      activeIdentityId,
+      allowResolve: false,
+      throwOnDomainMismatch: false,
+    );
+    if (identity == null) {
+      return null;
+    }
     return _activateIdentity(identity, transition: transition);
+  }
+
+  Future<bool> _ensureLegacyIdentityReady(String identityId) async {
+    final legacyUpgrades = _legacyUpgrades;
+    if (legacyUpgrades == null) {
+      return true;
+    }
+    var status = await legacyUpgrades.legacyUpgradeStatus(identityId);
+    if (status.phase == LegacyIdentityUpgradePhase.completed) {
+      return true;
+    }
+    status = await legacyUpgrades.upgradeLegacyIdentity(identityId);
+    return status.phase == LegacyIdentityUpgradePhase.completed;
   }
 
   @override
