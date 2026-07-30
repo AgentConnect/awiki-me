@@ -248,6 +248,9 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.profileApplicationService != null)
           profileApplicationServiceProvider.overrideWith((ref) {
             final profiles = bootstrap.profileApplicationService!;
+            if (bootstrap.accountStateSyncPort == null) {
+              return profiles;
+            }
             final accountState = ref.watch(accountStateSyncPortProvider);
             if (accountState is AccountStateProfileMutationPort) {
               return AccountStateProfileApplicationService(

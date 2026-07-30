@@ -633,14 +633,14 @@ void main() {
       expect(find.byType(SettingsPage), findsOneWidget);
       expect(find.text('设置'), findsWidgets);
       expect(find.text('语言'), findsOneWidget);
-      expect(find.text('导出身份凭证'), findsNothing);
+      expect(find.text('导出身份凭证'), findsOneWidget);
       expect(find.text('检查更新'), findsOneWidget);
     } finally {
       await tester.binding.setSurfaceSize(null);
     }
   });
 
-  testWidgets('AwikiMeApp authenticated smoke hides Personal Agent settings', (
+  testWidgets('AwikiMeApp authenticated smoke shows Personal Agent entry', (
     tester,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -700,7 +700,7 @@ void main() {
       await _pumpSmokeFrame(tester);
 
       expect(find.text('Message Daemon'), findsWidgets);
-      expect(find.text('个人助理'), findsNothing);
+      expect(find.text('个人助理'), findsOneWidget);
       expect(find.text('所有可处理会话'), findsNothing);
       expect(find.text('Hermes message runtime'), findsNothing);
       expect(find.text('启用个人助理'), findsNothing);
@@ -1087,8 +1087,8 @@ void main() {
           });
       await _pumpSmokeFrame(tester);
 
-      expect(find.text('个人助理 已完成处理'), findsOneWidget);
-      expect(find.text('个人助理 生成了草稿'), findsOneWidget);
+      expect(find.text('个人助理已完成处理'), findsOneWidget);
+      expect(find.text('个人助理生成了草稿'), findsOneWidget);
       await tester.tap(find.text('使用草稿'));
       await _pumpSmokeFrame(tester);
 

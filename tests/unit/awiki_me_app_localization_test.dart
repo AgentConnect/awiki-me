@@ -16,9 +16,11 @@ import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -92,6 +94,32 @@ void main() {
       expect(find.text('邮箱'), findsWidgets);
       expect(find.text('登录或注册'), findsWidgets);
     });
+
+    testWidgets(
+      'profile service remains usable without optional account-state sync',
+      (tester) async {
+        final gateway = bootstrap.gateway as FakeAwikiGateway;
+        gateway.publicProfilesByQuery['did:test:peer'] = const UserProfile(
+          did: 'did:test:peer',
+          displayName: 'Peer',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+        );
+
+        await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+        await tester.pump();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(OnboardingPage)),
+        );
+        final profile = await container
+            .read(profileApplicationServiceProvider)
+            .loadPublicProfile('did:test:peer');
+
+        expect(profile.displayName, 'Peer');
+      },
+    );
 
     testWidgets('uses explicit locale override from settings provider', (
       tester,
