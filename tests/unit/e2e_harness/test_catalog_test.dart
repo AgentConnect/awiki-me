@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(91));
+      expect(catalog.cases, hasLength(94));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[

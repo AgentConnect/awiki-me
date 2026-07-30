@@ -24,6 +24,7 @@ import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Tooltip;
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -245,6 +246,82 @@ void main() {
       expect(icon.size, iconSize);
     }
     expect(iconSize, isNotNull);
+  });
+
+  testWidgets('群列表标题在移动窄屏下完整显示', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(320, 720);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const GroupListPage(), session: session),
+    );
+    await tester.pumpAndSettle();
+
+    final title = find.text('群聊列表');
+    expect(title, findsOneWidget);
+    expect(
+      tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
+      isFalse,
+    );
+  });
+
+  testWidgets('群列表标题在桌面窄详情栏中完整显示', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(900, 720);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const Align(
+          alignment: Alignment.centerRight,
+          child: SizedBox(width: 360, child: GroupListPage(embedded: true)),
+        ),
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = find.text('群聊列表');
+    expect(title, findsOneWidget);
+    expect(
+      tester.renderObject<RenderParagraph>(title).didExceedMaxLines,
+      isFalse,
+    );
+  });
+
+  testWidgets('群列表英文标题使用 Group', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(320, 720);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const GroupListPage(),
+        locale: const Locale('en'),
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Group'), findsOneWidget);
+    expect(find.text('Group chats'), findsNothing);
+    final titleParagraph = tester.renderObject<RenderParagraph>(
+      find.text('Group'),
+    );
+    expect(
+      titleParagraph.didExceedMaxLines,
+      isFalse,
+      reason:
+          'title slot=${titleParagraph.size.width}, '
+          'text=${titleParagraph.getMaxIntrinsicWidth(double.infinity)}',
+    );
   });
 
   testWidgets('macOS 创建群弹窗只填写名称并直接进入群聊', (tester) async {

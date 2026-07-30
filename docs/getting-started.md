@@ -102,6 +102,20 @@ flutter devices
 flutter run -d <android-device-id>
 ```
 
+On macOS, if an Android Emulator field has focus and ADB-injected text works but
+the host physical keyboard produces no guest input, start the AVD through the
+repository launcher:
+
+```bash
+scripts/run_android_emulator.sh --list
+scripts/run_android_emulator.sh <avd-name>
+```
+
+The launcher enables the Emulator's direct keycode-forwarding mode, avoiding a
+broken host charmap or keyboard-capture path. It affects only the development
+emulator, not the Android app, physical devices, or other platforms. Shut down
+an already-running AVD normally before using the launcher.
+
 The current release artifact targets Android arm64. Confirm the device architecture and Android SDK configuration locally.
 
 ### 3.5 iOS

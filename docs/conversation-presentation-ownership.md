@@ -481,7 +481,9 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 5. DTO boundary review 确认 SDK 仍不引用 `awiki-me` App domain 类型。
 6. 本文档的 owner 表、数据流、渲染规则和测试清单已同步更新。
 
-release/0710 到 canonical schema 的启动顺序固定为：Vault 解锁 → Core
+本地状态启动先执行明确的版本边界：schema 1 到 26 的预发布 Core SQLite 文件集归档后
+按当前 schema 重建；schema 27 及以上不得走该退场路径。release/0710 到 canonical schema
+的启动顺序固定为：Vault 解锁 → Core
 检测/升级 → 读取 Core owner-scoped alias mapping → ProductLocalStore 备份并在单一
 SQLite transaction 内迁移 overlay/draft 与 journal → 创建业务 Store。Core 已完成但
 App 在 overlay cutover 前崩溃时，下一次启动必须重新读取 mapping 并幂等续跑；不得

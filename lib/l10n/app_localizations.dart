@@ -422,6 +422,12 @@ abstract class AppLocalizations {
   /// **'完成'**
   String get onboardingCompleteRegister;
 
+  /// No description provided for @onboardingPhoneLoginOrRegisterAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录/注册'**
+  String get onboardingPhoneLoginOrRegisterAction;
+
   /// No description provided for @onboardingCompleteEmailRegister.
   ///
   /// In zh, this message translates to:

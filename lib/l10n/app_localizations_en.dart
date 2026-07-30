@@ -180,6 +180,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingCompleteRegister => 'Continue';
 
   @override
+  String get onboardingPhoneLoginOrRegisterAction => 'Log in / Register';
+
+  @override
   String get onboardingCompleteEmailRegister => 'Complete registration';
 
   @override
@@ -1247,7 +1250,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get identitySearchNameHandleDid => 'Search name, handle, or DID';
 
   @override
-  String get groupListTitle => 'Group chats';
+  String get groupListTitle => 'Group';
 
   @override
   String get groupListEmpty =>

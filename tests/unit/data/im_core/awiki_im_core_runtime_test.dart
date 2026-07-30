@@ -179,6 +179,86 @@ void main() {
     ]);
   });
 
+  test('pre-release local state is archived before inspection', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'awiki_me_runtime_legacy_state_test_',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: '${root.path}/support',
+      cacheRoot: '${root.path}/cache',
+      tempRoot: '${root.path}/tmp',
+      scopeId: StorageScopeId.parse(scopeValue),
+    );
+    await layout.scopeLayout.createScopeRootExclusive();
+    await layout.ensureDirectories();
+    await _writeSqliteHeaderWithUserVersion(layout.sqlitePath, 25);
+    await File('${layout.sqlitePath}-wal').writeAsString('wal');
+
+    final events = <String>[];
+    final runtime = AwikiImCoreRuntime(
+      config: const AwikiImCoreEnvironmentConfig(
+        serviceBaseUrl: 'https://awiki.ai',
+        didDomain: 'awiki.ai',
+      ),
+      paths: layout,
+      scopeId: StorageScopeId.parse(scopeValue),
+      vaultSecretProvider: _FakeVaultSecretProvider(),
+      inspectLocalStateUpgrade: (paths) async {
+        events.add('inspect');
+        expect(await File(paths.sqlitePath).exists(), isFalse);
+        expect(await File('${paths.sqlitePath}-wal').exists(), isFalse);
+        return const core.LocalStateUpgradeInspection(
+          eligibility: core.LocalStateUpgradeEligibility.notRequired,
+          sourceSchemaVersion: 0,
+          targetSchemaVersion: 34,
+        );
+      },
+      upgradeLocalState: (paths) async {
+        events.add('upgrade');
+        return const core.LocalStateUpgradeResult(
+          status: core.LocalStateUpgradeStatus.notRequired,
+          sourceSchemaVersion: 0,
+          targetSchemaVersion: 34,
+          migratedPersonas: 0,
+          migratedConversations: 0,
+          unresolvedMessages: 0,
+          aliasCount: 0,
+          backupAvailable: false,
+        );
+      },
+      openCore:
+          ({
+            required core.AwikiImCoreConfig config,
+            required core.AwikiImCorePaths paths,
+            core.AwikiImCoreOpenOptions? openOptions,
+          }) async {
+            events.add('open');
+            throw UnsupportedError('fake opener stops before native load');
+          },
+    );
+
+    await expectLater(runtime.open(), throwsA(isA<UnsupportedError>()));
+    expect(events, <String>['inspect', 'upgrade', 'open']);
+    final archiveDir = Directory(
+      '${layout.scopeLayout.imCoreStateRoot}/legacy-state',
+    );
+    expect(await archiveDir.exists(), isTrue);
+    expect(
+      await archiveDir
+          .list()
+          .map((entry) => entry.path)
+          .where((path) => path.contains('.schema25.'))
+          .length,
+      2,
+    );
+  });
+
   test('upgrade failure prevents SDK open', () async {
     final root = await Directory.systemTemp.createTemp(
       'awiki_me_runtime_upgrade_failure_test_',
@@ -335,4 +415,17 @@ class _FailingVaultSecretProvider implements AwikiImCoreVaultSecretProvider {
     expect(scopeId.value, scopeValue);
     throw const AwikiVaultOpenException('vault_key_missing');
   }
+}
+
+Future<void> _writeSqliteHeaderWithUserVersion(String path, int version) async {
+  final bytes = List<int>.filled(64, 0);
+  const marker = 'SQLite format 3\u0000';
+  for (var index = 0; index < marker.length; index++) {
+    bytes[index] = marker.codeUnitAt(index);
+  }
+  bytes[60] = (version >> 24) & 0xff;
+  bytes[61] = (version >> 16) & 0xff;
+  bytes[62] = (version >> 8) & 0xff;
+  bytes[63] = version & 0xff;
+  await File(path).writeAsBytes(bytes, flush: true);
 }

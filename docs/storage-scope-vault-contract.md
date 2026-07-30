@@ -14,7 +14,10 @@ record 密码格式。
 `tenant-default` namespace、旧 split keys 和 namespace bundle 只属于预发布开发数据，
 不进入 production 启动或恢复链路，也不得在普通启动时自动删除。
 同一 scope 内的 release/0710 schema 27 数据必须通过 Core 显式 local-state upgrade gate
-升级，不能被当作不兼容数据归档，也不能要求用户重新登录。
+升级，不能被当作不兼容数据归档，也不能要求用户重新登录。早于该发布边界的 schema
+1 到 26 不再提供数据迁移兼容；App 在 Core inspection 前归档完整 SQLite 文件集并让当前
+Core 重建本地投影，但必须保留 tenant registry、scope manifest、Identity Registry、
+默认身份、Identity Vault、platform secret、Product DB 和附件目录。
 
 ## 1. Ownership 与边界
 
@@ -356,6 +359,7 @@ registry lookup
   -> readExisting platform secret
   -> envelope scope/schema/key validation
   -> derive v1 context
+  -> 若 Core SQLite 为 schema 1..26：归档完整 SQLite 文件集并按当前 schema 重建
   -> inspect Core local-state schema（只读）
   -> 若为0710 schema 27：online backup + shadow migration + conservation validation + cutover
   -> VaultRequired open
@@ -364,8 +368,10 @@ registry lookup
 
 任何步骤失败都不得创建key、切换directory、猜测domain scope或回退plaintext。
 “scope存在但key缺失”是blocked/unrecoverable local vault，不是fresh scope。
-Core升级失败时保持backup/journal并停留在启动错误页；允许重试，但不得清库、触发OTP/
-Handle恢复或在升级完成前创建conversation/profile/product业务Store。
+schema 27 或更高版本的 Core 升级失败时保持 backup/journal 并停留在启动错误页；允许重试，
+但不得清库、触发 OTP/Handle 恢复或在升级完成前创建 conversation/profile/product 业务
+Store。schema 1 到 26 的归档是明确的预发布兼容退场策略，不得扩大到 schema 27、未知更高
+版本、无法读取 header 或 fingerprint/shape 校验失败的数据库。
 
 ## 8. Route、switch 与删除规则
 
@@ -424,13 +430,15 @@ orphan_scope_detected
 其中的 profile/scope。覆盖安装新 App 只能替换应用 bundle，必须继续使用相同 production
 application identity、data root、Keychain service/account 和 Storage Scope ID。
 
-Registry、manifest、layout、envelope 或 SQLite 的未来升级必须满足：
+Registry、manifest、layout、envelope 或已发布 SQLite 基线的未来升级必须满足：
 
 - 在原 scope/account 内进行，不通过分配新 scope 模拟迁移；
 - 版本化、幂等，并在提交前完成完整校验；
 - 失败时保留原数据和原 secret，不得删除后重建；
 - unknown newer schema fail closed，旧版本不得回写；
-- 自动清理与数据升级分离，普通启动和覆盖安装不删除 legacy path。
+- 自动清理与数据升级分离，普通启动和覆盖安装不删除 legacy path。唯一例外是 schema
+  1 到 26 的预发布 Core SQLite 文件集可以被自动归档；归档不是删除，且不得触及同 scope
+  的身份、Vault、Product DB 或附件。
 
 Production不读取或迁移：
 

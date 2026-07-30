@@ -127,6 +127,12 @@ void main() {
         find.byKey(const Key('onboarding-mac-credential-mode')),
         findsNothing,
       );
+      expect(
+        find.byKey(const Key('onboarding-mac-phone-submit-action')),
+        findsOneWidget,
+      );
+      expect(find.text('登录/注册'), findsOneWidget);
+      expect(find.text('下一步'), findsNothing);
       final fields = find.byType(CupertinoTextField);
       expect(fields, findsNWidgets(3));
       await tester.enterText(fields.at(0), '13800138000');
@@ -150,6 +156,12 @@ void main() {
         find.byKey(const Key('onboarding-auth-mode-tabs')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const Key('onboarding-phone-submit-action')),
+        findsOneWidget,
+      );
+      expect(find.text('登录/注册'), findsOneWidget);
+      expect(find.text('下一步'), findsNothing);
     }
     expect(harness.gateway.listLocalCredentialsCalls, greaterThanOrEqualTo(1));
     expect(harness.realtimeGateway.isConnected, isFalse);
@@ -160,6 +172,7 @@ void main() {
         'onboarding_visible',
         'onboarding_auth_entry_visible',
         'mac_phone_otp_handle_scope_preserved',
+        'phone_single_stage_submit_visible',
         'unauthenticated_realtime_disconnected',
       ],
     );

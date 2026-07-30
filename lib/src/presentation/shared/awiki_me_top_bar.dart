@@ -6,6 +6,8 @@ import 'awiki_me_semantic_icon.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
 
+enum AwikiMeTopBarTitleLayout { centered, betweenActions }
+
 class AwikiMeTopBar extends StatelessWidget {
   const AwikiMeTopBar({
     super.key,
@@ -18,6 +20,7 @@ class AwikiMeTopBar extends StatelessWidget {
     this.titleColor,
     this.titleFontSize,
     this.titleFontWeight,
+    this.titleLayout = AwikiMeTopBarTitleLayout.centered,
   });
 
   final String title;
@@ -29,6 +32,7 @@ class AwikiMeTopBar extends StatelessWidget {
   final Color? titleColor;
   final double? titleFontSize;
   final FontWeight? titleFontWeight;
+  final AwikiMeTopBarTitleLayout titleLayout;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +40,15 @@ class AwikiMeTopBar extends StatelessWidget {
     final titleInset = leadingWidth > trailingWidth
         ? leadingWidth
         : trailingWidth;
+    final titlePadding = switch (titleLayout) {
+      AwikiMeTopBarTitleLayout.centered => EdgeInsets.symmetric(
+        horizontal: titleInset + 8,
+      ),
+      AwikiMeTopBarTitleLayout.betweenActions => EdgeInsets.only(
+        left: leadingWidth,
+        right: trailingWidth,
+      ),
+    };
     return Padding(
       padding: padding,
       child: SizedBox(
@@ -45,7 +58,7 @@ class AwikiMeTopBar extends StatelessWidget {
           children: <Widget>[
             Positioned.fill(
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: titleInset + 8),
+                padding: titlePadding,
                 child: Center(
                   child: Text(
                     title,

@@ -13,7 +13,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
-    required this.onRegisterStepChanged,
     required this.onSubmitRegister,
     required this.activeTenant,
     required this.localeMode,
@@ -33,7 +32,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
-  final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
   final AppTenantProfile activeTenant;
   final AppLocaleMode localeMode;
@@ -66,7 +64,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
             onRequestOtp: onRequestOtp,
             onRequestEmailActivation: onRequestEmailActivation,
             onCheckEmailActivation: onCheckEmailActivation,
-            onRegisterStepChanged: onRegisterStepChanged,
             onSubmitRegister: onSubmitRegister,
             onJoinDevice: onJoinDevice,
           );
@@ -386,7 +383,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
-    required this.onRegisterStepChanged,
     required this.onSubmitRegister,
     this.onJoinDevice,
   });
@@ -405,7 +401,6 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
-  final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
   final VoidCallback? onJoinDevice;
 
@@ -468,9 +463,7 @@ class _MacAuthCard extends StatelessWidget {
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 child: _MacRegisterForm(
-                  key: ValueKey<String>(
-                    'mac-register-${onboarding.authMode}-${onboarding.registerStep}',
-                  ),
+                  key: ValueKey<String>('mac-register-${onboarding.authMode}'),
                   onboarding: onboarding,
                   phoneController: phoneController,
                   otpController: otpController,
@@ -479,7 +472,6 @@ class _MacAuthCard extends StatelessWidget {
                   onRequestOtp: onRequestOtp,
                   onRequestEmailActivation: onRequestEmailActivation,
                   onCheckEmailActivation: onCheckEmailActivation,
-                  onRegisterStepChanged: onRegisterStepChanged,
                   onSubmitRegister: onSubmitRegister,
                 ),
               ),
@@ -827,7 +819,6 @@ class _MacRegisterForm extends StatelessWidget {
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
-    required this.onRegisterStepChanged,
     required this.onSubmitRegister,
   });
 
@@ -839,7 +830,6 @@ class _MacRegisterForm extends StatelessWidget {
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
-  final ValueChanged<int> onRegisterStepChanged;
   final VoidCallback onSubmitRegister;
 
   @override
@@ -902,38 +892,6 @@ class _MacRegisterForm extends StatelessWidget {
       );
     }
 
-    if (onboarding.registerStep == 2 && onboarding.authMode == 'phone') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _MacOutlinedField(
-            controller: handleController,
-            label: context.l10n.onboardingHandle,
-            placeholder: context.l10n.onboardingHandlePlaceholder,
-            icon: CupertinoIcons.at,
-          ),
-          const SizedBox(height: 22),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _MacSecondaryAction(
-                  label: context.l10n.commonPrevious,
-                  onPressed: () => onRegisterStepChanged(1),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MacPrimaryAction(
-                  label: context.l10n.onboardingCompleteRegister,
-                  onPressed: onboarding.isBusy ? null : onSubmitRegister,
-                ),
-              ),
-            ],
-          ),
-        ],
-      );
-    }
-
     if (onboarding.authMode == 'phone') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -972,13 +930,11 @@ class _MacRegisterForm extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           SizedBox(
-            key: const Key('onboarding-mac-phone-next-action'),
+            key: const Key('onboarding-mac-phone-submit-action'),
             width: double.infinity,
             child: _MacPrimaryAction(
-              label: context.l10n.commonNext,
-              onPressed: onboarding.isBusy
-                  ? null
-                  : () => onRegisterStepChanged(2),
+              label: context.l10n.onboardingPhoneLoginOrRegisterAction,
+              onPressed: onboarding.isBusy ? null : onSubmitRegister,
             ),
           ),
         ],

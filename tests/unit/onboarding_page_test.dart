@@ -20,6 +20,7 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show SelectionArea;
@@ -333,6 +334,12 @@ void main() {
 
     final fields = find.byType(CupertinoTextField);
     expect(fields, findsNWidgets(3));
+    expect(find.text('下一步'), findsNothing);
+    expect(find.text('登录/注册'), findsOneWidget);
+    expect(
+      find.byKey(const Key('onboarding-mac-phone-submit-action')),
+      findsOneWidget,
+    );
     await tester.enterText(fields.at(0), '13800138000');
     await tester.enterText(fields.at(1), 'alice-0714');
     await tester.tap(find.text('发送验证码'));
@@ -1116,7 +1123,7 @@ void main() {
     _resetTestViewSize(tester);
   });
 
-  testWidgets('全屏认证表单使用一级认证 tab 和右对齐动作按钮', (tester) async {
+  testWidgets('移动端手机号表单与桌面保持同一字段顺序和单屏动作', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));
     _setTestViewSize(tester, const Size(390, 844));
 
@@ -1131,20 +1138,31 @@ void main() {
     final authTabsRect = tester.getRect(
       find.byKey(const Key('onboarding-auth-mode-tabs')),
     );
-    final nextRect = tester.getRect(
-      find.ancestor(
-        of: find.text('下一步'),
-        matching: find.byWidgetPredicate(
-          (widget) => widget is SizedBox && widget.width == double.infinity,
-        ),
-      ),
+    final submitButton = find.descendant(
+      of: find.byKey(const Key('onboarding-phone-submit-action')),
+      matching: find.byType(AppPrimaryButton),
     );
+    final submitRect = tester.getRect(submitButton);
+    final fields = find.byType(CupertinoTextField);
+    expect(fields, findsNWidgets(3));
+    final phoneRect = tester.getRect(fields.at(0));
+    final handleRect = tester.getRect(fields.at(1));
+    final otpRect = tester.getRect(fields.at(2));
+    final sendOtpRect = tester.getRect(find.text('发送验证码'));
 
     expect(find.byKey(const Key('onboarding-entry-tabs')), findsNothing);
+    expect(find.text('下一步'), findsNothing);
+    expect(find.text('登录/注册'), findsOneWidget);
     expect(authTabsRect.width, lessThan(cardRect.width));
-    expect(nextRect.width, lessThan(cardRect.width * 0.5));
-    expect(nextRect.right, lessThan(cardRect.right));
-    expect(cardRect.right - nextRect.right, moreOrLessEquals(4, epsilon: 1));
+    expect(phoneRect.top, lessThan(handleRect.top));
+    expect(handleRect.top, lessThan(otpRect.top));
+    expect(
+      sendOtpRect.center.dy,
+      moreOrLessEquals(otpRect.center.dy, epsilon: 2),
+    );
+    expect(submitRect.width, lessThan(cardRect.width * 0.5));
+    expect(submitRect.right, lessThan(cardRect.right));
+    expect(cardRect.right - submitRect.right, moreOrLessEquals(4, epsilon: 1));
   });
 
   testWidgets('邮箱注册发送激活邮件后进入重新发送倒计时', (tester) async {
@@ -1245,6 +1263,56 @@ void main() {
     expect(feedback?.message.detail, 'otp gateway unavailable');
   });
 
+  testWidgets('手机号或 Handle 修改后已发送验证码不能继续提交', (tester) async {
+    for (final mutation in <({int fieldIndex, String replacement})>[
+      (fieldIndex: 0, replacement: '13900139000'),
+      (fieldIndex: 1, replacement: 'bob'),
+    ]) {
+      final gateway = FakeAwikiGateway();
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(CupertinoTextField);
+      await tester.enterText(fields.at(0), '13800138000');
+      await tester.enterText(fields.at(1), 'alice');
+      await tester.enterText(fields.at(2), '123456');
+      await _tapVisible(tester, find.text('发送验证码'));
+      await tester.pump();
+
+      var container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(
+        container.read(onboardingProvider).otpTargetFullHandle,
+        'alice.awiki.ai',
+      );
+
+      await tester.enterText(
+        fields.at(mutation.fieldIndex),
+        mutation.replacement,
+      );
+      await tester.pump();
+      expect(container.read(onboardingProvider).otpTargetFullHandle, isNull);
+
+      await _tapVisible(tester, find.text('登录/注册'));
+      await tester.pump();
+
+      expect(gateway.registerHandleCalls, 0);
+      container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(
+        container.read(uiFeedbackProvider)?.message.id,
+        'operationFailedRetry',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('邮箱验证成功后可以直接完成注册', (tester) async {
     final gateway = FakeAwikiGateway()..emailVerificationResult = true;
 
@@ -1270,45 +1338,59 @@ void main() {
     await tester.tap(find.text('完成注册'));
     await tester.pumpAndSettle();
 
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(container.read(onboardingProvider).registerStep, 1);
     expect(gateway.registerHandleWithEmailCalls, 1);
   });
 
-  testWidgets('进入 handle 步骤时用户名输入框没有默认值', (tester) async {
+  testWidgets('手机号表单切换响应式尺寸后仍保持同一单屏输入状态', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage()),
     );
-    await tester.pump();
-
-    await tester.tap(find.text('登录或注册'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byType(CupertinoTextField).at(0),
+
+    final compactFields = find.byType(CupertinoTextField);
+    await tester.enterText(compactFields.at(0), '13800138000');
+    await tester.enterText(compactFields.at(1), 'alice');
+    await tester.enterText(compactFields.at(2), '123456');
+
+    _setTestViewSize(tester, const Size(1280, 800));
+    await tester.pumpAndSettle();
+
+    final desktopFields = find.byType(CupertinoTextField);
+    expect(desktopFields, findsNWidgets(3));
+    expect(
+      tester.widget<CupertinoTextField>(desktopFields.at(0)).controller?.text,
       '13800138000',
     );
-    await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
-    await _tapVisible(tester, find.text('下一步'));
-    await tester.pumpAndSettle();
-
-    final handleField = tester.widget<CupertinoTextField>(
-      find.byType(CupertinoTextField).first,
+    expect(
+      tester.widget<CupertinoTextField>(desktopFields.at(1)).controller?.text,
+      'alice',
     );
-    expect(handleField.controller?.text, isEmpty);
+    expect(
+      tester.widget<CupertinoTextField>(desktopFields.at(2)).controller?.text,
+      '123456',
+    );
+    expect(find.text('下一步'), findsNothing);
+    expect(find.text('上一步'), findsNothing);
+    expect(find.text('登录/注册'), findsOneWidget);
   });
 
-  testWidgets('手机号提交直接走注册路径', (tester) async {
+  testWidgets('Android 手机号单屏提交直接走注册路径', (tester) async {
     final gateway = FakeAwikiGateway();
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      _resetTestViewSize(tester);
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    _setTestViewSize(tester, const Size(390, 844));
 
     await tester.pumpWidget(
       buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
     );
-    await tester.pump();
-
-    await tester.tap(find.text('登录或注册'));
     await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byType(CupertinoTextField).at(0),
       '13800138000',
@@ -1317,14 +1399,15 @@ void main() {
     await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
-    await _tapVisible(tester, find.text('下一步'));
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('完成'));
+    await _tapVisible(tester, find.text('登录/注册'));
     await tester.pumpAndSettle();
 
     expect(gateway.registerHandleCalls, 1);
     expect(gateway.lastRegisteredNickName, 'alice');
     expect(gateway.lastRegisteredProfileMarkdown, '# alice\n\n');
+
+    debugDefaultTargetPlatformOverride = null;
+    _resetTestViewSize(tester);
   });
 
   testWidgets('手机号注册返回 joinRequired 时进入设备加入页', (tester) async {
@@ -1346,9 +1429,7 @@ void main() {
     await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
     await _tapVisible(tester, find.text('发送验证码'));
     await tester.pump();
-    await _tapVisible(tester, find.text('下一步'));
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('完成'));
+    await _tapVisible(tester, find.text('登录/注册'));
     await tester.pumpAndSettle();
 
     expect(gateway.registerHandleCalls, 0);

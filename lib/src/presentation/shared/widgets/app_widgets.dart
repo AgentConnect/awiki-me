@@ -288,6 +288,8 @@ class TopBarActionButton extends StatelessWidget {
   final BorderRadius? borderRadius;
   final bool scaleOnPress;
 
+  static const double minimumSize = 44;
+
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
@@ -303,7 +305,10 @@ class TopBarActionButton extends StatelessWidget {
       borderRadius:
           borderRadius ?? BorderRadius.circular(responsive.radius(10)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        constraints: const BoxConstraints(
+          minWidth: minimumSize,
+          minHeight: minimumSize,
+        ),
         child: Center(child: child),
       ),
     );

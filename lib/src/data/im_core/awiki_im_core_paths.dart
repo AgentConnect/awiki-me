@@ -13,7 +13,12 @@ import '../storage/awiki_storage_scope_layout.dart';
 export '../storage/awiki_storage_roots.dart'
     show awikiE2eAppStateRoot, normalizeAwikiE2eAppStateRootForLaunch;
 
-const int identityOwnedLocalStateSchemaVersion = 17;
+/// The oldest local-state schema this App may open or upgrade in place.
+///
+/// Schemas before the release/0710 boundary are pre-release projections. They
+/// are archived as a complete SQLite file set so the current Core can rebuild
+/// its disposable local projection without touching identities or Vault data.
+const int minimumSupportedLocalStateSchemaVersion = 27;
 const String _sqliteHeader = 'SQLite format 3\u0000';
 const List<String> _sqliteSidecarSuffixes = <String>[
   '-wal',
@@ -105,7 +110,7 @@ class AwikiImCorePathLayout {
   Future<void> ensureDirectories() => scopeLayout.ensureDataDirectories();
 
   Future<ArchivedLocalState?> archiveIncompatibleLocalStateIfNeeded({
-    int minimumSchemaVersion = identityOwnedLocalStateSchemaVersion,
+    int minimumSchemaVersion = minimumSupportedLocalStateSchemaVersion,
     DateTime Function()? clock,
   }) async {
     final sqliteFile = File(sqlitePath);

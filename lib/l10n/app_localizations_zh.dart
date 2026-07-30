@@ -177,6 +177,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingCompleteRegister => '完成';
 
   @override
+  String get onboardingPhoneLoginOrRegisterAction => '登录/注册';
+
+  @override
   String get onboardingCompleteEmailRegister => '完成注册';
 
   @override

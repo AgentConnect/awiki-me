@@ -43,6 +43,8 @@ class GroupListPage extends ConsumerWidget {
     final groupCardHorizontalInset = responsive.supportsTwoPane
         ? responsive.spacing(18)
         : 0.0;
+    final actionGap = responsive.displayScaled(2);
+    final actionsWidth = TopBarActionButton.minimumSize * 3 + actionGap * 2;
     Future<void> refreshGroups() async {
       try {
         await ref.read(groupProvider.notifier).refresh();
@@ -64,7 +66,9 @@ class GroupListPage extends ConsumerWidget {
             AwikiMeTopBar(
               title: context.l10n.groupListTitle,
               padding: EdgeInsets.zero,
-              trailingWidth: 156,
+              leadingWidth: embedded ? 0 : TopBarActionButton.minimumSize,
+              trailingWidth: actionsWidth,
+              titleLayout: AwikiMeTopBarTitleLayout.betweenActions,
               leading: embedded
                   ? const SizedBox.shrink()
                   : TopBarActionButton(
@@ -88,7 +92,7 @@ class GroupListPage extends ConsumerWidget {
                       size: responsive.iconMd,
                     ),
                   ),
-                  SizedBox(width: responsive.displayScaled(2)),
+                  SizedBox(width: actionGap),
                   TopBarActionButton(
                     key: const Key('group-list-create-button'),
                     semanticsLabel: context.l10n.quickActionCreateGroup,
@@ -99,7 +103,7 @@ class GroupListPage extends ConsumerWidget {
                       size: responsive.iconMd,
                     ),
                   ),
-                  SizedBox(width: responsive.displayScaled(2)),
+                  SizedBox(width: actionGap),
                   TopBarActionButton(
                     key: const Key('group-list-join-button'),
                     onTap: () => _showJoinDialog(context, ref),

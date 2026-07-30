@@ -89,7 +89,7 @@ void main() {
     },
   );
 
-  test('archives pre-owner-identity local state before SDK open', () async {
+  test('archives pre-release local state before SDK open', () async {
     final root = await Directory.systemTemp.createTemp('awiki_me_paths_test_');
     addTearDown(() async {
       if (await root.exists()) {
@@ -105,26 +105,32 @@ void main() {
     );
     await layout.scopeLayout.createScopeRootExclusive();
     await layout.ensureDirectories();
-    await _writeSqliteHeaderWithUserVersion(layout.sqlitePath, 15);
+    await _writeSqliteHeaderWithUserVersion(layout.sqlitePath, 25);
     await File('${layout.sqlitePath}-wal').writeAsString('wal');
+    await File('${layout.sqlitePath}-shm').writeAsString('shm');
+    await File('${layout.sqlitePath}-journal').writeAsString('journal');
 
     final archived = await layout.archiveIncompatibleLocalStateIfNeeded(
       clock: () => DateTime.utc(2026, 6, 1, 3, 4, 5),
     );
 
     expect(archived, isNotNull);
-    expect(archived!.schemaVersion, 15);
+    expect(archived!.schemaVersion, 25);
     expect(await File(layout.sqlitePath).exists(), isFalse);
     expect(await File('${layout.sqlitePath}-wal').exists(), isFalse);
-    expect(archived.archivedPaths, hasLength(2));
+    expect(await File('${layout.sqlitePath}-shm').exists(), isFalse);
+    expect(await File('${layout.sqlitePath}-journal').exists(), isFalse);
+    expect(archived.archivedPaths, hasLength(4));
     expect(
       archived.archivedPaths.first,
-      endsWith('legacy-state/im_core.sqlite.schema15.20260601T030405Z'),
+      endsWith('legacy-state/im_core.sqlite.schema25.20260601T030405Z'),
     );
-    expect(await File(archived.archivedPaths.first).exists(), isTrue);
+    for (final path in archived.archivedPaths) {
+      expect(await File(path).exists(), isTrue);
+    }
   });
 
-  test('keeps identity-owned local state untouched', () async {
+  test('keeps release 0710 local state for the canonical upgrade', () async {
     final root = await Directory.systemTemp.createTemp('awiki_me_paths_test_');
     addTearDown(() async {
       if (await root.exists()) {
@@ -142,8 +148,32 @@ void main() {
     await layout.ensureDirectories();
     await _writeSqliteHeaderWithUserVersion(
       layout.sqlitePath,
-      identityOwnedLocalStateSchemaVersion,
+      minimumSupportedLocalStateSchemaVersion,
     );
+
+    final archived = await layout.archiveIncompatibleLocalStateIfNeeded();
+
+    expect(archived, isNull);
+    expect(await File(layout.sqlitePath).exists(), isTrue);
+  });
+
+  test('keeps newer local state untouched so downgrade fails closed', () async {
+    final root = await Directory.systemTemp.createTemp('awiki_me_paths_test_');
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+
+    final layout = AwikiImCorePathLayout.fromRoots(
+      appSupportRoot: '${root.path}/support',
+      cacheRoot: '${root.path}/cache',
+      tempRoot: '${root.path}/tmp',
+      scopeId: StorageScopeId.parse(scopeValue),
+    );
+    await layout.scopeLayout.createScopeRootExclusive();
+    await layout.ensureDirectories();
+    await _writeSqliteHeaderWithUserVersion(layout.sqlitePath, 35);
 
     final archived = await layout.archiveIncompatibleLocalStateIfNeeded();
 

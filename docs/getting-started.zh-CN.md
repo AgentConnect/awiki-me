@@ -105,6 +105,18 @@ flutter devices
 flutter run -d <android-device-id>
 ```
 
+macOS 上若 Android Emulator 已能聚焦输入框、ADB 注入也能输入，但宿主物理键盘没有任何
+字符进入虚拟设备，应使用仓库入口启动 AVD：
+
+```bash
+scripts/run_android_emulator.sh --list
+scripts/run_android_emulator.sh <avd-name>
+```
+
+该入口启用 Emulator 官方的直接 keycode forwarding，修复宿主 charmap 翻译或键盘捕获
+异常；它只影响开发模拟器，不改变 Android App、真机输入法或其它平台行为。AVD 已经运行时
+需要先正常关闭，再通过该入口启动。
+
 当前发布产物面向 Android arm64。开发者应自行确认设备架构与 Android SDK 配置。
 
 ### 3.5 iOS

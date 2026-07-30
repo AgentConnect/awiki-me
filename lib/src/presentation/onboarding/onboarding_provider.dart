@@ -21,7 +21,6 @@ class OnboardingState {
   const OnboardingState({
     this.entryMode = 'register',
     this.authMode = 'phone',
-    this.registerStep = 1,
     this.emailVerified = false,
     this.otpResendCountdown = 0,
     this.emailResendCountdown = 0,
@@ -35,7 +34,6 @@ class OnboardingState {
 
   final String entryMode;
   final String authMode;
-  final int registerStep;
   final bool emailVerified;
   final int otpResendCountdown;
   final int emailResendCountdown;
@@ -99,7 +97,6 @@ class OnboardingState {
   OnboardingState copyWith({
     String? entryMode,
     String? authMode,
-    int? registerStep,
     bool? emailVerified,
     int? otpResendCountdown,
     int? emailResendCountdown,
@@ -113,7 +110,6 @@ class OnboardingState {
     return OnboardingState(
       entryMode: entryMode ?? this.entryMode,
       authMode: authMode ?? this.authMode,
-      registerStep: registerStep ?? this.registerStep,
       emailVerified: emailVerified ?? this.emailVerified,
       otpResendCountdown: otpResendCountdown ?? this.otpResendCountdown,
       emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
@@ -180,7 +176,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   void _setEntryMode(String value) {
     state = state.copyWith(
       entryMode: value,
-      registerStep: value == 'login' ? 1 : state.registerStep,
       emailVerified: value == 'login' ? false : state.emailVerified,
       otpResendCountdown: value == 'login' ? 0 : state.otpResendCountdown,
       emailResendCountdown: value == 'login' ? 0 : state.emailResendCountdown,
@@ -198,20 +193,12 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     state = state.copyWith(
       authMode: value,
-      registerStep: 1,
       emailVerified: false,
       otpResendCountdown: 0,
       emailResendCountdown: 0,
     );
     _cancelOtpResendCountdown();
     _cancelEmailResendCountdown();
-  }
-
-  void setRegisterStep(int step) {
-    if (state.usesNoVerificationRegistration && step != 1) {
-      return;
-    }
-    state = state.copyWith(registerStep: step);
   }
 
   Future<void> loadServerInfo({bool force = false}) async {
@@ -642,9 +629,6 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     state = state.copyWith(
       authMode: nextAuthMode ?? state.authMode,
-      registerStep: method?.verification.type == OnboardingVerificationType.none
-          ? 1
-          : state.registerStep,
       emailVerified: authChanged ? false : state.emailVerified,
       otpResendCountdown: authChanged || method == null
           ? 0

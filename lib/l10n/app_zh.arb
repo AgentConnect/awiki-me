@@ -71,6 +71,7 @@
   "onboardingNickname": "昵称",
   "onboardingNicknamePlaceholder": "输入昵称",
   "onboardingCompleteRegister": "完成",
+  "onboardingPhoneLoginOrRegisterAction": "登录/注册",
   "onboardingCompleteEmailRegister": "完成注册",
   "onboardingLoginRegisterHint": "手机号会自动判断登录已有 Handle 或注册新 Handle；邮箱暂时仅支持注册新 Handle。",
   "onboardingAuthMethod": "验证方式",
