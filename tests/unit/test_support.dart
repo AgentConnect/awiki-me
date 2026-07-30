@@ -417,6 +417,7 @@ class FakeUpdateService implements UpdateService {
   bool openDownloadPageCalled = false;
   bool installUpdateCalled = false;
   bool openInstallPermissionSettingsCalled = false;
+  int getCurrentVersionCalls = 0;
   int checkForUpdatesCalls = 0;
   Object? checkError;
   Object? installError;
@@ -434,7 +435,10 @@ class FakeUpdateService implements UpdateService {
   }
 
   @override
-  Future<AppVersion> getCurrentVersion() async => currentVersion;
+  Future<AppVersion> getCurrentVersion() async {
+    getCurrentVersionCalls += 1;
+    return currentVersion;
+  }
 
   @override
   Future<void> installUpdate(AppUpdateManifest manifest) async {

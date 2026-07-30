@@ -11,11 +11,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
-  test('automatic update initialization is disabled only on Windows', () {
-    expect(shouldInitializeAppUpdates(TargetPlatform.windows), isFalse);
-    expect(shouldInitializeAppUpdates(TargetPlatform.macOS), isTrue);
-    expect(shouldInitializeAppUpdates(TargetPlatform.android), isTrue);
-    expect(shouldInitializeAppUpdates(TargetPlatform.iOS), isTrue);
+  testWidgets('Windows App Shell initializes local and remote version state', (
+    tester,
+  ) async {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    final updateService = FakeUpdateService();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        updateService: updateService,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+    final state = container.read(appUpdateProvider);
+    expect(updateService.getCurrentVersionCalls, 1);
+    expect(updateService.checkForUpdatesCalls, 1);
+    expect(state.currentVersion?.displayLabel, '0.1.0+1');
+    expect(state.status, AppUpdateStatus.upToDate);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   AppUpdateManifest buildManifest() {

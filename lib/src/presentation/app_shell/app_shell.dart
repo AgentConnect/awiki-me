@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
@@ -47,9 +46,6 @@ const MethodChannel _macWindowChromeChannel = MethodChannel(
   'ai.awiki.awikime/window_chrome',
 );
 
-bool shouldInitializeAppUpdates(TargetPlatform platform) =>
-    platform != TargetPlatform.windows;
-
 String? _formatUnreadBadge(int count) {
   if (count <= 0) {
     return null;
@@ -76,9 +72,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(ref.read(appRuntimeProvider.notifier).initialize());
-      if (shouldInitializeAppUpdates(defaultTargetPlatform)) {
-        unawaited(ref.read(appUpdateProvider.notifier).initialize());
-      }
+      unawaited(ref.read(appUpdateProvider.notifier).initialize());
     });
   }
 
