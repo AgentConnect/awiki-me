@@ -288,7 +288,7 @@ after the dedicated ali deployment and account have been reviewed:
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","/home/ecs-user/awiki-space/user-service/.venv/bin/python","/home/ecs-user/awiki-space/user-service/scripts/issue_multi_device_test_otp.py","--apply"]' \
+AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","--","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--apply","--env-file","/etc/awiki/user-service.env"]' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
