@@ -17,6 +17,18 @@ void main() {
       );
     });
 
+    test('limits R8 suppression to EMAS optional ping helper types', () {
+      final gradle = File('android/app/build.gradle').readAsStringSync();
+      final rules = File('android/app/proguard-rules.pro').readAsStringSync();
+
+      expect(gradle, contains('proguardFiles "proguard-rules.pro"'));
+      expect(rules, contains('-dontwarn org.android.netutil.PingEntry'));
+      expect(rules, contains('-dontwarn org.android.netutil.PingResponse'));
+      expect(rules, contains('-dontwarn org.android.netutil.PingTask'));
+      expect(rules, isNot(contains('-dontwarn org.android.netutil.**')));
+      expect(rules, isNot(contains('-dontwarn anet.channel.**')));
+    });
+
     test(
       'initializes EMAS before Flutter and registers the AWiki receiver',
       () {
