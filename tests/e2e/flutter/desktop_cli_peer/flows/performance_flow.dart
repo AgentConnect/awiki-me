@@ -445,7 +445,7 @@ String _conversationStableKey(ConversationSummary conversation) {
   if (key != null && key.isNotEmpty) {
     return key;
   }
-  return conversation.threadId;
+  return conversation.conversationId;
 }
 
 class _ConversationPageScanResult {
@@ -563,7 +563,7 @@ Future<void> _openConversationAndWaitForFirstPaint({
   final container = ProviderScope.containerOf(
     tester.element(find.byType(AppShell)),
   );
-  final targetThreadId = conversation.threadId;
+  final targetThreadId = conversation.conversationId;
   await container
       .read(chatThreadsProvider.notifier)
       .openConversation(conversation);
