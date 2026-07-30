@@ -1,5 +1,5 @@
 // [INPUT]: Production AppBootstrap/native Core and two isolated temporary App roots.
-// [OUTPUT]: Real product evidence for the default device entry and independent high-risk gates.
+// [OUTPUT]: Real product evidence for the default device entry, adapters, and independent gates.
 // [POS]: Local entry E2E; it does not claim remote Join/SAS/Root/Recovery acceptance.
 
 import 'dart:io';
@@ -42,14 +42,14 @@ void main() {
           didDomain: 'multi-device-e2e.invalid',
           agentImEnabled: false,
         );
-        _expectHighRiskCapabilitiesDisabled(environment);
+        _expectRolloutGatesDisabled(environment);
         bootstrap = await AppBootstrap.create(
           environment: environment,
           appStateRoot: appRoot.path,
         );
         scopeId = bootstrap.storageScopeLayout!.scopeId.value;
         expect(bootstrap.deviceManagementCorePort, isNotNull);
-        expect(bootstrap.rootKeyTransferPort, isNull);
+        expect(bootstrap.rootKeyTransferPort, isNotNull);
         expect(bootstrap.groupEncryptionCorePort, isNull);
 
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
@@ -75,6 +75,10 @@ void main() {
         expect(
           find.bySemanticsIdentifier('multi-device-start-join'),
           findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('root-transfer-grant-management')),
+          findsNothing,
         );
         expect(find.byKey(const Key('device-join-sas')), findsNothing);
         expect(find.byKey(const Key('device-admin-toggle')), findsNothing);
@@ -107,7 +111,7 @@ void main() {
   );
 }
 
-void _expectHighRiskCapabilitiesDisabled(AwikiEnvironmentConfig environment) {
+void _expectRolloutGatesDisabled(AwikiEnvironmentConfig environment) {
   expect(environment.multiDeviceDeviceRevokeEnabled, isFalse);
   expect(environment.multiDeviceDirectE2eeEnabled, isFalse);
   expect(environment.multiDeviceGroupE2eeEnabled, isFalse);

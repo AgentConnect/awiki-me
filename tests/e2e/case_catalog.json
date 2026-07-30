@@ -2591,11 +2591,11 @@
       "action": "Open one temporary Storage Scope through production AppBootstrap/native Core, verify the default device-management composition, and open the public onboarding Join entry without submitting an OTP.",
       "exactOracles": [
         "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
-        "With default configuration the production device-management adapter and public Join entry exist.",
-        "The public entry opens the real Handle/phone/OTP Join form, while root transfer, revoke, Direct multi-device, and group multi-device remain closed behind independent security gates; Handle Recovery has no executable V1 flow."
+        "With default configuration the production device-management and root-transfer adapters plus the public Join entry exist; the gated group-encryption adapter is absent.",
+        "The public entry opens the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE rollout gates remain closed, and Handle Recovery has no executable V1 flow."
       ],
       "negativeChecks": [
-        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry hidden behind the removed broad gate, hidden enablement of a high-risk capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
+        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry, root-transfer execution from the public form, hidden enablement of a gated capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "test_owned_temporary_scope_delete",
