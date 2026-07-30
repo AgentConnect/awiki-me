@@ -66,6 +66,7 @@ import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
 import '../../case_attestation.dart';
 import '../../remote_multi_device_join_contract.dart';
+import '../../sync_recovery_operator_contract.dart';
 
 part 'multi_device_app_pair_ui_test.part.dart';
 
@@ -95,8 +96,6 @@ const String _appPairDomainIsolationCaseId =
 const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
 const String _syncRecoveryOperatorModeEnv =
     'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
-const String _syncRecoveryAccountAllowlistEnv =
-    'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
 const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
 const String _syncRecoveryTarget = 'awiki-info-testing';
 const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
@@ -106,19 +105,6 @@ const String _accountStateOperatorCommandEnv =
     'AWIKI_ACCOUNT_STATE_E2E_OPERATOR_COMMAND_JSON';
 const String _accountStateFailpointEnableEnv =
     'AWIKI_ACCOUNT_STATE_TEST_FAILPOINTS_ENABLED';
-const List<String> _localSyncRecoveryPrepareCommand = <String>[
-  '/usr/bin/python3',
-  '/home/ecs-user/awiki-space/message-service/scripts/'
-      'prepare_sync_v2_recovery_test.py',
-];
-const List<String> _aliSyncRecoveryPrepareCommand = <String>[
-  'ssh',
-  'ali',
-  '--',
-  '/usr/bin/python3',
-  '/home/ecs-user/awiki-space/message-service/scripts/'
-      'prepare_sync_v2_recovery_test.py',
-];
 const String _rootTransferCaseId = 'ROOT-TRANSFER-E2E-001';
 const String _step4PaginationCaseId = 'STEP4-GROUP-PAGINATION-E2E-001';
 const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';

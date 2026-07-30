@@ -3479,14 +3479,10 @@ Future<void> _forceAppPairRetentionGap(String protocolDeviceId) async {
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv] != '1' ||
       environment[_syncRecoveryTargetEnv] != _syncRecoveryTarget ||
-      environment[_syncRecoveryAccountAllowlistEnv]?.trim().isNotEmpty !=
-          true ||
-      (mode != 'local' && mode != 'ali')) {
+      mode != 'ali') {
     fail('The fixed recovery operator gate is incomplete.');
   }
-  final command = mode == 'local'
-      ? _localSyncRecoveryPrepareCommand
-      : _aliSyncRecoveryPrepareCommand;
+  const command = reviewedSyncRecoveryOperatorCommand;
   final process = await Process.start(
     command.first,
     command.skip(1).toList(growable: false),

@@ -116,6 +116,19 @@ Account State fixture/fail-once action accepts only the reviewed
 `/etc/awiki/user-service.env`. A local `/home/ecs-user/...` command, mutable
 source checkout, alternate host, shell, or implicit remote environment fails
 before either App starts.
+The Stage-3 retention-gap action follows the same reviewed boundary. It runs
+only through the fixed `ssh ali -- sudo -n /usr/bin/env ...` command, executes
+the immutable `/opt/awiki/services/message-service/current` helper with
+`--apply`, and reads only owner-only `/etc/awiki/message-service.toml`.
+The server config must explicitly enable
+`testing.sync_v2_recovery_operator_enabled`. The helper accepts one exact
+protocol device and resolves exactly one account; the managed User operator
+then authorizes that account through the active Handle test-phone binding and
+confirms the same active device. Message Service revalidates the mapping,
+requires the replica to be bootstrapped, and updates exactly one active stream.
+The App runner supplies neither an account ID nor a dynamic account allowlist.
+Its closed receipt is fault-injection evidence only, never a message/recovery
+oracle.
 The functional suite keeps the production-default Direct E2EE gate disabled.
 Its ordinary Direct texts therefore use P3 Base on every participant; the test
 fails if multi-device synchronization silently creates a P5 session or upgrades

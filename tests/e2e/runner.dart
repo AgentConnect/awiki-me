@@ -50,8 +50,6 @@ const String _multiDeviceRemoteHandlePrefixEnv =
 const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
 const String _syncRecoveryOperatorModeEnv =
     'AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE';
-const String _syncRecoveryAccountAllowlistEnv =
-    'AWIKI_MESSAGE_SYNC_V2_RECOVERY_TEST_ACCOUNT_ALLOWLIST';
 const String _syncRecoveryTargetEnv = 'AWIKI_SYSTEM_TEST_TARGET';
 const String _syncRecoveryTarget = 'awiki-info-testing';
 const String _accountStateEnableEnv = 'AWIKI_ACCOUNT_STATE_V1_E2E';
@@ -601,10 +599,7 @@ class DesktopE2eRunner {
     await _timed('Flutter App smoke', () {
       return _runFlutterTest(
         'integration_test/app_smoke_test.dart',
-        caseIds: const <String>[
-          'AGENT-NOTIFY-SMOKE-E2E-001',
-          'SMOKE-E2E-001',
-        ],
+        caseIds: const <String>['AGENT-NOTIFY-SMOKE-E2E-001', 'SMOKE-E2E-001'],
       );
     });
     await _timed('Flutter native IM Core smoke', () {
@@ -859,8 +854,6 @@ class DesktopE2eRunner {
                 Platform.environment[_syncRecoveryEnableEnv]!,
             _syncRecoveryOperatorModeEnv:
                 Platform.environment[_syncRecoveryOperatorModeEnv]!,
-            _syncRecoveryAccountAllowlistEnv:
-                Platform.environment[_syncRecoveryAccountAllowlistEnv]!,
             _syncRecoveryTargetEnv:
                 Platform.environment[_syncRecoveryTargetEnv]!,
             _accountStateEnableEnv:
@@ -2702,12 +2695,10 @@ void _requireAppPairRecoveryOperatorEnvironment(
   final mode = environment[_syncRecoveryOperatorModeEnv]?.trim();
   if (environment[_syncRecoveryEnableEnv]?.trim() != '1' ||
       environment[_syncRecoveryTargetEnv]?.trim() != _syncRecoveryTarget ||
-      environment[_syncRecoveryAccountAllowlistEnv]?.trim().isNotEmpty !=
-          true ||
-      (mode != 'ali' && mode != 'local')) {
+      mode != 'ali') {
     throw E2eFailure(
       'The functional App-pair suite requires the reviewed sync-recovery '
-      'operator opt-in, target, mode, and account allowlist.',
+      'operator opt-in, target, and managed Ali mode.',
     );
   }
 }
