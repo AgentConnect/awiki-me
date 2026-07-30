@@ -514,6 +514,8 @@ FakeAwikiMeAppHarness _createVisualHarness() {
     bootstrap: harness.bootstrap,
     gateway: harness.gateway,
     realtimeGateway: harness.realtimeGateway,
+    messageSyncService: harness.messageSyncService,
+    agentControlService: harness.agentControlService,
     notificationFacade: harness.notificationFacade,
     providerOverrides: <Override>[
       ...harness.providerOverrides,

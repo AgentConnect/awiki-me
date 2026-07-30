@@ -165,6 +165,10 @@ class AppNotificationFacade implements NotificationFacade {
         notificationDetails: details,
         payload: target?.encode(),
       );
+      debugPrint(
+        '[awiki_me][system-notification][submitted] '
+        'target=${target == null ? 'none' : 'conversation'}',
+      );
     } catch (error) {
       debugPrint('[awiki_me][system-notification][error] $error');
     }

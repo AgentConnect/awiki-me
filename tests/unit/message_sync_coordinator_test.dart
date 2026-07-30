@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
@@ -12,18 +13,24 @@ import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
+import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/data/services/method_channel_app_presentation_service.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_terminal_notification_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 import 'devices/device_test_support.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('single-flight coalesces concurrent sync requests', () async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[_conversation()];
@@ -568,10 +575,169 @@ void main() {
         'realtime_duplicate_event',
         immediate: true,
       );
+      await pumpEventQueue();
 
       expect(notifications.inAppCalls, 1);
       expect(notifications.lastInAppTitle, 'Peer');
       expect(notifications.lastInAppBody, 'committed hello');
+    },
+  );
+
+  test(
+    'macOS inactive window uses a system notification while Flutter is resumed',
+    () async {
+      const channel = MethodChannel('ai.awiki.awikime/app_presentation');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'getState');
+            return <String, Object?>{
+              'applicationActive': false,
+              'windowVisible': true,
+              'windowMiniaturized': true,
+            };
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final message = ChatMessage(
+        localId: 'message-background-1',
+        remoteId: 'message-background-1',
+        conversationId: 'dm:peer-scope:v1:peer',
+        threadId: 'dm:peer-scope:v1:peer',
+        senderDid: 'did:test:peer',
+        senderName: 'Peer',
+        receiverDid: 'did:test:me',
+        content: 'background hello',
+        createdAt: DateTime.utc(2026, 7, 30, 9),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final notifications = FakeNotificationFacade();
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[
+            CommittedIncomingMessage(
+              eventId: 'event-background-1',
+              logicalMessageId: 'message-background-1',
+              message: message,
+            ),
+          ],
+        ),
+      );
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        appPresentationService: MethodChannelAppPresentationService(
+          channel: channel,
+          isMacOS: () => true,
+        ),
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('realtime_message', immediate: true);
+      await pumpEventQueue();
+
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 1);
+      expect(notifications.lastSystemTitle, 'Peer');
+      expect(notifications.lastSystemBody, 'background hello');
+    },
+  );
+
+  test(
+    'system notification prefers the current Agent inventory display name',
+    () async {
+      const channel = MethodChannel('ai.awiki.awikime/app_presentation');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            expect(call.method, 'getState');
+            return <String, Object?>{
+              'applicationActive': false,
+              'windowVisible': true,
+              'windowMiniaturized': true,
+            };
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      const skillDid =
+          'did:wba:agent-connect.cn:agent:skill:skill-test:e1_skill';
+      final message = ChatMessage(
+        localId: 'message-skill-background-1',
+        remoteId: 'message-skill-background-1',
+        conversationId: 'dm:peer-scope:v1:skill',
+        threadId: 'dm:peer-scope:v1:skill',
+        senderDid: skillDid,
+        senderName: 'skill-cc44721e0153c892',
+        receiverDid: 'did:test:me',
+        content: 'completed notification',
+        createdAt: DateTime.utc(2026, 7, 30, 9, 30),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      );
+      final notifications = FakeNotificationFacade();
+      final agentControl = FakeAgentControlService()
+        ..agents = const <AgentSummary>[
+          AgentSummary(
+            agentDid: skillDid,
+            kind: AgentKind.daemon,
+            displayName: 'AWiki Skill Agent',
+            activeState: 'active',
+            latest: AgentLatestStatus(status: 'ready'),
+          ),
+        ];
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[
+            CommittedIncomingMessage(
+              eventId: 'event-skill-background-1',
+              logicalMessageId: 'message-skill-background-1',
+              message: message,
+            ),
+          ],
+        ),
+      );
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        appPresentationService: MethodChannelAppPresentationService(
+          channel: channel,
+          isMacOS: () => true,
+        ),
+        agentControl: agentControl,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      expect(container.read(agentsProvider).agents, isEmpty);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('realtime_message', immediate: true);
+      await pumpEventQueue();
+
+      expect(
+        container
+            .read(agentsProvider)
+            .agents
+            .singleWhere((agent) => agent.agentDid == skillDid)
+            .displayName,
+        'AWiki Skill Agent',
+      );
+      expect(notifications.systemCalls, 1);
+      expect(notifications.lastSystemTitle, 'AWiki Skill Agent');
     },
   );
 
@@ -850,6 +1016,8 @@ ProviderContainer _container(
   Duration minInterval = Duration.zero,
   FakeDeviceManagementCore? devices,
   FakeNotificationFacade? notifications,
+  AppPresentationService? appPresentationService,
+  FakeAgentControlService? agentControl,
   bool syncV2ReadEnabled = false,
   SessionIdentity? session,
   FakeMessagingService? messagingService,
@@ -864,6 +1032,10 @@ ProviderContainer _container(
       notificationFacadeProvider.overrideWithValue(
         notifications ?? FakeNotificationFacade(),
       ),
+      if (appPresentationService != null)
+        appPresentationServiceProvider.overrideWithValue(
+          appPresentationService,
+        ),
       deviceManagementCorePortProvider.overrideWithValue(
         devices ?? FakeDeviceManagementCore(),
       ),
@@ -872,6 +1044,7 @@ ProviderContainer _container(
         messageSyncService: sync,
         messagingService: messagingService,
         conversationService: conversationService,
+        agentControlService: agentControl,
       ),
       messageSyncCoordinatorProvider.overrideWith(
         (ref) => MessageSyncCoordinator(

@@ -84,6 +84,36 @@ void main() {
     },
   );
 
+  test('prompt builder accepts the agent-connect.cn tenant', () {
+    final instruction = buildSkillOnboardingInstruction(
+      grant: SkillOnboardingGrant(
+        token: 'awsk1_agent_connect_test_secret',
+        tokenId: 'agtok_skill_agent_connect',
+        controllerHandle: 'newhandle1.agent-connect.cn',
+        agentHandle: 'skill-test.agent-connect.cn',
+        serviceOrigin: 'https://agent-connect.cn',
+        expiresAt: DateTime.utc(2026, 7, 30, 13),
+      ),
+      expectedControllerDid:
+          'did:wba:agent-connect.cn:user:newhandle1:e1_controller',
+      expectedControllerHandle: 'newhandle1.agent-connect.cn',
+      now: () => DateTime.utc(2026, 7, 30, 12),
+    );
+
+    expect(
+      instruction.prompt,
+      contains('https://agent-connect.cn/cli/onboarding.md'),
+    );
+    expect(
+      instruction.prompt,
+      contains('service_base_url=https://agent-connect.cn'),
+    );
+    expect(
+      instruction.prompt,
+      contains('agent_handle=skill-test.agent-connect.cn'),
+    );
+  });
+
   test(
     'controller keeps the instruction in memory and clears on session change',
     () async {
@@ -122,6 +152,37 @@ void main() {
       expect(container.read(skillOnboardingProvider).instruction, isNull);
     },
   );
+
+  test('controller issues a token for the agent-connect.cn tenant', () async {
+    final port = _FakeSkillOnboardingPort(domain: 'agent-connect.cn');
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(
+          AwikiEnvironmentConfig(
+            baseUrl: 'https://agent-connect.cn',
+            didDomain: 'agent-connect.cn',
+          ),
+        ),
+        skillOnboardingPortProvider.overrideWithValue(port),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:wba:agent-connect.cn:user:newhandle1:e1_controller',
+            credentialName: 'newhandle1',
+            displayName: 'newhandle1',
+            handle: 'newhandle1.agent-connect.cn',
+          ),
+        );
+
+    await container.read(skillOnboardingProvider.notifier).generate();
+
+    expect(container.read(skillOnboardingProvider).error, isNull);
+    expect(container.read(skillOnboardingProvider).instruction, isNotNull);
+  });
 
   test(
     'controller rejects non-domestic tenant before issuing a token',
@@ -162,6 +223,9 @@ void main() {
 }
 
 class _FakeSkillOnboardingPort implements SkillOnboardingPort {
+  _FakeSkillOnboardingPort({this.domain = 'awiki.info'});
+
+  final String domain;
   int calls = 0;
   String? controllerDid;
   String? controllerHandle;
@@ -179,8 +243,8 @@ class _FakeSkillOnboardingPort implements SkillOnboardingPort {
       token: 'awsk1_unit_test_secret_value',
       tokenId: 'agtok_skill_$calls',
       controllerHandle: controllerHandle,
-      agentHandle: 'skill-test-$calls.awiki.info',
-      serviceOrigin: 'https://awiki.info',
+      agentHandle: 'skill-test-$calls.$domain',
+      serviceOrigin: 'https://$domain',
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );
   }
