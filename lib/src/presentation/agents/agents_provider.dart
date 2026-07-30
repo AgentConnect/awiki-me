@@ -722,8 +722,11 @@ class AgentsController extends StateNotifier<AgentsState> {
       isLoading: false,
       clearError: true,
     );
-    _loadedCacheOwner =
-        'account:${inventory.binding.ownerIdentityId}:${inventory.binding.accountId}';
+    _loadedCacheOwner = _accountAgentCacheOwner(
+      ownerIdentityId: inventory.binding.ownerIdentityId,
+      accountId: inventory.binding.accountId,
+    );
+    _loadedCacheOperation = _captureOwnerOperation();
     _syncControlEventSubscriptions(visible);
   }
 
@@ -4512,11 +4515,25 @@ String _defaultAppInstanceId(String credentialName) {
 }
 
 String _agentCacheOwner(SessionIdentity session) {
+  final binding = session.accountBinding;
+  if (binding != null) {
+    return _accountAgentCacheOwner(
+      ownerIdentityId: binding.ownerIdentityId,
+      accountId: binding.accountId,
+    );
+  }
   final handle = session.handle?.trim().toLowerCase();
   if (handle != null && handle.isNotEmpty) {
     return 'controller-handle:$handle';
   }
   return 'controller-did:${session.did.trim()}';
+}
+
+String _accountAgentCacheOwner({
+  required String ownerIdentityId,
+  required String accountId,
+}) {
+  return 'account:${ownerIdentityId.trim()}:${accountId.trim()}';
 }
 
 AgentInventoryAutoSyncReason _preferredInventoryAutoSyncReason(

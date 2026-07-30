@@ -148,6 +148,76 @@ void main() {
   );
 
   test(
+    'account-state snapshot exposes runtime create pending without reloading',
+    () async {
+      final control = _BlockingRuntimeCreationAgentControlService();
+      final container = _container(
+        control,
+        session: const SessionIdentity(
+          did: 'did:human:current',
+          credentialName: 'identity-current',
+          displayName: 'Current',
+          handle: 'current.awiki.info',
+          accountBinding: SessionAccountBinding(
+            ownerIdentityId: 'owner-1',
+            accountId: 'account-1',
+            currentDid: 'did:human:current',
+            protocolDeviceId: 'device-1',
+            identityGeneration: '1',
+            deviceAuthGeneration: '1',
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentsProvider.notifier);
+
+      await controller.applyAccountStateSnapshots(
+        inventory: ProductAgentInventorySnapshot(
+          binding: const ProductAccountBinding(
+            ownerIdentityId: 'owner-1',
+            accountId: 'account-1',
+          ),
+          domainVersion: '7',
+          refreshedAt: DateTime.utc(2026, 7, 31),
+          agents: const <ProductAgentInventoryItem>[
+            ProductAgentInventoryItem(
+              agentDid: 'did:agent:daemon',
+              activeState: 'active',
+              payloadJson:
+                  '{"agent_kind":"daemon","display_name":"Daemon",'
+                  '"status":{"status":"ready"}}',
+            ),
+          ],
+        ),
+        isSessionCurrent: () => true,
+      );
+      final creation = controller.createRuntimeAgent(
+        'did:agent:daemon',
+        options: const RuntimeAgentCreateOptions(
+          kind: RuntimeAgentKind.codex,
+          handle: 'current-codex',
+          displayName: 'Current Codex',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(
+        container.read(agentsProvider).agents.single.agentDid,
+        'did:agent:daemon',
+      );
+      expect(control.listAgentsCalls, 0);
+      expect(control.runtimeCreateStarted, isTrue);
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+      );
+
+      control.completeRuntimeCreate();
+      await creation;
+    },
+  );
+
+  test(
     'next identity does not reuse or accept a stale inventory load',
     () async {
       final control = _BlockingFirstListAgentControlService();
@@ -4603,6 +4673,41 @@ class _CountingAgentControlService extends FakeAgentControlService {
   Future<List<AgentSummary>> listAgents({bool includeInactive = false}) async {
     listAgentsCalls += 1;
     return super.listAgents(includeInactive: includeInactive);
+  }
+}
+
+class _BlockingRuntimeCreationAgentControlService
+    extends FakeAgentControlService {
+  final Completer<List<AgentSummary>> _unexpectedPreCreateList =
+      Completer<List<AgentSummary>>();
+  final Completer<void> _runtimeCreateResult = Completer<void>();
+  int listAgentsCalls = 0;
+  bool runtimeCreateStarted = false;
+
+  @override
+  Future<List<AgentSummary>> listAgents({bool includeInactive = false}) {
+    listAgentsCalls += 1;
+    if (!runtimeCreateStarted) {
+      return _unexpectedPreCreateList.future;
+    }
+    return super.listAgents(includeInactive: includeInactive);
+  }
+
+  @override
+  Future<void> createRuntimeAgent({
+    required String daemonAgentDid,
+    required String controllerDid,
+    required RuntimeAgentCreateOptions options,
+    String? clientRequestId,
+  }) {
+    runtimeCreateStarted = true;
+    return _runtimeCreateResult.future;
+  }
+
+  void completeRuntimeCreate() {
+    if (!_runtimeCreateResult.isCompleted) {
+      _runtimeCreateResult.complete();
+    }
   }
 }
 

@@ -60,6 +60,12 @@ Profile/Agent/Device mutations.
 The product SQLite cache is keyed by stable `owner_identity_id + account_id`.
 DID and Handle are not cache owners.
 
+- The Agent provider uses that same stable account key for its loaded/cache
+  owner. Applying an authoritative Agent Inventory snapshot marks that exact
+  account owner and session operation as loaded, so an Agent creation can add
+  its short-lived pending intent immediately instead of starting a second
+  remote Inventory read. Handle/DID cache keys remain only for legacy sessions
+  that do not yet have a typed account binding.
 - Agent Inventory and Agent Status retain independent versions. Archived or
   inactive Agents remain in the durable Inventory cache but are filtered from
   the visible Agent list.

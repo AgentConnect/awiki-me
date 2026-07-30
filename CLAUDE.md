@@ -13,7 +13,7 @@
    - Android/iOS remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
    - Realtime/Push 都只是同步提示；前台会话必须以有界周期触发 Core reliable sync，补偿提示丢失，并在后台停止，不能把 WebSocket 投递当作可靠消息事实源。
    - 无业务消息体但携带 Core `sync` hint 的 realtime 事件必须保留为 sync-only `RealtimeUpdate` 并调度 reliable sync；普通 P3 Direct 的兄弟设备 outgoing 投影来自 sender owner 的 `sync.delta` / `sync.thread_after`，不能由 App 构造 plain own-sync 或升级为 P5。App 使用的稳定 conversationId 只是展示/存储路由，普通 Direct 的不可变 wire identity 仍由 Core 保持为 `direct + peer DID`。
-   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。权威 Inventory 中的 runtime Agent 在发布到 UI 前通过 Core Directory 投影 canonical Direct route，失败不伪造 Persona，并由后续 Inventory 对账重试。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
+   - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。typed account binding 存在时，Agent provider 的 cache/load owner 必须是稳定 `owner_identity_id + account_id`，应用权威 Inventory 后标记同一 owner 与当前 session operation 已加载，不能因 Handle/DID key 不一致阻塞 create pending 首帧。权威 Inventory 中的 runtime Agent 在发布到 UI 前通过 Core Directory 投影 canonical Direct route，失败不伪造 Persona，并由后续 Inventory 对账重试。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。
    - Agent/Daemon 能力按 App 内置 realm 白名单 fail-closed；仅当 HTTPS backend host 与 DID Host 相同且命中 `awiki.ai`、`awiki.info`、`anpclaw.com` 时启用。
    - 行为和 UI 变化同时更新 `tests/unit/`；真实 backend、CLI peer、平台或设备流程变化同步更新 `tests/e2e/`。
    - 平台 runner 变更只触及任务明确要求的平台，避免提交无关生成文件。
