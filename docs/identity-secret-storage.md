@@ -108,7 +108,10 @@ Native smoke 覆盖显式 provision、native `VaultRequired` open、同一进程
 root，以及删除 key 后 openExisting 不重建。Debug smoke 不是 production Team-signing 或真实 App
 进程重启证据；`scripts/run_macos_production_scope_restart_gate.sh` 是独立 release Gate：每个阶段重新
 构建并用同一稳定 identity签名production bundle，分别启动 provision/reopen/cleanup App进程，校验
-Team/bundle identity、dev/prod service隔离、revision 1持续存在和duplicate create拒绝。
+Team/bundle identity、dev/prod service隔离、revision 1持续存在和duplicate create拒绝。Gate 会在
+三个阶段前从 sibling `awiki-cli-rs2`（或显式 `AWIKI_IM_CORE_REPO_DIR`）只构建一次 universal macOS
+Core，校验 arm64/x86_64，刷新 CocoaPods 并清理旧 Release XCFramework 中间目录；原生依赖准备
+失败必须与 Keychain 行为失败分开报告。
 
 相关测试：
 

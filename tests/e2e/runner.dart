@@ -1292,23 +1292,43 @@ class DesktopE2eRunner {
   }) async {
     final peerConfig = _requireConfig();
     final tenantName = _tenantName;
-    await _cliForWorkspace(
-      workspaceDir: workspaceDir,
-      homeDir: homeDir,
-      args: <String>[
-        '--format',
-        'json',
-        'tenant',
-        'create',
-        tenantName,
-        '--backend-base-url',
-        peerConfig.serviceBaseUrl,
-        '--did-host',
-        peerConfig.didDomain,
-        '--display-name',
-        'AWiki E2E $runId',
-      ],
-    );
+    DesktopCliTenantConfig? existing;
+    if (!options.dryRun && !commands.dryRun) {
+      final list = await _cliForWorkspace(
+        workspaceDir: workspaceDir,
+        homeDir: homeDir,
+        args: const <String>['--format', 'json', 'tenant', 'list'],
+      );
+      existing = cliTenantConfigFromListJson(list.output, tenantName);
+    }
+    if (existing == null) {
+      await _cliForWorkspace(
+        workspaceDir: workspaceDir,
+        homeDir: homeDir,
+        args: <String>[
+          '--format',
+          'json',
+          'tenant',
+          'create',
+          tenantName,
+          '--backend-base-url',
+          peerConfig.serviceBaseUrl,
+          '--did-host',
+          peerConfig.didDomain,
+          '--display-name',
+          'AWiki E2E $runId',
+        ],
+      );
+    } else if (!_sameHttpEndpoint(
+          existing.backendBaseUrl,
+          peerConfig.serviceBaseUrl,
+        ) ||
+        _normalizedDomain(existing.didHost) !=
+            _normalizedDomain(peerConfig.didDomain)) {
+      throw E2eFailure(
+        'Existing E2E tenant does not match the selected service target.',
+      );
+    }
     await _cliForWorkspace(
       workspaceDir: workspaceDir,
       homeDir: homeDir,
@@ -1365,35 +1385,53 @@ class DesktopE2eRunner {
 
   Future<void> _prepareCliIdentity() async {
     final peerConfig = _requireConfig();
-    await _cli(<String>[
-      '--format',
-      'json',
-      'id',
-      'register',
-      '--handle',
-      peerConfig.cliHandle,
-      '--phone',
-      peerConfig.otpPhone,
-    ]);
-    final register = await _cli(<String>[
-      '--format',
-      'json',
-      'id',
-      'register',
-      '--handle',
-      peerConfig.cliHandle,
-      '--phone',
-      peerConfig.otpPhone,
-      '--otp',
-      peerConfig.otpCode,
-    ], allowFailure: true);
-    if (register.exitCode != 0 && !options.dryRun) {
-      throw E2eFailure(
-        'CLI peer register failed: ${redactor.redact(register.output)}',
-      );
+    var reuseReadyIdentity = false;
+    if (!options.dryRun && !commands.dryRun) {
+      final current = await _cli(const <String>[
+        '--format',
+        'json',
+        'id',
+        'current',
+      ], allowFailure: true);
+      if (current.exitCode == 0) {
+        reuseReadyIdentity = cliCurrentIdentityReadyForHandle(
+          current.output,
+          handle: peerConfig.cliHandle,
+          didDomain: peerConfig.didDomain,
+        );
+      }
     }
-    if (!options.dryRun) {
-      _resourceSideEffectsPossible = true;
+    if (!reuseReadyIdentity) {
+      await _cli(<String>[
+        '--format',
+        'json',
+        'id',
+        'register',
+        '--handle',
+        peerConfig.cliHandle,
+        '--phone',
+        peerConfig.otpPhone,
+      ]);
+      final register = await _cli(<String>[
+        '--format',
+        'json',
+        'id',
+        'register',
+        '--handle',
+        peerConfig.cliHandle,
+        '--phone',
+        peerConfig.otpPhone,
+        '--otp',
+        peerConfig.otpCode,
+      ], allowFailure: true);
+      if (register.exitCode != 0 && !options.dryRun) {
+        throw E2eFailure(
+          'CLI peer register failed: ${redactor.redact(register.output)}',
+        );
+      }
+      if (!options.dryRun) {
+        _resourceSideEffectsPossible = true;
+      }
     }
 
     if (peerConfig.e2eCase.publishesNicknameFixture) {
@@ -2661,6 +2699,108 @@ bool isAuditableGitSha(String value) {
   return RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(normalized) &&
       !RegExp(r'^0{40}$').hasMatch(normalized);
 }
+
+class DesktopCliTenantConfig {
+  const DesktopCliTenantConfig({
+    required this.backendBaseUrl,
+    required this.didHost,
+  });
+
+  final String backendBaseUrl;
+  final String didHost;
+}
+
+DesktopCliTenantConfig? cliTenantConfigFromListJson(
+  String output,
+  String tenantName,
+) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } on Object {
+    throw E2eFailure('CLI tenant preflight returned invalid JSON.');
+  }
+  final data = decoded is Map ? decoded['data'] : null;
+  final tenants = data is Map ? data['tenants'] : null;
+  if (tenants is! List) {
+    throw E2eFailure('CLI tenant preflight omitted the tenant list.');
+  }
+  DesktopCliTenantConfig? result;
+  for (final value in tenants) {
+    if (value is! Map || value['name'] != tenantName) {
+      continue;
+    }
+    if (result != null) {
+      throw E2eFailure('CLI tenant preflight returned duplicate tenant names.');
+    }
+    final backendBaseUrl = value['backend_base_url'];
+    final didHost = value['did_host'];
+    if (backendBaseUrl is! String ||
+        backendBaseUrl.trim().isEmpty ||
+        didHost is! String ||
+        didHost.trim().isEmpty) {
+      throw E2eFailure('CLI tenant preflight returned incomplete target data.');
+    }
+    result = DesktopCliTenantConfig(
+      backendBaseUrl: backendBaseUrl.trim(),
+      didHost: didHost.trim(),
+    );
+  }
+  return result;
+}
+
+bool cliCurrentIdentityReadyForHandle(
+  String output, {
+  required String handle,
+  required String didDomain,
+}) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(output);
+  } on Object {
+    throw E2eFailure('CLI current identity preflight returned invalid JSON.');
+  }
+  final data = decoded is Map ? decoded['data'] : null;
+  final identity = data is Map ? data['identity'] : null;
+  if (identity is! Map) {
+    throw E2eFailure('CLI current identity preflight omitted identity data.');
+  }
+  final localPart = handle.trim().toLowerCase();
+  final fullHandle = '$localPart.${_normalizedDomain(didDomain)}';
+  final currentHandle = identity['handle']?.toString().trim().toLowerCase();
+  final currentFullHandle = identity['full_handle']
+      ?.toString()
+      .trim()
+      .toLowerCase();
+  final userState = identity['user_state'];
+  final readyForMessaging = userState is Map
+      ? userState['ready_for_messaging']
+      : null;
+  return currentHandle == localPart &&
+      currentFullHandle == fullHandle &&
+      readyForMessaging == true;
+}
+
+bool _sameHttpEndpoint(String left, String right) {
+  Uri parse(String value) {
+    final uri = Uri.parse(value.trim());
+    final path = uri.path == '/'
+        ? ''
+        : uri.path.replaceFirst(RegExp(r'/$'), '');
+    return uri.replace(
+      scheme: uri.scheme.toLowerCase(),
+      host: uri.host.toLowerCase(),
+      path: path,
+      query: null,
+      fragment: null,
+    );
+  }
+
+  return parse(left) == parse(right);
+}
+
+String _normalizedDomain(String value) =>
+    value.trim().toLowerCase().replaceFirst(RegExp(r'\.$'), '');
 
 bool daemonStateRootFitsUnixSocket(String stateRoot) {
   const int maxUnixSocketPathBytes = 103;

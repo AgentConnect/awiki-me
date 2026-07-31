@@ -787,6 +787,120 @@ void main() {
     });
   });
 
+  group('CLI tenant preflight', () {
+    test('returns an exact reusable target or no match', () {
+      final tenant = cliTenantConfigFromListJson(
+        jsonEncode(<String, Object?>{
+          'data': <String, Object?>{
+            'tenants': <Object?>[
+              <String, Object?>{
+                'name': 'e2e-run',
+                'backend_base_url': 'https://anpclaw.com',
+                'did_host': 'anpclaw.com',
+              },
+            ],
+          },
+        }),
+        'e2e-run',
+      );
+
+      expect(tenant?.backendBaseUrl, 'https://anpclaw.com');
+      expect(tenant?.didHost, 'anpclaw.com');
+      expect(
+        cliTenantConfigFromListJson(
+          jsonEncode(<String, Object?>{
+            'data': <String, Object?>{'tenants': <Object?>[]},
+          }),
+          'missing',
+        ),
+        isNull,
+      );
+    });
+
+    test('rejects malformed or duplicate targets', () {
+      expect(
+        () => cliTenantConfigFromListJson('{}', 'e2e-run'),
+        throwsA(isA<E2eFailure>()),
+      );
+      expect(
+        () => cliTenantConfigFromListJson(
+          jsonEncode(<String, Object?>{
+            'data': <String, Object?>{
+              'tenants': <Object?>[
+                <String, Object?>{
+                  'name': 'e2e-run',
+                  'backend_base_url': 'https://anpclaw.com',
+                  'did_host': 'anpclaw.com',
+                },
+                <String, Object?>{
+                  'name': 'e2e-run',
+                  'backend_base_url': 'https://other.example',
+                  'did_host': 'other.example',
+                },
+              ],
+            },
+          }),
+          'e2e-run',
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+  });
+
+  group('CLI current identity preflight', () {
+    test('reuses only an exact ready Handle identity', () {
+      String output({
+        String handle = 'e2e-peer',
+        String fullHandle = 'e2e-peer.anpclaw.com',
+        bool ready = true,
+      }) => jsonEncode(<String, Object?>{
+        'data': <String, Object?>{
+          'identity': <String, Object?>{
+            'handle': handle,
+            'full_handle': fullHandle,
+            'user_state': <String, Object?>{'ready_for_messaging': ready},
+          },
+        },
+      });
+
+      expect(
+        cliCurrentIdentityReadyForHandle(
+          output(),
+          handle: 'e2e-peer',
+          didDomain: 'anpclaw.com',
+        ),
+        isTrue,
+      );
+      expect(
+        cliCurrentIdentityReadyForHandle(
+          output(ready: false),
+          handle: 'e2e-peer',
+          didDomain: 'anpclaw.com',
+        ),
+        isFalse,
+      );
+      expect(
+        cliCurrentIdentityReadyForHandle(
+          output(fullHandle: 'e2e-peer.other.example'),
+          handle: 'e2e-peer',
+          didDomain: 'anpclaw.com',
+        ),
+        isFalse,
+      );
+    });
+
+    test('rejects malformed successful current-identity output', () {
+      expect(
+        () => cliCurrentIdentityReadyForHandle(
+          '{}',
+          handle: 'e2e-peer',
+          didDomain: 'anpclaw.com',
+        ),
+        throwsA(isA<E2eFailure>()),
+      );
+    });
+  });
+
   group('DesktopE2eFileConfig', () {
     test('loads minimal local YAML config', () async {
       final root = await Directory.systemTemp.createTemp(
@@ -1385,6 +1499,66 @@ cliHandle: legacy-cli
       );
     });
 
+    test('performance accepts the audited Singapore staging target', () {
+      final definition = DesktopE2eSuiteManifest.load(
+        Directory.current,
+      ).definitionFor(DesktopE2eCase.performance);
+      final config = DesktopCliPeerConfig(
+        platform: DesktopE2ePlatform.macos,
+        serviceBaseUrl: 'https://anpclaw.com',
+        userServiceUrl: 'https://anpclaw.com',
+        messageServiceUrl: 'https://anpclaw.com',
+        messageServiceWsUrl: 'wss://anpclaw.com/im/ws',
+        didDomain: 'anpclaw.com',
+        otpPhone: 'redacted',
+        otpCode: 'redacted',
+        appHandle: 'app',
+        cliHandle: 'cli',
+        cliBin: '/tmp/awiki-cli',
+        cliSourceRef: '1111111111111111111111111111111111111111',
+        e2eCase: DesktopE2eCase.performance,
+        performance: DesktopPerformanceConfig.defaults,
+      );
+
+      expect(() => definition.validateRemoteTarget(config), returnsNormally);
+    });
+
+    test(
+      'Singapore staging still requires its exact secure WebSocket path',
+      () {
+        final definition = DesktopE2eSuiteManifest.load(
+          Directory.current,
+        ).definitionFor(DesktopE2eCase.performance);
+        final config = DesktopCliPeerConfig(
+          platform: DesktopE2ePlatform.macos,
+          serviceBaseUrl: 'https://anpclaw.com',
+          userServiceUrl: 'https://anpclaw.com',
+          messageServiceUrl: 'https://anpclaw.com',
+          messageServiceWsUrl: 'wss://anpclaw.com/ws',
+          didDomain: 'anpclaw.com',
+          otpPhone: 'redacted',
+          otpCode: 'redacted',
+          appHandle: 'app',
+          cliHandle: 'cli',
+          cliBin: '/tmp/awiki-cli',
+          cliSourceRef: '1111111111111111111111111111111111111111',
+          e2eCase: DesktopE2eCase.performance,
+          performance: DesktopPerformanceConfig.defaults,
+        );
+
+        expect(
+          () => definition.validateRemoteTarget(config),
+          throwsA(
+            isA<E2eFailure>().having(
+              (error) => error.message,
+              'message',
+              contains('audited remote WebSocket endpoint'),
+            ),
+          ),
+        );
+      },
+    );
+
     test('real source ref requires an exact non-zero commit SHA', () {
       expect(
         isAuditableGitSha('1111111111111111111111111111111111111111'),
@@ -1725,7 +1899,11 @@ cliPeer:
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'smoke');
       expect(decoded['platform'], Platform.isLinux ? 'linux' : 'macos');
-      expect(decoded['caseIds'], <dynamic>['SMOKE-E2E-001', 'NATIVE-E2E-001']);
+      expect(decoded['caseIds'], <dynamic>[
+        'AGENT-NOTIFY-SMOKE-E2E-001',
+        'SMOKE-E2E-001',
+        'NATIVE-E2E-001',
+      ]);
     });
 
     test('multi-device runs only the local capability-gate shim', () async {
@@ -3122,6 +3300,58 @@ performance:
   });
 
   group('DesktopPerformanceBudgetResult', () {
+    test('performance warmup releases its complete Bootstrap boundary', () {
+      final source = File(
+        'tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart',
+      ).readAsStringSync();
+
+      expect(
+        source,
+        contains('''
+    try {
+      await bootstrap.appSessionService?.logout();
+    } finally {
+      await bootstrap.dispose();
+    }
+'''),
+      );
+      expect(
+        source.indexOf('await _warmPerformanceLocalConversationState(config)'),
+        lessThan(source.indexOf('final appLaunchWatch =')),
+      );
+      expect(source, contains('_restoreOrPreparePerformanceWarmupIdentity'));
+      expect(source, contains('sessions.listLocalIdentities()'));
+    });
+
+    test('cold visibility metrics use one launch clock and real UI rows', () {
+      final scenario = File(
+        'tests/e2e/flutter/desktop_cli_peer/desktop_cli_peer_e2e.dart',
+      ).readAsStringSync();
+      final robot = File(
+        'tests/e2e/flutter/desktop_cli_peer/support/ui_robot.dart',
+      ).readAsStringSync();
+      final performance = File(
+        'tests/e2e/flutter/desktop_cli_peer/flows/performance_flow.dart',
+      ).readAsStringSync();
+
+      expect(scenario, contains('final appLaunchWatch ='));
+      expect(scenario, contains('await robot.awaitRestoredSession(session)'));
+      expect(
+        scenario,
+        contains(
+          'await robot.awaitFirstConversationRowVisible(appLaunchWatch!)',
+        ),
+      );
+      expect(robot, contains('ValueKey<String>(:final value)'));
+      expect(robot, contains("'conversation-row:'"));
+      expect(performance, contains("'app.authenticated_shell_visible_ms'"));
+      expect(
+        performance,
+        contains("'conversation_list.first_non_empty_visible_ms'"),
+      );
+      expect(performance, isNot(contains('_firstNonEmptyMs')));
+    });
+
     test(
       'default performance gate requires realtime chat open first-paint metrics',
       () {

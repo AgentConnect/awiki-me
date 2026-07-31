@@ -27,6 +27,77 @@ command -v flutter >/dev/null || {
   echo "production_scope_restart_gate_failed: flutter unavailable" >&2
   exit 2
 }
+command -v pod >/dev/null || {
+  echo "production_scope_restart_gate_failed: CocoaPods unavailable" >&2
+  exit 2
+}
+
+im_core_repo_dir="${AWIKI_IM_CORE_REPO_DIR:-$ROOT_DIR/../awiki-cli-rs2}"
+im_core_repo_dir="$(cd "$im_core_repo_dir" 2>/dev/null && pwd)" || {
+  echo "production_scope_restart_gate_failed: native dependency repository unavailable" >&2
+  exit 2
+}
+im_core_build_script="$im_core_repo_dir/scripts/flutter/build-sdk-native.sh"
+im_core_xcframework="$im_core_repo_dir/packages/awiki_im_core/macos/Frameworks/AwikiImCore.xcframework"
+
+prepare_native_dependency() {
+  [[ -x "$im_core_build_script" ]] || {
+    echo "missing native build script: $im_core_build_script" >&2
+    return 1
+  }
+  local source_revision
+  source_revision="$(git -C "$im_core_repo_dir" rev-parse --verify HEAD)" || return 1
+  echo "Preparing awiki_im_core from source revision $source_revision"
+
+  if ! "$im_core_build_script" --macos-only; then
+    echo "native awiki_im_core build failed" >&2
+    return 1
+  fi
+
+  local info_plist="$im_core_xcframework/Info.plist"
+  [[ -f "$info_plist" ]] || {
+    echo "native XCFramework is missing Info.plist" >&2
+    return 1
+  }
+  local platform library_path library
+  platform="$(/usr/libexec/PlistBuddy -c 'Print :AvailableLibraries:0:SupportedPlatform' "$info_plist")" || return 1
+  library_path="$(/usr/libexec/PlistBuddy -c 'Print :AvailableLibraries:0:LibraryPath' "$info_plist")" || return 1
+  [[ "$platform" == "macos" ]] || {
+    echo "native XCFramework first library is not macOS" >&2
+    return 1
+  }
+  if /usr/libexec/PlistBuddy -c 'Print :AvailableLibraries:1' "$info_plist" >/dev/null 2>&1; then
+    echo "native macOS XCFramework must contain exactly one platform library" >&2
+    return 1
+  fi
+  library="$(find "$im_core_xcframework" -mindepth 2 -maxdepth 2 -type f -name "$library_path" -print -quit)"
+  [[ -f "$library" ]] || {
+    echo "native XCFramework library is missing" >&2
+    return 1
+  }
+  lipo "$library" -verify_arch arm64 x86_64 || {
+    echo "native XCFramework must contain arm64 and x86_64" >&2
+    return 1
+  }
+
+  rm -rf build/macos/Build/Products/Release/XCFrameworkIntermediates/awiki_im_core
+  if ! flutter build macos --config-only --release --no-pub \
+    --target tests/e2e/flutter/native/production_scope_restart_probe.dart; then
+    echo "release platform configuration generation failed" >&2
+    return 1
+  fi
+  if ! (cd macos && pod install); then
+    echo "CocoaPods installation failed" >&2
+    return 1
+  fi
+}
+
+prepare_native_dependency || {
+  echo "production_scope_restart_gate_failed: native dependency preparation failed" >&2
+  exit 2
+}
+
+podfile_lock_checksum="$(shasum -a 256 macos/Podfile.lock | awk '{print $1}')"
 
 scope_id=$(python3 - <<'PY'
 import uuid
@@ -102,5 +173,10 @@ PY
 run_phase provision
 run_phase reopen
 run_phase cleanup
+final_podfile_lock_checksum="$(shasum -a 256 macos/Podfile.lock | awk '{print $1}')"
+[[ "$final_podfile_lock_checksum" == "$podfile_lock_checksum" ]] || {
+  echo "production_scope_restart_gate_failed: Podfile.lock changed during release phases" >&2
+  exit 2
+}
 cleanup_needed=false
 echo "NATIVE-E2E-002 passed: signed release rebuild/process restart preserved the production scope item"

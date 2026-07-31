@@ -3,7 +3,10 @@ part of '../desktop_cli_peer_e2e.dart';
 Future<void> _verifyPerformanceRegression({
   required WidgetTester tester,
   required Duration bootstrapCreateElapsed,
-  required Duration shellVisibleElapsed,
+  required Duration sessionRestoreElapsed,
+  required Duration firstFrameElapsed,
+  required Duration authenticatedShellVisibleElapsed,
+  required Duration firstConversationVisibleElapsed,
   required _PerformanceWarmupResult warmup,
   required MessagingService messaging,
   required MessageSyncService messageSync,
@@ -20,8 +23,24 @@ Future<void> _verifyPerformanceRegression({
     source: 'app',
   );
   recorder.record(
+    'app.session_restore_ms',
+    sessionRestoreElapsed,
+    source: 'app',
+  );
+  recorder.record('app.first_frame_ms', firstFrameElapsed, source: 'ui');
+  recorder.record(
+    'app.authenticated_shell_visible_ms',
+    authenticatedShellVisibleElapsed,
+    source: 'ui',
+  );
+  recorder.record(
     'app.launch_to_shell_visible_ms',
-    shellVisibleElapsed,
+    authenticatedShellVisibleElapsed,
+    source: 'ui',
+  );
+  recorder.record(
+    'conversation_list.first_non_empty_visible_ms',
+    firstConversationVisibleElapsed,
     source: 'ui',
   );
   recorder.record(
@@ -133,21 +152,6 @@ Future<void> _verifyPerformanceRegression({
     'conversation_list.full_hydrate_item_count',
     hydratedConversations.length,
   );
-  recorder.metric(
-    'conversation_list.first_non_empty_visible_ms',
-    _firstNonEmptyMs(
-      shellVisibleElapsed: shellVisibleElapsed,
-      snapshotCount: initialConversations.length,
-      fastLocalCount: fastLocalConversations.length,
-      hydrateCount: hydratedConversations.length,
-      snapshotMs: recorder.metricValue('conversation_list.snapshot_load_ms'),
-      fastLocalMs: recorder.metricValue(
-        'conversation_list.fast_local_hydrate_ms',
-      ),
-      hydrateMs: recorder.metricValue('conversation_list.full_hydrate_ms'),
-    ),
-  );
-
   recorder.record(
     'performance_dataset.long_thread_prepare_ms',
     warmup.longThreadElapsed,
@@ -586,28 +590,6 @@ Future<void> _openConversationAndWaitForFirstPaint({
     interval: const Duration(milliseconds: 100),
     timeout: const Duration(seconds: 30),
   );
-}
-
-num _firstNonEmptyMs({
-  required Duration shellVisibleElapsed,
-  required int snapshotCount,
-  required int fastLocalCount,
-  required int hydrateCount,
-  required num? snapshotMs,
-  required num? fastLocalMs,
-  required num? hydrateMs,
-}) {
-  final shellMs = shellVisibleElapsed.inMilliseconds;
-  if (snapshotCount > 0 && snapshotMs != null) {
-    return shellMs + snapshotMs;
-  }
-  if (fastLocalCount > 0 && fastLocalMs != null) {
-    return shellMs + fastLocalMs;
-  }
-  if (hydrateCount > 0 && hydrateMs != null) {
-    return shellMs + hydrateMs;
-  }
-  return shellMs;
 }
 
 class _CountingConversationService implements ConversationService {

@@ -59,7 +59,7 @@ import 'package:flutter/cupertino.dart'
     show CupertinoActivityIndicator, CupertinoTextField;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Key, SizedBox, Text;
+    show AppLifecycleState, Key, SizedBox, Text, ValueKey;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
@@ -200,6 +200,9 @@ void runDesktopCliPeerE2e({
       final performanceWarmup = config.e2eCase.runsPerformance
           ? await _warmPerformanceLocalConversationState(config)
           : null;
+      final appLaunchWatch = selectedCase.runsPerformance
+          ? (Stopwatch()..start())
+          : null;
       final appCreateWatch = Stopwatch()..start();
       final bootstrap = await AppBootstrap.create(
         environment: config.environment,
@@ -209,6 +212,9 @@ void runDesktopCliPeerE2e({
       addTearDown(bootstrap.dispose);
       final identitySwitchSessions = selectedCase.runsIdentitySwitch
           ? await _prepareIdentitySwitchSessions(bootstrap, config)
+          : null;
+      final sessionRestoreWatch = selectedCase.runsPerformance
+          ? (Stopwatch()..start())
           : null;
       final preparedSession = selectedCase.runsPerformance
           ? await _preparePerformanceAppIdentity(
@@ -222,6 +228,7 @@ void runDesktopCliPeerE2e({
                   bootstrap.onboardingSupportService!,
                   config,
                 );
+      sessionRestoreWatch?.stop();
       if (selectedCase.runsIdentitySwitch) {
         await _verifyIdentitySwitchRegression(
           bootstrap: bootstrap,
@@ -257,7 +264,6 @@ void runDesktopCliPeerE2e({
           messagingServiceProvider.overrideWithValue(faultMessaging),
         attachmentOpenServiceProvider.overrideWithValue(attachmentOpenRecorder),
       ];
-      final shellWatch = Stopwatch()..start();
       await tester.pumpWidget(
         AwikiMeApp(
           bootstrap: bootstrap,
@@ -265,7 +271,7 @@ void runDesktopCliPeerE2e({
         ),
       );
       await tester.pump();
-      shellWatch.stop();
+      final firstFrameElapsed = appLaunchWatch?.elapsed;
       expect(find.byType(AppShell), findsOneWidget);
 
       final session = preparedSession;
@@ -277,6 +283,11 @@ void runDesktopCliPeerE2e({
             : null,
       );
       await robot.awaitRestoredSession(session);
+      final authenticatedShellVisibleElapsed = appLaunchWatch?.elapsed;
+      final firstConversationVisibleElapsed = selectedCase.runsPerformance
+          ? await robot.awaitFirstConversationRowVisible(appLaunchWatch!)
+          : null;
+      appLaunchWatch?.stop();
       if (!selectedCase.runsPerformance) {
         await E2eCaseAttestationWriter.markPassed(
           'AUTH-E2E-001',
@@ -300,7 +311,10 @@ void runDesktopCliPeerE2e({
         await _verifyPerformanceRegression(
           tester: tester,
           bootstrapCreateElapsed: appCreateWatch.elapsed,
-          shellVisibleElapsed: shellWatch.elapsed,
+          sessionRestoreElapsed: sessionRestoreWatch!.elapsed,
+          firstFrameElapsed: firstFrameElapsed!,
+          authenticatedShellVisibleElapsed: authenticatedShellVisibleElapsed!,
+          firstConversationVisibleElapsed: firstConversationVisibleElapsed!,
           warmup: performanceWarmup!,
           messaging: messaging,
           messageSync: bootstrap.messageSyncService!,
@@ -668,6 +682,35 @@ Future<AppSession> _preparePerformanceAppIdentity({
   );
 }
 
+Future<AppSession> _restoreOrPreparePerformanceWarmupIdentity({
+  required AppBootstrap bootstrap,
+  required _DesktopCliPeerSmokeConfig config,
+}) async {
+  final sessions = bootstrap.appSessionService!;
+  final restored = await sessions.restoreSession();
+  if (restored != null && _sessionUsesHandle(restored, config)) {
+    return restored;
+  }
+  final identities = await sessions.listLocalIdentities();
+  for (final identity in identities) {
+    if (_sessionUsesHandle(identity, config)) {
+      return sessions.activateIdentity(identity);
+    }
+  }
+  return _prepareAppIdentity(
+    bootstrap.onboardingService!,
+    bootstrap.onboardingSupportService!,
+    config,
+  );
+}
+
+bool _sessionUsesHandle(AppSession session, _DesktopCliPeerSmokeConfig config) {
+  final actual = session.handle?.trim().toLowerCase();
+  final localPart = config.appHandle.trim().toLowerCase();
+  final fullHandle = '$localPart.${config.environment.didDomain.toLowerCase()}';
+  return actual == localPart || actual == fullHandle;
+}
+
 Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
   _DesktopCliPeerSmokeConfig config,
 ) async {
@@ -676,10 +719,9 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
     appStateRoot: config.appStateRoot,
   );
   try {
-    final session = await _prepareAppIdentity(
-      bootstrap.onboardingService!,
-      bootstrap.onboardingSupportService!,
-      config,
+    final session = await _restoreOrPreparePerformanceWarmupIdentity(
+      bootstrap: bootstrap,
+      config: config,
     );
     final datasetWatch = Stopwatch()..start();
     final dataset = await _preparePerformanceDatasetForAppSession(
@@ -728,7 +770,11 @@ Future<_PerformanceWarmupResult> _warmPerformanceLocalConversationState(
       warnings: syncResult.warnings,
     );
   } finally {
-    await bootstrap.appSessionService?.logout();
+    try {
+      await bootstrap.appSessionService?.logout();
+    } finally {
+      await bootstrap.dispose();
+    }
   }
 }
 

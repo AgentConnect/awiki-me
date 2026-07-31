@@ -1510,15 +1510,16 @@
       "caseId": "NATIVE-E2E-002",
       "feature": "Signed production Keychain process restart",
       "layer": "native_release_security",
-      "preconditions": "A stable signed macOS Release build uses bundle id ai.awiki.awikime and the production scope-secret service.",
+      "preconditions": "A stable signed macOS Release build uses bundle id ai.awiki.awikime and the production scope-secret service; the current awiki-cli-rs2 checkout can produce a universal macOS awiki_im_core XCFramework.",
       "action": "Provision one unique production scope item, terminate the test App process, launch a separately built process to reopen it, reject duplicate create, then delete it in a third process.",
       "exactOracles": [
+        "The gate builds awiki_im_core once before all App phases, validates arm64 and x86_64, and keeps Podfile.lock stable across the three Release builds.",
         "The provision process creates revision 1 only in the production service.",
         "The independent reopen process reads the same revision and createExclusive reports already-exists.",
         "The cleanup process deletes the unique item and confirms missing."
       ],
       "negativeChecks": [
-        "Ad-hoc identity, dev-service access, restart read failure, silent replacement, or cleanup failure fails the release gate."
+        "Native dependency preparation failure is reported before Keychain behavior; ad-hoc identity, dev-service access, restart read failure, silent replacement, or cleanup failure fails the release gate."
       ],
       "environment": "no_service",
       "cleanupPolicy": "unique_scope_item_delete",
@@ -1581,7 +1582,8 @@
       "preconditions": "Remote endpoints are exactly https://awiki.info and wss://awiki.info/im/ws; isolated App and CLI identities pass canonical preflight.",
       "action": "Measure cold App shell and conversation-list visibility.",
       "exactOracles": [
-        "Both cold visibility metrics are present and finite."
+        "Bootstrap creation, session restoration, first frame, authenticated shell, and the first actual visible conversation row are measured from one cold-launch clock.",
+        "The shell and conversation visibility budgets use real UI observations rather than application-service query timings."
       ],
       "negativeChecks": [
         "Missing metric, wrong canonical sample, schema drift, or incorrect budget classification fails."

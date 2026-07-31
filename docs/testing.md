@@ -508,8 +508,11 @@ Contacts、群成员、群系统事件和 sender label 的唯一 App 主显示�
 suite 不能与普通 nickname fixture 共用同一个 peer，也不能用 CLI 输出代替
 App 可见标题断言。
 
-The remote product suites must point every HTTP/WebSocket/DID domain at
-`awiki.info`; they do not start a local backend.
+Remote product suites do not start a backend. Generic App + CLI product suites
+may target the audited `awiki.info`, `agentwiki.info`, or Singapore staging
+`anpclaw.com` profiles. Security suites that depend on managed operators,
+fault injection, or a dedicated account pool remain restricted to the targets
+declared by their suite policy.
 
 Local-server verification is a separate target and must use the domains from
 the local deployment configuration. On the current server the primary target
@@ -522,19 +525,25 @@ domain, Handle domain, certificates, and account pool must not be copied into a
 local-server run.
 
 The full real-backend E2E runner reads local configuration from
-`tests/e2e/configs/e2e.local.yaml` by default. Copy the tracked template first:
+`tests/e2e/configs/e2e.local.yaml` by default. Copy the tracked template for the
+selected target first:
 
 ```bash
 cp tests/e2e/configs/e2e.example.yaml tests/e2e/configs/e2e.local.yaml
+# Or, for Singapore staging:
+cp tests/e2e/configs/e2e.singapore.example.yaml \
+  tests/e2e/configs/e2e.singapore.local.yaml
 ```
 
 Required configuration values:
 
-- `service.baseUrl`: selected backend root. Use `https://agentwiki.info` on the
-  current local server; `https://awiki.info` is only for an explicitly selected
-  remote compatibility run.
-- `service.didDomain`: selected DID domain. Use `agentwiki.info` on the current
-  local server; use `awiki.info` only for the matching remote compatibility run.
+- `service.baseUrl`, `service.userServiceUrl`, and
+  `service.messageServiceUrl`: selected HTTPS backend roots. Singapore staging
+  uses `https://anpclaw.com` for all three.
+- `service.messageServiceWsUrl`: matching secure message endpoint. Singapore
+  staging uses `wss://anpclaw.com/im/ws`.
+- `service.didDomain`: DID domain paired with the selected service profile;
+  Singapore staging uses `anpclaw.com`.
 - `otp.phone` and `otp.code`: the test OTP credential.
 - `accounts.appUser.handle`: App-side test handle.
 - `accounts.cliPeer.handle`: CLI peer test handle.
@@ -565,10 +574,12 @@ the remote attachment lookup. A raw `dm:peer-scope:*` storage thread must never
 be sent to the core `thread-attachment-download` capability.
 
 All live product cases are constrained by `tests/e2e/suite_manifest.json` to an
-explicit allowlist. The selected YAML configuration remains the source of the
-actual target: remote compatibility runs use `awiki.info`, while local-server
-runs use `agentwiki.info`. They reject localhost, `awiki.test`, insecure
-schemes, and other domains before starting Flutter.
+explicit per-suite allowlist. The selected YAML configuration remains the
+source of the actual target: remote compatibility runs use `awiki.info`, local
+server runs use `agentwiki.info`, and approved Singapore staging runs use
+`anpclaw.com`. They reject localhost, `awiki.test`, insecure schemes, and other
+domains before starting Flutter. Adding a generic staging target does not
+authorize operator-bound security suites on that target.
 The smoke case has no service dependency. Dry-run only validates orchestration
 and never counts as a real gate.
 
@@ -659,8 +670,12 @@ The product oracle is fail-closed:
 
 `performance` remains a service-driven backend/integration diagnostic because
 it directly prepares a large dataset and calls application services to measure
-specific timing boundaries. Its results must not be relabeled as required UI
-acceptance. Profile editing, directory-wide search, onboarding, group
+specific timing boundaries. The warmup Bootstrap is fully disposed before the
+measured launch. One cold-launch clock records Bootstrap creation, local session
+restoration, first frame, the authenticated shell, and the first actual visible
+conversation row; service snapshot/hydration calls remain separate metrics and
+must not be used to infer UI visibility. Its results must not be relabeled as
+required UI acceptance. Profile editing, directory-wide search, onboarding, group
 role/remove/leave flows, and secure-trust UI remain roadmap cases until they
 receive their own case IDs and vertical slices; `full` does not imply those
 features are covered. The focused identity-switch suite covers the runtime and
@@ -829,7 +844,11 @@ runtime reopen with the same root, and missing-key fail-closed without recreate.
 The release-only `NATIVE-E2E-002` gate builds and signs the production bundle
 three times, launches three independent App processes for provision/reopen/cleanup,
 rejects the development service, proves `createExclusive` cannot replace the item,
-and verifies the signing Team/bundle identity before every launch:
+and verifies the signing Team/bundle identity before every launch. Before those
+three phases it builds and validates one universal macOS `awiki_im_core` from
+the sibling `awiki-cli-rs2` checkout, refreshes CocoaPods once, and removes the
+stale Release XCFramework intermediate. Set `AWIKI_IM_CORE_REPO_DIR` only when
+the Core checkout is not the default sibling:
 
 ```bash
 AWIKI_MACOS_SIGNING_IDENTITY="<stable identity>" \

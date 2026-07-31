@@ -49,6 +49,27 @@ class _DesktopAppRobot {
     );
   }
 
+  Future<Duration> awaitFirstConversationRowVisible(
+    Stopwatch launchWatch,
+  ) async {
+    await pumpUntil(
+      description: 'first visible conversation row',
+      condition: () => find
+          .byWidgetPredicate(
+            (widget) => switch (widget.key) {
+              ValueKey<String>(:final value) => value.startsWith(
+                'conversation-row:',
+              ),
+              _ => false,
+            },
+            description: 'visible conversation row',
+          )
+          .evaluate()
+          .isNotEmpty,
+    );
+    return launchWatch.elapsed;
+  }
+
   Future<ConversationSummary> startDirectConversation(
     String peerHandle, {
     String expectedPrimaryDisplayName = _nicknameFixtureDisplayName,

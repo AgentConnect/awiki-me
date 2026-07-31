@@ -13,7 +13,9 @@ Current groups:
 - `desktop_cli_peer/`: real desktop App + `awiki-cli-rs2` product E2E for
   UI-driven direct/unread/read/retry, group/mention, attachment, and
   follow/contact flows, plus strict read-only App/CLI oracles. The maintained
-  remote gate targets `awiki.info`.
+  generic remote gates may target `awiki.info`, `agentwiki.info`, or audited
+  Singapore staging at `anpclaw.com`; operator-bound security gates keep their
+  narrower suite policy.
 - `native/`: native SDK/plugin smoke such as `AwikiImCore.open` and macOS
   secure storage Keychain access.
 - `support/`: integration-only helpers.
