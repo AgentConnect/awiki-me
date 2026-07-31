@@ -11,17 +11,20 @@ import '../../domain/entities/notification_target.dart';
 import '../../domain/services/notification_facade.dart';
 import '../../domain/services/notification_channels.dart';
 import 'mac_menu_bar_status_service.dart';
+import 'notification_screen_wake.dart';
 
 class AppNotificationFacade implements NotificationFacade {
   AppNotificationFacade._(
     this._plugin,
     this._menuBarStatus,
     this._desktopShell,
+    this._screenWake,
   );
 
   final FlutterLocalNotificationsPlugin _plugin;
   final MacMenuBarStatusService _menuBarStatus;
   final DesktopShellService _desktopShell;
+  final NotificationScreenWake _screenWake;
   final StreamController<NotificationActivation> _activations =
       StreamController<NotificationActivation>.broadcast(sync: true);
   int _lastBadgeCount = 0;
@@ -36,6 +39,7 @@ class AppNotificationFacade implements NotificationFacade {
       FlutterLocalNotificationsPlugin(),
       MacMenuBarStatusService(),
       desktopShell ?? const NoopDesktopShellService(),
+      PlatformNotificationScreenWake(),
     );
     facade._initializeInBackground();
     return facade;
@@ -158,12 +162,15 @@ class AppNotificationFacade implements NotificationFacade {
         macOS: darwin,
         windows: windows,
       );
-      await _plugin.show(
-        id: id,
-        title: title,
-        body: body,
-        notificationDetails: details,
-        payload: target?.encode(),
+      await submitNotificationAndWake(
+        submit: () => _plugin.show(
+          id: id,
+          title: title,
+          body: body,
+          notificationDetails: details,
+          payload: target?.encode(),
+        ),
+        screenWake: _screenWake,
       );
       debugPrint(
         '[awiki_me][system-notification][submitted] '

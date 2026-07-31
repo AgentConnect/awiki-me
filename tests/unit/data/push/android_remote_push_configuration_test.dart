@@ -47,6 +47,72 @@ void main() {
       },
     );
 
+    test('wakes a non-interactive device briefly when a notice arrives', () {
+      final manifest = File(
+        'android/app/src/main/AndroidManifest.xml',
+      ).readAsStringSync();
+      final receiver = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'AwikiAliyunPushReceiver.kt',
+      ).readAsStringSync();
+      final wakeController = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'NotificationScreenWakeController.kt',
+      );
+
+      expect(
+        manifest,
+        contains('android.permission.WAKE_LOCK'),
+        reason: 'screen wake requires the platform wake-lock permission',
+      );
+      expect(wakeController.existsSync(), isTrue);
+      if (!wakeController.existsSync()) return;
+      final controllerSource = wakeController.readAsStringSync();
+      expect(
+        receiver,
+        contains('NotificationScreenWakeController.wakeIfNeeded'),
+      );
+      final inAppCallback = RegExp(
+        r'onNotificationReceivedInApp\(([\s\S]*?)\n    \}',
+      ).firstMatch(receiver)?.group(1);
+      expect(inAppCallback, isNotNull);
+      expect(
+        inAppCallback,
+        isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
+        reason: 'an in-app callback does not prove visible notification UI',
+      );
+      expect(controllerSource, contains('areNotificationsEnabled'));
+      expect(controllerSource, contains('getNotificationChannel'));
+      expect(controllerSource, contains('powerManager.isInteractive'));
+      expect(controllerSource, contains('ACQUIRE_CAUSES_WAKEUP'));
+      expect(controllerSource, contains('wakeLock.acquire(WAKE_DURATION_MS)'));
+    });
+
+    test('keeps native EMAS registration idempotent after SDK auto-retry', () {
+      final bridge = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/RemotePushEventBridge.kt',
+      ).readAsStringSync();
+      final state = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'RemotePushRegistrationState.kt',
+      ).readAsStringSync();
+
+      expect(bridge, contains('RemotePushRegistrationState'));
+      expect(bridge, contains('pendingInitializationResults'));
+      expect(bridge, contains('readyDeviceId'));
+      expect(bridge, contains('PUSH_20110'));
+      expect(bridge, contains('completeRegistrationSuccess'));
+      expect(bridge, contains('completeRegistrationFailure'));
+      expect(state, contains('JOIN_IN_FLIGHT'));
+      expect(state, contains('completeFailure'));
+      expect(state, isNot(contains('terminalFailure')));
+      expect(bridge, isNot(contains('PushServiceFactory.init(')));
+      expect(
+        RegExp(r'getCloudPushService\(\)\.register\(').allMatches(bridge),
+        hasLength(1),
+      );
+    });
+
     test('buffers cold-start events and attaches one process-level channel', () {
       final bridge = File(
         'android/app/src/main/kotlin/ai/awiki/awikime/push/RemotePushEventBridge.kt',
@@ -61,6 +127,22 @@ void main() {
       expect(bridge, contains('onRemotePushEvents'));
       expect(activity, contains('RemotePushEventBridge.attach'));
       expect(activity, contains('RemotePushEventBridge.detach'));
+    });
+
+    test('exposes the enabled EMAS AppKey without exposing its secret', () {
+      final bridge = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/RemotePushEventBridge.kt',
+      ).readAsStringSync();
+      final getAppIdHandler = RegExp(
+        r'"getAppId"\s*->([\s\S]*?)"getDeviceId"\s*->',
+      ).firstMatch(bridge)?.group(1);
+
+      expect(getAppIdHandler, isNotNull);
+      expect(getAppIdHandler, contains('BuildConfig.AWIKI_EMAS_APP_KEY'));
+      expect(
+        getAppIdHandler,
+        isNot(contains('BuildConfig.AWIKI_EMAS_APP_SECRET')),
+      );
     });
 
     test('keeps real EMAS credentials out of tracked configuration', () {
@@ -99,8 +181,8 @@ void main() {
       expect(bridge, contains('PERSISTED_ENVELOPE_KEYS'));
       expect(bridge, contains('MAX_PENDING_AGE_MS'));
       expect(bridge, contains('eventForPersistence'));
-      expect(bridge, contains('AtomicBoolean'));
-      expect(bridge, contains('compareAndSet(false, true)'));
+      expect(bridge, contains('@Synchronized'));
+      expect(bridge, contains('.commit()'));
       expect(bridge, isNot(contains('put("title"')));
       expect(bridge, isNot(contains('put("content"')));
       expect(bridge, isNot(contains('put("openUrl"')));

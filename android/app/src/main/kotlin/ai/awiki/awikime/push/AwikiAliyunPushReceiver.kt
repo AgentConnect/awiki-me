@@ -12,6 +12,7 @@ class AwikiAliyunPushReceiver : MessageReceiver() {
         summary: String?,
         extraMap: MutableMap<String, String>?,
     ) {
+        NotificationScreenWakeController.wakeIfNeeded(context)
         emit(
             context,
             "notification_received",

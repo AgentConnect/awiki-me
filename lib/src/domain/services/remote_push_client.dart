@@ -5,11 +5,28 @@ class RemotePushRegistration {
     required this.provider,
     required this.providerDeviceId,
     required this.platform,
+    this.appId,
+    this.logicalDeviceId,
   });
 
   final String provider;
   final String providerDeviceId;
   final String platform;
+  final String? appId;
+  final String? logicalDeviceId;
+
+  RemotePushRegistration withLogicalDeviceId(String? value) {
+    final normalized = value?.trim();
+    return RemotePushRegistration(
+      provider: provider,
+      providerDeviceId: providerDeviceId,
+      platform: platform,
+      appId: appId,
+      logicalDeviceId: normalized == null || normalized.isEmpty
+          ? null
+          : normalized,
+    );
+  }
 }
 
 abstract interface class RemotePushClient {

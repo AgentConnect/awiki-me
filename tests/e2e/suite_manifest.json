@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-31.release0714+singapore-staging-v1+performance-timing-v2+native-dependency-v1",
+  "sourceRevision": "2026-07-31.release0714+singapore-staging-v1+performance-timing-v2+native-dependency-v1+android-emas-direct-message-mvp-v1",
   "suites": {
     "smoke": {
       "tier": "product_ui",

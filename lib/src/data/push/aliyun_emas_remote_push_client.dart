@@ -119,10 +119,12 @@ class AliyunEmasRemotePushClient implements RemotePushClient {
         code: 'empty_device_id',
       );
     }
+    final appId = await _loadAndroidAppId();
     return _registration = RemotePushRegistration(
       provider: aliyunEmasPushProvider,
       providerDeviceId: deviceId,
       platform: clientPlatform,
+      appId: appId,
     );
   }
 
@@ -146,11 +148,25 @@ class AliyunEmasRemotePushClient implements RemotePushClient {
   Future<void> _refreshRegistration() async {
     final deviceId = (await _platform.getDeviceId()).trim();
     if (deviceId.isEmpty) return;
+    final appId = _registration?.appId ?? await _loadAndroidAppId();
     _registration = RemotePushRegistration(
       provider: aliyunEmasPushProvider,
       providerDeviceId: deviceId,
       platform: clientPlatform,
+      appId: appId,
     );
+  }
+
+  Future<String?> _loadAndroidAppId() async {
+    if (clientPlatform != 'android') return null;
+    final appId = (await _platform.getAppId()).trim();
+    if (appId.isEmpty) {
+      throw const RemotePushInitializationException(
+        operation: 'get_app_id',
+        code: 'empty_app_id',
+      );
+    }
+    return appId;
   }
 
   void _retainPendingEvent(RemotePushEvent event) {
