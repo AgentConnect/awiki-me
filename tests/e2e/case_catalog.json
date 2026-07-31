@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-30.release0714-account-state+macos-agent-notification+agent-runtime-row+onboarding-phone-single-stage+android-emas-direct-message-mvp-v1",
+  "sourceRevision": "2026-07-31.published-legacy-upgrade-compatibility",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -1192,6 +1192,30 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "LEGACY-UPGRADE-E2E-001",
+      "feature": "Published 0.1.5+14 overwrite upgrade preserves identity and local data",
+      "layer": "native_product_ui",
+      "preconditions": "A clean macOS test user, the attested published AWiki Me 0.1.5+14 artifact, a candidate artifact, one isolated non-production account, and permission to interrupt one upgrade response are available.",
+      "action": "Install 0.1.5+14, register one identity, create non-secret local data sentinels, overwrite with the candidate, complete migration, restart, and retry once after an interrupted first upgrade response.",
+      "exactOracles": [
+        "The same DID/root, Handle, account, local identity ID, Storage Scope, Product database, conversations, messages, contacts, groups, unread state, attachment bytes, and historical Vault material remain usable.",
+        "The first successful cutover creates exactly one ready admin device, and cold restart plus response-loss retry converge to that same device and exact committed document without generating a second key set."
+      ],
+      "negativeChecks": [
+        "A changed DID/root, phone recovery in place of same-DID upgrade, missing local sentinel, unread or attachment drift, a second device, deleted historical key material, manual database repair, or evidence from an intermediate development build fails."
+      ],
+      "environment": "macos_published_upgrade",
+      "cleanupPolicy": "isolated_release_upgrade_state",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity+im-core+user-service",
+      "implementationPath": "tests/e2e/planned/legacy_upgrade_compatibility_future_case.md",
+      "evidenceType": "case_attestation+artifact_provenance+non_secret_state_sentinels",
+      "catalogStatus": "planned"
     },
     {
       "caseId": "IDENTITY-SWITCH-E2E-001",

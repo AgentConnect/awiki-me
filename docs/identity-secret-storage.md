@@ -66,6 +66,14 @@ request timeout，因为 Dart timeout 不会取消 native upgrade，反而会在
 第二次重试。失败页只投影 allowlisted diagnostic code，不展示 document、key、proof、token
 或服务响应正文。
 
+正式兼容基线固定为 AWiki Me `0.1.5+14`（App `c19a01a...`、Core `d7c853a...`）。
+Core 原位升级保持同一 Storage Scope、local identity ID、DID root、Handle、Product DB、
+attachments 和全部历史 Vault record；远端 vNext 文档的 managed fields 由 ANP builder
+重新生成，旧 `#key-2/#key-3` 不再发布但继续作为历史解密材料保留。App 只等待 typed
+upgrade 结果并在成功后重新读取 identity projection；失败时不得清除 active identity 指针。
+Core pending record 固定保存同一组新设备密钥和目标文档；响应丢失后先按远端 DID 的真实状态
+收敛，只有远端明确仍是 Legacy 时才保留设备密钥刷新 proof，App 不实现自己的重试分支。
+
 冷启动恢复已持久化 active identity 时，会话服务必须先读取 Core 的 Legacy upgrade status；
 未完成时先恢复或执行同一 Core upgrade transaction，只有返回 `completed` 后才允许
 `switchIdentity` 和 JWT 刷新。升级完成后必须重新读取 identity projection，不能继续使用升级前
@@ -122,6 +130,9 @@ Core，校验 arm64/x86_64，刷新 CocoaPods 并清理旧 Release XCFramework �
 - `tests/unit/app_runtime_archive_actions_test.dart`
 - `IDENTITY-DELETE-E2E-001`：真实 native Core、idle conversation Patch、删除凭证和独立
   Flutter 冷启动不恢复身份。
+- `LEGACY-UPGRADE-E2E-001`：使用正式 `0.1.5+14` 与候选包执行覆盖安装，验证同 DID/root、
+  Handle、local identity ID、Product DB、消息/联系人/群组/未读/附件、历史 Vault material 和
+  response-loss 重试均收敛到同一设备；该发布级双 artifact 用例不进入日常 unit/smoke。
 - `tests/unit/tenant_runtime_transition_test.dart`
 - `tests/e2e/flutter/native/im_core_open_smoke_test.dart`
 - `tests/e2e/flutter/native/secure_storage_smoke_test.dart`

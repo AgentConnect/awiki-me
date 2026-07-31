@@ -24,9 +24,10 @@ void main() {
         final runtime = _FakeRuntime();
         final identity = _session('id-default');
         final auth = _FakeAuth();
+        final identities = _FakeIdentities(defaultIdentity: identity);
         final service = ImCoreAppSessionService(
           runtime: runtime,
-          identities: _FakeIdentities(defaultIdentity: identity),
+          identities: identities,
           auth: auth,
           activeSessionStore: _FakeActiveSessionStore(),
         );
@@ -85,9 +86,10 @@ void main() {
           upgradeStatus: const LegacyIdentityUpgradeStatus.completed(),
         );
         final runtime = _FakeRuntime();
+        final identities = _FakeIdentities(defaultIdentity: identity);
         final service = ImCoreAppSessionService(
           runtime: runtime,
-          identities: _FakeIdentities(defaultIdentity: identity),
+          identities: identities,
           auth: _FakeAuth(),
           legacyUpgrades: legacyUpgrades,
           activeSessionStore: _FakeActiveSessionStore(identity.identityId),
@@ -98,38 +100,36 @@ void main() {
         expect(restored?.identityId, identity.identityId);
         expect(legacyUpgrades.statusSelectors, <String>[identity.identityId]);
         expect(legacyUpgrades.upgradeSelectors, <String>[identity.identityId]);
+        expect(identities.listCount, 2);
         expect(runtime.switchedIdentities, <String>[identity.identityId]);
       },
     );
 
-    test(
-      'restoreSession leaves retryable legacy identity inactive',
-      () async {
-        final identity = _session('id-legacy-retry');
-        final activeStore = _FakeActiveSessionStore(identity.identityId);
-        final runtime = _FakeRuntime();
-        final service = ImCoreAppSessionService(
-          runtime: runtime,
-          identities: _FakeIdentities(defaultIdentity: identity),
-          auth: _FakeAuth(),
-          legacyUpgrades: _FakeLegacyUpgrades(
-            initialStatus: const LegacyIdentityUpgradeStatus.idle(),
-            upgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
-              identityId: identity.identityId,
-              failureCode: 'permission_denied',
-            ),
+    test('restoreSession leaves retryable legacy identity inactive', () async {
+      final identity = _session('id-legacy-retry');
+      final activeStore = _FakeActiveSessionStore(identity.identityId);
+      final runtime = _FakeRuntime();
+      final service = ImCoreAppSessionService(
+        runtime: runtime,
+        identities: _FakeIdentities(defaultIdentity: identity),
+        auth: _FakeAuth(),
+        legacyUpgrades: _FakeLegacyUpgrades(
+          initialStatus: const LegacyIdentityUpgradeStatus.idle(),
+          upgradeStatus: LegacyIdentityUpgradeStatus.retryRequired(
+            identityId: identity.identityId,
+            failureCode: 'permission_denied',
           ),
-          activeSessionStore: activeStore,
-        );
+        ),
+        activeSessionStore: activeStore,
+      );
 
-        final restored = await service.restoreSession();
+      final restored = await service.restoreSession();
 
-        expect(restored, isNull);
-        expect(runtime.vaultChecks, isEmpty);
-        expect(runtime.switchedIdentities, isEmpty);
-        expect(activeStore.activeIdentityId, identity.identityId);
-      },
-    );
+      expect(restored, isNull);
+      expect(runtime.vaultChecks, isEmpty);
+      expect(runtime.switchedIdentities, isEmpty);
+      expect(activeStore.activeIdentityId, identity.identityId);
+    });
 
     test(
       'restoreSession keeps the local identity when auth is temporarily offline',
@@ -1279,6 +1279,7 @@ class _FakeIdentities implements IdentityCorePort {
   final List<String> resolvedSelectors = <String>[];
   final List<String> deletedSelectors = <String>[];
   int activeBindingCount = 0;
+  int listCount = 0;
 
   @override
   Future<SessionAccountBinding> activeSyncAccountBinding() async {
@@ -1294,10 +1295,13 @@ class _FakeIdentities implements IdentityCorePort {
   Future<AppSession?> defaultIdentity() async => _defaultIdentity;
 
   @override
-  Future<List<AppSession>> listLocalIdentities() async => <AppSession>[
-    if (_defaultIdentity != null) _defaultIdentity,
-    ..._extraIdentities,
-  ];
+  Future<List<AppSession>> listLocalIdentities() async {
+    listCount += 1;
+    return <AppSession>[
+      if (_defaultIdentity != null) _defaultIdentity,
+      ..._extraIdentities,
+    ];
+  }
 
   @override
   Future<IdentityRegistrationResult> registerHandleWithEmail({
