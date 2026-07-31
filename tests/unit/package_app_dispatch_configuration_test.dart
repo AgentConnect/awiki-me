@@ -188,6 +188,21 @@ ${{
     ).readAsStringSync();
     expect(unixWorker, contains('--macos-arch "\$arch"'));
     expect(unixWorker, contains('--android-abi arm64-v8a'));
+    expect(
+      unixWorker,
+      contains(r'derived_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"'),
+    );
+    expect(
+      unixWorker,
+      contains(
+        r'derived="$(mktemp -d "$derived_root/awiki-package-derived-$TARGET.XXXXXX")"',
+      ),
+    );
+    expect(unixWorker, contains('trap cleanup_worker EXIT'));
+    expect(
+      unixWorker,
+      isNot(contains(r'derived="$ROOT_DIR/build/package/derived-$TARGET"')),
+    );
 
     final aggregateSteps = aggregate['steps'] as YamlList;
     final aggregateFlutterSetup = _stepNamed(
