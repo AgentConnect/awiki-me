@@ -35,6 +35,12 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
     mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   );
 
+  static const AndroidOptions _androidOptions = AndroidOptions(
+    sharedPreferencesName: 'FlutterSecureStorage',
+    preferencesKeyPrefix:
+        'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',
+  );
+
   static FlutterSecureStorage _defaultSecureStorage() {
     if (Platform.isMacOS) {
       return _macOsStorage;
@@ -49,7 +55,10 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
       if (nativeValue != null) {
         return nativeValue;
       }
-      final legacyValue = await _secureStorage.read(key: key);
+      final legacyValue = await _secureStorage.read(
+        key: key,
+        aOptions: _androidOptions,
+      );
       if (legacyValue != null) {
         final migrated = await _migrateLegacyMacOsValue(
           key: key,
@@ -61,7 +70,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
       }
       return legacyValue;
     }
-    return _secureStorage.read(key: key);
+    return _secureStorage.read(key: key, aOptions: _androidOptions);
   }
 
   Future<String?> _readMacOsNativeValue(String key) async {
@@ -88,7 +97,7 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
 
   Future<void> _deleteLegacyMacOsValue(String key) async {
     try {
-      await _secureStorage.delete(key: key);
+      await _secureStorage.delete(key: key, aOptions: _androidOptions);
     } on Object {
       // Best-effort legacy cleanup. The native item already exists, so future
       // reads should not need to touch the legacy Keychain service.
@@ -102,11 +111,19 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
         await _macOsKeychainStorage.write(key: key, value: value);
         return;
       } on MissingPluginException {
-        await _secureStorage.write(key: key, value: value);
+        await _secureStorage.write(
+          key: key,
+          value: value,
+          aOptions: _androidOptions,
+        );
         return;
       }
     }
-    await _secureStorage.write(key: key, value: value);
+    await _secureStorage.write(
+      key: key,
+      value: value,
+      aOptions: _androidOptions,
+    );
   }
 
   @override
@@ -115,17 +132,17 @@ class SecureAppKeyValueStore implements AppKeyValueStore {
       try {
         await _macOsKeychainStorage.delete(key: key);
       } on MissingPluginException {
-        await _secureStorage.delete(key: key);
+        await _secureStorage.delete(key: key, aOptions: _androidOptions);
         return;
       }
       try {
-        await _secureStorage.delete(key: key);
+        await _secureStorage.delete(key: key, aOptions: _androidOptions);
       } on Object {
         // Best-effort legacy cleanup; the native Keychain item is already gone.
       }
       return;
     }
-    await _secureStorage.delete(key: key);
+    await _secureStorage.delete(key: key, aOptions: _androidOptions);
   }
 }
 

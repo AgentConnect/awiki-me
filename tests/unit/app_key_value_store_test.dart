@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -74,6 +75,35 @@ void main() {
       final fileMode = await _mode(file.path);
       expect(dirMode, '700');
       expect(fileMode, '600');
+    },
+  );
+
+  test(
+    'SecureAppKeyValueStore pins the Android preference namespace on plugin fallback',
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      const keychainChannel = MethodChannel('ai.awiki.awikime/keychain_access');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(keychainChannel, null);
+      final secureStorage = _CapturingSecureStorage();
+      final store = SecureAppKeyValueStore(secureStorage: secureStorage);
+
+      await store.write(key: 'active-session', value: 'identity-1');
+      await store.read(key: 'active-session');
+      await store.delete(key: 'active-session');
+
+      const expectedOptions = <String, String>{
+        'encryptedSharedPreferences': 'false',
+        'resetOnError': 'false',
+        'keyCipherAlgorithm': 'RSA_ECB_PKCS1Padding',
+        'storageCipherAlgorithm': 'AES_CBC_PKCS7Padding',
+        'sharedPreferencesName': 'FlutterSecureStorage',
+        'preferencesKeyPrefix':
+            'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',
+      };
+      expect(secureStorage.writeAndroidOptions, expectedOptions);
+      expect(secureStorage.readAndroidOptions, expectedOptions);
+      expect(secureStorage.deleteAndroidOptions, expectedOptions);
     },
   );
 
@@ -336,4 +366,51 @@ Future<String> _mode(String path) async {
     throw StateError('stat failed: ${result.stderr}');
   }
   return result.stdout.toString().trim();
+}
+
+class _CapturingSecureStorage extends FlutterSecureStorage {
+  Map<String, String>? writeAndroidOptions;
+  Map<String, String>? readAndroidOptions;
+  Map<String, String>? deleteAndroidOptions;
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    writeAndroidOptions = aOptions?.toMap();
+  }
+
+  @override
+  Future<String?> read({
+    required String key,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    readAndroidOptions = aOptions?.toMap();
+    return null;
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    IOSOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    deleteAndroidOptions = aOptions?.toMap();
+  }
 }
