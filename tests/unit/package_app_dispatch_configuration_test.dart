@@ -198,6 +198,16 @@ ${{
         r'derived="$(mktemp -d "$derived_root/awiki-package-derived-$TARGET.XXXXXX")"',
       ),
     );
+    expect(
+      unixWorker,
+      contains(
+        r'xcframeworks="$(mktemp -d "$derived_root/awiki-package-xcframeworks-$TARGET.XXXXXX")"',
+      ),
+    );
+    expect(
+      unixWorker,
+      contains(r'PODS_XCFRAMEWORKS_BUILD_DIR="$xcframeworks"'),
+    );
     expect(unixWorker, contains('trap cleanup_worker EXIT'));
     expect(
       unixWorker,
