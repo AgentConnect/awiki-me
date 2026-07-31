@@ -9,7 +9,6 @@ MACOS_DMG_BACKGROUND="$ROOT_DIR/installer/macos/dmg-background.png"
 MACOS_DMG_SETTINGS="$ROOT_DIR/installer/macos/dmg_settings.py"
 ANDROID_APP_ID="ai.awiki.awikime"
 ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
-MACOS_DERIVED_DIR=""
 cd "$ROOT_DIR"
 
 fail() {
@@ -20,14 +19,6 @@ fail() {
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
 }
-
-cleanup_worker() {
-  if [[ -n "$MACOS_DERIVED_DIR" ]]; then
-    rm -rf "$MACOS_DERIVED_DIR"
-  fi
-}
-
-trap cleanup_worker EXIT
 
 normalize_sha256() {
   tr '[:lower:]' '[:upper:]' | tr -d '[:space:]:'
@@ -434,7 +425,7 @@ build_macos() {
   fingerprint="$(awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY")" ||
     fail "configured macOS signing identity is unavailable"
 
-  local arch arch_label filename derived_root derived app
+  local arch arch_label filename derived app
   if [[ "$TARGET" == "macos-arm64" ]]; then
     arch="arm64"
     arch_label="arm64"
@@ -450,12 +441,9 @@ build_macos() {
   flutter pub get
   [[ -d macos/Runner.xcworkspace ]] || fail "macOS Runner workspace is missing"
   filename="AWiki-Me-macOS-$arch_label-$VERSION.dmg"
-  # Flutter owns ROOT_DIR/build and may clean it during an Xcode build.
-  derived_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
-  mkdir -p "$derived_root"
-  derived="$(mktemp -d "$derived_root/awiki-package-derived-$TARGET.XXXXXX")"
-  MACOS_DERIVED_DIR="$derived"
+  derived="$ROOT_DIR/build/package/derived-$TARGET"
   app="$derived/Build/Products/Release/AWikiMe.app"
+  rm -rf "$derived"
   flutter build macos \
     --release \
     --no-pub \
@@ -509,8 +497,6 @@ build_macos() {
   mv "$staged_dmg" "$OUTPUT_DIR/$filename"
   rm -rf "$dmg_work"
   metadata "$filename"
-  rm -rf "$MACOS_DERIVED_DIR"
-  MACOS_DERIVED_DIR=""
 }
 
 if [[ "$TARGET" == "android-arm64" ]]; then
