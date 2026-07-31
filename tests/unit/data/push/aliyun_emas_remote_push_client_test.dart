@@ -7,7 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('AliyunEmasRemotePushClient', () {
     test('initializes once and exposes the EMAS DeviceId', () async {
-      final platform = _FakeAliyunEmasPlatform(deviceId: ' device-123 ');
+      final platform = _FakeAliyunEmasPlatform(
+        appId: ' 12345678 ',
+        deviceId: ' device-123 ',
+      );
       final client = AliyunEmasRemotePushClient(platform: platform);
 
       final first = await client.initialize();
@@ -17,6 +20,8 @@ void main() {
       expect(first?.provider, aliyunEmasPushProvider);
       expect(first?.providerDeviceId, 'device-123');
       expect(first?.platform, 'android');
+      expect(first?.appId, '12345678');
+      expect(first?.logicalDeviceId, isNull);
       expect(client.registration, same(first));
       expect(platform.initializeCalls, 1);
       expect(platform.createChannelCalls, 1);
@@ -38,6 +43,8 @@ void main() {
       expect(registration?.provider, aliyunEmasPushProvider);
       expect(registration?.providerDeviceId, 'ios-device-123');
       expect(registration?.platform, 'ios');
+      expect(registration?.appId, isNull);
+      expect(platform.getAppIdCalls, 0);
       await client.dispose();
     });
 
@@ -174,9 +181,38 @@ void main() {
         ]);
 
         expect(client.registration?.providerDeviceId, 'device-after-retry');
+        expect(client.registration?.appId, '12345678');
         await client.dispose();
       },
     );
+
+    test('preserves the AppKey when registration changes', () async {
+      final platform = _FakeAliyunEmasPlatform(
+        appId: '12345678',
+        deviceId: 'device-before-refresh',
+      );
+      final client = AliyunEmasRemotePushClient(platform: platform);
+
+      await client.initialize();
+      expect(platform.getAppIdCalls, 1);
+
+      platform
+        ..appId = 'unexpected-replacement'
+        ..deviceId = 'device-after-refresh';
+      await platform.emit(<Object?>[
+        <String, Object?>{
+          'delivery_id': 'registration-refresh-delivery',
+          'kind': 'registration_changed',
+          'received_at_ms': DateTime.now().millisecondsSinceEpoch,
+          'payload': <String, Object?>{},
+        },
+      ]);
+
+      expect(client.registration?.providerDeviceId, 'device-after-refresh');
+      expect(client.registration?.appId, '12345678');
+      expect(platform.getAppIdCalls, 1);
+      await client.dispose();
+    });
 
     test('stays disabled when native Android config is absent', () async {
       final platform = _FakeAliyunEmasPlatform(configured: false);
@@ -227,6 +263,21 @@ void main() {
       await client.dispose();
     });
 
+    test('rejects an empty Android AppKey after registration', () async {
+      final platform = _FakeAliyunEmasPlatform(appId: '  ');
+      final client = AliyunEmasRemotePushClient(platform: platform);
+
+      await expectLater(
+        client.initialize(),
+        throwsA(
+          isA<RemotePushInitializationException>()
+              .having((error) => error.operation, 'operation', 'get_app_id')
+              .having((error) => error.code, 'code', 'empty_app_id'),
+        ),
+      );
+      await client.dispose();
+    });
+
     test('surfaces notification channel creation failures', () async {
       final platform = _FakeAliyunEmasPlatform(
         channelResult: <dynamic, dynamic>{
@@ -266,6 +317,7 @@ Map<String, Object?> _event(String kind, {required String messageId}) {
 class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
   _FakeAliyunEmasPlatform({
     this.configured = true,
+    this.appId = '12345678',
     this.deviceId = 'device-123',
     this.initializeResult = const <dynamic, dynamic>{'code': '10000'},
     this.initializeResults,
@@ -274,7 +326,8 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
   });
 
   final bool configured;
-  final String deviceId;
+  String appId;
+  String deviceId;
   final Map<dynamic, dynamic> initializeResult;
   final List<Map<dynamic, dynamic>>? initializeResults;
   final Map<dynamic, dynamic> channelResult;
@@ -282,6 +335,7 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
   RemotePushPlatformEventHandler? _handler;
   int initializeCalls = 0;
   int createChannelCalls = 0;
+  int getAppIdCalls = 0;
   final List<String> calls = <String>[];
   String? channelId;
   String? channelName;
@@ -315,6 +369,12 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
 
   Future<void> emit(List<Object?> events) async {
     await _handler?.call(events);
+  }
+
+  @override
+  Future<String> getAppId() async {
+    getAppIdCalls += 1;
+    return appId;
   }
 
   @override

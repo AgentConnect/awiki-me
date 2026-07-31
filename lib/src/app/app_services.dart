@@ -37,7 +37,9 @@ import '../application/product_local_store.dart';
 import '../application/profile_homepage_resolver.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
+import '../application/remote_push_installation_coordinator.dart';
 import '../application/relationship_application_service.dart';
+import '../application/tenant/app_tenant.dart';
 import '../data/services/flutter_attachment_image_dimension_probe.dart';
 import '../application/root_key_transfer_service.dart';
 import '../data/services/locale_preference_service.dart';
@@ -50,6 +52,7 @@ import '../domain/repositories/awiki_account_gateway.dart';
 import '../domain/repositories/awiki_gateway.dart';
 import '../domain/services/e2ee_facade.dart';
 import '../domain/services/notification_facade.dart';
+import '../domain/services/remote_push_client.dart';
 import '../domain/services/realtime_gateway.dart';
 import '../domain/services/update_service.dart';
 
@@ -259,6 +262,15 @@ final notificationFacadeProvider = Provider<NotificationFacade>(
 
 final appPresentationServiceProvider = Provider<AppPresentationService>(
   (ref) => MethodChannelAppPresentationService(),
+);
+
+final remotePushClientProvider = Provider<RemotePushClient?>((ref) => null);
+
+final remotePushInstallationCoordinatorProvider =
+    Provider<RemotePushInstallationCoordinator?>((ref) => null);
+
+final remotePushStorageScopeIdProvider = Provider<StorageScopeId?>(
+  (ref) => null,
 );
 
 final desktopShellServiceProvider = Provider<DesktopShellService>(

@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(94));
+      expect(catalog.cases, hasLength(96));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -35,6 +35,8 @@ void main() {
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
           'IDENTITY-DELETE-E2E-001',
+          'ANDROID-PUSH-PRODUCT-E2E-001',
+          'ANDROID-PUSH-NATIVE-E2E-001',
         ]),
       );
       expect(
@@ -106,6 +108,22 @@ void main() {
         catalog.caseById['MLS-MULTI-DEVICE-E2E-002']!.catalogStatus,
         'active',
       );
+      expect(
+        catalog.caseById['ANDROID-PUSH-PRODUCT-E2E-001']!.catalogStatus,
+        'planned',
+      );
+      expect(
+        catalog.caseById['ANDROID-PUSH-NATIVE-E2E-001']!.catalogStatus,
+        'planned',
+      );
+      final executableCaseIds = catalog.suiteCaseIds.values.expand(
+        (caseIds) => caseIds,
+      );
+      expect(
+        executableCaseIds,
+        isNot(contains('ANDROID-PUSH-PRODUCT-E2E-001')),
+      );
+      expect(executableCaseIds, isNot(contains('ANDROID-PUSH-NATIVE-E2E-001')));
       expect(catalog.suiteCaseIds, isNot(contains('multi-device-remote-mls')));
       expect(catalog.renderMarkdown(), contains('global unread increases by'));
     },

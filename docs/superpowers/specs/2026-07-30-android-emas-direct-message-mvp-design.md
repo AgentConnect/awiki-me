@@ -260,7 +260,7 @@ internal resolve, and inactive-installation exclusion. If that repository is
 not locally available during implementation, the App change remains
 `UNVERIFIED` at the cross-service layer and must not be represented as complete.
 
-### Physical Nubia M153 acceptance
+### Physical Nubia P0110 acceptance
 
 The real-device gate requires one non-production account and records:
 

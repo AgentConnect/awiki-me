@@ -5,6 +5,7 @@ import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/account_state_sync_request_bus.dart';
+import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/desktop_shell_service.dart';
@@ -15,9 +16,15 @@ import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/group_collection_page.dart';
+import 'package:awiki_me/src/application/models/push_installation.dart';
+import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
+import 'package:awiki_me/src/application/ports/push_installation_port.dart';
+import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/application/realtime_application_service.dart';
+import 'package:awiki_me/src/application/remote_push_installation_coordinator.dart';
+import 'package:awiki_me/src/application/remote_push_message_reference.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/chat_attachment.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -28,14 +35,17 @@ import 'package:awiki_me/src/domain/entities/group_summary.dart';
 import 'package:awiki_me/src/domain/entities/notification_target.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/realtime_update.dart';
+import 'package:awiki_me/src/domain/entities/remote_push_event.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
+import 'package:awiki_me/src/domain/services/remote_push_client.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/remote_push_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
@@ -138,8 +148,82 @@ void main() {
     late FakeDeviceManagementCore deviceCore;
     late _RecordingAccountStateSyncRequestBus accountStateRequests;
     late _BoundSessionConversationService boundConversationService;
+    late _RecordingRemotePushInstallationCoordinator pushInstallations;
+    late _RecordingRemotePushClient remotePushClient;
     late ProviderContainer container;
     late Duration messageSyncMinInterval;
+
+    ProviderContainer createContainer({
+      bool enableRemotePush = false,
+      bool enableRemotePushEvents = false,
+      RemotePushSyncPort? remotePushSyncPort,
+    }) {
+      return ProviderContainer(
+        overrides: <Override>[
+          awikiEnvironmentConfigProvider.overrideWithValue(
+            AwikiEnvironmentConfig(
+              messageSyncV2ReadEnabled: enableRemotePushEvents,
+            ),
+          ),
+          awikiGatewayProvider.overrideWithValue(gateway),
+          awikiAccountGatewayProvider.overrideWithValue(gateway),
+          ...fakeApplicationServiceOverrides(
+            gateway,
+            realtimeGateway: realtimeGateway,
+            messageSyncService: messageSyncService,
+            conversationService: boundConversationService,
+          ),
+          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
+          notificationFacadeProvider.overrideWithValue(notificationFacade),
+          appPresentationServiceProvider.overrideWithValue(
+            const _ForegroundAppPresentationService(),
+          ),
+          desktopShellServiceProvider.overrideWithValue(desktopShell),
+          accountStateSyncRequestBusProvider.overrideWithValue(
+            accountStateRequests,
+          ),
+          if (enableRemotePush)
+            remotePushInstallationCoordinatorProvider.overrideWithValue(
+              pushInstallations,
+            ),
+          if (enableRemotePush)
+            remotePushStorageScopeIdProvider.overrideWithValue(_pushScopeId),
+          if (enableRemotePushEvents)
+            remotePushClientProvider.overrideWithValue(remotePushClient),
+          if (remotePushSyncPort != null)
+            remotePushSyncPortProvider.overrideWithValue(remotePushSyncPort),
+          appRuntimeProvider.overrideWith(
+            (ref) => AppRuntimeController(
+              ref,
+              realtimeSyncRetryBaseDelay: Duration.zero,
+            ),
+          ),
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => MessageSyncCoordinator(
+              ref,
+              minInterval: messageSyncMinInterval,
+              failureBackoff: Duration.zero,
+            ),
+          ),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
+          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
+          updateServiceProvider.overrideWithValue(FakeUpdateService()),
+        ],
+      );
+    }
+
+    void enableRemotePushLifecycle() {
+      container.dispose();
+      container = createContainer(enableRemotePush: true);
+    }
+
+    void enableRemotePushEventRuntime() {
+      container.dispose();
+      container = createContainer(
+        enableRemotePush: true,
+        enableRemotePushEvents: true,
+      );
+    }
 
     setUp(() {
       gateway = FakeAwikiGateway();
@@ -148,6 +232,9 @@ void main() {
       messageSyncService = FakeMessageSyncService();
       desktopShell = _FakeDesktopShellService();
       boundConversationService = _BoundSessionConversationService(gateway);
+      pushInstallations = _RecordingRemotePushInstallationCoordinator();
+      remotePushClient = _RecordingRemotePushClient();
+      remotePushClient.conversationService = boundConversationService;
       accountStateRequests = _RecordingAccountStateSyncRequestBus();
       messageSyncMinInterval = Duration.zero;
       deviceCore = FakeDeviceManagementCore()
@@ -174,45 +261,10 @@ void main() {
         handle: 'me',
       );
       gateway.conversations = const <ConversationSummary>[];
-      container = ProviderContainer(
-        overrides: <Override>[
-          awikiEnvironmentConfigProvider.overrideWithValue(
-            AwikiEnvironmentConfig(messageSyncV2ReadEnabled: false),
-          ),
-          awikiGatewayProvider.overrideWithValue(gateway),
-          awikiAccountGatewayProvider.overrideWithValue(gateway),
-          ...fakeApplicationServiceOverrides(
-            gateway,
-            realtimeGateway: realtimeGateway,
-            messageSyncService: messageSyncService,
-            conversationService: boundConversationService,
-          ),
-          realtimeGatewayProvider.overrideWithValue(realtimeGateway),
-          notificationFacadeProvider.overrideWithValue(notificationFacade),
-          desktopShellServiceProvider.overrideWithValue(desktopShell),
-          accountStateSyncRequestBusProvider.overrideWithValue(
-            accountStateRequests,
-          ),
-          appRuntimeProvider.overrideWith(
-            (ref) => AppRuntimeController(
-              ref,
-              realtimeSyncRetryBaseDelay: Duration.zero,
-            ),
-          ),
-          messageSyncCoordinatorProvider.overrideWith(
-            (ref) => MessageSyncCoordinator(
-              ref,
-              minInterval: messageSyncMinInterval,
-              failureBackoff: Duration.zero,
-            ),
-          ),
-          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
-          e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
-          updateServiceProvider.overrideWithValue(FakeUpdateService()),
-        ],
-      );
+      container = createContainer();
       addTearDown(() async {
         container.dispose();
+        await remotePushClient.dispose();
         await boundConversationService.dispose();
       });
     });
@@ -1001,6 +1053,7 @@ void main() {
     test(
       'auth revoked fences realtime timers sync and old projections',
       () async {
+        enableRemotePushLifecycle();
         gateway.conversations = <ConversationSummary>[
           ConversationSummary(
             threadId: 'dm:revoked',
@@ -1023,7 +1076,7 @@ void main() {
             .read(appLifecycleProvider.notifier)
             .setLifecycle(AppLifecycleState.resumed);
 
-        await activate();
+        await activateBound();
         await pumpEventQueue();
 
         expect(
@@ -1039,6 +1092,8 @@ void main() {
         );
         expect(realtimeGateway.isConnected, isFalse);
         expect(gateway.logoutCalls, 1);
+        expect(pushInstallations.calls, contains('deactivate'));
+        expect(pushInstallations.calls, isNot(contains('disable')));
 
         final callsAfterFence = messageSyncService.syncReasons.length;
         container
@@ -1563,7 +1618,7 @@ void main() {
 
       expect(messageSyncService.syncReasons, <String>[
         'message_retry',
-        'message_retry',
+        'automatic_retry',
       ]);
       expect(messageSyncService.maxActiveSyncNowCalls, 1);
     });
@@ -2500,6 +2555,9 @@ void main() {
           ),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
+          appPresentationServiceProvider.overrideWithValue(
+            const _ForegroundAppPresentationService(),
+          ),
           deviceManagementCorePortProvider.overrideWithValue(deviceCore),
           e2eeFacadeProvider.overrideWithValue(FakeE2eeFacade()),
           updateServiceProvider.overrideWithValue(FakeUpdateService()),
@@ -3719,7 +3777,835 @@ void main() {
       expect(gateway.listConversationsCalls, 1);
       expect(realtimeGateway.connectionStatus, RealtimeConnectionStatus.failed);
     });
+
+    test('绑定 Push installation 使用当前 scope、epoch 与协议设备', () async {
+      enableRemotePushLifecycle();
+      await activateBound(protocolDeviceId: 'protocol-device-a');
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+
+      final epoch = container.read(sessionProvider).activeEpoch!;
+      final bound = pushInstallations.boundSessions.single;
+      expect(bound.storageScopeId, _pushScopeId);
+      expect(bound.ownerDid, 'did:test:me');
+      expect(bound.generation, epoch.generation);
+      expect(bound.logicalDeviceId, 'protocol-device-a');
+    });
+
+    test('缺少 account binding 或协议设备时仍绑定并可在登出时 disable', () async {
+      enableRemotePushLifecycle();
+
+      await activate();
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+      expect(pushInstallations.boundSessions.single.logicalDeviceId, isNull);
+
+      pushInstallations.calls.clear();
+      await container.read(appRuntimeProvider.notifier).logout();
+      expect(pushInstallations.calls, <String>['deactivate', 'disable']);
+
+      await activateBound(protocolDeviceId: '   ');
+      await _pumpUntil(() => pushInstallations.boundSessions.length == 2);
+      expect(pushInstallations.boundSessions.last.logicalDeviceId, isNull);
+    });
+
+    test('binding owner 不匹配时拒绝生成 Push installation session', () {
+      final resolved = resolveRemotePushInstallationSession(
+        storageScopeId: _pushScopeId,
+        sessionState: const SessionState(
+          generation: 7,
+          session: SessionIdentity(
+            did: 'did:test:me',
+            credentialName: 'owner-identity-a',
+            displayName: 'Me',
+            accountBinding: SessionAccountBinding(
+              ownerIdentityId: 'owner-identity-a',
+              accountId: 'account-a',
+              currentDid: 'did:test:other-owner',
+              protocolDeviceId: 'wrong-owner-device',
+              identityGeneration: '1',
+              deviceAuthGeneration: '1',
+            ),
+          ),
+        ),
+      );
+
+      expect(resolved, isNull);
+    });
+
+    test('Push 绑定失败不会使已提交登录失败', () async {
+      enableRemotePushLifecycle();
+      pushInstallations.failBind = true;
+
+      await activateBound();
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+
+      expect(container.read(sessionProvider).session?.did, 'did:test:me');
+      expect(container.read(appRuntimeProvider).activatedDid, 'did:test:me');
+    });
+
+    test('登出先本地停用并在 session 清除前尝试远端 disable', () async {
+      enableRemotePushLifecycle();
+      await activateBound();
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+      pushInstallations.calls.clear();
+      pushInstallations.failDisable = true;
+      pushInstallations.onDisable = () {
+        expect(container.read(sessionProvider).session, isNotNull);
+      };
+
+      await container.read(appRuntimeProvider.notifier).logout();
+
+      expect(pushInstallations.calls, <String>['deactivate', 'disable']);
+      expect(container.read(sessionProvider).session, isNull);
+      expect(gateway.logoutCalls, 1);
+    });
+
+    test('身份替换和凭据删除都先停用当前 Push installation', () async {
+      enableRemotePushLifecycle();
+      await activateBound();
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+      pushInstallations.calls.clear();
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .prepareIdentityActivation();
+
+      expect(pushInstallations.calls, <String>['deactivate', 'disable']);
+      expect(container.read(sessionProvider).session, isNull);
+
+      await activateBound();
+      await _pumpUntil(() => pushInstallations.boundSessions.length == 2);
+      pushInstallations.calls.clear();
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .deleteCurrentCredential();
+
+      expect(pushInstallations.calls, <String>['deactivate', 'disable']);
+      expect(container.read(sessionProvider).session, isNull);
+    });
+
+    test('本地身份登录替换时 Push disable 失败也继续激活新身份', () async {
+      enableRemotePushLifecycle();
+      await activateBound();
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+      pushInstallations.calls.clear();
+      pushInstallations.failDisable = true;
+      gateway.loginResult = const SessionIdentity(
+        did: 'did:test:second',
+        credentialName: 'second',
+        displayName: 'Second',
+        jwtToken: 'token-second',
+        accountBinding: SessionAccountBinding(
+          ownerIdentityId: 'owner-identity-b',
+          accountId: 'account-b',
+          currentDid: 'did:test:second',
+          protocolDeviceId: 'device-b',
+          identityGeneration: '2',
+          deviceAuthGeneration: '2',
+        ),
+      );
+      boundConversationService.prepareOwner('owner-identity-b');
+
+      await container
+          .read(appRuntimeProvider.notifier)
+          .loginWithLocalCredential('second');
+
+      expect(pushInstallations.calls.take(2), <String>[
+        'deactivate',
+        'disable',
+      ]);
+      expect(container.read(sessionProvider).session?.did, 'did:test:second');
+      expect(
+        container.read(appRuntimeProvider).activatedDid,
+        'did:test:second',
+      );
+    });
+
+    test('恢复前台时刷新当前 Push installation', () async {
+      enableRemotePushLifecycle();
+      await activateBound();
+      await _pumpUntil(() => pushInstallations.boundSessions.isNotEmpty);
+      pushInstallations.calls.clear();
+
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await _pumpUntil(() => pushInstallations.refreshedSessions.isNotEmpty);
+
+      expect(pushInstallations.calls, <String>['refresh']);
+      expect(
+        pushInstallations.refreshedSessions.single.logicalDeviceId,
+        'device-a',
+      );
+    });
+
+    test(
+      '冷启动 Push 等待 patch 和 active session 后以 remote_push 刷新投影再 ack',
+      () async {
+        final patchGate = Completer<void>();
+        boundConversationService.patchGate = patchGate;
+        final conversation = _remotePushConversation('conversation-cold');
+        final committed = _remotePushCommittedMessage(
+          conversation,
+          logicalId: 'logical-cold',
+        );
+        messageSyncService.deltaResult = MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[committed],
+        );
+        remotePushClient.addPending(
+          _remotePushEvent(
+            'delivery-cold',
+            kind: RemotePushEventKind.notificationReceived,
+          ),
+        );
+        enableRemotePushEventRuntime();
+
+        final activation = activateBound();
+        await pumpEventQueue();
+
+        expect(messageSyncService.syncReasons, isEmpty);
+        expect(remotePushClient.acknowledged, isEmpty);
+
+        gateway.conversations = <ConversationSummary>[conversation];
+        patchGate.complete();
+        await activation;
+        await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
+
+        expect(messageSyncService.syncReasons.first, 'remote_push');
+        expect(
+          container
+              .read(conversationListProvider)
+              .conversations
+              .map((item) => item.conversationId),
+          contains(conversation.conversationId),
+        );
+        expect(notificationFacade.inAppCalls, 0);
+        expect(notificationFacade.systemCalls, 0);
+        expect(boundConversationService.fastRefreshCompleted, isTrue);
+        expect(remotePushClient.ackObservedAfterFastRefresh, isTrue);
+      },
+    );
+
+    test(
+      'notification_opened 精确 mid 打开 committed canonical conversation',
+      () async {
+        final conversation = _remotePushConversation('conversation-opened');
+        final committed = _remotePushCommittedMessage(
+          conversation,
+          logicalId: 'logical-opened',
+        );
+        messageSyncService.deltaResult = MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[committed],
+        );
+        enableRemotePushEventRuntime();
+        await activateBound();
+        await pumpEventQueue();
+        messageSyncService.syncReasons.clear();
+        gateway.conversations = <ConversationSummary>[conversation];
+
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-opened',
+            kind: RemotePushEventKind.notificationOpened,
+            mid: remotePushOpaqueMessageReference('logical-opened'),
+          ),
+        );
+        await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
+
+        expect(messageSyncService.syncReasons.first, 'remote_push');
+        expect(
+          container.read(shellDestinationProvider),
+          ShellDestination.messages,
+        );
+        expect(
+          container.read(selectedConversationProvider),
+          conversation.conversationId,
+        );
+      },
+    );
+
+    test('无法匹配的 notification_opened 回退消息列表并清除旧选择', () async {
+      enableRemotePushEventRuntime();
+      await activateBound();
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+      container
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.agents);
+      container
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(staleSelectedConversation());
+
+      remotePushClient.emit(
+        _remotePushEvent(
+          'delivery-unmatched',
+          kind: RemotePushEventKind.notificationOpened,
+          mid: remotePushOpaqueMessageReference('not-committed'),
+        ),
+      );
+      await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
+
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.messages,
+      );
+      expect(container.read(selectedConversationProvider), isNull);
+    });
+
+    test(
+      'logout during Push sync fences acknowledgement and navigation',
+      () async {
+        final syncGate = Completer<void>();
+        final conversation = _remotePushConversation('conversation-logout');
+        messageSyncService
+          ..deltaResult = MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[
+              _remotePushCommittedMessage(
+                conversation,
+                logicalId: 'logical-logout',
+              ),
+            ],
+          )
+          ..syncNowCompleter = syncGate;
+        remotePushClient.addPending(
+          _remotePushEvent(
+            'delivery-logout',
+            kind: RemotePushEventKind.notificationOpened,
+            mid: remotePushOpaqueMessageReference('logical-logout'),
+          ),
+        );
+        enableRemotePushEventRuntime();
+
+        var activationCompleted = false;
+        final activation = activateBound().whenComplete(
+          () => activationCompleted = true,
+        );
+        await _pumpUntil(
+          () => messageSyncService.syncReasons.contains('remote_push'),
+        );
+        expect(activationCompleted, isTrue);
+        await container.read(appRuntimeProvider.notifier).logout();
+        syncGate.complete();
+        await activation;
+        await pumpEventQueue();
+
+        expect(remotePushClient.acknowledged, isEmpty);
+        expect(container.read(selectedConversationProvider), isNull);
+      },
+    );
+
+    test(
+      'identity A Push completion cannot select identity B conversation',
+      () async {
+        final syncGate = Completer<void>();
+        final conversation = _remotePushConversation('conversation-a');
+        messageSyncService
+          ..deltaResult = MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[
+              _remotePushCommittedMessage(conversation, logicalId: 'logical-a'),
+            ],
+          )
+          ..syncNowCompleter = syncGate;
+        remotePushClient.addPending(
+          _remotePushEvent(
+            'delivery-a',
+            kind: RemotePushEventKind.notificationOpened,
+            mid: remotePushOpaqueMessageReference('logical-a'),
+          ),
+        );
+        enableRemotePushEventRuntime();
+
+        final activation = activateBound();
+        await _pumpUntil(
+          () => messageSyncService.syncReasons.contains('remote_push'),
+        );
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:b',
+                credentialName: 'identity-b',
+                displayName: 'B',
+              ),
+            );
+        syncGate.complete();
+        await activation;
+        await pumpEventQueue();
+
+        expect(remotePushClient.acknowledged, isEmpty);
+        expect(container.read(selectedConversationProvider), isNull);
+      },
+    );
+
+    test(
+      'resume drains retained Push and refreshes installation registration',
+      () async {
+        enableRemotePushEventRuntime();
+        await activateBound();
+        await pumpEventQueue();
+        messageSyncService.syncReasons.clear();
+        pushInstallations.calls.clear();
+        remotePushClient.acknowledgeError = StateError('first ack fails');
+
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-resume',
+            kind: RemotePushEventKind.messageReceived,
+          ),
+        );
+        await _pumpUntil(() => remotePushClient.acknowledgeAttempts == 1);
+        expect(remotePushClient.acknowledged, isEmpty);
+
+        remotePushClient.acknowledgeError = null;
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.paused);
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.resumed);
+        await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
+
+        expect(
+          messageSyncService.syncReasons,
+          containsAll(<String>['remote_push', 'app_resumed']),
+        );
+        expect(pushInstallations.calls, contains('refresh'));
+      },
+    );
+
+    test(
+      'registration_changed refreshes installation without message sync',
+      () async {
+        enableRemotePushEventRuntime();
+        await activateBound();
+        await pumpEventQueue();
+        messageSyncService.syncReasons.clear();
+        pushInstallations.calls.clear();
+
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-registration',
+            kind: RemotePushEventKind.registrationChanged,
+          ),
+        );
+        await _pumpUntil(() => pushInstallations.refreshedSessions.isNotEmpty);
+
+        expect(pushInstallations.calls, <String>['refresh']);
+        expect(messageSyncService.syncReasons, isEmpty);
+      },
+    );
+
+    test(
+      'successful receipt followed by stale navigation retains event without selection',
+      () async {
+        final conversation = _remotePushConversation('conversation-stale-nav');
+        final committed = _remotePushCommittedMessage(
+          conversation,
+          logicalId: 'logical-stale-nav',
+        );
+        late ProviderContainer eventContainer;
+        final syncPort = _RecordingRemotePushSyncPort(
+          receipt: RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.succeeded,
+            committedIncomingMessages: <CommittedIncomingMessage>[committed],
+          ),
+          beforeReturn: () {
+            eventContainer
+                .read(sessionProvider.notifier)
+                .setSession(
+                  const SessionIdentity(
+                    did: 'did:test:b',
+                    credentialName: 'identity-b',
+                    displayName: 'B',
+                  ),
+                );
+          },
+        );
+        remotePushClient.addPending(
+          _remotePushEvent(
+            'delivery-stale-nav',
+            kind: RemotePushEventKind.notificationOpened,
+            mid: remotePushOpaqueMessageReference('logical-stale-nav'),
+          ),
+        );
+        container.dispose();
+        eventContainer = container = createContainer(
+          enableRemotePush: true,
+          enableRemotePushEvents: true,
+          remotePushSyncPort: syncPort,
+        );
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:a',
+                credentialName: 'identity-a',
+                displayName: 'A',
+              ),
+            );
+        final context = _remotePushContext(container);
+        final coordinator = container.read(
+          remotePushMessageSyncCoordinatorProvider,
+        )!;
+
+        await coordinator.activateSession(context);
+
+        expect(syncPort.calls, 1);
+        expect(remotePushClient.acknowledged, isEmpty);
+        expect(container.read(selectedConversationProvider), isNull);
+      },
+    );
+
+    test(
+      'session change during canonical commit retains event without selection',
+      () async {
+        final conversation = _remotePushConversation('conversation-gated-nav');
+        final committed = _remotePushCommittedMessage(
+          conversation,
+          logicalId: 'logical-gated-nav',
+        );
+        final syncPort = _RecordingRemotePushSyncPort(
+          receipt: RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.succeeded,
+            committedIncomingMessages: <CommittedIncomingMessage>[committed],
+          ),
+        );
+        final commitGate = Completer<void>();
+        boundConversationService.ensureConversationGate = commitGate;
+        remotePushClient.addPending(
+          _remotePushEvent(
+            'delivery-gated-nav',
+            kind: RemotePushEventKind.notificationOpened,
+            mid: remotePushOpaqueMessageReference('logical-gated-nav'),
+          ),
+        );
+        container.dispose();
+        container = createContainer(
+          enableRemotePush: true,
+          enableRemotePushEvents: true,
+          remotePushSyncPort: syncPort,
+        );
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:a',
+                credentialName: 'identity-a',
+                displayName: 'A',
+              ),
+            );
+        gateway.conversations = <ConversationSummary>[conversation];
+        final coordinator = container.read(
+          remotePushMessageSyncCoordinatorProvider,
+        )!;
+        final drain = coordinator.activateSession(
+          _remotePushContext(container),
+        );
+        await boundConversationService.ensureConversationStarted.future;
+
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:b',
+                credentialName: 'identity-b',
+                displayName: 'B',
+              ),
+            );
+        commitGate.complete();
+        await drain;
+
+        expect(remotePushClient.acknowledged, isEmpty);
+        expect(container.read(selectedConversationProvider), isNull);
+      },
+    );
+
+    test(
+      'session change during registration refresh deactivates old queued drain',
+      () async {
+        final refreshGate = Completer<void>();
+        pushInstallations.refreshGate = refreshGate;
+        final syncPort = _RecordingRemotePushSyncPort();
+        container.dispose();
+        container = createContainer(
+          enableRemotePush: true,
+          enableRemotePushEvents: true,
+          remotePushSyncPort: syncPort,
+        );
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:a',
+                credentialName: 'identity-a',
+                displayName: 'A',
+              ),
+            );
+        final coordinator = container.read(
+          remotePushMessageSyncCoordinatorProvider,
+        )!;
+        await coordinator.activateSession(_remotePushContext(container));
+
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-refresh',
+            kind: RemotePushEventKind.registrationChanged,
+          ),
+        );
+        await pushInstallations.refreshStarted.future;
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-after-refresh',
+            kind: RemotePushEventKind.messageReceived,
+          ),
+        );
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:b',
+                credentialName: 'identity-b',
+                displayName: 'B',
+              ),
+            );
+        refreshGate.complete();
+        await pumpEventQueue();
+
+        expect(syncPort.calls, 0);
+        expect(remotePushClient.acknowledged, isEmpty);
+      },
+    );
+
+    test(
+      'current-session registration refresh failure still triggers queued drain',
+      () async {
+        pushInstallations.failRefresh = true;
+        final syncPort = _RecordingRemotePushSyncPort();
+        container.dispose();
+        container = createContainer(
+          enableRemotePush: true,
+          enableRemotePushEvents: true,
+          remotePushSyncPort: syncPort,
+        );
+        container
+            .read(sessionProvider.notifier)
+            .setSession(
+              const SessionIdentity(
+                did: 'did:test:a',
+                credentialName: 'identity-a',
+                displayName: 'A',
+              ),
+            );
+        final coordinator = container.read(
+          remotePushMessageSyncCoordinatorProvider,
+        )!;
+        await coordinator.activateSession(_remotePushContext(container));
+
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-refresh-failure',
+            kind: RemotePushEventKind.registrationChanged,
+          ),
+        );
+        remotePushClient.emit(
+          _remotePushEvent(
+            'delivery-after-refresh-failure',
+            kind: RemotePushEventKind.messageReceived,
+          ),
+        );
+        await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
+
+        expect(syncPort.calls, 1);
+        expect(remotePushClient.acknowledged.single, <String>[
+          'delivery-after-refresh-failure',
+        ]);
+      },
+    );
   });
+}
+
+final _pushScopeId = StorageScopeId.parse(
+  '00000000-0000-4000-8000-000000000002',
+);
+
+final class _RecordingRemotePushInstallationCoordinator
+    extends RemotePushInstallationCoordinator {
+  _RecordingRemotePushInstallationCoordinator()
+    : super(
+        client: _NoopRemotePushClient(),
+        installations: _NoopPushInstallationPort(),
+      );
+
+  final List<String> calls = <String>[];
+  final List<RemotePushInstallationSession> boundSessions =
+      <RemotePushInstallationSession>[];
+  final List<RemotePushInstallationSession> refreshedSessions =
+      <RemotePushInstallationSession>[];
+  bool failBind = false;
+  bool failDisable = false;
+  bool failRefresh = false;
+  void Function()? onDisable;
+  Completer<void>? refreshGate;
+  final Completer<void> refreshStarted = Completer<void>();
+
+  @override
+  Future<void> bindActiveSession(RemotePushInstallationSession session) async {
+    calls.add('bind');
+    boundSessions.add(session);
+    if (failBind) {
+      throw StateError('bind failed');
+    }
+  }
+
+  @override
+  void deactivateLocally(RemotePushInstallationSession session) {
+    calls.add('deactivate');
+  }
+
+  @override
+  Future<void> disableActiveInstallation(
+    RemotePushInstallationSession session,
+  ) async {
+    calls.add('disable');
+    onDisable?.call();
+    if (failDisable) {
+      throw StateError('disable failed');
+    }
+  }
+
+  @override
+  Future<void> refreshActiveSession(
+    RemotePushInstallationSession session,
+  ) async {
+    calls.add('refresh');
+    refreshedSessions.add(session);
+    if (!refreshStarted.isCompleted) {
+      refreshStarted.complete();
+    }
+    await refreshGate?.future;
+    if (failRefresh) {
+      throw StateError('refresh failed');
+    }
+  }
+}
+
+final class _NoopRemotePushClient implements RemotePushClient {
+  @override
+  Stream<RemotePushEvent> get events => const Stream<RemotePushEvent>.empty();
+
+  @override
+  List<RemotePushEvent> get pendingEvents => const <RemotePushEvent>[];
+
+  @override
+  RemotePushRegistration? get registration => null;
+
+  @override
+  Future<void> acknowledgePendingEvents(Iterable<String> deliveryIds) async {}
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  Future<RemotePushRegistration?> initialize() async => null;
+}
+
+final class _RecordingRemotePushClient implements RemotePushClient {
+  final StreamController<RemotePushEvent> _events =
+      StreamController<RemotePushEvent>.broadcast(sync: true);
+  final Map<String, RemotePushEvent> _pending = <String, RemotePushEvent>{};
+  final List<List<String>> acknowledged = <List<String>>[];
+  Object? acknowledgeError;
+  int acknowledgeAttempts = 0;
+  bool ackObservedAfterFastRefresh = false;
+  _BoundSessionConversationService? conversationService;
+
+  void addPending(RemotePushEvent event) {
+    _pending[event.deliveryId] = event;
+  }
+
+  void emit(RemotePushEvent event) {
+    addPending(event);
+    _events.add(event);
+  }
+
+  @override
+  Stream<RemotePushEvent> get events => _events.stream;
+
+  @override
+  List<RemotePushEvent> get pendingEvents =>
+      List<RemotePushEvent>.unmodifiable(_pending.values);
+
+  @override
+  RemotePushRegistration? get registration => null;
+
+  @override
+  Future<void> acknowledgePendingEvents(Iterable<String> deliveryIds) async {
+    acknowledgeAttempts += 1;
+    ackObservedAfterFastRefresh =
+        conversationService?.fastRefreshCompleted == true;
+    final error = acknowledgeError;
+    if (error != null) {
+      throw error;
+    }
+    final ids = deliveryIds.toList(growable: false);
+    acknowledged.add(ids);
+    for (final deliveryId in ids) {
+      _pending.remove(deliveryId);
+    }
+  }
+
+  @override
+  Future<void> dispose() => _events.close();
+
+  @override
+  Future<RemotePushRegistration?> initialize() async => null;
+}
+
+final class _RecordingRemotePushSyncPort implements RemotePushSyncPort {
+  _RecordingRemotePushSyncPort({
+    this.receipt = const RemotePushSyncReceipt(
+      disposition: RemotePushSyncDisposition.succeeded,
+    ),
+    this.beforeReturn,
+  });
+
+  final RemotePushSyncReceipt receipt;
+  final void Function()? beforeReturn;
+  int calls = 0;
+
+  @override
+  Future<RemotePushSyncReceipt> requestRemotePushSync() async {
+    calls += 1;
+    beforeReturn?.call();
+    return receipt;
+  }
+}
+
+final class _NoopPushInstallationPort implements PushInstallationPort {
+  @override
+  Future<PushInstallation> disable(String installationId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<PushInstallation> upsert(RemotePushRegistration registration) {
+    throw UnimplementedError();
+  }
 }
 
 class _BoundSessionConversationService extends FakeConversationService {
@@ -3728,6 +4614,11 @@ class _BoundSessionConversationService extends FakeConversationService {
   final List<StreamController<ConversationListPatch>> _controllers =
       <StreamController<ConversationListPatch>>[];
   String? _ownerIdentityId;
+  void Function()? onWatchPatches;
+  Completer<void>? patchGate;
+  Completer<void>? ensureConversationGate;
+  final Completer<void> ensureConversationStarted = Completer<void>();
+  bool fastRefreshCompleted = false;
 
   void prepareOwner(String ownerIdentityId) {
     _ownerIdentityId = ownerIdentityId;
@@ -3743,7 +4634,8 @@ class _BoundSessionConversationService extends FakeConversationService {
     _controllers.add(controller);
     final ownerIdentityId = _ownerIdentityId;
     if (ownerIdentityId != null) {
-      scheduleMicrotask(() {
+      scheduleMicrotask(() async {
+        await patchGate?.future;
         if (controller.isClosed) {
           return;
         }
@@ -3757,9 +4649,42 @@ class _BoundSessionConversationService extends FakeConversationService {
             items: gateway.conversations,
           ),
         );
+        onWatchPatches?.call();
       });
     }
     return controller.stream;
+  }
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) async {
+    final conversations = await super.listConversationSummariesFast(
+      ownerDid: ownerDid,
+      limit: limit,
+      unreadOnly: unreadOnly,
+    );
+    fastRefreshCompleted = true;
+    return conversations;
+  }
+
+  @override
+  Future<void> ensureConversationInRecents({
+    required String ownerDid,
+    required String conversationId,
+    DateTime? updatedAt,
+  }) async {
+    if (!ensureConversationStarted.isCompleted) {
+      ensureConversationStarted.complete();
+    }
+    await ensureConversationGate?.future;
+    await super.ensureConversationInRecents(
+      ownerDid: ownerDid,
+      conversationId: conversationId,
+      updatedAt: updatedAt,
+    );
   }
 
   Future<void> dispose() async {
@@ -3769,6 +4694,74 @@ class _BoundSessionConversationService extends FakeConversationService {
           .map((controller) => controller.close()),
     );
   }
+}
+
+ConversationSummary _remotePushConversation(String conversationId) {
+  return ConversationSummary(
+    threadId: 'thread:$conversationId',
+    conversationId: conversationId,
+    displayName: 'Push peer',
+    lastMessagePreview: 'Core committed',
+    lastMessageAt: DateTime(2026, 7, 30, 12),
+    unreadCount: 1,
+    isGroup: false,
+    targetDid: 'did:test:push-peer',
+  );
+}
+
+CommittedIncomingMessage _remotePushCommittedMessage(
+  ConversationSummary conversation, {
+  required String logicalId,
+}) {
+  return CommittedIncomingMessage(
+    eventId: 'event:$logicalId',
+    logicalMessageId: logicalId,
+    message: ChatMessage(
+      localId: 'local:$logicalId',
+      remoteId: 'remote:$logicalId',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: 'did:test:push-peer',
+      receiverDid: 'did:test:me',
+      content: 'Core committed',
+      createdAt: DateTime(2026, 7, 30, 12),
+      isMine: false,
+      sendState: MessageSendState.sent,
+    ),
+  );
+}
+
+RemotePushEvent _remotePushEvent(
+  String deliveryId, {
+  required RemotePushEventKind kind,
+  String? mid,
+}) {
+  return RemotePushEvent(
+    deliveryId: deliveryId,
+    kind: kind,
+    payload: <String, Object?>{
+      if (mid != null)
+        'extraMap': <String, Object?>{
+          'mid': mid,
+          'exp':
+              DateTime.now()
+                  .toUtc()
+                  .add(const Duration(hours: 1))
+                  .millisecondsSinceEpoch ~/
+              Duration.millisecondsPerSecond,
+        },
+    },
+    receivedAt: DateTime.now().toUtc(),
+  );
+}
+
+RemotePushSessionContext _remotePushContext(ProviderContainer container) {
+  final epoch = container.read(sessionProvider).activeEpoch!;
+  return RemotePushSessionContext(
+    storageScopeId: container.read(activeAppTenantProvider).storageScopeId,
+    ownerDid: epoch.ownerDid,
+    generation: epoch.generation,
+  );
 }
 
 class _RecordingConversationService implements ConversationService {
@@ -4360,6 +5353,20 @@ final class _FakeDesktopShellService implements DesktopShellService {
   Future<void> showWindow() async {
     showWindowCalls += 1;
     await showWindowCompleter?.future;
+  }
+}
+
+final class _ForegroundAppPresentationService
+    implements AppPresentationService {
+  const _ForegroundAppPresentationService();
+
+  @override
+  Future<AppPresentationState?> currentState() async {
+    return const AppPresentationState(
+      applicationActive: true,
+      windowVisible: true,
+      windowMiniaturized: false,
+    );
   }
 }
 

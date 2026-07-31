@@ -11,6 +11,9 @@ import '../../../app/ui_feedback.dart';
 import '../../../application/app_session_service.dart';
 import '../../../core/performance_logger.dart';
 import '../../../application/models/app_session.dart';
+import '../../../application/remote_push_installation_coordinator.dart';
+import '../../../application/remote_push_message_sync_coordinator.dart';
+import '../../../application/ports/remote_push_sync_port.dart';
 import '../../../application/agent/agent_control_projection.dart';
 import '../../../application/tenant/app_tenant.dart';
 import '../../../domain/entities/bridge_capabilities.dart';
@@ -40,6 +43,7 @@ import 'account_state_sync_coordinator_provider.dart';
 import 'agent_terminal_notification_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'navigation_provider.dart';
+import 'remote_push_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
 
@@ -86,6 +90,30 @@ class AppRuntimeState {
   }
 }
 
+RemotePushInstallationSession? resolveRemotePushInstallationSession({
+  required StorageScopeId? storageScopeId,
+  required SessionState sessionState,
+}) {
+  final session = sessionState.session;
+  final epoch = sessionState.activeEpoch;
+  final binding = session?.accountBinding;
+  if (storageScopeId == null || session == null || epoch == null) {
+    return null;
+  }
+  if (binding != null && binding.currentDid.trim() != epoch.ownerDid) {
+    return null;
+  }
+  final protocolDeviceId = binding?.protocolDeviceId.trim();
+  return RemotePushInstallationSession(
+    storageScopeId: storageScopeId,
+    ownerDid: epoch.ownerDid,
+    generation: epoch.generation,
+    logicalDeviceId: protocolDeviceId == null || protocolDeviceId.isEmpty
+        ? null
+        : protocolDeviceId,
+  );
+}
+
 class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   AppRuntimeController(
     this.ref, {
@@ -100,6 +128,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
        super(const AppRuntimeState()) {
     _agentTerminalNotificationDeduplicator = ref.read(
       agentTerminalNotificationDeduplicatorProvider,
+    );
+    _remotePushMessageSyncCoordinator = ref.read(
+      remotePushMessageSyncCoordinatorProvider,
     );
     _lifecycleSubscription = ref.listen<AppLifecycleState>(
       appLifecycleProvider,
@@ -157,6 +188,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   _notificationActivationSubscription;
   late final ProviderSubscription<MessageSyncCoordinatorState>
   _messageSyncSubscription;
+  late final RemotePushMessageSyncCoordinator?
+  _remotePushMessageSyncCoordinator;
+  RemotePushSessionContext? _activeRemotePushMessageSyncContext;
 
   Future<void> initialize() async {
     if (state.isInitialized) {
@@ -254,12 +288,21 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         activatedDid: session.did,
         authRevoked: false,
       );
+      final remotePushActivation = _activateRemotePushMessageSyncBestEffort(
+        epoch,
+      );
+      await Future<void>.microtask(() {});
+      unawaited(remotePushActivation);
+      if (!_isSessionEpochActive(epoch)) {
+        return;
+      }
       unawaited(
         _refreshAuthenticatedDataInBackground(epoch: epoch, debounce: false),
       );
       _scheduleReliableSync('startup', immediate: true);
       _startForegroundCatchUp();
       _ensureRealtimeConnected(epoch);
+      unawaited(_bindRemotePushBestEffort(epoch));
     } on TimeoutException {
       if (!_isSessionLeaseTransitionCurrent(lease)) {
         return;
@@ -288,6 +331,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<void> prepareIdentityActivation() async {
     _isLoggingOut = true;
     _syncAuthRevoked = false;
+    final pushSession = _currentRemotePushInstallationSession();
+    _deactivateRemotePushLocally(pushSession);
+    await _disableRemotePushBestEffort(pushSession);
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: true,
@@ -311,6 +357,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final currentSession = ref.read(sessionProvider).session;
     if (currentSession != null) {
       ref.read(sessionProvider.notifier).upsertLocalCredential(currentSession);
+      final pushSession = _currentRemotePushInstallationSession();
+      _deactivateRemotePushLocally(pushSession);
+      await _disableRemotePushBestEffort(pushSession);
       _clearAuthenticatedUiState();
     }
     AppSession? session;
@@ -476,6 +525,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     _isLoggingOut = true;
     _syncAuthRevoked = false;
+    final pushSession = _currentRemotePushInstallationSession();
+    _deactivateRemotePushLocally(pushSession);
+    await _disableRemotePushBestEffort(pushSession);
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: false,
@@ -501,6 +553,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       try {
         _agentTerminalNotificationDeduplicator.clear();
         state = state.copyWith(activatedDid: null);
+        final pushSession = _currentRemotePushInstallationSession();
+        _deactivateRemotePushLocally(pushSession);
+        await _disableRemotePushBestEffort(pushSession);
         _clearAuthenticatedUiState();
         await ref
             .read(appSessionServiceProvider)
@@ -522,6 +577,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   void _clearAuthenticatedUiState() {
+    _deactivateRemotePushMessageSync();
     _stopForegroundCatchUp();
     _clearRealtimeSyncHints();
     _agentTerminalNotificationDeduplicator.clear();
@@ -573,6 +629,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     _syncAuthRevoked = true;
     _stopForegroundCatchUp();
+    _deactivateRemotePushLocally(_currentRemotePushInstallationSession());
     _clearAuthenticatedUiState();
     state = state.copyWith(
       isBusy: false,
@@ -849,6 +906,8 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     _startForegroundCatchUp();
     _ensureRealtimeConnected(epoch);
+    unawaited(_refreshRemotePushBestEffort(epoch));
+    unawaited(_resumeRemotePushMessageSyncBestEffort(epoch));
     _scheduleReliableSync('app_resumed');
     unawaited(_refreshAuthenticatedDataInBackground());
   }
@@ -994,6 +1053,132 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         !_isLoggingOut &&
         !_syncAuthRevoked &&
         epoch.matches(ref.read(sessionProvider));
+  }
+
+  RemotePushInstallationSession? _currentRemotePushInstallationSession() {
+    return resolveRemotePushInstallationSession(
+      storageScopeId: ref.read(remotePushStorageScopeIdProvider),
+      sessionState: ref.read(sessionProvider),
+    );
+  }
+
+  Future<void> _bindRemotePushBestEffort(SessionEpoch epoch) async {
+    final coordinator = ref.read(remotePushInstallationCoordinatorProvider);
+    final session = _currentRemotePushInstallationSession();
+    final skipReason = coordinator == null
+        ? 'coordinator_missing'
+        : session == null
+        ? 'session_missing'
+        : !_isSessionEpochActive(epoch)
+        ? 'inactive_epoch'
+        : session.generation != epoch.generation
+        ? 'generation_mismatch'
+        : session.ownerDid != epoch.ownerDid
+        ? 'owner_mismatch'
+        : null;
+    if (skipReason != null) {
+      debugPrint(
+        '[awiki_me][remote-push][installation-bind-skipped] '
+        'reason=$skipReason',
+      );
+      return;
+    }
+    try {
+      debugPrint('[awiki_me][remote-push][installation-bind-start]');
+      await coordinator!.bindActiveSession(session!);
+      debugPrint('[awiki_me][remote-push][installation-bind-succeeded]');
+    } catch (error) {
+      debugPrint(
+        '[awiki_me][remote-push][installation-bind-failed] '
+        'type=${error.runtimeType}',
+      );
+      // Push registration must never fail an authenticated activation.
+    }
+  }
+
+  Future<void> _refreshRemotePushBestEffort(SessionEpoch epoch) async {
+    final coordinator = ref.read(remotePushInstallationCoordinatorProvider);
+    final session = _currentRemotePushInstallationSession();
+    if (coordinator == null ||
+        session == null ||
+        !_isSessionEpochActive(epoch) ||
+        session.generation != epoch.generation ||
+        session.ownerDid != epoch.ownerDid) {
+      return;
+    }
+    try {
+      await coordinator.refreshActiveSession(session);
+    } catch (_) {
+      // Foreground Push refresh is best-effort.
+    }
+  }
+
+  Future<void> _disableRemotePushBestEffort(
+    RemotePushInstallationSession? session,
+  ) async {
+    final coordinator = ref.read(remotePushInstallationCoordinatorProvider);
+    if (coordinator == null || session == null) {
+      return;
+    }
+    try {
+      await coordinator
+          .disableActiveInstallation(session)
+          .timeout(_requestTimeout);
+    } catch (_) {
+      // Local session fencing remains authoritative if Push teardown fails.
+    }
+  }
+
+  void _deactivateRemotePushLocally(RemotePushInstallationSession? session) {
+    final coordinator = ref.read(remotePushInstallationCoordinatorProvider);
+    if (coordinator == null || session == null) {
+      return;
+    }
+    coordinator.deactivateLocally(session);
+  }
+
+  Future<void> _activateRemotePushMessageSyncBestEffort(
+    SessionEpoch epoch,
+  ) async {
+    final coordinator = _remotePushMessageSyncCoordinator;
+    final context = currentRemotePushSessionContext(ref);
+    if (coordinator == null ||
+        context == null ||
+        !_isSessionEpochActive(epoch) ||
+        context.ownerDid != epoch.ownerDid ||
+        context.generation != epoch.generation) {
+      return;
+    }
+    _activeRemotePushMessageSyncContext = context;
+    try {
+      await coordinator.activateSession(context);
+    } catch (_) {
+      // A Push event must never fail an authenticated activation.
+    }
+  }
+
+  Future<void> _resumeRemotePushMessageSyncBestEffort(
+    SessionEpoch epoch,
+  ) async {
+    final coordinator = _remotePushMessageSyncCoordinator;
+    if (coordinator == null || !_isSessionEpochActive(epoch)) {
+      return;
+    }
+    try {
+      await coordinator.resume();
+    } catch (_) {
+      // Pending Push replay is retried by the next real lifecycle trigger.
+    }
+  }
+
+  void _deactivateRemotePushMessageSync() {
+    final coordinator = _remotePushMessageSyncCoordinator;
+    final context = _activeRemotePushMessageSyncContext;
+    _activeRemotePushMessageSyncContext = null;
+    if (coordinator == null || context == null) {
+      return;
+    }
+    coordinator.deactivateSession(context);
   }
 
   void _adoptSessionEpoch(SessionEpoch epoch) {
@@ -1698,6 +1883,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
 
   @override
   void dispose() {
+    _deactivateRemotePushMessageSync();
     _invalidateSessionOperations();
     _stopForegroundCatchUp();
     _clearRealtimeSyncHints();

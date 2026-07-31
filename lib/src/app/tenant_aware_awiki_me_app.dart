@@ -19,7 +19,6 @@ import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
 import '../data/im_core/storage_scope_im_core_validator.dart';
 import '../data/push/remote_push_client_factory.dart';
-import '../domain/entities/remote_push_event.dart';
 import '../domain/services/remote_push_client.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/responsive_layout.dart';
@@ -53,7 +52,6 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   late final Future<void> _shellReady;
   late final Future<AppNotificationFacade> _notificationFacadeReady;
   late final RemotePushClient _remotePushClient;
-  StreamSubscription<RemotePushEvent>? _remotePushEvents;
   Future<void>? _remotePushInitialization;
   Future<_TenantRuntime>? _runtimeFuture;
   Future<void>? _runtimeDisposeOperation;
@@ -78,7 +76,6 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     );
     WidgetsBinding.instance.addObserver(this);
     _remotePushClient = widget.remotePushClient ?? buildRemotePushClient();
-    _remotePushEvents = _remotePushClient.events.listen(_onRemotePushEvent);
     _startRemotePushInitialization();
     final scopeSecrets = buildScopeSecretRepository(
       appStateRoot: widget.appStateRoot,
@@ -97,8 +94,6 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_remotePushEvents?.cancel());
-    unawaited(_remotePushClient.dispose());
     unawaited(
       _disposeAfterWidgetRemoval().catchError((Object _, StackTrace __) {}),
     );
@@ -148,12 +143,6 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     }
   }
 
-  void _onRemotePushEvent(RemotePushEvent event) {
-    if (kDebugMode) {
-      debugPrint('[awiki_me][remote-push] event=${event.kind.wireName}');
-    }
-  }
-
   Future<_TenantRuntime> _loadRuntime(int generation) async {
     await _shellReady;
     final registry = await _store.loadRegistry();
@@ -192,6 +181,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       appStateRoot: widget.appStateRoot,
       desktopShellService: _desktopShell,
       notificationFacade: notificationFacade,
+      remotePushClient: _remotePushClient,
       tenant: tenant,
       environment: AwikiEnvironmentConfig(
         baseUrl: tenant.backendBaseUrl,
@@ -223,7 +213,11 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     try {
       await _disposeRuntimeForExit();
     } finally {
-      await _desktopShell.dispose();
+      try {
+        await _desktopShell.dispose();
+      } finally {
+        await _remotePushClient.dispose();
+      }
     }
   }
 

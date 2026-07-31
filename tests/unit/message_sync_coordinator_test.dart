@@ -8,7 +8,9 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
+import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
+import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
@@ -18,18 +20,585 @@ import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/data/services/method_channel_app_presentation_service.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_terminal_notification_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 
 import 'test_support.dart';
 import 'devices/device_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('remote Push without an authenticated session is ignored', () async {
+    final sync = FakeMessageSyncService();
+    final container = _container(FakeAwikiGateway(), sync);
+    addTearDown(container.dispose);
+    container.read(sessionProvider.notifier).clear();
+
+    final receipt = await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+
+    expect(receipt.disposition, RemotePushSyncDisposition.ignored);
+    expect(receipt.canAcknowledge, isFalse);
+    expect(sync.syncReasons, isEmpty);
+  });
+
+  test(
+    'remote Push succeeds only after the post-commit projection refresh',
+    () async {
+      final message = _incomingMessage(logicalId: 'logical-projection');
+      final committed = CommittedIncomingMessage(
+        eventId: 'event-projection',
+        logicalMessageId: 'logical-projection',
+        message: message,
+      );
+      final gateway = _PostCommitRefreshBlockingGateway(_conversation());
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[committed],
+        ),
+      );
+      final container = _container(gateway, sync, syncV2ReadEnabled: true);
+      addTearDown(() {
+        gateway.release();
+        container.dispose();
+      });
+      final RemotePushSyncPort coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      var completed = false;
+      final pending = coordinator.requestRemotePushSync().whenComplete(
+        () => completed = true,
+      );
+      await gateway.postCommitRefreshStarted.future;
+
+      expect(completed, isFalse);
+      expect(sync.syncReasons, ['remote_push']);
+
+      gateway.release();
+      final receipt = await pending;
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(receipt.canAcknowledge, isTrue);
+      expect(receipt.committedIncomingMessages, [committed]);
+    },
+  );
+
+  test('remote Push maps every terminal Core outcome exactly', () async {
+    const cases = <MessageSyncStatus, RemotePushSyncDisposition>{
+      MessageSyncStatus.idle: RemotePushSyncDisposition.succeeded,
+      MessageSyncStatus.changed: RemotePushSyncDisposition.succeeded,
+      MessageSyncStatus.retryableFailure:
+          RemotePushSyncDisposition.retryableFailure,
+      MessageSyncStatus.recoveryRequired:
+          RemotePushSyncDisposition.recoveryRequired,
+      MessageSyncStatus.authRevoked: RemotePushSyncDisposition.authRevoked,
+    };
+
+    for (final entry in cases.entries) {
+      final container = _container(
+        FakeAwikiGateway(),
+        FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: entry.key,
+            eventsApplied: 0,
+            pagesFetched: 1,
+          ),
+        ),
+      );
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+
+      expect(
+        receipt.disposition,
+        entry.value,
+        reason: 'Core ${entry.key.name}',
+      );
+      expect(
+        receipt.canAcknowledge,
+        entry.value == RemotePushSyncDisposition.succeeded,
+      );
+      container.dispose();
+    }
+  });
+
+  test('remote Push maps a thrown sync error to retryable failure', () async {
+    final container = _container(
+      FakeAwikiGateway(),
+      _FailingMessageSyncService(),
+    );
+    addTearDown(container.dispose);
+
+    final receipt = await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+
+    expect(receipt.disposition, RemotePushSyncDisposition.retryableFailure);
+    expect(receipt.canAcknowledge, isFalse);
+  });
+
+  test('remote Push completion after an identity change is stale', () async {
+    final completion = Completer<void>();
+    final sync = FakeMessageSyncService()..syncNowCompleter = completion;
+    final container = _container(FakeAwikiGateway(), sync);
+    addTearDown(container.dispose);
+    final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+
+    final pending = coordinator.requestRemotePushSync();
+    await pumpEventQueue();
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:test:next',
+            credentialName: 'next',
+            displayName: 'Next',
+          ),
+        );
+    completion.complete();
+
+    final receipt = await pending;
+
+    expect(receipt.disposition, RemotePushSyncDisposition.staleSession);
+    expect(receipt.canAcknowledge, isFalse);
+  });
+
+  test(
+    'remote Push joins an active normal run and suppresses its presentation',
+    () async {
+      final completion = Completer<void>();
+      final notifications = FakeNotificationFacade();
+      final committed = _committedIncoming(
+        eventId: 'event-active',
+        logicalId: 'logical-active',
+      );
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[committed],
+        ),
+      )..syncNowCompleter = completion;
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      final normal = coordinator.requestSync('websocket_hint', immediate: true);
+      await pumpEventQueue();
+      final remote = coordinator.requestRemotePushSync();
+      completion.complete();
+
+      final receipt = await remote;
+      await normal;
+      await pumpEventQueue();
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(sync.syncReasons, ['websocket_hint']);
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test(
+    'queued suppression is sticky when a later normal request coalesces',
+    () async {
+      final first = _committedIncoming(
+        eventId: 'event-queue-first',
+        logicalId: 'logical-queue-first',
+      );
+      final second = _committedIncoming(
+        eventId: 'event-queue-second',
+        logicalId: 'logical-queue-second',
+      );
+      final sync = _SequencedMessageSyncService(<MessageSyncOutcome>[
+        MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[first],
+        ),
+        MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[second],
+        ),
+      ]);
+      final joinStarted = Completer<void>();
+      final joinGate = Completer<List<DeviceJoinRequestNotice>>();
+      final devices = _deviceCoreWithBlockingJoinInbox(
+        started: joinStarted,
+        gate: joinGate,
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        devices: devices,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        if (!joinGate.isCompleted) {
+          joinGate.complete(const <DeviceJoinRequestNotice>[]);
+        }
+        container.dispose();
+      });
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      final normal = coordinator.requestSync('startup', immediate: true);
+      await joinStarted.future;
+      final remote = coordinator.requestRemotePushSync();
+      unawaited(coordinator.requestSync('websocket_hint', immediate: true));
+      joinGate.complete(const <DeviceJoinRequestNotice>[]);
+
+      await normal;
+      final receipt = await remote;
+      await pumpEventQueue();
+
+      expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
+      expect(sync.syncReasons, ['startup', 'websocket_hint']);
+      expect(notifications.inAppCalls, 1);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test('a follow-up queued behind remote Push inherits suppression', () async {
+    final firstGate = Completer<void>();
+    final firstStarted = Completer<void>();
+    final secondCompleted = Completer<void>();
+    final sync = _FirstGatedSequencedMessageSyncService(
+      outcomes: <MessageSyncOutcome>[
+        const MessageSyncOutcome(
+          status: MessageSyncStatus.idle,
+          eventsApplied: 0,
+          pagesFetched: 1,
+        ),
+        MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[
+            _committedIncoming(
+              eventId: 'event-inherited',
+              logicalId: 'logical-inherited',
+            ),
+          ],
+        ),
+      ],
+      firstGate: firstGate,
+      firstStarted: firstStarted,
+      secondCompleted: secondCompleted,
+    );
+    final notifications = FakeNotificationFacade();
+    final container = _container(
+      FakeAwikiGateway(),
+      sync,
+      notifications: notifications,
+      syncV2ReadEnabled: true,
+    );
+    addTearDown(() {
+      if (!firstGate.isCompleted) {
+        firstGate.complete();
+      }
+      container.dispose();
+    });
+    final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+
+    final remote = coordinator.requestRemotePushSync();
+    await firstStarted.future;
+    unawaited(coordinator.requestSync('websocket_hint', immediate: true));
+    firstGate.complete();
+
+    await remote;
+    await secondCompleted.future;
+    await pumpEventQueue();
+
+    expect(sync.syncReasons, ['remote_push', 'websocket_hint']);
+    expect(notifications.inAppCalls, 0);
+    expect(notifications.systemCalls, 0);
+  });
+
+  test(
+    'a pending normal timer inherits suppression from an active remote Push',
+    () async {
+      final remoteGate = Completer<void>();
+      final remoteStarted = Completer<void>();
+      final followUpCompleted = Completer<void>();
+      final sync = _PendingTimerRaceMessageSyncService(
+        outcomes: <MessageSyncOutcome>[
+          const MessageSyncOutcome(
+            status: MessageSyncStatus.idle,
+            eventsApplied: 0,
+            pagesFetched: 1,
+          ),
+          const MessageSyncOutcome(
+            status: MessageSyncStatus.idle,
+            eventsApplied: 0,
+            pagesFetched: 1,
+          ),
+          MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 2,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[
+              _committedIncoming(
+                eventId: 'event-timer-ordinary',
+                logicalId: 'logical-timer-ordinary',
+              ),
+              _committedIncoming(
+                eventId: 'event-timer-runtime',
+                logicalId: 'logical-timer-runtime',
+                senderDid: 'did:agent:runtime',
+              ),
+            ],
+          ),
+        ],
+        remoteGate: remoteGate,
+        remoteStarted: remoteStarted,
+        followUpCompleted: followUpCompleted,
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        minInterval: const Duration(milliseconds: 100),
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(() {
+        if (!remoteGate.isCompleted) {
+          remoteGate.complete();
+        }
+        container.dispose();
+      });
+      container.read(agentsProvider.notifier).applyControlPayload(
+        const <String, Object?>{
+          'schema': 'awiki.agent.status.v1',
+          'status_scope': 'snapshot',
+          'daemon_agent_did': 'did:agent:daemon',
+          'daemon': <String, Object?>{
+            'agent_did': 'did:agent:daemon',
+            'status': 'ready',
+          },
+          'runtimes': <Object?>[
+            <String, Object?>{
+              'agent_did': 'did:agent:runtime',
+              'daemon_agent_did': 'did:agent:daemon',
+              'runtime': 'codex',
+              'status': 'ready',
+            },
+          ],
+        },
+      );
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      await coordinator.requestSync('seed', immediate: true);
+      final delayed = coordinator.requestSync('delayed_normal');
+      final remote = coordinator.requestRemotePushSync();
+      await remoteStarted.future;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      expect(sync.syncReasons, ['seed', 'remote_push']);
+
+      remoteGate.complete();
+      await remote;
+      await delayed;
+      await followUpCompleted.future;
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+
+      expect(sync.syncReasons, ['seed', 'remote_push', 'delayed_normal']);
+      expect(sync.maxActiveCalls, 1);
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test(
+    'suppressed commits retain event logical and message identity ledgers',
+    () async {
+      final first = _committedIncoming(
+        eventId: 'event-ledger',
+        logicalId: 'logical-ledger',
+        localId: 'local-ledger',
+        remoteId: 'remote-ledger',
+      );
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[first],
+        ),
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+
+      await coordinator.requestRemotePushSync();
+      sync.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          _committedIncoming(
+            eventId: 'event-ledger',
+            logicalId: 'logical-event-duplicate',
+          ),
+        ],
+      );
+      await coordinator.requestSync('websocket_hint', immediate: true);
+      sync.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          _committedIncoming(
+            eventId: 'event-logical-duplicate',
+            logicalId: 'logical-ledger',
+          ),
+        ],
+      );
+      await coordinator.requestSync('websocket_hint', immediate: true);
+      sync.deltaResult = MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          _committedIncoming(
+            eventId: 'event-message-duplicate',
+            logicalId: 'logical-message-duplicate',
+            localId: 'local-ledger',
+            remoteId: 'remote-ledger',
+          ),
+        ],
+      );
+      await coordinator.requestSync('websocket_hint', immediate: true);
+
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test('remote Push suppresses delayed Runtime Agent presentation', () async {
+    final notifications = FakeNotificationFacade();
+    final committed = _committedIncoming(
+      eventId: 'event-runtime-suppressed',
+      logicalId: 'logical-runtime-suppressed',
+      senderDid: 'did:agent:runtime',
+    );
+    final sync = FakeMessageSyncService(
+      deltaResult: MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[committed],
+      ),
+    );
+    final container = _container(
+      FakeAwikiGateway(),
+      sync,
+      notifications: notifications,
+      syncV2ReadEnabled: true,
+    );
+    addTearDown(container.dispose);
+    container.read(agentsProvider.notifier).applyControlPayload(
+      const <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'snapshot',
+        'daemon_agent_did': 'did:agent:daemon',
+        'daemon': <String, Object?>{
+          'agent_did': 'did:agent:daemon',
+          'status': 'ready',
+        },
+        'runtimes': <Object?>[
+          <String, Object?>{
+            'agent_did': 'did:agent:runtime',
+            'daemon_agent_did': 'did:agent:daemon',
+            'runtime': 'codex',
+            'status': 'ready',
+          },
+        ],
+      },
+    );
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
+
+    expect(notifications.inAppCalls, 0);
+    expect(notifications.systemCalls, 0);
+  });
+
+  test('automatic retry inherits remote Push suppression', () async {
+    final notifications = FakeNotificationFacade();
+    final sync = FakeMessageSyncService(
+      deltaResult: MessageSyncOutcome(
+        status: MessageSyncStatus.changed,
+        eventsApplied: 1,
+        pagesFetched: 1,
+        committedIncomingMessages: <CommittedIncomingMessage>[
+          _committedIncoming(
+            eventId: 'event-retry',
+            logicalId: 'logical-retry',
+          ),
+        ],
+      ),
+    )..nextDeltaError = StateError('transient_remote_push_failure');
+    final container = _container(
+      FakeAwikiGateway(),
+      sync,
+      notifications: notifications,
+      syncV2ReadEnabled: true,
+    );
+    addTearDown(container.dispose);
+
+    final receipt = await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestRemotePushSync();
+    await pumpEventQueue();
+
+    expect(receipt.disposition, RemotePushSyncDisposition.retryableFailure);
+    expect(sync.syncReasons, ['remote_push', 'automatic_retry']);
+    expect(notifications.inAppCalls, 0);
+    expect(notifications.systemCalls, 0);
+  });
 
   test('single-flight coalesces concurrent sync requests', () async {
     final gateway = FakeAwikiGateway()
@@ -1010,6 +1579,73 @@ void main() {
   );
 }
 
+CommittedIncomingMessage _committedIncoming({
+  required String eventId,
+  required String logicalId,
+  String? localId,
+  String? remoteId,
+  String senderDid = 'did:test:peer',
+}) {
+  return CommittedIncomingMessage(
+    eventId: eventId,
+    logicalMessageId: logicalId,
+    message: _incomingMessage(
+      logicalId: logicalId,
+      localId: localId,
+      remoteId: remoteId,
+      senderDid: senderDid,
+    ),
+  );
+}
+
+ChatMessage _incomingMessage({
+  required String logicalId,
+  String? localId,
+  String? remoteId,
+  String senderDid = 'did:test:peer',
+}) {
+  return ChatMessage(
+    localId: localId ?? 'local-$logicalId',
+    remoteId: remoteId ?? 'remote-$logicalId',
+    conversationId: 'dm:peer-scope:v1:peer',
+    threadId: 'dm:peer-scope:v1:peer',
+    senderDid: senderDid,
+    senderName: senderDid == 'did:agent:runtime' ? 'Codex' : 'Peer',
+    receiverDid: 'did:test:me',
+    content: 'committed $logicalId',
+    createdAt: DateTime.utc(2026, 7, 30, 9),
+    isMine: false,
+    sendState: MessageSendState.sent,
+  );
+}
+
+FakeDeviceManagementCore _deviceCoreWithBlockingJoinInbox({
+  required Completer<void> started,
+  required Completer<List<DeviceJoinRequestNotice>> gate,
+}) {
+  return FakeDeviceManagementCore()
+    ..registry = const DeviceRegistrySnapshot(
+      did: 'did:test:me',
+      devices: <DeviceSummary>[
+        DeviceSummary(
+          protocolDeviceId: 'admin-current',
+          signingKeyId: 'did:test:me#admin-sign',
+          e2eeKeyId: 'did:test:me#admin-e2ee',
+          status: DeviceStatus.active,
+          role: DeviceRole.admin,
+          managementReady: true,
+          isCurrent: true,
+        ),
+      ],
+    )
+    ..joinRequestsLoader = (selector) {
+      if (!started.isCompleted) {
+        started.complete();
+      }
+      return gate.future;
+    };
+}
+
 ProviderContainer _container(
   FakeAwikiGateway gateway,
   MessageSyncService sync, {
@@ -1182,6 +1818,122 @@ class _PostCommitConversationGateway extends FakeAwikiGateway {
   }
 
   void releaseFirstIfPending() => releaseFirst();
+}
+
+class _PostCommitRefreshBlockingGateway extends FakeAwikiGateway {
+  _PostCommitRefreshBlockingGateway(ConversationSummary conversation) {
+    conversations = <ConversationSummary>[conversation];
+  }
+
+  final Completer<void> postCommitRefreshStarted = Completer<void>();
+  final Completer<void> _release = Completer<void>();
+
+  @override
+  Future<List<ConversationSummary>> listConversations() async {
+    listConversationsCalls += 1;
+    if (listConversationsCalls == 2) {
+      postCommitRefreshStarted.complete();
+      await _release.future;
+    }
+    return List<ConversationSummary>.of(conversations);
+  }
+
+  void release() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
+  }
+}
+
+class _SequencedMessageSyncService extends FakeMessageSyncService {
+  _SequencedMessageSyncService(this.outcomes);
+
+  final List<MessageSyncOutcome> outcomes;
+  var _next = 0;
+
+  @override
+  Future<MessageSyncOutcome> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    return outcomes[_next++];
+  }
+}
+
+class _FirstGatedSequencedMessageSyncService
+    extends _SequencedMessageSyncService {
+  _FirstGatedSequencedMessageSyncService({
+    required List<MessageSyncOutcome> outcomes,
+    required this.firstGate,
+    required this.firstStarted,
+    required this.secondCompleted,
+  }) : super(outcomes);
+
+  final Completer<void> firstGate;
+  final Completer<void> firstStarted;
+  final Completer<void> secondCompleted;
+  var _calls = 0;
+
+  @override
+  Future<MessageSyncOutcome> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    _calls += 1;
+    if (_calls == 1) {
+      firstStarted.complete();
+      await firstGate.future;
+    }
+    final result = await super.syncNow(reason: reason, limit: limit);
+    if (_calls == 2 && !secondCompleted.isCompleted) {
+      secondCompleted.complete();
+    }
+    return result;
+  }
+}
+
+class _PendingTimerRaceMessageSyncService extends FakeMessageSyncService {
+  _PendingTimerRaceMessageSyncService({
+    required this.outcomes,
+    required this.remoteGate,
+    required this.remoteStarted,
+    required this.followUpCompleted,
+  });
+
+  final List<MessageSyncOutcome> outcomes;
+  final Completer<void> remoteGate;
+  final Completer<void> remoteStarted;
+  final Completer<void> followUpCompleted;
+  var _next = 0;
+  var _activeCalls = 0;
+  var maxActiveCalls = 0;
+
+  @override
+  Future<MessageSyncOutcome> syncNow({
+    required String reason,
+    int limit = 100,
+  }) async {
+    syncReasons.add(reason);
+    _activeCalls += 1;
+    if (_activeCalls > maxActiveCalls) {
+      maxActiveCalls = _activeCalls;
+    }
+    final index = _next++;
+    try {
+      if (index == 1) {
+        remoteStarted.complete();
+        await remoteGate.future;
+      }
+      final result = outcomes[index];
+      if (index == 2 && !followUpCompleted.isCompleted) {
+        followUpCompleted.complete();
+      }
+      return result;
+    } finally {
+      _activeCalls -= 1;
+    }
+  }
 }
 
 class _PublishingMessageSyncService extends FakeMessageSyncService {

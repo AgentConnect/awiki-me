@@ -10,6 +10,8 @@ abstract interface class AliyunEmasPlatform {
 
   Future<Map<dynamic, dynamic>> initialize();
 
+  Future<String> getAppId();
+
   Future<String> getDeviceId();
 
   Future<Map<dynamic, dynamic>> createNotificationChannel({
@@ -65,6 +67,11 @@ class PluginAliyunEmasPlatform implements AliyunEmasPlatform {
           'initialize',
         ) ??
         <dynamic, dynamic>{};
+  }
+
+  @override
+  Future<String> getAppId() async {
+    return await _eventChannel.invokeMethod<String>('getAppId') ?? '';
   }
 
   @override

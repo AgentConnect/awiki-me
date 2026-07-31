@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-30.release0714-account-state+macos-agent-notification+agent-runtime-row+onboarding-phone-single-stage-v1",
+  "sourceRevision": "2026-07-30.release0714-account-state+macos-agent-notification+agent-runtime-row+onboarding-phone-single-stage+android-emas-direct-message-mvp-v1",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -95,6 +95,60 @@
           ]
         ]
       }
+    },
+    {
+      "caseId": "ANDROID-PUSH-PRODUCT-E2E-001",
+      "feature": "Android EMAS direct-message product delivery",
+      "layer": "remote_product_ui",
+      "preconditions": "A dedicated authenticated AWiki Me identity is active on a physical Android device, notification permission and EMAS registration can be controlled, and User Service, Message Service outbox delivery, and EMAS are deployed on the approved test tenant.",
+      "action": "Upsert the authenticated Android installation, send one real direct message through Message Service outbox and EMAS, exercise foreground, background, terminated-process tap, WebSocket-plus-Push convergence, offline retry recovery, and finally logout.",
+      "exactOracles": [
+        "User Service records one active installation bound to the authenticated account and the Android EMAS registration without exposing credentials or a full provider device identifier.",
+        "Foreground Push is a silent dirty hint: Core sync commits and projects the direct message without an App-owned duplicate notification.",
+        "Background delivery renders exactly one EMAS NOTICE for the message.",
+        "A terminated-process notification tap starts Core sync and opens only the exact conversation matched from the newly committed message.",
+        "WebSocket and Push convergence produces one committed canonical message and one presentation outcome.",
+        "While offline, the pending Push event remains unacknowledged; after connectivity returns, successful sync and routing acknowledge it.",
+        "Logout disables the active installation, and a later send excludes the old DID installation from delivery."
+      ],
+      "negativeChecks": [
+        "Provider API success, outbox done state, fake-client callbacks, duplicate Core messages, duplicate notifications, acknowledgement before successful sync and routing, wrong-conversation navigation, retained delivery after logout, or old-DID delivery can never pass."
+      ],
+      "environment": "android_physical_remote",
+      "cleanupPolicy": "disable_test_installation_and_remove_isolated_message_state",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me+user-service+message-service",
+      "implementationPath": "tests/e2e/planned/android_remote_push_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
+    },
+    {
+      "caseId": "ANDROID-PUSH-NATIVE-E2E-001",
+      "feature": "Android EMAS physical-device registration and delivery",
+      "layer": "native_product_ui",
+      "preconditions": "A Nubia M153, or an explicitly named equivalent physical Android device, has an isolated AWiki Me build, resettable notification permission, controllable background and terminated-process state, and access to the configured EMAS application.",
+      "action": "Deny notification permission, recover it through Android settings, register with EMAS, and deliver notifications while the App is backgrounded and after its process is terminated.",
+      "exactOracles": [
+        "Permission denial is observed before settings recovery, and Android settings recovery enables the subsequent visible notification path.",
+        "EMAS registration is proven with non-sensitive provider DeviceId suffix evidence only; the full identifier and all credentials remain absent from evidence.",
+        "The physical device receives the background notification and the terminated-process notification, and the terminated-process tap reaches the App open path."
+      ],
+      "negativeChecks": [
+        "Provider API success, Message Service outbox done state, a fake facade, callback-only evidence without a visible notification, emulator-only evidence, or an unnamed substitute device can never pass."
+      ],
+      "environment": "android_physical_native",
+      "cleanupPolicy": "restore_notification_permission_disable_test_installation_and_clear_test_notifications",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-platform",
+      "implementationPath": "tests/e2e/planned/android_remote_push_future_cases.md",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "planned"
     },
     {
       "caseId": "ATTACH-E2E-001",

@@ -2,14 +2,12 @@ package ai.awiki.awikime.push
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.Application
 import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.alibaba.sdk.android.push.CommonCallback
-import com.alibaba.sdk.android.push.noonesdk.PushInitConfig
 import com.alibaba.sdk.android.push.noonesdk.PushServiceFactory
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -37,6 +35,11 @@ object RemotePushEventBridge {
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val registrationInFlight = AtomicBoolean(false)
+    private val registrationStarted = AtomicBoolean(false)
+    private val registrationLock = Any()
+    private val pendingInitializationResults = mutableListOf<MethodChannel.Result>()
+    private var terminalRegistrationResult: Map<String, String?>? = null
     @Volatile
     private var channel: MethodChannel? = null
 
@@ -49,9 +52,16 @@ object RemotePushEventBridge {
                         ai.awiki.awikime.BuildConfig.AWIKI_EMAS_ENABLED,
                     )
                     "initialize" -> initializePush(applicationContext, result)
+                    "getAppId" -> result.success(
+                        if (ai.awiki.awikime.BuildConfig.AWIKI_EMAS_ENABLED) {
+                            ai.awiki.awikime.BuildConfig.AWIKI_EMAS_APP_KEY
+                        } else {
+                            ""
+                        },
+                    )
                     "getDeviceId" -> {
                         try {
-                            val deviceId = PushServiceFactory.getCloudPushService().deviceId ?: ""
+                            val deviceId = readyDeviceId() ?: ""
                             if (
                                 ai.awiki.awikime.BuildConfig.DEBUG &&
                                 ai.awiki.awikime.BuildConfig.AWIKI_EMAS_LOG_DEVICE_ID
@@ -68,6 +78,10 @@ object RemotePushEventBridge {
                         call.arguments as? Map<*, *>,
                         result,
                     )
+                    "wakeNotificationScreen" -> {
+                        NotificationScreenWakeController.wakeIfNeeded(applicationContext)
+                        result.success(null)
+                    }
                     "loadPendingEvents" -> result.success(load(applicationContext))
                     "acknowledgePendingEvents" -> {
                         val deliveryIds = (call.arguments as? List<*>)
@@ -88,49 +102,106 @@ object RemotePushEventBridge {
             result.success(mapOf("code" to "configuration_disabled"))
             return
         }
-        val replied = AtomicBoolean(false)
         try {
-            val application = context.applicationContext as Application
-            PushServiceFactory.init(
-                PushInitConfig.Builder()
-                    .application(application)
-                    .appKey(ai.awiki.awikime.BuildConfig.AWIKI_EMAS_APP_KEY)
-                    .appSecret(ai.awiki.awikime.BuildConfig.AWIKI_EMAS_APP_SECRET)
-                    .build(),
-            )
+            if (readyDeviceId() != null) {
+                result.success(mapOf("code" to "10000"))
+                return
+            }
+
+            val shouldRegister = synchronized(registrationLock) {
+                if (readyDeviceId() != null) {
+                    mainHandler.post { result.success(mapOf("code" to "10000")) }
+                    return@synchronized false
+                }
+                terminalRegistrationResult?.let { terminal ->
+                    mainHandler.post { result.success(terminal) }
+                    return@synchronized false
+                }
+                pendingInitializationResults.add(result)
+                registrationStarted.compareAndSet(false, true).also { starting ->
+                    if (starting) {
+                        registrationInFlight.set(true)
+                    }
+                }
+            }
+            if (!shouldRegister) {
+                return
+            }
+
             PushServiceFactory.getCloudPushService().register(
                 context,
                 object : CommonCallback {
                     override fun onSuccess(response: String?) {
-                        emit(context, "registration_changed", emptyMap())
-                        if (replied.compareAndSet(false, true)) {
-                            mainHandler.post { result.success(mapOf("code" to "10000")) }
-                        }
+                        completeRegistrationSuccess(context)
                     }
 
                     override fun onFailed(errorCode: String?, errorMessage: String?) {
-                        if (replied.compareAndSet(false, true)) {
-                            mainHandler.post {
-                                result.success(
-                                    mapOf(
-                                        "code" to (errorCode ?: "registration_failed"),
-                                        "errorMsg" to errorMessage,
-                                    ),
-                                )
-                            }
+                        if (errorCode == "PUSH_20110" && readyDeviceId() != null) {
+                            completeRegistrationSuccess(context)
+                            return
                         }
+                        val safeErrorCode = errorCode
+                            ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,32}")) }
+                            ?: "registration_failed"
+                        Log.e(
+                            "AWikiRemotePush",
+                            "EMAS registration failed code=$safeErrorCode",
+                        )
+                        completeRegistrationFailure(
+                            errorCode = errorCode ?: "registration_failed",
+                            errorMessage = errorMessage,
+                        )
                     }
                 },
             )
         } catch (error: Throwable) {
-            if (replied.compareAndSet(false, true)) {
-                result.success(
-                    mapOf(
-                        "code" to "native_exception",
-                        "errorMsg" to error.javaClass.simpleName,
-                    ),
-                )
+            completeRegistrationFailure(
+                errorCode = "native_exception",
+                errorMessage = error.javaClass.simpleName,
+            )
+        }
+    }
+
+    private fun readyDeviceId(): String? {
+        return runCatching {
+            PushServiceFactory.getCloudPushService().deviceId
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    private fun completeRegistrationSuccess(context: Context) {
+        Log.i("AWikiRemotePush", "EMAS registration succeeded")
+        val results = synchronized(registrationLock) {
+            registrationInFlight.set(false)
+            terminalRegistrationResult = mapOf("code" to "10000")
+            pendingInitializationResults.toList().also {
+                pendingInitializationResults.clear()
             }
+        }
+        emit(context, "registration_changed", emptyMap())
+        mainHandler.post {
+            results.forEach { it.success(mapOf("code" to "10000")) }
+        }
+    }
+
+    private fun completeRegistrationFailure(
+        errorCode: String,
+        errorMessage: String?,
+    ) {
+        val response = mapOf(
+            "code" to errorCode,
+            "errorMsg" to errorMessage,
+        )
+        val results = synchronized(registrationLock) {
+            registrationInFlight.set(false)
+            terminalRegistrationResult = response
+            pendingInitializationResults.toList().also {
+                pendingInitializationResults.clear()
+            }
+        }
+        mainHandler.post {
+            results.forEach { it.success(response) }
         }
     }
 

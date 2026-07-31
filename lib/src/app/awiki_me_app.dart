@@ -55,6 +55,18 @@ class AwikiMeApp extends StatelessWidget {
         notificationFacadeProvider.overrideWithValue(
           bootstrap.notificationFacade,
         ),
+        if (bootstrap.remotePushClient != null)
+          remotePushClientProvider.overrideWithValue(
+            bootstrap.remotePushClient,
+          ),
+        if (bootstrap.remotePushInstallationCoordinator != null)
+          remotePushInstallationCoordinatorProvider.overrideWithValue(
+            bootstrap.remotePushInstallationCoordinator,
+          ),
+        if (bootstrap.storageScopeLayout != null)
+          remotePushStorageScopeIdProvider.overrideWithValue(
+            bootstrap.storageScopeLayout!.scopeId,
+          ),
         desktopShellServiceProvider.overrideWithValue(
           bootstrap.desktopShellService,
         ),

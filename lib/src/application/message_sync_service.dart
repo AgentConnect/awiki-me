@@ -105,6 +105,7 @@ String _coreMessageSyncReason(String reason) {
     'websocket_reconnect' || 'realtime_reconnected' => 'websocket_reconnect',
     'foreground_reconcile' || 'foreground_catch_up' => 'foreground_reconcile',
     'manual_refresh' => 'manual_refresh',
+    'remote_push' => 'remote_push',
     'after_mutation' => 'after_mutation',
     'websocket_hint' ||
     'realtime_agent_control' ||

@@ -12,6 +12,7 @@ import '../application/attachment_cache_service.dart';
 import '../application/desktop_shell_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
+import '../application/auth/auth_session_coordinator.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -33,6 +34,7 @@ import '../application/product_local_store.dart';
 import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
+import '../application/remote_push_installation_coordinator.dart';
 import '../data/compat/compat_awiki_account_gateway.dart';
 import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
@@ -61,17 +63,21 @@ import '../data/local/awiki_product_local_store_sqlite.dart';
 import '../data/services/app_key_value_store.dart';
 import '../data/services/app_notification_facade.dart';
 import '../data/services/app_update_service.dart';
+import '../data/services/authenticated_user_service_rpc_client.dart';
 import '../data/services/awiki_onboarding_support_service.dart';
+import '../data/services/awiki_onboarding_utility_client.dart';
 import '../data/services/user_service_account_state_sync_adapter.dart';
 import '../data/services/key_value_active_session_store.dart';
 import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
+import '../data/push/user_service_push_installation_adapter.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
 import '../data/services/noop_e2ee_facade.dart';
 import '../domain/repositories/awiki_gateway.dart';
 import '../domain/services/e2ee_facade.dart';
 import '../domain/services/notification_facade.dart';
+import '../domain/services/remote_push_client.dart';
 import '../domain/services/realtime_gateway.dart';
 import '../domain/services/update_service.dart';
 import '../core/performance_logger.dart';
@@ -123,6 +129,9 @@ class AppBootstrap {
     this.peerIdentityService,
     this.attachmentCacheService,
     this.storageScopeLayout,
+    this.remotePushClient,
+    this.remotePushInstallationCoordinator,
+    this.remotePushDisposeTimeout = const Duration(seconds: 3),
     this.disposeNotificationFacade = true,
   });
 
@@ -159,6 +168,9 @@ class AppBootstrap {
   final PeerIdentityService? peerIdentityService;
   final AttachmentCacheService? attachmentCacheService;
   final AwikiStorageScopeLayout? storageScopeLayout;
+  final RemotePushClient? remotePushClient;
+  final RemotePushInstallationCoordinator? remotePushInstallationCoordinator;
+  final Duration remotePushDisposeTimeout;
   final bool disposeNotificationFacade;
   Future<void>? _disposeOperation;
 
@@ -168,8 +180,22 @@ class AppBootstrap {
     AppTenantProfile? tenant,
     DesktopShellService? desktopShellService,
     NotificationFacade? notificationFacade,
+    RemotePushClient? remotePushClient,
+    @visibleForTesting
+    Future<AppBootstrap> Function()? createCoreBootstrapForTesting,
+    @visibleForTesting
+    AwikiOnboardingUtilityHttpClient? remotePushHttpClientForTesting,
     void Function(AppBootstrapProgress progress)? onProgress,
   }) async {
+    final coreBootstrapFactory = createCoreBootstrapForTesting;
+    if (coreBootstrapFactory != null) {
+      final coreBootstrap = await coreBootstrapFactory();
+      return _composeRemotePush(
+        coreBootstrap,
+        remotePushClient: remotePushClient,
+        httpClient: remotePushHttpClientForTesting,
+      );
+    }
     final totalWatch = Stopwatch()..start();
     final shell = desktopShellService ?? const NoopDesktopShellService();
     final scopeSecretRepository = buildScopeSecretRepository(
@@ -382,9 +408,7 @@ class AppBootstrap {
       unawaited(
         runMacosNotificationSmoke(
           notificationFacade: effectiveNotificationFacade,
-          enabled: const bool.fromEnvironment(
-            'AWIKI_MACOS_NOTIFICATION_SMOKE',
-          ),
+          enabled: const bool.fromEnvironment('AWIKI_MACOS_NOTIFICATION_SMOKE'),
           isMacOS: Platform.isMacOS,
           isReleaseMode: kReleaseMode,
           delay: const Duration(seconds: 8),
@@ -441,11 +465,95 @@ class AppBootstrap {
           'storage_scope_bound': true,
         },
       );
-      return bootstrap;
+      return _composeRemotePush(
+        bootstrap,
+        remotePushClient: remotePushClient,
+        httpClient: remotePushHttpClientForTesting,
+      );
     } on Object {
       await runtime.dispose();
       rethrow;
     }
+  }
+
+  static AppBootstrap _composeRemotePush(
+    AppBootstrap coreBootstrap, {
+    required RemotePushClient? remotePushClient,
+    AwikiOnboardingUtilityHttpClient? httpClient,
+  }) {
+    if (remotePushClient == null) {
+      return coreBootstrap;
+    }
+    final sessions = coreBootstrap.appSessionService;
+    if (sessions == null) {
+      throw StateError('remote_push_app_session_service_required');
+    }
+    final pushHttpClient =
+        httpClient ??
+        AwikiOnboardingUtilityHttpClient(
+          baseUrl: coreBootstrap.environment.userServiceUrl,
+        );
+    final pushAuthenticatedClient = AuthenticatedUserServiceRpcClient(
+      client: pushHttpClient,
+      sessions: AuthSessionCoordinator(sessions: sessions),
+    );
+    final pushInstallations = UserServicePushInstallationAdapter(
+      userServiceUrl: coreBootstrap.environment.userServiceUrl,
+      client: pushHttpClient,
+      authenticatedClient: pushAuthenticatedClient,
+    );
+    return coreBootstrap._copyWithRemotePush(
+      client: remotePushClient,
+      coordinator: RemotePushInstallationCoordinator(
+        client: remotePushClient,
+        installations: pushInstallations,
+      ),
+    );
+  }
+
+  AppBootstrap _copyWithRemotePush({
+    required RemotePushClient client,
+    required RemotePushInstallationCoordinator coordinator,
+  }) {
+    return AppBootstrap(
+      environment: environment,
+      accountGateway: accountGateway,
+      gateway: gateway,
+      realtimeGateway: realtimeGateway,
+      notificationFacade: notificationFacade,
+      e2eeFacade: e2eeFacade,
+      localePreferenceService: localePreferenceService,
+      updateService: updateService,
+      desktopShellService: desktopShellService,
+      appSessionService: appSessionService,
+      identityCorePort: identityCorePort,
+      deviceManagementCorePort: deviceManagementCorePort,
+      rootKeyTransferPort: rootKeyTransferPort,
+      groupEncryptionCorePort: groupEncryptionCorePort,
+      onboardingService: onboardingService,
+      onboardingSupportService: onboardingSupportService,
+      messagingService: messagingService,
+      messageSyncService: messageSyncService,
+      conversationService: conversationService,
+      agentInventoryPort: agentInventoryPort,
+      accountStateSyncPort: accountStateSyncPort,
+      personalAgentBindingPort: personalAgentBindingPort,
+      agentControlService: agentControlService,
+      agentControlStatusStore: agentControlStatusStore,
+      groupApplicationService: groupApplicationService,
+      profileApplicationService: profileApplicationService,
+      directoryApplicationService: directoryApplicationService,
+      relationshipApplicationService: relationshipApplicationService,
+      realtimeApplicationService: realtimeApplicationService,
+      productLocalStore: productLocalStore,
+      peerIdentityService: peerIdentityService,
+      attachmentCacheService: attachmentCacheService,
+      storageScopeLayout: storageScopeLayout,
+      remotePushClient: client,
+      remotePushInstallationCoordinator: coordinator,
+      remotePushDisposeTimeout: remotePushDisposeTimeout,
+      disposeNotificationFacade: disposeNotificationFacade,
+    );
   }
 
   Future<void> dispose() {
@@ -465,6 +573,16 @@ class AppBootstrap {
       }
     }
 
+    final pushInstallations = remotePushInstallationCoordinator;
+    if (pushInstallations != null) {
+      try {
+        await pushInstallations.disableCurrentInstallation().timeout(
+          remotePushDisposeTimeout,
+        );
+      } catch (_) {
+        // Push registration is best-effort and must not block Core teardown.
+      }
+    }
     final sessions = appSessionService;
     if (sessions is ImCoreAppSessionService) {
       await disposeStep(sessions.disposeRuntime);
