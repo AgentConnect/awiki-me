@@ -5,7 +5,7 @@ import org.junit.Test
 
 class RemotePushRegistrationStateTest {
     @Test
-    fun `transient failure permits the next explicit registration attempt`() {
+    fun `completion permits the next explicit initialization attempt`() {
         val state = RemotePushRegistrationState()
 
         assertEquals(
@@ -25,7 +25,7 @@ class RemotePushRegistrationStateTest {
         )
         state.completeSuccess()
         assertEquals(
-            RemotePushRegistrationAction.RETURN_SUCCESS,
+            RemotePushRegistrationAction.START,
             state.beginInitialization(),
         )
     }
