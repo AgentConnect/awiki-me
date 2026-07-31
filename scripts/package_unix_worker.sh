@@ -10,7 +10,6 @@ MACOS_DMG_SETTINGS="$ROOT_DIR/installer/macos/dmg_settings.py"
 ANDROID_APP_ID="ai.awiki.awikime"
 ANDROID_EXPECTED_CERT_SHA256="F2:67:E9:18:57:54:ED:C1:2B:E5:69:69:1B:39:B9:EF:D4:EF:1E:CF:2D:7E:D8:18:81:42:69:B3:70:85:D8:75"
 MACOS_DERIVED_DIR=""
-MACOS_XCFRAMEWORKS_DIR=""
 cd "$ROOT_DIR"
 
 fail() {
@@ -25,9 +24,6 @@ require_cmd() {
 cleanup_worker() {
   if [[ -n "$MACOS_DERIVED_DIR" ]]; then
     rm -rf "$MACOS_DERIVED_DIR"
-  fi
-  if [[ -n "$MACOS_XCFRAMEWORKS_DIR" ]]; then
-    rm -rf "$MACOS_XCFRAMEWORKS_DIR"
   fi
 }
 
@@ -438,7 +434,7 @@ build_macos() {
   fingerprint="$(awiki_resolve_codesigning_identity "$AWIKI_MACOS_SIGNING_IDENTITY")" ||
     fail "configured macOS signing identity is unavailable"
 
-  local arch arch_label filename derived_root derived xcframeworks app
+  local arch arch_label filename derived_root derived app
   if [[ "$TARGET" == "macos-arm64" ]]; then
     arch="arm64"
     arch_label="arm64"
@@ -454,13 +450,11 @@ build_macos() {
   flutter pub get
   [[ -d macos/Runner.xcworkspace ]] || fail "macOS Runner workspace is missing"
   filename="AWiki-Me-macOS-$arch_label-$VERSION.dmg"
-  # Flutter Assemble may clean Xcode products after CocoaPods copies XCFrameworks.
+  # Flutter owns ROOT_DIR/build and may clean it during an Xcode build.
   derived_root="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
   mkdir -p "$derived_root"
   derived="$(mktemp -d "$derived_root/awiki-package-derived-$TARGET.XXXXXX")"
-  xcframeworks="$(mktemp -d "$derived_root/awiki-package-xcframeworks-$TARGET.XXXXXX")"
   MACOS_DERIVED_DIR="$derived"
-  MACOS_XCFRAMEWORKS_DIR="$xcframeworks"
   app="$derived/Build/Products/Release/AWikiMe.app"
   flutter build macos \
     --release \
@@ -479,7 +473,6 @@ build_macos() {
     -destination 'platform=macOS' \
     ARCHS="$arch" \
     ONLY_ACTIVE_ARCH=NO \
-    PODS_XCFRAMEWORKS_BUILD_DIR="$xcframeworks" \
     CODE_SIGN_STYLE=Manual \
     CODE_SIGN_IDENTITY="$fingerprint" \
     DEVELOPMENT_TEAM="$AWIKI_MACOS_DEVELOPMENT_TEAM" \
@@ -518,8 +511,6 @@ build_macos() {
   metadata "$filename"
   rm -rf "$MACOS_DERIVED_DIR"
   MACOS_DERIVED_DIR=""
-  rm -rf "$MACOS_XCFRAMEWORKS_DIR"
-  MACOS_XCFRAMEWORKS_DIR=""
 }
 
 if [[ "$TARGET" == "android-arm64" ]]; then
