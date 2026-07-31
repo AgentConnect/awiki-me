@@ -34,9 +34,8 @@ object RemotePushEventBridge {
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val registrationLock = Any()
-    private val registrationState = RemotePushRegistrationState()
-    private val pendingInitializationResults = mutableListOf<MethodChannel.Result>()
+    private val initializationLock = Any()
+    private var initializationCoordinator: RemotePushInitializationCoordinator? = null
     @Volatile
     private var channel: MethodChannel? = null
 
@@ -99,60 +98,33 @@ object RemotePushEventBridge {
             result.success(mapOf("code" to "configuration_disabled"))
             return
         }
-        try {
-            if (readyDeviceId() != null) {
-                result.success(mapOf("code" to "10000"))
-                return
-            }
-
-            val registrationAction = synchronized(registrationLock) {
-                if (readyDeviceId() != null) {
-                    mainHandler.post { result.success(mapOf("code" to "10000")) }
-                    return@synchronized RemotePushRegistrationAction.RETURN_SUCCESS
-                }
-                val action = registrationState.beginInitialization()
-                if (action == RemotePushRegistrationAction.RETURN_SUCCESS) {
-                    mainHandler.post { result.success(mapOf("code" to "10000")) }
-                } else {
-                    pendingInitializationResults.add(result)
-                }
-                action
-            }
-            if (registrationAction != RemotePushRegistrationAction.START) {
-                return
-            }
-
-            PushServiceFactory.getCloudPushService().register(
-                context,
-                object : CommonCallback {
-                    override fun onSuccess(response: String?) {
-                        completeRegistrationSuccess(context)
+        coordinator(context).initialize { initializationResult ->
+            when (initializationResult) {
+                is RemotePushInitializationResult.Success -> {
+                    Log.i("AWikiRemotePush", "EMAS push channel ready")
+                    if (initializationResult.registrationChanged) {
+                        emit(context, "registration_changed", emptyMap())
                     }
-
-                    override fun onFailed(errorCode: String?, errorMessage: String?) {
-                        if (errorCode == "PUSH_20110" && readyDeviceId() != null) {
-                            completeRegistrationSuccess(context)
-                            return
-                        }
-                        val safeErrorCode = errorCode
-                            ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,32}")) }
-                            ?: "registration_failed"
-                        Log.e(
-                            "AWikiRemotePush",
-                            "EMAS registration failed code=$safeErrorCode",
-                        )
-                        completeRegistrationFailure(
-                            errorCode = errorCode ?: "registration_failed",
-                            errorMessage = errorMessage,
+                    mainHandler.post { result.success(mapOf("code" to "10000")) }
+                }
+                is RemotePushInitializationResult.Failure -> {
+                    val safeErrorCode = initializationResult.errorCode
+                        .takeIf { it.matches(Regex("[A-Za-z0-9_-]{1,32}")) }
+                        ?: "initialization_failed"
+                    Log.e(
+                        "AWikiRemotePush",
+                        "EMAS push channel initialization failed code=$safeErrorCode",
+                    )
+                    mainHandler.post {
+                        result.success(
+                            mapOf(
+                                "code" to initializationResult.errorCode,
+                                "errorMsg" to initializationResult.errorMessage,
+                            ),
                         )
                     }
-                },
-            )
-        } catch (error: Throwable) {
-            completeRegistrationFailure(
-                errorCode = "native_exception",
-                errorMessage = error.javaClass.simpleName,
-            )
+                }
+            }
         }
     }
 
@@ -164,36 +136,11 @@ object RemotePushEventBridge {
         }.getOrNull()
     }
 
-    private fun completeRegistrationSuccess(context: Context) {
-        Log.i("AWikiRemotePush", "EMAS registration succeeded")
-        val results = synchronized(registrationLock) {
-            registrationState.completeSuccess()
-            pendingInitializationResults.toList().also {
-                pendingInitializationResults.clear()
-            }
-        }
-        emit(context, "registration_changed", emptyMap())
-        mainHandler.post {
-            results.forEach { it.success(mapOf("code" to "10000")) }
-        }
-    }
-
-    private fun completeRegistrationFailure(
-        errorCode: String,
-        errorMessage: String?,
-    ) {
-        val response = mapOf(
-            "code" to errorCode,
-            "errorMsg" to errorMessage,
-        )
-        val results = synchronized(registrationLock) {
-            registrationState.completeFailure()
-            pendingInitializationResults.toList().also {
-                pendingInitializationResults.clear()
-            }
-        }
-        mainHandler.post {
-            results.forEach { it.success(response) }
+    private fun coordinator(context: Context): RemotePushInitializationCoordinator {
+        return synchronized(initializationLock) {
+            initializationCoordinator ?: RemotePushInitializationCoordinator(
+                AliyunEmasInitializationClient(context.applicationContext),
+            ).also { initializationCoordinator = it }
         }
     }
 
@@ -386,6 +333,38 @@ object RemotePushEventBridge {
                 }
             }
             else -> value
+        }
+    }
+}
+
+private class AliyunEmasInitializationClient(
+    private val context: Context,
+) : RemotePushInitializationClient {
+    override fun readyDeviceId(): String? {
+        return runCatching {
+            PushServiceFactory.getCloudPushService().deviceId
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }.getOrNull()
+    }
+
+    override fun register(callback: RemotePushInitializationCallback) {
+        PushServiceFactory.getCloudPushService().register(context, callback.asCommonCallback())
+    }
+
+    override fun turnOnPushChannel(callback: RemotePushInitializationCallback) {
+        PushServiceFactory.getCloudPushService().turnOnPushChannel(callback.asCommonCallback())
+    }
+}
+
+private fun RemotePushInitializationCallback.asCommonCallback(): CommonCallback {
+    return object : CommonCallback {
+        override fun onSuccess(response: String?) {
+            this@asCommonCallback.onSuccess(response)
+        }
+
+        override fun onFailed(errorCode: String?, errorMessage: String?) {
+            this@asCommonCallback.onFailure(errorCode, errorMessage)
         }
     }
 }
