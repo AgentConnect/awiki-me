@@ -14,7 +14,6 @@ import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
 
 object RemotePushEventBridge {
     private const val CHANNEL_NAME = "ai.awiki.awikime/remote_push_events"
@@ -35,11 +34,9 @@ object RemotePushEventBridge {
     )
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val registrationInFlight = AtomicBoolean(false)
-    private val registrationStarted = AtomicBoolean(false)
     private val registrationLock = Any()
+    private val registrationState = RemotePushRegistrationState()
     private val pendingInitializationResults = mutableListOf<MethodChannel.Result>()
-    private var terminalRegistrationResult: Map<String, String?>? = null
     @Volatile
     private var channel: MethodChannel? = null
 
@@ -108,23 +105,20 @@ object RemotePushEventBridge {
                 return
             }
 
-            val shouldRegister = synchronized(registrationLock) {
+            val registrationAction = synchronized(registrationLock) {
                 if (readyDeviceId() != null) {
                     mainHandler.post { result.success(mapOf("code" to "10000")) }
-                    return@synchronized false
+                    return@synchronized RemotePushRegistrationAction.RETURN_SUCCESS
                 }
-                terminalRegistrationResult?.let { terminal ->
-                    mainHandler.post { result.success(terminal) }
-                    return@synchronized false
+                val action = registrationState.beginInitialization()
+                if (action == RemotePushRegistrationAction.RETURN_SUCCESS) {
+                    mainHandler.post { result.success(mapOf("code" to "10000")) }
+                } else {
+                    pendingInitializationResults.add(result)
                 }
-                pendingInitializationResults.add(result)
-                registrationStarted.compareAndSet(false, true).also { starting ->
-                    if (starting) {
-                        registrationInFlight.set(true)
-                    }
-                }
+                action
             }
-            if (!shouldRegister) {
+            if (registrationAction != RemotePushRegistrationAction.START) {
                 return
             }
 
@@ -173,8 +167,7 @@ object RemotePushEventBridge {
     private fun completeRegistrationSuccess(context: Context) {
         Log.i("AWikiRemotePush", "EMAS registration succeeded")
         val results = synchronized(registrationLock) {
-            registrationInFlight.set(false)
-            terminalRegistrationResult = mapOf("code" to "10000")
+            registrationState.completeSuccess()
             pendingInitializationResults.toList().also {
                 pendingInitializationResults.clear()
             }
@@ -194,8 +187,7 @@ object RemotePushEventBridge {
             "errorMsg" to errorMessage,
         )
         val results = synchronized(registrationLock) {
-            registrationInFlight.set(false)
-            terminalRegistrationResult = response
+            registrationState.completeFailure()
             pendingInitializationResults.toList().also {
                 pendingInitializationResults.clear()
             }

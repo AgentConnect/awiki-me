@@ -129,7 +129,7 @@
       "caseId": "ANDROID-PUSH-NATIVE-E2E-001",
       "feature": "Android EMAS physical-device registration and delivery",
       "layer": "native_product_ui",
-      "preconditions": "A Nubia M153, or an explicitly named equivalent physical Android device, has an isolated AWiki Me build, resettable notification permission, controllable background and terminated-process state, and access to the configured EMAS application.",
+      "preconditions": "A Nubia P0110, or an explicitly named equivalent physical Android device, has an isolated AWiki Me build, resettable notification permission, controllable background and terminated-process state, and access to the configured EMAS application.",
       "action": "Deny notification permission, recover it through Android settings, register with EMAS, and deliver notifications while the App is backgrounded and after its process is terminated.",
       "exactOracles": [
         "Permission denial is observed before settings recovery, and Android settings recovery enables the subsequent visible notification path.",

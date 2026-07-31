@@ -68,7 +68,21 @@ void main() {
       expect(wakeController.existsSync(), isTrue);
       if (!wakeController.existsSync()) return;
       final controllerSource = wakeController.readAsStringSync();
-      expect(receiver, contains('NotificationScreenWakeController.wakeIfNeeded'));
+      expect(
+        receiver,
+        contains('NotificationScreenWakeController.wakeIfNeeded'),
+      );
+      final inAppCallback = RegExp(
+        r'onNotificationReceivedInApp\(([\s\S]*?)\n    \}',
+      ).firstMatch(receiver)?.group(1);
+      expect(inAppCallback, isNotNull);
+      expect(
+        inAppCallback,
+        isNot(contains('NotificationScreenWakeController.wakeIfNeeded')),
+        reason: 'an in-app callback does not prove visible notification UI',
+      );
+      expect(controllerSource, contains('areNotificationsEnabled'));
+      expect(controllerSource, contains('getNotificationChannel'));
       expect(controllerSource, contains('powerManager.isInteractive'));
       expect(controllerSource, contains('ACQUIRE_CAUSES_WAKEUP'));
       expect(controllerSource, contains('wakeLock.acquire(WAKE_DURATION_MS)'));
@@ -78,13 +92,20 @@ void main() {
       final bridge = File(
         'android/app/src/main/kotlin/ai/awiki/awikime/push/RemotePushEventBridge.kt',
       ).readAsStringSync();
+      final state = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'RemotePushRegistrationState.kt',
+      ).readAsStringSync();
 
-      expect(bridge, contains('registrationInFlight'));
+      expect(bridge, contains('RemotePushRegistrationState'));
       expect(bridge, contains('pendingInitializationResults'));
       expect(bridge, contains('readyDeviceId'));
       expect(bridge, contains('PUSH_20110'));
       expect(bridge, contains('completeRegistrationSuccess'));
-      expect(bridge, contains('compareAndSet(false, true)'));
+      expect(bridge, contains('completeRegistrationFailure'));
+      expect(state, contains('JOIN_IN_FLIGHT'));
+      expect(state, contains('completeFailure'));
+      expect(state, isNot(contains('terminalFailure')));
       expect(bridge, isNot(contains('PushServiceFactory.init(')));
       expect(
         RegExp(r'getCloudPushService\(\)\.register\(').allMatches(bridge),
@@ -160,8 +181,8 @@ void main() {
       expect(bridge, contains('PERSISTED_ENVELOPE_KEYS'));
       expect(bridge, contains('MAX_PENDING_AGE_MS'));
       expect(bridge, contains('eventForPersistence'));
-      expect(bridge, contains('AtomicBoolean'));
-      expect(bridge, contains('compareAndSet(false, true)'));
+      expect(bridge, contains('@Synchronized'));
+      expect(bridge, contains('.commit()'));
       expect(bridge, isNot(contains('put("title"')));
       expect(bridge, isNot(contains('put("content"')));
       expect(bridge, isNot(contains('put("openUrl"')));

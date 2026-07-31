@@ -166,6 +166,33 @@ void main() {
     },
   );
 
+  test(
+    'session replacement reassigns the provider device when old-owner disable fails',
+    () async {
+      final client = _FakeRemotePushClient(_registration('device-a'));
+      final installations = _FakePushInstallationPort();
+      final coordinator = RemotePushInstallationCoordinator(
+        client: client,
+        installations: installations,
+      );
+      await coordinator.bindActiveSession(_alice());
+      installations.disableError = StateError('old owner rejected');
+
+      await coordinator.bindActiveSession(_bob());
+
+      expect(installations.calls, <String>[
+        'upsert:device-a',
+        'disable:installation-1',
+        'upsert:device-a',
+      ]);
+      expect(installations.upserts, hasLength(2));
+
+      installations.disableError = null;
+      await coordinator.disableCurrentInstallation();
+      expect(installations.disables.last, 'installation-2');
+    },
+  );
+
   for (final replacement
       in <({String name, RemotePushInstallationSession session})>[
         (name: 'identity generation', session: _alice(generation: 2)),

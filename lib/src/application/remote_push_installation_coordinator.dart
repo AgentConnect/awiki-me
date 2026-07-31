@@ -112,7 +112,20 @@ class RemotePushInstallationCoordinator {
     if (existing != null &&
         (!_sameSessionIdentity(existing.session, session) ||
             !existing.accepted)) {
-      await _disableBoundInstallation();
+      final replacesAnotherSession = !_sameSessionIdentity(
+        existing.session,
+        session,
+      );
+      try {
+        await _disableBoundInstallation();
+      } catch (_) {
+        if (!replacesAnotherSession) {
+          rethrow;
+        }
+        if (identical(_boundInstallation, existing)) {
+          _boundInstallation = null;
+        }
+      }
       if (!_isDesired(session, revision)) {
         return;
       }

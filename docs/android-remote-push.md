@@ -102,10 +102,14 @@ The response must echo the bound values and return an
 The App never sends an EMAS AppSecret, Alibaba Cloud RAM AccessKeyId, or
 AccessKeySecret to this endpoint. On logout, account deletion, authentication
 revocation, or identity replacement, the old installation is made locally
-inactive before asynchronous work can complete and
-`disable_installation(installation_id)` is scheduled. Registration changes and
-App resume refresh the current binding. Session generation and tenant fences
-prevent a delayed bind or disable from being accepted by another identity.
+inactive before asynchronous work can complete. When valid authorization is
+still available, `disable_installation(installation_id)` is attempted as
+best-effort cleanup. Authentication revocation can make that remote cleanup
+impossible; the next authenticated identity therefore reassigns the same
+provider DeviceId through the owner-aware unique upsert. Registration changes
+and App resume refresh the current binding. Session generation and tenant
+fences prevent a delayed bind or disable from being accepted by another
+identity.
 
 ## Message delivery and acknowledgement
 
