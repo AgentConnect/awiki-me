@@ -139,6 +139,7 @@ void main() {
     late _RecordingAccountStateSyncRequestBus accountStateRequests;
     late _BoundSessionConversationService boundConversationService;
     late ProviderContainer container;
+    late Duration messageSyncMinInterval;
 
     setUp(() {
       gateway = FakeAwikiGateway();
@@ -148,6 +149,7 @@ void main() {
       desktopShell = _FakeDesktopShellService();
       boundConversationService = _BoundSessionConversationService(gateway);
       accountStateRequests = _RecordingAccountStateSyncRequestBus();
+      messageSyncMinInterval = Duration.zero;
       deviceCore = FakeDeviceManagementCore()
         ..registry = const DeviceRegistrySnapshot(
           did: 'did:test:me',
@@ -200,7 +202,7 @@ void main() {
           messageSyncCoordinatorProvider.overrideWith(
             (ref) => MessageSyncCoordinator(
               ref,
-              minInterval: Duration.zero,
+              minInterval: messageSyncMinInterval,
               failureBackoff: Duration.zero,
             ),
           ),
@@ -1473,6 +1475,28 @@ void main() {
 
       expect(messageSyncService.syncReasons, contains('message_available'));
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
+    });
+
+    test('realtime message domain 绕过普通同步最小间隔', () async {
+      messageSyncMinInterval = const Duration(minutes: 1);
+      await activateBound();
+      await pumpEventQueue();
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      await coordinator.requestSync('rate_limit_baseline', immediate: true);
+      messageSyncService.syncReasons.clear();
+      gateway.nextRealtimeUpdate = const RealtimeUpdate(
+        ownerDid: 'did:test:me',
+        domains: <SyncDomain>{SyncDomain.message},
+        reason: 'message_available',
+        syncDirty: true,
+      );
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'sync'});
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, <String>['message_available']);
     });
 
     test('v2 多域 hint 合并后分别路由消息与账号状态协调器', () async {
