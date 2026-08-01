@@ -889,7 +889,17 @@ void main() {
       );
     });
 
-    test('rejects malformed successful current-identity output', () {
+    test('accepts no identity and rejects malformed successful output', () {
+      expect(
+        cliCurrentIdentityReadyForHandle(
+          jsonEncode(<String, Object?>{
+            'data': <String, Object?>{'identity': null},
+          }),
+          handle: 'e2e-peer',
+          didDomain: 'anpclaw.com',
+        ),
+        isFalse,
+      );
       expect(
         () => cliCurrentIdentityReadyForHandle(
           '{}',
@@ -2069,7 +2079,6 @@ cliPeer:
           'xvfb-run: dry-run',
           'check file: <redacted>',
           r'$ <redacted> --format json init',
-          r'$ <redacted> --format json runtime mode set http',
           r'$ <redacted> --format json config show',
           r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted>',
           r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted> --otp <redacted>',
@@ -2098,6 +2107,13 @@ cliPeer:
       expect(log, isNot(contains(root.path)));
       expect(log, isNot(contains('../awiki-cli-rs2/cargo')));
       expect(log, contains('<redacted>'));
+      expect(log, isNot(contains('runtime mode set')));
+
+      final cliConfig = File(
+        '${root.path}/.e2e/desktop-cli-peer/run123/cli-peer/'
+        'tenants/e2e-run123/config.yaml',
+      );
+      expect(cliConfig.readAsStringSync(), contains('  mode: http\n'));
 
       final timings = File(
         '${root.path}/.e2e/desktop-cli-peer/run123/reports/timings.json',

@@ -1275,14 +1275,6 @@ class DesktopE2eRunner {
     await _cli(const <String>['--format', 'json', 'init']);
     await _prepareCliTenant(workspaceDir: cliWorkspaceDir, homeDir: cliHomeDir);
     await _writeCliConfig(cliWorkspaceDir);
-    await _cli(const <String>[
-      '--format',
-      'json',
-      'runtime',
-      'mode',
-      'set',
-      'http',
-    ]);
     await _cli(const <String>['--format', 'json', 'config', 'show']);
   }
 
@@ -1358,14 +1350,20 @@ class DesktopE2eRunner {
         ? _toStringKeyMap(loadYaml(file.readAsStringSync()), path: 'config')
         : <String, Object?>{};
     final services = _mapAt(configMap, 'services', optional: true);
+    final runtime = _mapAt(configMap, 'runtime', optional: true);
     services['anp_service_endpoint'] =
         peerConfig.anpServiceUrl ?? '${peerConfig.serviceBaseUrl}/anp-im/rpc';
     services['anp_service_did'] =
         peerConfig.anpServiceDid ?? 'did:wba:${peerConfig.didDomain}';
     services['mail_service_url'] =
         peerConfig.mailServiceUrl ?? peerConfig.serviceBaseUrl;
+    // This isolated E2E workspace is driven by foreground CLI processes owned
+    // by the harness. Persist the transport mode without applying host service
+    // policy, which would otherwise require a login-session service manager.
+    runtime['mode'] = 'http';
     configMap['schema_version'] = 1;
     configMap['services'] = services;
+    configMap['runtime'] = runtime;
 
     if (options.dryRun) {
       _line(
@@ -2761,7 +2759,13 @@ bool cliCurrentIdentityReadyForHandle(
     throw E2eFailure('CLI current identity preflight returned invalid JSON.');
   }
   final data = decoded is Map ? decoded['data'] : null;
-  final identity = data is Map ? data['identity'] : null;
+  if (data is! Map || !data.containsKey('identity')) {
+    throw E2eFailure('CLI current identity preflight omitted identity data.');
+  }
+  final identity = data['identity'];
+  if (identity == null) {
+    return false;
+  }
   if (identity is! Map) {
     throw E2eFailure('CLI current identity preflight omitted identity data.');
   }
