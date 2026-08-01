@@ -586,6 +586,7 @@ void main() {
       sync,
       notifications: notifications,
       syncV2ReadEnabled: true,
+      failureSurfaceDelay: const Duration(seconds: 30),
     );
     addTearDown(container.dispose);
 
