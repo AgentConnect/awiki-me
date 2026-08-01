@@ -1088,15 +1088,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Recovering recent messages and current read state…';
 
   @override
+  String get messageSyncStatusRetrying =>
+      'The message service is temporarily unavailable. Retrying automatically…';
+
+  @override
   String get messageSyncStatusRetryableFailure =>
-      'Message sync was interrupted. Your local data was kept unchanged.';
+      'New messages cannot be synced right now. Check your network and retry.';
+
+  @override
+  String get messageSyncStatusProjectionRefreshFailed =>
+      'Messages were synced, but the list could not refresh. Retry to reload it.';
 
   @override
   String get messageSyncStatusAuthRevoked =>
-      'This device is no longer authorized. Sign in again to continue.';
+      'Your sign-in expired or this device is no longer authorized. Sign in again.';
 
   @override
   String get messageSyncRetryAction => 'Retry';
+
+  @override
+  String get messageSyncReloadAction => 'Reload';
 
   @override
   String get messageSyncReauthenticateAction => 'Sign in again';

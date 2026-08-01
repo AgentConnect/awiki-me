@@ -1030,13 +1030,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageSyncStatusRecovering => '正在恢复近期消息和当前已读状态…';
 
   @override
-  String get messageSyncStatusRetryableFailure => '消息同步中断，本地数据保持不变。';
+  String get messageSyncStatusRetrying => '消息服务暂时不可用，正在自动重试…';
 
   @override
-  String get messageSyncStatusAuthRevoked => '此设备已不再获得授权，请重新登录后继续。';
+  String get messageSyncStatusRetryableFailure => '暂时无法同步新消息，请检查网络后重试。';
+
+  @override
+  String get messageSyncStatusProjectionRefreshFailed =>
+      '消息已同步，但列表刷新失败，请重试重新加载。';
+
+  @override
+  String get messageSyncStatusAuthRevoked => '登录状态已失效或此设备已被取消授权，请重新登录。';
 
   @override
   String get messageSyncRetryAction => '重试';
+
+  @override
+  String get messageSyncReloadAction => '重新加载';
 
   @override
   String get messageSyncReauthenticateAction => '重新登录';

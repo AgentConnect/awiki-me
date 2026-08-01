@@ -285,7 +285,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('此设备已不再获得授权，请重新登录后继续。'), findsOneWidget);
+    expect(find.text('登录状态已失效或此设备已被取消授权，请重新登录。'), findsOneWidget);
     expect(find.text('重新登录'), findsOneWidget);
 
     await tester.tap(find.text('重新登录'));
@@ -343,6 +343,7 @@ void main() {
               ref,
               const MessageSyncCoordinatorState(
                 status: MessageSyncCoordinatorStatus.retryableFailure,
+                retryableFailureVisible: true,
               ),
             );
           }),
@@ -351,7 +352,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
 
     await tester.tap(find.text('重试'));

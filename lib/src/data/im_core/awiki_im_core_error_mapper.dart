@@ -1,5 +1,8 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+import '../../application/models/message_sync_diagnostics.dart';
+import '../../application/ports/message_sync_core_port.dart';
+
 class ImCoreMappedError {
   const ImCoreMappedError({
     required this.code,
@@ -57,6 +60,60 @@ class AwikiImCoreErrorMapper {
   UnsupportedError unsupported(String capability) {
     return UnsupportedError('IM Core $capability is not available yet');
   }
+
+  MessageSyncCoreFailure messageSyncFailure(core.AwikiImCoreException error) {
+    final mapped = map(error);
+    final code = mapped.code.trim().toLowerCase();
+    final serviceCode = mapped.serviceCode?.trim().toLowerCase();
+    final authRejected =
+        mapped.statusCode == 401 ||
+        mapped.statusCode == 403 ||
+        const <String>{
+          'auth_required',
+          'session_expired',
+          'permission_denied',
+        }.contains(code) ||
+        const <String>{
+          '1401',
+          'anp.device_not_eligible',
+          'anp.device_state_changed',
+        }.contains(serviceCode);
+    final category = authRejected
+        ? AppMessageSyncFailureCategory.auth
+        : switch (code) {
+            'transport_unavailable' => AppMessageSyncFailureCategory.transport,
+            'service_error' => AppMessageSyncFailureCategory.service,
+            'local_state_unavailable' =>
+              AppMessageSyncFailureCategory.localState,
+            _ => AppMessageSyncFailureCategory.protocol,
+          };
+    return MessageSyncCoreFailure(
+      category: category,
+      code: _stableDiagnosticCode(
+        mapped.serviceCode?.trim().isNotEmpty == true
+            ? mapped.serviceCode!
+            : mapped.code,
+      ),
+      httpStatus: mapped.statusCode,
+    );
+  }
+}
+
+String _stableDiagnosticCode(String code) {
+  final trimmed = code.trim();
+  final isSafe =
+      trimmed.isNotEmpty &&
+      trimmed.length <= 96 &&
+      trimmed.codeUnits.every(
+        (unit) =>
+            (unit >= 48 && unit <= 57) ||
+            (unit >= 65 && unit <= 90) ||
+            (unit >= 97 && unit <= 122) ||
+            unit == 45 ||
+            unit == 46 ||
+            unit == 95,
+      );
+  return isSafe ? trimmed : 'message_sync_failure';
 }
 
 String _sanitize(String input) {

@@ -268,15 +268,17 @@ class _AppShellState extends ConsumerState<AppShell> {
             AwikiMePersistentToast(
               message: _messageSyncBannerMessage(context, messageSync),
               danger:
-                  messageSync.status ==
-                      MessageSyncCoordinatorStatus.retryableFailure ||
+                  messageSync.shouldSurfaceRetryableFailure ||
                   messageSync.status ==
                       MessageSyncCoordinatorStatus.authRevoked,
               showSpinner:
                   messageSync.status ==
                       MessageSyncCoordinatorStatus.recoveryRequired ||
                   messageSync.status ==
-                      MessageSyncCoordinatorStatus.recovering,
+                      MessageSyncCoordinatorStatus.recovering ||
+                  (messageSync.status ==
+                          MessageSyncCoordinatorStatus.retryableFailure &&
+                      !messageSync.shouldSurfaceRetryableFailure),
               bottom: _shouldShowRealtimeToast(realtimeStatus)
                   ? (responsive.isPhone ? 154 : 90)
                   : (responsive.isPhone ? 96 : 32),
@@ -316,7 +318,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _shouldShowMessageSyncBanner(MessageSyncCoordinatorState state) {
     return state.status == MessageSyncCoordinatorStatus.recoveryRequired ||
         state.status == MessageSyncCoordinatorStatus.recovering ||
-        state.shouldSurfaceRetryableFailure ||
+        state.status == MessageSyncCoordinatorStatus.retryableFailure ||
+        state.status == MessageSyncCoordinatorStatus.projectionRefreshFailed ||
         state.status == MessageSyncCoordinatorStatus.authRevoked;
   }
 
@@ -330,7 +333,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       MessageSyncCoordinatorStatus.recovering =>
         context.l10n.messageSyncStatusRecovering,
       MessageSyncCoordinatorStatus.retryableFailure =>
-        context.l10n.messageSyncStatusRetryableFailure,
+        state.shouldSurfaceRetryableFailure
+            ? context.l10n.messageSyncStatusRetryableFailure
+            : context.l10n.messageSyncStatusRetrying,
+      MessageSyncCoordinatorStatus.projectionRefreshFailed =>
+        context.l10n.messageSyncStatusProjectionRefreshFailed,
       MessageSyncCoordinatorStatus.authRevoked =>
         context.l10n.messageSyncStatusAuthRevoked,
       MessageSyncCoordinatorStatus.idle => context.l10n.messageSyncStatusIdle,

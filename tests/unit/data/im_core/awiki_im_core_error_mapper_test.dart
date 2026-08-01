@@ -1,4 +1,5 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_error_mapper.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -58,5 +59,49 @@ void main() {
     );
 
     expect(mapped.isDirectSyncBindingUnavailable, isTrue);
+  });
+
+  test('projects HTTP auth rejection without native error text', () {
+    final failure = mapper.messageSyncFailure(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'sensitive native error text',
+        statusCode: 401,
+        serviceCode: '1401',
+      ),
+    );
+
+    expect(failure.category, AppMessageSyncFailureCategory.auth);
+    expect(failure.code, '1401');
+    expect(failure.httpStatus, 401);
+    expect(failure.toString(), isNot(contains('sensitive')));
+  });
+
+  test('keeps transport failure retryable at the App boundary', () {
+    final failure = mapper.messageSyncFailure(
+      const core.AwikiImCoreException(
+        code: 'transport_unavailable',
+        message: 'offline',
+      ),
+    );
+
+    expect(failure.category, AppMessageSyncFailureCategory.transport);
+    expect(failure.code, 'transport_unavailable');
+    expect(failure.httpStatus, isNull);
+  });
+
+  test('sync failure projection rejects unsafe service codes', () {
+    final failure = mapper.messageSyncFailure(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'private response',
+        statusCode: 503,
+        serviceCode: 'secret payload value',
+      ),
+    );
+
+    expect(failure.category, AppMessageSyncFailureCategory.service);
+    expect(failure.code, 'message_sync_failure');
+    expect(failure.toString(), isNot(contains('secret')));
   });
 }

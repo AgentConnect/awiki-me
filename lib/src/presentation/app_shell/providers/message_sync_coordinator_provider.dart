@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
@@ -40,6 +39,7 @@ enum MessageSyncCoordinatorStatus {
   recoveryRequired,
   recovering,
   retryableFailure,
+  projectionRefreshFailed,
   authRevoked,
 }
 
@@ -59,6 +59,14 @@ class MessageSyncCoordinatorState {
     this.diagnosticsRefreshAttemptSequence = 0,
     this.diagnosticsRefreshSuccessSequence = 0,
     this.diagnosticsRefreshedAt,
+    this.firstRetryableFailureAt,
+    this.lastFailureAt,
+    this.lastFailureStage,
+    this.lastFailureCategory,
+    this.lastFailureCode,
+    this.lastFailureHttpStatus,
+    this.retryableFailureSurfaceAt,
+    this.retryableFailureVisible = false,
     this.consecutiveRetryableFailures = 0,
     this.automaticRetryPending = false,
   });
@@ -77,6 +85,14 @@ class MessageSyncCoordinatorState {
   final int diagnosticsRefreshAttemptSequence;
   final int diagnosticsRefreshSuccessSequence;
   final DateTime? diagnosticsRefreshedAt;
+  final DateTime? firstRetryableFailureAt;
+  final DateTime? lastFailureAt;
+  final AppMessageSyncFailureStage? lastFailureStage;
+  final AppMessageSyncFailureCategory? lastFailureCategory;
+  final String? lastFailureCode;
+  final int? lastFailureHttpStatus;
+  final DateTime? retryableFailureSurfaceAt;
+  final bool retryableFailureVisible;
   final int consecutiveRetryableFailures;
   final bool automaticRetryPending;
 
@@ -91,8 +107,7 @@ class MessageSyncCoordinatorState {
 
   bool get shouldSurfaceRetryableFailure =>
       status == MessageSyncCoordinatorStatus.retryableFailure &&
-      consecutiveRetryableFailures >= 2 &&
-      !automaticRetryPending;
+      retryableFailureVisible;
 
   AppMessageSyncSafeDiagnostics get safeDiagnostics =>
       AppMessageSyncSafeDiagnostics(
@@ -107,6 +122,16 @@ class MessageSyncCoordinatorState {
         ),
         retryState: retryState,
         nextRetryAt: nextRetryAt,
+        firstRetryableFailureAt: firstRetryableFailureAt,
+        lastFailureAt: lastFailureAt,
+        lastFailureStage: lastFailureStage,
+        lastFailureCategory: lastFailureCategory,
+        lastFailureCode: lastFailureCode,
+        lastFailureHttpStatus: lastFailureHttpStatus,
+        retryableFailureSurfaceAt: retryableFailureSurfaceAt,
+        retryableFailureVisible: retryableFailureVisible,
+        consecutiveRetryableFailures: consecutiveRetryableFailures,
+        automaticRetryPending: automaticRetryPending,
       );
 
   @Deprecated('Use recoveryRequired.')
@@ -127,6 +152,14 @@ class MessageSyncCoordinatorState {
     int? diagnosticsRefreshAttemptSequence,
     int? diagnosticsRefreshSuccessSequence,
     Object? diagnosticsRefreshedAt = _unset,
+    Object? firstRetryableFailureAt = _unset,
+    Object? lastFailureAt = _unset,
+    Object? lastFailureStage = _unset,
+    Object? lastFailureCategory = _unset,
+    Object? lastFailureCode = _unset,
+    Object? lastFailureHttpStatus = _unset,
+    Object? retryableFailureSurfaceAt = _unset,
+    bool? retryableFailureVisible,
     int? consecutiveRetryableFailures,
     bool? automaticRetryPending,
   }) {
@@ -161,6 +194,29 @@ class MessageSyncCoordinatorState {
       diagnosticsRefreshedAt: identical(diagnosticsRefreshedAt, _unset)
           ? this.diagnosticsRefreshedAt
           : diagnosticsRefreshedAt as DateTime?,
+      firstRetryableFailureAt: identical(firstRetryableFailureAt, _unset)
+          ? this.firstRetryableFailureAt
+          : firstRetryableFailureAt as DateTime?,
+      lastFailureAt: identical(lastFailureAt, _unset)
+          ? this.lastFailureAt
+          : lastFailureAt as DateTime?,
+      lastFailureStage: identical(lastFailureStage, _unset)
+          ? this.lastFailureStage
+          : lastFailureStage as AppMessageSyncFailureStage?,
+      lastFailureCategory: identical(lastFailureCategory, _unset)
+          ? this.lastFailureCategory
+          : lastFailureCategory as AppMessageSyncFailureCategory?,
+      lastFailureCode: identical(lastFailureCode, _unset)
+          ? this.lastFailureCode
+          : lastFailureCode as String?,
+      lastFailureHttpStatus: identical(lastFailureHttpStatus, _unset)
+          ? this.lastFailureHttpStatus
+          : lastFailureHttpStatus as int?,
+      retryableFailureSurfaceAt: identical(retryableFailureSurfaceAt, _unset)
+          ? this.retryableFailureSurfaceAt
+          : retryableFailureSurfaceAt as DateTime?,
+      retryableFailureVisible:
+          retryableFailureVisible ?? this.retryableFailureVisible,
       consecutiveRetryableFailures:
           consecutiveRetryableFailures ?? this.consecutiveRetryableFailures,
       automaticRetryPending:
@@ -177,6 +233,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     this.ref, {
     this.minInterval = const Duration(seconds: 2),
     this.failureBackoff = const Duration(seconds: 8),
+    this.failureSurfaceDelay = const Duration(seconds: 30),
   }) : _sessionEpoch = ref.read(sessionProvider).activeEpoch,
        super(const MessageSyncCoordinatorState()) {
     _sessionSubscription = ref.listen<SessionState>(
@@ -188,6 +245,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   final Ref ref;
   final Duration minInterval;
   final Duration failureBackoff;
+  final Duration failureSurfaceDelay;
 
   late final ProviderSubscription<SessionState> _sessionSubscription;
   SessionEpoch? _sessionEpoch;
@@ -203,6 +261,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   bool _recoveryRetryPending = false;
   bool _runningRecoveryRetry = false;
   bool _patchReplacementRetryPending = false;
+  Timer? _failureSurfaceTimer;
+  SessionEpoch? _failureSurfaceEpoch;
   bool _disposed = false;
 
   void resetForSession() {
@@ -216,6 +276,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
     _patchReplacementRetryPending = false;
+    _cancelFailureSurfaceTimer();
     _lastStartedAt = null;
     _lastFailedAt = null;
     _notifiedCommittedEventIds.clear();
@@ -466,6 +527,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         lastError: null,
       );
       var diagnosticsAttempted = false;
+      var failureStage = AppMessageSyncFailureStage.prepare;
       try {
         await ref.read(conversationListProvider.notifier).ensurePatchReady();
         if (!_isCurrentSync(epoch, sessionFence)) {
@@ -477,6 +539,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         ref
             .read(conversationListProvider.notifier)
             .recordReliableSyncStartedForCurrentPatchGeneration();
+        failureStage = AppMessageSyncFailureStage.coreSync;
         final result = await ref
             .read(messageSyncServiceProvider)
             .syncNow(reason: reason);
@@ -506,28 +569,27 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           _recoveryRetryPending = false;
         }
         if (result.status == MessageSyncStatus.retryableFailure) {
+          final failureCode =
+              result.errorCode ?? 'message_sync_retryable_failure';
           _recordRetryableFailure(
             epoch: epoch,
-            error: MessageSyncCoordinatorFailure(
-              result.errorCode ?? 'message_sync_retryable_failure',
-            ),
+            error: MessageSyncCoordinatorFailure(failureCode),
             policy: policy,
+            stage: AppMessageSyncFailureStage.coreSync,
+            category: _categoryForOutcomeCode(failureCode),
+            code: failureCode,
           );
           return const RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.retryableFailure,
           );
         }
         if (result.status == MessageSyncStatus.authRevoked) {
-          _cancelPendingTimerAndCompleteWaiters();
-          _recoveryRetryPending = false;
-          _runningRecoveryRetry = false;
-          _resetRetryableFailureTracking();
-          state = state.copyWith(
-            status: MessageSyncCoordinatorStatus.authRevoked,
-            pendingReason: null,
-            lastError: MessageSyncCoordinatorFailure(
+          _recordAuthFailure(
+            error: MessageSyncCoordinatorFailure(
               result.errorCode ?? 'message_sync_auth_revoked',
             ),
+            stage: AppMessageSyncFailureStage.coreSync,
+            code: result.errorCode ?? 'message_sync_auth_revoked',
           );
           _completeQueuedWaiters(
             _queuedAfterActive,
@@ -561,27 +623,37 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             disposition: RemotePushSyncDisposition.recoveryRequired,
           );
         }
-        activeSync.presentationFinalized = true;
-        _dispatchCommittedIncomingNotifications(
-          result,
-          suppressPresentation: policy.suppressNotificationPresentation,
-        );
-        await ref.read(devicesProvider.notifier).refreshJoinInbox();
-        if (!_isCurrentSync(epoch, sessionFence)) {
-          return const RemotePushSyncReceipt(
-            disposition: RemotePushSyncDisposition.staleSession,
-          );
-        }
-        await ref
-            .read(conversationListProvider.notifier)
-            .refreshFastLocalAfterCoreCommit();
-        if (!_isCurrentSync(epoch, sessionFence)) {
-          return const RemotePushSyncReceipt(
-            disposition: RemotePushSyncDisposition.staleSession,
-          );
-        }
         _resetRetryableFailureTracking();
         state = state.copyWith(lastError: null);
+
+        try {
+          activeSync.presentationFinalized = true;
+          _dispatchCommittedIncomingNotifications(
+            result,
+            suppressPresentation: policy.suppressNotificationPresentation,
+          );
+          await ref.read(devicesProvider.notifier).refreshJoinInbox();
+          if (!_isCurrentSync(epoch, sessionFence)) {
+            return const RemotePushSyncReceipt(
+              disposition: RemotePushSyncDisposition.staleSession,
+            );
+          }
+          await ref
+              .read(conversationListProvider.notifier)
+              .refreshFastLocalAfterCoreCommit();
+          if (!_isCurrentSync(epoch, sessionFence)) {
+            return const RemotePushSyncReceipt(
+              disposition: RemotePushSyncDisposition.staleSession,
+            );
+          }
+        } catch (error) {
+          if (!_isCurrentSync(epoch, sessionFence)) {
+            return const RemotePushSyncReceipt(
+              disposition: RemotePushSyncDisposition.staleSession,
+            );
+          }
+          _recordProjectionFailure(error);
+        }
         return RemotePushSyncReceipt(
           disposition: RemotePushSyncDisposition.succeeded,
           committedIncomingMessages: result.committedIncomingMessages,
@@ -593,7 +665,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
             'reason': reason,
             'error_type': error.runtimeType,
             'error_code': switch (error) {
-              core.AwikiImCoreException(:final code) => code,
+              MessageSyncCoreFailure(:final code) => code,
               _ => null,
             },
           },
@@ -628,10 +700,31 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         _recoveryRetryPending = false;
         _runningRecoveryRetry = false;
         _patchReplacementRetryPending = false;
-        _recordRetryableFailure(epoch: epoch, error: error, policy: policy);
-        return const RemotePushSyncReceipt(
-          disposition: RemotePushSyncDisposition.retryableFailure,
-        );
+        final failure = _classifyFailure(error, failureStage);
+        if (failure.category == AppMessageSyncFailureCategory.auth) {
+          _recordAuthFailure(
+            error: error,
+            stage: failure.stage,
+            code: failure.code,
+            httpStatus: failure.httpStatus,
+          );
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.authRevoked,
+          );
+        } else {
+          _recordRetryableFailure(
+            epoch: epoch,
+            error: error,
+            policy: policy,
+            stage: failure.stage,
+            category: failure.category,
+            code: failure.code,
+            httpStatus: failure.httpStatus,
+          );
+          return const RemotePushSyncReceipt(
+            disposition: RemotePushSyncDisposition.retryableFailure,
+          );
+        }
       } finally {
         if (identical(_activeSync?.future, operation)) {
           _activeSync = null;
@@ -700,6 +793,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
     _patchReplacementRetryPending = false;
+    _cancelFailureSurfaceTimer();
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
     _cancelPendingTimerAndCompleteWaiters();
@@ -747,16 +841,33 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     required SessionEpoch epoch,
     required Object error,
     required _MessageSyncRequestPolicy policy,
+    required AppMessageSyncFailureStage stage,
+    required AppMessageSyncFailureCategory category,
+    required String code,
+    int? httpStatus,
   }) {
-    _lastFailedAt = DateTime.now();
+    final now = DateTime.now();
+    _lastFailedAt = now;
+    final firstFailureAt = state.firstRetryableFailureAt ?? now;
+    final surfaceAt = firstFailureAt.add(failureSurfaceDelay);
+    final failureVisible = !now.isBefore(surfaceAt);
     final failureCount = state.consecutiveRetryableFailures + 1;
-    final scheduleAutomaticRetry = failureCount == 1;
+    final scheduleAutomaticRetry = !failureVisible;
     state = state.copyWith(
       status: MessageSyncCoordinatorStatus.retryableFailure,
       lastError: error,
+      firstRetryableFailureAt: firstFailureAt,
+      lastFailureAt: now,
+      lastFailureStage: stage,
+      lastFailureCategory: category,
+      lastFailureCode: _sanitizeFailureCode(code),
+      lastFailureHttpStatus: httpStatus,
+      retryableFailureSurfaceAt: surfaceAt,
+      retryableFailureVisible: failureVisible,
       consecutiveRetryableFailures: failureCount,
       automaticRetryPending: scheduleAutomaticRetry,
     );
+    _scheduleFailureSurface(epoch, firstFailureAt, surfaceAt);
     if (scheduleAutomaticRetry) {
       final queued = _queuedAfterActive;
       if (queued == null) {
@@ -776,11 +887,90 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   }
 
   void _resetRetryableFailureTracking() {
+    _cancelFailureSurfaceTimer();
     _lastFailedAt = null;
     state = state.copyWith(
+      firstRetryableFailureAt: null,
+      retryableFailureSurfaceAt: null,
+      retryableFailureVisible: false,
       consecutiveRetryableFailures: 0,
       automaticRetryPending: false,
     );
+  }
+
+  void _recordAuthFailure({
+    required Object error,
+    required AppMessageSyncFailureStage stage,
+    required String code,
+    int? httpStatus,
+  }) {
+    final now = DateTime.now();
+    _cancelPendingTimerAndCompleteWaiters();
+    _recoveryRetryPending = false;
+    _runningRecoveryRetry = false;
+    _resetRetryableFailureTracking();
+    state = state.copyWith(
+      status: MessageSyncCoordinatorStatus.authRevoked,
+      pendingReason: null,
+      lastError: error,
+      lastFailureAt: now,
+      lastFailureStage: stage,
+      lastFailureCategory: AppMessageSyncFailureCategory.auth,
+      lastFailureCode: _sanitizeFailureCode(code),
+      lastFailureHttpStatus: httpStatus,
+    );
+    _completeQueuedWaiters(_queuedAfterActive);
+    _queuedAfterActive = null;
+  }
+
+  void _recordProjectionFailure(Object error) {
+    _messageSyncTrace(
+      'run.projection_failed',
+      fields: <String, Object?>{'error_type': error.runtimeType},
+    );
+    state = state.copyWith(
+      status: MessageSyncCoordinatorStatus.projectionRefreshFailed,
+      lastError: const MessageSyncCoordinatorFailure(
+        'message_sync_projection_refresh_failed',
+      ),
+      lastFailureAt: DateTime.now(),
+      lastFailureStage: AppMessageSyncFailureStage.postCommitProjection,
+      lastFailureCategory: AppMessageSyncFailureCategory.projection,
+      lastFailureCode: 'message_sync_projection_refresh_failed',
+      lastFailureHttpStatus: null,
+    );
+  }
+
+  void _scheduleFailureSurface(
+    SessionEpoch epoch,
+    DateTime firstFailureAt,
+    DateTime surfaceAt,
+  ) {
+    _failureSurfaceTimer?.cancel();
+    _failureSurfaceEpoch = epoch;
+    final delay = surfaceAt.difference(DateTime.now());
+    if (delay <= Duration.zero) {
+      state = state.copyWith(retryableFailureVisible: true);
+      return;
+    }
+    _failureSurfaceTimer = Timer(delay, () {
+      _failureSurfaceTimer = null;
+      final timerEpoch = _failureSurfaceEpoch;
+      _failureSurfaceEpoch = null;
+      if (_disposed ||
+          timerEpoch != epoch ||
+          !_isCurrentEpoch(epoch) ||
+          state.firstRetryableFailureAt != firstFailureAt) {
+        return;
+      }
+      state = state.copyWith(retryableFailureVisible: true);
+    });
+  }
+
+  void _cancelFailureSurfaceTimer() {
+    _failureSurfaceTimer?.cancel();
+    _failureSurfaceTimer = null;
+    _failureSurfaceEpoch = null;
   }
 
   void _runQueuedAfterActive() {
@@ -864,6 +1054,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         'diagnostics.refresh_failed',
         fields: <String, Object?>{'error_type': error.runtimeType},
       );
+      return;
     }
   }
 
@@ -1099,10 +1290,72 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _disposed = true;
     _sessionSubscription.close();
     _cancelPendingTimerAndCompleteWaiters();
+    _cancelFailureSurfaceTimer();
     _completeQueuedWaiters(_queuedAfterActive);
     _queuedAfterActive = null;
     super.dispose();
   }
+}
+
+AppMessageSyncFailureCategory _categoryForOutcomeCode(String code) {
+  return switch (code.trim().toLowerCase()) {
+    'transport_unavailable' => AppMessageSyncFailureCategory.transport,
+    'local_state_unavailable' => AppMessageSyncFailureCategory.localState,
+    _ => AppMessageSyncFailureCategory.service,
+  };
+}
+
+_MessageSyncFailureDiagnostic _classifyFailure(
+  Object error,
+  AppMessageSyncFailureStage stage,
+) {
+  if (error is! MessageSyncCoreFailure) {
+    return _MessageSyncFailureDiagnostic(
+      stage: stage,
+      category: AppMessageSyncFailureCategory.unknown,
+      code: stage == AppMessageSyncFailureStage.prepare
+          ? 'message_sync_prepare_failed'
+          : 'message_sync_core_failed',
+    );
+  }
+  return _MessageSyncFailureDiagnostic(
+    stage: stage,
+    category: error.category,
+    code: error.code,
+    httpStatus: error.httpStatus,
+  );
+}
+
+String _sanitizeFailureCode(String code) {
+  final trimmed = code.trim();
+  if (trimmed.isEmpty ||
+      trimmed.length > 96 ||
+      !trimmed.codeUnits.every(
+        (unit) =>
+            (unit >= 48 && unit <= 57) ||
+            (unit >= 65 && unit <= 90) ||
+            (unit >= 97 && unit <= 122) ||
+            unit == 45 ||
+            unit == 46 ||
+            unit == 95,
+      )) {
+    return 'message_sync_failure';
+  }
+  return trimmed;
+}
+
+class _MessageSyncFailureDiagnostic {
+  const _MessageSyncFailureDiagnostic({
+    required this.stage,
+    required this.category,
+    required this.code,
+    this.httpStatus,
+  });
+
+  final AppMessageSyncFailureStage stage;
+  final AppMessageSyncFailureCategory category;
+  final String code;
+  final int? httpStatus;
 }
 
 class MessageSyncCoordinatorFailure implements Exception {

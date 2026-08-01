@@ -22,68 +22,75 @@ class AwikiImCoreMessageSyncAdapter
   final AwikiImCoreMappers _mappers;
 
   @override
-  Future<MessageSyncOutcome> syncNow({int? limit, required String reason}) {
-    return _runtime.withCurrentClient((client) async {
-      if (_syncV2ReadEnabled) {
-        final ownerDid = (await client.identity.current()).did;
-        final result = await client.messages.syncNow(
-          core.MessageSyncRequest(reason: reason, limit: limit),
-        );
-        final committedIncoming = <CommittedIncomingMessage>[];
-        for (final committed in result.committedIncomingMessages) {
-          if (committed.source != core.CommittedMessageSource.liveDelta ||
-              committed.direction != core.MessageDirection.incoming) {
-            throw StateError('message_sync_committed_event_invalid');
-          }
-          final eventId = committed.eventId.trim();
-          final logicalMessageId = committed.logicalMessageId.trim();
-          final message = _mappers.chatMessageFromCore(
-            committed.message,
-            ownerDid: ownerDid,
+  Future<MessageSyncOutcome> syncNow({
+    int? limit,
+    required String reason,
+  }) async {
+    try {
+      return await _runtime.withCurrentClient((client) async {
+        if (_syncV2ReadEnabled) {
+          final ownerDid = (await client.identity.current()).did;
+          final result = await client.messages.syncNow(
+            core.MessageSyncRequest(reason: reason, limit: limit),
           );
-          if (eventId.isEmpty ||
-              logicalMessageId.isEmpty ||
-              message.isMine ||
-              message.remoteId?.trim() != logicalMessageId) {
-            throw StateError('message_sync_committed_event_invalid');
+          final committedIncoming = <CommittedIncomingMessage>[];
+          for (final committed in result.committedIncomingMessages) {
+            if (committed.source != core.CommittedMessageSource.liveDelta ||
+                committed.direction != core.MessageDirection.incoming) {
+              throw StateError('message_sync_committed_event_invalid');
+            }
+            final eventId = committed.eventId.trim();
+            final logicalMessageId = committed.logicalMessageId.trim();
+            final message = _mappers.chatMessageFromCore(
+              committed.message,
+              ownerDid: ownerDid,
+            );
+            if (eventId.isEmpty ||
+                logicalMessageId.isEmpty ||
+                message.isMine ||
+                message.remoteId?.trim() != logicalMessageId) {
+              throw StateError('message_sync_committed_event_invalid');
+            }
+            committedIncoming.add(
+              CommittedIncomingMessage(
+                eventId: eventId,
+                logicalMessageId: logicalMessageId,
+                message: message,
+              ),
+            );
           }
-          committedIncoming.add(
-            CommittedIncomingMessage(
-              eventId: eventId,
-              logicalMessageId: logicalMessageId,
-              message: message,
+          return MessageSyncOutcome(
+            status: _messageSyncStatusFromCore(result.status),
+            eventsApplied: result.eventsApplied,
+            pagesFetched: result.pagesFetched,
+            messagesHydrated: result.messagesHydrated,
+            duplicatesSkipped: result.duplicatesSkipped,
+            changedConversationIds: List<String>.unmodifiable(
+              result.changedConversationIds,
             ),
+            committedIncomingMessages:
+                List<CommittedIncomingMessage>.unmodifiable(committedIncoming),
+            errorCode: _nonEmpty(result.errorCode),
+            warnings: List<String>.unmodifiable(result.warnings),
           );
         }
+        final result = await client.messages.syncDelta(
+          core.SyncDeltaRequest(limit: limit, reason: reason),
+        );
         return MessageSyncOutcome(
-          status: _messageSyncStatusFromCore(result.status),
+          status: result.snapshotRequired
+              ? MessageSyncStatus.recoveryRequired
+              : result.eventsApplied > 0
+              ? MessageSyncStatus.changed
+              : MessageSyncStatus.idle,
           eventsApplied: result.eventsApplied,
           pagesFetched: result.pagesFetched,
-          messagesHydrated: result.messagesHydrated,
-          duplicatesSkipped: result.duplicatesSkipped,
-          changedConversationIds: List<String>.unmodifiable(
-            result.changedConversationIds,
-          ),
-          committedIncomingMessages:
-              List<CommittedIncomingMessage>.unmodifiable(committedIncoming),
-          errorCode: _nonEmpty(result.errorCode),
-          warnings: List<String>.unmodifiable(result.warnings),
+          warnings: result.warnings,
         );
-      }
-      final result = await client.messages.syncDelta(
-        core.SyncDeltaRequest(limit: limit, reason: reason),
-      );
-      return MessageSyncOutcome(
-        status: result.snapshotRequired
-            ? MessageSyncStatus.recoveryRequired
-            : result.eventsApplied > 0
-            ? MessageSyncStatus.changed
-            : MessageSyncStatus.idle,
-        eventsApplied: result.eventsApplied,
-        pagesFetched: result.pagesFetched,
-        warnings: result.warnings,
-      );
-    });
+      });
+    } on core.AwikiImCoreException catch (error) {
+      throw const AwikiImCoreErrorMapper().messageSyncFailure(error);
+    }
   }
 
   @override

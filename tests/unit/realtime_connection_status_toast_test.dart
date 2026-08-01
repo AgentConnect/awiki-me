@@ -118,7 +118,7 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
   });
 
-  testWidgets('AppShell 首次可重试失败不显示全局同步错误', (tester) async {
+  testWidgets('AppShell 持续时间阈值前显示非红色自动重试提示', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
@@ -140,10 +140,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('消息同步中断，本地数据保持不变。'), findsNothing);
+    expect(find.text('消息服务暂时不可用，正在自动重试…'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsWidgets);
   });
 
-  testWidgets('AppShell 连续可重试失败显示全局同步错误', (tester) async {
+  testWidgets('AppShell 持续时间阈值后显示全局同步错误', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
@@ -156,6 +157,7 @@ void main() {
               const MessageSyncCoordinatorState(
                 status: MessageSyncCoordinatorStatus.retryableFailure,
                 consecutiveRetryableFailures: 2,
+                retryableFailureVisible: true,
               ),
             ),
           ),
@@ -164,7 +166,31 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+  });
+
+  testWidgets('AppShell 单独提示已提交后的列表刷新失败', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.projectionRefreshFailed,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息已同步，但列表刷新失败，请重试重新加载。'), findsOneWidget);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
 }

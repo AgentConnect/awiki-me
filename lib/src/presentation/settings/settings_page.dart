@@ -104,9 +104,7 @@ class SettingsPage extends ConsumerWidget {
               onTap: _messageSyncAction(
                 runtime: runtime,
                 sync: messageSync,
-                coordinator: ref.read(
-                  messageSyncCoordinatorProvider.notifier,
-                ),
+                coordinator: ref.read(messageSyncCoordinatorProvider.notifier),
               ),
             ),
           ],
@@ -331,7 +329,11 @@ class SettingsPage extends ConsumerWidget {
       MessageSyncCoordinatorStatus.recovering =>
         context.l10n.messageSyncStatusRecovering,
       MessageSyncCoordinatorStatus.retryableFailure =>
-        context.l10n.messageSyncStatusRetryableFailure,
+        state.shouldSurfaceRetryableFailure
+            ? context.l10n.messageSyncStatusRetryableFailure
+            : context.l10n.messageSyncStatusRetrying,
+      MessageSyncCoordinatorStatus.projectionRefreshFailed =>
+        context.l10n.messageSyncStatusProjectionRefreshFailed,
       MessageSyncCoordinatorStatus.authRevoked =>
         context.l10n.messageSyncStatusAuthRevoked,
     };
@@ -348,6 +350,13 @@ class SettingsPage extends ConsumerWidget {
         const CupertinoActivityIndicator(radius: 9),
       MessageSyncCoordinatorStatus.retryableFailure => Text(
         context.l10n.messageSyncRetryAction,
+        style: const TextStyle(
+          color: AwikiMeColors.primary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      MessageSyncCoordinatorStatus.projectionRefreshFailed => Text(
+        context.l10n.messageSyncReloadAction,
         style: const TextStyle(
           color: AwikiMeColors.primary,
           fontWeight: FontWeight.w600,
@@ -372,6 +381,8 @@ class SettingsPage extends ConsumerWidget {
     return switch (sync.status) {
       MessageSyncCoordinatorStatus.retryableFailure =>
         () => coordinator.requestSync('manual_refresh', immediate: true),
+      MessageSyncCoordinatorStatus.projectionRefreshFailed =>
+        () => coordinator.requestSync('projection_reload', immediate: true),
       MessageSyncCoordinatorStatus.authRevoked =>
         runtime.reauthenticateAfterAuthRevoked,
       MessageSyncCoordinatorStatus.idle ||

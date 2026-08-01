@@ -1,6 +1,7 @@
 import '../../domain/entities/chat_message.dart';
 import '../models/app_conversation_read_ref.dart';
 import '../models/app_thread_ref.dart';
+import '../models/message_sync_diagnostics.dart';
 
 abstract interface class MessageSyncCorePort {
   Future<MessageSyncOutcome> syncNow({int? limit, required String reason});
@@ -31,6 +32,22 @@ class DirectMessageSyncBindingUnavailable implements Exception {
 
   @override
   String toString() => 'DirectMessageSyncBindingUnavailable';
+}
+
+/// Payload-free failure projected by the Core adapter for App orchestration.
+class MessageSyncCoreFailure implements Exception {
+  const MessageSyncCoreFailure({
+    required this.category,
+    required this.code,
+    this.httpStatus,
+  });
+
+  final AppMessageSyncFailureCategory category;
+  final String code;
+  final int? httpStatus;
+
+  @override
+  String toString() => code;
 }
 
 enum MessageSyncStatus {

@@ -10,6 +10,18 @@ enum AppMessageSyncRetryState {
   permanentFailure,
 }
 
+enum AppMessageSyncFailureStage { prepare, coreSync, postCommitProjection }
+
+enum AppMessageSyncFailureCategory {
+  auth,
+  transport,
+  service,
+  localState,
+  protocol,
+  projection,
+  unknown,
+}
+
 /// Redacted product-safe diagnostics. It intentionally contains no cursor,
 /// account/device identifier, message content, token, or payload.
 class AppMessageSyncDiagnostics {
@@ -46,6 +58,16 @@ class AppMessageSyncSafeDiagnostics {
     this.dirtyDomains = const <AppMessageSyncDirtyDomain>[],
     required this.retryState,
     this.nextRetryAt,
+    this.firstRetryableFailureAt,
+    this.lastFailureAt,
+    this.lastFailureStage,
+    this.lastFailureCategory,
+    this.lastFailureCode,
+    this.lastFailureHttpStatus,
+    this.retryableFailureSurfaceAt,
+    this.retryableFailureVisible = false,
+    this.consecutiveRetryableFailures = 0,
+    this.automaticRetryPending = false,
   });
 
   final int refreshAttemptSequence;
@@ -57,6 +79,16 @@ class AppMessageSyncSafeDiagnostics {
   final List<AppMessageSyncDirtyDomain> dirtyDomains;
   final AppMessageSyncRetryState retryState;
   final DateTime? nextRetryAt;
+  final DateTime? firstRetryableFailureAt;
+  final DateTime? lastFailureAt;
+  final AppMessageSyncFailureStage? lastFailureStage;
+  final AppMessageSyncFailureCategory? lastFailureCategory;
+  final String? lastFailureCode;
+  final int? lastFailureHttpStatus;
+  final DateTime? retryableFailureSurfaceAt;
+  final bool retryableFailureVisible;
+  final int consecutiveRetryableFailures;
+  final bool automaticRetryPending;
 
   bool get isCurrent =>
       refreshSuccessSequence > 0 &&
@@ -64,7 +96,7 @@ class AppMessageSyncSafeDiagnostics {
       refreshedAt != null;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'schema_version': 1,
+    'schema_version': 2,
     'current': isCurrent,
     'refresh_attempt_sequence': refreshAttemptSequence,
     'refresh_success_sequence': refreshSuccessSequence,
@@ -75,5 +107,19 @@ class AppMessageSyncSafeDiagnostics {
     'dirty_domains': dirtyDomains.map((domain) => domain.name).toList(),
     'retry_state': retryState.name,
     'next_retry_at': nextRetryAt?.toUtc().toIso8601String(),
+    'first_retryable_failure_at': firstRetryableFailureAt
+        ?.toUtc()
+        .toIso8601String(),
+    'last_failure_at': lastFailureAt?.toUtc().toIso8601String(),
+    'last_failure_stage': lastFailureStage?.name,
+    'last_failure_category': lastFailureCategory?.name,
+    'last_failure_code': lastFailureCode,
+    'last_failure_http_status': lastFailureHttpStatus,
+    'retryable_failure_surface_at': retryableFailureSurfaceAt
+        ?.toUtc()
+        .toIso8601String(),
+    'retryable_failure_visible': retryableFailureVisible,
+    'consecutive_retryable_failures': consecutiveRetryableFailures,
+    'automatic_retry_pending': automaticRetryPending,
   };
 }

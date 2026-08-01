@@ -202,7 +202,7 @@ void main() {
   });
 
   testWidgets(
-    'AwikiMeApp suppresses a transient sync alert until retry also fails',
+    'AwikiMeApp escalates a sustained sync failure after the time threshold',
     (tester) async {
       const session = SessionIdentity(
         did: 'did:test:me',
@@ -235,16 +235,25 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('消息同步中断，本地数据保持不变。'), findsNothing);
+      expect(find.text('消息服务暂时不可用，正在自动重试…'), findsOneWidget);
 
       coordinator.publish(
         const MessageSyncCoordinatorState(
           status: MessageSyncCoordinatorStatus.retryableFailure,
           consecutiveRetryableFailures: 2,
+          retryableFailureVisible: true,
         ),
       );
       await tester.pump();
-      expect(find.text('消息同步中断，本地数据保持不变。'), findsOneWidget);
+      expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.projectionRefreshFailed,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息已同步，但列表刷新失败，请重试重新加载。'), findsOneWidget);
     },
   );
 

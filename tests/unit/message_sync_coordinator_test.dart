@@ -1034,7 +1034,7 @@ void main() {
     expect(firstSafe.refreshSuccessSequence, 1);
     expect(firstSafe.refreshedAt, isNotNull);
     expect(firstSafe.toJson(), <String, Object?>{
-      'schema_version': 1,
+      'schema_version': 2,
       'current': true,
       'refresh_attempt_sequence': 1,
       'refresh_success_sequence': 1,
@@ -1045,6 +1045,16 @@ void main() {
       'dirty_domains': <String>['messages', 'readState'],
       'retry_state': 'scheduled',
       'next_retry_at': retryAt.toIso8601String(),
+      'first_retryable_failure_at': null,
+      'last_failure_at': null,
+      'last_failure_stage': null,
+      'last_failure_category': null,
+      'last_failure_code': null,
+      'last_failure_http_status': null,
+      'retryable_failure_surface_at': null,
+      'retryable_failure_visible': false,
+      'consecutive_retryable_failures': 0,
+      'automatic_retry_pending': false,
     });
 
     messaging.nextDiagnosticsError = StateError('diagnostics unavailable');
@@ -1477,7 +1487,11 @@ void main() {
     () async {
       final sync = FakeMessageSyncService()
         ..nextDeltaError = StateError('transient_sync_failure');
-      final container = _container(FakeAwikiGateway(), sync);
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        failureSurfaceDelay: const Duration(seconds: 1),
+      );
       addTearDown(container.dispose);
 
       await container
@@ -1496,24 +1510,169 @@ void main() {
   );
 
   test(
-    'two consecutive retryable failures stop automatic retry and surface error',
+    'failure count does not surface before the duration threshold',
     () async {
       final sync = _FailingMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        failureBackoff: const Duration(seconds: 1),
+        failureSurfaceDelay: const Duration(seconds: 1),
+      );
+      addTearDown(container.dispose);
+
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+      await coordinator.requestSync('foreground_periodic', immediate: true);
+      await coordinator.requestSync('manual_refresh', immediate: true);
+
+      final state = container.read(messageSyncCoordinatorProvider);
+      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+      expect(state.consecutiveRetryableFailures, 2);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
+      expect(state.lastError, isA<StateError>());
+    },
+  );
+
+  test('typed retryable outcome preserves a safe transport category', () async {
+    final sync = FakeMessageSyncService(
+      deltaResult: const MessageSyncOutcome(
+        status: MessageSyncStatus.retryableFailure,
+        eventsApplied: 0,
+        pagesFetched: 0,
+        errorCode: 'TRANSPORT_UNAVAILABLE',
+      ),
+    );
+    final container = _container(FakeAwikiGateway(), sync);
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('foreground_periodic', immediate: true);
+
+    final diagnostics = container
+        .read(messageSyncCoordinatorProvider)
+        .safeDiagnostics;
+    expect(
+      diagnostics.lastFailureCategory,
+      AppMessageSyncFailureCategory.transport,
+    );
+    expect(diagnostics.lastFailureCode, 'TRANSPORT_UNAVAILABLE');
+  });
+
+  test(
+    'thrown HTTP auth rejection is terminal and never auto-retried',
+    () async {
+      final sync = FakeMessageSyncService()
+        ..nextDeltaError = const MessageSyncCoreFailure(
+          category: AppMessageSyncFailureCategory.auth,
+          code: 'message content leaked',
+          httpStatus: 401,
+        );
       final container = _container(FakeAwikiGateway(), sync);
       addTearDown(container.dispose);
 
       await container
           .read(messageSyncCoordinatorProvider.notifier)
           .requestSync('foreground_periodic', immediate: true);
-      await pumpEventQueue();
 
       final state = container.read(messageSyncCoordinatorProvider);
-      expect(sync.syncReasons, ['foreground_periodic', 'automatic_retry']);
-      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
-      expect(state.consecutiveRetryableFailures, 2);
+      expect(sync.syncReasons, ['foreground_periodic']);
+      expect(state.status, MessageSyncCoordinatorStatus.authRevoked);
       expect(state.automaticRetryPending, isFalse);
+      expect(
+        state.safeDiagnostics.lastFailureCategory,
+        AppMessageSyncFailureCategory.auth,
+      );
+      expect(state.safeDiagnostics.lastFailureCode, 'message_sync_failure');
+      expect(state.safeDiagnostics.lastFailureHttpStatus, 401);
+      expect(
+        state.safeDiagnostics.toJson().toString(),
+        isNot(contains('message content')),
+      );
+    },
+  );
+
+  test(
+    'one sustained failure surfaces when the duration threshold elapses',
+    () async {
+      final sync = _FailingMessageSyncService();
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        failureBackoff: const Duration(seconds: 1),
+        failureSurfaceDelay: const Duration(milliseconds: 30),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('foreground_periodic', immediate: true);
+
+      var state = container.read(messageSyncCoordinatorProvider);
+      expect(state.consecutiveRetryableFailures, 1);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
+
+      await Future<void>.delayed(const Duration(milliseconds: 45));
+      state = container.read(messageSyncCoordinatorProvider);
+      expect(state.consecutiveRetryableFailures, 1);
       expect(state.shouldSurfaceRetryableFailure, isTrue);
-      expect(state.lastError, isA<StateError>());
+      expect(
+        state.safeDiagnostics.lastFailureStage,
+        AppMessageSyncFailureStage.coreSync,
+      );
+      expect(
+        state.safeDiagnostics.lastFailureCategory,
+        AppMessageSyncFailureCategory.unknown,
+      );
+      expect(state.safeDiagnostics.lastFailureCode, 'message_sync_core_failed');
+    },
+  );
+
+  test(
+    'post-commit projection failure does not become a sync failure',
+    () async {
+      final gateway = FakeAwikiGateway();
+      final conversations = _PostCommitFailingConversationService(gateway);
+      final sync = FakeMessageSyncService(
+        deltaResult: const MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+        ),
+      );
+      final container = _container(
+        gateway,
+        sync,
+        conversationService: conversations,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('foreground_periodic', immediate: true);
+
+      final state = container.read(messageSyncCoordinatorProvider);
+      expect(state.lastStatus, MessageSyncStatus.changed);
+      expect(
+        state.status,
+        MessageSyncCoordinatorStatus.projectionRefreshFailed,
+      );
+      expect(state.consecutiveRetryableFailures, 0);
+      expect(state.automaticRetryPending, isFalse);
+      expect(
+        state.safeDiagnostics.lastFailureStage,
+        AppMessageSyncFailureStage.postCommitProjection,
+      );
+      expect(
+        state.safeDiagnostics.lastFailureCategory,
+        AppMessageSyncFailureCategory.projection,
+      );
+      expect(
+        state.safeDiagnostics.lastFailureCode,
+        'message_sync_projection_refresh_failed',
+      );
     },
   );
 
@@ -1650,6 +1809,8 @@ ProviderContainer _container(
   FakeAwikiGateway gateway,
   MessageSyncService sync, {
   Duration minInterval = Duration.zero,
+  Duration failureBackoff = Duration.zero,
+  Duration failureSurfaceDelay = Duration.zero,
   FakeDeviceManagementCore? devices,
   FakeNotificationFacade? notifications,
   AppPresentationService? appPresentationService,
@@ -1686,7 +1847,8 @@ ProviderContainer _container(
         (ref) => MessageSyncCoordinator(
           ref,
           minInterval: minInterval,
-          failureBackoff: Duration.zero,
+          failureBackoff: failureBackoff,
+          failureSurfaceDelay: failureSurfaceDelay,
         ),
       ),
       sessionProvider.overrideWith((ref) {
@@ -2013,6 +2175,29 @@ class _BoundReadyConversationService extends FakeConversationService {
   }
 
   Future<void> dispose() => _patches.close();
+}
+
+class _PostCommitFailingConversationService extends FakeConversationService {
+  _PostCommitFailingConversationService(super.gateway);
+
+  var _fastListCalls = 0;
+
+  @override
+  Future<List<ConversationSummary>> listConversationSummariesFast({
+    required String ownerDid,
+    int limit = 100,
+    bool unreadOnly = false,
+  }) {
+    _fastListCalls += 1;
+    if (_fastListCalls >= 2) {
+      throw StateError('projection_refresh_failed');
+    }
+    return super.listConversationSummariesFast(
+      ownerDid: ownerDid,
+      limit: limit,
+      unreadOnly: unreadOnly,
+    );
+  }
 }
 
 class _FailingMessageSyncService extends FakeMessageSyncService {

@@ -152,6 +152,12 @@ App 侧允许做的事情：
 - 对 sync/realtime/backfill 返回的消息页，等待或 repair Core committed projection/read
   model；App 不直接把这些返回值 merge 为 UI authoritative truth。
 - best-effort 读取产品安全 diagnostics；诊断失败不能改变已经完成的同步结果。
+- 将 patch preparation/Core `syncNow` 与 Core commit 后的 Join inbox、conversation list
+  projection refresh 分开捕获。后处理失败只提示列表重新加载，不得把已经提交的同步改写成
+  retryable sync failure。
+- HTTP 401/403、耗尽认证重试后的 `1401` 和设备资格 fence 立即进入终止性
+  `authRevoked`；其他可重试失败在 30 秒内保持自动重试提示，只有连续失败达到 30 秒才升级
+  为红色手动重试提示，不能再以“两次失败”作为升级条件。
 
 App 侧禁止做的事情：
 
@@ -184,8 +190,9 @@ Agent/Profile/Registry 当前快照不受该消息窗口限制。Direct E2EE、G
 7. 如果 `message_sync.delta` 很慢，优先判断是 SDK bootstrap/delta/compact recovery、
    exact hydration、SQLite 原子 projection commit，还是 message-service HTTP 响应。
    正常成功后不应再出现 coordinator 触发的全 conversation refresh/prewarm。产品安全
-   diagnostics 只能查看 typed mode、pending mutation count、dirty domains 和 retry state；
-   raw cursor/epoch/anchor 不属于 App 性能诊断面。
+   diagnostics 只能查看 typed mode、pending mutation count、dirty domains、retry state，
+   以及 App 记录的 failure stage/category、稳定 code、HTTP status、次数和时间；异常正文、
+   raw cursor/epoch/anchor、身份、token 和 payload 不属于 App 性能诊断面。
 8. 如果 `message_sync.conversation_after` 很慢，优先看该 conversation 的远端补新、E2EE projection
    persist 和 projection repair/load。它只按 `afterServerSeq` 做 conversation-local freshness，
    不代表全局 reliable sync 落后。`message_sync.thread_after` 只应作为 legacy adapter/debug 线索。
