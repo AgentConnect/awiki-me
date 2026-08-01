@@ -20,6 +20,9 @@ class ImCoreMappedError {
   final String? serviceDataJson;
 
   bool get isUnsupported => code == 'unsupported_capability';
+
+  bool get isDirectSyncBindingUnavailable =>
+      code == 'service_error' && serviceCode == 'SYNC_THREAD_BINDING_REQUIRED';
 }
 
 class AwikiImCoreErrorMapper {

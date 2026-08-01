@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/device_revoke_outcome.dart';
+import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -1393,6 +1394,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(core.sendOtpCalls, 1);
+  });
+
+  testWidgets('Join SMS rate limit shows retry reason and disables resend', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..sendOtpError = const DeviceJoinSmsOtpRateLimited(retryAfterSeconds: 2);
+    await tester.pumpWidget(
+      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), 'alice');
+    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+
+    expect(find.text('验证码发送过于频繁，请 2 秒后重试'), findsOneWidget);
+    expect(find.text('设备操作失败，请刷新后重试'), findsNothing);
+    expect(find.text('重新发送（2秒）'), findsOneWidget);
+    await tester.tap(find.text('重新发送（2秒）'));
+    await tester.pump();
+    expect(core.sendOtpCalls, 1);
+
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('验证码发送过于频繁，请 1 秒后重试'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('发送验证码'), findsOneWidget);
+    expect(find.textContaining('验证码发送过于频繁'), findsNothing);
   });
 
   testWidgets('cancel is projected as one terminal state', (tester) async {

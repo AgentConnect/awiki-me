@@ -16,6 +16,7 @@ import '../../application/models/app_thread_ref.dart';
 import '../../application/models/app_thread_read_watermark.dart';
 import '../../application/models/thread_message_patch.dart';
 import '../../application/messaging_service.dart';
+import '../../application/ports/message_sync_core_port.dart';
 import '../../application/thread_id_utils.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_control_payloads.dart';
@@ -3007,12 +3008,12 @@ class ChatThreadsController
     if (showLoading) {
       _setThreadLoading(targetThreadId, true);
     }
+    final afterServerSeq = maxServerSequenceForMessages(
+      thread(targetThreadId).messages,
+    );
     try {
       final messaging = ref.read(messagingServiceProvider);
       final syncService = ref.read(messageSyncServiceProvider);
-      final afterServerSeq = maxServerSequenceForMessages(
-        thread(targetThreadId).messages,
-      );
       final syncConversationRef = conversationRef;
       final syncUsedReadModel =
           syncConversationRef != null &&
@@ -3142,7 +3143,22 @@ class ChatThreadsController
       if (showLoading) {
         _setThreadLoading(targetThreadId, false);
       }
-      if (reportFailure) {
+      final expectedEmptyDirectBinding =
+          error is DirectMessageSyncBindingUnavailable &&
+          !conversation.isGroup &&
+          afterServerSeq == null &&
+          !thread(
+            targetThreadId,
+          ).messages.any((message) => message.serverSequence != null);
+      if (expectedEmptyDirectBinding) {
+        _chatProviderTrace(
+          'remote_history.binding_pending',
+          fields: <String, Object?>{
+            ...AwikiPerformanceLogger.threadField(targetThreadId),
+            'conversation_ref': _conversationReadRefDebug(conversationRef),
+          },
+        );
+      } else if (reportFailure) {
         ref
             .read(uiFeedbackProvider.notifier)
             .showError(AppMessage.fromError(error));

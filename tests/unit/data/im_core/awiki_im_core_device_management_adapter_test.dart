@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_device_management_adapter.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +43,59 @@ void main() {
       'target_handle': 'alice',
       'target_handle_domain': 'awiki.info',
     });
+  });
+
+  test('maps SMS 429 Retry-After to a bounded typed error', () async {
+    const sensitive = 'provider-secret-must-not-escape';
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: _unusedCore,
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      httpClient: MockClient(
+        (_) async => http.Response(
+          '{"detail":"$sensitive"}',
+          429,
+          headers: const <String, String>{'Retry-After': '17'},
+        ),
+      ),
+    );
+
+    Object? error;
+    try {
+      await adapter.sendJoinSmsOtp(handle: 'alice', phone: '+8613800138000');
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(
+      error,
+      isA<DeviceJoinSmsOtpRateLimited>().having(
+        (value) => value.retryAfterSeconds,
+        'retryAfterSeconds',
+        17,
+      ),
+    );
+    expect(error.toString(), isNot(contains(sensitive)));
+  });
+
+  test('uses safe SMS retry default when 429 metadata is absent', () async {
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: _unusedCore,
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      httpClient: MockClient((_) async => http.Response('{}', 429)),
+    );
+
+    await expectLater(
+      adapter.sendJoinSmsOtp(handle: 'alice', phone: '+8613800138000'),
+      throwsA(
+        isA<DeviceJoinSmsOtpRateLimited>().having(
+          (value) => value.retryAfterSeconds,
+          'retryAfterSeconds',
+          60,
+        ),
+      ),
+    );
   });
 
   test(

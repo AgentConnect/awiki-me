@@ -312,6 +312,12 @@
   "deviceJoinPhone": "Linked phone number",
   "deviceJoinOtp": "SMS verification code",
   "deviceJoinSendOtp": "Send code",
+  "deviceJoinResendOtpIn": "Resend ({seconds}s)",
+  "@deviceJoinResendOtpIn": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
   "deviceJoinStart": "Start pairing",
   "deviceJoinWaiting": "Waiting for an admin device",
   "deviceJoinRefresh": "Refresh status",
@@ -351,6 +357,12 @@
   "deviceJoinErrorSas": "The verification code state did not match. Authorization stopped.",
   "deviceJoinErrorPresence": "System authentication was not completed. The device was not authorized.",
   "deviceJoinErrorNetwork": "Network connection failed. Try again later.",
+  "deviceJoinOtpRateLimited": "Verification codes are being sent too frequently. Try again in {seconds} seconds.",
+  "@deviceJoinOtpRateLimited": {
+    "placeholders": {
+      "seconds": {"type": "int"}
+    }
+  },
   "deviceJoinErrorFailed": "Device operation failed. Refresh and try again.",
   "settingsLanguage": "Language",
   "settingsLanguageSystem": "Follow system",

@@ -73,6 +73,10 @@ E2EE 私钥、配对共享秘密、challenge 明文和 DID 根私钥始终留在
 SMS OTP 只进入发起方法；域内 exchange 返回的 account token 只存在于 data adapter
 的局部变量，并立即包装为 Core 单次消费对象，不进入 application/presentation state、
 日志、错误、持久化或跨域协议。
+发码端返回 HTTP `429` 时，User Service 的 `Retry-After` 是重试时间的机器可读事实源；
+data adapter 只把有界秒数投影为 typed rate-limit error，不向 presentation 透传 Problem
+JSON 或供应商详情。Join 页面显示明确的“发送过于频繁”提示并在剩余时间内禁用重发，
+不得将限流降级为通用“设备操作失败”。
 
 JoinRequested / JoinClaimed / JoinResponseVerified 是通用系统通知承载的业务 payload。
 Message Service 按标准 P3 signed message 传输，Core 负责验证可信 service DID、proof、

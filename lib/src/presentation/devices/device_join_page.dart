@@ -1,5 +1,5 @@
 // [INPUT]: New-device Join projection, user form input, widget lifecycle, and authorized-device summary.
-// [OUTPUT]: Lifecycle-safe OTP/SAS polling plus exact-DID member session activation.
+// [OUTPUT]: Lifecycle-safe OTP cooldown/SAS polling plus exact-DID member session activation.
 // [POS]: New-device pairing surface; it never persists OTP, SAS, or root material.
 
 import 'dart:async';
@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
+import '../../application/ports/device_management_core_port.dart';
 import '../../domain/entities/device_management.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
@@ -33,8 +34,10 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   Timer? _pollTimer;
+  Timer? _otpCooldownTimer;
   bool _sendingOtp = false;
   bool _otpSendFailed = false;
+  int _otpRetryAfterSeconds = 0;
   bool _activationPending = false;
   bool _activationFailed = false;
   String? _activatedJoinSessionId;
@@ -58,6 +61,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _otpCooldownTimer?.cancel();
     _handleController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
@@ -101,7 +105,15 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
               ),
               const SizedBox(height: 12),
             ],
-            if (_otpSendFailed) ...<Widget>[
+            if (_otpRetryAfterSeconds > 0) ...<Widget>[
+              _DeviceJoinNotice(
+                message: context.l10n.deviceJoinOtpRateLimited(
+                  _otpRetryAfterSeconds,
+                ),
+                danger: true,
+              ),
+              const SizedBox(height: 12),
+            ] else if (_otpSendFailed) ...<Widget>[
               _DeviceJoinNotice(
                 message: context.l10n.deviceJoinErrorFailed,
                 danger: true,
@@ -155,9 +167,16 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             children: <Widget>[
               Expanded(
                 child: AppSecondaryButton(
-                  label: context.l10n.deviceJoinSendOtp,
+                  label: _otpRetryAfterSeconds > 0
+                      ? context.l10n.deviceJoinResendOtpIn(
+                          _otpRetryAfterSeconds,
+                        )
+                      : context.l10n.deviceJoinSendOtp,
                   semanticsIdentifier: 'multi-device-send-otp',
-                  onPressed: state.isActionPending || _sendingOtp
+                  onPressed:
+                      state.isActionPending ||
+                          _sendingOtp ||
+                          _otpRetryAfterSeconds > 0
                       ? null
                       : _sendOtp,
                 ),
@@ -270,16 +289,42 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     setState(() {
       _sendingOtp = true;
       _otpSendFailed = false;
+      _otpRetryAfterSeconds = 0;
     });
     try {
       await ref
           .read(deviceManagementServiceProvider)
           .sendJoinSmsOtp(handle: handle, phone: phone);
+    } on DeviceJoinSmsOtpRateLimited catch (error) {
+      if (mounted) {
+        _startOtpCooldown(error.retryAfterSeconds);
+      }
     } catch (_) {
       if (mounted) setState(() => _otpSendFailed = true);
     } finally {
       if (mounted) setState(() => _sendingOtp = false);
     }
+  }
+
+  void _startOtpCooldown(int seconds) {
+    _otpCooldownTimer?.cancel();
+    final boundedSeconds = seconds.clamp(1, 3600).toInt();
+    setState(() {
+      _otpSendFailed = false;
+      _otpRetryAfterSeconds = boundedSeconds;
+    });
+    _otpCooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_otpRetryAfterSeconds <= 1) {
+        timer.cancel();
+        setState(() => _otpRetryAfterSeconds = 0);
+        return;
+      }
+      setState(() => _otpRetryAfterSeconds -= 1);
+    });
   }
 
   Future<void> _begin() async {

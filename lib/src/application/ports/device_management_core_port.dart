@@ -1,5 +1,19 @@
 import '../../domain/entities/device_management.dart';
 
+/// The Join SMS endpoint rejected a resend until [retryAfterSeconds] elapses.
+///
+/// Only the bounded retry delay crosses this port. Raw response bodies and
+/// provider diagnostics remain below the data boundary.
+class DeviceJoinSmsOtpRateLimited implements Exception {
+  const DeviceJoinSmsOtpRateLimited({required this.retryAfterSeconds});
+
+  final int retryAfterSeconds;
+
+  @override
+  String toString() =>
+      'DeviceJoinSmsOtpRateLimited(retryAfterSeconds: $retryAfterSeconds)';
+}
+
 /// Secret-free projection and action boundary used by AWiki Me.
 ///
 /// The SMS OTP is a write-only input to [beginDeviceJoinWithSms]. The adapter

@@ -47,4 +47,16 @@ void main() {
       '{"did":"did:example:old","handle":"alice"}',
     );
   });
+
+  test('classifies Direct sync binding absence by stable service code', () {
+    final mapped = mapper.map(
+      const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'localized or changed diagnostic text',
+        serviceCode: 'SYNC_THREAD_BINDING_REQUIRED',
+      ),
+    );
+
+    expect(mapped.isDirectSyncBindingUnavailable, isTrue);
+  });
 }

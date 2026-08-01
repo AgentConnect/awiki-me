@@ -20,6 +20,19 @@ abstract interface class ConversationMessageSyncCorePort {
   });
 }
 
+/// Core has not yet observed an authoritative service event that binds this
+/// Direct conversation to a durable remote thread.
+///
+/// This is an expected state for an empty conversation on a newly joined
+/// tail-only device. Callers must not derive or persist a binding from a DID,
+/// Handle, or presentation route.
+class DirectMessageSyncBindingUnavailable implements Exception {
+  const DirectMessageSyncBindingUnavailable();
+
+  @override
+  String toString() => 'DirectMessageSyncBindingUnavailable';
+}
+
 enum MessageSyncStatus {
   idle,
   changed,

@@ -45,6 +45,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   joinRequestsLoader;
   Future<DeviceJoinProgress> Function(String joinSessionId)? pollNewLoader;
   Object? pollError;
+  Object? sendOtpError;
   Object? revokeError;
   Future<DeviceRevokeResult> Function({
     required String selector,
@@ -78,6 +79,10 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     required String phone,
   }) async {
     sendOtpCalls += 1;
+    final error = sendOtpError;
+    if (error != null) {
+      throw error;
+    }
   }
 
   @override

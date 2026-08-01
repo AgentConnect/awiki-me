@@ -824,6 +824,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinSendOtp => '发送验证码';
 
   @override
+  String deviceJoinResendOtpIn(int seconds) {
+    return '重新发送（$seconds秒）';
+  }
+
+  @override
   String get deviceJoinStart => '开始关联';
 
   @override
@@ -910,6 +915,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get deviceJoinErrorNetwork => '网络连接失败，请稍后重试';
+
+  @override
+  String deviceJoinOtpRateLimited(int seconds) {
+    return '验证码发送过于频繁，请 $seconds 秒后重试';
+  }
 
   @override
   String get deviceJoinErrorFailed => '设备操作失败，请刷新后重试';

@@ -2986,6 +2986,103 @@ void main() {
     },
   );
 
+  test(
+    'new-device empty Direct treats missing authoritative binding as empty history',
+    () async {
+      final joinedDeviceConversation = ConversationSummary(
+        conversationId: 'dm:peer-scope:v1:joined-agent',
+        threadId: 'dm:did:joined-owner:did:runtime-agent',
+        displayName: 'Existing Agent',
+        lastMessagePreview: '',
+        lastMessageAt: DateTime(2026, 8, 1, 9),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:runtime:existing-agent',
+        targetPeer: 'existing-agent.awiki.info',
+      );
+      messageSyncService.conversationAfterError =
+          const DirectMessageSyncBindingUnavailable();
+      _seedContainerConversationProjection(
+        container,
+        joinedDeviceConversation,
+        const <ChatMessage>[],
+      );
+
+      await container
+          .read(chatThreadsProvider.notifier)
+          .openConversation(joinedDeviceConversation);
+      await pumpEventQueue();
+
+      expect(
+        messageSyncService.conversationAfterRequests.length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(
+        container
+            .read(
+              chatThreadProvider(_timelineThreadId(joinedDeviceConversation)),
+            )
+            .messages,
+        isEmpty,
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
+    },
+  );
+
+  test(
+    'existing server-sequenced Direct does not hide missing binding',
+    () async {
+      final existingConversation = ConversationSummary(
+        conversationId: 'dm:peer-scope:v1:existing-binding',
+        threadId: 'dm:did:joined-owner:did:existing-peer',
+        displayName: 'Existing Peer',
+        lastMessagePreview: 'existing message',
+        lastMessageAt: DateTime(2026, 8, 1, 9),
+        unreadCount: 0,
+        isGroup: false,
+        targetDid: 'did:peer:existing',
+      );
+      final existingMessage = ChatMessage(
+        localId: 'existing-server-message',
+        remoteId: 'existing-server-message',
+        conversationId: existingConversation.conversationId,
+        threadId: existingConversation.threadId,
+        senderDid: 'did:peer:existing',
+        receiverDid: 'did:me',
+        content: 'existing message',
+        createdAt: existingConversation.lastMessageAt,
+        isMine: false,
+        serverSequence: 7,
+        sendState: MessageSendState.sent,
+      );
+      messageSyncService.conversationAfterError =
+          const DirectMessageSyncBindingUnavailable();
+      gateway.localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        existingConversation.threadId: <ChatMessage>[existingMessage],
+      };
+      _seedContainerConversationProjection(
+        container,
+        existingConversation,
+        <ChatMessage>[existingMessage],
+      );
+
+      await container
+          .read(chatThreadsProvider.notifier)
+          .openConversation(existingConversation);
+      await pumpEventQueue();
+      await container
+          .read(chatThreadsProvider.notifier)
+          .syncHistoryForConversation(
+            existingConversation,
+            force: true,
+            reportFailure: true,
+          );
+      await pumpEventQueue();
+
+      expect(container.read(uiFeedbackProvider), isNotNull);
+    },
+  );
+
   test('peer-scope 强制同步时跳过未支持的远端 thread history', () async {
     final canonicalConversation = ConversationSummary(
       threadId: 'dm:peer-scope:v1:codex-force',

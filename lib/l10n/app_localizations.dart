@@ -1668,6 +1668,12 @@ abstract class AppLocalizations {
   /// **'发送验证码'**
   String get deviceJoinSendOtp;
 
+  /// No description provided for @deviceJoinResendOtpIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新发送（{seconds}秒）'**
+  String deviceJoinResendOtpIn(int seconds);
+
   /// No description provided for @deviceJoinStart.
   ///
   /// In zh, this message translates to:
@@ -1835,6 +1841,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'网络连接失败，请稍后重试'**
   String get deviceJoinErrorNetwork;
+
+  /// No description provided for @deviceJoinOtpRateLimited.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码发送过于频繁，请 {seconds} 秒后重试'**
+  String deviceJoinOtpRateLimited(int seconds);
 
   /// No description provided for @deviceJoinErrorFailed.
   ///

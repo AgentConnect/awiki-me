@@ -866,6 +866,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceJoinSendOtp => 'Send code';
 
   @override
+  String deviceJoinResendOtpIn(int seconds) {
+    return 'Resend (${seconds}s)';
+  }
+
+  @override
   String get deviceJoinStart => 'Start pairing';
 
   @override
@@ -961,6 +966,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deviceJoinErrorNetwork =>
       'Network connection failed. Try again later.';
+
+  @override
+  String deviceJoinOtpRateLimited(int seconds) {
+    return 'Verification codes are being sent too frequently. Try again in $seconds seconds.';
+  }
 
   @override
   String get deviceJoinErrorFailed =>

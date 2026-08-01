@@ -142,6 +142,11 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     } on Object {
       throw const DeviceManagementTransportException('sms_code_network');
     }
+    if (response.statusCode == 429) {
+      throw DeviceJoinSmsOtpRateLimited(
+        retryAfterSeconds: _smsRetryAfterSeconds(response),
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw DeviceManagementTransportException(
         'sms_code_http_${response.statusCode}',
@@ -390,6 +395,34 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
       );
     }
   }
+}
+
+const int _defaultSmsRetryAfterSeconds = 60;
+const int _maxSmsRetryAfterSeconds = 3600;
+
+int _smsRetryAfterSeconds(http.Response response) {
+  String? retryAfterHeader;
+  for (final entry in response.headers.entries) {
+    if (entry.key.toLowerCase() == 'retry-after') {
+      retryAfterHeader = entry.value;
+      break;
+    }
+  }
+  final headerSeconds = int.tryParse(retryAfterHeader?.trim() ?? '');
+  int? bodySeconds;
+  try {
+    final payload = jsonDecode(response.body);
+    if (payload is Map) {
+      final value = payload['retry_after'];
+      bodySeconds = value is int
+          ? value
+          : int.tryParse(value?.toString().trim() ?? '');
+    }
+  } on Object {
+    // The response body is diagnostic-only. Retry-After remains authoritative.
+  }
+  final seconds = headerSeconds ?? bodySeconds ?? _defaultSmsRetryAfterSeconds;
+  return seconds.clamp(1, _maxSmsRetryAfterSeconds).toInt();
 }
 
 class DeviceManagementTransportException implements Exception {

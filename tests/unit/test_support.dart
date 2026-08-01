@@ -4066,6 +4066,7 @@ class FakeMessageSyncService
   Object? nextDeltaError;
   Object? nextThreadAfterError;
   Object? nextConversationAfterError;
+  Object? conversationAfterError;
   Completer<void>? syncNowCompleter;
   int activeSyncNowCalls = 0;
   int maxActiveSyncNowCalls = 0;
@@ -4145,7 +4146,10 @@ class FakeMessageSyncService
         limit: limit,
       ),
     );
-    final error = nextConversationAfterError ?? nextThreadAfterError;
+    final error =
+        nextConversationAfterError ??
+        conversationAfterError ??
+        nextThreadAfterError;
     if (error != null) {
       nextConversationAfterError = null;
       nextThreadAfterError = null;
