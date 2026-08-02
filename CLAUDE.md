@@ -10,8 +10,10 @@
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
+   - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。
    - Android/iOS remote push transport 是进程级平台能力，不随 tenant runtime 重建；Push 只作为同步提示，不能成为消息或未读状态的事实来源。
    - Realtime/Push 都只是同步提示；前台会话必须以有界周期触发 Core reliable sync，补偿提示丢失，并在后台停止，不能把 WebSocket 投递当作可靠消息事实源。
+   - Core diagnostics 中带 `pending` / `scheduled` 的本地 mutation outbox 由 App 消息同步协调器按 Core `nextRetryAt` 串行重试；这属于 application scheduling，不改变 Core 对 outbox、游标和重试状态的事实源所有权。
    - 消息同步的认证拒绝（HTTP 401/403、耗尽重试后的 `1401` 和设备资格 fence）是终止性 `authRevoked`；普通可重试失败按连续失败时长而非失败次数升级提示。Core commit 后的 Join inbox/会话列表投影刷新异常必须单独标记，不能反向改写为“同步失败”。App 安全诊断只记录 stage/category/稳定 code/HTTP status/count/time，不包含异常正文、身份、cursor、token 或 payload。
    - 无业务消息体但携带 Core `sync` hint 的 realtime 事件必须保留为 sync-only `RealtimeUpdate` 并调度 reliable sync；普通 P3 Direct 的兄弟设备 outgoing 投影来自 sender owner 的 `sync.delta` / `sync.thread_after`，不能由 App 构造 plain own-sync 或升级为 P5。App 使用的稳定 conversationId 只是展示/存储路由，普通 Direct 的不可变 wire identity 仍由 Core 保持为 `direct + peer DID`。
    - Agent 页面以 User Service Inventory 为存在性基线，以 IM Core committed control patch 为运行状态/因果失效信号，以 App pending intent 为短期交互层；realtime control 只触发 reliable sync，不能直接成为 Agent UI 真相。typed account binding 存在时，Agent provider 的 cache/load owner 必须是稳定 `owner_identity_id + account_id`，应用权威 Inventory 后标记同一 owner 与当前 session operation 已加载，不能因 Handle/DID key 不一致阻塞 create pending 首帧。权威 Inventory 中的 runtime Agent 在发布到 UI 前通过 Core Directory 投影 canonical Direct route，失败不伪造 Persona，并由后续 Inventory 对账重试。可见 Agent 页面在 App 前台按 30 秒静默重读 Inventory，以补偿失效信号丢失，页面销毁或 App 后台时不发起对账。

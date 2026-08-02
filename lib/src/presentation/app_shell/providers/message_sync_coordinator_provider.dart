@@ -261,6 +261,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   bool _recoveryRetryPending = false;
   bool _runningRecoveryRetry = false;
   bool _patchReplacementRetryPending = false;
+  Timer? _coreDirectedRetryTimer;
+  SessionEpoch? _coreDirectedRetryEpoch;
   Timer? _failureSurfaceTimer;
   SessionEpoch? _failureSurfaceEpoch;
   bool _disposed = false;
@@ -276,6 +278,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
     _patchReplacementRetryPending = false;
+    _cancelCoreDirectedRetry();
     _cancelFailureSurfaceTimer();
     _lastStartedAt = null;
     _lastFailedAt = null;
@@ -527,6 +530,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         lastError: null,
       );
       var diagnosticsAttempted = false;
+      AppMessageSyncDiagnostics? diagnostics;
       var failureStage = AppMessageSyncFailureStage.prepare;
       try {
         await ref.read(conversationListProvider.notifier).ensurePatchReady();
@@ -549,7 +553,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           );
         }
         diagnosticsAttempted = true;
-        await _refreshDiagnosticsBestEffort(epoch, sessionFence);
+        diagnostics = await _refreshDiagnosticsBestEffort(epoch, sessionFence);
         if (!_isCurrentSync(epoch, sessionFence)) {
           return const RemotePushSyncReceipt(
             disposition: RemotePushSyncDisposition.staleSession,
@@ -571,6 +575,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         if (result.status == MessageSyncStatus.retryableFailure) {
           final failureCode =
               result.errorCode ?? 'message_sync_retryable_failure';
+          _cancelCoreDirectedRetry();
           _recordRetryableFailure(
             epoch: epoch,
             error: MessageSyncCoordinatorFailure(failureCode),
@@ -603,6 +608,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           );
         }
         if (result.status == MessageSyncStatus.recoveryRequired) {
+          _cancelCoreDirectedRetry();
           _resetRetryableFailureTracking();
           state = state.copyWith(
             status: MessageSyncCoordinatorStatus.recoveryRequired,
@@ -624,6 +630,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
           );
         }
         _resetRetryableFailureTracking();
+        if (diagnostics != null) {
+          _reconcileCoreDirectedRetry(epoch, diagnostics);
+        }
         state = state.copyWith(lastError: null);
 
         try {
@@ -700,6 +709,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         _recoveryRetryPending = false;
         _runningRecoveryRetry = false;
         _patchReplacementRetryPending = false;
+        _cancelCoreDirectedRetry();
         final failure = _classifyFailure(error, failureStage);
         if (failure.category == AppMessageSyncFailureCategory.auth) {
           _recordAuthFailure(
@@ -793,6 +803,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
     _patchReplacementRetryPending = false;
+    _cancelCoreDirectedRetry();
     _cancelFailureSurfaceTimer();
     _notifiedCommittedEventIds.clear();
     _notifiedCommittedMessageIds.clear();
@@ -906,6 +917,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   }) {
     final now = DateTime.now();
     _cancelPendingTimerAndCompleteWaiters();
+    _cancelCoreDirectedRetry();
     _recoveryRetryPending = false;
     _runningRecoveryRetry = false;
     _resetRetryableFailureTracking();
@@ -1018,16 +1030,16 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     return _isCurrentEpoch(epoch) && _isCurrentSession(fence);
   }
 
-  Future<void> _refreshDiagnosticsBestEffort(
+  Future<AppMessageSyncDiagnostics?> _refreshDiagnosticsBestEffort(
     SessionEpoch epoch,
     _MessageSyncSessionFence fence,
   ) async {
     if (!_isCurrentSync(epoch, fence)) {
-      return;
+      return null;
     }
     final service = ref.read(messagingServiceProvider);
     if (service is! MessageSyncDiagnosticsService) {
-      return;
+      return null;
     }
     final attemptSequence = state.diagnosticsRefreshAttemptSequence + 1;
     state = state.copyWith(diagnosticsRefreshAttemptSequence: attemptSequence);
@@ -1035,7 +1047,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       final diagnostics = await (service as MessageSyncDiagnosticsService)
           .syncDiagnostics();
       if (!_isCurrentSync(epoch, fence)) {
-        return;
+        return null;
       }
       state = state.copyWith(
         lastSuccessAt: diagnostics.lastSuccessAt,
@@ -1049,13 +1061,57 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         diagnosticsRefreshSuccessSequence: attemptSequence,
         diagnosticsRefreshedAt: DateTime.now(),
       );
+      return diagnostics;
     } catch (error) {
       _messageSyncTrace(
         'diagnostics.refresh_failed',
         fields: <String, Object?>{'error_type': error.runtimeType},
       );
+      return null;
+    }
+  }
+
+  void _reconcileCoreDirectedRetry(
+    SessionEpoch epoch,
+    AppMessageSyncDiagnostics diagnostics,
+  ) {
+    final retryState = diagnostics.retryState;
+    final shouldRetry =
+        diagnostics.pendingMutationCount > 0 &&
+        (retryState == AppMessageSyncRetryState.pending ||
+            retryState == AppMessageSyncRetryState.scheduled);
+    if (!shouldRetry) {
+      _cancelCoreDirectedRetry();
       return;
     }
+
+    final now = DateTime.now();
+    final retryAt = retryState == AppMessageSyncRetryState.scheduled
+        ? diagnostics.nextRetryAt
+        : null;
+    final delay = retryAt == null ? minInterval : retryAt.difference(now);
+    _coreDirectedRetryTimer?.cancel();
+    _coreDirectedRetryEpoch = epoch;
+    state = state.copyWith(automaticRetryPending: true);
+    _coreDirectedRetryTimer = Timer(
+      delay > Duration.zero ? delay : Duration.zero,
+      () {
+        _coreDirectedRetryTimer = null;
+        final retryEpoch = _coreDirectedRetryEpoch;
+        _coreDirectedRetryEpoch = null;
+        if (_disposed || retryEpoch == null || !_isCurrentEpoch(retryEpoch)) {
+          return;
+        }
+        state = state.copyWith(automaticRetryPending: false);
+        unawaited(requestSync('core_directed_retry', immediate: true));
+      },
+    );
+  }
+
+  void _cancelCoreDirectedRetry() {
+    _coreDirectedRetryTimer?.cancel();
+    _coreDirectedRetryTimer = null;
+    _coreDirectedRetryEpoch = null;
   }
 
   void _dispatchCommittedIncomingNotifications(
@@ -1290,6 +1346,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     _disposed = true;
     _sessionSubscription.close();
     _cancelPendingTimerAndCompleteWaiters();
+    _cancelCoreDirectedRetry();
     _cancelFailureSurfaceTimer();
     _completeQueuedWaiters(_queuedAfterActive);
     _queuedAfterActive = null;
