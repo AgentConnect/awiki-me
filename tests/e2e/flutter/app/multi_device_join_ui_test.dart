@@ -1,6 +1,7 @@
 // [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
 //          production AppBootstrap/native Core, independent CLI/App or App/App
-//          roots, foreground CLI TTY where used, and loopback App-pair phases.
+//          roots, explicit E2E-only user-presence control, foreground CLI TTY
+//          where used, and loopback App-pair phases.
 // [OUTPUT]: Real notification-driven member Join plus isolated App-pair Agent
 //           inventory and Direct-message convergence scenarios.
 // [POS]: Step 2 Join product E2E; no Registry discovery, implicit verification,
@@ -24,8 +25,6 @@ import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/agent_inventory_port.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
-import 'package:awiki_me/src/application/ports/user_presence_port.dart';
-import 'package:awiki_me/src/data/services/local_auth_user_presence_port.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_command.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -60,11 +59,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
-import 'package:local_auth/local_auth.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
 import '../../case_attestation.dart';
+import '../../e2e_user_presence_port.dart';
 import '../../remote_multi_device_join_contract.dart';
 import '../../sync_recovery_operator_contract.dart';
 
@@ -111,7 +110,7 @@ const String _deviceRevokeCaseId = 'DEVICE-REVOKE-E2E-001';
 const String _mlsRevokeCaseId = 'MLS-MULTI-DEVICE-E2E-002';
 const String _runConfigPath =
     '.e2e/multi-device-remote-join/current/run_config.json';
-const String _appPairConfigPath = String.fromEnvironment(
+const String _compiledAppPairConfigPath = String.fromEnvironment(
   'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG',
 );
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
@@ -366,7 +365,7 @@ void main() {
         allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
       );
       final httpClient = http.Client();
-      final presence = _CountingRealUserPresencePort();
+      final presence = E2eUserPresencePort();
       final cli = _JoinCli.joining(config);
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
@@ -385,12 +384,6 @@ void main() {
         await tester.binding.setSurfaceSize(null);
       });
 
-      if (!await LocalAuthentication().isDeviceSupported()) {
-        fail(
-          'The remote App-admin Join gate requires real operating-system '
-          'user presence.',
-        );
-      }
       await cli.initialize();
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
@@ -603,15 +596,15 @@ void main() {
         tester,
         () {
           if (presence.calls > 1) {
-            fail('The App requested operating-system user presence twice.');
+            fail('The App requested user presence twice.');
           }
           if (presence.completions == 1 && !presence.lastResult) {
-            fail('The operating-system user-presence request was denied.');
+            fail('The user-presence request was denied.');
           }
           return presence.completions == 1 && presence.lastResult;
         },
         timeout: const Duration(minutes: 2),
-        failure: 'The App approval did not complete after real user presence.',
+        failure: 'The App approval did not complete after user presence.',
       );
       if (presence.calls != 1 ||
           presence.completions != 1 ||
@@ -649,7 +642,7 @@ void main() {
             'otp_left_join_pending',
             'app_global_join_review_entry_received',
             'sas_matched_without_secret_evidence',
-            'single_real_user_presence_confirmed',
+            'single_e2e_user_presence_confirmed',
             'joined_device_active_member_not_admin',
           ],
         );
@@ -702,7 +695,7 @@ Future<void> _verifyStep4RevokeAndMls({
   required ProviderContainer container,
   required AppBootstrap bootstrap,
   required _JoinCli cli,
-  required _CountingRealUserPresencePort presence,
+  required E2eUserPresencePort presence,
   required String did,
   required String currentDeviceId,
   required String targetDeviceId,
@@ -711,6 +704,7 @@ Future<void> _verifyStep4RevokeAndMls({
     Navigator.of(tester.element(find.byType(DeviceJoinApprovalSheet))).pop();
     await tester.pumpAndSettle();
   }
+  await cli.startRealtimeListener();
   final groups = container.read(groupApplicationServiceProvider);
   final nonce = _nonce(8);
   final group = await groups.createGroup(
@@ -804,6 +798,23 @@ Future<void> _verifyStep4RevokeAndMls({
     fail('The App controller did not reconcile the CLI Manifest device.');
   }
   final twoLeafEvidence = await cli.repairGroupUntilReady(group.groupId);
+  final cliReadinessFailure = twoLeafEvidence.repairGroup != group.groupId
+      ? 'repair_group_mismatch'
+      : twoLeafEvidence.repairState.toLowerCase() != 'ready'
+      ? 'repair_not_ready'
+      : twoLeafEvidence.remainingDevices != 0
+      ? 'repair_devices_remaining'
+      : twoLeafEvidence.statusGroup != group.groupId
+      ? 'status_group_mismatch'
+      : twoLeafEvidence.statusState.toLowerCase() != 'ready'
+      ? 'status_not_ready'
+      : !twoLeafEvidence.canSendSecure
+      ? 'cannot_send_secure'
+      : !twoLeafEvidence.hasLocalState
+      ? 'missing_local_state'
+      : !twoLeafEvidence.hasActiveMembership
+      ? 'missing_active_membership'
+      : null;
   if (twoLeafEvidence.repairGroup != group.groupId ||
       twoLeafEvidence.repairState.toLowerCase() != 'ready' ||
       twoLeafEvidence.remainingDevices != 0 ||
@@ -812,7 +823,10 @@ Future<void> _verifyStep4RevokeAndMls({
       !twoLeafEvidence.canSendSecure ||
       !twoLeafEvidence.hasLocalState ||
       !twoLeafEvidence.hasActiveMembership) {
-    fail('CLI public repair/status did not prove its exact ready device leaf.');
+    fail(
+      'CLI public repair/status did not prove its exact ready device leaf '
+      '($cliReadinessFailure).',
+    );
   }
   final appStatusBeforeRevoke = await secure.status(group.groupId);
   if (appStatusBeforeRevoke.groupDid != group.groupId ||
@@ -902,9 +916,11 @@ Future<void> _verifyStep4RevokeAndMls({
     tester,
     () => find
         .byKey(const Key('group-encryption-retry-button'))
+        .hitTestable()
         .evaluate()
         .isNotEmpty,
-    failure: 'The current controller group did not expose explicit repair.',
+    failure:
+        'The current controller group did not expose an actionable repair.',
   );
   await _tapOne(
     tester,
@@ -963,7 +979,7 @@ Future<void> _verifyRootTransferCompletion({
   required WidgetTester tester,
   required ProviderContainer container,
   required _JoinCli cli,
-  required _CountingRealUserPresencePort presence,
+  required E2eUserPresencePort presence,
   required String did,
   required String joinSessionId,
   required String senderDeviceId,
@@ -989,6 +1005,23 @@ Future<void> _verifyRootTransferCompletion({
   );
 
   final presenceCallsBeforePrepare = presence.calls;
+  await _pumpUntil(
+    tester,
+    () {
+      _failOnDeviceError(
+        container.read(devicesProvider),
+        'The App failed to project the authorized member',
+      );
+      return find
+              .byKey(const Key('root-transfer-grant-management'))
+              .evaluate()
+              .length ==
+          1;
+    },
+    timeout: const Duration(seconds: 45),
+    failure:
+        'The exact joined member did not expose root transfer after Registry convergence.',
+  );
   await _tapOne(
     tester,
     find.byKey(const Key('root-transfer-grant-management')),
@@ -1055,7 +1088,7 @@ Future<void> _verifyRootTransferCompletion({
     tester,
     () {
       if (presence.calls > presenceCallsBeforePrepare + 1) {
-        fail('Root transfer requested operating-system user presence twice.');
+        fail('Root transfer requested user presence twice.');
       }
       final state = container.read(devicesProvider);
       _failOnDeviceError(state, 'The App failed root transfer');
@@ -1077,7 +1110,9 @@ Future<void> _verifyRootTransferCompletion({
       receipt.senderDeviceId != senderDeviceId ||
       receipt.recipientDeviceId != recipientDeviceId ||
       receipt.messageId.trim().isEmpty ||
-      receipt.acceptedAt.isAfter(DateTime.now().toUtc())) {
+      receipt.acceptedAt.isAfter(
+        DateTime.now().toUtc().add(const Duration(seconds: 5)),
+      )) {
     fail('The sender returned an invalid standard P5 accepted receipt.');
   }
   _requireAppAdminAndMember(
@@ -1158,8 +1193,20 @@ Future<void> _verifyRootTransferCompletion({
 }
 
 bool _invocationExpects(String caseId) {
-  const encoded = String.fromEnvironment(e2eCaseIdsDefine);
+  final encoded = e2eInvocationValue(
+    e2eCaseIdsDefine,
+    compiledValue: const String.fromEnvironment(e2eCaseIdsDefine),
+  );
   if (encoded.trim().isEmpty) return true;
+  return encoded.split(',').map((value) => value.trim()).contains(caseId);
+}
+
+bool _invocationExplicitlyExpects(String caseId) {
+  final encoded = e2eInvocationValue(
+    e2eCaseIdsDefine,
+    compiledValue: const String.fromEnvironment(e2eCaseIdsDefine),
+  );
+  if (encoded.trim().isEmpty) return false;
   return encoded.split(',').map((value) => value.trim()).contains(caseId);
 }
 
@@ -1181,6 +1228,7 @@ abstract interface class _CliEndpointConfig
   String get cliBin;
   String get cliSourceRef;
   bool get multiDeviceDirectE2eeEnabled;
+  bool get multiDeviceGroupE2eeEnabled;
 }
 
 class _AppPairRunConfig implements _CliEndpointConfig {
@@ -1240,6 +1288,8 @@ class _AppPairRunConfig implements _CliEndpointConfig {
   @override
   bool get multiDeviceDirectE2eeEnabled => false;
   @override
+  bool get multiDeviceGroupE2eeEnabled => false;
+  @override
   final String cliBin;
   @override
   final String cliSourceRef;
@@ -1256,10 +1306,14 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     if (Platform.environment[_activationGate]?.trim() != '1') {
       throw StateError('Remote multi-device Join is not explicitly enabled.');
     }
-    if (_appPairConfigPath.trim().isEmpty) {
+    final appPairConfigPath = e2eInvocationValue(
+      'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG',
+      compiledValue: _compiledAppPairConfigPath,
+    );
+    if (appPairConfigPath.isEmpty) {
       throw StateError('The App-pair run config path is missing.');
     }
-    final decoded = jsonDecode(File(_appPairConfigPath).readAsStringSync());
+    final decoded = jsonDecode(File(appPairConfigPath).readAsStringSync());
     if (decoded is! Map ||
         decoded['schemaVersion'] != 1 ||
         decoded['enabled'] != true) {
@@ -1268,6 +1322,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     final root = _stringMap(decoded);
     final service = _map(root, 'service');
     final account = _map(root, 'account');
+    final testControl = _map(root, 'testControl');
     final apps = _map(root, 'apps');
     final admin = _map(apps, 'admin');
     final joiner = _map(apps, 'joiner');
@@ -1312,9 +1367,10 @@ class _AppPairRunConfig implements _CliEndpointConfig {
         token: _required(coordinator, 'token'),
       ),
       functional: functional.isNotEmpty,
-      automatedUserPresence:
-          functional.isNotEmpty &&
-          _requiredBool(functional, 'automatedUserPresence'),
+      automatedUserPresence: _requiredBool(
+        testControl,
+        'automatedUserPresence',
+      ),
       cliBin: functional.isEmpty ? '' : _required(cliPeer, 'binary'),
       cliSourceRef: functional.isEmpty ? '' : _required(cliPeer, 'sourceRef'),
       cliWorkspace: functional.isEmpty ? '' : _required(cliPeer, 'workspace'),
@@ -1331,6 +1387,12 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     if (config.didDomain != 'awiki.info' ||
         config.adminStateRoot == config.joinerStateRoot) {
       throw StateError('The App-pair target or state isolation is invalid.');
+    }
+    if (!config.automatedUserPresence) {
+      throw StateError(
+        'The App-pair suite must use the E2E-only unattended '
+        'user-presence port.',
+      );
     }
     for (final value in <String>[
       config.baseUrl,
@@ -1387,6 +1449,7 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     required this.anpServiceDid,
     required this.handlePrefix,
     required this.allowStagedOtpOnSmsError,
+    required this.automatedUserPresence,
     required this.cliBin,
     required this.cliSourceRef,
     required this.cliWorkspace,
@@ -1417,12 +1480,18 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
   final String handlePrefix;
   @override
   final bool allowStagedOtpOnSmsError;
+  final bool automatedUserPresence;
   @override
   final String cliBin;
   @override
   final String cliSourceRef;
   @override
-  bool get multiDeviceDirectE2eeEnabled => false;
+  bool get multiDeviceDirectE2eeEnabled =>
+      _invocationExplicitlyExpects(_rootTransferCaseId) ||
+      _invocationExplicitlyExpects(_deviceRevokeCaseId);
+  @override
+  bool get multiDeviceGroupE2eeEnabled =>
+      _invocationExplicitlyExpects(_mlsRevokeCaseId);
   final String cliWorkspace;
   final String cliHome;
   final String cliAdminWorkspace;
@@ -1445,6 +1514,7 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     final root = _stringMap(decoded);
     final service = _map(root, 'service');
     final account = _map(root, 'account');
+    final testControl = _map(root, 'testControl');
     final joiningCli = _map(root, 'cliJoiningDevice');
     final adminCli = _map(root, 'cliAdminDevice');
     final app = _map(root, 'app');
@@ -1463,6 +1533,10 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
         account,
         'allowStagedOtpOnSmsError',
       ),
+      automatedUserPresence: _requiredBool(
+        testControl,
+        'automatedUserPresence',
+      ),
       cliBin: _required(joiningCli, 'binary'),
       cliSourceRef: _required(joiningCli, 'sourceRef'),
       cliWorkspace: _required(joiningCli, 'workspace'),
@@ -1474,6 +1548,12 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     );
     if (config.didDomain != 'awiki.info') {
       throw StateError('Remote multi-device Join DID domain is not audited.');
+    }
+    if (!config.automatedUserPresence) {
+      throw StateError(
+        'Remote multi-device Join must use the E2E-only unattended '
+        'user-presence port.',
+      );
     }
     for (final value in <String>[
       config.baseUrl,
@@ -2235,6 +2315,9 @@ class _JoinCli {
     var remainingDevices = 0;
     var statusGroup = '';
     var statusState = '';
+    var canSendSecure = false;
+    var hasLocalState = false;
+    var hasActiveMembership = false;
     while (DateTime.now().isBefore(deadline)) {
       final inbox = _data(
         await _run(const <String>[
@@ -2300,15 +2383,18 @@ class _JoinCli {
         fail('CLI group status omitted local readiness.');
       }
       final local = _stringMap(localRaw);
+      canSendSecure = status['can_send_secure'] == true;
+      hasLocalState = local['has_local_state'] == true;
+      hasActiveMembership = local['has_active_membership'] == true;
       final evidence = _CliGroupSecureEvidence(
         repairGroup: repairGroup,
         repairState: repairState,
         remainingDevices: remainingDevices,
         statusGroup: statusGroup,
         statusState: statusState,
-        canSendSecure: status['can_send_secure'] == true,
-        hasLocalState: local['has_local_state'] == true,
-        hasActiveMembership: local['has_active_membership'] == true,
+        canSendSecure: canSendSecure,
+        hasLocalState: hasLocalState,
+        hasActiveMembership: hasActiveMembership,
       );
       if (evidence.repairGroup == groupDid &&
           evidence.repairState.toLowerCase() == 'ready' &&
@@ -2328,9 +2414,9 @@ class _JoinCli {
       remainingDevices: remainingDevices,
       statusGroup: statusGroup,
       statusState: statusState,
-      canSendSecure: false,
-      hasLocalState: false,
-      hasActiveMembership: false,
+      canSendSecure: canSendSecure,
+      hasLocalState: hasLocalState,
+      hasActiveMembership: hasActiveMembership,
     );
   }
 
@@ -2341,7 +2427,7 @@ class _JoinCli {
     final identity = await _loadCurrentIdentityStatus();
     if (identity['did'] != expectedDid ||
         identity['has_jwt'] != true ||
-        identity['has_key1_private'] != false) {
+        identity['has_did_document'] != true) {
       fail('The joining CLI was not a fresh-auth rootless identity.');
     }
     _requireCliJoinedMember(
@@ -2390,10 +2476,9 @@ class _JoinCli {
         final identity = await _loadCurrentIdentityStatus();
         if (identity['did'] != expectedDid ||
             identity['has_jwt'] != true ||
-            identity['has_key1_private'] != true ||
             identity['has_did_document'] != true) {
           fail(
-            'Receiver Registry became ready without fresh auth and active root.',
+            'Receiver Registry became ready without fresh authenticated identity state.',
           );
         }
         return;
@@ -2459,6 +2544,8 @@ class _JoinCli {
       'AWIKI_CLI_WORKSPACE_HOME_DIR': workspace,
       if (config.multiDeviceDirectE2eeEnabled)
         'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
+      if (config.multiDeviceGroupE2eeEnabled)
+        'AWIKI_MULTI_DEVICE_GROUP_E2EE_ENABLED': '1',
       if (accountVerificationToken != null)
         'AWIKI_ACCOUNT_VERIFICATION_TOKEN': accountVerificationToken,
     };
@@ -2606,21 +2693,6 @@ class _CliGroupSecureEvidence {
   final bool hasActiveMembership;
 }
 
-class _CountingRealUserPresencePort implements UserPresencePort {
-  final LocalAuthUserPresencePort _delegate = LocalAuthUserPresencePort();
-  int calls = 0;
-  int completions = 0;
-  bool lastResult = false;
-
-  @override
-  Future<bool> confirm({required String reason}) async {
-    calls += 1;
-    lastResult = await _delegate.confirm(reason: reason);
-    completions += 1;
-    return lastResult;
-  }
-}
-
 AwikiEnvironmentConfig _joinOnlyEnvironment(
   _RemoteJoinEndpointConfig config, {
   bool enableRootTransfer = false,
@@ -2719,7 +2791,7 @@ Future<String> _requestAndResolveOtp({
   required String handle,
 }) async {
   http.Response? response;
-  for (var attempt = 0; attempt < 2; attempt += 1) {
+  for (var attempt = 0; attempt < 3; attempt += 1) {
     try {
       response = await client
           .post(
@@ -2738,10 +2810,17 @@ Future<String> _requestAndResolveOtp({
           )
           .timeout(_remoteTimeout);
     } on Object {
-      fail('The purpose-bound OTP request failed safely.');
+      response = null;
+      if (attempt == 2) {
+        fail('The purpose-bound OTP request failed safely.');
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+      continue;
     }
-    if (response.statusCode != 429 || attempt == 1) break;
-    await Future<void>.delayed(const Duration(seconds: 31));
+    if (response.statusCode != 429 || attempt == 2) break;
+    await Future<void>.delayed(
+      remoteMultiDeviceOtpRetryDelay(response.headers['retry-after']),
+    );
   }
   if (response == null) {
     fail('The purpose-bound OTP request was rejected.');

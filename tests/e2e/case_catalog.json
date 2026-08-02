@@ -2259,15 +2259,15 @@
       "caseId": "DEVICE-JOIN-E2E-002",
       "feature": "AWiki Me admin-side approval defaults to member",
       "layer": "remote_product_ui_security",
-      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; macOS can present real LocalAuthentication; AWiki Me and an exact-revision CLI use independent native Core roots; OTPs are resolved through validated fixed argv; the authenticated App runtime is connected before the CLI starts Join. SMS request delivery is 200-only unless the explicit operator staged-OTP flag and exact reviewed SSH resolver are used.",
-      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, approve the fixed member role through one real operating-system user-presence prompt, and poll the new-device result.",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the runner explicitly enables the E2E-only unattended UserPresencePort; AWiki Me and an exact-revision CLI use independent native Core roots; OTPs are resolved through validated fixed argv; the authenticated App runtime is connected before the CLI starts Join. SMS request delivery is 200-only unless the explicit operator staged-OTP flag and exact reviewed SSH resolver are used.",
+      "action": "Bootstrap AWiki Me as the ready admin, start an independent CLI Join request while the App is on its normal authenticated shell, wait for system_notification_changed to refresh the Core Join inbox and expose the global review entry, open that entry to start verification exactly once, compare the independently derived six-digit SAS, approve the fixed member role through exactly one test-scoped user-presence decision, and poll the new-device result.",
       "exactOracles": [
         "The independently bootstrapped App admin and CLI requester use distinct fresh native Core roots; the OTP-authenticated request remains pending until the App receives its system notification, refreshes the typed Core Join inbox independently of general message sync, exposes the global review entry, and the user explicitly starts verification.",
-        "The App-visible and CLI-derived six-digit SAS match without recording either value, and exactly one delegated real user-presence confirmation succeeds.",
+        "The App-visible and CLI-derived six-digit SAS match without recording either value, and exactly one E2E-only user-presence confirmation succeeds without changing the production LocalAuthentication implementation.",
         "Both Registries contain exactly two devices: the joining protocol_device_id is the CLI current active member with management_ready false, while the original App device remains the unique current active management-ready admin."
       ],
       "negativeChecks": [
-        "A fake provider, copied or non-fresh local state, static OTP, unsafe resolver argv, unapproved or malformed SMS-error response, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
+        "A production user-presence override, copied or non-fresh local state, static OTP, unsafe resolver argv, unapproved or malformed SMS-error response, Registry discovery, direct requestSync/refreshJoinInbox calls, pre-opening Devices to bypass the global entry, split claim or admin polling, repeated verification start, secret-bearing evidence, mismatched SAS, an enabled approval action before SAS confirmation, any admin-role control, a denied or repeated user-presence result, mismatched protocol_device_id, or an active-admin joining result prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2285,7 +2285,7 @@
           "DEVICE-JOIN-E2E-002:otp_left_join_pending",
           "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
           "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
-          "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed",
+          "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
           "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
         ],
         "exactOracleAssertions": [
@@ -2296,7 +2296,7 @@
           ],
           [
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
-            "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed"
+            "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed"
           ],
           [
             "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
@@ -2308,7 +2308,7 @@
             "DEVICE-JOIN-E2E-002:otp_left_join_pending",
             "DEVICE-JOIN-E2E-002:app_global_join_review_entry_received",
             "DEVICE-JOIN-E2E-002:sas_matched_without_secret_evidence",
-            "DEVICE-JOIN-E2E-002:single_real_user_presence_confirmed",
+            "DEVICE-JOIN-E2E-002:single_e2e_user_presence_confirmed",
             "DEVICE-JOIN-E2E-002:joined_device_active_member_not_admin"
           ]
         ]
@@ -2318,15 +2318,15 @@
       "caseId": "DEVICE-JOIN-E2E-004",
       "feature": "Two isolated AWiki Me Apps complete member Join on one macOS host",
       "layer": "remote_product_ui_security",
-      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; macOS can present real LocalAuthentication; the runner builds two Debug App bundles with distinct stable bundle identifiers, build directories, and fresh native Core state roots; OTPs are resolved through validated fixed argv.",
-      "action": "Launch and concurrently drive one admin App and one joining App, start Join through the joining App UI, require the authenticated admin runtime to expose the listener-delivered global review entry without test-side inbox refresh, explicitly start verification, compare both locally rendered SAS values only in the loopback coordinator memory, approve through one real operating-system user-presence prompt, and wait for both Registry projections.",
+      "preconditions": "The dedicated phone allowlist is enabled on awiki.info; the runner explicitly enables the E2E-only unattended UserPresencePort; the runner builds two Debug App bundles with distinct stable bundle identifiers, build directories, and fresh native Core state roots; OTPs are resolved through validated fixed argv.",
+      "action": "Launch and concurrently drive one admin App and one joining App, start Join through the joining App UI, require the authenticated admin runtime to expose the listener-delivered global review entry without test-side inbox refresh, explicitly start verification, compare both locally rendered SAS values only in the loopback coordinator memory, approve through exactly one test-scoped user-presence decision, and wait for both Registry projections.",
       "exactOracles": [
         "Two real AWiki Me processes use distinct bundle identifiers, build products, and fresh native Core roots; the joining App remains pending without SAS until the admin user explicitly starts verification from the global Join review entry.",
-        "The two App-rendered six-digit SAS values match only inside the authenticated loopback coordinator, no SAS is written to config, logs, attestation, or reports, and exactly one real user-presence confirmation succeeds.",
+        "The two App-rendered six-digit SAS values match only inside the authenticated loopback coordinator, no SAS is written to config, logs, attestation, or reports, and exactly one E2E-only user-presence confirmation succeeds without changing the production LocalAuthentication implementation.",
         "Both App Core Registries converge to exactly the same two devices: the original App remains the management-ready admin and the joining App becomes the current active rootless member."
       ],
       "negativeChecks": [
-        "A copied/shared state root, shared bundle or build product, fake Core, direct requestSync/refreshJoinInbox calls, pre-opened Devices page, implicit or repeated verification, persisted or reported SAS, mismatched SAS/session/device, approval before explicit SAS confirmation, denied or repeated user presence, admin-role joining result, or either Registry failing exact two-device convergence prevents pass attestation."
+        "A production user-presence override, copied/shared state root, shared bundle or build product, fake Core, direct requestSync/refreshJoinInbox calls, pre-opened Devices page, implicit or repeated verification, persisted or reported SAS, mismatched SAS/session/device, approval before explicit SAS confirmation, denied or repeated user presence, admin-role joining result, or either Registry failing exact two-device convergence prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_device_join_residual_ledger",
@@ -2344,7 +2344,7 @@
           "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
           "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received",
           "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
-          "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed",
+          "DEVICE-JOIN-E2E-004:single_e2e_user_presence_confirmed",
           "DEVICE-JOIN-E2E-004:both_app_registries_converged"
         ],
         "exactOracleAssertions": [
@@ -2355,7 +2355,7 @@
           ],
           [
             "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
-            "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed"
+            "DEVICE-JOIN-E2E-004:single_e2e_user_presence_confirmed"
           ],
           [
             "DEVICE-JOIN-E2E-004:both_app_registries_converged"
@@ -2367,7 +2367,7 @@
             "DEVICE-JOIN-E2E-004:joiner_pending_without_sas",
             "DEVICE-JOIN-E2E-004:admin_global_join_review_entry_received",
             "DEVICE-JOIN-E2E-004:sas_matched_in_memory_without_evidence",
-            "DEVICE-JOIN-E2E-004:single_real_user_presence_confirmed",
+            "DEVICE-JOIN-E2E-004:single_e2e_user_presence_confirmed",
             "DEVICE-JOIN-E2E-004:both_app_registries_converged"
           ]
         ]
@@ -2400,11 +2400,11 @@
       "caseId": "ROOT-TRANSFER-E2E-001",
       "feature": "AWiki Me management-device root import",
       "layer": "product_ui",
-      "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots, exact protocol device IDs, and macOS can present real LocalAuthentication.",
-      "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, confirm operating-system user presence once, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
+      "preconditions": "An accepted Step 3 contract has established a management-ready AWiki Me admin and an independent CLI active member with management_ready false; both use fresh native Core roots and exact protocol device IDs, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
+      "action": "Open Devices on the ready AWiki Me admin, select the exact eligible member, let Core prepare a safe recipient summary, complete exactly one E2E-only user-presence decision, stop the App sender flow at standard P5 accepted, then bring the CLI receiver online to import and complete readiness directly.",
       "exactOracles": [
         "Before receiver completion, the exact recipient remains active member with management_ready false; no Init-only pending, sender waiting, or App-owned transfer state is projected.",
-        "The App displays only Core's safe recipient summary, delegates exactly one real user-presence check, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
+        "The App displays only Core's safe recipient summary, delegates exactly one E2E-only user-presence decision without changing production LocalAuthentication, and treats the closed standard P5 accepted receipt as the end of the sender operation.",
         "The CLI receiver imports the envelope, completes directly with User Service, and becomes active admin with management_ready true after fresh device auth and Registry convergence; Root control never appears in either product inbox."
       ],
       "negativeChecks": [
@@ -2502,8 +2502,8 @@
       "caseId": "DEVICE-REVOKE-E2E-001",
       "feature": "AWiki Me permanent device revoke",
       "layer": "remote_product_ui_security",
-      "preconditions": "The same isolated awiki.info identity has two active management-ready devices after encrypted root import; the current AWiki Me device is a ready admin and real macOS user presence is available.",
-      "action": "From the real Devices page, select the non-current device, accept the visible destructive confirmation, complete one fresh operating-system user-presence check, and wait for the authoritative Registry projection.",
+      "preconditions": "The same isolated awiki.info identity has two active management-ready devices after encrypted root import; the current AWiki Me device is a ready admin, and the unattended suite uses the test-scoped user-presence port while production LocalAuthentication remains unchanged.",
+      "action": "From the real Devices page, select the non-current device, accept the visible destructive confirmation, complete one fresh E2E-only user-presence decision, and wait for the authoritative Registry projection.",
       "exactOracles": [
         "The target becomes revoked and loses its destructive action only after the Core mutation and Registry refresh, while the current AWiki Me device remains the active management-ready admin."
       ],
@@ -3338,12 +3338,12 @@
     },
     {
       "caseId": "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001",
-      "feature": "Real recovery exposes only typed product-safe sync diagnostics",
+      "feature": "Post-recovery state exposes only typed product-safe sync diagnostics",
       "layer": "remote_product_ui",
       "preconditions": "An existing joined replica enters the reviewed real compact-recovery flow through normal App lifecycle resume.",
-      "action": "Observe the product coordinator across recovery, then inspect only its typed diagnostics projection after the reliable chain completes.",
+      "action": "Resume through the Core-owned one-call compact recovery chain, allow the product coordinator to honor any Core-provided local-mutation retry deadline, then inspect only its typed diagnostics projection after the serialized reliable chain completes.",
       "exactOracles": [
-        "Recovery-required, recovering, or Core recovering mode is observed and the coordinator returns to a successful idle state.",
+        "Core closes compact recovery within one syncNow call, any pending or scheduled local mutation is retried by the product coordinator at the Core-provided deadline, and the coordinator returns to a successful idle state without requiring Flutter to observe Rust-internal transient recovery phases.",
         "Diagnostics expose a non-negative pending mutation count, closed dirty-domain/retry values, and last-success time.",
         "The product refresh attempt and success sequences both advance after recovery, are equal, and mark the serialized observation current.",
         "The E2E-safe diagnostics projection contains no cursor, epoch, account/device identifier, recovery token, message content, or payload field."
@@ -3365,14 +3365,14 @@
         "assertionIds": [
           "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
           "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
-          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery",
+          "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:compact_recovery_closed_by_core_sync_now",
           "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery",
           "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
         ],
         "exactOracleAssertions": [
           [
             "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
-            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery"
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:compact_recovery_closed_by_core_sync_now"
           ],
           [
             "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
@@ -3389,7 +3389,7 @@
           [
             "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:typed_diagnostics_refreshed_after_real_sync",
             "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:pending_mutation_count_reported_as_non_negative_count",
-            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:recovery_state_observed_during_compact_recovery",
+            "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:compact_recovery_closed_by_core_sync_now",
             "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_refresh_sequence_advanced_after_recovery",
             "DEVICE-MESSAGE-DIAGNOSTICS-E2E-001:diagnostics_projection_excluded_sensitive_fields"
           ]

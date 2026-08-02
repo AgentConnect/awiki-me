@@ -22,6 +22,7 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'joiner\u0000authorized': <String>{'adminDeviceId', 'joinedDeviceId'},
   'admin\u0000complete': <String>{},
   'joiner\u0000functional_ready': <String>{},
+  'joiner\u0000functional_tail_only_verified': <String>{},
   'admin\u0000functional_agents_created': <String>{
     'daemonDid',
     'daemonHandle',
@@ -29,6 +30,8 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
     'codexHandle',
     'claudeDid',
     'claudeHandle',
+    'archiveDid',
+    'archiveHandle',
   },
   'joiner\u0000functional_agents_converged': <String>{},
   'joiner\u0000functional_agent_prompt_sent': <String>{
@@ -36,7 +39,13 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
     'messageId',
   },
   'admin\u0000functional_agent_prompt_visible': <String>{},
-  'admin\u0000functional_peer_ready': <String>{'peerDid', 'peerHandle'},
+  'admin\u0000functional_peer_ready': <String>{
+    'peerDid',
+    'peerHandle',
+    'conversationId',
+    'historicalMessageId',
+    'historicalText',
+  },
   'admin\u0000functional_outbound_sent': <String>{
     'conversationId',
     'messageId',
@@ -58,6 +67,47 @@ const Map<String, Set<String>> _checkpointFieldsByRoute = <String, Set<String>>{
   'admin\u0000functional_post_anchor_sent': <String>{'messageId'},
   'joiner\u0000functional_post_anchor_visible': <String>{},
   'joiner\u0000functional_agent_observer_ready': <String>{},
+  'joiner\u0000account_state_stage4_baseline_ready': <String>{},
+  'admin\u0000account_state_agent_renamed': <String>{'agentDid', 'displayName'},
+  'joiner\u0000account_state_agent_rename_converged': <String>{},
+  'admin\u0000account_state_agent_unbound': <String>{'agentDid'},
+  'joiner\u0000account_state_agent_unbind_converged': <String>{},
+  'admin\u0000account_state_archive_fixture_ready': <String>{
+    'agentDid',
+    'displayName',
+    'handle',
+  },
+  'joiner\u0000account_state_archive_fixture_converged_active': <String>{},
+  'admin\u0000account_state_archive_product_delete_completed': <String>{
+    'agentDid',
+  },
+  'joiner\u0000account_state_archive_converged': <String>{},
+  'admin\u0000account_state_agent_deleted': <String>{'agentDid'},
+  'joiner\u0000account_state_agent_delete_converged': <String>{},
+  'admin\u0000account_state_profile_updated': <String>{'displayName', 'bio'},
+  'joiner\u0000account_state_profile_converged': <String>{},
+  'admin\u0000account_state_isolation_fixture_ready': <String>{
+    'agentDid',
+    'displayName',
+  },
+  'joiner\u0000account_state_isolation_fixture_converged': <String>{},
+  'admin\u0000account_state_isolation_mutated': <String>{
+    'agentDid',
+    'oldDisplayName',
+    'newDisplayName',
+    'profileDisplayName',
+    'messageId',
+    'receiptId',
+  },
+  'joiner\u0000account_state_isolation_recovered': <String>{},
+  'admin\u0000account_state_registry_ready': <String>{},
+  'joiner\u0000account_state_registry_observer_ready': <String>{},
+  'admin\u0000account_state_registry_revoked': <String>{},
+  'joiner\u0000account_state_registry_fence_observed': <String>{},
+  'admin\u0000account_state_post_revoke_message_committed': <String>{
+    'messageId',
+  },
+  'joiner\u0000account_state_revoked_device_auth_fenced': <String>{},
 };
 
 String safeCliFailureDiagnostic({

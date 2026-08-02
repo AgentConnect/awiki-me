@@ -130,19 +130,20 @@ generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
 later self-healing title fail. CLI is only the remote identity/traffic stimulus,
 not the product assertion surface.
 
-`--case multi-device-remote-join` is the operator-confirmed
+`--case multi-device-remote-join` is the explicitly activated, unattended
 `DEVICE-JOIN-E2E-001/002` product-security suite. In one direction a real AWiki
 Me onboarding surface joins an existing CLI ready admin through the production
 foreground TTY approval contract; in the other, a real AWiki Me ready admin
 receives the system notification, starts verification explicitly, and approves
-an independent CLI requester through exactly one real macOS
-LocalAuthentication prompt. Both directions use fresh independent native Core
+an independent CLI requester through exactly one E2E-only user-presence
+decision. Production continues to use macOS LocalAuthentication, which this
+suite does not attest. Both directions use fresh independent native Core
 roots, dynamically resolve purpose-bound OTPs, compare the independently
 derived SAS without recording it, and require the new device to converge as a
 non-admin member in both Registries. The App-new-device direction also restarts
 from the same pending Core session and rejects persisted SAS. The suite fails
 closed unless the dedicated server-side test-phone authorization, JSON-argv OTP resolver, exact
-CLI source revision, and manual system-auth prerequisites are explicit. The
+CLI source revision are explicit. The
 joining CLI exposes its SAS only through the foreground TTY prompt; JSON remains
 redacted and is used only for the public `response_verified` state. The
 optional synthetic-number staged-OTP mode is an explicit operator test path
@@ -187,7 +188,9 @@ Lower-level backend coverage remains separate and must not be relabeled as UI
 acceptance.
 
 Every runner-owned Flutter invocation receives an ignored local attestation
-path through dart-defines. Durable scenarios call
+path. Ordinary Flutter-test suites use dart-defines; reusable App-pair bundles
+receive the same values in their launch environment so a run ID does not
+invalidate the role build. Durable scenarios call
 `E2eCaseAttestationWriter.markPassed` only after the case's business assertions
 complete. Schema-v2 `timings.json` is derived from that scenario-owned evidence:
 `dry_run`, `prepared`, missing, duplicate, skipped, or incomplete case results

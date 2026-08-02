@@ -126,8 +126,9 @@ E2EE 的 rollout gate 默认保持关闭。该用例不发送 OTP，也不声称
 本地 capability gate。该 suite 只覆盖 App 新设备 + CLI 管理设备和 App 管理设备 + CLI
 新设备的消息驱动 member Join。两个方向均使用独立 native Core root、动态一次性 OTP、
 双端 SAS 和场景级 attestation；加入端 CLI 的 SAS 只从前台 TTY 提示读取，结构化 JSON
-必须保持脱敏。`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化 SAS，App 批准要求
-真实 macOS user-presence。专用测试账号、OTP/operator 配置或执行环境尚未全部就绪时，
+必须保持脱敏。`001` 还覆盖 pending Join 的 App 重启恢复且断言不持久化 SAS；`002` 的
+App 批准通过 runner 明确启用的 E2E-only `UserPresencePort` 无人值守执行，正式 App 的
+macOS LocalAuthentication 实现不变且不由该用例证明。专用测试账号、OTP/operator 配置或执行环境尚未全部就绪时，
 这个入口不得声称远端通过。未发布且依赖旧 token pair 的 Handle/Device Recovery runner、
 adapter、UI 和测试已退出 V1；产品只显示明确的“不支持”，不保留可误触发旧协议的远端
 case。
@@ -139,10 +140,10 @@ case。
 `DEVICE-JOIN-E2E-004` 由 `multi-device-app-pair` suite 承载。它在同一台 macOS 上构建并
 并发驱动两个真实 AWiki Me Debug bundle；两端拥有不同的稳定 bundle ID、Flutter build
 root 和 native Core state root。测试只通过加入端 UI、管理端全局 Join 审批入口、真实
-realtime/Core 投影和一次系统 user-presence 推进产品状态，不直接调用 inbox hydration、
+realtime/Core 投影和一次 E2E-only user-presence 决定推进产品状态，不直接调用 inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()`。跨进程 coordinator 仅在 loopback 内交换阶段
 checkpoint，并在内存中返回 SAS 是否匹配；SAS 不进入配置、日志、报告或 attestation。
-真实系统授权的安全 suite 当前仅用于多设备 Join，不能替代其他 suite。
+正式 App 的 LocalAuthentication 实现不变，且不由该无人值守 suite 证明。
 
 无人值守的 `multi-device-app-pair-functional` 使用同一双 bundle/双 Core 隔离模型，但只在
 integration-test provider override 中注入自动确认的 `UserPresencePort`。它不修改生产
@@ -156,6 +157,8 @@ adapter 代替；另一设备即使从未打开 Agent 会话，也必须依靠 I
 sender-side reliable sync 收敛同一 `message_id`。这里的 canonical conversationId
 只是 App 展示/存储路由；Core 仍须把普通 Direct 历史保存为 `direct + peer DID` wire
 identity，再与发送设备的本地投影合并，不能通过放宽 wire-conflict 校验让用例通过。
+重复使用同一个 `run-id` 时，runner 会先重置双 App、Daemon 和 CLI 的隔离运行态目录，
+但保留 App-pair build/artifact 目录，以便增量编译且不会继承上一次的身份状态。
 
 `DEVICE-JOIN-E2E-003`、`ROOT-TRANSFER-E2E-002` 和
 `MLS-MULTI-DEVICE-E2E-001` 为 planned、不可执行边界。`ROOT-TRANSFER-E2E-001`
@@ -282,7 +285,7 @@ closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
 providers. The remote Join case remains separate and is not included in this
 suite's pass attestation.
 
-Run the operator-confirmed remote bidirectional App + CLI member Join only
+Run the explicitly activated remote bidirectional App + CLI member Join only
 after the dedicated ali deployment and account have been reviewed:
 
 ```bash
@@ -303,9 +306,10 @@ Every argv item rejects whitespace, newlines, shell metacharacters and
 multi-command strings; a nested `bash`/`sh -c` after `ssh` is also rejected.
 The ali-side services must allow the dedicated phone hash and support the
 message-driven member Join contract. The CLI must be built from exactly the
-configured revision. The macOS operator must complete every real
-LocalAuthentication prompt; the test only counts and delegates those prompts
-and never injects success.
+configured revision. The runner installs an E2E-only UserPresencePort and
+requires exactly one successful decision, so this suite is unattended.
+Production continues to use LocalAuthentication, which this suite does not
+attest.
 
 By default the purpose-bound `/user-service/auth/sms-codes` request remains
 strictly 200-only. For the user-authorized synthetic test number, an explicit
@@ -315,6 +319,9 @@ operator-only mode may be added to the command above:
 AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1
 ```
 
+An HTTP 429 remains a real rate-limit response, not a staged-SMS condition.
+The runner honors the bounded `Retry-After` header before retrying the HTTP
+request and never invokes the OTP resolver merely because it was rate-limited.
 This flag is accepted only with the exact reviewed resolver argv shown above.
 It permits one non-retried HTTP 503 only when the response media type is
 `application/problem+json` and its object contains exactly `type`, `title`,
@@ -329,7 +336,7 @@ exactly six ASCII digits. Any other status, content type, key, value, resolver
 output, or malformed flag fails closed without recording the response body.
 The normal HTTP 200 delivery path is unchanged and does not require staged mode.
 
-Run the operator-confirmed one-host App + App member Join with the same reviewed
+Run the unattended one-host App + App member Join with the same reviewed
 remote account inputs:
 
 ```bash
@@ -355,7 +362,17 @@ before it can enter diagnostics; raw driver output is neither streamed nor
 persisted. See
 [multi-device-app-pair-e2e.md](multi-device-app-pair-e2e.md).
 
-For unattended Agent/message convergence, use
+Admin and Joiner use stable, separate build caches under
+`.e2e/build-cache/multi-device-app-pair/`. A rerun therefore preserves
+Flutter/Xcode intermediates and performs only the required incremental
+recompile. Run config and case-attestation values are launch-time environment
+inputs rather than run-specific Dart defines. Identity state, E2E credential
+storage, reports, and copied App bundles remain isolated under the current run
+directory; production Keychain state is not reused.
+
+Both App-pair modes use the test-scoped UserPresencePort; production
+LocalAuthentication remains unchanged and requires the real user. For
+Agent/message convergence, use
 `--case multi-device-app-pair-functional`. That YAML must additionally provide
 the audited Debug CLI binary/source revision and Debug Daemon binary/Handle.
 The functional suite still executes the real Join protocol, native Core,
@@ -384,8 +401,8 @@ The suite first bootstraps a CLI ready admin and joins a newly generated App
 device through the real onboarding UI and foreground CLI approval contract. It
 then bootstraps an independent App ready admin, receives the CLI request through
 the system-notification projection, starts verification explicitly, and
-approves the requester through the real Devices UI and exactly one macOS
-LocalAuthentication prompt. Both directions compare the independently derived
+approves the requester through the real Devices UI and exactly one E2E-only
+user-presence decision. Both directions compare the independently derived
 six-digit SAS without recording it, authorize only the fixed member role, and
 require both Registries to converge with the new device `active-member` and
 `management_ready=false`. The App-new-device direction also restarts from the

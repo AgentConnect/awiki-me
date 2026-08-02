@@ -68,7 +68,7 @@ dart run tool/test_coverage_gate.dart
 dart run tool/validate_test_catalog.dart
 dart run tests/e2e/runner.dart --case smoke
 dart run tests/e2e/runner.dart --case multi-device
-# Requires reviewed awiki.info rollout/account env and real macOS user presence:
+# Requires reviewed awiki.info rollout/account env:
 dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
@@ -80,8 +80,9 @@ dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-aw
 通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的双向真实 Join suite：
 覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI 新设备；根导入、永久 revoke 与 MLS
 由各自独立 suite 承担，不属于 Join suite 的通过结论。两个方向均使用独立 native Core root、动态
-OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高风险操作要求真实 macOS
-user-presence。Join 请求发现必须分别经过 CLI foreground listener 的专用 host event 与
+OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高风险操作在 E2E 中使用
+明确配置、仅测试可见的 `UserPresencePort`，正式 App 仍使用 macOS LocalAuthentication。
+Join 请求发现必须分别经过 CLI foreground listener 的专用 host event 与
 App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 Inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()` 代替唤醒。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
 只执行 Ali 不可变发布、显式受保护配置并禁止写入 Python bytecode，不证明短信送达。
@@ -98,9 +99,10 @@ root 覆盖 Add/Welcome、未来群文本/附件以及精确设备 Remove；实�
 bundle ID、独立 Flutter build root 与独立 native Core state root 的管理端/加入端 App，
 再由两个 driver 并发操作真实 UI。loopback coordinator 只交换生命周期 checkpoint，并在
 内存中比较 SAS；不得调用产品 API、触发 inbox/sync 或持久化秘密。当前该模式仅注册
-`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。独立的
-`multi-device-app-pair-functional` 只在 integration-test provider override 中自动确认
-user presence，用真实双 App、Daemon、Agent Inventory、CLI peer 和远端消息链路验证
+`DEVICE-JOIN-E2E-004`，不能外推为其他 E2E 已具备 App↔App 覆盖。两个双 App suite 都只在
+integration-test provider override 中自动确认 user presence；正式 App 仍使用 macOS
+LocalAuthentication。独立的 `multi-device-app-pair-functional` 用真实双 App、Daemon、
+Agent Inventory、CLI peer 和远端消息链路验证
 Daemon/Codex/Claude Agent 跨设备收敛、普通 P3 消息的双向 sender-side sync 及双端入站消息；它不修改生产授权实现，也不提供 LocalAuthentication 安全 attestation。
 其 Account State operator 固定为 Mac→`ssh ali` 的 managed-release argv，
 不得把本机误建模为 `/home/ecs-user/...` 服务主机；临时 E2E account 由服务器通过

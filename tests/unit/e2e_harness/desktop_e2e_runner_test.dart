@@ -8,6 +8,68 @@ import '../../e2e/runner.dart';
 import '../../e2e/performance_contract.dart';
 
 void main() {
+  group('App-pair runtime isolation', () {
+    test('uses a stable build cache outside per-run state roots', () {
+      final root = Directory('/workspace/awiki-me');
+
+      final cache = appPairBuildCacheRoot(root);
+
+      expect(
+        cache.path,
+        '/workspace/awiki-me/.e2e/build-cache/multi-device-app-pair',
+      );
+      expect(cache.path, isNot(contains('/reports/')));
+      expect(cache.path, isNot(contains('/app-pair/admin-state')));
+      expect(cache.path, isNot(contains('/app-pair/joiner-state')));
+    });
+
+    test('resets runtime roots while preserving incremental build cache', () {
+      final root = Directory.systemTemp.createTempSync(
+        'awiki_app_pair_runtime_reset_',
+      );
+      addTearDown(() => root.deleteSync(recursive: true));
+      final adminState = Directory('${root.path}/admin');
+      final joinerState = Directory('${root.path}/joiner');
+      final daemonState = Directory('${root.path}/daemon');
+      final cliWorkspace = Directory('${root.path}/cli-workspace');
+      final cliHome = Directory('${root.path}/cli-home');
+      for (final directory in <Directory>[
+        adminState,
+        joinerState,
+        daemonState,
+        cliWorkspace,
+        cliHome,
+      ]) {
+        directory.createSync(recursive: true);
+        File('${directory.path}/stale').writeAsStringSync('stale');
+      }
+      final buildMarker = File('${root.path}/build/cache.marker')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('cached');
+
+      resetAppPairRuntimeDirectories(
+        functional: true,
+        adminStateRoot: adminState,
+        joinerStateRoot: joinerState,
+        daemonStateRoot: daemonState,
+        cliWorkspace: cliWorkspace,
+        cliHome: cliHome,
+      );
+
+      for (final directory in <Directory>[
+        adminState,
+        joinerState,
+        daemonState,
+        cliWorkspace,
+        cliHome,
+      ]) {
+        expect(directory.existsSync(), isTrue);
+        expect(directory.listSync(), isEmpty);
+      }
+      expect(buildMarker.readAsStringSync(), 'cached');
+    });
+  });
+
   group('DesktopFlutterBuildIsolation', () {
     test(
       'writes an isolated macOS build directory without changing build/',

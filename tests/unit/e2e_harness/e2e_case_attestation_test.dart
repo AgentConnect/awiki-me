@@ -6,6 +6,25 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../e2e/case_attestation.dart';
 
 void main() {
+  test('invocation values use compile input before runtime environment', () {
+    expect(
+      e2eInvocationValue(
+        e2eCaseRunIdDefine,
+        compiledValue: '',
+        environment: const <String, String>{e2eCaseRunIdDefine: ' run-2 '},
+      ),
+      'run-2',
+    );
+    expect(
+      e2eInvocationValue(
+        e2eCaseRunIdDefine,
+        compiledValue: 'run-1',
+        environment: const <String, String>{e2eCaseRunIdDefine: 'run-2'},
+      ),
+      'run-1',
+    );
+  });
+
   group('E2eCaseAttestation', () {
     test(
       'failure observation is structured and rejects payload-like codes',
