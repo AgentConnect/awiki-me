@@ -22,6 +22,7 @@ import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'language_selection_page.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
@@ -174,7 +175,10 @@ class SettingsPage extends ConsumerWidget {
             leading: leading(
               const _SettingsIcon(role: AwikiMeIconRole.language),
             ),
-            onTap: () => showAppLanguageSheet(context, ref, localeMode),
+            onTap: () => AppNavigator.push<void>(
+              context,
+              (_) => const LanguageSelectionPage(),
+            ),
           ),
         ],
       ),
@@ -367,7 +371,10 @@ class SettingsPage extends ConsumerWidget {
               title: l10n.settingsLanguage,
               trailingText: appLocaleModeLabel(context, localeMode),
               height: appRowHeight,
-              onTap: () => showAppLanguageSheet(context, ref, localeMode),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const LanguageSelectionPage(),
+              ),
             ),
           ],
         ),

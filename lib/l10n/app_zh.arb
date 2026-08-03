@@ -386,6 +386,7 @@
   "deviceJoinErrorFailed": "设备操作失败，请刷新后重试",
   "settingsLanguage": "语言",
   "settingsLanguageSystem": "跟随系统",
+  "settingsLanguageSystemSubtitle": "使用设备语言",
   "settingsLanguageZhHans": "简体中文",
   "settingsLanguageEnglish": "English",
   "settingsPushNotification": "消息推送通知",

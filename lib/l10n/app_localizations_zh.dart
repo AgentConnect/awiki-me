@@ -990,6 +990,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageSystem => '跟随系统';
 
   @override
+  String get settingsLanguageSystemSubtitle => '使用设备语言';
+
+  @override
   String get settingsLanguageZhHans => '简体中文';
 
   @override

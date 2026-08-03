@@ -1045,6 +1045,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageSystem => 'Follow system';
 
   @override
+  String get settingsLanguageSystemSubtitle => 'Use device language';
+
+  @override
   String get settingsLanguageZhHans => '简体中文';
 
   @override

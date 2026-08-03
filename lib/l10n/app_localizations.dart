@@ -1986,6 +1986,12 @@ abstract class AppLocalizations {
   /// **'跟随系统'**
   String get settingsLanguageSystem;
 
+  /// No description provided for @settingsLanguageSystemSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用设备语言'**
+  String get settingsLanguageSystemSubtitle;
+
   /// No description provided for @settingsLanguageZhHans.
   ///
   /// In zh, this message translates to:

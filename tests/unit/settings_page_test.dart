@@ -7,6 +7,7 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/settings/language_selection_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -1024,8 +1025,14 @@ void main() {
     expect(actions.deleteTenantCalls, 0);
   });
 
-  testWidgets('设置页展示语言设置并支持切换选项', (tester) async {
+  testWidgets('设置页进入独立语言页并即时保存选项', (tester) async {
     final localePreferenceService = FakeLocalePreferenceService();
+
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -1038,19 +1045,110 @@ void main() {
     expect(find.text('语言'), findsOneWidget);
     expect(find.text('跟随系统'), findsOneWidget);
 
-    await tester.tap(find.text('语言'));
+    await tester.tap(find.byKey(const Key('settings-language-row')));
     await tester.pumpAndSettle();
 
+    expect(find.byType(LanguageSelectionPage), findsOneWidget);
+    expect(find.byKey(const Key('language-selection-page')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('language-selection-header'))),
+      const Rect.fromLTWH(0, 0, 390, 64),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('language-selection-back-button'))),
+      const Rect.fromLTWH(8, 10, 44, 44),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('language-selection-options'))),
+      const Rect.fromLTWH(16, 88, 358, 208),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-system'))).height,
+      78,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-zh-hans'))).height,
+      64,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-english'))).height,
+      64,
+    );
+    expect(find.text('使用设备语言'), findsOneWidget);
     expect(find.text('简体中文'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('取消'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('language-option-system')),
+        matching: find.byKey(const Key('language-option-selected-check')),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('English').last);
+    await tester.tap(find.byKey(const Key('language-option-english')));
     await tester.pumpAndSettle();
 
     expect(find.text('English'), findsWidgets);
+    expect(find.text('Language'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('language-option-english')),
+        matching: find.byKey(const Key('language-option-selected-check')),
+      ),
+      findsOneWidget,
+    );
     expect(localePreferenceService.saveCalls, 1);
     expect(await localePreferenceService.loadMode(), AppLocaleMode.english);
+
+    await tester.tap(find.byKey(const Key('language-selection-back-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(LanguageSelectionPage), findsNothing);
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+  });
+
+  testWidgets('语言页在小屏横向和放大字体下保持可滚动且无溢出', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: LanguageSelectionPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-system'))).height,
+      117,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-english'))).height,
+      96,
+    );
+
+    tester.view.physicalSize = const Size(568, 320);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('language-option-english')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('language-option-english')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('设置页可进入 Personal Agent 独立设置页并从真实入口启用', (tester) async {

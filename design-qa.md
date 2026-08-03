@@ -75,6 +75,38 @@ final result: passed
 
 ---
 
+## 独立语言选择页 ImageGen → Ardot → P0110 闭环（2026-08-03）
+
+### 比较真值与状态
+
+- 视觉真值：`.design-references/language-page-redesign-20260803/selected-option-1.png`，`852 × 1846`，ImageGen 方案 1。
+- 可编辑设计：Ardot `cocraft://localhost/file/709816693934731` 的 `AWiki Me · Language Selection · v1` 页面；参考图、可编辑当前 APP 与实现契约分列保存。可编辑画面节点 `104:2291` 无裁切、重叠或布局问题。
+- 实现截图：`.design-references/language-page-redesign-20260803/device-final/10-language-release-candidate.png`，P0110 原始 `1264 × 2800`；状态为浅色模式、跟随系统已选中。
+- 归一化：去除 P0110 顶部系统状态栏与底部手势区后，以相同 app-owned 内容比例缩放到 `852 × 1846`。同图比较证据为 `.design-references/language-page-redesign-20260803/device-final/09-imagegen-vs-p0110-final.png`；最终无障碍语义调整未改变视觉。
+- 重点区域：本页只有顶栏和语言列表两处关键区域，完整同图已能清晰判断标题、返回图标、字号、行高、分割线、圆角和选中勾，无需额外局部裁切。
+
+### 比较历史与修正
+
+- 首轮 P2：新路由未自行承接系统安全区，返回图标与 P0110 状态栏发生重叠。已在页面根节点加入顶部 `SafeArea`；修改后返回按钮边界为 `[28,175][182,329]`，与设置页一致。
+- 首轮 P2：列表与顶栏之间留白比 ImageGen 目标偏大。内容顶部间距由 `48` 收敛到 `24`，并同步修改 Ardot 可编辑画面；复比后层级与密度对齐。
+- 无障碍修正：三行现在各自只有一个可点击语义节点，选中项同时具有 `clickable=true` 与 `selected=true`；不再把选中状态放在不可点击的重复节点上。
+
+### 最终检查
+
+- 字体与排版：标题复用全 APP `16 / w600 / 1.25` token；语言主文案 `17`，系统说明 `14`，放大字体时行高随比例扩展。
+- 间距与布局：手机左右 `16`、行内 `20 / 16`、行高 `78 / 64 / 64`，圆角 `12`；320px 小屏、横屏和 2 倍字体组件测试无溢出且可滚动。
+- 颜色：仅使用 AWiki 语义色 `canvas / surface / border / actionBlue / secondaryText`；选中态由蓝色文字和勾选双重表达，不依赖颜色单一传意。
+- 图像与图标：页面无品牌图像或装饰位图；返回与勾选使用同一 Cupertino 矢量图标体系，24pt 视觉尺寸、44pt 以上点击区。
+- 文案：中文、英文和跟随系统说明均来自 l10n；切换后页面标题和选项立即更新。
+- 交互：P0110 已验证“设置 → 语言 → English → 返回设置 → 重进仍选中 → 恢复跟随系统 → 返回消息根页”；Activity 全程保持 AWiki Me，未退出桌面或白屏。
+- 自动化：相关 analyze 无问题；设置页 `24/24`、onboarding 语言入口 `1/1` 通过；既有 `awiki_me_app_localization_test.dart` 中 4 个旧断言在未修改基线同样失败，因此不计为本次回归。
+- 设备最终状态：P0110 已恢复“跟随系统”，AWiki Me 前台停留消息列表；未发送消息、未更改联系人或会话数据，未卸载、未清数据。
+- 深色模式、TalkBack 实际朗读、iOS 与其他 Android 机型保持 **UNVERIFIED**。
+
+final result: passed
+
+---
+
 ## 开屏设计目标与三项能力图标对齐复验（2026-08-03）
 
 > 本轮以 Ardot `01 开屏` 为视觉真值，并修正了原设计稿遗漏的三项能力图标；既有 ImageGen 开屏方向已经包含同一组能力图标，因此不另起视觉方向。未使用 Superpowers 技能。

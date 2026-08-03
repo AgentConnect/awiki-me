@@ -386,6 +386,7 @@
   "deviceJoinErrorFailed": "Device operation failed. Refresh and try again.",
   "settingsLanguage": "Language",
   "settingsLanguageSystem": "Follow system",
+  "settingsLanguageSystemSubtitle": "Use device language",
   "settingsLanguageZhHans": "简体中文",
   "settingsLanguageEnglish": "English",
   "settingsPushNotification": "Push notifications",
