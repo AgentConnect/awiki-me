@@ -890,3 +890,34 @@ final result: passed
 - APP 最终停留在消息列表；没有发送消息、改变联系人关系或清除 APP 数据。其他 Android 尺寸、iOS 真机与正式签名发布保持 **UNVERIFIED**。
 
 final result: passed
+
+---
+
+## P0110 compact 多工作区返回栈 P1 修复闭环（2026-08-03）
+
+> 本轮只修复 compact retained workspace 的系统返回契约，不改变消息、联系人、群聊或“我”页视觉。最终真机判定由原独立 QA 任务执行；修复任务未自行操作设备或声明通过。未使用 Superpowers 技能。
+
+### 根因与修复
+
+- 原完整真机 UI 测试在 4 条路径命中同一类 P1：私聊左边缘返回、长会话滚动后返回、联系人群聊两级返回、关注我的返回会间歇结束 MainActivity 并进入 Launcher；事件证据包含 `performDestroy` 与 `task_removed`，无 AndroidRuntime crash。
+- 消息、联系人和“我”三个 compact workspace 原先依赖 `NavigatorPopHandler` 从 inner Navigator 的 `NavigationNotification` 推导系统返回资格。Flutter 3.44.8 会把 Navigator 历史通知延迟到 post-frame，处理器收到通知后还需 `setState` 再构建一帧；provider/page 已进入二级栈但 root `PopScope` 尚未同步的窗口因此可能把同一次 back 穿透到根 Activity。既有 `pumpAndSettle` 测试会跨过该窗口，不能证明真机预测返回闭环。
+- 新增统一 `CompactNestedNavigatorBackScope`：只有“当前激活 Tab + 与 page list 同源的同步 provider 业务栈存在二级页”时才拦截系统返回；一次 back 只弹当前 inner route，不可见 retained Tab 不参与。若 provider 暂时领先 Navigator 页面协调，本次 back 仍被消费并收敛 provider，禁止穿透根 Activity。
+- 页头返回继续通过同一 inner Navigator 与 `onDidRemovePage` 更新 provider，因此与系统返回保持一致；未叠加延时或额外视觉路由。
+
+### 自动化、构建与提交
+
+- 新增首帧回归与连续轮次，覆盖私聊 5 轮、联系人群聊 3 轮（含群信息逐层返回）、我关注的/关注我的各 3 轮、page removal/provider 更新、非激活 retained Tab 以及页头返回。
+- 使用原 QA 基线 Core `caa73e88685bdd785589e8420325f97aa936d301` 的最终组合，`conversation_workspace_test.dart` 53 项、`friends_workspace_test.dart` 24 项、`profile_page_test.dart` 14 项、`navigation_provider_test.dart` 11 项，合计 `102/102` 通过；相关 8 项 `flutter analyze` 为 `No issues found`，`dart format` 与 `git diff --check` 通过。
+- 修复提交为 `e89694874ce0953254d577d85cdeafae46ccd4c5`（`fix: synchronize compact nested back handling`），分支为 `BugFix/mobile-back-stack-p1`；未 push、未创建 PR、未合并。
+- 最终 Android Debug APK 为 `0.1.13+23`，SHA-256 `3b31480553650a4bccdff8f65b5b2a99e5623b0e6a780f377c1b3c39b54561b3`，v2 Debug 签名。首次交接 APK 因错误解析到另一个 dirty Core 导致 `local_state_upgrade_failed`，已由独立 QA 阻断且未进入返回矩阵；最终 APK 的 `libawiki_im_core.so`、`libredb` 与原可启动 QA 基线逐字节一致，覆盖安装后启动门禁恢复。
+
+### 独立 P0110 真机复测
+
+- 独立 QA 使用 `adb -s EP0110MZ0BB290687W install -r -d -t` 保留数据覆盖安装；只确认 AWiki Me USB 安装提示中的“同意”，未卸载、未清数据。`local_state_upgrade_failed` 消失，既有私聊、群聊和个人关系数据可读。
+- A 私聊左边缘系统返回 `5/5` PASS；B 长会话上下滚动后系统返回 `3/3` PASS；C 联系人群组 → 群聊 → 群信息 → 群聊 → 联系人群组 `3/3` PASS。
+- D 我关注的与关注我的各 `3/3` PASS；E 联系人消息入口返回 PASS，实际回消息根页且无白屏；F 四 Tab 快切 `2/2` 与桌面恢复 `1/1` PASS。
+- 所有 APP 内检查点均保持 `ai.awiki.awikime.dev/ai.awiki.awikime.MainActivity` task 972；A–F 窗口内无 task 972 `task_removed`、MainActivity `performDestroy`、AndroidRuntime crash、FATAL EXCEPTION 或 ANR。P0 / P1 / P2 / P3 均为 0。
+- 完整矩阵与证据为 `.design-references/p0110-full-ui-smoke-20260803/p1-back-stack-retest2-e896948-20260803/report.md`。含完整群 DID 的原始证据已由 QA 删除并替换为安全摘要；设备端 73 个本轮临时文件已清理。
+- 最终设备状态为 AWiki Me 前台消息列表；未发送消息或附件，未关注/取关，未删除会话，未创建/退出群，未添加/移除成员，未退出登录或修改设置。Release、iOS 与其他 Android 机型保持 **UNVERIFIED**。
+
+final result: passed
