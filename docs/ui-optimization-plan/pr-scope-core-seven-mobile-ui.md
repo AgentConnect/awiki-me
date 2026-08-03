@@ -105,11 +105,10 @@ Current pre-PR validation, together with the focused runs recorded in `design-qa
 The latest data-preserving install was verified on P0110 with:
 
 - package: `ai.awiki.awikime.dev`;
-- version: `0.1.14+25`;
-- last recorded install time: `2026-08-02 15:05:15`;
-- latest recorded APK SHA-256: `afe02f68b5284c03a125d049b4469218f50d6aeb1ec47b94503648dd449603b1`.
+- version: `0.1.13+23`;
+- APK SHA-256: `12191cd4b0f80b3d1c94bd63004574aad95564ddf9373b2f36b4a71337c315e2`.
 
-The accepted device paths include cold-start splash continuity, all four primary tabs, anchored header menus, contact category switching, group-local navigation, contact-to-chat back handling, profile relationship lists, continuous chat bubbles, chat information, User Information, and My Information.
+That run verified cold-start continuity, the Messages and Me roots, the Settings route, the dedicated language-selection entry, and the compact Settings layout without list-item subtitles. Broader P0110 flow evidence from earlier builds remains recorded in `design-qa.md` and is not presented as proof for this exact APK.
 
 ## Pull request inclusion boundary
 
