@@ -28,7 +28,16 @@ class _CompactOnboardingCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           const _CompactOnboardingBrand(),
-          SizedBox(height: responsive.spacing(20)),
+          SizedBox(height: responsive.spacing(18)),
+          Text(
+            context.l10n.onboardingRegister,
+            style: TextStyle(
+              color: theme.title,
+              fontSize: responsive.bodyMd,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: responsive.spacing(14)),
           if (onboarding.hasRegistrationMethods) ...<Widget>[
             _AuthModeToggle(
               value: onboarding.authMode,
@@ -53,30 +62,26 @@ class _CompactOnboardingBrand extends StatelessWidget {
     final theme = context.awikiTheme;
     return Row(
       key: const Key('onboarding-compact-brand'),
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.start,
       children: <Widget>[
-        Container(
-          width: responsive.scaled(44),
-          height: responsive.scaled(44),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: CupertinoColors.white,
-            borderRadius: BorderRadius.circular(responsive.radius(10)),
-            border: Border.all(color: theme.border),
-          ),
-          child: Image.asset(
-            'assets/branding/awiki-me-logo.png',
-            key: const Key('onboarding-compact-logo'),
-            width: responsive.scaled(34),
-            height: responsive.scaled(34),
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Text(
-              'AW',
-              style: TextStyle(
-                color: AwikiMePalette.actionBlue,
-                fontSize: responsive.titleLg,
-                fontWeight: FontWeight.w600,
-                height: 1,
+        Image.asset(
+          'assets/branding/awiki-me-logo.png',
+          key: const Key('onboarding-compact-logo'),
+          width: responsive.scaled(36),
+          height: responsive.scaled(36),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+          errorBuilder: (_, __, ___) => SizedBox.square(
+            dimension: responsive.scaled(36),
+            child: Center(
+              child: Text(
+                'AW',
+                style: TextStyle(
+                  color: AwikiMePalette.actionBlue,
+                  fontSize: responsive.titleLg,
+                  fontWeight: FontWeight.w600,
+                  height: 1,
+                ),
               ),
             ),
           ),

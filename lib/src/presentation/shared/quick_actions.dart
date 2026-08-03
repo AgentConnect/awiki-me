@@ -1,6 +1,13 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'
-    show PopupMenuEntry, RelativeRect, RoundedRectangleBorder, showMenu;
+    show
+        PopupMenuEntry,
+        RelativeRect,
+        RoundedRectangleBorder,
+        showGeneralDialog,
+        showMenu;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/semantics.dart' show SemanticsRole;
 
@@ -59,12 +66,18 @@ Future<void> showCommonQuickActionsMenu(
       ),
   ];
 
-  if (anchoredToTrigger && context.awikiResponsive.isExpanded) {
-    final shown = await _showAnchoredQuickActionsMenu(
-      context,
-      items: items,
-      semanticLabel: l10n.quickActionsTitle,
-    );
+  if (anchoredToTrigger) {
+    final shown = context.awikiResponsive.isExpanded
+        ? await _showAnchoredQuickActionsMenu(
+            context,
+            items: items,
+            semanticLabel: l10n.quickActionsTitle,
+          )
+        : await _showCompactAnchoredQuickActionsMenu(
+            context,
+            items: items,
+            semanticLabel: l10n.quickActionsTitle,
+          );
     if (shown) {
       return;
     }
@@ -81,6 +94,274 @@ Future<void> showCommonQuickActionsMenu(
 
 void showFollowContactDialog(BuildContext context, WidgetRef ref) {
   showFollowIdentityDialog(context, ref);
+}
+
+Future<bool> _showCompactAnchoredQuickActionsMenu(
+  BuildContext context, {
+  required List<AppDropMenuItem> items,
+  required String semanticLabel,
+}) async {
+  final anchor = context.findRenderObject();
+  final overlay = Overlay.of(
+    context,
+    rootOverlay: true,
+  ).context.findRenderObject();
+  if (anchor is! RenderBox || overlay is! RenderBox) {
+    return false;
+  }
+
+  final anchorTopLeft = anchor.localToGlobal(Offset.zero, ancestor: overlay);
+  final anchorRect = anchorTopLeft & anchor.size;
+  final theme = context.awikiTheme;
+  final selected = await showGeneralDialog<int>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: semanticLabel,
+    barrierColor: theme.title.withValues(alpha: 0.06),
+    transitionDuration: AwikiMeMotion.standard,
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      return _CompactAnchoredQuickActionsMenu(
+        anchorRect: anchorRect,
+        items: items,
+        semanticLabel: semanticLabel,
+      );
+    },
+    transitionBuilder: (dialogContext, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: AwikiMeMotion.emphasized,
+        ),
+        child: child,
+      );
+    },
+  );
+  if (selected == null || !context.mounted) {
+    return true;
+  }
+  await items[selected].onTap?.call();
+  return true;
+}
+
+class _CompactAnchoredQuickActionsMenu extends StatelessWidget {
+  const _CompactAnchoredQuickActionsMenu({
+    required this.anchorRect,
+    required this.items,
+    required this.semanticLabel,
+  });
+
+  final Rect anchorRect;
+  final List<AppDropMenuItem> items;
+  final String semanticLabel;
+
+  static const double _horizontalMargin = 8;
+  static const double _targetMenuWidth = 196;
+  static const double _rowHeight = 52;
+  static const double _pointerWidth = 20;
+  static const double _pointerHeight = 10;
+  static const double _menuGap = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final safePadding = MediaQuery.paddingOf(context);
+    final theme = context.awikiTheme;
+    final menuWidth = math
+        .min(
+          _targetMenuWidth,
+          math.max(0, screenSize.width - (_horizontalMargin * 2)),
+        )
+        .toDouble();
+    final menuHeight = _rowHeight * items.length;
+    final menuLeft = math.max(
+      _horizontalMargin,
+      screenSize.width - menuWidth - _horizontalMargin,
+    );
+    final maxMenuTop = math.max(
+      safePadding.top + _horizontalMargin,
+      screenSize.height - safePadding.bottom - menuHeight - _horizontalMargin,
+    );
+    final menuTop = (anchorRect.bottom + _menuGap)
+        .clamp(safePadding.top + _horizontalMargin, maxMenuTop)
+        .toDouble();
+    final pointerCenter = (anchorRect.center.dx - menuLeft)
+        .clamp(18.0, menuWidth - 18)
+        .toDouble();
+
+    return Semantics(
+      role: SemanticsRole.menu,
+      container: true,
+      explicitChildNodes: true,
+      label: semanticLabel,
+      child: Stack(
+        key: const Key('compact-quick-actions-overlay'),
+        children: <Widget>[
+          Positioned(
+            left: menuLeft + pointerCenter - (_pointerWidth / 2),
+            top: menuTop - _pointerHeight + 1,
+            child: IgnorePointer(
+              child: CustomPaint(
+                key: const Key('compact-quick-actions-pointer'),
+                size: const Size(_pointerWidth, _pointerHeight),
+                painter: _QuickActionsPointerPainter(
+                  fillColor: theme.surface,
+                  borderColor: theme.border,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: menuLeft,
+            top: menuTop,
+            width: menuWidth,
+            height: menuHeight,
+            child: DecoratedBox(
+              key: const Key('compact-quick-actions-menu'),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(AwikiMeRadii.sm),
+                border: Border.all(color: theme.border),
+                boxShadow: AwikiMeShadows.overlay,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AwikiMeRadii.sm - 1),
+                child: Column(
+                  children: <Widget>[
+                    for (var index = 0; index < items.length; index++)
+                      _CompactQuickActionRow(
+                        item: items[index],
+                        value: index,
+                        showDivider: index < items.length - 1,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactQuickActionRow extends StatelessWidget {
+  const _CompactQuickActionRow({
+    required this.item,
+    required this.value,
+    required this.showDivider,
+  });
+
+  final AppDropMenuItem item;
+  final int value;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Semantics(
+      role: SemanticsRole.menuItem,
+      enabled: item.onTap != null,
+      button: true,
+      child: SizedBox(
+        height: _CompactAnchoredQuickActionsMenu._rowHeight,
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: AppPressable(
+                key: item.buttonKey,
+                onTap: item.onTap == null
+                    ? null
+                    : () => Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).pop<int>(value),
+                semanticLabel: item.label,
+                semanticsIdentifier: item.semanticsIdentifier,
+                borderRadius: BorderRadius.circular(AwikiMeRadii.xs),
+                hoverColor: theme.title.withValues(alpha: 0.05),
+                pressedColor: AwikiMePalette.actionBlueSoft.withValues(
+                  alpha: 0.72,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: <Widget>[
+                      ExcludeSemantics(
+                        child: Icon(
+                          item.icon,
+                          size: 20,
+                          color: AwikiMePalette.actionBlue,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ExcludeSemantics(
+                          child: Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AwikiMePalette.inkNeutral,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (showDivider)
+              const Positioned(
+                left: 48,
+                right: 16,
+                bottom: 0,
+                height: 1,
+                child: ColoredBox(color: AwikiMePalette.hairline),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionsPointerPainter extends CustomPainter {
+  const _QuickActionsPointerPainter({
+    required this.fillColor,
+    required this.borderColor,
+  });
+
+  final Color fillColor;
+  final Color borderColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(size.width / 2, 0)
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = fillColor);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _QuickActionsPointerPainter oldDelegate) {
+    return fillColor != oldDelegate.fillColor ||
+        borderColor != oldDelegate.borderColor;
+  }
 }
 
 Future<bool> _showAnchoredQuickActionsMenu(

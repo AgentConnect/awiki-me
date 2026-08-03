@@ -22,6 +22,7 @@ import '../data/push/remote_push_client_factory.dart';
 import '../domain/services/remote_push_client.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/responsive_layout.dart';
+import '../presentation/shared/startup_splash.dart';
 import 'app_locale.dart';
 import 'awiki_me_app.dart';
 import 'bootstrap.dart';
@@ -579,34 +580,20 @@ class _TenantBootstrapLoadingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appTheme = AwikiMeTheme.current;
+    final statusLabel = switch (progress) {
+      AppBootstrapProgress.preparing ||
+      AppBootstrapProgress.startingApplication => null,
+      AppBootstrapProgress.upgradingLocalState =>
+        'Upgrading local data securely…',
+      AppBootstrapProgress.migratingLocalOverlays =>
+        'Finishing local data upgrade…',
+    };
     return CupertinoApp(
       debugShowCheckedModeBanner: false,
       theme: appTheme.cupertinoTheme,
-      home: CupertinoPageScaffold(
-        backgroundColor: AwikiMePalette.canvas,
-        child: AwikiAdaptiveScaffold(
-          maxWidth: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const CupertinoActivityIndicator(radius: 11),
-              const SizedBox(height: 14),
-              Text(
-                progress == AppBootstrapProgress.upgradingLocalState
-                    ? 'Upgrading local data securely…'
-                    : progress == AppBootstrapProgress.migratingLocalOverlays
-                    ? 'Finishing local data upgrade…'
-                    : 'AWiki',
-                style: const TextStyle(
-                  color: AwikiMePalette.actionInk,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: AwikiMeStartupSplash(statusLabel: statusLabel),
     );
   }
 }

@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_router.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/navigation_provider.dart';
+import '../friends/friends_page.dart';
+import '../friends/friends_provider.dart';
 import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
@@ -52,27 +55,111 @@ Future<void> showCurrentIdentityDialog(BuildContext context) {
   );
 }
 
-class ProfileWorkspacePage extends StatelessWidget {
+Future<void> showCurrentIdentityPage(BuildContext context) {
+  return AppNavigator.push<void>(
+    context,
+    (pageContext) => ProfilePage(
+      title: pageContext.l10n.profileMyInformationTitle,
+      bottomInset: 24,
+      onBack: () => Navigator.of(pageContext).pop(),
+    ),
+    rootNavigator: true,
+  );
+}
+
+final profileRelationshipListTypeProvider =
+    StateProvider<FriendsRelationshipListType?>((ref) => null);
+
+class ProfileWorkspacePage extends ConsumerStatefulWidget {
   const ProfileWorkspacePage({super.key, this.listFooter, this.onCompactBack});
 
   final Widget? listFooter;
   final VoidCallback? onCompactBack;
 
   @override
+  ConsumerState<ProfileWorkspacePage> createState() =>
+      _ProfileWorkspacePageState();
+}
+
+class _ProfileWorkspacePageState extends ConsumerState<ProfileWorkspacePage> {
+  final GlobalKey<NavigatorState> _compactNavigatorKey =
+      GlobalKey<NavigatorState>();
+
+  void _showRelationships(FriendsRelationshipListType type) {
+    ref.read(profileRelationshipListTypeProvider.notifier).state = type;
+  }
+
+  void _closeRelationships() {
+    ref.read(profileRelationshipListTypeProvider.notifier).state = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
+    final relationshipType = ref.watch(profileRelationshipListTypeProvider);
     if (!responsive.supportsTwoPane) {
-      return ProfilePage(onBack: onCompactBack);
+      final handlesSystemBack =
+          relationshipType != null &&
+          (!AwikiShellNavigationScope.isPresent(context) ||
+              ref.watch(shellDestinationProvider) == ShellDestination.profile);
+      return NavigatorPopHandler<void>(
+        enabled: handlesSystemBack,
+        onPopWithResult: (_) {
+          if (!handlesSystemBack) {
+            return;
+          }
+          _compactNavigatorKey.currentState?.pop<void>();
+        },
+        child: Navigator(
+          key: _compactNavigatorKey,
+          pages: <Page<void>>[
+            CupertinoPage<void>(
+              key: const ValueKey<String>('profile-overview'),
+              child: ProfilePage(
+                onBack: widget.onCompactBack,
+                onFollowingTap: () =>
+                    _showRelationships(FriendsRelationshipListType.following),
+                onFollowersTap: () =>
+                    _showRelationships(FriendsRelationshipListType.followers),
+              ),
+            ),
+            if (relationshipType != null)
+              CupertinoPage<void>(
+                key: ValueKey<String>(
+                  'profile-relationships:${relationshipType.name}',
+                ),
+                child: RelationshipListPage(type: relationshipType),
+              ),
+          ],
+          onDidRemovePage: (page) {
+            if (page.key != const ValueKey<String>('profile-overview')) {
+              _closeRelationships();
+            }
+          },
+        ),
+      );
     }
 
     return AwikiSidebarWorkspace(
-      footer: listFooter,
-      sidebar: _ProfileSidebar(bottomInset: listFooter == null ? 24 : 16),
+      footer: widget.listFooter,
+      sidebar: _ProfileSidebar(
+        bottomInset: widget.listFooter == null ? 24 : 16,
+      ),
       detailPane: DecoratedBox(
         decoration: BoxDecoration(color: context.awikiTheme.background),
-        child: const SafeArea(
+        child: SafeArea(
           bottom: false,
-          child: ProfilePage(embedded: true, bottomInset: 24, showTitle: false),
+          child: relationshipType == null
+              ? ProfilePage(
+                  embedded: true,
+                  bottomInset: 24,
+                  showTitle: false,
+                  onFollowingTap: () =>
+                      _showRelationships(FriendsRelationshipListType.following),
+                  onFollowersTap: () =>
+                      _showRelationships(FriendsRelationshipListType.followers),
+                )
+              : RelationshipListPage(type: relationshipType, embedded: true),
         ),
       ),
     );

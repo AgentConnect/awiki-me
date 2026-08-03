@@ -29,6 +29,7 @@ import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
+import '../shared/startup_splash.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
@@ -105,6 +106,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
+    if (!runtime.isInitialized) {
+      return const AwikiMeStartupSplash();
+    }
+
     final messageSync = ref.watch(messageSyncCoordinatorProvider);
     final realtimeStatus = ref
         .watch(realtimeConnectionStatusProvider)
@@ -211,7 +216,8 @@ class _AppShellState extends ConsumerState<AppShell> {
             ),
           ),
           ShellDestination.settings => true,
-          ShellDestination.profile => false,
+          ShellDestination.profile =>
+            ref.watch(profileRelationshipListTypeProvider) != null,
           _ => false,
         };
     final content = expanded
@@ -1066,14 +1072,14 @@ class _BottomNavBar extends StatelessWidget {
     return DecoratedBox(
       key: const Key('compact-bottom-navigation'),
       decoration: BoxDecoration(
-        color: AwikiMePalette.navigationSurface,
+        color: AwikiMePalette.content,
         border: Border(top: BorderSide(color: theme.border)),
       ),
       child: SafeArea(
         top: false,
-        minimum: const EdgeInsets.fromLTRB(4, 4, 4, 4),
+        minimum: const EdgeInsets.fromLTRB(4, 2, 4, 0),
         child: SizedBox(
-          height: 56,
+          height: 62,
           child: Row(
             children: <Widget>[
               Expanded(
@@ -1089,22 +1095,22 @@ class _BottomNavBar extends StatelessWidget {
               ),
               Expanded(
                 child: _BottomNavItem(
-                  key: const Key('compact-nav-agents'),
-                  label: context.l10n.shellNavAgents,
-                  semanticsIdentifier: 'e2e-agents-tab',
-                  role: AwikiMeIconRole.agents,
-                  active: currentDestination == ShellDestination.agents,
-                  onTap: () => onTap(ShellDestination.agents),
-                ),
-              ),
-              Expanded(
-                child: _BottomNavItem(
                   key: const Key('compact-nav-contacts'),
                   label: context.l10n.shellNavContacts,
                   semanticsIdentifier: 'e2e-contacts-tab',
                   role: AwikiMeIconRole.contacts,
                   active: currentDestination == ShellDestination.contacts,
                   onTap: () => onTap(ShellDestination.contacts),
+                ),
+              ),
+              Expanded(
+                child: _BottomNavItem(
+                  key: const Key('compact-nav-agents'),
+                  label: context.l10n.shellNavAgents,
+                  semanticsIdentifier: 'e2e-agents-tab',
+                  role: AwikiMeIconRole.agents,
+                  active: currentDestination == ShellDestination.agents,
+                  onTap: () => onTap(ShellDestination.agents),
                 ),
               ),
               Expanded(
@@ -1146,9 +1152,9 @@ class _BottomNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
-    final iconSize = responsive.scaled(23);
+    final iconSize = responsive.scaled(22);
     final labelFontSize = responsive.scaled(10.5);
-    final iconSlotSize = responsive.scaled(32);
+    final iconSlotSize = responsive.scaled(30);
     final foreground = active
         ? AwikiMePalette.brandAccent
         : AwikiMePalette.mutedNeutral;
@@ -1179,51 +1185,69 @@ class _BottomNavItem extends StatelessWidget {
       );
     }
 
-    return AppPressable(
-      onTap: onTap,
-      semanticLabel: label,
-      semanticsIdentifier: semanticsIdentifier,
-      selected: active,
-      scaleOnPress: true,
-      pressedScale: 0.96,
-      borderRadius: BorderRadius.circular(responsive.radius(10)),
-      child: ExcludeSemantics(
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOut,
-          width: double.infinity,
-          height: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            responsive.spacing(4),
-            0,
-            responsive.spacing(4),
-            responsive.spacing(2),
-          ),
-          color: CupertinoColors.transparent,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: <Widget>[
-              buildNavIcon(),
-              SizedBox(height: responsive.scaled(1)),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: labelFontSize,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                    height: 1,
-                  ),
-                ),
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        AppPressable(
+          onTap: onTap,
+          semanticLabel: label,
+          semanticsIdentifier: semanticsIdentifier,
+          selected: active,
+          scaleOnPress: true,
+          pressedScale: 0.96,
+          borderRadius: BorderRadius.circular(responsive.radius(10)),
+          child: ExcludeSemantics(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOut,
+              width: double.infinity,
+              height: double.infinity,
+              padding: EdgeInsets.fromLTRB(
+                responsive.spacing(4),
+                responsive.scaled(2),
+                responsive.spacing(4),
+                responsive.spacing(4),
               ),
-            ],
+              color: CupertinoColors.transparent,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: <Widget>[
+                  buildNavIcon(),
+                  SizedBox(height: responsive.scaled(2)),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: labelFontSize,
+                        fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
+        if (active)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              key: Key('compact-nav-active-indicator:${role.name}'),
+              width: responsive.scaled(28),
+              height: responsive.scaled(3),
+              decoration: const BoxDecoration(
+                color: AwikiMePalette.brandAccent,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

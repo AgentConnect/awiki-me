@@ -644,6 +644,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get friendsTitle => 'Contacts';
 
   @override
+  String get friendsSearchPlaceholder => 'Search contacts';
+
+  @override
+  String get friendsSearchGroupsPlaceholder => 'Search groups';
+
+  @override
+  String get friendsTabAll => 'All';
+
+  @override
+  String get friendsTabFollowing => 'Following';
+
+  @override
+  String get friendsTabFollowers => 'Followers';
+
+  @override
+  String get friendsTabGroups => 'Groups';
+
+  @override
+  String get friendsAllEmpty => 'No contacts yet.';
+
+  @override
+  String get friendsNoResults => 'No matching contacts found.';
+
+  @override
+  String get friendsMessage => 'Message';
+
+  @override
+  String get friendsFollowBack => 'Follow back';
+
+  @override
   String get friendsGroups => 'Groups';
 
   @override
@@ -681,6 +711,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileMeTitle => 'Me';
 
   @override
+  String get profileMyInformationTitle => 'My info';
+
+  @override
+  String get profileIdentitySectionTitle => 'Identity';
+
+  @override
+  String get profileIdentityCardSubtitle =>
+      'Complete details for trusted collaboration';
+
+  @override
+  String get profileSettingsSubtitle => 'Account, devices, and app preferences';
+
+  @override
   String get profileFollowers => 'Followers';
 
   @override
@@ -709,6 +752,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsAccountDevicesSection => 'Account & devices';
+
+  @override
+  String get settingsAppSection => 'App';
+
+  @override
+  String get settingsSecuritySection => 'Security';
 
   @override
   String get settingsDevices => 'Devices';
@@ -1740,6 +1792,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get agentPageTitle => 'Agents';
 
   @override
+  String get agentMineSection => 'My agents';
+
+  @override
+  String get agentInstallDaemonAction => 'Install a new Daemon';
+
+  @override
   String get agentCreateDaemon => 'Create Daemon';
 
   @override
@@ -2555,7 +2613,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get personalAgentSettingsSubtitle =>
-      'Configure enablement, pause, and daemon message authorization.';
+      'Configure enablement, pause, and Daemon management';
 
   @override
   String get personalAgentSettingsDisabledSubtitle =>
@@ -3023,6 +3081,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatGroupProfileUpdated => 'Group info updated';
+
+  @override
+  String get chatInformationTitle => 'Chat Info';
+
+  @override
+  String get chatOpenInformation => 'Open chat information';
+
+  @override
+  String get chatSearchHistory => 'Search Chat History';
+
+  @override
+  String get chatSearchHistoryPlaceholder => 'Search chat history';
+
+  @override
+  String get chatSearchHistoryEmpty => 'No matching chat history';
+
+  @override
+  String get chatMuteNotifications => 'Mute Notifications';
+
+  @override
+  String get chatPinConversation => 'Pin Chat';
+
+  @override
+  String get chatRemoveConversation => 'Remove from Messages';
+
+  @override
+  String get chatRemoveConversationConfirmTitle => 'Remove from Messages?';
+
+  @override
+  String get chatRemoveConversationConfirmMessage =>
+      'This only removes the conversation from Messages. Its history is preserved and the conversation will return when reopened or when a new message arrives.';
 
   @override
   String get handleRecoveryUnavailable =>

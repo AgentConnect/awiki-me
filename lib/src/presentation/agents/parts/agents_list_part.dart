@@ -31,7 +31,7 @@ class _AgentListPane extends StatelessWidget {
     final theme = context.awikiTheme;
     return ColoredBox(
       key: const Key('agents-list-pane'),
-      color: theme.surface,
+      color: responsive.isCompact ? theme.background : theme.surface,
       child: SafeArea(
         bottom: false,
         child: Column(
@@ -58,6 +58,12 @@ class _AgentListPane extends StatelessWidget {
                         responsive.spacing(16),
                       ),
                 children: <Widget>[
+                  if (responsive.isCompact)
+                    _AgentListSectionHeader(
+                      count: state.agents
+                          .where((agent) => agent.isRuntime)
+                          .length,
+                    ),
                   if (state.error != null) ...<Widget>[
                     _AgentErrorBanner(
                       message: state.error!,
@@ -77,6 +83,13 @@ class _AgentListPane extends StatelessWidget {
                     onSelect: onSelect,
                     onRefreshDaemon: onRefreshDaemon,
                   ),
+                  if (responsive.isCompact)
+                    _AgentInstallDaemonRow(
+                      onTap: onCreateDaemon,
+                      disabled: state.isActionPending(
+                        AgentActionKeys.installCommand,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -131,39 +144,49 @@ class _AgentListHeader extends StatelessWidget {
         ),
         child: AwikiMeTopBar(
           title: context.l10n.agentPageTitle,
-          leadingWidth: 136,
-          trailingWidth: 136,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          leadingWidth: 0,
+          trailingWidth: 108,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5.5),
+          titleFontSize: awikiMeCompactTopBarTitleFontSize,
+          titleFontWeight: awikiMeCompactTopBarTitleFontWeight,
+          titleHeight: awikiMeCompactTopBarTitleHeight,
           leading: const SizedBox.shrink(),
-          trailing: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: <Widget>[
-              TopBarActionButton(
-                key: const Key('agent-skill-onboarding-button'),
-                onTap: isCreatingSkill ? null : onCreateSkill,
-                semanticsLabel: context.l10n.agentSkillCreateInstruction,
-                tooltip: context.l10n.agentSkillCreateInstruction,
-                child: isCreatingSkill
-                    ? CupertinoActivityIndicator(
-                        radius: responsive.displayScaled(7),
-                      )
-                    : const Icon(CupertinoIcons.command),
-              ),
-              TopBarActionButton(
-                key: const Key('agents-list-refresh-button'),
-                onTap: isLoading ? null : onRefresh,
-                semanticsLabel: context.l10n.agentRefreshList,
-                tooltip: context.l10n.agentRefreshList,
-                child: refreshIcon,
-              ),
-              TopBarActionButton(
-                key: const Key('agents-install-daemon-button'),
-                onTap: isInstalling ? null : onInstall,
-                semanticsLabel: context.l10n.agentInstallTitle,
-                tooltip: context.l10n.agentInstallTitle,
-                child: installIcon,
-              ),
-            ],
+          trailing: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TopBarActionButton(
+                  key: const Key('agents-more-actions-button'),
+                  onTap: isCreatingSkill || isLoading
+                      ? null
+                      : () => _showCompactAgentActions(
+                          context,
+                          onCreateSkill: onCreateSkill,
+                          onRefresh: onRefresh,
+                        ),
+                  semanticsLabel: context.l10n.commonMoreActions,
+                  tooltip: context.l10n.commonMoreActions,
+                  child: isCreatingSkill || isLoading
+                      ? CupertinoActivityIndicator(
+                          radius: responsive.displayScaled(7),
+                        )
+                      : Icon(
+                          CupertinoIcons.ellipsis,
+                          color: theme.secondaryText,
+                          size: responsive.iconMd,
+                        ),
+                ),
+                const SizedBox(width: 12),
+                TopBarActionButton(
+                  key: const Key('agents-install-daemon-button'),
+                  onTap: isInstalling ? null : onInstall,
+                  semanticsLabel: context.l10n.agentInstallTitle,
+                  tooltip: context.l10n.agentInstallTitle,
+                  child: installIcon,
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -207,6 +230,140 @@ class _AgentListHeader extends StatelessWidget {
             child: installIcon,
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _showCompactAgentActions(
+    BuildContext context, {
+    required VoidCallback onCreateSkill,
+    required VoidCallback onRefresh,
+  }) async {
+    final action = await showCupertinoModalPopup<String>(
+      context: context,
+      builder: (sheetContext) => CupertinoActionSheet(
+        actions: <Widget>[
+          CupertinoActionSheetAction(
+            key: const Key('agent-skill-onboarding-button'),
+            onPressed: () => Navigator.of(sheetContext).pop('skill'),
+            child: Text(context.l10n.agentSkillCreateInstruction),
+          ),
+          CupertinoActionSheetAction(
+            key: const Key('agents-list-refresh-button'),
+            onPressed: () => Navigator.of(sheetContext).pop('refresh'),
+            child: Text(context.l10n.agentRefreshList),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheetContext).pop(),
+          child: Text(context.l10n.commonCancel),
+        ),
+      ),
+    );
+    if (!context.mounted) {
+      return;
+    }
+    if (action == 'skill') {
+      onCreateSkill();
+    } else if (action == 'refresh') {
+      onRefresh();
+    }
+  }
+}
+
+class _AgentListSectionHeader extends StatelessWidget {
+  const _AgentListSectionHeader({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return SizedBox(
+      key: const Key('agents-compact-section-header'),
+      height: 60,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.surface,
+          border: Border(bottom: BorderSide(color: theme.border)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  context.l10n.agentMineSection,
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: responsive.bodyMd,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: theme.secondaryText,
+                  fontSize: responsive.bodySm,
+                  fontFeatures: const <FontFeature>[
+                    FontFeature.tabularFigures(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentInstallDaemonRow extends StatelessWidget {
+  const _AgentInstallDaemonRow({required this.onTap, required this.disabled});
+
+  final VoidCallback onTap;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return AppPressable(
+      key: const Key('agents-install-daemon-row'),
+      onTap: disabled ? null : onTap,
+      semanticLabel: context.l10n.agentInstallDaemonAction,
+      enabled: !disabled,
+      borderRadius: BorderRadius.zero,
+      child: SizedBox(
+        height: 56,
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(24)),
+          decoration: BoxDecoration(
+            color: theme.surface,
+            border: Border(top: BorderSide(color: theme.border)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                CupertinoIcons.arrow_down_to_line,
+                color: theme.primary,
+                size: responsive.iconSm,
+              ),
+              SizedBox(width: responsive.spacing(12)),
+              Text(
+                context.l10n.agentInstallDaemonAction,
+                style: TextStyle(
+                  color: theme.primary,
+                  fontSize: responsive.bodySm,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -406,6 +563,26 @@ class _AgentDaemonGroup extends StatelessWidget {
         ),
       );
     }
+    final runtimeTiles = <Widget>[
+      for (final runtime in runtimes)
+        _AgentListTile(
+          agent: runtime,
+          pendingAgentDids: pendingAgentDids,
+          pendingDaemonUpgrades: state.pendingDaemonUpgrades,
+          cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
+          daemonUpgradeErrors: state.daemonUpgradeErrors,
+          daemonUpgradeProgress: state.daemonUpgradeProgress,
+          statusQueryErrors: state.statusQueryErrors,
+          isDeleting: state.isDeletingAgent(runtime.agentDid),
+          pendingRuntimeCreation:
+              group.runtimeCreationOverlays[runtime.agentDid],
+          selected: selectedAgentDid == runtime.agentDid,
+          onTap: () => onSelect(runtime.agentDid),
+          depth: 1,
+        ),
+      for (final pending in pendingRuntimeCreations)
+        _PendingRuntimeCreationTile(pending: pending),
+    ];
     return Padding(
       padding: EdgeInsets.only(
         bottom: responsive.isCompact ? 0 : responsive.spacing(8),
@@ -431,28 +608,45 @@ class _AgentDaemonGroup extends StatelessWidget {
           ),
           if (runtimes.isEmpty && pendingRuntimeCreations.isEmpty)
             _EmptyRuntimeHint()
-          else ...<Widget>[
-            for (final runtime in runtimes)
-              _AgentListTile(
-                agent: runtime,
-                pendingAgentDids: pendingAgentDids,
-                pendingDaemonUpgrades: state.pendingDaemonUpgrades,
-                cancellingDaemonUpgrades: state.cancellingDaemonUpgrades,
-                daemonUpgradeErrors: state.daemonUpgradeErrors,
-                daemonUpgradeProgress: state.daemonUpgradeProgress,
-                statusQueryErrors: state.statusQueryErrors,
-                isDeleting: state.isDeletingAgent(runtime.agentDid),
-                pendingRuntimeCreation:
-                    group.runtimeCreationOverlays[runtime.agentDid],
-                selected: selectedAgentDid == runtime.agentDid,
-                onTap: () => onSelect(runtime.agentDid),
-                depth: 1,
-              ),
-            for (final pending in pendingRuntimeCreations)
-              _PendingRuntimeCreationTile(pending: pending),
-          ],
+          else if (responsive.isCompact)
+            _CompactAgentChildrenTree(
+              daemonAgentDid: daemon.agentDid,
+              children: runtimeTiles,
+            )
+          else
+            ...runtimeTiles,
         ],
       ),
+    );
+  }
+}
+
+class _CompactAgentChildrenTree extends StatelessWidget {
+  const _CompactAgentChildrenTree({
+    required this.daemonAgentDid,
+    required this.children,
+  });
+
+  final String daemonAgentDid;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Stack(
+      children: <Widget>[
+        Column(children: children),
+        Positioned(
+          left: responsive.displayScaled(41),
+          top: responsive.displayScaled(14),
+          bottom: responsive.displayScaled(14),
+          child: Container(
+            key: ValueKey<String>('agent-tree-vertical-$daemonAgentDid'),
+            width: responsive.displayScaled(1),
+            color: AwikiMePalette.navigationBorder,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -563,6 +757,23 @@ class _AgentTreeConnector extends StatelessWidget {
   }
 }
 
+class _CompactAgentTreeBranch extends StatelessWidget {
+  const _CompactAgentTreeBranch({required this.identifier});
+
+  final String identifier;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return SizedBox(
+      key: ValueKey<String>('agent-tree-branch-$identifier'),
+      width: responsive.displayScaled(20),
+      height: responsive.displayScaled(1),
+      child: const ColoredBox(color: AwikiMePalette.navigationBorder),
+    );
+  }
+}
+
 class _PendingRuntimeCreationTile extends StatelessWidget {
   const _PendingRuntimeCreationTile({required this.pending});
 
@@ -573,6 +784,113 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
     final visualStatus = _pendingRuntimeCreationVisualStatus(pending);
+    final content = Row(
+      children: <Widget>[
+        if (!responsive.isCompact) const _AgentTreeConnector(),
+        if (!responsive.isCompact) SizedBox(width: responsive.spacing(8)),
+        if (responsive.isCompact)
+          e2eSemantics(
+            identifier: _runtimeAgentRowE2eIdentifier(pending.handle),
+            child: Container(
+              width: responsive.displayScaled(responsive.isCompact ? 42 : 28),
+              height: responsive.displayScaled(responsive.isCompact ? 42 : 28),
+              decoration: BoxDecoration(
+                color: theme.primarySoft,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: pending.isWaitingForStatus
+                    ? Icon(
+                        CupertinoIcons.clock,
+                        color: theme.secondaryText,
+                        size: responsive.iconSm,
+                      )
+                    : CupertinoActivityIndicator(
+                        radius: responsive.displayScaled(7),
+                      ),
+              ),
+            ),
+          )
+        else
+          AgentStatusIndicatorOverlay(
+            key: ValueKey<String>(
+              'agent-list-status-anchor-pending-${pending.requestId}',
+            ),
+            status: visualStatus,
+            dotSize: responsive.displayScaled(9),
+            child: e2eSemantics(
+              identifier: _runtimeAgentRowE2eIdentifier(pending.handle),
+              child: Container(
+                width: responsive.displayScaled(28),
+                height: responsive.displayScaled(28),
+                decoration: BoxDecoration(
+                  color: theme.primarySoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: pending.isWaitingForStatus
+                      ? Icon(
+                          CupertinoIcons.clock,
+                          color: theme.secondaryText,
+                          size: responsive.iconSm,
+                        )
+                      : CupertinoActivityIndicator(
+                          radius: responsive.displayScaled(7),
+                        ),
+                ),
+              ),
+            ),
+          ),
+        SizedBox(
+          width: responsive.isCompact
+              ? responsive.displayScaled(16)
+              : responsive.spacing(10),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                pending.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: theme.title,
+                  fontSize: responsive.bodySm,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: responsive.spacing(2)),
+              Row(
+                children: <Widget>[
+                  if (responsive.isCompact) ...<Widget>[
+                    AgentStatusDot(
+                      key: ValueKey<String>(
+                        'agent-list-status-anchor-pending-${pending.requestId}',
+                      ),
+                      status: visualStatus,
+                      size: 8,
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Expanded(
+                    child: Text(
+                      _pendingRuntimeCreationSubtitle(context, pending),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.tertiaryText,
+                        fontSize: responsive.metaSm,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
     return Padding(
       padding: EdgeInsets.only(
         left: responsive.isCompact ? 0 : responsive.spacing(26),
@@ -580,17 +898,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
       ),
       child: Container(
         constraints: BoxConstraints(
-          minHeight: responsive.displayScaled(responsive.isCompact ? 60 : 48),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          responsive.isCompact
-              ? responsive.displayScaled(30)
-              : responsive.spacing(8),
-          responsive.spacing(8),
-          responsive.isCompact
-              ? responsive.displayScaled(14)
-              : responsive.spacing(8),
-          responsive.spacing(8),
+          minHeight: responsive.isCompact ? 75.5 : responsive.displayScaled(48),
         ),
         decoration: BoxDecoration(
           color: theme.surface,
@@ -598,70 +906,30 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
               ? Border(bottom: BorderSide(color: theme.border))
               : null,
         ),
-        child: Row(
+        child: Stack(
+          alignment: Alignment.centerLeft,
           children: <Widget>[
-            if (!responsive.isCompact) const _AgentTreeConnector(),
-            SizedBox(width: responsive.spacing(8)),
-            AgentStatusIndicatorOverlay(
-              key: ValueKey<String>(
-                'agent-list-status-anchor-pending-${pending.requestId}',
-              ),
-              status: visualStatus,
-              dotSize: responsive.displayScaled(responsive.isCompact ? 10 : 9),
-              child: e2eSemantics(
-                identifier: _runtimeAgentRowE2eIdentifier(pending.handle),
-                child: Container(
-                  width: responsive.displayScaled(
-                    responsive.isCompact ? 34 : 28,
-                  ),
-                  height: responsive.displayScaled(
-                    responsive.isCompact ? 34 : 28,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.primarySoft,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: pending.isWaitingForStatus
-                        ? Icon(
-                            CupertinoIcons.clock,
-                            color: theme.secondaryText,
-                            size: responsive.iconSm,
-                          )
-                        : CupertinoActivityIndicator(
-                            radius: responsive.displayScaled(7),
-                          ),
-                  ),
+            if (responsive.isCompact)
+              Positioned(
+                left: responsive.displayScaled(41),
+                top: 0,
+                bottom: 0,
+                child: Align(
+                  child: _CompactAgentTreeBranch(identifier: pending.requestId),
                 ),
               ),
-            ),
-            SizedBox(width: responsive.spacing(10)),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    pending.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: responsive.bodySm,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: responsive.spacing(2)),
-                  Text(
-                    _pendingRuntimeCreationSubtitle(context, pending),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: theme.tertiaryText,
-                      fontSize: responsive.metaSm,
-                    ),
-                  ),
-                ],
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                responsive.isCompact
+                    ? responsive.displayScaled(61)
+                    : responsive.spacing(8),
+                responsive.spacing(8),
+                responsive.isCompact
+                    ? responsive.displayScaled(14)
+                    : responsive.spacing(8),
+                responsive.spacing(8),
               ),
+              child: content,
             ),
           ],
         ),
@@ -753,99 +1021,132 @@ class _AgentListTile extends StatelessWidget {
         border: responsive.isCompact
             ? Border(bottom: BorderSide(color: theme.border))
             : null,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: responsive.displayScaled(responsive.isCompact ? 60 : 48),
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              responsive.isCompact
-                  ? responsive.displayScaled(isChild ? 30 : 14)
-                  : responsive.spacing(8),
-              responsive.spacing(7),
-              responsive.isCompact
-                  ? responsive.displayScaled(12)
-                  : responsive.spacing(8),
-              responsive.spacing(7),
-            ),
-            child: Row(
-              children: <Widget>[
-                if (isChild && !responsive.isCompact) ...<Widget>[
-                  const _AgentTreeConnector(),
-                  SizedBox(width: responsive.spacing(8)),
-                ],
-                AgentStatusIndicatorOverlay(
-                  key: ValueKey<String>(
-                    'agent-list-status-anchor-${agent.agentDid}',
+        child: SizedBox(
+          height: responsive.isCompact ? (isChild ? 74.5 : 64) : null,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            children: <Widget>[
+              if (isChild && responsive.isCompact)
+                Positioned(
+                  left: responsive.displayScaled(41),
+                  top: 0,
+                  bottom: 0,
+                  child: Align(
+                    child: _CompactAgentTreeBranch(identifier: agent.agentDid),
                   ),
-                  status: visualStatus,
-                  dotSize: responsive.displayScaled(
-                    responsive.isCompact ? 10 : 9,
-                  ),
-                  child: _AgentKindIcon(agent: agent, isChild: isChild),
                 ),
-                SizedBox(width: responsive.spacing(10)),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.title,
-                          fontSize: responsive.bodySm,
-                          fontWeight: FontWeight.w600,
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  responsive.isCompact
+                      ? responsive.displayScaled(isChild ? 61 : 18)
+                      : responsive.spacing(8),
+                  responsive.spacing(7),
+                  responsive.isCompact
+                      ? responsive.displayScaled(12)
+                      : responsive.spacing(8),
+                  responsive.spacing(7),
+                ),
+                child: Row(
+                  children: <Widget>[
+                    if (isChild && !responsive.isCompact) ...<Widget>[
+                      const _AgentTreeConnector(),
+                      SizedBox(width: responsive.spacing(8)),
+                    ],
+                    if (responsive.isCompact)
+                      _AgentKindIcon(agent: agent, isChild: isChild)
+                    else
+                      AgentStatusIndicatorOverlay(
+                        key: ValueKey<String>(
+                          'agent-list-status-anchor-${agent.agentDid}',
                         ),
+                        status: visualStatus,
+                        dotSize: responsive.displayScaled(9),
+                        child: _AgentKindIcon(agent: agent, isChild: isChild),
                       ),
-                      SizedBox(height: responsive.spacing(2)),
-                      Text(
-                        _agentListSubtitle(
-                          context,
-                          agent,
-                          runtimeCount,
-                          visualStatus,
-                          isUpgrading: pendingDaemonUpgrades.containsKey(
-                            agent.agentDid,
+                    SizedBox(
+                      width: responsive.isCompact && isChild
+                          ? responsive.displayScaled(16)
+                          : responsive.spacing(10),
+                    ),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.title,
+                              fontSize: responsive.bodySm,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          isCancelling: cancellingDaemonUpgrades.containsKey(
-                            agent.agentDid,
+                          SizedBox(height: responsive.spacing(2)),
+                          Row(
+                            children: <Widget>[
+                              if (responsive.isCompact) ...<Widget>[
+                                AgentStatusDot(
+                                  key: ValueKey<String>(
+                                    'agent-list-status-anchor-${agent.agentDid}',
+                                  ),
+                                  status: visualStatus,
+                                  size: 8,
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  _agentListSubtitle(
+                                    context,
+                                    agent,
+                                    runtimeCount,
+                                    visualStatus,
+                                    isUpgrading: pendingDaemonUpgrades
+                                        .containsKey(agent.agentDid),
+                                    isCancelling: cancellingDaemonUpgrades
+                                        .containsKey(agent.agentDid),
+                                    upgradeProgress: daemonUpgradeProgress,
+                                    upgradeError: daemonUpgradeError,
+                                    isDeleting: isDeleting,
+                                    pendingRuntimeCreation:
+                                        pendingRuntimeCreation,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: theme.tertiaryText,
+                                    fontSize: responsive.metaSm,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          upgradeProgress: daemonUpgradeProgress,
-                          upgradeError: daemonUpgradeError,
-                          isDeleting: isDeleting,
-                          pendingRuntimeCreation: pendingRuntimeCreation,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.tertiaryText,
-                          fontSize: responsive.metaSm,
-                        ),
+                        ],
+                      ),
+                    ),
+                    if (agent.isDaemon && !responsive.isCompact) ...<Widget>[
+                      SizedBox(width: responsive.spacing(6)),
+                      _DaemonRefreshIconButton(
+                        onPressed: onRefresh,
+                        isLoading: isRefreshing,
+                        size: responsive.displayScaled(28),
                       ),
                     ],
-                  ),
+                    if (responsive.isCompact) ...<Widget>[
+                      const SizedBox(width: 8),
+                      Icon(
+                        CupertinoIcons.chevron_right,
+                        color: theme.tertiaryText,
+                        size: responsive.iconSm,
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                  ],
                 ),
-                if (agent.isDaemon && !responsive.isCompact) ...<Widget>[
-                  SizedBox(width: responsive.spacing(6)),
-                  _DaemonRefreshIconButton(
-                    onPressed: onRefresh,
-                    isLoading: isRefreshing,
-                    size: responsive.displayScaled(28),
-                  ),
-                ],
-                if (responsive.isCompact) ...<Widget>[
-                  SizedBox(width: responsive.spacing(8)),
-                  Icon(
-                    CupertinoIcons.chevron_right,
-                    color: theme.tertiaryText,
-                    size: responsive.iconSm,
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -868,15 +1169,31 @@ class _AgentKindIcon extends StatelessWidget {
       responsive.isCompact
           ? agent.isDaemon
                 ? 36
-                : 34
+                : 42
           : isChild
           ? 28
           : 30,
     );
     if (agent.isRuntime) {
-      return AvatarBadge(seed: title, size: size);
+      return AvatarBadge(
+        key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
+        seed: title,
+        size: size,
+      );
+    }
+    if (responsive.isCompact) {
+      return SizedBox.square(
+        key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
+        dimension: size,
+        child: Icon(
+          CupertinoIcons.desktopcomputer,
+          color: theme.secondaryText,
+          size: responsive.displayScaled(22),
+        ),
+      );
     }
     return Container(
+      key: ValueKey<String>('agent-list-kind-icon-${agent.agentDid}'),
       width: size,
       height: size,
       decoration: BoxDecoration(

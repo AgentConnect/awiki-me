@@ -36,6 +36,7 @@ import '../../application/attachment_preview_service.dart';
 import '../../application/attachment_image_dimensions.dart';
 import '../../application/attachment_resource_reference.dart';
 import '../../application/models/attachment_models.dart';
+import '../../application/models/product_local_models.dart';
 import '../../core/group_display_name.dart';
 import '../../core/performance_logger.dart';
 import '../../domain/entities/agent/agent_summary.dart';
@@ -83,6 +84,7 @@ import '../shared/widgets/app_widgets.dart';
 import 'chat_provider.dart';
 
 part 'parts/chat_header_part.dart';
+part 'parts/chat_information_part.dart';
 part 'parts/chat_peer_info_part.dart';
 part 'parts/chat_message_part.dart';
 part 'parts/chat_composer_part.dart';
@@ -1009,6 +1011,9 @@ class _ChatViewState extends ConsumerState<ChatView> {
             isDeletedAgentConversation: isDeletedAgentConversation,
             onBack: widget.onBack,
             onPeerInfoTap: _openDetails,
+            onChatInformationTap: () => unawaited(
+              _openChatInformation(currentConversation, headerNickname),
+            ),
             onAddGroupMemberTap: canInviteGroupMembers
                 ? () => _openGroupInviteDialog(currentConversation)
                 : null,
@@ -1414,22 +1419,51 @@ class _ChatViewState extends ConsumerState<ChatView> {
     }
   }
 
+  Future<void> _openChatInformation(
+    ConversationSummary conversation,
+    String? nickname,
+  ) async {
+    if (conversation.isGroup) {
+      await _showGroupInfoDialog(conversation);
+      return;
+    }
+    final targetDid = conversation.targetDid?.trim();
+    if (targetDid == null || targetDid.isEmpty) {
+      return;
+    }
+    final cleared = await AppNavigator.push<bool>(
+      context,
+      (_) => _ChatInformationPage(
+        conversation: conversation,
+        target: _PeerInfoTarget.fromConversation(conversation),
+        displayName: nickname?.trim().isNotEmpty == true
+            ? nickname!.trim()
+            : DidDisplayFormatter.conversationTitle(conversation, context.l10n),
+        displayThreadId: _displayThreadId,
+      ),
+      rootNavigator: context.awikiResponsive.isCompact,
+    );
+    if (cleared == true && mounted) {
+      widget.onBack?.call();
+    }
+  }
+
   Future<void> _showPeerInfoDialog(ConversationSummary conversation) async {
+    await _showPeerInfoTarget(_PeerInfoTarget.fromConversation(conversation));
+  }
+
+  Future<void> _showPeerInfoTarget(_PeerInfoTarget target) async {
     if (context.awikiResponsive.isCompact) {
       await AppNavigator.push<void>(
         context,
-        (_) => _PeerInfoDialog(
-          target: _PeerInfoTarget.fromConversation(conversation),
-          fullPage: true,
-        ),
+        (_) => _PeerInfoDialog(target: target, fullPage: true),
+        rootNavigator: true,
       );
       return;
     }
     await AppNavigator.showDialog<void>(
       context,
-      (dialogContext) => _PeerInfoDialog(
-        target: _PeerInfoTarget.fromConversation(conversation),
-      ),
+      (dialogContext) => _PeerInfoDialog(target: target),
     );
   }
 
@@ -1550,7 +1584,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
     String senderLabel,
   ) {
     if (message.isMine) {
-      return () => showCurrentIdentityDialog(context);
+      return () => unawaited(_showCurrentIdentityInformation());
     }
     final targetDid = conversation.isGroup
         ? message.senderDid.trim()
@@ -1567,10 +1601,14 @@ class _ChatViewState extends ConsumerState<ChatView> {
             peerPersonaId: message.senderPeerPersonaId,
           )
         : _PeerInfoTarget.fromConversation(conversation);
-    return () => AppNavigator.showDialog<void>(
-      context,
-      (dialogContext) => _PeerInfoDialog(target: target),
-    );
+    return () => unawaited(_showPeerInfoTarget(target));
+  }
+
+  Future<void> _showCurrentIdentityInformation() {
+    if (context.awikiResponsive.isCompact) {
+      return showCurrentIdentityPage(context);
+    }
+    return showCurrentIdentityDialog(context);
   }
 
   Future<void> _pickAndStageAttachment() async {

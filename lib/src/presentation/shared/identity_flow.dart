@@ -229,6 +229,7 @@ Future<void> openDirectConversationForProfile(
   UserProfile profile, {
   String? conversationId,
   SessionEpoch? expectedEpoch,
+  bool pushWithinCurrentNavigator = false,
 }) async {
   await openDirectConversationForDid(
     context,
@@ -240,6 +241,7 @@ Future<void> openDirectConversationForProfile(
     avatarSeed: profile.handle ?? profile.did,
     conversationId: conversationId,
     expectedEpoch: expectedEpoch,
+    pushWithinCurrentNavigator: pushWithinCurrentNavigator,
   );
 }
 
@@ -270,6 +272,7 @@ Future<void> openDirectConversationForDid(
   String? conversationId,
   SessionEpoch? expectedEpoch,
   bool popCurrentRouteOnTwoPane = false,
+  bool pushWithinCurrentNavigator = false,
 }) async {
   final operationEpoch = expectedEpoch ?? ref.read(sessionProvider).activeEpoch;
   if (operationEpoch == null) {
@@ -345,7 +348,8 @@ Future<void> openDirectConversationForDid(
     return;
   }
 
-  if (!AwikiShellNavigationScope.isPresent(context)) {
+  if (pushWithinCurrentNavigator ||
+      !AwikiShellNavigationScope.isPresent(context)) {
     await AppNavigator.push(
       context,
       (_) => ChatPage(conversation: conversation),

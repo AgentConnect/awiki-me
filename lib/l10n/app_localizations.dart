@@ -1262,6 +1262,66 @@ abstract class AppLocalizations {
   /// **'联系人'**
   String get friendsTitle;
 
+  /// No description provided for @friendsSearchPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索联系人'**
+  String get friendsSearchPlaceholder;
+
+  /// No description provided for @friendsSearchGroupsPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索群组'**
+  String get friendsSearchGroupsPlaceholder;
+
+  /// No description provided for @friendsTabAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get friendsTabAll;
+
+  /// No description provided for @friendsTabFollowing.
+  ///
+  /// In zh, this message translates to:
+  /// **'关注'**
+  String get friendsTabFollowing;
+
+  /// No description provided for @friendsTabFollowers.
+  ///
+  /// In zh, this message translates to:
+  /// **'粉丝'**
+  String get friendsTabFollowers;
+
+  /// No description provided for @friendsTabGroups.
+  ///
+  /// In zh, this message translates to:
+  /// **'群组'**
+  String get friendsTabGroups;
+
+  /// No description provided for @friendsAllEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有联系人。'**
+  String get friendsAllEmpty;
+
+  /// No description provided for @friendsNoResults.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有找到相关联系人。'**
+  String get friendsNoResults;
+
+  /// No description provided for @friendsMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息'**
+  String get friendsMessage;
+
+  /// No description provided for @friendsFollowBack.
+  ///
+  /// In zh, this message translates to:
+  /// **'回关'**
+  String get friendsFollowBack;
+
   /// No description provided for @friendsGroups.
   ///
   /// In zh, this message translates to:
@@ -1334,6 +1394,30 @@ abstract class AppLocalizations {
   /// **'我'**
   String get profileMeTitle;
 
+  /// No description provided for @profileMyInformationTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的信息'**
+  String get profileMyInformationTitle;
+
+  /// No description provided for @profileIdentitySectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份信息'**
+  String get profileIdentitySectionTitle;
+
+  /// No description provided for @profileIdentityCardSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'完整资料，让协作更可信'**
+  String get profileIdentityCardSubtitle;
+
+  /// No description provided for @profileSettingsSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号、设备与应用偏好'**
+  String get profileSettingsSubtitle;
+
   /// No description provided for @profileFollowers.
   ///
   /// In zh, this message translates to:
@@ -1355,7 +1439,7 @@ abstract class AppLocalizations {
   /// No description provided for @profileEmpty.
   ///
   /// In zh, this message translates to:
-  /// **'暂无 profile'**
+  /// **'暂无资料'**
   String get profileEmpty;
 
   /// No description provided for @profileEditTitle.
@@ -1393,6 +1477,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'设置'**
   String get settingsTitle;
+
+  /// No description provided for @settingsAccountDevicesSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'账户与设备'**
+  String get settingsAccountDevicesSection;
+
+  /// No description provided for @settingsAppSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用'**
+  String get settingsAppSection;
+
+  /// No description provided for @settingsSecuritySection.
+  ///
+  /// In zh, this message translates to:
+  /// **'安全'**
+  String get settingsSecuritySection;
 
   /// No description provided for @settingsDevices.
   ///
@@ -3192,6 +3294,18 @@ abstract class AppLocalizations {
   /// **'智能体'**
   String get agentPageTitle;
 
+  /// No description provided for @agentMineSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的智能体'**
+  String get agentMineSection;
+
+  /// No description provided for @agentInstallDaemonAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装新的 Daemon'**
+  String get agentInstallDaemonAction;
+
   /// No description provided for @agentCreateDaemon.
   ///
   /// In zh, this message translates to:
@@ -4605,7 +4719,7 @@ abstract class AppLocalizations {
   /// No description provided for @personalAgentSettingsSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'配置个人助理的启用、暂停和 Daemon 消息授权。'**
+  /// **'配置个人助理的启用、暂停和 Daemon 管理'**
   String get personalAgentSettingsSubtitle;
 
   /// No description provided for @personalAgentSettingsDisabledSubtitle.
@@ -5369,6 +5483,66 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'群信息已更新'**
   String get chatGroupProfileUpdated;
+
+  /// No description provided for @chatInformationTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'聊天信息'**
+  String get chatInformationTitle;
+
+  /// No description provided for @chatOpenInformation.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开聊天信息'**
+  String get chatOpenInformation;
+
+  /// No description provided for @chatSearchHistory.
+  ///
+  /// In zh, this message translates to:
+  /// **'查找聊天记录'**
+  String get chatSearchHistory;
+
+  /// No description provided for @chatSearchHistoryPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索聊天记录'**
+  String get chatSearchHistoryPlaceholder;
+
+  /// No description provided for @chatSearchHistoryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有找到相关聊天记录'**
+  String get chatSearchHistoryEmpty;
+
+  /// No description provided for @chatMuteNotifications.
+  ///
+  /// In zh, this message translates to:
+  /// **'消息免打扰'**
+  String get chatMuteNotifications;
+
+  /// No description provided for @chatPinConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'置顶聊天'**
+  String get chatPinConversation;
+
+  /// No description provided for @chatRemoveConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'移出消息列表'**
+  String get chatRemoveConversation;
+
+  /// No description provided for @chatRemoveConversationConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'移出消息列表？'**
+  String get chatRemoveConversationConfirmTitle;
+
+  /// No description provided for @chatRemoveConversationConfirmMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'这只会将会话从消息列表移除，消息记录仍会保留；重新打开或收到新消息后会再次出现。'**
+  String get chatRemoveConversationConfirmMessage;
 
   /// No description provided for @handleRecoveryUnavailable.
   ///

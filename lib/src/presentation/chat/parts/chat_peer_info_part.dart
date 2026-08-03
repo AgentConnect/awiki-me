@@ -60,9 +60,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     final targetDid = widget.target.targetDid;
     final maxDialogHeight = MediaQuery.sizeOf(context).height * 0.86;
     final runtimeAgent = _runtimeAgent();
-    final title = runtimeAgent == null
-        ? context.l10n.chatPeerInfoUserTitle
-        : context.l10n.chatPeerInfoAgentTitle;
+    final targetLooksLikeAgent =
+        runtimeAgent != null || conversationTargetDidLooksLikeAgent(targetDid);
+    final title = targetLooksLikeAgent
+        ? context.l10n.chatPeerInfoAgentTitle
+        : context.l10n.chatPeerInfoUserTitle;
     final state = targetDid.isEmpty
         ? const PeerProfileState(isLoading: false)
         : ref.watch(peerProfileProvider(targetDid));
@@ -74,6 +76,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
           title: title,
           fullPage: widget.fullPage,
           showDivider: false,
+          compactAgentLayout:
+              widget.fullPage &&
+              context.awikiResponsive.isCompact &&
+              targetLooksLikeAgent,
         ),
         Flexible(
           child: _buildProfileContent(
@@ -87,7 +93,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     );
     if (widget.fullPage) {
       return CupertinoPageScaffold(
-        backgroundColor: context.awikiTheme.surface,
+        backgroundColor:
+            context.awikiResponsive.isCompact && targetLooksLikeAgent
+            ? context.awikiTheme.background
+            : context.awikiTheme.surface,
         child: SafeArea(bottom: false, child: content),
       );
     }
@@ -177,6 +186,26 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         runtimeAgent != null || conversationTargetDidLooksLikeAgent(targetDid);
     final canFollowProfile = profileDid.startsWith('did:');
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
+    if (widget.fullPage && responsive.isCompact && looksLikeAgent) {
+      final compactHandle = profile?.handle?.trim();
+      return _buildCompactAgentProfileContent(
+        state,
+        profileDid: profileDid,
+        displayName: primaryIdentity,
+        handleLabel: compactHandle == null || compactHandle.isEmpty
+            ? secondaryIdentity
+            : compactHandle.startsWith('@')
+            ? compactHandle
+            : '@$compactHandle',
+        avatarUri: avatarUri,
+        homepageUrl: homepageUrl,
+        profileContent: profileContent,
+        isFollowing: isFollowing,
+        relationship: relationship,
+        hasPositiveRelationship: hasPositiveRelationship,
+        canFollowProfile: canFollowProfile,
+      );
+    }
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         IdentityProfileLayout.contentInset(context),
@@ -347,6 +376,191 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     );
   }
 
+  Widget _buildCompactAgentProfileContent(
+    PeerProfileState state, {
+    required String profileDid,
+    required String displayName,
+    required String handleLabel,
+    required String? avatarUri,
+    required String homepageUrl,
+    required String profileContent,
+    required bool isFollowing,
+    required String relationship,
+    required bool hasPositiveRelationship,
+    required bool canFollowProfile,
+  }) {
+    final theme = context.awikiTheme;
+    final relationshipLabel = localizeRelationshipLabel(
+      context.l10n,
+      relationship,
+    );
+    return SingleChildScrollView(
+      key: const Key('peer-info-compact-agent-layout'),
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const SizedBox(height: 28),
+          Align(
+            child: AvatarBadge(
+              key: const Key('peer-info-avatar'),
+              seed: displayName,
+              size: 80,
+              avatarUri: avatarUri,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            key: const Key('peer-info-compact-agent-name'),
+            height: 34,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Center(
+                child: Text(
+                  displayName,
+                  key: const Key('peer-info-dialog-handle-value'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            key: const Key('peer-info-compact-agent-handle'),
+            height: 24,
+            child: Center(
+              child: Text(
+                handleLabel,
+                key: const Key('peer-info-dialog-display-name'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: theme.secondaryText,
+                  fontSize: 14,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 30),
+          if (canFollowProfile)
+            Align(
+              child: SizedBox(
+                width: 198,
+                height: 48,
+                child: _ChatFollowButton(
+                  isFollowing: isFollowing,
+                  compactAgentLayout: true,
+                  onTap: () => _toggleFollow(profileDid),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 48),
+          const SizedBox(height: 22),
+          SizedBox(
+            key: const Key('peer-info-compact-agent-badges'),
+            height: 28,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                _CompactAgentInfoBadge(
+                  key: const Key('peer-info-compact-agent-type-badge'),
+                  label: context.l10n.identityTypeAgent,
+                  emphasized: true,
+                ),
+                const SizedBox(width: 8),
+                _CompactAgentInfoBadge(
+                  key: const Key('peer-info-compact-agent-follow-badge'),
+                  label: relationshipLabel,
+                  emphasized: hasPositiveRelationship,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 42),
+          _CompactAgentInfoMetadataRow(
+            key: const Key('peer-info-compact-agent-did-row'),
+            height: 58,
+            label: 'DID',
+            showDivider: true,
+            child: CopyableDidLine(
+              value: profileDid,
+              displayValue: DidDisplayFormatter.compactDidPath(profileDid),
+              maxLines: 2,
+              copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+              copiedMessage: context.l10n.chatPeerInfoDidCopied,
+              textKey: const Key('peer-info-dialog-did-value'),
+              buttonKey: const Key('peer-info-dialog-copy-did-button'),
+              textStyle: TextStyle(
+                color: theme.secondaryText,
+                fontSize: 14,
+                height: 1.35,
+              ),
+              buttonSize: 44,
+              iconSize: 20,
+              showButtonChrome: false,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (homepageUrl.isNotEmpty)
+            _CompactAgentHomepageRow(
+              homepageUrl: homepageUrl,
+              onTap: () => _openHomepage(homepageUrl),
+            )
+          else
+            const SizedBox(height: 60),
+          Container(
+            key: const Key('peer-info-compact-agent-section-divider'),
+            height: 1,
+            color: theme.border,
+          ),
+          const SizedBox(height: 25),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              key: const Key('peer-info-identity-document'),
+              height: 104,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+              decoration: BoxDecoration(
+                color: theme.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: theme.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    context.l10n.chatPeerInfoIdentityCard,
+                    style: TextStyle(
+                      color: theme.title,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  IdentityDocumentContent(
+                    content: profileContent,
+                    emptyText: context.l10n.chatPeerInfoNoProfile,
+                    emptyState: _profilePlaceholder(state),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _profileDid(UserProfile? profile, {required String fallbackDid}) {
     final did = profile?.did.trim();
     if (did != null && did.isNotEmpty) {
@@ -485,17 +699,22 @@ class _PeerInfoHeader extends StatelessWidget {
     required this.title,
     this.fullPage = false,
     this.showDivider = true,
+    this.compactAgentLayout = false,
   });
 
   final String title;
   final bool fullPage;
   final bool showDivider;
+  final bool compactAgentLayout;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     if (fullPage) {
       return DecoratedBox(
+        key: compactAgentLayout
+            ? const Key('peer-info-compact-agent-header')
+            : null,
         decoration: BoxDecoration(
           color: AwikiMePalette.content,
           border: showDivider
@@ -506,7 +725,12 @@ class _PeerInfoHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: AwikiMeTopBar(
             title: title,
-            padding: EdgeInsets.zero,
+            padding: compactAgentLayout
+                ? const EdgeInsets.symmetric(vertical: 6)
+                : EdgeInsets.zero,
+            titleFontSize: compactAgentLayout
+                ? 20
+                : awikiMeCompactTopBarTitleFontSize,
             leading: TopBarActionButton(
               key: const Key('peer-info-back-button'),
               onTap: () => Navigator.of(context).pop(),
@@ -514,7 +738,7 @@ class _PeerInfoHeader extends StatelessWidget {
               child: AwikiMeSemanticIcon(
                 role: AwikiMeIconRole.back,
                 color: context.awikiTheme.primaryDark,
-                size: responsive.iconSm,
+                size: compactAgentLayout ? 20 : responsive.iconSm,
               ),
             ),
           ),
@@ -541,6 +765,154 @@ class _PeerInfoHeader extends StatelessWidget {
             title: title,
             closeLabel: context.l10n.chatPeerInfoClose,
             onClose: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactAgentInfoBadge extends StatelessWidget {
+  const _CompactAgentInfoBadge({
+    super.key,
+    required this.label,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: emphasized ? theme.primarySoft : theme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: emphasized ? theme.primarySoft : theme.border,
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: theme.secondaryText, fontSize: 14, height: 1),
+      ),
+    );
+  }
+}
+
+class _CompactAgentInfoMetadataRow extends StatelessWidget {
+  const _CompactAgentInfoMetadataRow({
+    super.key,
+    required this.height,
+    required this.label,
+    required this.child,
+    this.showDivider = false,
+  });
+
+  final double height;
+  final String label;
+  final Widget child;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return SizedBox(
+      height: height,
+      child: Stack(
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 56,
+                  child: Text(
+                    label,
+                    style: TextStyle(color: theme.secondaryText, fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: child),
+              ],
+            ),
+          ),
+          if (showDivider)
+            Positioned(
+              left: 92,
+              right: 24,
+              bottom: 0,
+              child: SizedBox(
+                key: const Key('peer-info-compact-agent-metadata-divider'),
+                height: 1,
+                child: ColoredBox(color: theme.border),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactAgentHomepageRow extends StatelessWidget {
+  const _CompactAgentHomepageRow({
+    required this.homepageUrl,
+    required this.onTap,
+  });
+
+  final String homepageUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return AppPressable(
+      key: const Key('peer-info-compact-agent-homepage-row'),
+      onTap: onTap,
+      semanticLabel: context.l10n.profileOpenHomepage,
+      borderRadius: BorderRadius.zero,
+      child: SizedBox(
+        height: 60,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 56,
+                child: Text(
+                  context.l10n.profileHomepageLabel,
+                  style: TextStyle(color: theme.secondaryText, fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  homepageUrl,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: theme.primary,
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox.square(
+                dimension: 44,
+                child: Icon(
+                  CupertinoIcons.arrow_up_right,
+                  color: theme.secondaryText,
+                  size: 20,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1034,10 +1406,15 @@ class _MacChatPill extends StatelessWidget {
 }
 
 class _ChatFollowButton extends StatefulWidget {
-  const _ChatFollowButton({required this.isFollowing, required this.onTap});
+  const _ChatFollowButton({
+    required this.isFollowing,
+    required this.onTap,
+    this.compactAgentLayout = false,
+  });
 
   final bool isFollowing;
   final Future<void> Function() onTap;
+  final bool compactAgentLayout;
 
   @override
   State<_ChatFollowButton> createState() => _ChatFollowButtonState();
@@ -1051,6 +1428,50 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
     final label = widget.isFollowing
         ? context.l10n.followContactAlreadyFollowing
         : context.l10n.friendsFollow;
+    if (widget.compactAgentLayout) {
+      final theme = context.awikiTheme;
+      return AppPressable(
+        key: Key(
+          widget.isFollowing ? 'chat-unfollow-button' : 'chat-follow-button',
+        ),
+        onTap: _isBusy ? null : _handleTap,
+        semanticLabel: label,
+        tooltip: label,
+        enabled: !_isBusy,
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 198,
+          height: 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.isFollowing ? theme.surface : theme.primary,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: widget.isFollowing ? theme.border : theme.primary,
+            ),
+          ),
+          child: _isBusy
+              ? CupertinoActivityIndicator(
+                  key: const Key('chat-relationship-action-progress'),
+                  radius: 8,
+                  color: widget.isFollowing
+                      ? theme.secondaryText
+                      : theme.primaryForeground,
+                )
+              : Text(
+                  label,
+                  style: TextStyle(
+                    color: widget.isFollowing
+                        ? theme.secondaryText
+                        : theme.primaryForeground,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+        ),
+      );
+    }
     return IdentityProfileActionButton(
       key: Key(
         widget.isFollowing ? 'chat-unfollow-button' : 'chat-follow-button',
@@ -1059,18 +1480,18 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
       emphasized: !widget.isFollowing,
       isLoading: _isBusy,
       progressKey: const Key('chat-relationship-action-progress'),
-      onPressed: _isBusy
-          ? null
-          : () async {
-              setState(() => _isBusy = true);
-              try {
-                await widget.onTap();
-              } finally {
-                if (mounted) {
-                  setState(() => _isBusy = false);
-                }
-              }
-            },
+      onPressed: _isBusy ? null : _handleTap,
     );
+  }
+
+  Future<void> _handleTap() async {
+    setState(() => _isBusy = true);
+    try {
+      await widget.onTap();
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
   }
 }

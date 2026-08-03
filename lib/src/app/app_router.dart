@@ -26,9 +26,14 @@ class AppNavigator {
     systemNavigationBarDividerColor: AwikiMePalette.navigationBorder,
   );
 
-  static Future<T?> push<T>(BuildContext context, WidgetBuilder builder) {
+  static Future<T?> push<T>(
+    BuildContext context,
+    WidgetBuilder builder, {
+    bool rootNavigator = false,
+  }) {
     return Navigator.of(
       context,
+      rootNavigator: rootNavigator,
     ).push<T>(CupertinoPageRoute<T>(builder: builder));
   }
 

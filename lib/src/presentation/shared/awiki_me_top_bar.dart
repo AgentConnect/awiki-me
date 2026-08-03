@@ -2,11 +2,14 @@ import 'package:flutter/cupertino.dart';
 
 import '../../l10n/l10n.dart';
 import 'awiki_me_design.dart';
-import 'awiki_me_semantic_icon.dart';
 import 'responsive_layout.dart';
 import 'widgets/app_widgets.dart';
 
 enum AwikiMeTopBarTitleLayout { centered, adaptive }
+
+const double awikiMeCompactTopBarTitleFontSize = 16;
+const FontWeight awikiMeCompactTopBarTitleFontWeight = FontWeight.w600;
+const double awikiMeCompactTopBarTitleHeight = 1.25;
 
 class AwikiMeTopBar extends StatelessWidget {
   const AwikiMeTopBar({
@@ -20,6 +23,7 @@ class AwikiMeTopBar extends StatelessWidget {
     this.titleColor,
     this.titleFontSize,
     this.titleFontWeight,
+    this.titleHeight,
     this.titleLayout = AwikiMeTopBarTitleLayout.centered,
   });
 
@@ -32,6 +36,7 @@ class AwikiMeTopBar extends StatelessWidget {
   final Color? titleColor;
   final double? titleFontSize;
   final FontWeight? titleFontWeight;
+  final double? titleHeight;
   final AwikiMeTopBarTitleLayout titleLayout;
 
   @override
@@ -44,6 +49,7 @@ class AwikiMeTopBar extends StatelessWidget {
       color: titleColor,
       fontSize: titleFontSize ?? responsive.titleXl,
       fontWeight: titleFontWeight,
+      height: titleHeight,
     );
     return Padding(
       padding: padding,
@@ -143,39 +149,32 @@ class AwikiMeShellTopBar extends StatelessWidget {
   const AwikiMeShellTopBar({
     super.key,
     required this.title,
-    this.onSettingsTap,
     this.onQuickActionsTap,
+    this.quickActionIcon = CupertinoIcons.square_pencil,
   });
 
   final String title;
-  final VoidCallback? onSettingsTap;
   final ValueChanged<BuildContext>? onQuickActionsTap;
+  final IconData quickActionIcon;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     const titleColor = AwikiMePalette.inkNeutral;
-    const actionColor = AwikiMePalette.mutedNeutral;
     return AwikiMeTopBar(
       title: title,
-      padding: EdgeInsets.zero,
+      padding: responsive.isPhone
+          ? const EdgeInsets.symmetric(vertical: 6)
+          : EdgeInsets.zero,
       titleColor: titleColor,
       titleFontSize: responsive.isPhone
-          ? responsive.displayScaled(16)
+          ? awikiMeCompactTopBarTitleFontSize
           : responsive.displayScaled(14),
-      titleFontWeight: FontWeight.w600,
-      leading: onSettingsTap == null
-          ? const SizedBox.shrink()
-          : TopBarActionButton(
-              onTap: onSettingsTap,
-              semanticsIdentifier: 'e2e-settings-button',
-              semanticsLabel: context.l10n.settingsTitle,
-              child: AwikiMeSemanticIcon(
-                role: AwikiMeIconRole.settings,
-                size: responsive.iconLg,
-                color: actionColor,
-              ),
-            ),
+      titleFontWeight: responsive.isPhone
+          ? awikiMeCompactTopBarTitleFontWeight
+          : FontWeight.w600,
+      titleHeight: responsive.isPhone ? awikiMeCompactTopBarTitleHeight : null,
+      leading: const SizedBox.shrink(),
       trailing: onQuickActionsTap == null
           ? const SizedBox.shrink()
           : Builder(
@@ -184,13 +183,34 @@ class AwikiMeShellTopBar extends StatelessWidget {
                 onTap: () => onQuickActionsTap!(anchorContext),
                 semanticsIdentifier: 'e2e-quick-actions-button',
                 semanticsLabel: context.l10n.commonMoreActions,
-                child: AwikiMeSemanticIcon(
-                  role: AwikiMeIconRole.add,
+                child: Icon(
+                  quickActionIcon,
                   size: responsive.iconLg,
-                  color: actionColor,
+                  color: AwikiMePalette.brandAccent,
                 ),
               ),
             ),
+    );
+  }
+}
+
+class AwikiMeBrandMark extends StatelessWidget {
+  const AwikiMeBrandMark({super.key, this.size});
+
+  final double? size;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedSize = size ?? context.awikiResponsive.displayScaled(22);
+    return SizedBox.square(
+      dimension: resolvedSize,
+      child: Image.asset(
+        'assets/branding/awiki-me-logo.png',
+        key: const Key('awiki-me-brand-mark'),
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
     );
   }
 }
@@ -200,13 +220,13 @@ class AwikiMeShellTabPage extends StatelessWidget {
     super.key,
     required this.title,
     required this.child,
-    this.onSettingsTap,
     this.onQuickActionsTap,
+    this.quickActionIcon = CupertinoIcons.square_pencil,
   });
 
   final String title;
-  final VoidCallback? onSettingsTap;
   final ValueChanged<BuildContext>? onQuickActionsTap;
+  final IconData quickActionIcon;
   final Widget child;
 
   @override
@@ -222,6 +242,7 @@ class AwikiMeShellTabPage extends StatelessWidget {
       child: Column(
         children: <Widget>[
           DecoratedBox(
+            key: responsive.isPhone ? const Key('shell-compact-header') : null,
             decoration: BoxDecoration(
               color: theme.surface,
               border: Border(bottom: BorderSide(color: theme.border)),
@@ -230,8 +251,8 @@ class AwikiMeShellTabPage extends StatelessWidget {
               padding: responsive.scaledInsets(innerPadding),
               child: AwikiMeShellTopBar(
                 title: title,
-                onSettingsTap: onSettingsTap,
                 onQuickActionsTap: onQuickActionsTap,
+                quickActionIcon: quickActionIcon,
               ),
             ),
           ),

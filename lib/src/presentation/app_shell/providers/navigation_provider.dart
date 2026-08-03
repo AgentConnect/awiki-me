@@ -13,8 +13,8 @@ enum ShellDestination {
 
 const List<ShellDestination> compactShellDestinations = <ShellDestination>[
   ShellDestination.messages,
-  ShellDestination.agents,
   ShellDestination.contacts,
+  ShellDestination.agents,
   ShellDestination.profile,
 ];
 

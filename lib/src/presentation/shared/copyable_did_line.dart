@@ -13,6 +13,8 @@ class CopyableDidLine extends StatelessWidget {
     required this.copiedMessage,
     this.displayValue,
     this.maxLines,
+    this.softWrap = true,
+    this.overflow,
     this.textKey,
     this.buttonKey,
     this.textStyle,
@@ -26,6 +28,8 @@ class CopyableDidLine extends StatelessWidget {
   final String value;
   final String? displayValue;
   final int? maxLines;
+  final bool softWrap;
+  final TextOverflow? overflow;
   final String copySemanticLabel;
   final String copiedMessage;
   final Key? textKey;
@@ -47,8 +51,9 @@ class CopyableDidLine extends StatelessWidget {
           child: Text(
             key: textKey,
             displayValue ?? value,
-            softWrap: true,
+            softWrap: softWrap,
             maxLines: maxLines,
+            overflow: overflow,
             style:
                 textStyle ??
                 TextStyle(color: theme.body, fontSize: 12, height: 1.35),

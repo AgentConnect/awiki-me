@@ -1194,8 +1194,32 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     ChatMessage message, {
     bool suppressWhenForeground = false,
   }) async {
-    if (_disposed || ref.read(sessionProvider).session == null) {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (_disposed || epoch == null) {
       return;
+    }
+    final conversationId = message.conversationId?.trim() ?? '';
+    if (conversationId.isNotEmpty) {
+      try {
+        final overlay = await ref
+            .read(productLocalStoreProvider)
+            .loadConversationOverlayByConversationId(
+              ownerDid: epoch.ownerDid,
+              conversationId: conversationId,
+            );
+        if (_disposed || !_isCurrentEpoch(epoch)) {
+          return;
+        }
+        if (overlay?.muted == true) {
+          return;
+        }
+      } catch (_) {
+        // Notification preferences are best-effort when the local overlay
+        // store is temporarily unavailable.
+        if (_disposed || !_isCurrentEpoch(epoch)) {
+          return;
+        }
+      }
     }
     final l10n = _currentLocalizations();
     final systemEvent = message.groupSystemEvent;

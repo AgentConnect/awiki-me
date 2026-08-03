@@ -127,20 +127,210 @@ void main() {
     expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(256));
   });
 
-  testWidgets('紧凑设置页使用单层窄边距扩大设置行宽度', (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(393, 852));
+  testWidgets('紧凑设置页按图1使用连续全宽列表并在首屏展示全部安全操作', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const session = SessionIdentity(
+      did: 'did:test:compact-settings',
+      credentialName: 'compact-settings',
+      displayName: 'newhandle2',
+      handle: 'newhandle2.agent-connect.cn',
+    );
 
-    await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const SettingsPage(), session: session),
+    );
     await tester.pumpAndSettle();
 
-    final sectionSurface = find
-        .descendant(
-          of: find.byKey(const Key('settings-general-section')),
-          matching: find.byType(DecoratedBox),
+    final headerRect = tester.getRect(
+      find.byKey(const Key('settings-compact-header')),
+    );
+    final avatarRect = tester.getRect(
+      find.byKey(const Key('settings-profile-avatar')),
+    );
+    final accountFinder = find.byKey(const Key('settings-account-group'));
+    final appFinder = find.byKey(const Key('settings-app-group'));
+    final securityFinder = find.byKey(const Key('settings-security-group'));
+    final accountRect = tester.getRect(accountFinder);
+    final appRect = tester.getRect(appFinder);
+    final securityRect = tester.getRect(securityFinder);
+    final profileRect = tester.getRect(
+      find.byKey(const Key('settings-profile-row')),
+    );
+    final compactScaffold = tester.widget<CupertinoPageScaffold>(
+      find.byType(CupertinoPageScaffold),
+    );
+
+    expect(compactScaffold.backgroundColor, AwikiMeColors.background);
+    expect(headerRect, const Rect.fromLTWH(0, 0, 390, 64));
+    expect(
+      tester.getRect(find.byKey(const Key('settings-back-button'))),
+      const Rect.fromLTWH(8, 10, 44, 44),
+    );
+    expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
+    expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
+    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 146));
+    expect(appRect, const Rect.fromLTWH(0, 394, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 617, 390, 223));
+
+    for (final titleKey in <String>[
+      'settings-account-section-title',
+      'settings-app-section-title',
+      'settings-security-section-title',
+    ]) {
+      final title = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(Key(titleKey)),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(title.style?.fontSize, 13);
+      expect(title.maxLines, 1);
+      expect(title.overflow, TextOverflow.ellipsis);
+    }
+    final versionRow = find.byKey(const Key('settings-current-version-row'));
+    expect(
+      tester.getRect(find.byKey(const Key('settings-current-version-icon'))),
+      const Rect.fromLTWH(28, 412, 24, 24),
+    );
+    expect(tester.getRect(find.text('当前版本')).left, closeTo(68, 0.1));
+    expect(tester.getSize(versionRow).height, 60);
+    expect(
+      find.descendant(
+        of: versionRow,
+        matching: find.byIcon(CupertinoIcons.chevron_right),
+      ),
+      findsNothing,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-devices-row'))).height,
+      72,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-personal-agent-row')))
+          .height,
+      72,
+    );
+    final assistantDescription = tester.widget<Text>(
+      find.text('配置个人助理的启用、暂停和 Daemon 管理'),
+    );
+    expect(assistantDescription.maxLines, 1);
+    expect(assistantDescription.overflow, TextOverflow.ellipsis);
+    expect(find.text('查看已授权设备并审批新设备'), findsOneWidget);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-check-updates-row')))
+          .height,
+      60,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-language-row'))).height,
+      60,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-export-credential-row')))
+          .height,
+      68,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-logout-row'))).height,
+      68,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-profile-row'))).height,
+      greaterThanOrEqualTo(44),
+    );
+    expect(
+      find.byKey(const Key('settings-danger-section-title')),
+      findsNothing,
+    );
+    expect(find.text('导出身份凭证'), findsOneWidget);
+    expect(find.text('退出登录'), findsOneWidget);
+    expect(find.text('退出并删除当前凭证'), findsOneWidget);
+    expect(tester.getRect(find.text('退出并删除当前凭证')).bottom, lessThan(844));
+    final securitySurface = tester.widget<ColoredBox>(
+      find
+          .descendant(of: securityFinder, matching: find.byType(ColoredBox))
+          .first,
+    );
+    expect(securitySurface.color, AwikiMeColors.surface);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-delete-credential-row')))
+          .height,
+      84,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-delete-credential-icon'))),
+      const Size.square(24),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('紧凑设置页长动态值保持单行省略且不溢出', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(320, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const longCredential =
+        'credential-with-an-extremely-long-name-that-must-not-overflow';
+    const session = SessionIdentity(
+      did: 'did:test:compact-settings-long-values',
+      credentialName: longCredential,
+      displayName: 'A Very Long Settings Display Name For Narrow Screens',
+      handle: 'a-very-long-handle.very-long-tenant.example',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const SettingsPage(), session: session),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final profileTexts = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byKey(const Key('settings-profile-row')),
+            matching: find.byType(Text),
+          ),
         )
-        .first;
-    expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(373));
+        .where((text) => text.maxLines == 1);
+    expect(profileTexts, hasLength(2));
+    for (final text in profileTexts) {
+      expect(text.maxLines, 1);
+      expect(text.overflow, TextOverflow.ellipsis);
+    }
+    final languageValue = tester.widget<Text>(
+      find.byKey(const Key('settings-language-value')),
+    );
+    expect(languageValue.maxLines, 1);
+    expect(languageValue.softWrap, isFalse);
+    expect(languageValue.overflow, TextOverflow.ellipsis);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-export-credential-row')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final exportTexts = tester.widgetList<Text>(
+      find.descendant(
+        of: find.byKey(const Key('settings-export-credential-row')),
+        matching: find.byType(Text),
+      ),
+    );
+    final credentialSubtitle = exportTexts.singleWhere(
+      (text) => text.data?.contains(longCredential) == true,
+    );
+    expect(credentialSubtitle.maxLines, 1);
+    expect(credentialSubtitle.overflow, TextOverflow.ellipsis);
     expect(tester.takeException(), isNull);
   });
 

@@ -15,6 +15,7 @@ enum AwikiMeIconRole {
   add,
   newConversation,
   more,
+  moreHorizontal,
   edit,
   refresh,
   notifications,
@@ -103,6 +104,9 @@ class AwikiMeIconRegistry {
         AwikiMeIconRole.more: AwikiMeIconDefinition(
           fallback: CupertinoIcons.ellipsis,
           assetName: 'assets/icons/dot_vertical.svg',
+        ),
+        AwikiMeIconRole.moreHorizontal: AwikiMeIconDefinition(
+          fallback: CupertinoIcons.ellipsis,
         ),
         AwikiMeIconRole.edit: AwikiMeIconDefinition(
           fallback: CupertinoIcons.pencil,

@@ -9,6 +9,7 @@ class _ChatHeader extends StatelessWidget {
     required this.classification,
     required this.isDeletedAgentConversation,
     required this.onPeerInfoTap,
+    required this.onChatInformationTap,
     this.onBack,
     this.onAddGroupMemberTap,
     this.isAddGroupMemberLoading = false,
@@ -22,6 +23,7 @@ class _ChatHeader extends StatelessWidget {
   final ConversationPeerClassification classification;
   final bool isDeletedAgentConversation;
   final VoidCallback onPeerInfoTap;
+  final VoidCallback onChatInformationTap;
   final VoidCallback? onAddGroupMemberTap;
   final bool isAddGroupMemberLoading;
 
@@ -105,12 +107,11 @@ class _ChatHeader extends StatelessWidget {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final showSourceLabel = constraints.maxWidth >= 350;
-        final sideWidth = responsive.displayScaled(showSourceLabel ? 82 : 44);
+        final sideWidth = responsive.displayScaled(44);
         return Container(
           key: const Key('chat-header'),
-          height: responsive.displayScaled(52),
-          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(8)),
+          height: responsive.displayScaled(64),
+          padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
           decoration: BoxDecoration(
             color: theme.surface,
             border: Border(bottom: BorderSide(color: theme.border)),
@@ -130,48 +131,40 @@ class _ChatHeader extends StatelessWidget {
                       AwikiMeSemanticIcon(
                         role: AwikiMeIconRole.back,
                         color: theme.primaryDark,
-                        size: responsive.iconSm,
+                        size: responsive.iconMd,
                       ),
-                      if (showSourceLabel) ...<Widget>[
-                        SizedBox(width: responsive.spacing(3)),
-                        Flexible(
-                          child: Text(
-                            context.l10n.shellNavMessages,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: theme.primaryDark,
-                              fontSize: responsive.bodySm,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
               ),
               Expanded(
-                child: _ChatHeaderIdentityTapTarget(
-                  key: const Key('chat-peer-info-avatar-button'),
-                  semanticLabel: openInfoLabel,
-                  semanticsIdentifier: 'chat-peer-info-avatar-button',
-                  onTap: onPeerInfoTap,
-                  child: Text(
-                    compactName,
-                    key: const Key('chat-header-title'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: responsive.displayScaled(16),
-                      fontWeight: FontWeight.w600,
-                      color: theme.title,
-                    ),
+                child: Text(
+                  compactName,
+                  key: const Key('chat-header-title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: responsive.displayScaled(16),
+                    fontWeight: FontWeight.w600,
+                    color: theme.title,
                   ),
                 ),
               ),
-              SizedBox(width: sideWidth),
+              SizedBox(
+                width: sideWidth,
+                child: TopBarActionButton(
+                  key: const Key('chat-information-button'),
+                  onTap: onChatInformationTap,
+                  semanticsIdentifier: 'e2e-chat-information-button',
+                  semanticsLabel: context.l10n.chatOpenInformation,
+                  child: AwikiMeSemanticIcon(
+                    role: AwikiMeIconRole.moreHorizontal,
+                    color: theme.secondaryText,
+                    size: responsive.iconMd,
+                  ),
+                ),
+              ),
             ],
           ),
         );

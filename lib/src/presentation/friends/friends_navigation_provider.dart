@@ -1,10 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import 'friends_provider.dart';
 
-enum FriendsWorkspaceDetail { overview, relationships, groups, profile }
+enum FriendsWorkspaceDetail {
+  overview,
+  relationships,
+  groups,
+  groupChat,
+  profile,
+}
 
 enum FriendsProfileParent { overview, relationships }
 
@@ -15,12 +22,14 @@ class FriendsWorkspaceNavigationState {
     this.relationshipType = FriendsRelationshipListType.following,
     this.profileParent = FriendsProfileParent.overview,
     this.selectedDid,
+    this.selectedGroupConversation,
   });
 
   final FriendsWorkspaceDetail detail;
   final FriendsRelationshipListType relationshipType;
   final FriendsProfileParent profileParent;
   final String? selectedDid;
+  final ConversationSummary? selectedGroupConversation;
 
   bool get showsCompactDetail => detail != FriendsWorkspaceDetail.overview;
 
@@ -35,12 +44,17 @@ class FriendsWorkspaceNavigationState {
     FriendsProfileParent? profileParent,
     String? selectedDid,
     bool clearSelectedDid = false,
+    ConversationSummary? selectedGroupConversation,
+    bool clearSelectedGroupConversation = false,
   }) {
     return FriendsWorkspaceNavigationState(
       detail: detail ?? this.detail,
       relationshipType: relationshipType ?? this.relationshipType,
       profileParent: profileParent ?? this.profileParent,
       selectedDid: clearSelectedDid ? null : selectedDid ?? this.selectedDid,
+      selectedGroupConversation: clearSelectedGroupConversation
+          ? null
+          : selectedGroupConversation ?? this.selectedGroupConversation,
     );
   }
 }
@@ -62,6 +76,15 @@ class FriendsWorkspaceNavigationController
       detail: FriendsWorkspaceDetail.groups,
       profileParent: FriendsProfileParent.overview,
       clearSelectedDid: true,
+      clearSelectedGroupConversation: true,
+    );
+  }
+
+  void showGroupChat(ConversationSummary conversation) {
+    state = state.copyWith(
+      detail: FriendsWorkspaceDetail.groupChat,
+      selectedGroupConversation: conversation,
+      clearSelectedDid: true,
     );
   }
 
@@ -81,6 +104,7 @@ class FriendsWorkspaceNavigationController
       detail: FriendsWorkspaceDetail.profile,
       profileParent: profileParent,
       selectedDid: normalized,
+      clearSelectedGroupConversation: true,
     );
   }
 
@@ -94,10 +118,15 @@ class FriendsWorkspaceNavigationController
             ? FriendsWorkspaceDetail.relationships
             : FriendsWorkspaceDetail.overview,
       FriendsWorkspaceDetail.relationships ||
-      FriendsWorkspaceDetail.groups => FriendsWorkspaceDetail.overview,
+      FriendsWorkspaceDetail.groups ||
+      FriendsWorkspaceDetail.groupChat => FriendsWorkspaceDetail.overview,
       FriendsWorkspaceDetail.overview => FriendsWorkspaceDetail.overview,
     };
-    state = state.copyWith(detail: destination, clearSelectedDid: true);
+    state = state.copyWith(
+      detail: destination,
+      clearSelectedDid: true,
+      clearSelectedGroupConversation: true,
+    );
   }
 
   void reset() {
