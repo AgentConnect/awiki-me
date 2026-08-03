@@ -180,11 +180,7 @@ class _ConversationListPageState extends ConsumerState<ConversationListPage> {
   ) async {
     final confirmed = await AppNavigator.showDialog<bool>(
       context,
-      (dialogContext) => AppConfirmationDialog(
-        title: context.l10n.conversationsDeleteTitle,
-        message: context.l10n.conversationsDeleteContent,
-        confirmLabel: context.l10n.commonDelete,
-        destructive: true,
+      (dialogContext) => _ConversationDeleteDialog(
         onCancel: () => Navigator.of(dialogContext).pop(false),
         onConfirm: () => Navigator.of(dialogContext).pop(true),
       ),
@@ -628,6 +624,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final responsive = context.awikiResponsive;
     return CustomScrollView(
       slivers: <Widget>[
         CupertinoSliverRefreshControl(onRefresh: onRefresh),
@@ -685,8 +682,7 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   item,
                   composerDrafts,
                 );
-                return _ConversationRow(
-                  key: Key('conversation-row:${item.conversationId}'),
+                final row = _ConversationRow(
                   conversationId: item.conversationId,
                   title: _conversationPresentationTitle(
                     ref,
@@ -709,10 +705,225 @@ class _ConversationSearchableRefreshView extends ConsumerWidget {
                   onTap: () => onOpen(item),
                   onLongPress: () => onDelete(item),
                 );
+                if (!responsive.isCompact) {
+                  return KeyedSubtree(
+                    key: Key('conversation-row:${item.conversationId}'),
+                    child: row,
+                  );
+                }
+                return _SwipeToDeleteConversationRow(
+                  key: Key('conversation-row:${item.conversationId}'),
+                  conversationId: item.conversationId,
+                  title: _conversationPresentationTitle(
+                    ref,
+                    item,
+                    context.l10n,
+                  ),
+                  onDelete: () => onDelete(item),
+                  child: row,
+                );
               },
             ),
           ),
       ],
+    );
+  }
+}
+
+class _ConversationDeleteDialog extends StatelessWidget {
+  const _ConversationDeleteDialog({
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    return AppConfirmationDialog(
+      title: context.l10n.conversationsDeleteTitle,
+      message: context.l10n.conversationsDeleteContent,
+      confirmLabel: context.l10n.commonDelete,
+      destructive: true,
+      onCancel: onCancel,
+      onConfirm: onConfirm,
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.subtleSurface,
+          borderRadius: BorderRadius.circular(responsive.radius(12)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: responsive.spacing(10),
+            vertical: responsive.spacing(8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Semantics(
+                enabled: false,
+                label: context.l10n.conversationsDeleteClearHistory,
+                child: const CupertinoCheckbox(
+                  key: Key('conversation-delete-clear-history'),
+                  value: false,
+                  onChanged: null,
+                ),
+              ),
+              SizedBox(width: responsive.spacing(8)),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      context.l10n.conversationsDeleteClearHistory,
+                      style: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: responsive.displayScaled(14),
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                      ),
+                    ),
+                    SizedBox(height: responsive.spacing(2)),
+                    Text(
+                      context.l10n.conversationsDeleteClearHistoryUnavailable,
+                      style: TextStyle(
+                        color: theme.tertiaryText,
+                        fontSize: responsive.displayScaled(11),
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SwipeToDeleteConversationRow extends StatefulWidget {
+  const _SwipeToDeleteConversationRow({
+    super.key,
+    required this.conversationId,
+    required this.title,
+    required this.onDelete,
+    required this.child,
+  });
+
+  final String conversationId;
+  final String title;
+  final VoidCallback onDelete;
+  final Widget child;
+
+  @override
+  State<_SwipeToDeleteConversationRow> createState() =>
+      _SwipeToDeleteConversationRowState();
+}
+
+class _SwipeToDeleteConversationRowState
+    extends State<_SwipeToDeleteConversationRow> {
+  double _dragOffset = 0;
+  bool _hasInteracted = false;
+  bool _actionVisible = false;
+
+  void _handleDragUpdate(DragUpdateDetails details, double actionExtent) {
+    setState(() {
+      _hasInteracted = true;
+      _actionVisible = true;
+      _dragOffset = (_dragOffset + details.delta.dx).clamp(-actionExtent, 0.0);
+    });
+  }
+
+  void _handleDragEnd(DragEndDetails details, double actionExtent) {
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldOpen = velocity < -220 || _dragOffset < -actionExtent * 0.45;
+    setState(() {
+      _actionVisible = shouldOpen;
+      _dragOffset = shouldOpen ? -actionExtent : 0;
+    });
+  }
+
+  void _handleDelete() {
+    setState(() {
+      _actionVisible = false;
+      _dragOffset = 0;
+    });
+    widget.onDelete();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final theme = context.awikiTheme;
+    final actionExtent = responsive.displayScaled(84);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    final foreground = !_hasInteracted
+        ? widget.child
+        : AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(_dragOffset, 0, 0),
+            child: widget.child,
+          );
+    return ClipRect(
+      child: Stack(
+        children: <Widget>[
+          if (_actionVisible)
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox(
+                  width: actionExtent,
+                  child: CupertinoButton(
+                    key: Key(
+                      'conversation-row-delete:${widget.conversationId}',
+                    ),
+                    padding: EdgeInsets.zero,
+                    color: theme.danger,
+                    borderRadius: BorderRadius.zero,
+                    onPressed: _handleDelete,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Icon(
+                          CupertinoIcons.delete,
+                          color: CupertinoColors.white,
+                          size: responsive.displayScaled(20),
+                        ),
+                        SizedBox(height: responsive.spacing(4)),
+                        Text(
+                          context.l10n.conversationsSwipeDelete,
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: responsive.displayScaled(13),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragUpdate: (details) =>
+                _handleDragUpdate(details, actionExtent),
+            onHorizontalDragEnd: (details) =>
+                _handleDragEnd(details, actionExtent),
+            child: foreground,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1015,7 +1226,6 @@ class _MacConversationEmptyState extends StatelessWidget {
 
 class _ConversationRow extends StatelessWidget {
   const _ConversationRow({
-    super.key,
     required this.conversationId,
     required this.title,
     required this.avatarUri,

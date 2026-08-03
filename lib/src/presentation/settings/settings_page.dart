@@ -638,6 +638,11 @@ class SettingsPage extends ConsumerWidget {
         message: context.l10n.settingsDeleteCredentialConfirmContent(
           credentialName,
         ),
+        helperMessage: context.l10n.settingsDeleteCredentialConfirmHint,
+        compactTitleTextAlign: TextAlign.center,
+        compactMessageTextAlign: TextAlign.center,
+        compactHorizontalPadding: 24,
+        compactSpacious: true,
         confirmLabel: context.l10n.settingsDeleteCredentialConfirmAction,
         destructive: true,
         onConfirm: () async {

@@ -70,7 +70,7 @@ class AppNavigator {
       try {
         return await showCupertinoModalPopup<T>(
           context: context,
-          barrierColor: const Color(0x57000000),
+          barrierColor: const Color(0x66000000),
           barrierDismissible: barrierDismissible,
           semanticsDismissible: true,
           useRootNavigator: true,

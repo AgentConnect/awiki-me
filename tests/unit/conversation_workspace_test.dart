@@ -34,6 +34,7 @@ import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -113,6 +114,23 @@ class _BlockingRestoreConversationListController
         (conversation) => conversation.conversationId == conversationId,
       );
     });
+  }
+}
+
+class _RecordingDeleteConversationListController
+    extends _StaticConversationListController {
+  _RecordingDeleteConversationListController(super.ref, super.items);
+
+  ConversationSummary? deletedConversation;
+
+  @override
+  Future<void> deleteFromRecents(ConversationSummary conversation) async {
+    deletedConversation = conversation;
+    state = ConversationListState(
+      conversations: state.conversations
+          .where((item) => item.conversationId != conversation.conversationId)
+          .toList(growable: false),
+    );
   }
 }
 
@@ -3991,6 +4009,97 @@ void main() {
     expect(timeRect.right, lessThanOrEqualTo(rowRect.right - 2));
     expect(unreadBadgeRect.left, greaterThanOrEqualTo(rowRect.left));
     expect(unreadBadgeRect.right, lessThanOrEqualTo(rowRect.right));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('手机会话左滑显示删除操作并使用紧凑确认框', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final target = ConversationSummary(
+      threadId: 'dm:swipe-delete',
+      conversationId: 'dm:swipe-delete',
+      displayName: 'Swipe Target',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 8, 3, 14, 20),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: 'did:test:swipe-target',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[target];
+    late _RecordingDeleteConversationListController controller;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            controller = _RecordingDeleteConversationListController(
+              ref,
+              gateway.conversations,
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(Key('conversation-row:${target.conversationId}'));
+    await tester.drag(row, const Offset(-120, 0));
+    await tester.pumpAndSettle();
+
+    final deleteAction = find.byKey(
+      Key('conversation-row-delete:${target.conversationId}'),
+    );
+    expect(deleteAction, findsOneWidget);
+    final rowSurface = find.descendant(
+      of: row,
+      matching: find.byType(AppPressableTile),
+    );
+    expect(
+      tester.getTopLeft(rowSurface).dx,
+      lessThan(tester.getTopLeft(row).dx),
+    );
+
+    await tester.tap(deleteAction);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AppConfirmationDialog);
+    expect(dialog, findsOneWidget);
+    expect(deleteAction, findsNothing);
+    expect(find.text('删除会话'), findsOneWidget);
+    expect(find.text('从最近列表移除该会话'), findsOneWidget);
+    expect(find.text('同时清空历史消息'), findsOneWidget);
+    expect(find.text('单会话历史清理待 Core 支持'), findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoCheckbox>(find.byType(CupertinoCheckbox))
+          .onChanged,
+      isNull,
+    );
+    expect(controller.deletedConversation, isNull);
+
+    await tester.tap(find.descendant(of: dialog, matching: find.text('删除')));
+    await tester.pumpAndSettle();
+
+    expect(
+      controller.deletedConversation?.conversationId,
+      target.conversationId,
+    );
+    expect(row, findsNothing);
     expect(tester.takeException(), isNull);
   });
 

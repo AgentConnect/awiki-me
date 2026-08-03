@@ -360,7 +360,8 @@ void main() {
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('将退出当前登录，并删除本地凭证 "default"'), findsOneWidget);
+    expect(find.text('退出 default 并删除本机凭证'), findsOneWidget);
+    expect(find.text('不会注销身份或影响其他设备'), findsOneWidget);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(SettingsPage)),

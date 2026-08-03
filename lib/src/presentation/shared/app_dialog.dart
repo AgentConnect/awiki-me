@@ -21,6 +21,8 @@ class AppDialogScaffold extends StatelessWidget {
     this.surfaceColor,
     this.clipBehavior = Clip.antiAlias,
     this.avoidViewInsets = false,
+    this.compactCentered = false,
+    this.alignment = Alignment.center,
   });
 
   final Widget child;
@@ -33,6 +35,8 @@ class AppDialogScaffold extends StatelessWidget {
   final Color? surfaceColor;
   final Clip clipBehavior;
   final bool avoidViewInsets;
+  final bool compactCentered;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +63,7 @@ class AppDialogScaffold extends StatelessWidget {
     final effectiveBorderRadius =
         borderRadius ??
         BorderRadius.circular(responsive.radius(responsive.isCompact ? 14 : 8));
-    if (responsive.isCompact) {
+    if (responsive.isCompact && !compactCentered) {
       return CompactBottomSheet(
         maxWidth: maxWidth,
         maxHeightFraction: effectiveHeightFraction,
@@ -80,7 +84,7 @@ class AppDialogScaffold extends StatelessWidget {
           bottom: viewInsets.bottom,
         ),
         child: Align(
-          alignment: Alignment.center,
+          alignment: alignment,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: maxDialogWidth,
@@ -205,6 +209,12 @@ class AppConfirmationDialog extends StatelessWidget {
     this.onCancel,
     this.destructive = false,
     this.confirmButtonKey,
+    this.body,
+    this.helperMessage,
+    this.compactTitleTextAlign = TextAlign.start,
+    this.compactMessageTextAlign = TextAlign.start,
+    this.compactHorizontalPadding = 34,
+    this.compactSpacious = false,
   });
 
   final String title;
@@ -215,6 +225,12 @@ class AppConfirmationDialog extends StatelessWidget {
   final VoidCallback? onCancel;
   final bool destructive;
   final Key? confirmButtonKey;
+  final Widget? body;
+  final String? helperMessage;
+  final TextAlign compactTitleTextAlign;
+  final TextAlign compactMessageTextAlign;
+  final double compactHorizontalPadding;
+  final bool compactSpacious;
 
   @override
   Widget build(BuildContext context) {
@@ -223,28 +239,83 @@ class AppConfirmationDialog extends StatelessWidget {
     return AppDialogScaffold(
       maxWidth: 460,
       maxHeightFraction: 0.8,
+      compactCentered: true,
+      horizontalPadding: responsive.isCompact ? compactHorizontalPadding : 16,
+      alignment: responsive.isCompact
+          ? const Alignment(0, -0.08)
+          : Alignment.center,
+      borderRadius: BorderRadius.circular(
+        responsive.radius(responsive.isCompact ? 20 : 8),
+      ),
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           responsive.spacing(20),
-          responsive.spacing(16),
+          responsive.spacing(responsive.isCompact && compactSpacious ? 22 : 20),
           responsive.spacing(20),
-          responsive.spacing(20),
+          responsive.spacing(responsive.isCompact && compactSpacious ? 28 : 20),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            AppDialogHeader(title: title, onClose: cancel),
-            SizedBox(height: responsive.spacing(16)),
+            if (responsive.isCompact)
+              Text(
+                title,
+                textAlign: compactTitleTextAlign,
+                style: TextStyle(
+                  color: context.awikiTheme.title,
+                  fontSize: responsive.displayScaled(18),
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                ),
+              )
+            else
+              AppDialogHeader(title: title, onClose: cancel),
+            SizedBox(
+              height: responsive.spacing(
+                responsive.isCompact && compactSpacious ? 18 : 12,
+              ),
+            ),
             Text(
               message,
+              textAlign: responsive.isCompact
+                  ? compactMessageTextAlign
+                  : TextAlign.start,
               style: TextStyle(
                 color: context.awikiTheme.body,
                 fontSize: responsive.bodySm,
                 height: 1.45,
               ),
             ),
-            SizedBox(height: responsive.spacing(20)),
+            if (body != null) ...<Widget>[
+              SizedBox(height: responsive.spacing(12)),
+              body!,
+            ],
+            if (helperMessage != null &&
+                helperMessage!.trim().isNotEmpty) ...<Widget>[
+              SizedBox(
+                height: responsive.spacing(
+                  responsive.isCompact && compactSpacious ? 12 : 10,
+                ),
+              ),
+              Text(
+                helperMessage!,
+                textAlign: responsive.isCompact
+                    ? compactMessageTextAlign
+                    : TextAlign.start,
+                style: TextStyle(
+                  color: context.awikiTheme.danger,
+                  fontSize: responsive.displayScaled(12),
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                ),
+              ),
+            ],
+            SizedBox(
+              height: responsive.spacing(
+                responsive.isCompact && compactSpacious ? 24 : 20,
+              ),
+            ),
             Row(
               children: <Widget>[
                 Expanded(
@@ -260,6 +331,7 @@ class AppConfirmationDialog extends StatelessWidget {
                           key: confirmButtonKey,
                           label: confirmLabel,
                           onPressed: onConfirm,
+                          filled: responsive.isCompact,
                         )
                       : AppPrimaryButton(
                           key: confirmButtonKey,

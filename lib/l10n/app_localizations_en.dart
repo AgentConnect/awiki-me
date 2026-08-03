@@ -530,7 +530,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get conversationsDeleteContent =>
-      'This conversation will be removed from recents, but message history will be kept. It will appear again when you reopen it or receive a new message.';
+      'Remove this conversation from recents';
+
+  @override
+  String get conversationsDeleteClearHistory => 'Also clear message history';
+
+  @override
+  String get conversationsDeleteClearHistoryUnavailable =>
+      'Single-conversation history clearing requires Core support';
+
+  @override
+  String get conversationsSwipeDelete => 'Delete';
 
   @override
   String conversationsUnreadTag(Object count) {
@@ -1197,8 +1207,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return 'This will sign you out and delete the local credential \"$credentialName\". To use it again, you will need to import or recover the identity. Continue?';
+    return 'Sign out of $credentialName and delete its credential from this device';
   }
+
+  @override
+  String get settingsDeleteCredentialConfirmHint =>
+      'This does not delete the identity or affect other devices';
 
   @override
   String get settingsDeleteCredentialConfirmAction => 'Sign out and delete';

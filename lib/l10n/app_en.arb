@@ -180,7 +180,10 @@
   "conversationsNoResultsTitle": "No matching conversations",
   "conversationsNoResultsSubtitle": "Try another keyword",
   "conversationsDeleteTitle": "Delete conversation",
-  "conversationsDeleteContent": "This conversation will be removed from recents, but message history will be kept. It will appear again when you reopen it or receive a new message.",
+  "conversationsDeleteContent": "Remove this conversation from recents",
+  "conversationsDeleteClearHistory": "Also clear message history",
+  "conversationsDeleteClearHistoryUnavailable": "Single-conversation history clearing requires Core support",
+  "conversationsSwipeDelete": "Delete",
   "conversationsUnreadTag": "{count} unread",
   "@conversationsUnreadTag": {
     "placeholders": {
@@ -462,12 +465,13 @@
   "settingsLogoutConfirmTitle": "Log out",
   "settingsLogoutConfirmContent": "Are you sure you want to log out of the current account?",
   "settingsDeleteCredentialConfirmTitle": "Sign out and delete current credential",
-  "settingsDeleteCredentialConfirmContent": "This will sign you out and delete the local credential \"{credentialName}\". To use it again, you will need to import or recover the identity. Continue?",
+  "settingsDeleteCredentialConfirmContent": "Sign out of {credentialName} and delete its credential from this device",
   "@settingsDeleteCredentialConfirmContent": {
     "placeholders": {
       "credentialName": {}
     }
   },
+  "settingsDeleteCredentialConfirmHint": "This does not delete the identity or affect other devices",
   "settingsDeleteCredentialConfirmAction": "Sign out and delete",
   "quickActionsTitle": "More actions",
   "quickActionStartConversation": "New message",

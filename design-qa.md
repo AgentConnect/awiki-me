@@ -75,6 +75,35 @@ final result: passed
 
 ---
 
+## Ardot 设计目标首轮代码对齐：左滑删除与危险确认（2026-08-03）
+
+> 本轮以 Ardot `AWiki Me · Core Seven UI · PR Review` 的 22 / 23 / 24 号设计目标为唯一视觉基准，完成现有 Flutter App 的第一段 image-to-code 对齐。未改 Ardot，未使用 Superpowers 技能。
+
+### 设计目标与实现
+
+- 设计目标节点：`104:2113`（会话左滑删除）、`104:2178`（删除会话确认）、`104:1503`（退出并删除凭证确认）。源截图保存在本轮临时对比目录 `/tmp/awiki-targets.xFQ5cG/709816693934731/`。
+- 手机会话行现在跟手左滑，露出 84dp 的红色删除操作；操作包含系统垃圾桶图标、文字标签和完整语义按钮，保留长按作为非手势替代入口。
+- 删除操作只在滑动或展开状态进入渲染与语义树；点击后先收回操作区再打开确认框。取消后会话仍在，隐藏操作不会继续被读屏发现。
+- 手机确认框改为居中卡片、20dp 圆角、40% 黑色遮罩、主次双按钮和实心危险按钮。会话确认文案精简为“从最近列表移除该会话”；设置危险确认精简为“退出 {credential} 并删除本机凭证 / 不会注销身份或影响其他设备”，均不使用句号。
+- Ardot 目标中的“同时清空历史消息”需要 Core 提供单会话持久历史删除 API。当前 Core 只有隐藏最近会话和清除可丢弃 conversation snapshot 的能力；Flutter 不伪造历史已清理，因此该复选项明确禁用并标注能力边界。真实持久清理保持 `UNVERIFIED / BLOCKED_BY_CORE_API`。
+
+### 视觉证据
+
+- 可复现视觉基线：`docs/ui-optimization-plan/screenshots/23-compact-conversation-swipe-delete.png`、`24-compact-conversation-delete-confirmation.png`、`22-compact-settings-delete-credential-confirmation.png`。
+- 与 Ardot 同尺寸对比后，会话确认框的左右边距、圆角、遮罩、按钮层级和纵向节奏已对齐；设置危险确认框使用更宽的 24dp 外边距和更舒展的标题/说明/按钮间距，匹配独立目标画面。
+- P0110 真机证据：`.design-references/design-target-alignment-20260803/device/04-swipe-delete.png`、`05-delete-dialog.png`、`12-settings-danger-dialog.png`；取消后的语义与状态证据为 `09-retest-after-cancel.xml`、`13-settings-after-cancel.xml`。
+
+### 验证与边界
+
+- `flutter analyze`：No issues found；会话工作区测试 `52/52` 通过；会话与设置联合回归 `75/75` 通过；两个视觉基线流程分别 `1/1` 通过；`git diff --check` 通过。
+- P0110 保留数据覆盖安装成功：`ai.awiki.awikime.dev` / `0.1.13+23`，`firstInstallTime` 保持 `2026-07-30 15:58:45`，`lastUpdateTime` 为 `2026-08-03 15:12:28`。APK SHA-256：`462366620ef06e7bfad3d428a57533b705a362bab015c9e2b41e3b6e481aaca4`。
+- 真机只执行左滑、打开确认和取消；未确认删除会话，未退出登录，未删除凭证，未改变关注关系或发送消息。最终停留在设置页。
+- 深色模式、最大动态字体、TalkBack 实际朗读、横屏、其他 Android 尺寸、iOS 真机、正式签名发布以及单会话持久历史清理保持 **UNVERIFIED**。
+
+final result: passed
+
+---
+
 ## 会话三点入口、聊天信息页与头像资料导航复验（2026-08-02）
 
 > 用户选定 ImageGen 第 1 版“身份优先聊天信息”方向。本轮先用内置 ImageGen 固定视觉真值，再反推 Flutter 界面和交互；未使用 Superpowers 技能。

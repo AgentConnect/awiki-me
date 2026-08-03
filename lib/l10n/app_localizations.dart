@@ -1049,8 +1049,26 @@ abstract class AppLocalizations {
   /// No description provided for @conversationsDeleteContent.
   ///
   /// In zh, this message translates to:
-  /// **'会话将从最近列表移除，历史消息仍会保留。重新打开或收到新消息后，会话会再次出现在列表中。'**
+  /// **'从最近列表移除该会话'**
   String get conversationsDeleteContent;
+
+  /// No description provided for @conversationsDeleteClearHistory.
+  ///
+  /// In zh, this message translates to:
+  /// **'同时清空历史消息'**
+  String get conversationsDeleteClearHistory;
+
+  /// No description provided for @conversationsDeleteClearHistoryUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'单会话历史清理待 Core 支持'**
+  String get conversationsDeleteClearHistoryUnavailable;
+
+  /// No description provided for @conversationsSwipeDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get conversationsSwipeDelete;
 
   /// No description provided for @conversationsUnreadTag.
   ///
@@ -2235,8 +2253,14 @@ abstract class AppLocalizations {
   /// No description provided for @settingsDeleteCredentialConfirmContent.
   ///
   /// In zh, this message translates to:
-  /// **'将退出当前登录，并删除本地凭证 \"{credentialName}\"。删除后需要重新导入或恢复身份才能再次使用该凭证。确定继续吗？'**
+  /// **'退出 {credentialName} 并删除本机凭证'**
   String settingsDeleteCredentialConfirmContent(Object credentialName);
+
+  /// No description provided for @settingsDeleteCredentialConfirmHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'不会注销身份或影响其他设备'**
+  String get settingsDeleteCredentialConfirmHint;
 
   /// No description provided for @settingsDeleteCredentialConfirmAction.
   ///

@@ -162,6 +162,40 @@ void main() {
       _expectCompactShellHeader(tester, title: '消息');
       await _captureScreenshot(tester, '03-compact-messages');
 
+      final swipeConversation = find.byKey(
+        const Key('conversation-row:dm:peer-scope:v1:hermes-ui'),
+      );
+      await tester.drag(swipeConversation, const Offset(-120, 0));
+      await _pumpVisualFrames(tester);
+      expect(
+        find.byKey(
+          const Key('conversation-row-delete:dm:peer-scope:v1:hermes-ui'),
+        ),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '23-compact-conversation-swipe-delete');
+
+      await tester.tap(
+        find.byKey(
+          const Key('conversation-row-delete:dm:peer-scope:v1:hermes-ui'),
+        ),
+      );
+      await _pumpVisualFrames(tester);
+      expect(find.text('删除会话'), findsOneWidget);
+      expect(find.text('从最近列表移除该会话'), findsOneWidget);
+      await _captureScreenshot(
+        tester,
+        '24-compact-conversation-delete-confirmation',
+      );
+      await tester.tap(find.text('取消'));
+      await _pumpVisualFrames(tester);
+      expect(
+        find.byKey(
+          const Key('conversation-row-delete:dm:peer-scope:v1:hermes-ui'),
+        ),
+        findsNothing,
+      );
+
       await tester.tap(
         find.byKey(const Key('conversation-row:dm:peer-scope:v1:hermes-ui')),
       );
@@ -441,6 +475,17 @@ void main() {
         const Size.square(24),
       );
       await _captureScreenshot(tester, '11b-compact-settings-danger');
+
+      await tester.tap(find.byKey(const Key('settings-delete-credential-row')));
+      await _pumpVisualFrames(tester);
+      expect(find.text('退出并删除当前凭证'), findsWidgets);
+      expect(find.text('不会注销身份或影响其他设备'), findsOneWidget);
+      await _captureScreenshot(
+        tester,
+        '22-compact-settings-delete-credential-confirmation',
+      );
+      await tester.tap(find.text('取消'));
+      await _pumpVisualFrames(tester);
 
       await _prepareEnvironment(
         tester,
