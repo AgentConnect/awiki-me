@@ -79,7 +79,6 @@ class SettingsPage extends ConsumerWidget {
           children: <Widget>[
             AppListTile(
               title: l10n.settingsDevices,
-              subtitle: l10n.settingsDevicesSubtitle,
               leading: leading(
                 const _SettingsIcon(icon: CupertinoIcons.device_phone_portrait),
               ),
@@ -97,7 +96,6 @@ class SettingsPage extends ConsumerWidget {
             AppListTile(
               title: l10n.messageSyncStatusTitle,
               titleKey: const ValueKey<String>('message-sync-status'),
-              subtitle: _messageSyncStatusLabel(context, messageSync),
               leading: leading(
                 const _SettingsIcon(role: AwikiMeIconRole.refresh),
               ),
@@ -119,9 +117,6 @@ class SettingsPage extends ConsumerWidget {
             title: personalAgentEnabled
                 ? l10n.personalAgentTitle
                 : l10n.personalAgentExperimentDisabled,
-            subtitle: personalAgentEnabled
-                ? l10n.personalAgentSettingsSubtitle
-                : l10n.personalAgentSettingsDisabledSubtitle,
             leading: leading(
               const _SettingsIcon(
                 icon: CupertinoIcons.person_crop_circle_badge_checkmark,
@@ -142,7 +137,6 @@ class SettingsPage extends ConsumerWidget {
         children: <Widget>[
           AppListTile(
             title: l10n.settingsCurrentVersion,
-            subtitle: _currentVersionLabel(context, updateState),
             leading: leading(
               const _SettingsIcon(icon: CupertinoIcons.info_circle),
             ),
@@ -158,9 +152,16 @@ class SettingsPage extends ConsumerWidget {
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsCheckForUpdates,
-            subtitle: _updateStatusLabel(context, updateState),
             leading: leading(
               const _SettingsIcon(role: AwikiMeIconRole.refresh),
+            ),
+            trailing: Text(
+              _updateStatusLabel(context, updateState),
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: context.awikiResponsive.bodySm,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             onTap: updateState.status == AppUpdateStatus.checking
                 ? null
@@ -171,9 +172,16 @@ class SettingsPage extends ConsumerWidget {
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsLanguage,
-            subtitle: appLocaleModeLabel(context, localeMode),
             leading: leading(
               const _SettingsIcon(role: AwikiMeIconRole.language),
+            ),
+            trailing: Text(
+              appLocaleModeLabel(context, localeMode),
+              style: TextStyle(
+                color: theme.secondaryText,
+                fontSize: context.awikiResponsive.bodySm,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             onTap: () => AppNavigator.push<void>(
               context,
@@ -188,9 +196,6 @@ class SettingsPage extends ConsumerWidget {
         children: <Widget>[
           AppListTile(
             title: l10n.settingsExportCredential,
-            subtitle: session?.credentialName != null
-                ? l10n.settingsExportCurrentCredential(session!.credentialName)
-                : l10n.settingsNoCredentialToExport,
             leading: leading(
               const _SettingsIcon(icon: CupertinoIcons.archivebox),
             ),
@@ -199,16 +204,12 @@ class SettingsPage extends ConsumerWidget {
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsLogout,
-            subtitle: l10n.settingsLogoutSubtitle,
             leading: leading(const _SettingsIcon(role: AwikiMeIconRole.logout)),
             onTap: () => _showLogoutDialog(context, runtime),
           ),
           const AppSectionDivider(),
           AppListTile(
             title: l10n.settingsDeleteCredential,
-            subtitle: session?.credentialName != null
-                ? l10n.settingsDeleteCurrentCredential(session!.credentialName)
-                : l10n.settingsDeleteCredentialFallback,
             destructive: true,
             leading: leading(
               const _SettingsIcon(
@@ -262,10 +263,7 @@ class SettingsPage extends ConsumerWidget {
       final profileHeight = useShortViewportMetrics ? 88.0 : 104.0;
       final profileAvatarSize = useShortViewportMetrics ? 52.0 : 58.0;
       final sectionTitleHeight = useShortViewportMetrics ? 32.0 : 40.0;
-      final accountRowHeight = useShortViewportMetrics ? 64.0 : 72.0;
-      final appRowHeight = useShortViewportMetrics ? 52.0 : 60.0;
-      final securityRowHeight = useShortViewportMetrics ? 60.0 : 68.0;
-      final deleteRowHeight = useShortViewportMetrics ? 68.0 : 84.0;
+      final optionRowHeight = useShortViewportMetrics ? 52.0 : 60.0;
       final accountRows = <Widget>[
         if (session != null)
           _QuietSettingsRow(
@@ -273,8 +271,7 @@ class SettingsPage extends ConsumerWidget {
             icon: CupertinoIcons.device_phone_portrait,
             iconKey: const Key('settings-devices-icon'),
             title: l10n.settingsDevices,
-            subtitle: l10n.settingsDevicesSubtitle,
-            height: accountRowHeight,
+            height: optionRowHeight,
             onTap: () =>
                 AppNavigator.push<void>(context, (_) => const DevicesPage()),
           ),
@@ -285,11 +282,7 @@ class SettingsPage extends ConsumerWidget {
           title: personalAgentEnabled
               ? l10n.personalAgentTitle
               : l10n.personalAgentExperimentDisabled,
-          subtitle: personalAgentEnabled
-              ? l10n.personalAgentSettingsSubtitle
-              : l10n.personalAgentSettingsDisabledSubtitle,
-          height: accountRowHeight,
-          subtitleMaxLines: 1,
+          height: optionRowHeight,
           onTap: personalAgentEnabled
               ? () => AppNavigator.push<void>(
                   context,
@@ -302,9 +295,8 @@ class SettingsPage extends ConsumerWidget {
             key: const ValueKey<String>('message-sync-status'),
             icon: CupertinoIcons.arrow_clockwise,
             title: l10n.messageSyncStatusTitle,
-            subtitle: _messageSyncStatusLabel(context, messageSync),
             trailing: _messageSyncTrailing(context, messageSync),
-            height: 74,
+            height: optionRowHeight,
             onTap: _messageSyncAction(
               runtime: runtime,
               sync: messageSync,
@@ -349,7 +341,7 @@ class SettingsPage extends ConsumerWidget {
               iconKey: const Key('settings-current-version-icon'),
               title: l10n.settingsCurrentVersion,
               trailingText: updateState.currentVersion?.version ?? '--',
-              height: appRowHeight,
+              height: optionRowHeight,
             ),
             _QuietSettingsRow(
               key: const Key('settings-check-updates-row'),
@@ -357,7 +349,7 @@ class SettingsPage extends ConsumerWidget {
               iconKey: const Key('settings-check-updates-icon'),
               title: l10n.settingsCheckForUpdates,
               trailingText: _updateStatusLabel(context, updateState),
-              height: appRowHeight,
+              height: optionRowHeight,
               onTap: updateState.status == AppUpdateStatus.checking
                   ? null
                   : () => ref
@@ -370,7 +362,7 @@ class SettingsPage extends ConsumerWidget {
               iconKey: const Key('settings-language-icon'),
               title: l10n.settingsLanguage,
               trailingText: appLocaleModeLabel(context, localeMode),
-              height: appRowHeight,
+              height: optionRowHeight,
               onTap: () => AppNavigator.push<void>(
                 context,
                 (_) => const LanguageSelectionPage(),
@@ -391,12 +383,7 @@ class SettingsPage extends ConsumerWidget {
               icon: CupertinoIcons.arrow_down_to_line,
               iconKey: const Key('settings-export-credential-icon'),
               title: l10n.settingsExportCredential,
-              subtitle: session?.credentialName != null
-                  ? l10n.settingsExportCurrentCredential(
-                      session!.credentialName,
-                    )
-                  : l10n.settingsNoCredentialToExport,
-              height: securityRowHeight,
+              height: optionRowHeight,
               onTap: session == null ? null : runtime.exportCurrentCredential,
             ),
             _QuietSettingsRow(
@@ -404,9 +391,8 @@ class SettingsPage extends ConsumerWidget {
               icon: CupertinoIcons.square_arrow_right,
               iconKey: const Key('settings-logout-icon'),
               title: l10n.settingsLogout,
-              subtitle: l10n.settingsLogoutSubtitle,
               destructive: true,
-              height: securityRowHeight,
+              height: optionRowHeight,
               onTap: () => _showLogoutDialog(context, runtime),
             ),
             _QuietSettingsRow(
@@ -414,13 +400,8 @@ class SettingsPage extends ConsumerWidget {
               icon: CupertinoIcons.delete,
               iconKey: const Key('settings-delete-credential-icon'),
               title: l10n.settingsDeleteCredential,
-              subtitle: session?.credentialName != null
-                  ? l10n.settingsDeleteCurrentCredential(
-                      session!.credentialName,
-                    )
-                  : l10n.settingsDeleteCredentialFallback,
               destructive: true,
-              height: deleteRowHeight,
+              height: optionRowHeight,
               onTap: session == null
                   ? null
                   : () => _showDeleteCredentialDialog(
@@ -515,15 +496,6 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  String _currentVersionLabel(BuildContext context, AppUpdateState state) {
-    final l10n = context.l10n;
-    final current = state.currentVersion;
-    if (current == null) {
-      return l10n.settingsUpdateStatusLoading;
-    }
-    return l10n.settingsCurrentVersionValue(current.displayLabel);
-  }
-
   String _updateStatusLabel(BuildContext context, AppUpdateState state) {
     final l10n = context.l10n;
     if (state.status == AppUpdateStatus.checking) {
@@ -536,29 +508,6 @@ class SettingsPage extends ConsumerWidget {
       return l10n.settingsUpdateStatusFailed;
     }
     return l10n.settingsAlreadyLatestVersion;
-  }
-
-  String _messageSyncStatusLabel(
-    BuildContext context,
-    MessageSyncCoordinatorState state,
-  ) {
-    return switch (state.status) {
-      MessageSyncCoordinatorStatus.idle => context.l10n.messageSyncStatusIdle,
-      MessageSyncCoordinatorStatus.syncing =>
-        context.l10n.messageSyncStatusSyncing,
-      MessageSyncCoordinatorStatus.recoveryRequired =>
-        context.l10n.messageSyncStatusRecoveryRequired,
-      MessageSyncCoordinatorStatus.recovering =>
-        context.l10n.messageSyncStatusRecovering,
-      MessageSyncCoordinatorStatus.retryableFailure =>
-        state.shouldSurfaceRetryableFailure
-            ? context.l10n.messageSyncStatusRetryableFailure
-            : context.l10n.messageSyncStatusRetrying,
-      MessageSyncCoordinatorStatus.projectionRefreshFailed =>
-        context.l10n.messageSyncStatusProjectionRefreshFailed,
-      MessageSyncCoordinatorStatus.authRevoked =>
-        context.l10n.messageSyncStatusAuthRevoked,
-    };
   }
 
   Widget? _messageSyncTrailing(
@@ -839,30 +788,25 @@ class _QuietSettingsRow extends StatelessWidget {
     required this.title,
     required this.height,
     this.iconKey,
-    this.subtitle,
     this.trailing,
     this.trailingText,
     this.onTap,
     this.destructive = false,
-    this.subtitleMaxLines = 1,
   });
 
   final IconData icon;
   final Key? iconKey;
   final String title;
   final double height;
-  final String? subtitle;
   final Widget? trailing;
   final String? trailingText;
   final VoidCallback? onTap;
   final bool destructive;
-  final int subtitleMaxLines;
 
   @override
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final subtitleValue = subtitle?.trim() ?? '';
     final trailingValue = trailingText?.trim() ?? '';
     final foreground = destructive ? theme.danger : AwikiMePalette.actionBlue;
     return AppPressable(
@@ -882,34 +826,15 @@ class _QuietSettingsRow extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: destructive ? theme.danger : theme.title,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (subtitleValue.isNotEmpty) ...<Widget>[
-                    SizedBox(height: responsive.spacing(3)),
-                    Text(
-                      subtitleValue,
-                      maxLines: subtitleMaxLines,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: theme.secondaryText,
-                        fontSize: 12,
-                        height: 18 / 12,
-                      ),
-                    ),
-                  ],
-                ],
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: destructive ? theme.danger : theme.title,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             if (trailing != null)

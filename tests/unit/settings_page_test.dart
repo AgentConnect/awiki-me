@@ -60,8 +60,8 @@ void main() {
       buildLocalizedTestApp(home: const SettingsPage(), gateway: gateway),
     );
 
-    expect(find.text('当前暂无可导出的登录凭证'), findsOneWidget);
-    expect(find.text('退出并删除当前登录凭证'), findsOneWidget);
+    expect(find.text('当前暂无可导出的登录凭证'), findsNothing);
+    expect(find.text('退出并删除当前登录凭证'), findsNothing);
 
     await tester.tap(find.text('导出身份凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
@@ -173,9 +173,9 @@ void main() {
     );
     expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
-    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 146));
-    expect(appRect, const Rect.fromLTWH(0, 394, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 617, 390, 223));
+    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 122));
+    expect(appRect, const Rect.fromLTWH(0, 370, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 183));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -195,7 +195,7 @@ void main() {
     final versionRow = find.byKey(const Key('settings-current-version-row'));
     expect(
       tester.getRect(find.byKey(const Key('settings-current-version-icon'))),
-      const Rect.fromLTWH(28, 412, 24, 24),
+      const Rect.fromLTWH(28, 388, 24, 24),
     );
     expect(tester.getRect(find.text('当前版本')).left, closeTo(68, 0.1));
     expect(tester.getSize(versionRow).height, 60);
@@ -208,20 +208,16 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('settings-devices-row'))).height,
-      72,
+      60,
     );
     expect(
       tester
           .getSize(find.byKey(const Key('settings-personal-agent-row')))
           .height,
-      72,
+      60,
     );
-    final assistantDescription = tester.widget<Text>(
-      find.text('配置个人助理的启用、暂停和 Daemon 管理'),
-    );
-    expect(assistantDescription.maxLines, 1);
-    expect(assistantDescription.overflow, TextOverflow.ellipsis);
-    expect(find.text('查看已授权设备并审批新设备'), findsOneWidget);
+    expect(find.text('配置个人助理的启用、暂停和 Daemon 管理'), findsNothing);
+    expect(find.text('查看已授权设备并审批新设备'), findsNothing);
     expect(
       tester
           .getSize(find.byKey(const Key('settings-check-updates-row')))
@@ -236,11 +232,11 @@ void main() {
       tester
           .getSize(find.byKey(const Key('settings-export-credential-row')))
           .height,
-      68,
+      60,
     );
     expect(
       tester.getSize(find.byKey(const Key('settings-logout-row'))).height,
-      68,
+      60,
     );
     expect(
       tester.getSize(find.byKey(const Key('settings-profile-row'))).height,
@@ -264,7 +260,7 @@ void main() {
       tester
           .getSize(find.byKey(const Key('settings-delete-credential-row')))
           .height,
-      84,
+      60,
     );
     expect(
       tester.getSize(find.byKey(const Key('settings-delete-credential-icon'))),
@@ -273,7 +269,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('紧凑设置页长动态值保持单行省略且不溢出', (tester) async {
+  testWidgets('紧凑设置页仅保留身份信息和右侧状态且不溢出', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(320, 844);
@@ -327,11 +323,9 @@ void main() {
         matching: find.byType(Text),
       ),
     );
-    final credentialSubtitle = exportTexts.singleWhere(
-      (text) => text.data?.contains(longCredential) == true,
-    );
-    expect(credentialSubtitle.maxLines, 1);
-    expect(credentialSubtitle.overflow, TextOverflow.ellipsis);
+    expect(exportTexts, hasLength(1));
+    expect(exportTexts.single.data, '导出身份凭证');
+    expect(find.textContaining(longCredential), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -355,7 +349,7 @@ void main() {
     );
 
     expect(find.text('退出并删除当前凭证'), findsOneWidget);
-    expect(find.text('删除本地凭证：default'), findsOneWidget);
+    expect(find.text('删除本地凭证：default'), findsNothing);
 
     await tester.ensureVisible(find.text('退出并删除当前凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
@@ -477,7 +471,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('登录状态已失效或此设备已被取消授权，请重新登录。'), findsOneWidget);
+    expect(find.text('登录状态已失效或此设备已被取消授权，请重新登录。'), findsNothing);
     expect(find.text('重新登录'), findsOneWidget);
 
     await tester.tap(find.text('重新登录'));
@@ -514,7 +508,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
+    expect(find.text('正在恢复近期消息和当前已读状态…'), findsNothing);
     expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
     expect(find.text('重试'), findsNothing);
   });
@@ -544,7 +538,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
+    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
     expect(find.text('重试'), findsOneWidget);
 
     await tester.tap(find.text('重试'));
