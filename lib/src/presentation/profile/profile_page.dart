@@ -24,6 +24,7 @@ import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'profile_markdown.dart';
+import 'profile_edit_page.dart';
 import 'profile_provider.dart';
 
 enum _CompactProfileSection { did, homepage, identity }
@@ -469,6 +470,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     BuildContext context,
     UserProfile profile,
   ) async {
+    if (context.awikiResponsive.isCompact) {
+      await AppNavigator.push<void>(
+        context,
+        (_) => ProfileEditPage(
+          profile: profile,
+          onSave: (patch) =>
+              ref.read(profileProvider.notifier).updateProfile(patch),
+        ),
+        rootNavigator: true,
+      );
+      return;
+    }
     final nickController = TextEditingController(text: profile.displayName);
     final bioController = TextEditingController(text: profile.bio);
     final tagsController = TextEditingController(text: profile.tags.join(', '));

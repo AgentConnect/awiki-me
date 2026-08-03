@@ -1472,6 +1472,36 @@ abstract class AppLocalizations {
   /// **'个人简介'**
   String get profileBioPlaceholder;
 
+  /// No description provided for @profileBioHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'介绍一下自己'**
+  String get profileBioHint;
+
+  /// No description provided for @profileAvatarLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'头像'**
+  String get profileAvatarLabel;
+
+  /// No description provided for @profileAvatarChange.
+  ///
+  /// In zh, this message translates to:
+  /// **'更换'**
+  String get profileAvatarChange;
+
+  /// No description provided for @profileTagsLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'标签'**
+  String get profileTagsLabel;
+
+  /// No description provided for @profileTagsLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'最多 5 个标签'**
+  String get profileTagsLimit;
+
   /// No description provided for @profileTagsPlaceholder.
   ///
   /// In zh, this message translates to:

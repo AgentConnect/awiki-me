@@ -752,6 +752,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileBioPlaceholder => 'Bio';
 
   @override
+  String get profileBioHint => 'Introduce yourself';
+
+  @override
+  String get profileAvatarLabel => 'Avatar';
+
+  @override
+  String get profileAvatarChange => 'Change';
+
+  @override
+  String get profileTagsLabel => 'Tags';
+
+  @override
+  String get profileTagsLimit => 'Up to 5 tags';
+
+  @override
   String get profileTagsPlaceholder => 'Tags, separated by commas';
 
   @override

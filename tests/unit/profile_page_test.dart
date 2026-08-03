@@ -516,6 +516,69 @@ DID: did:wba:agent-connect.cn:user:empty:e1_profile_key
     expect(patch.tags, <String>['ai', 'agent']);
   });
 
+  testWidgets('窄屏个人资料编辑使用独立页面并在保存后返回', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway();
+    const profile = UserProfile(
+      did: 'did:test:compact-edit-profile',
+      nickName: 'Alice',
+      bio: 'Old bio',
+      tags: <String>['old', 'tag'],
+      profileMarkdown: '# Alice',
+      handle: 'alice',
+    );
+    gateway.myProfile = profile;
+    gateway.updatedProfile = profile.copyWith();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: ProfilePage(homepageMarkdownLoader: (_) async => null),
+        gateway: gateway,
+        profile: profile,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('profile-edit-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-edit-page')), findsOneWidget);
+    expect(find.byKey(const Key('profile-edit-dialog')), findsNothing);
+    expect(find.text('编辑个人资料'), findsOneWidget);
+    expect(find.text('头像'), findsOneWidget);
+    expect(find.text('最多 5 个标签'), findsOneWidget);
+
+    await _simulateSystemBack(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-edit-page')), findsNothing);
+    expect(find.byKey(const Key('profile-edit-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('profile-edit-button')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(CupertinoTextField).at(0), 'Alice New');
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'New bio');
+    await tester.enterText(
+      find.byType(CupertinoTextField).at(2),
+      'ai, agent, flutter, mobile, design, ignored',
+    );
+
+    await tester.tap(find.byKey(const Key('profile-edit-save-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-edit-page')), findsNothing);
+    final patch = gateway.lastProfilePatch;
+    expect(patch, isNotNull);
+    expect(patch!.nickName, 'Alice New');
+    expect(patch.bio, 'New bio');
+    expect(patch.tags, <String>['ai', 'agent', 'flutter', 'mobile', 'design']);
+  });
+
   testWidgets('个人资料页优先渲染拉取到的 markdown 和 tags', (tester) async {
     const profile = UserProfile(
       did: 'did:wba:anpclaw.com:bob:e1_456',

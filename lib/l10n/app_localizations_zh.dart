@@ -718,6 +718,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileBioPlaceholder => '个人简介';
 
   @override
+  String get profileBioHint => '介绍一下自己';
+
+  @override
+  String get profileAvatarLabel => '头像';
+
+  @override
+  String get profileAvatarChange => '更换';
+
+  @override
+  String get profileTagsLabel => '标签';
+
+  @override
+  String get profileTagsLimit => '最多 5 个标签';
+
+  @override
   String get profileTagsPlaceholder => '标签，使用英文逗号分隔';
 
   @override
