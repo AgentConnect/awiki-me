@@ -75,6 +75,24 @@ final result: passed
 
 ---
 
+## 编辑个人资料标签对齐复验（2026-08-03）
+
+### 对照基准与修正
+
+- 视觉基准：Ardot `Edit Profile Full Page` 可编辑目标节点 `104:2380`；P0110 实现截图为 `/tmp/p0110-profile-edit-final-latest.png`，同屏归一化对照为 `/tmp/profile-edit-final-comparison.png`，标签局部对照为 `/tmp/profile-edit-tags-comparison.png`。
+- 初始实现把标签编辑压成逗号分隔文本框，并把昵称改成上下堆叠，属于 P1 偏差；首轮修正后“添加”按钮过宽，属于 P2 偏差。最终已恢复单行昵称，标签改为可独立删除的胶囊，并使用 64 × 40 的紧凑添加按钮。
+- 标签胶囊视觉高度 40，添加与删除触控区不小于 44；最多 5 个标签，到达上限后禁用添加。添加、删除各只有一个可点击语义节点。
+
+### 自动化与真机
+
+- `profile_page_test.dart` 15/15 通过，相关 `flutter analyze` 为 `No issues found`，`git diff --check` 通过。
+- P0110 保留数据覆盖安装后，页面布局、标签新增/删除状态和无障碍节点复核通过；设计示例标签与真机账号真实标签的文字差异不构成布局偏差。
+- 未保存测试标签，未改变账号资料。深色模式、最大动态字体、TalkBack 实际朗读、iOS 与其他 Android 机型保持 **UNVERIFIED**。
+
+final result: passed
+
+---
+
 ## 独立语言选择页 ImageGen → Ardot → P0110 闭环（2026-08-03）
 
 ### 比较真值与状态

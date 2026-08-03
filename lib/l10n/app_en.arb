@@ -274,6 +274,16 @@
   "profileTagsLabel": "Tags",
   "profileTagsLimit": "Up to 5 tags",
   "profileTagsPlaceholder": "Tags, separated by commas",
+  "profileTagAdd": "Add",
+  "profileTagInputPlaceholder": "Enter tag",
+  "profileTagRemove": "Remove {tag}",
+  "@profileTagRemove": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
   "profileHomepageLabel": "Homepage",
   "profileOpenHomepage": "Open homepage",
   "settingsTitle": "Settings",

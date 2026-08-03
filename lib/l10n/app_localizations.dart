@@ -1508,6 +1508,24 @@ abstract class AppLocalizations {
   /// **'标签，使用英文逗号分隔'**
   String get profileTagsPlaceholder;
 
+  /// No description provided for @profileTagAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加'**
+  String get profileTagAdd;
+
+  /// No description provided for @profileTagInputPlaceholder.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入标签'**
+  String get profileTagInputPlaceholder;
+
+  /// No description provided for @profileTagRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除标签 {tag}'**
+  String profileTagRemove(String tag);
+
   /// No description provided for @profileHomepageLabel.
   ///
   /// In zh, this message translates to:

@@ -28,8 +28,11 @@ class ProfileEditPage extends StatefulWidget {
 class _ProfileEditPageState extends State<ProfileEditPage> {
   late final TextEditingController _nicknameController;
   late final TextEditingController _bioController;
-  late final TextEditingController _tagsController;
+  late final TextEditingController _tagInputController;
+  late final FocusNode _tagInputFocusNode;
+  late final List<String> _tags;
   bool _saving = false;
+  bool _addingTag = false;
 
   @override
   void initState() {
@@ -38,9 +41,14 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       text: widget.profile.displayName,
     )..addListener(_refreshSaveState);
     _bioController = TextEditingController(text: widget.profile.bio);
-    _tagsController = TextEditingController(
-      text: widget.profile.tags.join(', '),
-    );
+    _tagInputController = TextEditingController();
+    _tagInputFocusNode = FocusNode();
+    _tags = widget.profile.tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .take(5)
+        .toList();
   }
 
   @override
@@ -49,7 +57,8 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       ..removeListener(_refreshSaveState)
       ..dispose();
     _bioController.dispose();
-    _tagsController.dispose();
+    _tagInputController.dispose();
+    _tagInputFocusNode.dispose();
     super.dispose();
   }
 
@@ -57,6 +66,42 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _startAddingTag() {
+    if (_tags.length >= 5) {
+      return;
+    }
+    setState(() => _addingTag = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _tagInputFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _commitTag(String value) {
+    final tag = value.trim();
+    if (tag.isEmpty) {
+      setState(() => _addingTag = false);
+      _tagInputController.clear();
+      _tagInputFocusNode.unfocus();
+      return;
+    }
+    if (_tags.length < 5 && !_tags.contains(tag)) {
+      setState(() {
+        _tags.add(tag);
+        _addingTag = false;
+      });
+    } else {
+      setState(() => _addingTag = false);
+    }
+    _tagInputController.clear();
+    _tagInputFocusNode.unfocus();
+  }
+
+  void _removeTag(String tag) {
+    setState(() => _tags.remove(tag));
   }
 
   Future<void> _save() async {
@@ -69,12 +114,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         ProfilePatch(
           displayName: _nicknameController.text.trim(),
           bio: _bioController.text.trim(),
-          tags: _tagsController.text
-              .split(',')
-              .map((item) => item.trim())
-              .where((item) => item.isNotEmpty)
-              .take(5)
-              .toList(),
+          tags: List<String>.unmodifiable(_tags),
         ),
       );
       if (mounted) {
@@ -103,7 +143,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
           children: <Widget>[
             DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.surface,
+                color: theme.background,
                 border: Border(
                   bottom: BorderSide(color: theme.border, width: 0.5),
                 ),
@@ -159,7 +199,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     onChangeAvatar: widget.onChangeAvatar,
                   ),
                   const _ProfileEditDivider(inset: 0),
-                  _CompactFieldRow(
+                  _CompactInlineFieldRow(
                     key: const Key('profile-edit-nickname-row'),
                     label: l10n.onboardingNickname,
                     controller: _nicknameController,
@@ -178,14 +218,20 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                     textInputAction: TextInputAction.newline,
                   ),
                   const _ProfileEditDivider(),
-                  _CompactFieldRow(
+                  _ProfileTagsEditor(
                     key: const Key('profile-edit-tags-row'),
                     label: l10n.profileTagsLabel,
-                    controller: _tagsController,
-                    minHeight: 150,
-                    maxLines: 2,
+                    tags: _tags,
+                    addingTag: _addingTag,
+                    inputController: _tagInputController,
+                    inputFocusNode: _tagInputFocusNode,
                     helper: l10n.profileTagsLimit,
-                    textInputAction: TextInputAction.done,
+                    addLabel: l10n.profileTagAdd,
+                    inputPlaceholder: l10n.profileTagInputPlaceholder,
+                    removeSemanticLabel: l10n.profileTagRemove,
+                    onAddTap: _startAddingTag,
+                    onTagSubmitted: _commitTag,
+                    onRemoveTag: _removeTag,
                   ),
                 ],
               ),
@@ -208,7 +254,7 @@ class _AvatarEditRow extends StatelessWidget {
     final theme = context.awikiTheme;
     final l10n = context.l10n;
     return ColoredBox(
-      color: theme.surface,
+      color: theme.background,
       child: SizedBox(
         height: 152,
         child: Padding(
@@ -262,6 +308,62 @@ class _AvatarEditRow extends StatelessWidget {
   }
 }
 
+class _CompactInlineFieldRow extends StatelessWidget {
+  const _CompactInlineFieldRow({
+    super.key,
+    required this.label,
+    required this.controller,
+    required this.textInputAction,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final TextInputAction textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return ColoredBox(
+      color: theme.background,
+      child: SizedBox(
+        height: 95,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: <Widget>[
+              Text(
+                label,
+                style: TextStyle(
+                  color: theme.title,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: CupertinoTextField(
+                  key: ValueKey<String>('profile-edit-field-$label'),
+                  controller: controller,
+                  textAlign: TextAlign.right,
+                  textInputAction: textInputAction,
+                  padding: EdgeInsets.zero,
+                  decoration: null,
+                  style: TextStyle(
+                    color: theme.title,
+                    fontSize: 16,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CompactFieldRow extends StatelessWidget {
   const _CompactFieldRow({
     super.key,
@@ -269,7 +371,6 @@ class _CompactFieldRow extends StatelessWidget {
     required this.controller,
     required this.textInputAction,
     this.placeholder,
-    this.helper,
     this.minHeight = 96,
     this.maxLines = 1,
     this.maxLength,
@@ -278,7 +379,6 @@ class _CompactFieldRow extends StatelessWidget {
 
   final String label;
   final String? placeholder;
-  final String? helper;
   final TextEditingController controller;
   final TextInputAction textInputAction;
   final double minHeight;
@@ -290,7 +390,7 @@ class _CompactFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     return ColoredBox(
-      color: theme.surface,
+      color: theme.background,
       child: ConstrainedBox(
         constraints: BoxConstraints(minHeight: minHeight),
         child: Padding(
@@ -351,17 +451,195 @@ class _CompactFieldRow extends StatelessWidget {
                     ),
                 ],
               ),
-              if (helper != null) ...<Widget>[
-                const SizedBox(height: 10),
-                Text(
-                  helper!,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileTagsEditor extends StatelessWidget {
+  const _ProfileTagsEditor({
+    super.key,
+    required this.label,
+    required this.tags,
+    required this.addingTag,
+    required this.inputController,
+    required this.inputFocusNode,
+    required this.helper,
+    required this.addLabel,
+    required this.inputPlaceholder,
+    required this.removeSemanticLabel,
+    required this.onAddTap,
+    required this.onTagSubmitted,
+    required this.onRemoveTag,
+  });
+
+  final String label;
+  final List<String> tags;
+  final bool addingTag;
+  final TextEditingController inputController;
+  final FocusNode inputFocusNode;
+  final String helper;
+  final String addLabel;
+  final String inputPlaceholder;
+  final String Function(String tag) removeSemanticLabel;
+  final VoidCallback onAddTap;
+  final ValueChanged<String> onTagSubmitted;
+  final ValueChanged<String> onRemoveTag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final canAdd = tags.length < 5;
+    return ColoredBox(
+      color: theme.background,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 154),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 26, 24, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                style: TextStyle(
+                  color: theme.title,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  for (final tag in tags)
+                    Semantics(
+                      button: true,
+                      label: removeSemanticLabel(tag),
+                      onTap: () => onRemoveTag(tag),
+                      excludeSemantics: true,
+                      child: CupertinoButton(
+                        key: ValueKey<String>('profile-edit-remove-tag-$tag'),
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 44),
+                        onPressed: () => onRemoveTag(tag),
+                        child: Container(
+                          key: ValueKey<String>('profile-edit-tag-chip-$tag'),
+                          height: 40,
+                          constraints: const BoxConstraints(maxWidth: 180),
+                          padding: const EdgeInsets.fromLTRB(14, 0, 10, 0),
+                          decoration: BoxDecoration(
+                            color: theme.subtleSurface,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              Flexible(
+                                child: Text(
+                                  tag,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: theme.title,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                CupertinoIcons.xmark,
+                                size: 13,
+                                color: theme.secondaryText,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (addingTag)
+                    SizedBox(
+                      key: const Key('profile-edit-tag-input-target'),
+                      width: 132,
+                      height: 44,
+                      child: Center(
+                        child: CupertinoTextField(
+                          key: const Key('profile-edit-tag-input'),
+                          controller: inputController,
+                          focusNode: inputFocusNode,
+                          autofocus: true,
+                          maxLines: 1,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: onTagSubmitted,
+                          placeholder: inputPlaceholder,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: theme.background,
+                            border: Border.all(color: theme.border),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          style: TextStyle(color: theme.title, fontSize: 15),
+                          placeholderStyle: TextStyle(
+                            color: theme.tertiaryText,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Semantics(
+                      button: true,
+                      enabled: canAdd,
+                      label: addLabel,
+                      onTap: canAdd ? onAddTap : null,
+                      excludeSemantics: true,
+                      child: CupertinoButton(
+                        key: const Key('profile-edit-add-tag-button'),
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(64, 44),
+                        onPressed: canAdd ? onAddTap : null,
+                        child: Container(
+                          key: const Key('profile-edit-add-tag-visual'),
+                          constraints: const BoxConstraints.tightFor(
+                            width: 64,
+                            height: 40,
+                          ),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: theme.border),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            addLabel,
+                            style: TextStyle(
+                              color: canAdd
+                                  ? theme.secondaryText
+                                  : theme.tertiaryText,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  helper,
                   style: TextStyle(
                     color: theme.tertiaryText,
                     fontSize: 13,
                     height: 1.4,
                   ),
                 ),
-              ],
+              ),
             ],
           ),
         ),
@@ -378,7 +656,7 @@ class _ProfileEditDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: context.awikiTheme.surface,
+      color: context.awikiTheme.background,
       child: Padding(
         padding: EdgeInsets.only(left: inset, right: inset),
         child: ColoredBox(

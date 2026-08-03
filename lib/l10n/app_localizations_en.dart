@@ -770,6 +770,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileTagsPlaceholder => 'Tags, separated by commas';
 
   @override
+  String get profileTagAdd => 'Add';
+
+  @override
+  String get profileTagInputPlaceholder => 'Enter tag';
+
+  @override
+  String profileTagRemove(String tag) {
+    return 'Remove $tag';
+  }
+
+  @override
   String get profileHomepageLabel => 'Homepage';
 
   @override

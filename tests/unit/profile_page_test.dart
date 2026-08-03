@@ -566,6 +566,44 @@ DID: did:wba:agent-connect.cn:user:empty:e1_profile_key
     expect(find.text('编辑个人资料'), findsOneWidget);
     expect(find.text('头像'), findsOneWidget);
     expect(find.text('最多 5 个标签'), findsOneWidget);
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey<String>('profile-edit-tag-chip-old')),
+          )
+          .height,
+      40,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey<String>('profile-edit-remove-tag-old')),
+          )
+          .height,
+      44,
+    );
+    expect(
+      tester.getRect(find.text('昵称')).center.dy,
+      closeTo(
+        tester
+            .getRect(
+              find.byKey(const ValueKey<String>('profile-edit-field-昵称')),
+            )
+            .center
+            .dy,
+        0.1,
+      ),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('profile-edit-add-tag-visual'))),
+      const Size(64, 40),
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('profile-edit-add-tag-button')))
+          .height,
+      44,
+    );
 
     await _simulateSystemBack(tester);
     await tester.pumpAndSettle();
@@ -576,14 +614,48 @@ DID: did:wba:agent-connect.cn:user:empty:e1_profile_key
     await tester.tap(find.byKey(const Key('profile-edit-button')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(CupertinoTextField).at(0), 'Alice New');
-    await tester.enterText(find.byType(CupertinoTextField).at(1), 'New bio');
     await tester.enterText(
-      find.byType(CupertinoTextField).at(2),
-      'ai, agent, flutter, mobile, design, ignored',
+      find.byKey(const ValueKey<String>('profile-edit-field-昵称')),
+      'Alice New',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('profile-edit-field-个人简介')),
+      'New bio',
     );
 
-    await tester.tap(find.byKey(const Key('profile-edit-save-button')));
+    for (final tag in <String>['old', 'tag']) {
+      final remove = find.byKey(
+        ValueKey<String>('profile-edit-remove-tag-$tag'),
+      );
+      await tester.ensureVisible(remove);
+      await tester.tap(remove);
+      await tester.pump();
+    }
+
+    for (final tag in <String>['ai', 'agent', 'flutter', 'mobile', 'design']) {
+      final add = find.byKey(const Key('profile-edit-add-tag-button'));
+      await tester.ensureVisible(add);
+      await tester.tap(add);
+      await tester.pump();
+      final input = find.byKey(const Key('profile-edit-tag-input'));
+      expect(input, findsOneWidget);
+      await tester.enterText(input, tag);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(
+        find.byKey(ValueKey<String>('profile-edit-tag-chip-$tag')),
+        findsOneWidget,
+      );
+    }
+
+    final disabledAdd = tester.widget<CupertinoButton>(
+      find.byKey(const Key('profile-edit-add-tag-button')),
+    );
+    expect(disabledAdd.onPressed, isNull);
+
+    final save = find.byKey(const Key('profile-edit-save-button'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('profile-edit-page')), findsNothing);

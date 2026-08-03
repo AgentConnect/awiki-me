@@ -736,6 +736,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileTagsPlaceholder => '标签，使用英文逗号分隔';
 
   @override
+  String get profileTagAdd => '添加';
+
+  @override
+  String get profileTagInputPlaceholder => '输入标签';
+
+  @override
+  String profileTagRemove(String tag) {
+    return '删除标签 $tag';
+  }
+
+  @override
   String get profileHomepageLabel => '主页';
 
   @override

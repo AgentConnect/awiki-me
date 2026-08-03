@@ -274,6 +274,16 @@
   "profileTagsLabel": "标签",
   "profileTagsLimit": "最多 5 个标签",
   "profileTagsPlaceholder": "标签，使用英文逗号分隔",
+  "profileTagAdd": "添加",
+  "profileTagInputPlaceholder": "输入标签",
+  "profileTagRemove": "删除标签 {tag}",
+  "@profileTagRemove": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
   "profileHomepageLabel": "主页",
   "profileOpenHomepage": "打开主页",
   "settingsTitle": "设置",
