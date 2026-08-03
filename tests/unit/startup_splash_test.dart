@@ -160,14 +160,70 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('AWiki'), findsOneWidget);
+    expect(find.text('AWiki Me'), findsOneWidget);
     expect(find.text('连接你的 Agent 世界'), findsOneWidget);
     expect(find.text('安全协作'), findsOneWidget);
     expect(find.text('智能体随行'), findsOneWidget);
     expect(find.text('人与 Agent 同群'), findsOneWidget);
+    expect(
+      find.byKey(const Key('startup-splash-feature-icon-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('startup-splash-feature-icon-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('startup-splash-feature-icon-2')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('startup-splash-logo')), findsOneWidget);
     expect(find.byKey(const Key('startup-splash-progress')), findsOneWidget);
     expect(find.byType(CupertinoButton), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('开屏按 390x844 设计目标对齐品牌、三行能力与进度位置', (tester) async {
+    _setTestViewSize(tester, const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const MediaQuery(
+          data: MediaQueryData(disableAnimations: true),
+          child: AwikiMeStartupSplash(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-logo'))),
+      const Rect.fromLTWH(112, 246, 24, 24),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-title'))).top,
+      318,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-subtitle'))).top,
+      372,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-feature-0'))).top,
+      454,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-feature-1'))).top,
+      510,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-feature-2'))).top,
+      566,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('startup-splash-progress'))),
+      const Rect.fromLTWH(76, 756, 238, 4),
+    );
     expect(tester.takeException(), isNull);
   });
 

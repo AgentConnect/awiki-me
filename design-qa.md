@@ -75,6 +75,28 @@ final result: passed
 
 ---
 
+## 开屏设计目标与三项能力图标对齐复验（2026-08-03）
+
+> 本轮以 Ardot `01 开屏` 为视觉真值，并修正了原设计稿遗漏的三项能力图标；既有 ImageGen 开屏方向已经包含同一组能力图标，因此不另起视觉方向。未使用 Superpowers 技能。
+
+### Ardot 与实现
+
+- Ardot 页面 `104:1` 的开屏画面 `104:96` 已补入盾牌勾选、组合闪光和消息气泡三个标准线性图标，分别对应“安全协作”“智能体随行”“人与 Agent 同群”。修正版证据为 `.design-references/splash-design-alignment-20260803/reference/ardot-01-splash-with-icons.png`，SHA-256 为 `78cf2a4b287ce25a0a9bddd7629cb291b80e52246a037623c773988a4c81dcf6`。
+- Flutter 开屏品牌统一为 `AWiki Me`，并按 390 × 844 基准锁定品牌、标题、副标题、三行能力和 238 × 4 加载线的位置与尺寸；三行图标使用与 Ardot 最接近的标准图标库资产，没有手绘或字符替代。
+- 进度条保留真实初始化反馈；启用“减少动态效果”时显示稳定的 60% 活动段，普通模式仅做轻量透明度变化，不人为延长冷启动。
+- 横屏或不足 700dp 高度时继续使用可滚动紧凑布局，避免固定参考坐标造成裁切；会话恢复门禁保持不变。
+
+### 自动化与 P0110
+
+- 开屏定向测试 `6/6` 通过，覆盖会话恢复不闪登录页、已登录直达消息、明确无会话进入登录、正式 Logo/文案/三枚图标、390 × 844 精确坐标，以及横屏/大字体/减少动态效果；相关 `flutter analyze` 为 `No issues found`，`git diff --check` 通过。
+- P0110 使用保留数据覆盖安装；包名与版本为 `ai.awiki.awikime.dev` / `0.1.13+23`，`firstInstallTime` 保持 `2026-07-30 15:58:45`，`lastUpdateTime` 为 `2026-08-03 16:09:29`。APK SHA-256 为 `df065310fd44395f5039e39814755c7e4ca4a635a920e0cbb3427ca2d6fd21fe`。
+- Ardot 与 P0110 同屏对照为 `.design-references/splash-design-alignment-20260803/comparison/ardot-vs-p0110-final.png`；品牌、标题、副标题、三行图标/文案和底部进度条均已对齐。冷启动连续取样为同目录 `device/cold-start-contact-sheet.png`，顺序为系统启动过渡 → AWiki Me 开屏 → 消息列表，未出现登录/注册页。
+- APP 最终停留在消息页；账号、会话和联系人数据均保留，没有发送消息或改变业务数据。深色模式、最大动态字体、TalkBack/VoiceOver 实际朗读、其他 Android 尺寸、iOS 真机与正式签名发布保持 **UNVERIFIED**。
+
+final result: passed
+
+---
+
 ## Ardot 设计目标全量状态对齐（2026-08-03）
 
 > 本轮以 Ardot `AWiki Me · Core Seven UI · PR Review` 页面为索引，逐张核对当前 Flutter 实现、已提交视觉基线、P0110 既有证据与可安全复查的真机状态；只在证据能够闭环时把画面标为“当前 APP”。未使用 Superpowers 技能。
