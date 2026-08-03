@@ -16,8 +16,10 @@ import '../../application/models/device_revoke_outcome.dart';
 import '../../application/ports/root_key_transfer_port.dart';
 import '../../application/root_key_transfer_service.dart';
 import '../../domain/entities/device_management.dart';
+import '../../domain/entities/handle_recovery.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../app_shell/providers/app_lifecycle_provider.dart';
+import '../recovery/handle_recovery_provider.dart';
 
 enum DeviceRevokeNotice {
   revoked,
@@ -210,6 +212,9 @@ class DevicesController extends StateNotifier<DevicesState> {
 
   bool get _deviceRevokeEnabled =>
       ref.read(multiDeviceDeviceRevokeEnabledProvider);
+
+  bool get _handleRecoveryEnabled =>
+      ref.read(multiDeviceHandleRecoveryEnabledProvider);
 
   String? get _selector {
     final did = ref.read(sessionProvider).session?.did.trim();
@@ -471,15 +476,30 @@ class DevicesController extends StateNotifier<DevicesState> {
                 session.phase == DeviceJoinPhase.authorized,
           )
           .toList();
+      var newDeviceSessions = sessions
+          .where((session) => session.side == DeviceJoinSide.newDevice)
+          .toList(growable: false);
+      var activeJoin = resumable.isNotEmpty
+          ? resumable.last
+          : authorized.isEmpty
+          ? null
+          : authorized.last;
+      if (_handleRecoveryEnabled &&
+          activeJoin != null &&
+          activeJoin.phase == DeviceJoinPhase.authorized) {
+        final restoredActiveJoin = await ref
+            .read(handleRecoveryServiceProvider)
+            .resumeAuthorizedJoinActivation(
+              joinSessionId: activeJoin.joinSessionId,
+              recoveryExpected:
+                  activeJoin.cause == DeviceJoinCause.handleRecovery,
+            );
+        activeJoin = restoredActiveJoin;
+        newDeviceSessions = _replaceJoin(newDeviceSessions, restoredActiveJoin);
+      }
       state = DevicesState(
-        localJoins: sessions
-            .where((session) => session.side == DeviceJoinSide.newDevice)
-            .toList(growable: false),
-        activeJoin: resumable.isNotEmpty
-            ? resumable.last
-            : authorized.isEmpty
-            ? null
-            : authorized.last,
+        localJoins: newDeviceSessions,
+        activeJoin: activeJoin,
       );
       if (resumable.isNotEmpty) {
         await pollNewDeviceActive();
@@ -497,18 +517,32 @@ class DevicesController extends StateNotifier<DevicesState> {
     required String handle,
     required String phone,
     required String otp,
+    String presenceReason = 'Confirm Handle Recovery authorized Join',
   }) async {
     if (state.isActionPending) return false;
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
-      final progress = await ref
-          .read(deviceManagementServiceProvider)
-          .beginNewDeviceJoinWithSms(
-            handle: handle,
-            phone: phone,
-            otp: otp,
-            operationId: _newOperationId('join'),
-          );
+      final deviceService = ref.read(deviceManagementServiceProvider);
+      final operationId = _newOperationId('join');
+      final recoveryScope = _recoveryScopeForHandle(handle);
+      final progress = recoveryScope == null
+          ? await deviceService.beginNewDeviceJoinWithSms(
+              handle: handle,
+              phone: phone,
+              otp: otp,
+              operationId: operationId,
+            )
+          : await ref
+                .read(handleRecoveryServiceProvider)
+                .activateAuthorizedJoin(
+                  scope: recoveryScope,
+                  phone: phone,
+                  otp: otp,
+                  handle: handle,
+                  did: await deviceService.resolveNewDeviceJoinDid(handle),
+                  operationId: operationId,
+                  presenceReason: presenceReason,
+                );
       if (!mounted) return false;
       state = state.copyWith(
         activeJoin: progress,
@@ -619,9 +653,17 @@ class DevicesController extends StateNotifier<DevicesState> {
     }
     state = state.copyWith(isActionPending: true, clearError: true);
     try {
-      final next = await ref
-          .read(deviceManagementServiceProvider)
-          .pollNewDeviceJoin(progress: progress);
+      final next = _handleRecoveryEnabled
+          ? await ref
+                .read(handleRecoveryServiceProvider)
+                .resumeAuthorizedJoinActivation(
+                  joinSessionId: progress.joinSessionId,
+                  recoveryExpected:
+                      progress.cause == DeviceJoinCause.handleRecovery,
+                )
+          : await ref
+                .read(deviceManagementServiceProvider)
+                .pollNewDeviceJoin(progress: progress);
       if (!mounted) return;
       state = state.copyWith(
         activeJoin: next,
@@ -1243,6 +1285,25 @@ class DevicesController extends StateNotifier<DevicesState> {
         ref.read(rootKeyTransferServiceProvider).discard(stalePreparation),
       );
     }
+  }
+
+  HandleRecoveryIdentityScope? _recoveryScopeForHandle(String handle) {
+    if (!_handleRecoveryEnabled) return null;
+    final normalizedHandle = handle.trim().toLowerCase();
+    if (normalizedHandle.isEmpty) return null;
+    final matches = ref
+        .read(sessionProvider)
+        .localCredentials
+        .where(
+          (credential) =>
+              credential.credentialName.trim().isNotEmpty &&
+              credential.handle?.trim().toLowerCase() == normalizedHandle,
+        )
+        .toList(growable: false);
+    if (matches.length != 1) return null;
+    return HandleRecoveryIdentityScope(
+      localIdentityId: matches.single.credentialName.trim(),
+    );
   }
 }
 

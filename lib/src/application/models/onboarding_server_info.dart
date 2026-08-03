@@ -145,6 +145,9 @@ class OnboardingServerInfo {
         phone.verification.type == OnboardingVerificationType.none &&
         !phone.verification.required;
   }
+
+  bool get supportsPhoneHandleRecovery =>
+      identity.handleRecovery.supportsPhoneOtp;
 }
 
 class OnboardingServerServiceInfo {
@@ -162,9 +165,13 @@ class OnboardingServerServiceInfo {
 }
 
 class OnboardingIdentityCapabilities {
-  const OnboardingIdentityCapabilities({required this.handleRegistration});
+  const OnboardingIdentityCapabilities({
+    required this.handleRegistration,
+    this.handleRecovery = const OnboardingHandleRecoveryCapabilities.disabled(),
+  });
 
   final OnboardingHandleRegistrationCapabilities handleRegistration;
+  final OnboardingHandleRecoveryCapabilities handleRecovery;
 
   factory OnboardingIdentityCapabilities.fromJson(Map<String, Object?> json) {
     return OnboardingIdentityCapabilities(
@@ -174,7 +181,63 @@ class OnboardingIdentityCapabilities {
           'identity.handle_registration',
         ),
       ),
+      handleRecovery: OnboardingHandleRecoveryCapabilities.fromJson(
+        json['handle_recovery'],
+      ),
     );
+  }
+}
+
+class OnboardingHandleRecoveryCapabilities {
+  const OnboardingHandleRecoveryCapabilities({
+    required this.enabled,
+    required this.methods,
+  });
+
+  const OnboardingHandleRecoveryCapabilities.disabled()
+    : enabled = false,
+      methods = const <OnboardingIdentityMethod>[];
+
+  final bool enabled;
+  final List<OnboardingIdentityMethod> methods;
+
+  bool get supportsPhoneOtp {
+    if (!enabled || methods.length != 1) {
+      return false;
+    }
+    final method = methods.single;
+    return method.enabled &&
+        method.id == OnboardingIdentityMethodId.phone &&
+        method.verification.required &&
+        method.verification.type == OnboardingVerificationType.smsOtp;
+  }
+
+  factory OnboardingHandleRecoveryCapabilities.fromJson(Object? raw) {
+    if (raw is! Map) {
+      return const OnboardingHandleRecoveryCapabilities.disabled();
+    }
+    try {
+      final json = raw.map<String, Object?>(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+      final enabled = json['enabled'];
+      if (enabled != null && enabled is! bool) {
+        return const OnboardingHandleRecoveryCapabilities.disabled();
+      }
+      final methods = _methodList(
+        json['methods'],
+        'identity.handle_recovery.methods',
+      );
+      final result = OnboardingHandleRecoveryCapabilities(
+        enabled: enabled != false,
+        methods: methods,
+      );
+      return result.supportsPhoneOtp
+          ? result
+          : const OnboardingHandleRecoveryCapabilities.disabled();
+    } on FormatException {
+      return const OnboardingHandleRecoveryCapabilities.disabled();
+    }
   }
 }
 

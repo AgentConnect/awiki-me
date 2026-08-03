@@ -4,14 +4,18 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
+import '../../app/app_router.dart';
 import '../../app/e2e_semantics.dart';
+import '../../app/app_services.dart';
 import '../../application/models/onboarding_server_info.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/tenant/app_tenant.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/entities/session_identity.dart';
+import '../../domain/entities/handle_recovery.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../devices/device_join_page.dart';
+import '../recovery/handle_recovery_page.dart';
 import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
@@ -98,6 +102,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final localeMode = ref.watch(appLocaleModeProvider);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final handleRecoveryAvailable =
+        ref.watch(multiDeviceHandleRecoveryEnabledProvider) &&
+        (onboarding.serverInfo?.supportsPhoneHandleRecovery ?? false);
     if (responsive.usesDesktopLayout) {
       return _withLegacyUpgradeProjection(
         _MacOnboardingScaffold(
@@ -118,6 +125,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           onLanguagePressed: _showLanguageSheet,
           onTenantPressed: _showTenantManagementDialog,
           onJoinDevice: () => openDeviceJoinPage(context),
+          onRecoverHandle: handleRecoveryAvailable
+              ? (identity) => _openHandleRecoveryPage(context, identity)
+              : null,
         ),
         onboarding,
       );
@@ -184,6 +194,14 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                               credentials: credentials,
                                               onLogin:
                                                   _loginWithLocalCredential,
+                                              onRecoverHandle:
+                                                  handleRecoveryAvailable
+                                                  ? (identity) =>
+                                                        _openHandleRecoveryPage(
+                                                          context,
+                                                          identity,
+                                                        )
+                                                  : null,
                                             ),
                                           ],
                                           SizedBox(
@@ -450,6 +468,21 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   Future<void> _showTenantManagementDialog() async {
     await showTenantManagementDialog(context);
+  }
+
+  Future<void> _openHandleRecoveryPage(
+    BuildContext context,
+    SessionIdentity identity,
+  ) {
+    return AppNavigator.push<void>(
+      context,
+      (_) => HandleRecoveryPage(
+        identityScope: HandleRecoveryIdentityScope(
+          localIdentityId: identity.credentialName,
+        ),
+        initialHandle: identity.handle,
+      ),
+    );
   }
 
   Future<void> _submitRegister(BuildContext context) async {

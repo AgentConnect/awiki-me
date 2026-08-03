@@ -43,6 +43,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     this.multiDeviceDeviceRevokeEnabled = false,
     this.multiDeviceDirectE2eeEnabled = false,
     this.multiDeviceGroupE2eeEnabled = false,
+    this.multiDeviceHandleRecoveryEnabled = false,
     AwikiImCoreOpen? openCore,
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
     AwikiImCoreUpgradeLocalState? upgradeLocalState,
@@ -64,6 +65,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final bool multiDeviceDeviceRevokeEnabled;
   final bool multiDeviceDirectE2eeEnabled;
   final bool multiDeviceGroupE2eeEnabled;
+  final bool multiDeviceHandleRecoveryEnabled;
   final AwikiImCoreOpen _openCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
@@ -135,6 +137,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
         multiDeviceDeviceRevokeEnabled: multiDeviceDeviceRevokeEnabled,
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,
+        multiDeviceHandleRecoveryEnabled: multiDeviceHandleRecoveryEnabled,
         identitySecretVault: core.ImCoreSecretVaultOptions(
           rootKey: vaultSecrets.rootKey,
           vaultDir: _paths.vaultDir,

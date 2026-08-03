@@ -3,6 +3,14 @@ import 'models/product_local_models.dart';
 abstract interface class ProductLocalStore {
   Future<void> warmUp();
 
+  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
+    required String localIdentityId,
+  });
+
+  Future<void> saveHandleRecoveryLocator(ProductHandleRecoveryLocator locator);
+
+  Future<void> deleteHandleRecoveryLocator({required String localIdentityId});
+
   Future<ProductConversationOverlay?> loadConversationOverlay({
     required String ownerDid,
     required String threadId,
@@ -130,6 +138,28 @@ abstract interface class ProductLocalStore {
   Future<ProductDeviceRegistrySnapshot?> loadDeviceRegistrySnapshot({
     required ProductAccountBinding binding,
   });
+
+  Future<ProductDeviceRegistryEpoch?> loadDeviceRegistryEpoch({
+    required ProductAccountBinding binding,
+  });
+
+  Future<ProductDeviceRegistryEpochResetReceipt?>
+  loadDeviceRegistryEpochResetReceipt({
+    required ProductDeviceRegistryEpochResetAuthorization authorization,
+  });
+
+  Future<ProductDeviceRegistryEpochResetReceipt> applyDeviceRegistryEpochReset(
+    ProductDeviceRegistryEpochResetAuthorization authorization,
+  );
+
+  Future<LegacyRegistryEpochAdoptionReceipt?>
+  loadLegacyRegistryEpochAdoptionReceipt({
+    required ProductAccountBinding binding,
+  });
+
+  Future<LegacyRegistryEpochAdoptionReceipt> adoptLegacyDeviceRegistryEpoch(
+    LegacyRegistryEpochAdoptionAuthority authority,
+  );
 
   Future<void> replaceDeviceRegistrySnapshot(
     ProductDeviceRegistrySnapshot snapshot,

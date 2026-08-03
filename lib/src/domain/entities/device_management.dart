@@ -44,6 +44,39 @@ enum DeviceJoinRemoteState {
 
 enum DeviceJoinRejectReason { userRejected, sasMismatch }
 
+const int deviceJoinSessionIdMaxUnicodeScalars = 128;
+
+bool isCanonicalDeviceJoinSessionId(String value) {
+  final runes = value.runes;
+  if (runes.isEmpty || runes.length > deviceJoinSessionIdMaxUnicodeScalars) {
+    return false;
+  }
+  for (final rune in runes) {
+    if (rune <= 0x1f ||
+        (rune >= 0x7f && rune <= 0x9f) ||
+        RegExp(r'\s', unicode: true).hasMatch(String.fromCharCode(rune))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+enum DeviceJoinCause { ordinary, handleRecovery }
+
+class DeviceJoinHandleRecoveryContext {
+  const DeviceJoinHandleRecoveryContext({
+    required this.handle,
+    required this.localOrdinaryDataWillMigrate,
+    this.unsupportedE2eeGroupCount = 0,
+    this.unsupportedDidOnlyGroupCount = 0,
+  });
+
+  final String handle;
+  final bool localOrdinaryDataWillMigrate;
+  final int unsupportedE2eeGroupCount;
+  final int unsupportedDidOnlyGroupCount;
+}
+
 class DeviceSummary {
   const DeviceSummary({
     required this.protocolDeviceId,
@@ -262,7 +295,13 @@ class DeviceJoinProgress {
     required this.expiresAt,
     this.sas,
     this.authorizedDevice,
-  });
+    this.cause = DeviceJoinCause.ordinary,
+    this.handleRecovery,
+  }) : assert(
+         cause == DeviceJoinCause.handleRecovery
+             ? handleRecovery != null
+             : handleRecovery == null,
+       );
 
   final String joinSessionId;
   final String did;
@@ -275,6 +314,8 @@ class DeviceJoinProgress {
   /// Short-lived display-only SAS. It must never be persisted or logged.
   final String? sas;
   final DeviceSummary? authorizedDevice;
+  final DeviceJoinCause cause;
+  final DeviceJoinHandleRecoveryContext? handleRecovery;
 
   bool get isTerminal =>
       phase == DeviceJoinPhase.authorized ||

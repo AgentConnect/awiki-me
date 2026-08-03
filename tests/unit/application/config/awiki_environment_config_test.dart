@@ -33,6 +33,7 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
+    expect(config.multiDeviceHandleRecoveryEnabled, isFalse);
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
@@ -47,9 +48,7 @@ void main() {
   });
 
   test('agent-connect.cn enables Agent and Daemon capabilities', () {
-    final config = AwikiEnvironmentConfig(
-      baseUrl: 'https://agent-connect.cn',
-    );
+    final config = AwikiEnvironmentConfig(baseUrl: 'https://agent-connect.cn');
 
     expect(config.didDomain, 'agent-connect.cn');
     expect(config.agentImEnabled, isTrue);
@@ -111,6 +110,7 @@ void main() {
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
+      multiDeviceHandleRecoveryEnabled: true,
       messageSyncV2ReadEnabled: true,
     );
 
@@ -131,6 +131,7 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isTrue);
     expect(config.multiDeviceDirectE2eeEnabled, isTrue);
     expect(config.multiDeviceGroupE2eeEnabled, isTrue);
+    expect(config.multiDeviceHandleRecoveryEnabled, isTrue);
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
@@ -160,6 +161,7 @@ void main() {
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
+    expect(container.read(multiDeviceHandleRecoveryEnabledProvider), isFalse);
     expect(container.read(messageSyncV2ReadEnabledProvider), isTrue);
   });
 

@@ -26,6 +26,8 @@ class DeviceJoinSmsOtpRateLimited implements Exception {
 abstract interface class DeviceManagementCorePort {
   Future<void> sendJoinSmsOtp({required String handle, required String phone});
 
+  Future<String> resolveJoinDid(String handle);
+
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions();
 
   Future<DeviceJoinProgress> beginDeviceJoinWithSms({

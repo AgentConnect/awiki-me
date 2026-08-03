@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'models/product_local_models.dart';
 import 'ports/account_state_sync_port.dart';
+import 'ports/legacy_registry_epoch_adoption_port.dart';
 import 'product_local_store.dart';
 
 typedef AccountStateSessionValidator =
@@ -12,19 +13,25 @@ class AccountStateSyncService {
   AccountStateSyncService({
     required AccountStateSyncPort remote,
     required ProductLocalStore local,
+    LegacyRegistryEpochAdoptionPort? legacyRegistryEpochAdoption,
     DateTime Function()? clock,
   }) : _remote = remote,
        _local = local,
+       _legacyRegistryEpochAdoption = legacyRegistryEpochAdoption,
        _clock = clock ?? (() => DateTime.now().toUtc());
 
   final AccountStateSyncPort _remote;
   final ProductLocalStore _local;
+  final LegacyRegistryEpochAdoptionPort? _legacyRegistryEpochAdoption;
   final DateTime Function() _clock;
 
   Future<AccountStateReconcileResult> reconcile({
     required ProductAccountBinding binding,
     required String expectedCurrentDid,
     required String expectedIdentityGeneration,
+    String? expectedIdentitySelector,
+    String? expectedProtocolDeviceId,
+    String? expectedDeviceAuthGeneration,
     required int sessionGeneration,
     required AccountStateSessionValidator isSessionCurrent,
     Map<ProductAccountDomain, String> minimumVersions =
@@ -67,6 +74,68 @@ class AccountStateSyncService {
       return accumulator.result(sessionInvalidated: true);
     }
 
+    final registryEpoch = ProductDeviceRegistryEpoch(
+      currentDid: expectedCurrentDid,
+      bindingGeneration: expectedIdentityGeneration,
+    );
+    var persistedRegistryEpoch = await _local.loadDeviceRegistryEpoch(
+      binding: binding,
+    );
+    if (persistedRegistryEpoch == null) {
+      final legacyRegistryState = await _local.loadDomainSyncState(
+        binding: binding,
+        domain: ProductAccountDomain.deviceRegistry,
+      );
+      if (legacyRegistryState != null) {
+        final adoption = _legacyRegistryEpochAdoption;
+        if (adoption == null ||
+            expectedIdentitySelector == null ||
+            expectedIdentitySelector.isEmpty ||
+            expectedIdentitySelector.trim() != expectedIdentitySelector ||
+            expectedProtocolDeviceId == null ||
+            expectedProtocolDeviceId.isEmpty ||
+            expectedProtocolDeviceId.trim() != expectedProtocolDeviceId ||
+            expectedDeviceAuthGeneration == null ||
+            !isCanonicalProductDecimal(expectedDeviceAuthGeneration)) {
+          throw const AccountStateSyncProtocolException(
+            'account_state_registry_epoch_adoption_unavailable',
+          );
+        }
+        final authority = await adoption.legacyRegistryEpochAdoptionAuthority(
+          expectedIdentitySelector,
+        );
+        if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
+          return accumulator.result(sessionInvalidated: true);
+        }
+        if (authority == null ||
+            !_authorityMatchesExpectedBinding(
+              authority,
+              binding: binding,
+              currentDid: expectedCurrentDid,
+              identityGeneration: expectedIdentityGeneration,
+              protocolDeviceId: expectedProtocolDeviceId,
+              deviceAuthGeneration: expectedDeviceAuthGeneration,
+            )) {
+          throw const AccountStateSyncProtocolException(
+            'account_state_registry_epoch_adoption_mismatch',
+          );
+        }
+        await _local.adoptLegacyDeviceRegistryEpoch(authority);
+        if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
+          return accumulator.result(sessionInvalidated: true);
+        }
+        persistedRegistryEpoch = await _local.loadDeviceRegistryEpoch(
+          binding: binding,
+        );
+      }
+    }
+    if (persistedRegistryEpoch != null &&
+        !persistedRegistryEpoch.matches(registryEpoch)) {
+      throw const AccountStateSyncProtocolException(
+        'account_state_registry_epoch_mismatch',
+      );
+    }
+
     final firstManifest = await _remote.loadManifest();
     if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
       return accumulator.result(sessionInvalidated: true);
@@ -91,6 +160,7 @@ class AccountStateSyncService {
           sessionGeneration: sessionGeneration,
           isSessionCurrent: isSessionCurrent,
           manifest: firstManifest,
+          registryEpoch: registryEpoch,
           localState: initialStates[domain],
           minimumVersion: minimumVersions[domain],
           accumulator: accumulator,
@@ -138,6 +208,7 @@ class AccountStateSyncService {
             sessionGeneration: sessionGeneration,
             isSessionCurrent: isSessionCurrent,
             manifest: secondManifest,
+            registryEpoch: registryEpoch,
             localState: currentStates[domain],
             minimumVersion: minimumVersions[domain],
             accumulator: accumulator,
@@ -201,6 +272,7 @@ class AccountStateSyncService {
     required int sessionGeneration,
     required AccountStateSessionValidator isSessionCurrent,
     required AccountStateManifest manifest,
+    required ProductDeviceRegistryEpoch registryEpoch,
     required ProductAccountDomainSyncState? localState,
     required String? minimumVersion,
     required _ReconcileAccumulator accumulator,
@@ -310,7 +382,7 @@ class AccountStateSyncService {
         accumulator.unchanged.add(domain);
         return;
       }
-      await _commitDomain(binding, domain, snapshot);
+      await _commitDomain(binding, domain, snapshot, registryEpoch);
       if (!_isCurrent(binding, sessionGeneration, isSessionCurrent)) {
         accumulator.sessionInvalidated = true;
         return;
@@ -335,6 +407,7 @@ class AccountStateSyncService {
     ProductAccountBinding binding,
     ProductAccountDomain domain,
     Object snapshot,
+    ProductDeviceRegistryEpoch registryEpoch,
   ) {
     final refreshedAt = _clock().toUtc();
     return switch ((domain, snapshot)) {
@@ -389,6 +462,7 @@ class AccountStateSyncService {
         _local.replaceDeviceRegistrySnapshot(
           ProductDeviceRegistrySnapshot(
             binding: binding,
+            epoch: registryEpoch,
             domainVersion: value.registryVersion,
             refreshedAt: refreshedAt,
             devices: value.devices.map(
@@ -403,6 +477,27 @@ class AccountStateSyncService {
       _ => throw StateError('account_state_snapshot_domain_mismatch'),
     };
   }
+}
+
+bool _authorityMatchesExpectedBinding(
+  LegacyRegistryEpochAdoptionAuthority authority, {
+  required ProductAccountBinding binding,
+  required String currentDid,
+  required String identityGeneration,
+  required String protocolDeviceId,
+  required String deviceAuthGeneration,
+}) {
+  try {
+    validateLegacyRegistryEpochAdoptionAuthority(authority);
+  } on ArgumentError {
+    return false;
+  }
+  return authority.ownerIdentityId == binding.ownerIdentityId &&
+      authority.accountUserId == binding.accountId &&
+      authority.currentDid == currentDid &&
+      authority.bindingGeneration == identityGeneration &&
+      authority.protocolDeviceId == protocolDeviceId &&
+      authority.deviceAuthGeneration == deviceAuthGeneration;
 }
 
 class AccountStateReconcileResult {

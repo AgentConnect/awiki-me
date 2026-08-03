@@ -31,6 +31,16 @@ class DeviceManagementService {
     );
   }
 
+  Future<String> resolveNewDeviceJoinDid(String handle) async {
+    final did = await _core.resolveJoinDid(
+      _required(handle, 'handle').toLowerCase(),
+    );
+    if (!did.startsWith('did:wba:') || did.trim() != did) {
+      throw const DeviceManagementException('invalid_join_target_did');
+    }
+    return did;
+  }
+
   Future<DeviceRegistrySnapshot> loadRegistry(String selector) async {
     return _core.identityDeviceRegistry(_required(selector, 'selector'));
   }
@@ -61,7 +71,7 @@ class DeviceManagementService {
   }) async {
     final progress = await _core.localDeviceJoinVerificationProgress(
       selector: _required(selector, 'selector'),
-      joinSessionId: _required(joinSessionId, 'joinSessionId'),
+      joinSessionId: _requiredJoinSessionId(joinSessionId),
     );
     _validateProgress(progress);
     if (progress.side != DeviceJoinSide.admin) {
@@ -133,7 +143,7 @@ class DeviceManagementService {
   }) async {
     final result = await _core.startDeviceJoinVerification(
       selector: _required(selector, 'selector'),
-      joinSessionId: _required(joinSessionId, 'joinSessionId'),
+      joinSessionId: _requiredJoinSessionId(joinSessionId),
       operationId: _required(operationId, 'operationId'),
       challengeTtlSeconds: challengeTtlSeconds,
     );
@@ -254,7 +264,7 @@ class DeviceManagementService {
   }) async {
     final progress = await _core.rejectDeviceJoin(
       selector: _required(selector, 'selector'),
-      joinSessionId: _required(joinSessionId, 'joinSessionId'),
+      joinSessionId: _requiredJoinSessionId(joinSessionId),
       reason: reason,
     );
     _validateProgress(progress);
@@ -267,7 +277,7 @@ class DeviceManagementService {
 }
 
 void _validateProgress(DeviceJoinProgress progress) {
-  _required(progress.joinSessionId, 'joinSessionId');
+  _requiredJoinSessionId(progress.joinSessionId);
   _required(progress.did, 'did');
   _required(progress.protocolDeviceId, 'protocolDeviceId');
   final authorized = progress.authorizedDevice;
@@ -285,7 +295,7 @@ void _validateProgress(DeviceJoinProgress progress) {
 
 void _validateRequest(DeviceJoinRequestNotice request) {
   _required(request.eventId, 'eventId');
-  _required(request.joinSessionId, 'joinSessionId');
+  _requiredJoinSessionId(request.joinSessionId);
   _required(request.did, 'did');
   _required(request.protocolDeviceId, 'protocolDeviceId');
   _required(request.candidateKeyFingerprint, 'candidateKeyFingerprint');
@@ -307,4 +317,11 @@ String _required(String value, String field) {
     throw DeviceManagementException('invalid_$field');
   }
   return normalized;
+}
+
+String _requiredJoinSessionId(String value) {
+  if (!isCanonicalDeviceJoinSessionId(value)) {
+    throw const DeviceManagementException('invalid_joinSessionId');
+  }
+  return value;
 }

@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:awiki_me/src/application/account_state_sync_service.dart';
 import 'package:awiki_me/src/application/models/product_local_models.dart';
+import 'package:awiki_me/src/application/ports/account_state_sync_port.dart';
+import 'package:awiki_me/src/application/ports/legacy_registry_epoch_adoption_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store_sqlite.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
@@ -8,6 +11,11 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  const registryEpoch = ProductDeviceRegistryEpoch(
+    currentDid: 'did:wba:awiki.info:users:alice-old',
+    bindingGeneration: '7',
+  );
 
   late Directory databaseDir;
 
@@ -151,6 +159,68 @@ void main() {
       ),
       isNotNull,
     );
+  });
+
+  test('persists only the secret-free Handle Recovery host locator', () async {
+    final store = _store(databaseDir);
+    const beforePrepare = ProductHandleRecoveryLocator(
+      localIdentityId: 'identity-alice',
+      operationId: 'recovery-operation-1',
+      fullHandle: 'alice.awiki.info',
+    );
+
+    await store.saveHandleRecoveryLocator(beforePrepare);
+    final restoredBeforePrepare = await store.loadHandleRecoveryLocator(
+      localIdentityId: 'identity-alice',
+    );
+    expect(restoredBeforePrepare?.localIdentityId, 'identity-alice');
+    expect(restoredBeforePrepare?.operationId, 'recovery-operation-1');
+    expect(restoredBeforePrepare?.fullHandle, 'alice.awiki.info');
+    expect(restoredBeforePrepare?.recoveryId, isNull);
+
+    const afterPrepare = ProductHandleRecoveryLocator(
+      localIdentityId: 'identity-alice',
+      operationId: 'recovery-operation-1',
+      fullHandle: 'alice.awiki.info',
+      recoveryId: 'recovery-1',
+    );
+    await store.saveHandleRecoveryLocator(afterPrepare);
+    final restoredAfterPrepare = await store.loadHandleRecoveryLocator(
+      localIdentityId: 'identity-alice',
+    );
+    expect(restoredAfterPrepare?.localIdentityId, 'identity-alice');
+    expect(restoredAfterPrepare?.operationId, 'recovery-operation-1');
+    expect(restoredAfterPrepare?.fullHandle, 'alice.awiki.info');
+    expect(restoredAfterPrepare?.recoveryId, 'recovery-1');
+
+    final database = await databaseFactory.openDatabase(
+      _databasePath(databaseDir),
+      options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+    );
+    final columnNames = (await database.rawQuery(
+      'PRAGMA table_info(handle_recovery_locator)',
+    )).map((column) => column['name']).toSet();
+    final rows = await database.query('handle_recovery_locator');
+    await database.close();
+    expect(columnNames, <Object?>{
+      'local_identity_id',
+      'operation_id',
+      'full_handle',
+      'recovery_id',
+    });
+    expect(rows.single, <String, Object?>{
+      'local_identity_id': 'identity-alice',
+      'operation_id': 'recovery-operation-1',
+      'full_handle': 'alice.awiki.info',
+      'recovery_id': 'recovery-1',
+    });
+
+    await store.deleteHandleRecoveryLocator(localIdentityId: 'identity-alice');
+    expect(
+      await store.loadHandleRecoveryLocator(localIdentityId: 'identity-alice'),
+      isNull,
+    );
+    await store.close();
   });
 
   test('stores agent states by owner sorted by latest update', () async {
@@ -382,7 +452,7 @@ void main() {
     },
   );
 
-  test('fresh product store creates the complete version 4 schema', () async {
+  test('fresh product store creates the complete version 6 schema', () async {
     final store = _store(databaseDir);
     await store.warmUp();
     await store.close();
@@ -403,7 +473,7 @@ void main() {
         .toSet();
     await database.close();
 
-    expect(version, 4);
+    expect(version, 6);
     expect(
       tableNames,
       containsAll(<String>[
@@ -412,9 +482,88 @@ void main() {
         'account_agent_status_snapshot',
         'account_profile_snapshot',
         'account_device_registry_snapshot',
+        'account_device_registry_epoch',
+        'account_device_registry_epoch_reset_receipt',
+        'account_device_registry_epoch_adoption_receipt',
+        'handle_recovery_locator',
       ]),
     );
   });
+
+  test(
+    'upgrades version 5 with the exact secret-free Recovery locator table',
+    () async {
+      final path = _databasePath(databaseDir);
+      final version5 = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 5,
+          onCreate: (database, _) async {
+            await database.execute(
+              'CREATE TABLE legacy_marker (value TEXT NOT NULL)',
+            );
+            await database.insert('legacy_marker', <String, Object?>{
+              'value': 'preserved',
+            });
+          },
+        ),
+      );
+      await version5.close();
+
+      final store = _store(databaseDir);
+      await store.warmUp();
+      await store.saveHandleRecoveryLocator(
+        const ProductHandleRecoveryLocator(
+          localIdentityId: 'identity-alice',
+          operationId: 'operation-1',
+          fullHandle: 'alice.awiki.info',
+        ),
+      );
+      await store.close();
+
+      final upgraded = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      expect(
+        Sqflite.firstIntValue(await upgraded.rawQuery('PRAGMA user_version')),
+        6,
+      );
+      final locatorColumns = (await upgraded.rawQuery(
+        'PRAGMA table_info(handle_recovery_locator)',
+      )).map((column) => column['name']).toSet();
+      expect(locatorColumns, <Object?>{
+        'local_identity_id',
+        'operation_id',
+        'full_handle',
+        'recovery_id',
+      });
+      expect(await upgraded.query('legacy_marker'), <Map<String, Object?>>[
+        <String, Object?>{'value': 'preserved'},
+      ]);
+      await upgraded.close();
+
+      final backup = await databaseFactory.openDatabase(
+        _schemaUpgradeBackupPath(databaseDir),
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      expect(
+        Sqflite.firstIntValue(await backup.rawQuery('PRAGMA user_version')),
+        5,
+      );
+      expect(
+        await backup.rawQuery(
+          'SELECT name FROM sqlite_master '
+          "WHERE type = 'table' AND name = 'handle_recovery_locator'",
+        ),
+        isEmpty,
+      );
+      expect(await backup.query('legacy_marker'), <Map<String, Object?>>[
+        <String, Object?>{'value': 'preserved'},
+      ]);
+      await backup.close();
+    },
+  );
 
   test(
     'upgrades a real version 3 store additively and keeps a verified backup',
@@ -451,7 +600,7 @@ void main() {
       );
       expect(
         Sqflite.firstIntValue(await upgraded.rawQuery('PRAGMA user_version')),
-        4,
+        6,
       );
       expect(
         await upgraded.rawQuery(
@@ -483,6 +632,261 @@ void main() {
       );
       expect(await backup.query('local_agent_states'), hasLength(1));
       await backup.close();
+    },
+  );
+
+  test(
+    'v4 Registry adopts exact ordinary Core authority without resetting domains',
+    () async {
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-legacy-epoch',
+        accountId: 'account-legacy-epoch',
+      );
+      const authority = LegacyRegistryEpochAdoptionAuthority(
+        ownerIdentityId: 'owner-legacy-epoch',
+        accountUserId: 'account-legacy-epoch',
+        currentDid: 'did:wba:example.test:alice-old',
+        bindingGeneration: '7',
+        protocolDeviceId: 'old-device',
+        deviceAuthGeneration: '4',
+        provenanceId: 'sha256:legacy-checkpoint-proof',
+      );
+      final path = _databasePath(databaseDir);
+      final version4 = await databaseFactory.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 4,
+          onCreate: (db, _) => _createVersion4Schema(db),
+        ),
+      );
+      await _insertVersion4AccountState(version4, binding);
+      await version4.close();
+
+      var store = _store(databaseDir);
+      final adoption = _LegacyAdoptionPort(authority);
+      final remote = _LegacyUpgradeRemote();
+      final service = AccountStateSyncService(
+        remote: remote,
+        local: store,
+        legacyRegistryEpochAdoption: adoption,
+      );
+      final result = await service.reconcile(
+        binding: binding,
+        expectedCurrentDid: authority.currentDid,
+        expectedIdentityGeneration: authority.bindingGeneration,
+        expectedIdentitySelector: 'identity-alice-old',
+        expectedProtocolDeviceId: authority.protocolDeviceId,
+        expectedDeviceAuthGeneration: authority.deviceAuthGeneration,
+        sessionGeneration: 7,
+        isSessionCurrent: (_, generation) => generation == 7,
+      );
+
+      expect(result.failures, isEmpty);
+      expect(adoption.calls, 1);
+      expect(remote.manifestCalls, 2);
+      expect(remote.registryCalls, 1);
+      final registry = await store.loadDeviceRegistrySnapshot(binding: binding);
+      expect(registry?.epoch.currentDid, authority.currentDid);
+      expect(registry?.epoch.bindingGeneration, '7');
+      expect(registry?.domainVersion, '10');
+      expect(registry?.devices.single.protocolDeviceId, 'old-device');
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '12',
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '15',
+      );
+      final firstReceipt = await store.loadLegacyRegistryEpochAdoptionReceipt(
+        binding: binding,
+      );
+      expect(firstReceipt?.authority.provenanceId, authority.provenanceId);
+      await store.close();
+
+      store = _store(databaseDir);
+      final replayed = await store.adoptLegacyDeviceRegistryEpoch(authority);
+      expect(replayed.adoptedAt, firstReceipt?.adoptedAt);
+      expect(
+        (await store.loadDeviceRegistrySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '10',
+      );
+      final restartRemote = _LegacyUpgradeRemote();
+      await AccountStateSyncService(
+        remote: restartRemote,
+        local: store,
+        legacyRegistryEpochAdoption: adoption,
+      ).reconcile(
+        binding: binding,
+        expectedCurrentDid: authority.currentDid,
+        expectedIdentityGeneration: authority.bindingGeneration,
+        expectedIdentitySelector: 'identity-alice-old',
+        expectedProtocolDeviceId: authority.protocolDeviceId,
+        expectedDeviceAuthGeneration: authority.deviceAuthGeneration,
+        sessionGeneration: 8,
+        isSessionCurrent: (_, generation) => generation == 8,
+      );
+      expect(adoption.calls, 1);
+
+      final recoveryRemote = _LegacyUpgradeRemote(
+        currentDid: 'did:wba:example.test:alice-new',
+        identityGeneration: '8',
+        registryVersion: '1',
+      );
+      await expectLater(
+        AccountStateSyncService(
+          remote: recoveryRemote,
+          local: store,
+          legacyRegistryEpochAdoption: _LegacyAdoptionPort(null),
+        ).reconcile(
+          binding: binding,
+          expectedCurrentDid: 'did:wba:example.test:alice-new',
+          expectedIdentityGeneration: '8',
+          expectedIdentitySelector: 'identity-alice-new',
+          expectedProtocolDeviceId: 'new-device',
+          expectedDeviceAuthGeneration: '1',
+          sessionGeneration: 9,
+          isSessionCurrent: (_, generation) => generation == 9,
+        ),
+        throwsA(
+          isA<AccountStateSyncProtocolException>().having(
+            (error) => error.code,
+            'code',
+            'account_state_registry_epoch_mismatch',
+          ),
+        ),
+      );
+      expect(recoveryRemote.manifestCalls, 0);
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '12',
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '15',
+      );
+      await store.close();
+    },
+  );
+
+  test(
+    'v4 Registry without exact Core authority fails before remote unchanged',
+    () async {
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-legacy-epoch',
+        accountId: 'account-legacy-epoch',
+      );
+      const oldAuthority = LegacyRegistryEpochAdoptionAuthority(
+        ownerIdentityId: 'owner-legacy-epoch',
+        accountUserId: 'account-legacy-epoch',
+        currentDid: 'did:wba:example.test:alice-old',
+        bindingGeneration: '7',
+        protocolDeviceId: 'old-device',
+        deviceAuthGeneration: '4',
+        provenanceId: 'sha256:legacy-checkpoint-proof',
+      );
+      final version4 = await databaseFactory.openDatabase(
+        _databasePath(databaseDir),
+        options: OpenDatabaseOptions(
+          version: 4,
+          onCreate: (db, _) => _createVersion4Schema(db),
+        ),
+      );
+      await _insertVersion4AccountState(version4, binding);
+      await version4.close();
+      final store = _store(databaseDir);
+
+      for (final scenario
+          in <
+            ({
+              LegacyRegistryEpochAdoptionAuthority? authority,
+              String did,
+              String generation,
+              String deviceId,
+              String deviceGeneration,
+            })
+          >[
+            (
+              authority: null,
+              did: oldAuthority.currentDid,
+              generation: oldAuthority.bindingGeneration,
+              deviceId: oldAuthority.protocolDeviceId,
+              deviceGeneration: oldAuthority.deviceAuthGeneration,
+            ),
+            (
+              authority: oldAuthority,
+              did: 'did:wba:example.test:alice-new',
+              generation: '8',
+              deviceId: 'new-device',
+              deviceGeneration: '1',
+            ),
+          ]) {
+        final remote = _LegacyUpgradeRemote(
+          currentDid: scenario.did,
+          identityGeneration: scenario.generation,
+          registryVersion: scenario.generation == '8' ? '1' : '10',
+        );
+        await expectLater(
+          AccountStateSyncService(
+            remote: remote,
+            local: store,
+            legacyRegistryEpochAdoption: _LegacyAdoptionPort(
+              scenario.authority,
+            ),
+          ).reconcile(
+            binding: binding,
+            expectedCurrentDid: scenario.did,
+            expectedIdentityGeneration: scenario.generation,
+            expectedIdentitySelector: 'identity-alice',
+            expectedProtocolDeviceId: scenario.deviceId,
+            expectedDeviceAuthGeneration: scenario.deviceGeneration,
+            sessionGeneration: 7,
+            isSessionCurrent: (_, generation) => generation == 7,
+          ),
+          throwsA(
+            isA<AccountStateSyncProtocolException>().having(
+              (error) => error.code,
+              'code',
+              'account_state_registry_epoch_adoption_mismatch',
+            ),
+          ),
+        );
+        expect(remote.manifestCalls, 0);
+      }
+
+      expect(await store.loadDeviceRegistryEpoch(binding: binding), isNull);
+      expect(
+        await store.loadLegacyRegistryEpochAdoptionReceipt(binding: binding),
+        isNull,
+      );
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '12',
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '15',
+      );
+      await store.close();
+      final raw = await databaseFactory.openDatabase(
+        _databasePath(databaseDir),
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      expect(
+        (await raw.query(
+          'account_device_registry_snapshot',
+        )).single['registry_version'],
+        '9',
+      );
+      await raw.close();
     },
   );
 
@@ -596,6 +1000,7 @@ void main() {
       await store.replaceDeviceRegistrySnapshot(
         ProductDeviceRegistrySnapshot(
           binding: binding,
+          epoch: registryEpoch,
           domainVersion: '21',
           refreshedAt: refreshedAt,
           devices: const <ProductDeviceRegistryItem>[
@@ -610,6 +1015,7 @@ void main() {
       await store.replaceDeviceRegistrySnapshot(
         ProductDeviceRegistrySnapshot(
           binding: binding,
+          epoch: registryEpoch,
           domainVersion: '22',
           refreshedAt: refreshedAt.add(const Duration(minutes: 4)),
           devices: const <ProductDeviceRegistryItem>[],
@@ -621,6 +1027,163 @@ void main() {
       expect(emptyRegistry?.domainVersion, '22');
       expect(emptyRegistry?.devices, isEmpty);
 
+      await store.close();
+    },
+  );
+
+  test(
+    'Registry epoch reset is durable idempotent and isolated after reopen',
+    () async {
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-recovery',
+        accountId: 'account-recovery',
+      );
+      const nextEpoch = ProductDeviceRegistryEpoch(
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+        bindingGeneration: '8',
+      );
+      const reset = ProductDeviceRegistryEpochResetReference(
+        accountUserId: 'account-recovery',
+        ownerIdentityId: 'owner-identity-recovery',
+        previousDid: 'did:wba:awiki.info:users:alice-old',
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+        bindingGeneration: '8',
+      );
+      const authorization = ProductDeviceRegistryEpochResetAuthorization(
+        reference: reset,
+        handle: 'alice.awiki.info',
+        sourceKind: ProductIdentityTransitionSourceKind.joinedDevice,
+        sourceId: 'join-session-1',
+      );
+      final now = DateTime.utc(2026, 8, 3);
+      var store = _store(databaseDir);
+      await store.replaceProfileSnapshot(
+        ProductProfileSnapshot(
+          binding: binding,
+          domainVersion: '12',
+          refreshedAt: now,
+          payloadJson: '{"display_name":"Alice"}',
+        ),
+      );
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '15',
+          refreshedAt: now,
+          agents: const <ProductAgentInventoryItem>[],
+        ),
+      );
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          epoch: registryEpoch,
+          domainVersion: '9',
+          refreshedAt: now,
+          devices: const <ProductDeviceRegistryItem>[
+            ProductDeviceRegistryItem(
+              protocolDeviceId: 'old-device',
+              authGeneration: '4',
+              payloadJson: '{"status":"active"}',
+            ),
+          ],
+        ),
+      );
+
+      await expectLater(
+        store.replaceDeviceRegistrySnapshot(
+          ProductDeviceRegistrySnapshot(
+            binding: binding,
+            epoch: nextEpoch,
+            domainVersion: '1',
+            refreshedAt: now,
+            devices: const <ProductDeviceRegistryItem>[],
+          ),
+        ),
+        throwsA(isA<ProductDeviceRegistryEpochMismatchException>()),
+      );
+      for (final invalidSourceId in <String>[
+        'join session',
+        'join\u0000session',
+        List<String>.filled(129, 'j').join(),
+      ]) {
+        await expectLater(
+          store.applyDeviceRegistryEpochReset(
+            ProductDeviceRegistryEpochResetAuthorization(
+              reference: reset,
+              handle: 'alice.awiki.info',
+              sourceKind: ProductIdentityTransitionSourceKind.joinedDevice,
+              sourceId: invalidSourceId,
+            ),
+          ),
+          throwsArgumentError,
+        );
+      }
+      await store.close();
+
+      store = _store(databaseDir);
+      expect(
+        await store.loadDeviceRegistryEpochResetReceipt(
+          authorization: authorization,
+        ),
+        isNull,
+      );
+      final retainedBeforeReset = await store.loadDeviceRegistrySnapshot(
+        binding: binding,
+      );
+      expect(retainedBeforeReset?.epoch, isNotNull);
+      expect(retainedBeforeReset?.domainVersion, '9');
+      expect(
+        retainedBeforeReset?.devices.single.protocolDeviceId,
+        'old-device',
+      );
+
+      final firstReceipt = await store.applyDeviceRegistryEpochReset(
+        authorization,
+      );
+      await store.close();
+
+      store = _store(databaseDir);
+      final durableReceipt = await store.loadDeviceRegistryEpochResetReceipt(
+        authorization: authorization,
+      );
+      expect(durableReceipt?.appliedAt, firstReceipt.appliedAt);
+      expect(await store.loadDeviceRegistrySnapshot(binding: binding), isNull);
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '12',
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '15',
+      );
+
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          epoch: nextEpoch,
+          domainVersion: '1',
+          refreshedAt: now,
+          devices: const <ProductDeviceRegistryItem>[
+            ProductDeviceRegistryItem(
+              protocolDeviceId: 'new-device',
+              authGeneration: '1',
+              payloadJson: '{"status":"active"}',
+            ),
+          ],
+        ),
+      );
+      final replayedReceipt = await store.applyDeviceRegistryEpochReset(
+        authorization,
+      );
+      expect(replayedReceipt.appliedAt, firstReceipt.appliedAt);
+      expect(
+        (await store.loadDeviceRegistrySnapshot(
+          binding: binding,
+        ))?.devices.single.protocolDeviceId,
+        'new-device',
+      );
       await store.close();
     },
   );
@@ -941,6 +1504,185 @@ Future<void> _createVersion3Schema(DatabaseExecutor db) async {
   ''');
 }
 
+Future<void> _createVersion4Schema(DatabaseExecutor db) async {
+  await _createVersion3Schema(db);
+  await db.execute('''
+    CREATE TABLE account_domain_sync_state (
+      owner_identity_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      domain TEXT NOT NULL,
+      domain_version TEXT NOT NULL,
+      payload_hash TEXT,
+      refreshed_at INTEGER NOT NULL,
+      PRIMARY KEY (owner_identity_id, domain)
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE account_agent_inventory_snapshot (
+      owner_identity_id TEXT NOT NULL,
+      agent_did TEXT NOT NULL,
+      inventory_version TEXT NOT NULL,
+      active_state TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      PRIMARY KEY (owner_identity_id, agent_did)
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE account_agent_status_snapshot (
+      owner_identity_id TEXT NOT NULL,
+      agent_did TEXT NOT NULL,
+      agent_status_version TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      PRIMARY KEY (owner_identity_id, agent_did)
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE account_profile_snapshot (
+      owner_identity_id TEXT PRIMARY KEY,
+      profile_version TEXT NOT NULL,
+      payload_json TEXT NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE account_device_registry_snapshot (
+      owner_identity_id TEXT NOT NULL,
+      protocol_device_id TEXT NOT NULL,
+      registry_version TEXT NOT NULL,
+      auth_generation TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      PRIMARY KEY (owner_identity_id, protocol_device_id)
+    )
+  ''');
+}
+
+Future<void> _insertVersion4AccountState(
+  DatabaseExecutor db,
+  ProductAccountBinding binding,
+) async {
+  final refreshedAt = DateTime.utc(2026, 8, 3).millisecondsSinceEpoch;
+  for (final entry in <(String, String)>[
+    ('profile', '12'),
+    ('agent_inventory', '15'),
+    ('device_registry', '9'),
+  ]) {
+    await db.insert('account_domain_sync_state', <String, Object?>{
+      'owner_identity_id': binding.ownerIdentityId,
+      'account_id': binding.accountId,
+      'domain': entry.$1,
+      'domain_version': entry.$2,
+      'refreshed_at': refreshedAt,
+    });
+  }
+  await db.insert('account_profile_snapshot', <String, Object?>{
+    'owner_identity_id': binding.ownerIdentityId,
+    'profile_version': '12',
+    'payload_json': '{"display_name":"Alice"}',
+  });
+  await db.insert('account_agent_inventory_snapshot', <String, Object?>{
+    'owner_identity_id': binding.ownerIdentityId,
+    'agent_did': 'did:wba:example.test:agents:assistant',
+    'inventory_version': '15',
+    'active_state': 'active',
+    'payload_json': '{"name":"Assistant"}',
+  });
+  await db.insert('account_device_registry_snapshot', <String, Object?>{
+    'owner_identity_id': binding.ownerIdentityId,
+    'protocol_device_id': 'old-device',
+    'registry_version': '9',
+    'auth_generation': '4',
+    'payload_json':
+        '{"device_id":"old-device",'
+        '"signing_key_id":"did:key:signing",'
+        '"e2ee_key_id":"did:key:e2ee",'
+        '"status":"active","role":"admin",'
+        '"management_ready":true,"auth_generation":"4"}',
+  });
+}
+
+class _LegacyAdoptionPort implements LegacyRegistryEpochAdoptionPort {
+  _LegacyAdoptionPort(this.authority);
+
+  final LegacyRegistryEpochAdoptionAuthority? authority;
+  int calls = 0;
+
+  @override
+  Future<LegacyRegistryEpochAdoptionAuthority?>
+  legacyRegistryEpochAdoptionAuthority(String identitySelector) async {
+    calls += 1;
+    return authority;
+  }
+}
+
+class _LegacyUpgradeRemote implements AccountStateSyncPort {
+  _LegacyUpgradeRemote({
+    this.currentDid = 'did:wba:example.test:alice-old',
+    this.identityGeneration = '7',
+    this.registryVersion = '10',
+  });
+
+  final String currentDid;
+  final String identityGeneration;
+  final String registryVersion;
+  int manifestCalls = 0;
+  int registryCalls = 0;
+
+  @override
+  Future<AccountStateManifest> loadManifest() async {
+    manifestCalls += 1;
+    return AccountStateManifest(
+      accountId: 'account-legacy-epoch',
+      currentDid: currentDid,
+      identityGeneration: identityGeneration,
+      versions: <ProductAccountDomain, String>{
+        ProductAccountDomain.profile: '12',
+        ProductAccountDomain.agentInventory: '15',
+        ProductAccountDomain.agentStatus: '0',
+        ProductAccountDomain.deviceRegistry: registryVersion,
+      },
+      serverTime: DateTime.utc(2026, 8, 3),
+    );
+  }
+
+  @override
+  Future<AccountStateAgentInventorySnapshot> loadAgentInventory() {
+    throw StateError('inventory_should_not_reload');
+  }
+
+  @override
+  Future<AccountStateAgentStatusSnapshot> loadAgentStatus() async {
+    return AccountStateAgentStatusSnapshot(
+      accountId: 'account-legacy-epoch',
+      agentStatusVersion: '0',
+      statuses: const <AccountStateAgentStatusEntry>[],
+    );
+  }
+
+  @override
+  Future<AccountStateProfileSnapshot> loadProfile() {
+    throw StateError('profile_should_not_reload');
+  }
+
+  @override
+  Future<AccountStateDeviceRegistrySnapshot> loadDeviceRegistry() async {
+    registryCalls += 1;
+    return AccountStateDeviceRegistrySnapshot(
+      did: currentDid,
+      registryVersion: registryVersion,
+      devices: const <AccountStateDeviceRegistryEntry>[
+        AccountStateDeviceRegistryEntry(
+          protocolDeviceId: 'old-device',
+          signingKeyId: 'did:key:signing',
+          e2eeKeyId: 'did:key:e2ee',
+          status: 'active',
+          role: 'admin',
+          managementReady: true,
+          authGeneration: '4',
+        ),
+      ],
+    );
+  }
+}
+
 AwikiProductLocalStoreSqlite _store(Directory databaseDir) {
   return AwikiProductLocalStoreSqlite(databasePath: _databasePath(databaseDir));
 }
@@ -957,5 +1699,5 @@ String _canonicalBackupPath(Directory databaseDir) {
 
 String _schemaUpgradeBackupPath(Directory databaseDir) {
   return '${databaseDir.path}/support/awiki-me/product/schema-upgrades/'
-      'awiki_me_product_store.pre-v4.sqlite';
+      'awiki_me_product_store.pre-v6.sqlite';
 }

@@ -19,6 +19,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onLanguagePressed,
     required this.onTenantPressed,
     this.onJoinDevice,
+    this.onRecoverHandle,
   });
 
   final OnboardingState onboarding;
@@ -38,6 +39,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
   final VoidCallback? onJoinDevice;
+  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +68,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
             onCheckEmailActivation: onCheckEmailActivation,
             onSubmitRegister: onSubmitRegister,
             onJoinDevice: onJoinDevice,
+            onRecoverHandle: onRecoverHandle,
           );
           if (useCompactLayout) {
             return DecoratedBox(
@@ -385,6 +388,7 @@ class _MacAuthCard extends StatelessWidget {
     required this.onCheckEmailActivation,
     required this.onSubmitRegister,
     this.onJoinDevice,
+    this.onRecoverHandle,
   });
 
   final double maxHeight;
@@ -403,6 +407,7 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onCheckEmailActivation;
   final VoidCallback onSubmitRegister;
   final VoidCallback? onJoinDevice;
+  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -488,6 +493,7 @@ class _MacAuthCard extends StatelessWidget {
                 _OnboardingLocalIdentitySection(
                   credentials: credentials,
                   onLogin: onLogin,
+                  onRecoverHandle: onRecoverHandle,
                 ),
               ],
             ],
@@ -676,10 +682,12 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
   const _OnboardingLocalIdentitySection({
     required this.credentials,
     required this.onLogin,
+    this.onRecoverHandle,
   });
 
   final List<SessionIdentity> credentials;
   final Future<void> Function(String credentialName) onLogin;
+  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -709,12 +717,27 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
             padding: EdgeInsets.only(
               bottom: identity == credentials.last ? 0 : 10,
             ),
-            child: _OnboardingCredentialTile(
-              key: Key(
-                'onboarding-local-credential:${identity.credentialName}',
-              ),
-              identity: identity,
-              onTap: () => onLogin(identity.credentialName),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _OnboardingCredentialTile(
+                  key: Key(
+                    'onboarding-local-credential:${identity.credentialName}',
+                  ),
+                  identity: identity,
+                  onTap: () => onLogin(identity.credentialName),
+                ),
+                if (onRecoverHandle != null) ...<Widget>[
+                  const SizedBox(height: 6),
+                  AppSecondaryButton(
+                    key: const Key('handle-recovery-entry'),
+                    label: context.l10n.handleRecoveryTitle,
+                    semanticsIdentifier:
+                        'handle-recovery-entry:${identity.credentialName}',
+                    onPressed: () => onRecoverHandle!(identity),
+                  ),
+                ],
+              ],
             ),
           ),
       ],

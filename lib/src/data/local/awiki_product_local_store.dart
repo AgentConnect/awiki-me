@@ -4,6 +4,8 @@ import '../../application/models/product_local_models.dart';
 import '../../application/product_local_store.dart';
 
 class InMemoryAwikiProductLocalStore implements ProductLocalStore {
+  final Map<String, ProductHandleRecoveryLocator> _handleRecoveryLocators =
+      <String, ProductHandleRecoveryLocator>{};
   final Map<String, ProductConversationOverlay> _overlays =
       <String, ProductConversationOverlay>{};
   final Map<String, MessageDraft> _drafts = <String, MessageDraft>{};
@@ -19,9 +21,36 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
       <String, ProductProfileSnapshot>{};
   final Map<String, ProductDeviceRegistrySnapshot> _deviceRegistrySnapshots =
       <String, ProductDeviceRegistrySnapshot>{};
+  final Map<String, ProductDeviceRegistryEpoch> _deviceRegistryEpochs =
+      <String, ProductDeviceRegistryEpoch>{};
+  final Map<String, ProductDeviceRegistryEpochResetReceipt>
+  _deviceRegistryEpochResetReceipts =
+      <String, ProductDeviceRegistryEpochResetReceipt>{};
+  final Map<String, LegacyRegistryEpochAdoptionReceipt>
+  _legacyRegistryEpochAdoptionReceipts =
+      <String, LegacyRegistryEpochAdoptionReceipt>{};
 
   @override
   Future<void> warmUp() async {}
+
+  @override
+  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
+    required String localIdentityId,
+  }) async => _handleRecoveryLocators[localIdentityId];
+
+  @override
+  Future<void> saveHandleRecoveryLocator(
+    ProductHandleRecoveryLocator locator,
+  ) async {
+    _handleRecoveryLocators[locator.localIdentityId] = locator;
+  }
+
+  @override
+  Future<void> deleteHandleRecoveryLocator({
+    required String localIdentityId,
+  }) async {
+    _handleRecoveryLocators.remove(localIdentityId);
+  }
 
   @override
   Future<ProductConversationOverlay?> loadConversationOverlay({
@@ -390,17 +419,139 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
   }
 
   @override
+  Future<ProductDeviceRegistryEpoch?> loadDeviceRegistryEpoch({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    _assertAccountBinding(binding);
+    return _deviceRegistryEpochs[binding.ownerIdentityId];
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpochResetReceipt?>
+  loadDeviceRegistryEpochResetReceipt({
+    required ProductDeviceRegistryEpochResetAuthorization authorization,
+  }) async {
+    validateProductDeviceRegistryEpochResetAuthorization(authorization);
+    _assertAccountBinding(authorization.reference.binding);
+    return _deviceRegistryEpochResetReceipts[_registryResetKey(authorization)];
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpochResetReceipt> applyDeviceRegistryEpochReset(
+    ProductDeviceRegistryEpochResetAuthorization authorization,
+  ) async {
+    validateProductDeviceRegistryEpochResetAuthorization(authorization);
+    final reference = authorization.reference;
+    _assertAccountBinding(reference.binding);
+    final resetKey = _registryResetKey(authorization);
+    final existingReceipt = _deviceRegistryEpochResetReceipts[resetKey];
+    if (existingReceipt != null) {
+      return existingReceipt;
+    }
+    final existingEpoch = _deviceRegistryEpochs[reference.ownerIdentityId];
+    final existingSnapshot =
+        _deviceRegistrySnapshots[reference.ownerIdentityId];
+    if ((existingEpoch == null && existingSnapshot != null) ||
+        (existingEpoch != null &&
+            (existingEpoch.currentDid != reference.previousDid ||
+                compareProductDecimalVersions(
+                      reference.bindingGeneration,
+                      existingEpoch.bindingGeneration,
+                    ) <=
+                    0))) {
+      throw const ProductDeviceRegistryEpochMismatchException();
+    }
+    final receipt = ProductDeviceRegistryEpochResetReceipt(
+      authorization: authorization,
+      appliedAt: DateTime.now().toUtc(),
+    );
+    _deviceRegistrySnapshots.remove(reference.ownerIdentityId);
+    _deviceRegistryEpochs[reference.ownerIdentityId] = reference.targetEpoch;
+    _deviceRegistryEpochResetReceipts[resetKey] = receipt;
+    _claimAccountBinding(reference.binding);
+    return receipt;
+  }
+
+  @override
+  Future<LegacyRegistryEpochAdoptionReceipt?>
+  loadLegacyRegistryEpochAdoptionReceipt({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    _assertAccountBinding(binding);
+    final receipt =
+        _legacyRegistryEpochAdoptionReceipts[binding.ownerIdentityId];
+    return receipt?.authority.accountUserId == binding.accountId
+        ? receipt
+        : null;
+  }
+
+  @override
+  Future<LegacyRegistryEpochAdoptionReceipt> adoptLegacyDeviceRegistryEpoch(
+    LegacyRegistryEpochAdoptionAuthority authority,
+  ) async {
+    validateLegacyRegistryEpochAdoptionAuthority(authority);
+    _assertAccountBinding(authority.binding);
+    final existingReceipt =
+        _legacyRegistryEpochAdoptionReceipts[authority.ownerIdentityId];
+    if (existingReceipt != null) {
+      if (existingReceipt.authority.matches(authority) &&
+          _deviceRegistryEpochs[authority.ownerIdentityId]?.matches(
+                authority.epoch,
+              ) ==
+              true) {
+        return existingReceipt;
+      }
+      throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+    }
+    if (_deviceRegistryEpochResetReceipts.values.any(
+          (receipt) =>
+              receipt.reference.ownerIdentityId == authority.ownerIdentityId,
+        ) ||
+        _deviceRegistryEpochs[authority.ownerIdentityId] != null) {
+      throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+    }
+    final snapshot = _deviceRegistrySnapshots[authority.ownerIdentityId];
+    final device = snapshot?.devices.where(
+      (candidate) =>
+          candidate.protocolDeviceId == authority.protocolDeviceId &&
+          candidate.authGeneration == authority.deviceAuthGeneration,
+    );
+    if (snapshot == null ||
+        device == null ||
+        device.length != 1 ||
+        !_isActiveRegistryPayload(device.single.payloadJson)) {
+      throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+    }
+    final receipt = LegacyRegistryEpochAdoptionReceipt(
+      authority: authority,
+      adoptedAt: DateTime.now().toUtc(),
+    );
+    _deviceRegistryEpochs[authority.ownerIdentityId] = authority.epoch;
+    _legacyRegistryEpochAdoptionReceipts[authority.ownerIdentityId] = receipt;
+    _claimAccountBinding(authority.binding);
+    return receipt;
+  }
+
+  @override
   Future<void> replaceDeviceRegistrySnapshot(
     ProductDeviceRegistrySnapshot snapshot,
   ) async {
     validateProductDeviceRegistrySnapshot(snapshot);
     _assertAccountBinding(snapshot.binding);
+    final existingEpoch =
+        _deviceRegistryEpochs[snapshot.binding.ownerIdentityId];
+    if (existingEpoch != null && !existingEpoch.matches(snapshot.epoch)) {
+      throw const ProductDeviceRegistryEpochMismatchException();
+    }
     _assertNonRegressingVersion(
       snapshot.domainVersion,
       _deviceRegistrySnapshots[snapshot.binding.ownerIdentityId]?.domainVersion,
     );
     final replacement = _copyDeviceRegistrySnapshot(snapshot);
     _claimAccountBinding(snapshot.binding);
+    _deviceRegistryEpochs[snapshot.binding.ownerIdentityId] = snapshot.epoch;
     _deviceRegistrySnapshots[snapshot.binding.ownerIdentityId] = replacement;
   }
 
@@ -440,6 +591,26 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
       }
     }
     return null;
+  }
+}
+
+String _registryResetKey(
+  ProductDeviceRegistryEpochResetAuthorization authorization,
+) {
+  final reference = authorization.reference;
+  return '${reference.accountUserId}\n${reference.ownerIdentityId}\n'
+      '${reference.previousDid}\n${reference.currentDid}\n'
+      '${reference.bindingGeneration}\n${authorization.handle}\n'
+      '${productIdentityTransitionSourceKindWireName(authorization.sourceKind)}\n'
+      '${authorization.sourceId}';
+}
+
+bool _isActiveRegistryPayload(String payloadJson) {
+  try {
+    final value = jsonDecode(payloadJson);
+    return value is Map && value['status'] == 'active';
+  } on FormatException {
+    return false;
   }
 }
 
@@ -538,6 +709,7 @@ ProductDeviceRegistrySnapshot _copyDeviceRegistrySnapshot(
     );
   return ProductDeviceRegistrySnapshot(
     binding: snapshot.binding,
+    epoch: snapshot.epoch,
     domainVersion: snapshot.domainVersion,
     payloadHash: snapshot.payloadHash,
     refreshedAt: snapshot.refreshedAt,

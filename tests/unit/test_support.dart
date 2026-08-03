@@ -3161,6 +3161,28 @@ class FakePersonalAgentBindingPort implements PersonalAgentBindingPort {
 }
 
 class FakeProductLocalStore implements ProductLocalStore {
+  final Map<String, ProductHandleRecoveryLocator> handleRecoveryLocators =
+      <String, ProductHandleRecoveryLocator>{};
+
+  @override
+  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
+    required String localIdentityId,
+  }) async => handleRecoveryLocators[localIdentityId];
+
+  @override
+  Future<void> saveHandleRecoveryLocator(
+    ProductHandleRecoveryLocator locator,
+  ) async {
+    handleRecoveryLocators[locator.localIdentityId] = locator;
+  }
+
+  @override
+  Future<void> deleteHandleRecoveryLocator({
+    required String localIdentityId,
+  }) async {
+    handleRecoveryLocators.remove(localIdentityId);
+  }
+
   final Map<String, ProductConversationOverlay> overlays =
       <String, ProductConversationOverlay>{};
   final Map<String, MessageDraft> drafts = <String, MessageDraft>{};
@@ -3254,6 +3276,47 @@ class FakeProductLocalStore implements ProductLocalStore {
     required ProductAccountBinding binding,
   }) {
     return _accountDomainStore.loadDeviceRegistrySnapshot(binding: binding);
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpoch?> loadDeviceRegistryEpoch({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadDeviceRegistryEpoch(binding: binding);
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpochResetReceipt?>
+  loadDeviceRegistryEpochResetReceipt({
+    required ProductDeviceRegistryEpochResetAuthorization authorization,
+  }) {
+    return _accountDomainStore.loadDeviceRegistryEpochResetReceipt(
+      authorization: authorization,
+    );
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpochResetReceipt> applyDeviceRegistryEpochReset(
+    ProductDeviceRegistryEpochResetAuthorization authorization,
+  ) {
+    return _accountDomainStore.applyDeviceRegistryEpochReset(authorization);
+  }
+
+  @override
+  Future<LegacyRegistryEpochAdoptionReceipt?>
+  loadLegacyRegistryEpochAdoptionReceipt({
+    required ProductAccountBinding binding,
+  }) {
+    return _accountDomainStore.loadLegacyRegistryEpochAdoptionReceipt(
+      binding: binding,
+    );
+  }
+
+  @override
+  Future<LegacyRegistryEpochAdoptionReceipt> adoptLegacyDeviceRegistryEpoch(
+    LegacyRegistryEpochAdoptionAuthority authority,
+  ) {
+    return _accountDomainStore.adoptLegacyDeviceRegistryEpoch(authority);
   }
 
   @override

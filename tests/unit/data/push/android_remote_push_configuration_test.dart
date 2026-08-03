@@ -96,13 +96,18 @@ void main() {
         'android/app/src/main/kotlin/ai/awiki/awikime/push/'
         'RemotePushRegistrationState.kt',
       ).readAsStringSync();
+      final coordinator = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'RemotePushInitializationCoordinator.kt',
+      ).readAsStringSync();
 
-      expect(bridge, contains('RemotePushRegistrationState'));
-      expect(bridge, contains('pendingInitializationResults'));
-      expect(bridge, contains('readyDeviceId'));
-      expect(bridge, contains('PUSH_20110'));
-      expect(bridge, contains('completeRegistrationSuccess'));
-      expect(bridge, contains('completeRegistrationFailure'));
+      expect(bridge, contains('RemotePushInitializationCoordinator'));
+      expect(coordinator, contains('RemotePushRegistrationState'));
+      expect(coordinator, contains('pendingCompletions'));
+      expect(coordinator, contains('readyDeviceId'));
+      expect(coordinator, contains('PUSH_20110'));
+      expect(coordinator, contains('completeSuccess'));
+      expect(coordinator, contains('completeFailure'));
       expect(state, contains('JOIN_IN_FLIGHT'));
       expect(state, contains('completeFailure'));
       expect(state, isNot(contains('terminalFailure')));

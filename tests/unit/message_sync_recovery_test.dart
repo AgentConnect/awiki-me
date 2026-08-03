@@ -77,7 +77,7 @@ void main() {
         container.read(messageSyncCoordinatorProvider).lastStatus,
         MessageSyncStatus.changed,
       );
-      expect(gateway.listConversationsCalls, 0);
+      expect(gateway.listConversationsCalls, 1);
     },
   );
 

@@ -30,6 +30,7 @@ import '../application/ports/account_state_sync_port.dart';
 import '../application/ports/device_management_core_port.dart';
 import '../application/ports/group_encryption_core_port.dart';
 import '../application/ports/identity_core_port.dart';
+import '../application/ports/legacy_registry_epoch_adoption_port.dart';
 import '../application/ports/personal_agent_binding_port.dart';
 import '../application/ports/root_key_transfer_port.dart';
 import '../application/ports/user_presence_port.dart';
@@ -111,6 +112,12 @@ final multiDeviceDirectE2eeEnabledProvider = Provider<bool>(
 final multiDeviceGroupE2eeEnabledProvider = Provider<bool>(
   (ref) =>
       ref.watch(awikiEnvironmentConfigProvider).multiDeviceGroupE2eeEnabled,
+);
+
+final multiDeviceHandleRecoveryEnabledProvider = Provider<bool>(
+  (ref) => ref
+      .watch(awikiEnvironmentConfigProvider)
+      .multiDeviceHandleRecoveryEnabled,
 );
 
 final messageSyncV2ReadEnabledProvider = Provider<bool>(
@@ -244,10 +251,16 @@ final accountStateSyncPortProvider = Provider<AccountStateSyncPort>(
   ),
 );
 
+final legacyRegistryEpochAdoptionPortProvider =
+    Provider<LegacyRegistryEpochAdoptionPort?>((ref) => null);
+
 final accountStateSyncServiceProvider = Provider<AccountStateSyncService>(
   (ref) => AccountStateSyncService(
     remote: ref.watch(accountStateSyncPortProvider),
     local: ref.watch(productLocalStoreProvider),
+    legacyRegistryEpochAdoption: ref.watch(
+      legacyRegistryEpochAdoptionPortProvider,
+    ),
   ),
 );
 

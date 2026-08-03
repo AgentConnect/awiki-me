@@ -708,7 +708,7 @@ void main() {
           service.isSessionTransitionCurrent(firstLease.transition),
           isFalse,
         );
-        expect(await active.readActiveIdentityId(), first.identityId);
+        expect(await active.readActiveIdentityId(), isNull);
         expect(realtime.stopCount, 1);
         expect(realtime.isRunning, isFalse);
       },
@@ -922,6 +922,11 @@ void main() {
           identities: _FakeIdentities(
             defaultIdentity: first,
             extraIdentities: <AppSession>[latest],
+            activeBindings: <SessionAccountBinding>[
+              _bindingFor(first),
+              _bindingFor(prepared),
+              _bindingFor(latest),
+            ],
           ),
           auth: _FakeAuth(),
           activeSessionStore: active,
@@ -1261,20 +1266,27 @@ class _FakeIdentities implements IdentityCorePort {
     AppSession? resolvedIdentity,
     List<AppSession> extraIdentities = const <AppSession>[],
     SessionAccountBinding? activeBinding,
+    List<SessionAccountBinding>? activeBindings,
     this.activeBindingError,
   }) : _defaultIdentity = defaultIdentity,
        _resolvedIdentity = resolvedIdentity,
        _extraIdentities = extraIdentities,
-       _activeBinding =
-           activeBinding ??
-           _bindingFor(
-             defaultIdentity ?? resolvedIdentity ?? _session('id-default'),
-           );
+       _activeBindings =
+           activeBindings ??
+           <SessionAccountBinding>[
+             if (activeBinding != null)
+               activeBinding
+             else
+               ...<AppSession>[
+                 defaultIdentity ?? resolvedIdentity ?? _session('id-default'),
+                 ...extraIdentities,
+               ].map(_bindingFor),
+           ];
 
   final AppSession? _defaultIdentity;
   final AppSession? _resolvedIdentity;
   final List<AppSession> _extraIdentities;
-  final SessionAccountBinding _activeBinding;
+  final List<SessionAccountBinding> _activeBindings;
   final Object? activeBindingError;
   final List<String> resolvedSelectors = <String>[];
   final List<String> deletedSelectors = <String>[];
@@ -1288,7 +1300,8 @@ class _FakeIdentities implements IdentityCorePort {
     if (error != null) {
       throw error;
     }
-    return _activeBinding;
+    final index = activeBindingCount - 1;
+    return _activeBindings[index.clamp(0, _activeBindings.length - 1)];
   }
 
   @override

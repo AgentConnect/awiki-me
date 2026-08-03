@@ -5376,6 +5376,240 @@ abstract class AppLocalizations {
   /// **'当前版本不支持 Handle 恢复，未对身份做任何更改。'**
   String get handleRecoveryUnavailable;
 
+  /// No description provided for @handleRecoveryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复 Handle'**
+  String get handleRecoveryTitle;
+
+  /// No description provided for @handleRecoveryIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'通过已绑定手机号恢复当前 Handle。恢复不会带回旧身份私钥。'**
+  String get handleRecoveryIntro;
+
+  /// No description provided for @handleRecoveryHandle.
+  ///
+  /// In zh, this message translates to:
+  /// **'完整 Handle'**
+  String get handleRecoveryHandle;
+
+  /// No description provided for @handleRecoveryPhone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已绑定手机号'**
+  String get handleRecoveryPhone;
+
+  /// No description provided for @handleRecoveryOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'短信验证码'**
+  String get handleRecoveryOtp;
+
+  /// No description provided for @handleRecoverySendOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送验证码'**
+  String get handleRecoverySendOtp;
+
+  /// No description provided for @handleRecoveryVerify.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证恢复资格'**
+  String get handleRecoveryVerify;
+
+  /// No description provided for @handleRecoveryIrreversible.
+  ///
+  /// In zh, this message translates to:
+  /// **'此恢复不可撤销。'**
+  String get handleRecoveryIrreversible;
+
+  /// No description provided for @handleRecoveryHandlePreserved.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的 Handle 会保留，但身份将切换到新的 DID。'**
+  String get handleRecoveryHandlePreserved;
+
+  /// No description provided for @handleRecoveryOtherDevicesRejoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'所有旧设备会立即失效，之后只能通过普通设备加入重新接入。'**
+  String get handleRecoveryOtherDevicesRejoin;
+
+  /// No description provided for @handleRecoveryLocalOrdinaryMigration.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机只迁移普通数据。'**
+  String get handleRecoveryLocalOrdinaryMigration;
+
+  /// No description provided for @handleRecoveryOldE2eeUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'旧的 P5 PreKey、Ratchet、MLS 及其他 E2EE 密钥不会迁移。'**
+  String get handleRecoveryOldE2eeUnavailable;
+
+  /// No description provided for @handleRecoverySingletonRisk.
+  ///
+  /// In zh, this message translates to:
+  /// **'在第二台 ready 管理设备建立前，恢复后的 A′ 是唯一批准者。'**
+  String get handleRecoverySingletonRisk;
+
+  /// No description provided for @handleRecoveryDidOnlyUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'V1 不会自动恢复任何 E2EE 群或 DID-only 群。'**
+  String get handleRecoveryDidOnlyUnsupported;
+
+  /// No description provided for @handleRecoveryRiskConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'我已了解以上影响'**
+  String get handleRecoveryRiskConfirm;
+
+  /// No description provided for @handleRecoveryActivate.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认并恢复'**
+  String get handleRecoveryActivate;
+
+  /// No description provided for @handleRecoveryResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续恢复'**
+  String get handleRecoveryResume;
+
+  /// No description provided for @handleRecoveryPresenceReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认恢复 Handle 身份'**
+  String get handleRecoveryPresenceReason;
+
+  /// No description provided for @handleRecoveryRiskRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先确认你已了解恢复影响。'**
+  String get handleRecoveryRiskRequired;
+
+  /// No description provided for @handleRecoveryFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复操作失败，请稍后重试。'**
+  String get handleRecoveryFailed;
+
+  /// No description provided for @handleRecoveryErrorNotPrepared.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复尚未准备完成；本次流程已终止，请重新开始。'**
+  String get handleRecoveryErrorNotPrepared;
+
+  /// No description provided for @handleRecoveryErrorUserPresenceRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要你再次完成本机系统验证后才能继续。'**
+  String get handleRecoveryErrorUserPresenceRequired;
+
+  /// No description provided for @handleRecoveryErrorTransitionMismatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复上下文不匹配；为安全起见本次流程已终止。'**
+  String get handleRecoveryErrorTransitionMismatch;
+
+  /// No description provided for @handleRecoveryErrorTransitionChainUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前身份转换链不受支持；本次流程已终止。'**
+  String get handleRecoveryErrorTransitionChainUnsupported;
+
+  /// No description provided for @handleRecoveryErrorRemoteStateChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端状态已变化；请仅使用当前恢复引用继续查询或恢复。'**
+  String get handleRecoveryErrorRemoteStateChanged;
+
+  /// No description provided for @handleRecoveryErrorOutcomeUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交结果尚无法确认；请使用同一恢复引用继续，不要新建操作。'**
+  String get handleRecoveryErrorOutcomeUnknown;
+
+  /// No description provided for @handleRecoveryErrorLocalStateUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机恢复引用不可用；已在本机阻止继续操作。'**
+  String get handleRecoveryErrorLocalStateUnavailable;
+
+  /// No description provided for @handleRecoveryErrorBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复被安全策略阻止；请保留当前恢复引用进行审计。'**
+  String get handleRecoveryErrorBlocked;
+
+  /// No description provided for @handleRecoveryPrepared.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复信息已验证，请确认影响后继续。'**
+  String get handleRecoveryPrepared;
+
+  /// No description provided for @handleRecoveryRemotePending.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在提交远端恢复结果。'**
+  String get handleRecoveryRemotePending;
+
+  /// No description provided for @handleRecoveryRemoteCommitted.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端恢复结果已确认。'**
+  String get handleRecoveryRemoteCommitted;
+
+  /// No description provided for @handleRecoveryIdentityPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在迁移本机身份数据。'**
+  String get handleRecoveryIdentityPending;
+
+  /// No description provided for @handleRecoveryIdentitySwitched.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机身份已切换，正在收尾。'**
+  String get handleRecoveryIdentitySwitched;
+
+  /// No description provided for @handleRecoveryCompleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份恢复已完成。'**
+  String get handleRecoveryCompleted;
+
+  /// No description provided for @handleRecoveryBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复被阻止，请检查状态后重试。'**
+  String get handleRecoveryBlocked;
+
+  /// No description provided for @handleRecoveryJoinRestored.
+  ///
+  /// In zh, this message translates to:
+  /// **'{handle} 已完成身份恢复。'**
+  String handleRecoveryJoinRestored(Object handle);
+
+  /// No description provided for @handleRecoveryJoinLocalMigration.
+  ///
+  /// In zh, this message translates to:
+  /// **'将迁移此设备上的本地数据。'**
+  String get handleRecoveryJoinLocalMigration;
+
+  /// No description provided for @handleRecoveryJoinE2eeUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'加密群暂不支持身份恢复，旧 E2EE 私钥不会迁移。'**
+  String get handleRecoveryJoinE2eeUnsupported;
+
+  /// No description provided for @handleRecoveryJoinDidOnlyUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'DID-only 联系与群组不会迁移。'**
+  String get handleRecoveryJoinDidOnlyUnsupported;
+
   /// No description provided for @legacyIdentityUpgradeFailed.
   ///
   /// In zh, this message translates to:

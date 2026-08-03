@@ -216,6 +216,9 @@ class AccountStateSyncCoordinator
             binding: fence.binding,
             expectedCurrentDid: fence.currentDid,
             expectedIdentityGeneration: fence.identityGeneration,
+            expectedIdentitySelector: fence.session.credentialName,
+            expectedProtocolDeviceId: fence.protocolDeviceId,
+            expectedDeviceAuthGeneration: fence.deviceAuthGeneration,
             sessionGeneration: fence.sessionGeneration,
             isSessionCurrent: (binding, generation) =>
                 fence.matchesBinding(binding, generation) && _isCurrent(fence),

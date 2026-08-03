@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_support_service.dart';
+import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -58,6 +59,7 @@ void main() {
     expect(userClient.sentEmails, ['alice@example.test']);
     expect(userClient.sentEmailHandles, ['alice']);
     expect(serverInfo.service.kind, 'user-service');
+    expect(serverInfo.supportsPhoneHandleRecovery, isTrue);
     expect(userClient.loadServerInfoCalls, 1);
     expect(verified, isTrue);
     expect(userClient.checkedEmails, ['alice@example.test']);
@@ -113,6 +115,83 @@ void main() {
     expect(result.reason, 'reserved');
     expect(result.message, 'Handle is reserved.');
   });
+
+  test('handle Recovery capability is phone-only and fails closed', () {
+    expect(
+      _serverInfoWithRecovery(<String, Object?>{
+        'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
+      }).supportsPhoneHandleRecovery,
+      isTrue,
+    );
+    expect(
+      _serverInfoWithRecovery(<String, Object?>{
+        'enabled': false,
+        'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
+      }).supportsPhoneHandleRecovery,
+      isFalse,
+    );
+    expect(
+      _serverInfoWithRecovery(<String, Object?>{
+        'methods': <Object?>[_recoveryMethod('email', 'email_activation')],
+      }).supportsPhoneHandleRecovery,
+      isFalse,
+    );
+    expect(
+      _serverInfoWithRecovery(<String, Object?>{
+        'methods': <Object?>[
+          _recoveryMethod('phone', 'sms_otp'),
+          _recoveryMethod('email', 'email_activation'),
+        ],
+      }).supportsPhoneHandleRecovery,
+      isFalse,
+    );
+  });
+
+  test('missing or malformed handle Recovery advertisement fails closed', () {
+    expect(_serverInfoWithRecovery(null).supportsPhoneHandleRecovery, isFalse);
+    expect(
+      _serverInfoWithRecovery(<String, Object?>{
+        'methods': 'phone',
+      }).supportsPhoneHandleRecovery,
+      isFalse,
+    );
+    expect(
+      _serverInfoWithRecovery(<String, Object?>{
+        'methods': <Object?>[
+          <String, Object?>{'id': 'phone', 'enabled': true},
+        ],
+      }).supportsPhoneHandleRecovery,
+      isFalse,
+    );
+  });
+}
+
+OnboardingServerInfo _serverInfoWithRecovery(Object? recovery) {
+  return OnboardingServerInfo.fromJson(<String, Object?>{
+    'schema_version': 1,
+    'service': <String, Object?>{
+      'kind': 'user-service',
+      'name': 'AWiki User Service',
+    },
+    'identity': <String, Object?>{
+      'handle_registration': <String, Object?>{
+        'enabled': true,
+        'methods': <Object?>[_recoveryMethod('phone', 'sms_otp')],
+      },
+      if (recovery != null) 'handle_recovery': recovery,
+    },
+  });
+}
+
+Map<String, Object?> _recoveryMethod(String id, String verificationType) {
+  return <String, Object?>{
+    'id': id,
+    'enabled': true,
+    'verification': <String, Object?>{
+      'required': true,
+      'type': verificationType,
+    },
+  };
 }
 
 class _RecordingRpcClient extends AwikiOnboardingUtilityHttpClient {

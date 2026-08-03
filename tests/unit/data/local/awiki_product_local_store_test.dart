@@ -3,6 +3,10 @@ import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  const registryEpoch = ProductDeviceRegistryEpoch(
+    currentDid: 'did:wba:awiki.info:users:alice-old',
+    bindingGeneration: '7',
+  );
   test(
     'in-memory product store keeps overlays drafts and preferences by owner',
     () async {
@@ -270,6 +274,7 @@ void main() {
       await store.replaceDeviceRegistrySnapshot(
         ProductDeviceRegistrySnapshot(
           binding: binding,
+          epoch: registryEpoch,
           domainVersion: '3',
           refreshedAt: refreshedAt,
           devices: const <ProductDeviceRegistryItem>[
@@ -284,6 +289,7 @@ void main() {
       await store.replaceDeviceRegistrySnapshot(
         ProductDeviceRegistrySnapshot(
           binding: binding,
+          epoch: registryEpoch,
           domainVersion: '4',
           refreshedAt: refreshedAt.add(const Duration(minutes: 4)),
           devices: const <ProductDeviceRegistryItem>[],
@@ -398,6 +404,7 @@ void main() {
         store.replaceDeviceRegistrySnapshot(
           ProductDeviceRegistrySnapshot(
             binding: binding,
+            epoch: registryEpoch,
             domainVersion: '1',
             refreshedAt: DateTime.utc(2026, 7, 28, 10),
             devices: const <ProductDeviceRegistryItem>[
@@ -415,6 +422,202 @@ void main() {
       final retained = await store.loadAgentInventorySnapshot(binding: binding);
       expect(retained?.domainVersion, '2');
       expect(retained?.agents.single.agentDid, 'did:agent:original');
+    },
+  );
+
+  test(
+    'in-memory Registry epoch reset requires exact reference and is idempotent',
+    () async {
+      final store = InMemoryAwikiProductLocalStore();
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-recovery',
+        accountId: 'account-recovery',
+      );
+      const previousEpoch = ProductDeviceRegistryEpoch(
+        currentDid: 'did:wba:awiki.info:users:alice-old',
+        bindingGeneration: '7',
+      );
+      const currentEpoch = ProductDeviceRegistryEpoch(
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+        bindingGeneration: '8',
+      );
+      const reset = ProductDeviceRegistryEpochResetReference(
+        accountUserId: 'account-recovery',
+        ownerIdentityId: 'owner-identity-recovery',
+        previousDid: 'did:wba:awiki.info:users:alice-old',
+        currentDid: 'did:wba:awiki.info:users:alice-new',
+        bindingGeneration: '8',
+      );
+      const authorization = ProductDeviceRegistryEpochResetAuthorization(
+        reference: reset,
+        handle: 'alice.awiki.info',
+        sourceKind: ProductIdentityTransitionSourceKind.initiator,
+        sourceId: 'recover-001',
+      );
+      final now = DateTime.utc(2026, 8, 3);
+
+      await store.replaceProfileSnapshot(
+        ProductProfileSnapshot(
+          binding: binding,
+          domainVersion: '12',
+          refreshedAt: now,
+          payloadJson: '{"display_name":"Alice"}',
+        ),
+      );
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '15',
+          refreshedAt: now,
+          agents: const <ProductAgentInventoryItem>[],
+        ),
+      );
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          epoch: previousEpoch,
+          domainVersion: '9',
+          refreshedAt: now,
+          devices: const <ProductDeviceRegistryItem>[
+            ProductDeviceRegistryItem(
+              protocolDeviceId: 'old-device',
+              authGeneration: '4',
+              payloadJson: '{"status":"active"}',
+            ),
+          ],
+        ),
+      );
+
+      await expectLater(
+        store.replaceDeviceRegistrySnapshot(
+          ProductDeviceRegistrySnapshot(
+            binding: binding,
+            epoch: currentEpoch,
+            domainVersion: '1',
+            refreshedAt: now,
+            devices: const <ProductDeviceRegistryItem>[],
+          ),
+        ),
+        throwsA(isA<ProductDeviceRegistryEpochMismatchException>()),
+      );
+      expect(
+        (await store.loadDeviceRegistrySnapshot(
+          binding: binding,
+        ))?.devices.single.protocolDeviceId,
+        'old-device',
+      );
+
+      final receipt = await store.applyDeviceRegistryEpochReset(authorization);
+      expect(receipt.reference.currentDid, currentEpoch.currentDid);
+      expect(await store.loadDeviceRegistrySnapshot(binding: binding), isNull);
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '12',
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '15',
+      );
+
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          epoch: currentEpoch,
+          domainVersion: '1',
+          refreshedAt: now,
+          devices: const <ProductDeviceRegistryItem>[
+            ProductDeviceRegistryItem(
+              protocolDeviceId: 'new-device',
+              authGeneration: '1',
+              payloadJson: '{"status":"active"}',
+            ),
+          ],
+        ),
+      );
+      final repeated = await store.applyDeviceRegistryEpochReset(authorization);
+      expect(repeated.reference.currentDid, currentEpoch.currentDid);
+      expect(
+        (await store.loadDeviceRegistrySnapshot(
+          binding: binding,
+        ))?.devices.single.protocolDeviceId,
+        'new-device',
+      );
+
+      await expectLater(
+        store.applyDeviceRegistryEpochReset(
+          const ProductDeviceRegistryEpochResetAuthorization(
+            reference: reset,
+            handle: 'alice.awiki.info',
+            sourceKind: ProductIdentityTransitionSourceKind.joinedDevice,
+            sourceId: 'join-session-1',
+          ),
+        ),
+        throwsA(isA<ProductDeviceRegistryEpochMismatchException>()),
+      );
+
+      await expectLater(
+        store.applyDeviceRegistryEpochReset(
+          const ProductDeviceRegistryEpochResetAuthorization(
+            reference: ProductDeviceRegistryEpochResetReference(
+              accountUserId: 'account-recovery',
+              ownerIdentityId: 'owner-identity-recovery',
+              previousDid: 'did:wba:awiki.info:users:unknown',
+              currentDid: 'did:wba:awiki.info:users:alice-next',
+              bindingGeneration: '9',
+            ),
+            handle: 'alice.awiki.info',
+            sourceKind: ProductIdentityTransitionSourceKind.joinedDevice,
+            sourceId: 'join-session-next',
+          ),
+        ),
+        throwsA(isA<ProductDeviceRegistryEpochMismatchException>()),
+      );
+    },
+  );
+
+  test(
+    'exact joined-device authorization establishes an empty Registry epoch',
+    () async {
+      final store = InMemoryAwikiProductLocalStore();
+      const binding = ProductAccountBinding(
+        ownerIdentityId: 'owner-identity-fresh-join',
+        accountId: 'account-fresh-join',
+      );
+      const authorization = ProductDeviceRegistryEpochResetAuthorization(
+        reference: ProductDeviceRegistryEpochResetReference(
+          accountUserId: 'account-fresh-join',
+          ownerIdentityId: 'owner-identity-fresh-join',
+          previousDid: 'did:wba:awiki.info:users:alice-old',
+          currentDid: 'did:wba:awiki.info:users:alice-new',
+          bindingGeneration: '8',
+        ),
+        handle: 'alice.awiki.info',
+        sourceKind: ProductIdentityTransitionSourceKind.joinedDevice,
+        sourceId: 'join-session-fresh',
+      );
+      await store.replaceProfileSnapshot(
+        ProductProfileSnapshot(
+          binding: binding,
+          domainVersion: '3',
+          refreshedAt: DateTime.utc(2026, 8, 3),
+          payloadJson: '{"display_name":"Alice"}',
+        ),
+      );
+
+      final receipt = await store.applyDeviceRegistryEpochReset(authorization);
+
+      expect(receipt.authorization.sourceId, 'join-session-fresh');
+      expect(
+        (await store.loadDeviceRegistryEpoch(binding: binding))?.currentDid,
+        authorization.reference.currentDid,
+      );
+      expect(await store.loadDeviceRegistrySnapshot(binding: binding), isNull);
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '3',
+      );
     },
   );
 }

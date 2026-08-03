@@ -27,6 +27,7 @@ import 'package:awiki_me/src/presentation/conversation_list/conversation_provide
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
@@ -2612,10 +2613,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ChatView), findsOneWidget);
 
-    await tester.tap(find.text('联系人'));
+    await tester.tap(find.byKey(const Key('desktop-rail-contacts')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatView), findsNothing);
-    expect(find.text('朋友'), findsOneWidget);
+    expect(find.byType(FriendsWorkspacePage), findsOneWidget);
 
     controller.upsertConversation(incoming);
     await tester.pumpAndSettle();

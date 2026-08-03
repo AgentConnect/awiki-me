@@ -45,6 +45,7 @@ void main() {
       multiDeviceDeviceRevokeEnabled: true,
       multiDeviceDirectE2eeEnabled: true,
       multiDeviceGroupE2eeEnabled: true,
+      multiDeviceHandleRecoveryEnabled: true,
       inspectLocalStateUpgrade: (paths) async {
         inspectionCalled = true;
         expect(await Directory(paths.identityRootDir).exists(), isTrue);
@@ -98,6 +99,7 @@ void main() {
               List<int>.filled(32, 7),
             );
             expect(openOptions?.multiDeviceDeviceRevokeEnabled, isTrue);
+            expect(openOptions?.multiDeviceHandleRecoveryEnabled, isTrue);
             expect(openOptions?.multiDeviceDirectE2eeEnabled, isTrue);
             expect(openOptions?.multiDeviceGroupE2eeEnabled, isTrue);
             throw UnsupportedError('fake opener stops before native load');

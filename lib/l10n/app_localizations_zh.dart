@@ -2851,5 +2851,131 @@ class AppLocalizationsZh extends AppLocalizations {
   String get handleRecoveryUnavailable => '当前版本不支持 Handle 恢复，未对身份做任何更改。';
 
   @override
+  String get handleRecoveryTitle => '恢复 Handle';
+
+  @override
+  String get handleRecoveryIntro => '通过已绑定手机号恢复当前 Handle。恢复不会带回旧身份私钥。';
+
+  @override
+  String get handleRecoveryHandle => '完整 Handle';
+
+  @override
+  String get handleRecoveryPhone => '已绑定手机号';
+
+  @override
+  String get handleRecoveryOtp => '短信验证码';
+
+  @override
+  String get handleRecoverySendOtp => '发送验证码';
+
+  @override
+  String get handleRecoveryVerify => '验证恢复资格';
+
+  @override
+  String get handleRecoveryIrreversible => '此恢复不可撤销。';
+
+  @override
+  String get handleRecoveryHandlePreserved => '你的 Handle 会保留，但身份将切换到新的 DID。';
+
+  @override
+  String get handleRecoveryOtherDevicesRejoin => '所有旧设备会立即失效，之后只能通过普通设备加入重新接入。';
+
+  @override
+  String get handleRecoveryLocalOrdinaryMigration => '本机只迁移普通数据。';
+
+  @override
+  String get handleRecoveryOldE2eeUnavailable =>
+      '旧的 P5 PreKey、Ratchet、MLS 及其他 E2EE 密钥不会迁移。';
+
+  @override
+  String get handleRecoverySingletonRisk =>
+      '在第二台 ready 管理设备建立前，恢复后的 A′ 是唯一批准者。';
+
+  @override
+  String get handleRecoveryDidOnlyUnsupported =>
+      'V1 不会自动恢复任何 E2EE 群或 DID-only 群。';
+
+  @override
+  String get handleRecoveryRiskConfirm => '我已了解以上影响';
+
+  @override
+  String get handleRecoveryActivate => '确认并恢复';
+
+  @override
+  String get handleRecoveryResume => '继续恢复';
+
+  @override
+  String get handleRecoveryPresenceReason => '确认恢复 Handle 身份';
+
+  @override
+  String get handleRecoveryRiskRequired => '请先确认你已了解恢复影响。';
+
+  @override
+  String get handleRecoveryFailed => '恢复操作失败，请稍后重试。';
+
+  @override
+  String get handleRecoveryErrorNotPrepared => '恢复尚未准备完成；本次流程已终止，请重新开始。';
+
+  @override
+  String get handleRecoveryErrorUserPresenceRequired => '需要你再次完成本机系统验证后才能继续。';
+
+  @override
+  String get handleRecoveryErrorTransitionMismatch => '恢复上下文不匹配；为安全起见本次流程已终止。';
+
+  @override
+  String get handleRecoveryErrorTransitionChainUnsupported =>
+      '当前身份转换链不受支持；本次流程已终止。';
+
+  @override
+  String get handleRecoveryErrorRemoteStateChanged =>
+      '远端状态已变化；请仅使用当前恢复引用继续查询或恢复。';
+
+  @override
+  String get handleRecoveryErrorOutcomeUnknown =>
+      '提交结果尚无法确认；请使用同一恢复引用继续，不要新建操作。';
+
+  @override
+  String get handleRecoveryErrorLocalStateUnavailable =>
+      '本机恢复引用不可用；已在本机阻止继续操作。';
+
+  @override
+  String get handleRecoveryErrorBlocked => '恢复被安全策略阻止；请保留当前恢复引用进行审计。';
+
+  @override
+  String get handleRecoveryPrepared => '恢复信息已验证，请确认影响后继续。';
+
+  @override
+  String get handleRecoveryRemotePending => '正在提交远端恢复结果。';
+
+  @override
+  String get handleRecoveryRemoteCommitted => '远端恢复结果已确认。';
+
+  @override
+  String get handleRecoveryIdentityPending => '正在迁移本机身份数据。';
+
+  @override
+  String get handleRecoveryIdentitySwitched => '本机身份已切换，正在收尾。';
+
+  @override
+  String get handleRecoveryCompleted => '身份恢复已完成。';
+
+  @override
+  String get handleRecoveryBlocked => '恢复被阻止，请检查状态后重试。';
+
+  @override
+  String handleRecoveryJoinRestored(Object handle) {
+    return '$handle 已完成身份恢复。';
+  }
+
+  @override
+  String get handleRecoveryJoinLocalMigration => '将迁移此设备上的本地数据。';
+
+  @override
+  String get handleRecoveryJoinE2eeUnsupported => '加密群暂不支持身份恢复，旧 E2EE 私钥不会迁移。';
+
+  @override
+  String get handleRecoveryJoinDidOnlyUnsupported => 'DID-only 联系与群组不会迁移。';
+
+  @override
   String get legacyIdentityUpgradeFailed => '旧身份升级失败，请重试。';
 }

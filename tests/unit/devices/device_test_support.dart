@@ -29,6 +29,7 @@ DeviceJoinProgress testJoinProgress({
 }
 
 class FakeDeviceManagementCore implements DeviceManagementCorePort {
+  String resolvedJoinDid = testDid;
   DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(did: testDid);
   List<DeviceJoinRequestNotice> joinRequests =
       const <DeviceJoinRequestNotice>[];
@@ -84,6 +85,9 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
       throw error;
     }
   }
+
+  @override
+  Future<String> resolveJoinDid(String handle) async => resolvedJoinDid;
 
   @override
   Future<DeviceJoinProgress> beginDeviceJoinWithSms({

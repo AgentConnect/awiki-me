@@ -1,8 +1,13 @@
 import 'dart:async';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/device_revoke_outcome.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
+import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
+import 'package:awiki_me/src/data/im_core/awiki_im_core_handle_recovery_adapter.dart';
+import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
@@ -14,6 +19,7 @@ import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -717,6 +723,331 @@ void main() {
     expect(terminalJoin?.phase, DeviceJoinPhase.authorized);
     expect(terminalJoin?.authorizedDevice?.protocolDeviceId, 'member-new');
     expect(find.text('管理设备等待根密钥'), findsNothing);
+  });
+
+  testWidgets(
+    'Recovery Join uses high-level activation and never DID-only login',
+    (tester) async {
+      final sdk = _ProductionJoinRecoveryCore();
+      final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final deviceCore = FakeDeviceManagementCore()..resolvedJoinDid = testDid;
+      final gateway = FakeAwikiGateway()
+        ..localCredentials = const <SessionIdentity>[
+          SessionIdentity(
+            did: 'did:wba:awiki.info:users:alice-old',
+            credentialName: 'identity-alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.info',
+          ),
+        ];
+      await tester.pumpWidget(
+        _app(
+          const DeviceJoinPage(autoPoll: false),
+          deviceCore,
+          recovery: recovery,
+          gateway: gateway,
+          session: null,
+          handleRecoveryEnabled: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final fields = find.byType(CupertinoTextField);
+      await tester.enterText(fields.at(0), 'alice.awiki.info');
+      await tester.enterText(fields.at(1), '+8613800138000');
+      await tester.enterText(fields.at(2), '987580');
+      await tester.tap(find.text('开始关联'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('handle-recovery-join-banner')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('已完成身份恢复'), findsOneWidget);
+      expect(find.textContaining('迁移此设备上的本地数据'), findsOneWidget);
+      expect(find.textContaining('加密群暂不支持身份恢复'), findsOneWidget);
+      expect(find.textContaining('DID-only'), findsOneWidget);
+      expect(sdk.activateJoinCalls, 1);
+      expect(sdk.resumeJoinCalls, 1);
+      expect(deviceCore.beginCalls, 0);
+      expect(deviceCore.pollCalls, 0);
+      expect(gateway.loginCalls, 0);
+      expect(
+        find.byKey(const Key('handle-recovery-join-resume')),
+        findsNothing,
+      );
+      expect(gateway.loginCalls, 0);
+    },
+  );
+
+  test(
+    'production adapter keeps pending Recovery cause across ProviderContainer restart and resets once consumed',
+    () async {
+      final sdk = _ProductionJoinRecoveryCore(activationPending: true);
+      final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final deviceCore = FakeDeviceManagementCore()..resolvedJoinDid = testDid;
+      final local = InMemoryAwikiProductLocalStore();
+      SessionController sessionController() =>
+          SessionController()..setLocalCredentials(const <SessionIdentity>[
+            SessionIdentity(
+              did: 'did:wba:awiki.info:users:alice-old',
+              credentialName: 'identity-alice',
+              displayName: 'Alice',
+              handle: 'alice.awiki.info',
+            ),
+          ]);
+      ProviderContainer container() => ProviderContainer(
+        overrides: <Override>[
+          multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
+          deviceManagementCorePortProvider.overrideWithValue(deviceCore),
+          handleRecoveryCorePortProvider.overrideWithValue(recovery),
+          productLocalStoreProvider.overrideWithValue(local),
+          userPresencePortProvider.overrideWithValue(FakeUserPresence()),
+          sessionProvider.overrideWith((ref) => sessionController()),
+        ],
+      );
+
+      final first = container();
+      final started = await first
+          .read(devicesProvider.notifier)
+          .beginNewDeviceJoin(
+            handle: 'alice.awiki.info',
+            phone: '+8613800138000',
+            otp: '987580',
+          );
+      final pending = first.read(devicesProvider).activeJoin!;
+      expect(started, isTrue);
+      expect(pending.cause, DeviceJoinCause.handleRecovery);
+      expect(pending.phase, DeviceJoinPhase.pending);
+      expect(deviceCore.beginCalls, 0);
+      expect(deviceCore.pollCalls, 0);
+      expect(
+        await local.loadDeviceRegistryEpoch(
+          binding: const ProductAccountBinding(
+            ownerIdentityId: 'identity-alice',
+            accountId: 'account-1',
+          ),
+        ),
+        isNull,
+      );
+      deviceCore.localSessions = <DeviceJoinProgress>[
+        DeviceJoinProgress(
+          joinSessionId: pending.joinSessionId,
+          did: pending.did,
+          protocolDeviceId: pending.protocolDeviceId,
+          side: DeviceJoinSide.newDevice,
+          phase: DeviceJoinPhase.pending,
+          remoteState: DeviceJoinRemoteState.pending,
+          expiresAt: pending.expiresAt,
+        ),
+      ];
+      first.dispose();
+
+      final restarted = container();
+      addTearDown(restarted.dispose);
+      await restarted.read(devicesProvider.notifier).loadNewDevice();
+      final consumed = restarted.read(devicesProvider).activeJoin!;
+      expect(consumed.cause, DeviceJoinCause.handleRecovery);
+      expect(consumed.phase, DeviceJoinPhase.authorized);
+      expect(consumed.remoteState, DeviceJoinRemoteState.consumed);
+      expect(sdk.activateJoinCalls, 1);
+      expect(sdk.resumeJoinCalls, 1);
+      expect(deviceCore.pollCalls, 0);
+      final epoch = await local.loadDeviceRegistryEpoch(
+        binding: const ProductAccountBinding(
+          ownerIdentityId: 'identity-alice',
+          accountId: 'account-1',
+        ),
+      );
+      expect(epoch?.currentDid, testDid);
+      expect(epoch?.bindingGeneration, '8');
+    },
+  );
+
+  testWidgets(
+    'missing Recovery reset fails closed without ordinary begin poll or login',
+    (tester) async {
+      final sdk = _ProductionJoinRecoveryCore(
+        activationPending: true,
+        includeResumeReset: false,
+      );
+      final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+      final deviceCore = FakeDeviceManagementCore()..resolvedJoinDid = testDid;
+      final gateway = FakeAwikiGateway()
+        ..localCredentials = const <SessionIdentity>[
+          SessionIdentity(
+            did: 'did:wba:awiki.info:users:alice-old',
+            credentialName: 'identity-alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.info',
+          ),
+        ];
+      await tester.pumpWidget(
+        _app(
+          const DeviceJoinPage(autoPoll: false),
+          deviceCore,
+          recovery: recovery,
+          gateway: gateway,
+          session: null,
+          handleRecoveryEnabled: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final fields = find.byType(CupertinoTextField);
+      await tester.enterText(fields.at(0), 'alice.awiki.info');
+      await tester.enterText(fields.at(1), '+8613800138000');
+      await tester.enterText(fields.at(2), '987580');
+      await tester.tap(find.text('开始关联'));
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('device-join-page'))),
+      );
+      await container.read(devicesProvider.notifier).pollNewDeviceActive();
+      await tester.pumpAndSettle();
+      expect(
+        container.read(devicesProvider).activeJoin?.cause,
+        DeviceJoinCause.handleRecovery,
+      );
+      expect(
+        container.read(devicesProvider).activeJoin?.phase,
+        DeviceJoinPhase.pending,
+      );
+      expect(container.read(devicesProvider).error, isNotNull);
+      expect(sdk.activateJoinCalls, 1);
+      expect(sdk.resumeJoinCalls, 1);
+      expect(deviceCore.beginCalls, 0);
+      expect(deviceCore.pollCalls, 0);
+      expect(gateway.loginCalls, 0);
+      expect(container.read(appRuntimeProvider).activatedDid, isNull);
+    },
+  );
+
+  testWidgets('feature-on authorized Join without transition stays ordinary', (
+    tester,
+  ) async {
+    final sdk = _ProductionJoinRecoveryCore(includeActivationReset: false);
+    final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
+    );
+    final deviceCore = FakeDeviceManagementCore()..resolvedJoinDid = testDid;
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:wba:awiki.info:users:alice-old',
+          credentialName: 'identity-alice',
+          displayName: 'Alice',
+          handle: 'alice.awiki.info',
+        ),
+      ]
+      ..loginResult = const SessionIdentity(
+        did: testDid,
+        credentialName: 'member-new-local',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+      );
+    await tester.pumpWidget(
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        deviceCore,
+        recovery: recovery,
+        gateway: gateway,
+        session: null,
+        handleRecoveryEnabled: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), 'alice.awiki.info');
+    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(2), '987580');
+    await tester.tap(find.text('开始关联'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-page'))),
+    );
+    expect(
+      container.read(devicesProvider).activeJoin?.cause,
+      DeviceJoinCause.ordinary,
+    );
+    expect(sdk.activateJoinCalls, 1);
+    expect(sdk.resumeJoinCalls, 0);
+    expect(deviceCore.beginCalls, 0);
+    expect(deviceCore.pollCalls, 0);
+    expect(gateway.loginCalls, 1);
+    expect(container.read(appRuntimeProvider).activatedDid, testDid);
+    expect(find.byKey(const Key('handle-recovery-join-banner')), findsNothing);
+  });
+
+  testWidgets('feature-off exact local handle keeps legacy ordinary Join', (
+    tester,
+  ) async {
+    final sdk = _ProductionJoinRecoveryCore();
+    final recovery = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
+    );
+    final deviceCore = FakeDeviceManagementCore()
+      ..beginResult = _authorizedNewDeviceProgress(
+        authorizedDevice: _device(
+          id: 'member-new',
+          role: DeviceRole.member,
+          isCurrent: true,
+        ),
+      );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:wba:awiki.info:users:alice-old',
+          credentialName: 'identity-alice',
+          displayName: 'Alice',
+          handle: 'alice.awiki.info',
+        ),
+      ]
+      ..loginResult = const SessionIdentity(
+        did: testDid,
+        credentialName: 'member-new-local',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+      );
+    await tester.pumpWidget(
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        deviceCore,
+        recovery: recovery,
+        gateway: gateway,
+        session: null,
+        handleRecoveryEnabled: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), 'alice.awiki.info');
+    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(2), '987580');
+    await tester.tap(find.text('开始关联'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byKey(const Key('device-join-page'))),
+    );
+    expect(
+      container.read(devicesProvider).activeJoin?.cause,
+      DeviceJoinCause.ordinary,
+    );
+    expect(deviceCore.beginCalls, 1);
+    expect(sdk.activateJoinCalls, 0);
+    expect(sdk.resumeJoinCalls, 0);
+    expect(gateway.loginCalls, 1);
+    expect(container.read(appRuntimeProvider).activatedDid, testDid);
   });
 
   testWidgets(
@@ -1555,9 +1886,10 @@ DeviceJoinRequestNotice _request({
 
 DeviceJoinProgress _authorizedNewDeviceProgress({
   DeviceSummary? authorizedDevice,
+  String joinSessionId = 'join-1',
 }) {
   return DeviceJoinProgress(
-    joinSessionId: 'join-1',
+    joinSessionId: joinSessionId,
     did: testDid,
     protocolDeviceId: 'member-new',
     side: DeviceJoinSide.newDevice,
@@ -1573,8 +1905,10 @@ Widget _app(
   FakeDeviceManagementCore core, {
   FakeUserPresence? presence,
   FakeRootKeyTransferPort? rootTransfer,
+  HandleRecoveryCorePort? recovery,
   FakeAwikiGateway? gateway,
   bool deviceRevokeEnabled = false,
+  bool handleRecoveryEnabled = false,
   SessionIdentity? session = _session,
 }) {
   return buildLocalizedTestApp(
@@ -1584,6 +1918,9 @@ Widget _app(
     providerOverrides: <Override>[
       multiDeviceDeviceRevokeEnabledProvider.overrideWithValue(
         deviceRevokeEnabled,
+      ),
+      multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(
+        handleRecoveryEnabled,
       ),
       deviceManagementCorePortProvider.overrideWithValue(core),
       rootKeyTransferPortProvider.overrideWithValue(
@@ -1595,9 +1932,121 @@ Widget _app(
       userPresencePortProvider.overrideWithValue(
         presence ?? FakeUserPresence(),
       ),
+      if (recovery != null)
+        handleRecoveryCorePortProvider.overrideWithValue(recovery),
     ],
   );
 }
+
+class _ProductionJoinRecoveryCore implements core.AwikiImCore {
+  _ProductionJoinRecoveryCore({
+    this.activationPending = false,
+    this.includeActivationReset = true,
+    this.includeResumeReset = true,
+  });
+
+  final bool activationPending;
+  final bool includeActivationReset;
+  final bool includeResumeReset;
+  int activateJoinCalls = 0;
+  int resumeJoinCalls = 0;
+  core.IdentitySelector? selector;
+
+  @override
+  Future<core.AuthorizedJoinActivationProgress> activateAuthorizedJoin({
+    required core.IdentitySelector selector,
+    required String phone,
+    required String code,
+    required String handle,
+    required String did,
+    required String operationId,
+    int? ttlSeconds,
+    required bool userPresenceConfirmed,
+  }) async {
+    activateJoinCalls += 1;
+    this.selector = selector;
+    return activationPending
+        ? _pendingRecoveryJoin()
+        : _authorizedRecoveryJoin(includeReset: includeActivationReset);
+  }
+
+  @override
+  Future<core.AuthorizedJoinActivationProgress> resumeAuthorizedJoinActivation(
+    String joinSessionId,
+  ) async {
+    resumeJoinCalls += 1;
+    return _authorizedRecoveryJoin(
+      joinSessionId: joinSessionId,
+      includeReset: includeResumeReset,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+core.AuthorizedJoinActivationProgress _authorizedRecoveryJoin({
+  String joinSessionId = 'join-recovery-1',
+  bool includeReset = true,
+}) => core.AuthorizedJoinActivationProgress(
+  join: core.DeviceJoinProgress(
+    session: core.DeviceJoinSessionSummary(
+      joinSessionId: joinSessionId,
+      did: testDid,
+      protocolDeviceId: 'member-new',
+      side: core.DeviceJoinSide.newDevice,
+      phase: core.DeviceJoinPhase.authorized,
+      expiresAt: '2030-01-01T00:00:00.000Z',
+    ),
+    remoteState: core.DeviceJoinRemoteState.consumed,
+    authorizedDevice: const core.DeviceJoinAuthorizedDeviceSummary(
+      protocolDeviceId: 'member-new',
+      signingKeyId: '$testDid#member-sign',
+      e2eeKeyId: '$testDid#member-e2ee',
+      status: core.DeviceJoinAuthorizationStatus.active,
+      role: core.DeviceJoinRole.member,
+      managementReady: false,
+      isCurrent: true,
+    ),
+  ),
+  registryEpochReset: includeReset
+      ? core.HandleRecoveryRegistryEpochReset(
+          accountUserId: 'account-1',
+          ownerIdentityId: 'identity-alice',
+          handle: 'alice.awiki.info',
+          previousDid: 'did:wba:awiki.info:users:alice-old',
+          currentDid: testDid,
+          bindingGeneration: '8',
+          sourceKind: core.HandleRecoveryTransitionSourceKind.joinedDevice,
+          sourceId: joinSessionId,
+        )
+      : null,
+);
+
+core.AuthorizedJoinActivationProgress _pendingRecoveryJoin() =>
+    const core.AuthorizedJoinActivationProgress(
+      join: core.DeviceJoinProgress(
+        session: core.DeviceJoinSessionSummary(
+          joinSessionId: 'join-recovery-1',
+          did: testDid,
+          protocolDeviceId: 'member-new',
+          side: core.DeviceJoinSide.newDevice,
+          phase: core.DeviceJoinPhase.pending,
+          expiresAt: '2030-01-01T00:00:00.000Z',
+        ),
+        remoteState: core.DeviceJoinRemoteState.pending,
+      ),
+      registryEpochReset: core.HandleRecoveryRegistryEpochReset(
+        accountUserId: 'account-1',
+        ownerIdentityId: 'identity-alice',
+        handle: 'alice.awiki.info',
+        previousDid: 'did:wba:awiki.info:users:alice-old',
+        currentDid: testDid,
+        bindingGeneration: '8',
+        sourceKind: core.HandleRecoveryTransitionSourceKind.joinedDevice,
+        sourceId: 'join-recovery-1',
+      ),
+    );
 
 DeviceRegistrySnapshot _rootTransferRegistry({bool recipientReady = false}) {
   return DeviceRegistrySnapshot(

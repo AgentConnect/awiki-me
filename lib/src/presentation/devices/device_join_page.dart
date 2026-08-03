@@ -19,6 +19,7 @@ import '../shared/widgets/app_widgets.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
+import '../recovery/handle_recovery_provider.dart';
 
 class DeviceJoinPage extends ConsumerStatefulWidget {
   const DeviceJoinPage({super.key, this.autoPoll = true});
@@ -41,6 +42,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   bool _activationPending = false;
   bool _activationFailed = false;
   String? _activatedJoinSessionId;
+  DeviceJoinProgress? _recoveryActivationProgress;
 
   @override
   void initState() {
@@ -222,6 +224,10 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: context.awikiTheme.secondaryText),
           ),
+          if (progress.cause == DeviceJoinCause.handleRecovery) ...<Widget>[
+            const SizedBox(height: 16),
+            _HandleRecoveryJoinNotice(progress: progress),
+          ],
           if (sas != null) ...<Widget>[
             const SizedBox(height: 24),
             Text(
@@ -267,6 +273,16 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             AppPrimaryButton(
               label: context.l10n.deviceJoinActivationRetry,
               onPressed: _activationPending ? null : _activateAuthorizedMember,
+            )
+          else if (progress.cause == DeviceJoinCause.handleRecovery &&
+              _recoveryActivationProgress?.phase != DeviceJoinPhase.authorized)
+            AppSecondaryButton(
+              key: const Key('handle-recovery-join-resume'),
+              label: context.l10n.handleRecoveryResume,
+              semanticsIdentifier: 'handle-recovery-join-resume',
+              onPressed: _activationPending
+                  ? null
+                  : () => _resumeRecoveryJoin(progress),
             )
           else
             AppPrimaryButton(
@@ -336,6 +352,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           handle: _handleController.text,
           phone: _phoneController.text,
           otp: otp,
+          presenceReason: context.l10n.handleRecoveryPresenceReason,
         );
     if (!mounted) return;
     await _activateAuthorizedMember();
@@ -384,9 +401,21 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           !authorized.isCurrent) {
         throw StateError('invalid_authorized_device_projection');
       }
-      await ref
-          .read(appRuntimeProvider.notifier)
-          .activateJoinedMember(progress.did);
+      if (progress.cause == DeviceJoinCause.handleRecovery) {
+        final recoveryProgress = await ref
+            .read(handleRecoveryServiceProvider)
+            .resumeAuthorizedJoinActivation(
+              joinSessionId: progress.joinSessionId,
+              recoveryExpected: true,
+            );
+        if (mounted) {
+          setState(() => _recoveryActivationProgress = recoveryProgress);
+        }
+      } else {
+        await ref
+            .read(appRuntimeProvider.notifier)
+            .activateJoinedMember(progress.did);
+      }
       _activatedJoinSessionId = progress.joinSessionId;
     } catch (_) {
       if (mounted) {
@@ -397,6 +426,54 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
         setState(() => _activationPending = false);
       }
     }
+  }
+
+  Future<void> _resumeRecoveryJoin(DeviceJoinProgress progress) async {
+    if (_activationPending) return;
+    setState(() {
+      _activationPending = true;
+      _activationFailed = false;
+    });
+    try {
+      final recoveryProgress = await ref
+          .read(handleRecoveryServiceProvider)
+          .resumeAuthorizedJoinActivation(
+            joinSessionId: progress.joinSessionId,
+            recoveryExpected: true,
+          );
+      if (mounted) {
+        setState(() => _recoveryActivationProgress = recoveryProgress);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _activationFailed = true);
+    } finally {
+      if (mounted) setState(() => _activationPending = false);
+    }
+  }
+}
+
+class _HandleRecoveryJoinNotice extends StatelessWidget {
+  const _HandleRecoveryJoinNotice({required this.progress});
+
+  final DeviceJoinProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final recovery = progress.handleRecovery!;
+    return AppSurface(
+      key: const Key('handle-recovery-join-banner'),
+      color: context.awikiTheme.warningContainer,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(context.l10n.handleRecoveryJoinRestored(recovery.handle)),
+          if (recovery.localOrdinaryDataWillMigrate)
+            Text(context.l10n.handleRecoveryJoinLocalMigration),
+          Text(context.l10n.handleRecoveryJoinE2eeUnsupported),
+          Text(context.l10n.handleRecoveryJoinDidOnlyUnsupported),
+        ],
+      ),
+    );
   }
 }
 

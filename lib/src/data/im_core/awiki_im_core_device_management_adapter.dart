@@ -155,6 +155,19 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   }
 
   @override
+  Future<String> resolveJoinDid(String handle) async {
+    final target = _handleTarget(handle, targetHandleDomain);
+    final did = await _resolveJoinTarget(
+      handle: target.handle,
+      domain: target.domain,
+    );
+    if (!did.startsWith('did:wba:') || did.trim() != did) {
+      throw const DeviceManagementTransportException('join_target_invalid_did');
+    }
+    return did;
+  }
+
+  @override
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async {
     final instance = await _coreInstance();
     final sessions = await instance.localDeviceJoinSessions();

@@ -24,6 +24,7 @@ import '../presentation/app_shell/providers/app_lifecycle_provider.dart';
 import '../presentation/app_shell/providers/session_provider.dart';
 import '../presentation/agents/agents_provider.dart';
 import '../presentation/chat/chat_provider.dart';
+import '../presentation/recovery/handle_recovery_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
 import '../presentation/shared/widgets/app_widgets.dart';
@@ -98,6 +99,14 @@ class AwikiMeApp extends StatelessWidget {
         if (bootstrap.groupEncryptionCorePort != null)
           groupEncryptionCorePortProvider.overrideWithValue(
             bootstrap.groupEncryptionCorePort!,
+          ),
+        if (bootstrap.handleRecoveryCorePort != null)
+          handleRecoveryCorePortProvider.overrideWithValue(
+            bootstrap.handleRecoveryCorePort!,
+          ),
+        if (bootstrap.legacyRegistryEpochAdoptionPort != null)
+          legacyRegistryEpochAdoptionPortProvider.overrideWithValue(
+            bootstrap.legacyRegistryEpochAdoptionPort,
           ),
         if (bootstrap.onboardingService != null)
           onboardingServiceProvider.overrideWithValue(

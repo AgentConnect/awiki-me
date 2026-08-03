@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../domain/entities/session_identity.dart';
+import '../../domain/entities/device_management.dart';
 
 class ProductConversationOverlay {
   const ProductConversationOverlay({
@@ -268,9 +269,175 @@ class ProductDeviceRegistryItem {
   final String payloadJson;
 }
 
+class ProductDeviceRegistryEpoch {
+  const ProductDeviceRegistryEpoch({
+    required this.currentDid,
+    required this.bindingGeneration,
+  });
+
+  final String currentDid;
+  final String bindingGeneration;
+
+  bool matches(ProductDeviceRegistryEpoch other) =>
+      currentDid == other.currentDid &&
+      bindingGeneration == other.bindingGeneration;
+}
+
+class ProductDeviceRegistryEpochResetReference {
+  const ProductDeviceRegistryEpochResetReference({
+    required this.accountUserId,
+    required this.ownerIdentityId,
+    required this.previousDid,
+    required this.currentDid,
+    required this.bindingGeneration,
+  });
+
+  final String accountUserId;
+  final String ownerIdentityId;
+  final String previousDid;
+  final String currentDid;
+  final String bindingGeneration;
+
+  ProductAccountBinding get binding => ProductAccountBinding(
+    ownerIdentityId: ownerIdentityId,
+    accountId: accountUserId,
+  );
+
+  ProductDeviceRegistryEpoch get targetEpoch => ProductDeviceRegistryEpoch(
+    currentDid: currentDid,
+    bindingGeneration: bindingGeneration,
+  );
+
+  bool matches(ProductDeviceRegistryEpochResetReference other) =>
+      accountUserId == other.accountUserId &&
+      ownerIdentityId == other.ownerIdentityId &&
+      previousDid == other.previousDid &&
+      currentDid == other.currentDid &&
+      bindingGeneration == other.bindingGeneration;
+}
+
+enum ProductIdentityTransitionSourceKind { initiator, joinedDevice }
+
+String productIdentityTransitionSourceKindWireName(
+  ProductIdentityTransitionSourceKind sourceKind,
+) => switch (sourceKind) {
+  ProductIdentityTransitionSourceKind.initiator => 'initiator',
+  ProductIdentityTransitionSourceKind.joinedDevice => 'joined_device',
+};
+
+class ProductDeviceRegistryEpochResetAuthorization {
+  const ProductDeviceRegistryEpochResetAuthorization({
+    required this.reference,
+    required this.handle,
+    required this.sourceKind,
+    required this.sourceId,
+  });
+
+  final ProductDeviceRegistryEpochResetReference reference;
+  final String handle;
+  final ProductIdentityTransitionSourceKind sourceKind;
+  final String sourceId;
+
+  bool matches(ProductDeviceRegistryEpochResetAuthorization other) =>
+      reference.matches(other.reference) &&
+      handle == other.handle &&
+      sourceKind == other.sourceKind &&
+      sourceId == other.sourceId;
+}
+
+class ProductDeviceRegistryEpochResetReceipt {
+  const ProductDeviceRegistryEpochResetReceipt({
+    required this.authorization,
+    required this.appliedAt,
+  });
+
+  final ProductDeviceRegistryEpochResetAuthorization authorization;
+  final DateTime appliedAt;
+
+  ProductDeviceRegistryEpochResetReference get reference =>
+      authorization.reference;
+}
+
+/// Secret-free host locator for reopening the Core-owned Handle Recovery
+/// state machine. Phone numbers, OTPs, grants, proofs, phases, and key
+/// material must never be added to this projection.
+class ProductHandleRecoveryLocator {
+  const ProductHandleRecoveryLocator({
+    required this.localIdentityId,
+    required this.operationId,
+    required this.fullHandle,
+    this.recoveryId,
+  });
+
+  final String localIdentityId;
+  final String operationId;
+  final String fullHandle;
+  final String? recoveryId;
+
+  ProductHandleRecoveryLocator withRecoveryId(String value) =>
+      ProductHandleRecoveryLocator(
+        localIdentityId: localIdentityId,
+        operationId: operationId,
+        fullHandle: fullHandle,
+        recoveryId: value,
+      );
+}
+
+/// Core-certified proof that a pre-v5 Registry checkpoint belongs to the
+/// currently active ordinary identity binding and has no Recovery transition.
+class LegacyRegistryEpochAdoptionAuthority {
+  const LegacyRegistryEpochAdoptionAuthority({
+    required this.ownerIdentityId,
+    required this.accountUserId,
+    required this.currentDid,
+    required this.bindingGeneration,
+    required this.protocolDeviceId,
+    required this.deviceAuthGeneration,
+    required this.provenanceId,
+  });
+
+  final String ownerIdentityId;
+  final String accountUserId;
+  final String currentDid;
+  final String bindingGeneration;
+  final String protocolDeviceId;
+  final String deviceAuthGeneration;
+  final String provenanceId;
+
+  ProductAccountBinding get binding => ProductAccountBinding(
+    ownerIdentityId: ownerIdentityId,
+    accountId: accountUserId,
+  );
+
+  ProductDeviceRegistryEpoch get epoch => ProductDeviceRegistryEpoch(
+    currentDid: currentDid,
+    bindingGeneration: bindingGeneration,
+  );
+
+  bool matches(LegacyRegistryEpochAdoptionAuthority other) =>
+      ownerIdentityId == other.ownerIdentityId &&
+      accountUserId == other.accountUserId &&
+      currentDid == other.currentDid &&
+      bindingGeneration == other.bindingGeneration &&
+      protocolDeviceId == other.protocolDeviceId &&
+      deviceAuthGeneration == other.deviceAuthGeneration &&
+      provenanceId == other.provenanceId;
+}
+
+class LegacyRegistryEpochAdoptionReceipt {
+  const LegacyRegistryEpochAdoptionReceipt({
+    required this.authority,
+    required this.adoptedAt,
+  });
+
+  final LegacyRegistryEpochAdoptionAuthority authority;
+  final DateTime adoptedAt;
+}
+
 class ProductDeviceRegistrySnapshot {
   ProductDeviceRegistrySnapshot({
     required this.binding,
+    required this.epoch,
     required this.domainVersion,
     this.payloadHash,
     required this.refreshedAt,
@@ -278,6 +445,7 @@ class ProductDeviceRegistrySnapshot {
   }) : devices = List<ProductDeviceRegistryItem>.unmodifiable(devices);
 
   final ProductAccountBinding binding;
+  final ProductDeviceRegistryEpoch epoch;
   final String domainVersion;
   final String? payloadHash;
   final DateTime refreshedAt;
@@ -306,6 +474,22 @@ class ProductDomainVersionRegressionException implements Exception {
   @override
   String toString() =>
       'ProductDomainVersionRegressionException(product_domain_version_regression)';
+}
+
+class ProductDeviceRegistryEpochMismatchException implements Exception {
+  const ProductDeviceRegistryEpochMismatchException();
+
+  @override
+  String toString() =>
+      'ProductDeviceRegistryEpochMismatchException(product_device_registry_epoch_mismatch)';
+}
+
+class ProductLegacyRegistryEpochAdoptionMismatchException implements Exception {
+  const ProductLegacyRegistryEpochAdoptionMismatchException();
+
+  @override
+  String toString() =>
+      'ProductLegacyRegistryEpochAdoptionMismatchException(product_legacy_registry_epoch_adoption_mismatch)';
 }
 
 void validateProductAccountBinding(ProductAccountBinding binding) {
@@ -399,6 +583,7 @@ void validateProductDeviceRegistrySnapshot(
   ProductDeviceRegistrySnapshot snapshot,
 ) {
   validateProductAccountBinding(snapshot.binding);
+  validateProductDeviceRegistryEpoch(snapshot.epoch);
   _validateSnapshotMetadata(
     snapshot.domainVersion,
     snapshot.payloadHash,
@@ -416,6 +601,103 @@ void validateProductDeviceRegistrySnapshot(
         'must be unique within a snapshot',
       );
     }
+  }
+}
+
+void validateProductDeviceRegistryEpoch(ProductDeviceRegistryEpoch epoch) {
+  _requireExactNonEmpty(epoch.currentDid, 'currentDid');
+  if (!epoch.currentDid.startsWith('did:wba:') ||
+      RegExp(r'[\s\x00-\x1f\x7f]').hasMatch(epoch.currentDid)) {
+    throw ArgumentError.value(
+      epoch.currentDid,
+      'currentDid',
+      'must be a canonical did:wba identifier',
+    );
+  }
+  _requireCanonicalPositiveDecimal(
+    epoch.bindingGeneration,
+    'bindingGeneration',
+  );
+}
+
+void validateProductDeviceRegistryEpochResetReference(
+  ProductDeviceRegistryEpochResetReference reference,
+) {
+  validateProductAccountBinding(reference.binding);
+  _requireExactNonEmpty(reference.previousDid, 'previousDid');
+  validateProductDeviceRegistryEpoch(reference.targetEpoch);
+  if (reference.previousDid == reference.currentDid) {
+    throw ArgumentError.value(
+      reference.currentDid,
+      'currentDid',
+      'must differ from previousDid',
+    );
+  }
+}
+
+void validateProductDeviceRegistryEpochResetAuthorization(
+  ProductDeviceRegistryEpochResetAuthorization authorization,
+) {
+  validateProductDeviceRegistryEpochResetReference(authorization.reference);
+  _requireExactNonEmpty(authorization.handle, 'handle');
+  if (authorization.handle != authorization.handle.toLowerCase() ||
+      !authorization.handle.contains('.') ||
+      authorization.handle.endsWith('.')) {
+    throw ArgumentError.value(
+      authorization.handle,
+      'handle',
+      'must be a canonical full Handle',
+    );
+  }
+  _requireExactNonEmpty(authorization.sourceId, 'sourceId');
+  final invalidSourceId = switch (authorization.sourceKind) {
+    ProductIdentityTransitionSourceKind.initiator =>
+      authorization.sourceId.runes.length > 128 ||
+          RegExp(
+            r'[\s\x00-\x1f\x7f-\x9f]',
+            unicode: true,
+          ).hasMatch(authorization.sourceId),
+    ProductIdentityTransitionSourceKind.joinedDevice =>
+      !isCanonicalDeviceJoinSessionId(authorization.sourceId),
+  };
+  if (invalidSourceId) {
+    throw ArgumentError.value(
+      authorization.sourceId,
+      'sourceId',
+      'must be a canonical non-secret source reference',
+    );
+  }
+}
+
+void validateLegacyRegistryEpochAdoptionAuthority(
+  LegacyRegistryEpochAdoptionAuthority authority,
+) {
+  validateProductAccountBinding(authority.binding);
+  validateProductDeviceRegistryEpoch(authority.epoch);
+  _requireExactNonEmpty(authority.protocolDeviceId, 'protocolDeviceId');
+  _requireCanonicalDecimal(
+    authority.deviceAuthGeneration,
+    'deviceAuthGeneration',
+  );
+  _requireExactNonEmpty(authority.provenanceId, 'provenanceId');
+  if (!authority.provenanceId.startsWith('sha256:') ||
+      authority.provenanceId.runes.length > 128 ||
+      RegExp(
+        r'[\s\x00-\x1f\x7f-\x9f]',
+        unicode: true,
+      ).hasMatch(authority.provenanceId)) {
+    throw ArgumentError.value(
+      authority.provenanceId,
+      'provenanceId',
+      'must be an opaque sha256 provenance identifier',
+    );
+  }
+}
+
+void _requireCanonicalPositiveDecimal(String value, String name) {
+  _requireCanonicalDecimal(value, name);
+  if (value == '0') {
+    throw ArgumentError.value(value, name, 'must be positive');
   }
 }
 

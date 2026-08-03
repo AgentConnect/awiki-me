@@ -42,6 +42,84 @@ void _resetTestViewSize(WidgetTester tester) {
 
 void main() {
   testWidgets(
+    'Handle Recovery entry requires both local gate and advertised phone capability',
+    (tester) async {
+      final defaultInfo = OnboardingServerInfo.userServiceDefault();
+      final gateway = FakeAwikiGateway()
+        ..localCredentials = const <SessionIdentity>[
+          SessionIdentity(
+            did: 'did:wba:awiki.ai:alice:e1_old',
+            credentialName: 'identity-alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.ai',
+          ),
+        ]
+        ..serverInfo = OnboardingServerInfo(
+          schemaVersion: defaultInfo.schemaVersion,
+          service: defaultInfo.service,
+          identity: OnboardingIdentityCapabilities(
+            handleRegistration: defaultInfo.identity.handleRegistration,
+            handleRecovery: const OnboardingHandleRecoveryCapabilities(
+              enabled: true,
+              methods: <OnboardingIdentityMethod>[
+                OnboardingIdentityMethod(
+                  id: OnboardingIdentityMethodId.phone,
+                  enabled: true,
+                  verification: OnboardingVerificationRequirement(
+                    required: true,
+                    type: OnboardingVerificationType.smsOtp,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: gateway,
+          providerOverrides: <Override>[
+            multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('handle-recovery-entry')), findsOneWidget);
+      expect(find.text('恢复 Handle'), findsOneWidget);
+      expect(find.textContaining('CLI'), findsNothing);
+      expect(find.textContaining('Daemon'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'Handle Recovery entry stays hidden when server omits the capability',
+    (tester) async {
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const OnboardingPage(),
+          gateway: FakeAwikiGateway()
+            ..localCredentials = const <SessionIdentity>[
+              SessionIdentity(
+                did: 'did:wba:awiki.ai:alice:e1_old',
+                credentialName: 'identity-alice',
+                displayName: 'Alice',
+                handle: 'alice.awiki.ai',
+              ),
+            ],
+          providerOverrides: <Override>[
+            multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('handle-recovery-entry')), findsNothing);
+    },
+  );
+
+  testWidgets(
     'Legacy upgrade blocks login, shows loading, and retries the same identity id',
     (tester) async {
       const localIdentity = SessionIdentity(

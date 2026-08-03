@@ -3029,6 +3029,149 @@ class AppLocalizationsEn extends AppLocalizations {
       'Handle Recovery is not supported in this version. No identity state was changed.';
 
   @override
+  String get handleRecoveryTitle => 'Recover Handle';
+
+  @override
+  String get handleRecoveryIntro =>
+      'Recover this Handle with its bound phone number. Old identity private keys are not recovered.';
+
+  @override
+  String get handleRecoveryHandle => 'Full Handle';
+
+  @override
+  String get handleRecoveryPhone => 'Bound phone number';
+
+  @override
+  String get handleRecoveryOtp => 'SMS code';
+
+  @override
+  String get handleRecoverySendOtp => 'Send code';
+
+  @override
+  String get handleRecoveryVerify => 'Verify recovery';
+
+  @override
+  String get handleRecoveryIrreversible => 'This recovery is irreversible.';
+
+  @override
+  String get handleRecoveryHandlePreserved =>
+      'Your Handle is preserved, but the identity moves to a new DID.';
+
+  @override
+  String get handleRecoveryOtherDevicesRejoin =>
+      'All old devices are invalidated immediately and can return only through ordinary Device Join.';
+
+  @override
+  String get handleRecoveryLocalOrdinaryMigration =>
+      'Only ordinary local data is migrated on this device.';
+
+  @override
+  String get handleRecoveryOldE2eeUnavailable =>
+      'Old P5 PreKeys, Ratchet, MLS, and other E2EE keys are not migrated.';
+
+  @override
+  String get handleRecoverySingletonRisk =>
+      'Until a second ready admin device exists, recovered A′ is the only approver.';
+
+  @override
+  String get handleRecoveryDidOnlyUnsupported =>
+      'V1 does not automatically restore any E2EE or DID-only group.';
+
+  @override
+  String get handleRecoveryRiskConfirm => 'I understand these effects';
+
+  @override
+  String get handleRecoveryActivate => 'Confirm and recover';
+
+  @override
+  String get handleRecoveryResume => 'Resume recovery';
+
+  @override
+  String get handleRecoveryPresenceReason => 'Confirm Handle identity recovery';
+
+  @override
+  String get handleRecoveryRiskRequired =>
+      'Confirm that you understand the recovery effects first.';
+
+  @override
+  String get handleRecoveryFailed => 'Recovery failed. Try again later.';
+
+  @override
+  String get handleRecoveryErrorNotPrepared =>
+      'Recovery was not prepared. This flow is terminated; start again.';
+
+  @override
+  String get handleRecoveryErrorUserPresenceRequired =>
+      'Complete the local system confirmation again before continuing.';
+
+  @override
+  String get handleRecoveryErrorTransitionMismatch =>
+      'The recovery context does not match. This flow is terminated for safety.';
+
+  @override
+  String get handleRecoveryErrorTransitionChainUnsupported =>
+      'This identity transition chain is unsupported. This flow is terminated.';
+
+  @override
+  String get handleRecoveryErrorRemoteStateChanged =>
+      'Remote state changed. Continue status or resume only with the current recovery reference.';
+
+  @override
+  String get handleRecoveryErrorOutcomeUnknown =>
+      'The submission outcome is unknown. Continue with the same recovery reference; do not create a new operation.';
+
+  @override
+  String get handleRecoveryErrorLocalStateUnavailable =>
+      'The local recovery reference is unavailable. Continuing is blocked on this device.';
+
+  @override
+  String get handleRecoveryErrorBlocked =>
+      'Recovery is blocked by a safety policy. Retain the current recovery reference for audit.';
+
+  @override
+  String get handleRecoveryPrepared =>
+      'Recovery was verified. Review the effects before continuing.';
+
+  @override
+  String get handleRecoveryRemotePending =>
+      'Submitting the remote recovery result.';
+
+  @override
+  String get handleRecoveryRemoteCommitted =>
+      'The remote recovery result is confirmed.';
+
+  @override
+  String get handleRecoveryIdentityPending => 'Migrating local identity data.';
+
+  @override
+  String get handleRecoveryIdentitySwitched =>
+      'The local identity switched. Finishing recovery.';
+
+  @override
+  String get handleRecoveryCompleted => 'Identity recovery is complete.';
+
+  @override
+  String get handleRecoveryBlocked =>
+      'Recovery is blocked. Check its status and try again.';
+
+  @override
+  String handleRecoveryJoinRestored(Object handle) {
+    return 'Identity recovery is complete for $handle.';
+  }
+
+  @override
+  String get handleRecoveryJoinLocalMigration =>
+      'Local data on this device will be migrated.';
+
+  @override
+  String get handleRecoveryJoinE2eeUnsupported =>
+      'Encrypted groups do not support identity recovery yet. Old E2EE private keys do not migrate.';
+
+  @override
+  String get handleRecoveryJoinDidOnlyUnsupported =>
+      'DID-only contacts and groups do not migrate.';
+
+  @override
   String get legacyIdentityUpgradeFailed =>
       'The legacy identity upgrade failed. Please try again.';
 }

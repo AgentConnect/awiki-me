@@ -344,6 +344,9 @@ class _FakeUserPresence implements UserPresencePort {
 }
 
 class _FakeDeviceCore implements DeviceManagementCorePort {
+  @override
+  Future<String> resolveJoinDid(String handle) async =>
+      'did:wba:awiki.info:user:alice:e1_test';
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
   DeviceJoinProgress? pollResult;
   String? beginHandle;

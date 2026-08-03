@@ -44,6 +44,116 @@ void main() {
     );
   });
 
+  test(
+    'Registry epoch mismatch blocks before remote sync until exact source receipt',
+    () async {
+      const oldDid = 'did:wba:example.test:alice-old';
+      const newDid = 'did:wba:example.test:alice-new';
+      const oldEpoch = ProductDeviceRegistryEpoch(
+        currentDid: oldDid,
+        bindingGeneration: '7',
+      );
+      const reset = ProductDeviceRegistryEpochResetAuthorization(
+        reference: ProductDeviceRegistryEpochResetReference(
+          accountUserId: 'account-1',
+          ownerIdentityId: 'owner-1',
+          previousDid: oldDid,
+          currentDid: newDid,
+          bindingGeneration: '8',
+        ),
+        handle: 'alice.example.test',
+        sourceKind: ProductIdentityTransitionSourceKind.joinedDevice,
+        sourceId: 'join-session-1',
+      );
+      final store = InMemoryAwikiProductLocalStore();
+      final now = DateTime.utc(2026, 8, 3);
+      await store.replaceProfileSnapshot(
+        ProductProfileSnapshot(
+          binding: binding,
+          domainVersion: '12',
+          refreshedAt: now,
+          payloadJson: '{"display_name":"Alice"}',
+        ),
+      );
+      await store.replaceAgentInventorySnapshot(
+        ProductAgentInventorySnapshot(
+          binding: binding,
+          domainVersion: '15',
+          refreshedAt: now,
+          agents: const <ProductAgentInventoryItem>[],
+        ),
+      );
+      await store.replaceDeviceRegistrySnapshot(
+        ProductDeviceRegistrySnapshot(
+          binding: binding,
+          epoch: oldEpoch,
+          domainVersion: '9',
+          refreshedAt: now,
+          devices: const <ProductDeviceRegistryItem>[
+            ProductDeviceRegistryItem(
+              protocolDeviceId: 'old-device',
+              authGeneration: '4',
+              payloadJson: '{"status":"active"}',
+            ),
+          ],
+        ),
+      );
+      final remote = _Remote(currentDid: newDid, identityGeneration: '8');
+      final service = AccountStateSyncService(remote: remote, local: store);
+
+      await expectLater(
+        service.reconcile(
+          binding: binding,
+          expectedCurrentDid: newDid,
+          expectedIdentityGeneration: '8',
+          sessionGeneration: 8,
+          isSessionCurrent: (_, __) => true,
+        ),
+        throwsA(
+          isA<AccountStateSyncProtocolException>().having(
+            (error) => error.code,
+            'code',
+            'account_state_registry_epoch_mismatch',
+          ),
+        ),
+      );
+      expect(remote.manifestCalls, 0);
+
+      await store.applyDeviceRegistryEpochReset(reset);
+      final result = await service.reconcile(
+        binding: binding,
+        expectedCurrentDid: newDid,
+        expectedIdentityGeneration: '8',
+        sessionGeneration: 8,
+        isSessionCurrent: (_, __) => true,
+      );
+
+      expect(result.failures, isEmpty);
+      expect(
+        (await store.loadDeviceRegistrySnapshot(
+          binding: binding,
+        ))?.epoch.currentDid,
+        newDid,
+      );
+      expect(
+        (await store.loadDeviceRegistrySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '1',
+      );
+      expect(
+        (await store.loadProfileSnapshot(binding: binding))?.domainVersion,
+        '12',
+      );
+      expect(
+        (await store.loadAgentInventorySnapshot(
+          binding: binding,
+        ))?.domainVersion,
+        '15',
+      );
+    },
+  );
+
   test('one failed domain does not block the other three', () async {
     final remote = _Remote(failStatus: true);
     final store = InMemoryAwikiProductLocalStore();
@@ -272,6 +382,7 @@ class _Remote implements AccountStateSyncPort {
   _Remote({
     this.version = '1',
     this.currentDid = 'did:wba:example.test:alice',
+    this.identityGeneration = '1',
     this.failStatus = false,
     this.emptyInventory = false,
     this.advanceProfileAtM2 = false,
@@ -281,6 +392,7 @@ class _Remote implements AccountStateSyncPort {
 
   final String version;
   final String currentDid;
+  final String identityGeneration;
   final bool failStatus;
   final bool emptyInventory;
   final bool advanceProfileAtM2;
@@ -296,7 +408,7 @@ class _Remote implements AccountStateSyncPort {
     return AccountStateManifest(
       accountId: 'account-1',
       currentDid: currentDid,
-      identityGeneration: '1',
+      identityGeneration: identityGeneration,
       versions: <ProductAccountDomain, String>{
         for (final domain in ProductAccountDomain.values)
           domain:

@@ -17,7 +17,7 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
        _databasePath = databasePath;
 
   static const String databaseName = 'awiki_me_product_store.db';
-  static const int databaseVersion = 4;
+  static const int databaseVersion = 6;
 
   Database? _database;
   Future<Database>? _databaseOpening;
@@ -75,6 +75,12 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
           if (oldVersion < 4) {
             await _createAccountDomainSnapshotTables(db);
           }
+          if (oldVersion < 5) {
+            await _createDeviceRegistryEpochTables(db);
+          }
+          if (oldVersion < 6) {
+            await _createHandleRecoveryLocatorTable(db);
+          }
         },
       ),
     );
@@ -113,6 +119,49 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     final database = _database;
     _database = null;
     if (database != null) await database.close();
+  }
+
+  @override
+  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
+    required String localIdentityId,
+  }) async {
+    final rows = await (await _db).query(
+      'handle_recovery_locator',
+      where: 'local_identity_id = ?',
+      whereArgs: <Object?>[localIdentityId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.single;
+    return ProductHandleRecoveryLocator(
+      localIdentityId: row['local_identity_id']?.toString() ?? '',
+      operationId: row['operation_id']?.toString() ?? '',
+      fullHandle: row['full_handle']?.toString() ?? '',
+      recoveryId: row['recovery_id']?.toString(),
+    );
+  }
+
+  @override
+  Future<void> saveHandleRecoveryLocator(
+    ProductHandleRecoveryLocator locator,
+  ) async {
+    await (await _db).insert('handle_recovery_locator', <String, Object?>{
+      'local_identity_id': locator.localIdentityId,
+      'operation_id': locator.operationId,
+      'full_handle': locator.fullHandle,
+      'recovery_id': locator.recoveryId,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<void> deleteHandleRecoveryLocator({
+    required String localIdentityId,
+  }) async {
+    await (await _db).delete(
+      'handle_recovery_locator',
+      where: 'local_identity_id = ?',
+      whereArgs: <Object?>[localIdentityId],
+    );
   }
 
   /// Atomically rewrites App-owned conversation overlays and drafts using the
@@ -426,6 +475,25 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
     ''');
     await _createAgentStatesTable(db);
     await _createAccountDomainSnapshotTables(db);
+    await _createDeviceRegistryEpochTables(db);
+    await _createHandleRecoveryLocatorTable(db);
+  }
+
+  static Future<void> _createHandleRecoveryLocatorTable(
+    DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS handle_recovery_locator (
+        local_identity_id TEXT PRIMARY KEY,
+        operation_id TEXT NOT NULL,
+        full_handle TEXT NOT NULL,
+        recovery_id TEXT,
+        CHECK (TRIM(local_identity_id) <> ''),
+        CHECK (TRIM(operation_id) <> ''),
+        CHECK (TRIM(full_handle) <> ''),
+        CHECK (recovery_id IS NULL OR TRIM(recovery_id) <> '')
+      )
+    ''');
   }
 
   static Future<void> _createAgentStatesTable(DatabaseExecutor db) async {
@@ -545,6 +613,90 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
           auth_generation = '0' OR (
             auth_generation NOT GLOB '*[^0-9]*'
             AND SUBSTR(auth_generation, 1, 1) BETWEEN '1' AND '9'
+          )
+        )
+      )
+    ''');
+  }
+
+  static Future<void> _createDeviceRegistryEpochTables(
+    DatabaseExecutor db,
+  ) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_device_registry_epoch (
+        owner_identity_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        current_did TEXT NOT NULL,
+        binding_generation TEXT NOT NULL,
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(account_id) <> ''),
+        CHECK (TRIM(current_did) <> ''),
+        CHECK (
+          binding_generation NOT GLOB '*[^0-9]*'
+          AND SUBSTR(binding_generation, 1, 1) BETWEEN '1' AND '9'
+        )
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_device_registry_epoch_reset_receipt (
+        account_user_id TEXT NOT NULL,
+        owner_identity_id TEXT NOT NULL,
+        previous_did TEXT NOT NULL,
+        current_did TEXT NOT NULL,
+        binding_generation TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        source_kind TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        applied_at INTEGER NOT NULL,
+        PRIMARY KEY (
+          account_user_id,
+          owner_identity_id,
+          previous_did,
+          current_did,
+          binding_generation,
+          handle,
+          source_kind,
+          source_id
+        ),
+        CHECK (TRIM(account_user_id) <> ''),
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(previous_did) <> ''),
+        CHECK (TRIM(current_did) <> ''),
+        CHECK (previous_did <> current_did),
+        CHECK (TRIM(handle) <> ''),
+        CHECK (source_kind IN ('initiator', 'joined_device')),
+        CHECK (TRIM(source_id) <> ''),
+        CHECK (applied_at >= 0),
+        CHECK (
+          binding_generation NOT GLOB '*[^0-9]*'
+          AND SUBSTR(binding_generation, 1, 1) BETWEEN '1' AND '9'
+        )
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS account_device_registry_epoch_adoption_receipt (
+        owner_identity_id TEXT PRIMARY KEY,
+        account_user_id TEXT NOT NULL,
+        current_did TEXT NOT NULL,
+        binding_generation TEXT NOT NULL,
+        protocol_device_id TEXT NOT NULL,
+        device_auth_generation TEXT NOT NULL,
+        provenance_id TEXT NOT NULL,
+        adopted_at INTEGER NOT NULL,
+        CHECK (TRIM(owner_identity_id) <> ''),
+        CHECK (TRIM(account_user_id) <> ''),
+        CHECK (TRIM(current_did) <> ''),
+        CHECK (TRIM(protocol_device_id) <> ''),
+        CHECK (TRIM(provenance_id) <> ''),
+        CHECK (adopted_at >= 0),
+        CHECK (
+          binding_generation NOT GLOB '*[^0-9]*'
+          AND SUBSTR(binding_generation, 1, 1) BETWEEN '1' AND '9'
+        ),
+        CHECK (
+          device_auth_generation = '0' OR (
+            device_auth_generation NOT GLOB '*[^0-9]*'
+            AND SUBSTR(device_auth_generation, 1, 1) BETWEEN '1' AND '9'
           )
         )
       )
@@ -1132,6 +1284,10 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
     if (state == null) {
       return null;
     }
+    final epoch = await _loadDeviceRegistryEpoch(db, binding);
+    if (epoch == null) {
+      throw const ProductDeviceRegistryEpochMismatchException();
+    }
     final rows = await db.query(
       'account_device_registry_snapshot',
       where: 'owner_identity_id = ?',
@@ -1145,6 +1301,7 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
     );
     final snapshot = ProductDeviceRegistrySnapshot(
       binding: binding,
+      epoch: epoch,
       domainVersion: state.domainVersion,
       payloadHash: state.payloadHash,
       refreshedAt: state.refreshedAt,
@@ -1161,12 +1318,253 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
   }
 
   @override
+  Future<ProductDeviceRegistryEpoch?> loadDeviceRegistryEpoch({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    return _loadDeviceRegistryEpoch(db, binding);
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpochResetReceipt?>
+  loadDeviceRegistryEpochResetReceipt({
+    required ProductDeviceRegistryEpochResetAuthorization authorization,
+  }) async {
+    validateProductDeviceRegistryEpochResetAuthorization(authorization);
+    final db = await _db;
+    await _assertAccountBinding(db, authorization.reference.binding);
+    return _loadDeviceRegistryEpochResetReceipt(db, authorization);
+  }
+
+  @override
+  Future<ProductDeviceRegistryEpochResetReceipt> applyDeviceRegistryEpochReset(
+    ProductDeviceRegistryEpochResetAuthorization authorization,
+  ) async {
+    validateProductDeviceRegistryEpochResetAuthorization(authorization);
+    final reference = authorization.reference;
+    return (await _db).transaction((transaction) async {
+      await _assertAccountBinding(transaction, reference.binding);
+      final existingReceipt = await _loadDeviceRegistryEpochResetReceipt(
+        transaction,
+        authorization,
+      );
+      if (existingReceipt != null) {
+        return existingReceipt;
+      }
+      final existingEpoch = await _loadDeviceRegistryEpoch(
+        transaction,
+        reference.binding,
+      );
+      final existingRegistryState = await _loadDomainState(
+        transaction,
+        reference.binding,
+        ProductAccountDomain.deviceRegistry,
+      );
+      if ((existingEpoch == null && existingRegistryState != null) ||
+          (existingEpoch != null &&
+              (existingEpoch.currentDid != reference.previousDid ||
+                  compareProductDecimalVersions(
+                        reference.bindingGeneration,
+                        existingEpoch.bindingGeneration,
+                      ) <=
+                      0))) {
+        throw const ProductDeviceRegistryEpochMismatchException();
+      }
+      final appliedAt = DateTime.fromMillisecondsSinceEpoch(
+        DateTime.now().toUtc().millisecondsSinceEpoch,
+        isUtc: true,
+      );
+      await transaction.insert(
+        'account_device_registry_epoch_reset_receipt',
+        <String, Object?>{
+          'account_user_id': reference.accountUserId,
+          'owner_identity_id': reference.ownerIdentityId,
+          'previous_did': reference.previousDid,
+          'current_did': reference.currentDid,
+          'binding_generation': reference.bindingGeneration,
+          'handle': authorization.handle,
+          'source_kind': productIdentityTransitionSourceKindWireName(
+            authorization.sourceKind,
+          ),
+          'source_id': authorization.sourceId,
+          'applied_at': appliedAt.millisecondsSinceEpoch,
+        },
+      );
+      await transaction.delete(
+        'account_device_registry_snapshot',
+        where: 'owner_identity_id = ?',
+        whereArgs: <Object?>[reference.ownerIdentityId],
+      );
+      await transaction.delete(
+        'account_domain_sync_state',
+        where: 'owner_identity_id = ? AND domain = ?',
+        whereArgs: <Object?>[
+          reference.ownerIdentityId,
+          ProductAccountDomain.deviceRegistry.storageValue,
+        ],
+      );
+      final epochValues = <String, Object?>{
+        'account_id': reference.accountUserId,
+        'current_did': reference.currentDid,
+        'binding_generation': reference.bindingGeneration,
+      };
+      if (existingEpoch == null) {
+        await transaction.insert(
+          'account_device_registry_epoch',
+          <String, Object?>{
+            'owner_identity_id': reference.ownerIdentityId,
+            ...epochValues,
+          },
+        );
+      } else {
+        await transaction.update(
+          'account_device_registry_epoch',
+          epochValues,
+          where: 'owner_identity_id = ?',
+          whereArgs: <Object?>[reference.ownerIdentityId],
+        );
+      }
+      return ProductDeviceRegistryEpochResetReceipt(
+        authorization: authorization,
+        appliedAt: appliedAt,
+      );
+    });
+  }
+
+  @override
+  Future<LegacyRegistryEpochAdoptionReceipt?>
+  loadLegacyRegistryEpochAdoptionReceipt({
+    required ProductAccountBinding binding,
+  }) async {
+    validateProductAccountBinding(binding);
+    final db = await _db;
+    await _assertAccountBinding(db, binding);
+    return _loadLegacyRegistryEpochAdoptionReceipt(db, binding);
+  }
+
+  @override
+  Future<LegacyRegistryEpochAdoptionReceipt> adoptLegacyDeviceRegistryEpoch(
+    LegacyRegistryEpochAdoptionAuthority authority,
+  ) async {
+    validateLegacyRegistryEpochAdoptionAuthority(authority);
+    return (await _db).transaction((transaction) async {
+      await _assertAccountBinding(transaction, authority.binding);
+      final existingReceipt = await _loadLegacyRegistryEpochAdoptionReceipt(
+        transaction,
+        authority.binding,
+      );
+      final existingEpoch = await _loadDeviceRegistryEpoch(
+        transaction,
+        authority.binding,
+      );
+      if (existingReceipt != null) {
+        if (existingReceipt.authority.matches(authority) &&
+            existingEpoch?.matches(authority.epoch) == true) {
+          return existingReceipt;
+        }
+        throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+      }
+      if (existingEpoch != null) {
+        throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+      }
+      final resetReceiptCount = Sqflite.firstIntValue(
+        await transaction.rawQuery(
+          'SELECT COUNT(*) FROM account_device_registry_epoch_reset_receipt '
+          'WHERE owner_identity_id = ?',
+          <Object?>[authority.ownerIdentityId],
+        ),
+      );
+      if (resetReceiptCount != 0) {
+        throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+      }
+      final state = await _loadDomainState(
+        transaction,
+        authority.binding,
+        ProductAccountDomain.deviceRegistry,
+      );
+      if (state == null) {
+        throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+      }
+      final rows = await transaction.query(
+        'account_device_registry_snapshot',
+        where:
+            'owner_identity_id = ? AND protocol_device_id = ? '
+            'AND auth_generation = ? AND registry_version = ?',
+        whereArgs: <Object?>[
+          authority.ownerIdentityId,
+          authority.protocolDeviceId,
+          authority.deviceAuthGeneration,
+          state.domainVersion,
+        ],
+      );
+      if (rows.length != 1 ||
+          !_isActiveRegistryPayload(rows.single['payload_json']?.toString())) {
+        throw const ProductLegacyRegistryEpochAdoptionMismatchException();
+      }
+      final adoptedAt = DateTime.fromMillisecondsSinceEpoch(
+        DateTime.now().toUtc().millisecondsSinceEpoch,
+        isUtc: true,
+      );
+      await transaction.insert(
+        'account_device_registry_epoch_adoption_receipt',
+        <String, Object?>{
+          'owner_identity_id': authority.ownerIdentityId,
+          'account_user_id': authority.accountUserId,
+          'current_did': authority.currentDid,
+          'binding_generation': authority.bindingGeneration,
+          'protocol_device_id': authority.protocolDeviceId,
+          'device_auth_generation': authority.deviceAuthGeneration,
+          'provenance_id': authority.provenanceId,
+          'adopted_at': adoptedAt.millisecondsSinceEpoch,
+        },
+      );
+      await transaction
+          .insert('account_device_registry_epoch', <String, Object?>{
+            'owner_identity_id': authority.ownerIdentityId,
+            'account_id': authority.accountUserId,
+            'current_did': authority.currentDid,
+            'binding_generation': authority.bindingGeneration,
+          });
+      return LegacyRegistryEpochAdoptionReceipt(
+        authority: authority,
+        adoptedAt: adoptedAt,
+      );
+    });
+  }
+
+  @override
   Future<void> replaceDeviceRegistrySnapshot(
     ProductDeviceRegistrySnapshot snapshot,
   ) async {
     validateProductDeviceRegistrySnapshot(snapshot);
     await (await _db).transaction((transaction) async {
       await _assertAccountBinding(transaction, snapshot.binding);
+      final existingEpoch = await _loadDeviceRegistryEpoch(
+        transaction,
+        snapshot.binding,
+      );
+      if (existingEpoch != null && !existingEpoch.matches(snapshot.epoch)) {
+        throw const ProductDeviceRegistryEpochMismatchException();
+      }
+      if (existingEpoch == null) {
+        final existingState = await _loadDomainState(
+          transaction,
+          snapshot.binding,
+          ProductAccountDomain.deviceRegistry,
+        );
+        if (existingState != null) {
+          throw const ProductDeviceRegistryEpochMismatchException();
+        }
+        await transaction
+            .insert('account_device_registry_epoch', <String, Object?>{
+              'owner_identity_id': snapshot.binding.ownerIdentityId,
+              'account_id': snapshot.binding.accountId,
+              'current_did': snapshot.epoch.currentDid,
+              'binding_generation': snapshot.epoch.bindingGeneration,
+            });
+      }
       await _assertNonRegressingDomainVersion(
         transaction,
         snapshot.binding,
@@ -1190,6 +1588,98 @@ CREATE TABLE IF NOT EXISTS canonical_conversation_overlay_migrations (
       }
       await _writeDomainState(transaction, snapshot.syncState);
     });
+  }
+
+  static Future<ProductDeviceRegistryEpoch?> _loadDeviceRegistryEpoch(
+    DatabaseExecutor db,
+    ProductAccountBinding binding,
+  ) async {
+    final rows = await db.query(
+      'account_device_registry_epoch',
+      where: 'owner_identity_id = ? AND account_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId, binding.accountId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    final epoch = ProductDeviceRegistryEpoch(
+      currentDid: rows.single['current_did']?.toString() ?? '',
+      bindingGeneration: rows.single['binding_generation']?.toString() ?? '',
+    );
+    validateProductDeviceRegistryEpoch(epoch);
+    return epoch;
+  }
+
+  static Future<ProductDeviceRegistryEpochResetReceipt?>
+  _loadDeviceRegistryEpochResetReceipt(
+    DatabaseExecutor db,
+    ProductDeviceRegistryEpochResetAuthorization authorization,
+  ) async {
+    final reference = authorization.reference;
+    final rows = await db.query(
+      'account_device_registry_epoch_reset_receipt',
+      where:
+          'account_user_id = ? AND owner_identity_id = ? '
+          'AND previous_did = ? AND current_did = ? '
+          'AND binding_generation = ? AND handle = ? '
+          'AND source_kind = ? AND source_id = ?',
+      whereArgs: <Object?>[
+        reference.accountUserId,
+        reference.ownerIdentityId,
+        reference.previousDid,
+        reference.currentDid,
+        reference.bindingGeneration,
+        authorization.handle,
+        productIdentityTransitionSourceKindWireName(authorization.sourceKind),
+        authorization.sourceId,
+      ],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return ProductDeviceRegistryEpochResetReceipt(
+      authorization: authorization,
+      appliedAt: DateTime.fromMillisecondsSinceEpoch(
+        int.parse(rows.single['applied_at'].toString()),
+        isUtc: true,
+      ),
+    );
+  }
+
+  static Future<LegacyRegistryEpochAdoptionReceipt?>
+  _loadLegacyRegistryEpochAdoptionReceipt(
+    DatabaseExecutor db,
+    ProductAccountBinding binding,
+  ) async {
+    final rows = await db.query(
+      'account_device_registry_epoch_adoption_receipt',
+      where: 'owner_identity_id = ? AND account_user_id = ?',
+      whereArgs: <Object?>[binding.ownerIdentityId, binding.accountId],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    final row = rows.single;
+    final authority = LegacyRegistryEpochAdoptionAuthority(
+      ownerIdentityId: row['owner_identity_id']?.toString() ?? '',
+      accountUserId: row['account_user_id']?.toString() ?? '',
+      currentDid: row['current_did']?.toString() ?? '',
+      bindingGeneration: row['binding_generation']?.toString() ?? '',
+      protocolDeviceId: row['protocol_device_id']?.toString() ?? '',
+      deviceAuthGeneration: row['device_auth_generation']?.toString() ?? '',
+      provenanceId: row['provenance_id']?.toString() ?? '',
+    );
+    validateLegacyRegistryEpochAdoptionAuthority(authority);
+    return LegacyRegistryEpochAdoptionReceipt(
+      authority: authority,
+      adoptedAt: DateTime.fromMillisecondsSinceEpoch(
+        int.parse(row['adopted_at'].toString()),
+        isUtc: true,
+      ),
+    );
   }
 
   static Future<ProductAgentInventorySnapshot?> _loadAgentInventorySnapshot(
@@ -1465,6 +1955,16 @@ void _assertRowsUseDomainVersion(
     if (row[column]?.toString() != domainVersion) {
       throw StateError('product_snapshot_row_version_mismatch');
     }
+  }
+}
+
+bool _isActiveRegistryPayload(String? payloadJson) {
+  if (payloadJson == null) return false;
+  try {
+    final value = jsonDecode(payloadJson);
+    return value is Map && value['status'] == 'active';
+  } on FormatException {
+    return false;
   }
 }
 
