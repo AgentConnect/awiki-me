@@ -9,6 +9,7 @@ import '../chat/chat_page.dart';
 import '../group/group_chat_navigation.dart';
 import '../group/group_list_page.dart';
 import '../profile/peer_profile_page.dart';
+import '../shared/compact_nested_navigator_back_scope.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import 'friends_navigation_provider.dart';
@@ -53,14 +54,15 @@ class _FriendsWorkspacePageState extends ConsumerState<FriendsWorkspacePage> {
     final navigation = ref.watch(friendsWorkspaceNavigationProvider);
     final controller = ref.read(friendsWorkspaceNavigationProvider.notifier);
     if (!responsive.supportsTwoPane) {
-      final handlesSystemBack =
+      final active =
           !AwikiShellNavigationScope.isPresent(context) ||
           ref.watch(shellDestinationProvider) == ShellDestination.contacts;
-      return NavigatorPopHandler<void>(
-        enabled: handlesSystemBack,
-        onPopWithResult: (_) {
-          _compactNavigatorKey.currentState?.pop<void>();
-        },
+      return CompactNestedNavigatorBackScope(
+        key: const Key('friends-compact-back-scope'),
+        active: active,
+        hasNestedRoute: navigation.showsCompactDetail,
+        navigatorKey: _compactNavigatorKey,
+        onMissingNestedRoute: controller.closeDetail,
         child: Navigator(
           key: _compactNavigatorKey,
           pages: <Page<void>>[

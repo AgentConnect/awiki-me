@@ -15,6 +15,7 @@ import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/sidebar_workspace.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -535,32 +536,66 @@ void main() {
 
     await tester.tap(find.byKey(const Key('friends-category-tab-groups')));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(
-        const Key('friends-group-tab-row:did:test:group:contacts-route'),
-      ),
+    final groupRow = find.byKey(
+      const Key('friends-group-tab-row:did:test:group:contacts-route'),
     );
-    await tester.pumpAndSettle();
 
-    expect(find.byType(ChatPage), findsOneWidget);
-    expect(
-      container.read(friendsWorkspaceNavigationProvider).detail,
-      FriendsWorkspaceDetail.groupChat,
-    );
-    expect(container.read(shellDestinationProvider), ShellDestination.contacts);
-    expect(container.read(selectedConversationProvider), isNull);
+    for (var round = 0; round < 3; round += 1) {
+      await tester.tap(groupRow);
+      await tester.pump();
 
-    await _simulateSystemBack(tester);
-    await tester.pumpAndSettle();
+      expect(find.byType(ChatPage), findsOneWidget, reason: 'round $round');
+      final backScope = tester.widget<CompactNestedNavigatorBackScope>(
+        find.byKey(const Key('friends-compact-back-scope')),
+      );
+      expect(backScope.active, isTrue, reason: 'round $round');
+      expect(backScope.hasNestedRoute, isTrue, reason: 'round $round');
+      expect(
+        container.read(friendsWorkspaceNavigationProvider).detail,
+        FriendsWorkspaceDetail.groupChat,
+        reason: 'round $round',
+      );
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.contacts,
+        reason: 'round $round',
+      );
+      expect(container.read(selectedConversationProvider), isNull);
 
-    expect(find.byType(ChatPage), findsNothing);
-    expect(find.byType(FriendsPage), findsOneWidget);
-    expect(find.text('Contacts Route Group'), findsOneWidget);
-    expect(
-      container.read(friendsWorkspaceNavigationProvider).detail,
-      FriendsWorkspaceDetail.overview,
-    );
-    expect(container.read(shellDestinationProvider), ShellDestination.contacts);
+      if (round == 0) {
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('chat-information-button')));
+        await tester.pumpAndSettle();
+        expect(find.text('群聊信息'), findsWidgets);
+
+        await _simulateSystemBack(tester);
+        await tester.pumpAndSettle();
+
+        expect(find.text('群聊信息'), findsNothing);
+        expect(find.byType(ChatPage), findsOneWidget);
+        expect(
+          container.read(friendsWorkspaceNavigationProvider).detail,
+          FriendsWorkspaceDetail.groupChat,
+        );
+      }
+
+      await _simulateSystemBack(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChatPage), findsNothing, reason: 'round $round');
+      expect(find.byType(FriendsPage), findsOneWidget, reason: 'round $round');
+      expect(find.text('Contacts Route Group'), findsOneWidget);
+      expect(
+        container.read(friendsWorkspaceNavigationProvider).detail,
+        FriendsWorkspaceDetail.overview,
+        reason: 'round $round',
+      );
+      expect(
+        container.read(shellDestinationProvider),
+        ShellDestination.contacts,
+        reason: 'round $round',
+      );
+    }
   });
 
   testWidgets('联系人消息按钮进入聊天后系统返回不会弹空后台联系人导航栈', (tester) async {

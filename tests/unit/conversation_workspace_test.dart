@@ -16,6 +16,7 @@ import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/agents/agent_visual_status.dart';
@@ -28,15 +29,19 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
+import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -3289,30 +3294,132 @@ void main() {
     final row = find.byKey(
       Key('conversation-row:${conversation.conversationId}'),
     );
-    await tester.tap(row);
-    await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ConversationWorkspacePage)),
     );
 
+    for (var round = 0; round < 5; round += 1) {
+      await tester.tap(row);
+      // Deliberately stop after the page reconciliation frame. The old
+      // NavigatorPopHandler needed one more frame for NavigationNotification
+      // to rebuild its PopScope and could leak this back to the root route.
+      await tester.pump();
+
+      expect(find.byType(ChatView), findsOneWidget, reason: 'round $round');
+      final backScope = tester.widget<CompactNestedNavigatorBackScope>(
+        find.byKey(const Key('conversation-compact-back-scope')),
+      );
+      expect(backScope.active, isTrue, reason: 'round $round');
+      expect(backScope.hasNestedRoute, isTrue, reason: 'round $round');
+      expect(
+        container.read(selectedConversationProvider),
+        conversation.conversationId,
+        reason: 'round $round',
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppShell), findsOneWidget, reason: 'round $round');
+      expect(find.byType(ChatView), findsNothing, reason: 'round $round');
+      expect(row, findsOneWidget, reason: 'round $round');
+      expect(
+        container.read(selectedConversationProvider),
+        isNull,
+        reason: 'round $round',
+      );
+      expect(
+        find.byKey(const Key('compact-bottom-navigation')),
+        findsOneWidget,
+        reason: 'round $round',
+      );
+    }
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('Android retained 非激活我页不消费消息页系统返回', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:retained-back-owner',
+      credentialName: 'retained-back.json',
+      displayName: 'Retained Back Owner',
+      handle: 'retained-back-owner',
+    );
+    const profile = UserProfile(
+      did: 'did:test:retained-back-owner',
+      displayName: 'Retained Back Owner',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'retained-back-owner',
+    );
+    final gateway = FakeAwikiGateway()
+      ..myProfile = profile
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        profile: profile,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+
+    await tester.tap(find.byKey(const Key('compact-nav-profile')));
+    await tester.pumpAndSettle();
+    container.read(profileRelationshipListTypeProvider.notifier).state =
+        FriendsRelationshipListType.following;
+    await tester.pumpAndSettle();
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+
+    container
+        .read(shellDestinationProvider.notifier)
+        .selectCompact(ShellDestination.messages);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+    );
+    await tester.pump();
     expect(find.byType(ChatView), findsOneWidget);
-    final popHandler = tester.widget<NavigatorPopHandler<void>>(
-      find.byKey(const Key('conversation-compact-pop-handler')),
-    );
-    expect(popHandler.enabled, isTrue);
-    expect(
-      container.read(selectedConversationProvider),
-      conversation.conversationId,
-    );
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
-    expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(ChatView), findsNothing);
-    expect(row, findsOneWidget);
     expect(container.read(selectedConversationProvider), isNull);
-    expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
+    expect(
+      container.read(profileRelationshipListTypeProvider),
+      FriendsRelationshipListType.following,
+    );
+
+    container
+        .read(shellDestinationProvider.notifier)
+        .selectCompact(ShellDestination.profile);
+    await tester.pumpAndSettle();
+    expect(find.byType(RelationshipListPage), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = null;
     tester.view.resetPhysicalSize();

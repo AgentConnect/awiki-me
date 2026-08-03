@@ -9,6 +9,7 @@ import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/compact_nested_navigator_back_scope.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
@@ -45,14 +46,16 @@ class _ConversationWorkspacePageState
       ref.watch(conversationListProvider).conversations,
     );
     if (!responsive.supportsTwoPane) {
-      final handlesSystemBack =
+      final active =
           !AwikiShellNavigationScope.isPresent(context) ||
           ref.watch(shellDestinationProvider) == ShellDestination.messages;
-      return NavigatorPopHandler<void>(
-        key: const Key('conversation-compact-pop-handler'),
-        enabled: handlesSystemBack,
-        onPopWithResult: (_) {
-          _compactNavigatorKey.currentState?.pop<void>();
+      return CompactNestedNavigatorBackScope(
+        key: const Key('conversation-compact-back-scope'),
+        active: active,
+        hasNestedRoute: selectedConversation != null,
+        navigatorKey: _compactNavigatorKey,
+        onMissingNestedRoute: () {
+          ref.read(selectedConversationProvider.notifier).clearSelection();
         },
         child: Navigator(
           key: _compactNavigatorKey,

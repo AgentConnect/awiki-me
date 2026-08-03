@@ -7,6 +7,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
 import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:flutter/cupertino.dart';
@@ -731,52 +732,82 @@ DID: did:wba:agent-connect.cn:user:empty:e1_profile_key
       findsOneWidget,
     );
 
-    await tester.tap(find.byKey(const Key('profile-following-stat-button')));
-    await tester.pumpAndSettle();
-    expect(find.byType(RelationshipListPage), findsOneWidget);
-    expect(
-      tester
-          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
-          .type,
-      FriendsRelationshipListType.following,
-    );
-    final followingTitle = tester.widget<Text>(find.text('我关注的'));
-    expect(followingTitle.style?.fontSize, 16);
-    expect(followingTitle.style?.fontWeight, FontWeight.w600);
-    expect(find.text('Following Profile'), findsOneWidget);
-    expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+    for (final entry
+        in <
+          ({
+            Key buttonKey,
+            FriendsRelationshipListType type,
+            String title,
+            String contact,
+          })
+        >[
+          (
+            buttonKey: const Key('profile-following-stat-button'),
+            type: FriendsRelationshipListType.following,
+            title: '我关注的',
+            contact: 'Following Profile',
+          ),
+          (
+            buttonKey: const Key('profile-followers-stat-button'),
+            type: FriendsRelationshipListType.followers,
+            title: '关注我的',
+            contact: 'Follower Profile',
+          ),
+        ]) {
+      for (var round = 0; round < 3; round += 1) {
+        await tester.tap(find.byKey(entry.buttonKey));
+        // Exercise the first page reconciliation frame, before a nested
+        // NavigationNotification-driven handler could rebuild.
+        await tester.pump();
 
-    await _simulateSystemBack(tester);
-    await tester.pumpAndSettle();
-    expect(find.byType(RelationshipListPage), findsNothing);
-    expect(
-      find.byKey(const Key('profile-following-stat-button')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
+        expect(
+          find.byType(RelationshipListPage),
+          findsOneWidget,
+          reason: '${entry.type} round $round',
+        );
+        expect(
+          tester
+              .widget<RelationshipListPage>(find.byType(RelationshipListPage))
+              .type,
+          entry.type,
+          reason: 'round $round',
+        );
+        final backScope = tester.widget<CompactNestedNavigatorBackScope>(
+          find.byKey(const Key('profile-compact-back-scope')),
+        );
+        expect(backScope.active, isTrue, reason: 'round $round');
+        expect(backScope.hasNestedRoute, isTrue, reason: 'round $round');
+        expect(
+          find.byKey(const Key('compact-bottom-navigation')),
+          findsNothing,
+        );
 
-    await tester.tap(find.byKey(const Key('profile-followers-stat-button')));
-    await tester.pumpAndSettle();
-    expect(find.byType(RelationshipListPage), findsOneWidget);
-    expect(
-      tester
-          .widget<RelationshipListPage>(find.byType(RelationshipListPage))
-          .type,
-      FriendsRelationshipListType.followers,
-    );
-    final followersTitle = tester.widget<Text>(find.text('关注我的'));
-    expect(followersTitle.style?.fontSize, 16);
-    expect(followersTitle.style?.fontWeight, FontWeight.w600);
-    expect(find.text('Follower Profile'), findsOneWidget);
+        if (round == 0) {
+          await tester.pumpAndSettle();
+          final title = tester.widget<Text>(find.text(entry.title));
+          expect(title.style?.fontSize, 16);
+          expect(title.style?.fontWeight, FontWeight.w600);
+          expect(find.text(entry.contact), findsOneWidget);
+        }
 
-    await tester.tap(find.byKey(const Key('relationship-list-back-button')));
-    await tester.pumpAndSettle();
-    expect(find.byType(RelationshipListPage), findsNothing);
-    expect(
-      find.byKey(const Key('profile-followers-stat-button')),
-      findsOneWidget,
-    );
-    expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
+        if (round == 2) {
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const Key('relationship-list-back-button')),
+          );
+        } else {
+          await _simulateSystemBack(tester);
+        }
+        await tester.pumpAndSettle();
+
+        expect(find.byType(RelationshipListPage), findsNothing);
+        expect(find.byKey(entry.buttonKey), findsOneWidget);
+        expect(
+          find.byKey(const Key('compact-bottom-navigation')),
+          findsOneWidget,
+        );
+      }
+    }
   });
 
   testWidgets('个人资料页按显示名称、完整 handle、DID 排列身份信息', (tester) async {

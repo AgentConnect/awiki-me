@@ -10,6 +10,7 @@ import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_top_bar.dart';
+import '../shared/compact_nested_navigator_back_scope.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
@@ -98,18 +99,15 @@ class _ProfileWorkspacePageState extends ConsumerState<ProfileWorkspacePage> {
     final responsive = context.awikiResponsive;
     final relationshipType = ref.watch(profileRelationshipListTypeProvider);
     if (!responsive.supportsTwoPane) {
-      final handlesSystemBack =
-          relationshipType != null &&
-          (!AwikiShellNavigationScope.isPresent(context) ||
-              ref.watch(shellDestinationProvider) == ShellDestination.profile);
-      return NavigatorPopHandler<void>(
-        enabled: handlesSystemBack,
-        onPopWithResult: (_) {
-          if (!handlesSystemBack) {
-            return;
-          }
-          _compactNavigatorKey.currentState?.pop<void>();
-        },
+      final active =
+          !AwikiShellNavigationScope.isPresent(context) ||
+          ref.watch(shellDestinationProvider) == ShellDestination.profile;
+      return CompactNestedNavigatorBackScope(
+        key: const Key('profile-compact-back-scope'),
+        active: active,
+        hasNestedRoute: relationshipType != null,
+        navigatorKey: _compactNavigatorKey,
+        onMissingNestedRoute: _closeRelationships,
         child: Navigator(
           key: _compactNavigatorKey,
           pages: <Page<void>>[
