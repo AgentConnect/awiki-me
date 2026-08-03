@@ -3296,6 +3296,10 @@ void main() {
     );
 
     expect(find.byType(ChatView), findsOneWidget);
+    final popHandler = tester.widget<NavigatorPopHandler<void>>(
+      find.byKey(const Key('conversation-compact-pop-handler')),
+    );
+    expect(popHandler.enabled, isTrue);
     expect(
       container.read(selectedConversationProvider),
       conversation.conversationId,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../shared/awiki_me_design.dart';
@@ -21,27 +22,40 @@ part 'parts/conversation_workspace_mac_layout_part.dart';
 part 'parts/conversation_workspace_panel_widgets_part.dart';
 part 'parts/conversation_workspace_agent_detail_part.dart';
 
-class ConversationWorkspacePage extends ConsumerWidget {
+class ConversationWorkspacePage extends ConsumerStatefulWidget {
   const ConversationWorkspacePage({super.key, this.listFooter});
 
   final Widget? listFooter;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ConversationWorkspacePage> createState() =>
+      _ConversationWorkspacePageState();
+}
+
+class _ConversationWorkspacePageState
+    extends ConsumerState<ConversationWorkspacePage> {
+  final GlobalKey<NavigatorState> _compactNavigatorKey =
+      GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final selectedConversation = _selectedConversation(
       ref.watch(selectedConversationProvider),
       ref.watch(conversationListProvider).conversations,
     );
     if (!responsive.supportsTwoPane) {
-      return PopScope<void>(
-        canPop: selectedConversation == null,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop && selectedConversation != null) {
-            ref.read(selectedConversationProvider.notifier).clearSelection();
-          }
+      final handlesSystemBack =
+          !AwikiShellNavigationScope.isPresent(context) ||
+          ref.watch(shellDestinationProvider) == ShellDestination.messages;
+      return NavigatorPopHandler<void>(
+        key: const Key('conversation-compact-pop-handler'),
+        enabled: handlesSystemBack,
+        onPopWithResult: (_) {
+          _compactNavigatorKey.currentState?.pop<void>();
         },
         child: Navigator(
+          key: _compactNavigatorKey,
           pages: <Page<void>>[
             CupertinoPage<void>(
               key: const ValueKey<String>('conversation-directory'),
@@ -85,11 +99,11 @@ class ConversationWorkspacePage extends ConsumerWidget {
       );
     }
     return AwikiSidebarWorkspace(
-      footer: listFooter,
+      footer: widget.listFooter,
       sidebar: ConversationListPage(
         embedded: true,
         selectedConversationId: selectedConversation?.conversationId,
-        bottomInset: listFooter == null ? 24 : 16,
+        bottomInset: widget.listFooter == null ? 24 : 16,
         onConversationSelected: (conversation) async {
           ref
               .read(selectedConversationProvider.notifier)

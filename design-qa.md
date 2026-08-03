@@ -869,3 +869,24 @@ final result: passed
 - 未发送消息、未改变关注关系、未清除 APP 数据；未提交、未推送、未合并、未发布。深色模式、最大动态字体、TalkBack/VoiceOver 实际朗读、横屏、其他 Android 尺寸、iOS 真机与正式签名发布保持 **UNVERIFIED**。
 
 final result: passed
+
+---
+
+## 会话详情返回手势退出 APP 修复复验（2026-08-03）
+
+> 本轮只修复消息工作区的系统返回栈，不改变会话详情或消息列表的视觉，因此不重新生成 ImageGen 方案，也不修改 Ardot 视觉真值。未使用 Superpowers 技能。
+
+### 根因与修复
+
+- P0110 修改前已复现：会话详情执行左边缘返回手势后，前台从 `ai.awiki.awikime.dev/ai.awiki.awikime.MainActivity` 直接切换到系统 Launcher，而不是恢复消息列表。
+- 消息工作区原先用外层 `PopScope` 手动清理内层 Navigator 的选择状态；组件测试的普通返回事件可以通过，但 Android 真机预测返回手势仍可能把根 Activity 一并弹出。
+- 紧凑消息工作区现在使用 Flutter 专用于嵌套 Navigator 的 `NavigatorPopHandler`，系统手势先弹出会话页，再由 `onDidRemovePage` 清理当前会话。处理器只在“消息”Tab 激活时启用，不会干扰联系人等保留在后台的 Tab 导航栈。
+
+### 自动化与 P0110
+
+- 三条定向回归均通过：会话详情返回消息列表、聊天信息/用户信息逐层返回、联系人消息入口返回不破坏联系人栈；消息工作区完整测试 `52/52`、开屏测试 `7/7` 通过，相关 `flutter analyze` 为 `No issues found`，`git diff --check` 通过。完整回归同时发现并收口了英文开屏长文案沿用中文固定版式导致的溢出，英文或放大字体现在自动使用自适应布局。
+- P0110 使用保留数据覆盖安装；包名与版本为 `ai.awiki.awikime.dev` / `0.1.13+23`，`firstInstallTime` 保持 `2026-07-30 15:58:45`，`lastUpdateTime` 为 `2026-08-03 16:22:29`。APK SHA-256 为 `099ff1761f927b03d4bb2a9b4766f9f0658f4633347946208ff88213a8977dc9`。
+- 同一路径连续执行 4 轮“打开 newhandle1 会话 → 左边缘返回”；每轮都恢复消息标题、搜索会话、会话列表和底部四 Tab，前台 Activity 始终保持 AWiki Me。三轮重复截图汇总为 `.design-references/conversation-back-fix-20260803/after/repeat-contact-sheet.png`。
+- APP 最终停留在消息列表；没有发送消息、改变联系人关系或清除 APP 数据。其他 Android 尺寸、iOS 真机与正式签名发布保持 **UNVERIFIED**。
+
+final result: passed

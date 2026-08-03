@@ -79,7 +79,16 @@ class _AwikiMeStartupSplashState extends State<AwikiMeStartupSplash>
         backgroundColor: background,
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final locale =
+                Localizations.maybeLocaleOf(context) ??
+                View.of(context).platformDispatcher.locale;
+            final usesChineseReference =
+                locale.languageCode.toLowerCase() == 'zh';
+            final usesStandardTextScale =
+                MediaQuery.textScalerOf(context).scale(1) <= 1.1;
             final portraitReferenceLayout =
+                usesChineseReference &&
+                usesStandardTextScale &&
                 constraints.maxHeight >= 700 &&
                 constraints.maxWidth <= constraints.maxHeight;
             return Semantics(

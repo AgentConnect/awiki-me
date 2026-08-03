@@ -247,4 +247,21 @@ void main() {
     expect(find.byType(SingleChildScrollView), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('英文开屏使用自适应布局且长文案不溢出', (tester) async {
+    _setTestViewSize(tester, const Size(390, 844));
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        locale: const Locale('en'),
+        home: const AwikiMeStartupSplash(),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('AWiki Me'), findsOneWidget);
+    expect(find.text('Secure collaboration'), findsOneWidget);
+    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
