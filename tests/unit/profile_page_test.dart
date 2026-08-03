@@ -299,13 +299,28 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('profile-homepage-details')), findsNothing);
-    expect(
-      tester.getRect(navigationGroup),
-      const Rect.fromLTWH(0, 354, 390, 212),
-    );
     expect(find.byKey(const Key('profile-identity-document')), findsOneWidget);
     expect(find.byType(IdentityDocumentContent), findsOneWidget);
     expect(find.text('Independent profile body'), findsOneWidget);
+    expect(find.text('身份卡'), findsOneWidget);
+    final expandedIdentityRowRect = tester.getRect(
+      find.byKey(const Key('profile-identity-document-row')),
+    );
+    final identityDetailsRect = tester.getRect(
+      find.byKey(const Key('profile-identity-document')),
+    );
+    final expandedDividerRect = tester.getRect(
+      find.byKey(const Key('profile-navigation-divider')),
+    );
+    final expandedSettingsRect = tester.getRect(
+      find.byKey(const Key('profile-settings-row')),
+    );
+    expect(identityDetailsRect.left, 0);
+    expect(identityDetailsRect.width, 390);
+    expect(identityDetailsRect.top, expandedIdentityRowRect.bottom);
+    expect(expandedDividerRect.top, identityDetailsRect.bottom);
+    expect(expandedSettingsRect.top, expandedDividerRect.bottom);
+    expect(tester.getRect(navigationGroup).bottom, expandedSettingsRect.bottom);
     expect(
       tester
           .widget<Icon>(

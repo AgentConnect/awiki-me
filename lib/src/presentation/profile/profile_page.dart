@@ -119,25 +119,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         responsive.isCompact &&
         identityDocumentExpanded &&
         !hasIdentityDocument;
-    final hasHomepage = homepageUrl.trim().isNotEmpty;
-    var compactNavigationHeight = hasHomepage ? 212.0 : 159.0;
-    if (_compactExpandedSection == _CompactProfileSection.did) {
-      compactNavigationHeight += 84;
-    } else if (_compactExpandedSection == _CompactProfileSection.homepage &&
-        hasHomepage) {
-      compactNavigationHeight += 64;
-    } else if (showCompactIdentityEmptyState) {
-      compactNavigationHeight += 28;
-    }
 
     final profileBody = SelectionArea(
       child: ListView(
         shrinkWrap: widget.shrinkWrap,
         padding: responsive.isCompact
             ? EdgeInsets.fromLTRB(
-                16,
+                0,
                 40,
-                16,
+                0,
                 widget.embedded ? widget.bottomInset : 88,
               )
             : EdgeInsets.fromLTRB(
@@ -155,95 +145,77 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   if (responsive.isCompact) ...<Widget>[
-                    _CompactProfileSummary(
-                      displayName: displayName,
-                      handle: compactHandle.isEmpty
-                          ? displayName
-                          : compactHandle,
-                      avatarUri: profile.avatarUri,
-                      isSaving: state.isSaving,
-                      onEdit: () => _showEditProfileDialog(context, profile),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _CompactProfileSummary(
+                        displayName: displayName,
+                        handle: compactHandle.isEmpty
+                            ? displayName
+                            : compactHandle,
+                        avatarUri: profile.avatarUri,
+                        isSaving: state.isSaving,
+                        onEdit: () => _showEditProfileDialog(context, profile),
+                      ),
                     ),
                     const SizedBox(height: 13),
-                    SelectionContainer.disabled(
-                      child: SizedBox(
-                        height: 44,
-                        child: _CompactProfileStatistics(
-                          followersCount: friendsState.followers.length,
-                          followingCount: friendsState.following.length,
-                          onFollowingTap: widget.onFollowingTap,
-                          onFollowersTap: widget.onFollowersTap,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: SelectionContainer.disabled(
+                        child: SizedBox(
+                          height: 44,
+                          child: _CompactProfileStatistics(
+                            followersCount: friendsState.followers.length,
+                            followingCount: friendsState.following.length,
+                            onFollowingTap: widget.onFollowingTap,
+                            onFollowersTap: widget.onFollowersTap,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 25),
                     SelectionContainer.disabled(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final fullWidth = constraints.maxWidth + 32;
-                          return SizedBox(
-                            height: compactNavigationHeight,
-                            child: OverflowBox(
-                              minWidth: fullWidth,
-                              maxWidth: fullWidth,
-                              minHeight: compactNavigationHeight,
-                              maxHeight: compactNavigationHeight,
-                              child: _CompactProfileNavigationGroup(
-                                navigationHeight: compactNavigationHeight,
-                                did: profile.did,
-                                homepageUrl: homepageUrl,
-                                didTitle: 'DID',
-                                homepageTitle:
-                                    context.l10n.profileHomepageLabel,
-                                identityTitle:
-                                    context.l10n.chatPeerInfoIdentityCard,
-                                settingsTitle: context.l10n.settingsTitle,
-                                expandedSection: _compactExpandedSection,
-                                showEmptyState: showCompactIdentityEmptyState,
-                                onDidTap: () => setState(
-                                  () => _compactExpandedSection =
-                                      _compactExpandedSection ==
-                                          _CompactProfileSection.did
-                                      ? null
-                                      : _CompactProfileSection.did,
-                                ),
-                                onHomepageTap: () => setState(
-                                  () => _compactExpandedSection =
-                                      _compactExpandedSection ==
-                                          _CompactProfileSection.homepage
-                                      ? null
-                                      : _CompactProfileSection.homepage,
-                                ),
-                                onOpenHomepage: () =>
-                                    _openHomepage(homepageUrl),
-                                onIdentityTap: () => setState(
-                                  () => _compactExpandedSection =
-                                      _compactExpandedSection ==
-                                          _CompactProfileSection.identity
-                                      ? null
-                                      : _CompactProfileSection.identity,
-                                ),
-                                onSettingsTap: () => _openSettings(context),
-                              ),
-                            ),
-                          );
-                        },
+                      child: _CompactProfileNavigationGroup(
+                        did: profile.did,
+                        homepageUrl: homepageUrl,
+                        didTitle: 'DID',
+                        homepageTitle: context.l10n.profileHomepageLabel,
+                        identityTitle: context.l10n.chatPeerInfoIdentityCard,
+                        settingsTitle: context.l10n.settingsTitle,
+                        expandedSection: _compactExpandedSection,
+                        showEmptyState: showCompactIdentityEmptyState,
+                        identityDetails:
+                            identityDocumentExpanded && hasIdentityDocument
+                            ? _CompactProfileIdentityDetails(
+                                content: identityDocumentContent,
+                                emptyText: context.l10n.profileEmpty,
+                                tags: profile.tags,
+                              )
+                            : null,
+                        onDidTap: () => setState(
+                          () => _compactExpandedSection =
+                              _compactExpandedSection ==
+                                  _CompactProfileSection.did
+                              ? null
+                              : _CompactProfileSection.did,
+                        ),
+                        onHomepageTap: () => setState(
+                          () => _compactExpandedSection =
+                              _compactExpandedSection ==
+                                  _CompactProfileSection.homepage
+                              ? null
+                              : _CompactProfileSection.homepage,
+                        ),
+                        onOpenHomepage: () => _openHomepage(homepageUrl),
+                        onIdentityTap: () => setState(
+                          () => _compactExpandedSection =
+                              _compactExpandedSection ==
+                                  _CompactProfileSection.identity
+                              ? null
+                              : _CompactProfileSection.identity,
+                        ),
+                        onSettingsTap: () => _openSettings(context),
                       ),
                     ),
-                    if (identityDocumentExpanded &&
-                        hasIdentityDocument) ...<Widget>[
-                      const SizedBox(height: 14),
-                      IdentityDocumentCard(
-                        key: const Key('profile-identity-document'),
-                        title: context.l10n.chatPeerInfoIdentityCard,
-                        child: IdentityDocumentContent(
-                          content: identityDocumentContent,
-                          emptyText: context.l10n.profileEmpty,
-                          tags: profile.tags,
-                          emptyState: const SizedBox.shrink(),
-                        ),
-                      ),
-                    ],
                   ] else ...<Widget>[
                     IdentityProfileCard(
                       key: const Key('profile-identity-card'),
@@ -720,7 +692,6 @@ String _compactCountWithSuffix(double value, String suffix) {
 
 class _CompactProfileNavigationGroup extends StatelessWidget {
   const _CompactProfileNavigationGroup({
-    required this.navigationHeight,
     required this.did,
     required this.homepageUrl,
     required this.didTitle,
@@ -729,6 +700,7 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
     required this.settingsTitle,
     required this.expandedSection,
     required this.showEmptyState,
+    required this.identityDetails,
     required this.onDidTap,
     required this.onHomepageTap,
     required this.onOpenHomepage,
@@ -736,7 +708,6 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
     required this.onSettingsTap,
   });
 
-  final double navigationHeight;
   final String did;
   final String homepageUrl;
   final String didTitle;
@@ -745,6 +716,7 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
   final String settingsTitle;
   final _CompactProfileSection? expandedSection;
   final bool showEmptyState;
+  final Widget? identityDetails;
   final VoidCallback onDidTap;
   final VoidCallback onHomepageTap;
   final VoidCallback onOpenHomepage;
@@ -761,7 +733,7 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
     final identityExpanded = expandedSection == _CompactProfileSection.identity;
     return SizedBox(
       key: const Key('profile-navigation-group'),
-      height: navigationHeight,
+      width: double.infinity,
       child: Column(
         children: <Widget>[
           Container(
@@ -829,6 +801,7 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
             isExpanded: identityExpanded,
             onTap: onIdentityTap,
           ),
+          if (identityDetails != null) identityDetails!,
           if (showEmptyState)
             Container(
               key: const Key('profile-identity-empty-state'),
@@ -962,6 +935,35 @@ class _CompactProfileHomepageDetails extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CompactProfileIdentityDetails extends StatelessWidget {
+  const _CompactProfileIdentityDetails({
+    required this.content,
+    required this.emptyText,
+    required this.tags,
+  });
+
+  final String content;
+  final String emptyText;
+  final List<String> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Container(
+      key: const Key('profile-identity-document'),
+      width: double.infinity,
+      color: theme.subtleSurface,
+      padding: const EdgeInsets.fromLTRB(36, 14, 16, 16),
+      child: IdentityDocumentContent(
+        content: content,
+        emptyText: emptyText,
+        tags: tags,
+        emptyState: const SizedBox.shrink(),
       ),
     );
   }
