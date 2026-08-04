@@ -127,22 +127,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   if (responsive.isCompact) ...<Widget>[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _CompactProfileSummary(
-                        displayName: displayName,
-                        bio: profile.bio,
-                        tags: profile.tags,
-                        avatarUri: profile.avatarUri,
-                        isSaving: state.isSaving,
-                        onEdit: () => _showEditProfileDialog(context, profile),
-                        followersCount: friendsState.followers.length,
-                        followingCount: friendsState.following.length,
-                        onFollowingTap: widget.onFollowingTap,
-                        onFollowersTap: widget.onFollowersTap,
-                      ),
+                    _CompactProfileSummary(
+                      displayName: displayName,
+                      bio: profile.bio,
+                      tags: profile.tags,
+                      avatarUri: profile.avatarUri,
+                      isSaving: state.isSaving,
+                      onEdit: () => _showEditProfileDialog(context, profile),
+                      followersCount: friendsState.followers.length,
+                      followingCount: friendsState.following.length,
+                      onFollowingTap: widget.onFollowingTap,
+                      onFollowersTap: widget.onFollowersTap,
                     ),
-                    const SizedBox(height: 20),
                     SelectionContainer.disabled(
                       child: _CompactProfileNavigationGroup(
                         did: profile.did,
@@ -506,11 +502,7 @@ class _CompactProfileSummary extends StatelessWidget {
         .toList(growable: false);
     return Container(
       key: const Key('profile-compact-summary'),
-      decoration: BoxDecoration(
-        color: theme.subtleSurface,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      clipBehavior: Clip.antiAlias,
+      color: theme.subtleSurface,
       child: Column(
         children: <Widget>[
           SelectionContainer.disabled(
@@ -518,11 +510,8 @@ class _CompactProfileSummary extends StatelessWidget {
               key: const Key('profile-edit-button'),
               onTap: isSaving ? null : onEdit,
               semanticLabel: context.l10n.profileEditTitle,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+                padding: const EdgeInsets.fromLTRB(32, 16, 16, 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: <Widget>[
@@ -598,7 +587,7 @@ class _CompactProfileSummary extends StatelessWidget {
           Container(
             key: const Key('profile-statistics-top-divider'),
             height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
+            margin: const EdgeInsets.symmetric(horizontal: 24),
             color: theme.border,
           ),
           SelectionContainer.disabled(

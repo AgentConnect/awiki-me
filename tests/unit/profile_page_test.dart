@@ -119,6 +119,16 @@ void main() {
     );
     expect(find.byKey(const Key('profile-edit-chevron')), findsOneWidget);
     expect(find.byKey(const Key('profile-statistics-divider')), findsNothing);
+    expect(
+      tester.getRect(find.byKey(const Key('profile-compact-summary'))).left,
+      0,
+    );
+    expect(
+      tester
+          .widget<Container>(find.byKey(const Key('profile-compact-summary')))
+          .decoration,
+      isNull,
+    );
     expect(find.byKey(const Key('profile-handle-value')), findsNothing);
     expect(find.text('身份卡'), findsNothing);
     expect(
