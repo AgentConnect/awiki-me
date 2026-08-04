@@ -179,12 +179,14 @@ class PeerProfileController extends StateNotifier<PeerProfileState> {
     if (!_isActionOperationCurrent(operation)) {
       return;
     }
+    final remainsFollower =
+        state.relationship == 'friend' || state.relationship == 'follower';
     state = state.copyWith(isActionBusy: true);
     try {
       await ref.read(friendsProvider.notifier).unfollow(did);
       if (_isActionOperationCurrent(operation)) {
         state = state.copyWith(
-          relationship: state.relationship == 'friend' ? 'follower' : 'none',
+          relationship: remainsFollower ? 'follower' : 'none',
         );
       }
     } catch (error) {

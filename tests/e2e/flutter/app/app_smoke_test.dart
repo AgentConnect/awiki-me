@@ -29,9 +29,10 @@ import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey, SystemChannels;
+import 'package:flutter/services.dart'
+    show JSONMessageCodec, LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart'
-    show AppLifecycleState, Key, ListView, Size, Text;
+    show AppLifecycleState, Key, ListView, MediaQuery, Size, Text;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -199,6 +200,120 @@ void main() {
 
     expect(find.byType(AppShell), findsOneWidget);
     expect(find.byType(OnboardingPage), findsNothing);
+  });
+
+  testWidgets('Android 从自己的消息头像返回列表后我页保持可见', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'default',
+      handle: 'me',
+      displayName: 'Me',
+      jwtToken: 'test-jwt',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:did:test:me:did:test:peer',
+      conversationId: 'dm:did:test:me:did:test:peer',
+      displayName: 'Profile Return Peer',
+      lastMessagePreview: 'hello from me',
+      lastMessageAt: DateTime(2026, 8, 3, 10),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:peer',
+    );
+    final ownMessage = ChatMessage(
+      localId: 'smoke-own-message-profile-return',
+      remoteId: 'smoke-own-message-profile-return',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: session.did,
+      senderName: session.displayName,
+      receiverDid: conversation.targetDid,
+      content: 'hello from me',
+      createdAt: conversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.gateway
+      ..conversations = <ConversationSummary>[conversation]
+      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:peer': <ChatMessage>[ownMessage],
+      }
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:test:peer': <ChatMessage>[ownMessage],
+      };
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          providerOverrides: <Override>[
+            ...harness.providerOverrides,
+            conversationListProvider.overrideWith(
+              (ref) => _StaticConversationListController(
+                ref,
+                <ConversationSummary>[conversation],
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppShell), findsOneWidget);
+      expect(find.byType(OnboardingPage), findsNothing);
+      expect(
+        MediaQuery.sizeOf(tester.element(find.byType(AppShell))).width,
+        lessThan(720),
+      );
+      expect(
+        find.byKey(const Key('compact-bottom-navigation')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('compact-nav-profile')));
+      await _pumpSmokeFrame(tester);
+      expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('compact-nav-messages')));
+      await _pumpSmokeFrame(tester);
+      await tester.tap(
+        find.byKey(Key('conversation-row:${conversation.conversationId}')),
+      );
+      await _pumpSmokeFrame(tester);
+      final ownAvatar = find.byKey(
+        const Key('chat-message-avatar:smoke-own-message-profile-return:mine'),
+      );
+      expect(ownAvatar, findsOneWidget);
+      await tester.tap(ownAvatar);
+      await _pumpSmokeFrame(tester);
+      expect(find.text('我的信息'), findsOneWidget);
+
+      await _simulateSystemBack(tester);
+      await tester.pumpAndSettle();
+      expect(find.text('我的信息'), findsNothing);
+      expect(ownAvatar, findsOneWidget);
+
+      await _simulateSystemBack(tester);
+      await tester.pumpAndSettle();
+      expect(ownAvatar, findsNothing);
+      expect(
+        find.byKey(Key('conversation-row:${conversation.conversationId}')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const Key('compact-nav-profile')));
+      await _pumpSmokeFrame(tester);
+      expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    }
   });
 
   testWidgets(
@@ -1318,6 +1433,16 @@ class _SmokeSkillOnboardingPort implements SkillOnboardingPort {
 Future<void> _pumpSmokeFrame(WidgetTester tester) async {
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> _simulateSystemBack(WidgetTester tester) {
+  return tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    'flutter/navigation',
+    const JSONMessageCodec().encodeMessage(<String, dynamic>{
+      'method': 'popRoute',
+    }),
+    (_) {},
+  );
 }
 
 Future<void> _tapFirstFound(

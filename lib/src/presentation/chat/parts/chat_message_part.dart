@@ -915,6 +915,137 @@ class _MessageAvatar extends StatelessWidget {
   }
 }
 
+class _ChatBubbleShapeBorder extends ShapeBorder {
+  const _ChatBubbleShapeBorder({
+    required this.isMine,
+    required this.radius,
+    required this.tailExtent,
+    required this.side,
+  });
+
+  final bool isMine;
+  final double radius;
+  final double tailExtent;
+  final BorderSide side;
+
+  @override
+  EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
+
+  @override
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) {
+    return _buildPath(rect.deflate(side.width));
+  }
+
+  @override
+  Path getOuterPath(Rect rect, {TextDirection? textDirection}) {
+    return _buildPath(rect);
+  }
+
+  Path _buildPath(Rect rect) {
+    final width = rect.width;
+    final height = rect.height;
+    final resolvedTail = tailExtent.clamp(0.0, width / 3).toDouble();
+    final bodyWidth = width - resolvedTail;
+    final maxRadiusByHeight = ((height - 9) / 2).clamp(0.0, height / 2);
+    final maxRadius = bodyWidth < height ? bodyWidth / 2 : maxRadiusByHeight;
+    final resolvedRadius = radius.clamp(0.0, maxRadius).toDouble();
+    final joinHalfHeight = (resolvedTail * 0.8).clamp(4.0, 5.0);
+    final minTailCenter = resolvedRadius + joinHalfHeight;
+    final maxTailCenter = height - resolvedRadius - joinHalfHeight;
+    final preferredTailCenter = resolvedRadius + 4;
+    final tailCenter = maxTailCenter >= minTailCenter
+        ? preferredTailCenter.clamp(minTailCenter, maxTailCenter).toDouble()
+        : height / 2;
+    final bodyLeft = resolvedTail;
+    final bodyRight = width;
+    const tipX = 1.0;
+
+    double x(double localX) =>
+        isMine ? rect.right - localX : rect.left + localX;
+    double y(double localY) => rect.top + localY;
+
+    return Path()
+      ..moveTo(x(bodyLeft + resolvedRadius), y(0))
+      ..lineTo(x(bodyRight - resolvedRadius), y(0))
+      ..quadraticBezierTo(x(bodyRight), y(0), x(bodyRight), y(resolvedRadius))
+      ..lineTo(x(bodyRight), y(height - resolvedRadius))
+      ..quadraticBezierTo(
+        x(bodyRight),
+        y(height),
+        x(bodyRight - resolvedRadius),
+        y(height),
+      )
+      ..lineTo(x(bodyLeft + resolvedRadius), y(height))
+      ..quadraticBezierTo(
+        x(bodyLeft),
+        y(height),
+        x(bodyLeft),
+        y(height - resolvedRadius),
+      )
+      ..lineTo(x(bodyLeft), y(tailCenter + joinHalfHeight))
+      ..cubicTo(
+        x(bodyLeft - 0.8),
+        y(tailCenter + joinHalfHeight - 0.3),
+        x(tipX + 2.8),
+        y(tailCenter + 2.8),
+        x(tipX + 1.3),
+        y(tailCenter + 1.3),
+      )
+      ..quadraticBezierTo(
+        x(tipX - 0.2),
+        y(tailCenter),
+        x(tipX + 1.3),
+        y(tailCenter - 1.3),
+      )
+      ..cubicTo(
+        x(tipX + 2.8),
+        y(tailCenter - 2.8),
+        x(bodyLeft - 0.8),
+        y(tailCenter - joinHalfHeight + 0.3),
+        x(bodyLeft),
+        y(tailCenter - joinHalfHeight),
+      )
+      ..lineTo(x(bodyLeft), y(resolvedRadius))
+      ..quadraticBezierTo(x(bodyLeft), y(0), x(bodyLeft + resolvedRadius), y(0))
+      ..close();
+  }
+
+  @override
+  void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
+    if (side.style == BorderStyle.none || side.width <= 0) {
+      return;
+    }
+    canvas.drawPath(
+      getOuterPath(rect, textDirection: textDirection),
+      side.toPaint()
+        ..isAntiAlias = true
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  ShapeBorder scale(double t) {
+    return _ChatBubbleShapeBorder(
+      isMine: isMine,
+      radius: radius * t,
+      tailExtent: tailExtent * t,
+      side: side.scale(t),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ChatBubbleShapeBorder &&
+        other.isMine == isMine &&
+        other.radius == radius &&
+        other.tailExtent == tailExtent &&
+        other.side == side;
+  }
+
+  @override
+  int get hashCode => Object.hash(isMine, radius, tailExtent, side);
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -1228,6 +1359,23 @@ class _MessageBubble extends StatelessWidget {
             onSaveImage: onSaveImage,
             isDownloading: isDownloading,
           );
+    final bubbleColor = attachment != null
+        ? theme.surface
+        : isMine
+        ? theme.outgoingMessage
+        : theme.surface;
+    final bubbleBorderColor = isMine
+        ? AwikiMePalette.brandAccent.withValues(alpha: 0.28)
+        : theme.border;
+    final bubbleRadius = responsive.displayScaled(16);
+    final bubbleTailExtent = responsive.displayScaled(6);
+    final bubbleShape = _ChatBubbleShapeBorder(
+      isMine: isMine,
+      radius: bubbleRadius,
+      tailExtent: bubbleTailExtent,
+      side: BorderSide(color: bubbleBorderColor),
+    );
+    final horizontalPadding = responsive.displayScaled(13);
     final bubble = Column(
       crossAxisAlignment: isMine
           ? CrossAxisAlignment.end
@@ -1243,27 +1391,16 @@ class _MessageBubble extends StatelessWidget {
             constraints: BoxConstraints(
               maxWidth: responsive.displayScaled(300),
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: responsive.displayScaled(13),
-              vertical: responsive.displayScaled(9),
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding + (isMine ? 0 : bubbleTailExtent),
+              responsive.displayScaled(9),
+              horizontalPadding + (isMine ? bubbleTailExtent : 0),
+              responsive.displayScaled(9),
             ),
-            decoration: BoxDecoration(
-              color: attachment != null
-                  ? theme.surface
-                  : isMine
-                  ? theme.outgoingMessage
-                  : theme.incomingMessage,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(
-                  responsive.displayScaled(isMine ? 16 : 4),
-                ),
-                topRight: Radius.circular(
-                  responsive.displayScaled(isMine ? 4 : 16),
-                ),
-                bottomLeft: Radius.circular(responsive.displayScaled(16)),
-                bottomRight: Radius.circular(responsive.displayScaled(16)),
-              ),
-              boxShadow: attachment != null
+            decoration: ShapeDecoration(
+              color: bubbleColor,
+              shape: bubbleShape,
+              shadows: attachment != null
                   ? const <BoxShadow>[
                       BoxShadow(
                         color: Color(0x0D000000),

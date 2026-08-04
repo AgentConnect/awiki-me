@@ -499,8 +499,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get conversationsDeleteTitle => '删除会话';
 
   @override
-  String get conversationsDeleteContent =>
-      '会话将从最近列表移除，历史消息仍会保留。重新打开或收到新消息后，会话会再次出现在列表中。';
+  String get conversationsDeleteContent => '从最近列表移除该会话';
+
+  @override
+  String get conversationsDeleteClearHistory => '同时清空历史消息';
+
+  @override
+  String get conversationsDeleteClearHistoryUnavailable => '单会话历史清理待 Core 支持';
+
+  @override
+  String get conversationsSwipeDelete => '删除';
 
   @override
   String conversationsUnreadTag(Object count) {
@@ -614,6 +622,36 @@ class AppLocalizationsZh extends AppLocalizations {
   String get friendsTitle => '联系人';
 
   @override
+  String get friendsSearchPlaceholder => '搜索联系人';
+
+  @override
+  String get friendsSearchGroupsPlaceholder => '搜索群组';
+
+  @override
+  String get friendsTabAll => '全部';
+
+  @override
+  String get friendsTabFollowing => '关注';
+
+  @override
+  String get friendsTabFollowers => '粉丝';
+
+  @override
+  String get friendsTabGroups => '群组';
+
+  @override
+  String get friendsAllEmpty => '还没有联系人。';
+
+  @override
+  String get friendsNoResults => '没有找到相关联系人。';
+
+  @override
+  String get friendsMessage => '消息';
+
+  @override
+  String get friendsFollowBack => '回关';
+
+  @override
   String get friendsGroups => '群组';
 
   @override
@@ -650,6 +688,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileMeTitle => '我';
 
   @override
+  String get profileMyInformationTitle => '我的信息';
+
+  @override
+  String get profileIdentitySectionTitle => '身份信息';
+
+  @override
+  String get profileIdentityCardSubtitle => '完整资料，让协作更可信';
+
+  @override
+  String get profileSettingsSubtitle => '账号、设备与应用偏好';
+
+  @override
   String get profileFollowers => '粉丝';
 
   @override
@@ -659,7 +709,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileGroups => '群组';
 
   @override
-  String get profileEmpty => '暂无 profile';
+  String get profileEmpty => '暂无资料';
 
   @override
   String get profileEditTitle => '编辑个人资料';
@@ -668,7 +718,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileBioPlaceholder => '个人简介';
 
   @override
+  String get profileBioHint => '介绍一下自己';
+
+  @override
+  String get profileAvatarLabel => '头像';
+
+  @override
+  String get profileAvatarChange => '更换';
+
+  @override
+  String get profileTagsLabel => '标签';
+
+  @override
+  String get profileTagsLimit => '最多 5 个标签';
+
+  @override
   String get profileTagsPlaceholder => '标签，使用英文逗号分隔';
+
+  @override
+  String get profileTagAdd => '添加';
+
+  @override
+  String get profileTagInputPlaceholder => '输入标签';
+
+  @override
+  String profileTagRemove(String tag) {
+    return '删除标签 $tag';
+  }
 
   @override
   String get profileHomepageLabel => '主页';
@@ -678,6 +754,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsTitle => '设置';
+
+  @override
+  String get settingsAccountDevicesSection => '账户与设备';
+
+  @override
+  String get settingsAppSection => '应用';
+
+  @override
+  String get settingsSecuritySection => '安全';
 
   @override
   String get settingsDevices => '设备';
@@ -931,6 +1016,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageSystem => '跟随系统';
 
   @override
+  String get settingsLanguageSystemSubtitle => '使用设备语言';
+
+  @override
   String get settingsLanguageZhHans => '简体中文';
 
   @override
@@ -1079,8 +1167,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return '将退出当前登录，并删除本地凭证 \"$credentialName\"。删除后需要重新导入或恢复身份才能再次使用该凭证。确定继续吗？';
+    return '退出 $credentialName 并删除本机凭证';
   }
+
+  @override
+  String get settingsDeleteCredentialConfirmHint => '不会注销身份或影响其他设备';
 
   @override
   String get settingsDeleteCredentialConfirmAction => '退出并删除';
@@ -1632,10 +1723,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get peerProfileSendMessage => '发消息';
 
   @override
-  String get peerProfileUnfollow => '取消关注';
+  String get peerProfileUnfollow => '取关';
 
   @override
-  String get peerProfileDeleteThread => '删除本地聊天记录';
+  String get peerProfileDeleteThread => '清空聊天记录';
+
+  @override
+  String get peerProfileDeleteThreadConfirmTitle => '清空聊天记录？';
+
+  @override
+  String get peerProfileDeleteThreadConfirmMessage => '将清空与该用户的本地聊天记录';
 
   @override
   String get peerProfileUnfollowed => '已取消关注';
@@ -1645,6 +1742,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get agentPageTitle => '智能体';
+
+  @override
+  String get agentMineSection => '我的智能体';
+
+  @override
+  String get agentInstallDaemonAction => '安装新的 Daemon';
 
   @override
   String get agentCreateDaemon => '创建 Daemon';
@@ -2415,7 +2518,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '撤销需要先通过签名 DID Document 更新移除 daemon-key-1。未完成更新时会失败，不会把暂停误认为撤销成功。';
 
   @override
-  String get personalAgentSettingsSubtitle => '配置个人助理的启用、暂停和 Daemon 消息授权。';
+  String get personalAgentSettingsSubtitle => '配置个人助理的启用、暂停和 Daemon 管理';
 
   @override
   String get personalAgentSettingsDisabledSubtitle =>
@@ -2846,6 +2949,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatGroupProfileUpdated => '群信息已更新';
+
+  @override
+  String get chatInformationTitle => '聊天信息';
+
+  @override
+  String get chatOpenInformation => '打开聊天信息';
+
+  @override
+  String get chatSearchHistory => '查找聊天记录';
+
+  @override
+  String get chatSearchHistoryPlaceholder => '搜索聊天记录';
+
+  @override
+  String get chatSearchHistoryEmpty => '没有找到相关聊天记录';
+
+  @override
+  String get chatMuteNotifications => '消息免打扰';
+
+  @override
+  String get chatPinConversation => '置顶聊天';
+
+  @override
+  String get chatRemoveConversation => '移出消息列表';
+
+  @override
+  String get chatRemoveConversationConfirmTitle => '移出消息列表？';
+
+  @override
+  String get chatRemoveConversationConfirmMessage =>
+      '这只会将会话从消息列表移除，消息记录仍会保留；重新打开或收到新消息后会再次出现。';
 
   @override
   String get handleRecoveryUnavailable => '当前版本不支持 Handle 恢复，未对身份做任何更改。';

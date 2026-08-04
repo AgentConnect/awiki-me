@@ -75,8 +75,12 @@ AppDropMenuItem _buildLanguageAction({
     label: label,
     highlighted: currentMode == mode,
     onTap: () async {
-      await ref.read(localePreferenceServiceProvider).saveMode(mode);
-      ref.read(appLocaleModeProvider.notifier).state = mode;
+      await setAppLocaleMode(ref, mode);
     },
   );
+}
+
+Future<void> setAppLocaleMode(WidgetRef ref, AppLocaleMode mode) async {
+  await ref.read(localePreferenceServiceProvider).saveMode(mode);
+  ref.read(appLocaleModeProvider.notifier).state = mode;
 }

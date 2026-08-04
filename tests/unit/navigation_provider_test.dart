@@ -8,8 +8,8 @@ void main() {
     () {
       expect(compactShellDestinations, const <ShellDestination>[
         ShellDestination.messages,
-        ShellDestination.agents,
         ShellDestination.contacts,
+        ShellDestination.agents,
         ShellDestination.profile,
       ]);
     },
@@ -31,8 +31,8 @@ void main() {
     () {
       expect(compactContentDestinations, const <ShellDestination>[
         ShellDestination.messages,
-        ShellDestination.agents,
         ShellDestination.contacts,
+        ShellDestination.agents,
         ShellDestination.profile,
         ShellDestination.settings,
       ]);

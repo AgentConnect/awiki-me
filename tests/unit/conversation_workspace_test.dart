@@ -16,6 +16,7 @@ import 'package:awiki_me/src/domain/entities/peer_agent_identity.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/selected_conversation_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agent_status_indicator.dart';
 import 'package:awiki_me/src/presentation/agents/agent_visual_status.dart';
@@ -28,14 +29,20 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/conversation_list/conversation_list_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_workspace_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_page.dart';
+import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
+import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_semantic_icon.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
+import 'package:awiki_me/src/presentation/shared/compact_nested_navigator_back_scope.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/responsive_layout.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -113,6 +120,23 @@ class _BlockingRestoreConversationListController
         (conversation) => conversation.conversationId == conversationId,
       );
     });
+  }
+}
+
+class _RecordingDeleteConversationListController
+    extends _StaticConversationListController {
+  _RecordingDeleteConversationListController(super.ref, super.items);
+
+  ConversationSummary? deletedConversation;
+
+  @override
+  Future<void> deleteFromRecents(ConversationSummary conversation) async {
+    deletedConversation = conversation;
+    state = ConversationListState(
+      conversations: state.conversations
+          .where((item) => item.conversationId != conversation.conversationId)
+          .toList(growable: false),
+    );
   }
 }
 
@@ -282,6 +306,20 @@ void main() {
     expect(
       find.descendant(of: unreadBadge, matching: find.text('2')),
       findsOneWidget,
+    );
+    final avatar = find.byKey(
+      const Key('conversation-row-avatar:group:did:group:mentions'),
+    );
+    expect(avatar, findsOneWidget);
+    final avatarRect = tester.getRect(avatar);
+    final badgeRect = tester.getRect(unreadBadge);
+    expect(badgeRect.center.dx, greaterThan(avatarRect.center.dx));
+    expect(badgeRect.center.dy, lessThan(avatarRect.center.dy));
+    expect(badgeRect.width, closeTo(badgeRect.height, 0.01));
+    expect(
+      (tester.widget<Container>(unreadBadge).decoration! as BoxDecoration)
+          .shape,
+      BoxShape.circle,
     );
     expect(find.text('未读 2'), findsNothing);
     expect(find.text('@我'), findsOneWidget);
@@ -461,7 +499,7 @@ void main() {
     tester.view.resetDevicePixelRatio();
   });
 
-  testWidgets('移动消息搜索使用白色表层且快捷操作保留 action sheet', (tester) async {
+  testWidgets('移动消息搜索使用白色表层且快捷操作锚定右上角', (tester) async {
     final gateway = FakeAwikiGateway()..conversations = <ConversationSummary>[];
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -490,9 +528,7 @@ void main() {
     );
     final searchDecoration = searchSurface.decoration as BoxDecoration;
     expect(searchDecoration.color, AwikiMeColors.surface);
-    final searchBorder = searchDecoration.border as Border;
-    expect(searchBorder.bottom.color, AwikiMeColors.border);
-    expect(searchBorder.bottom.width, 1);
+    expect(searchDecoration.border, isNull);
     final searchField = tester.widget<CupertinoSearchTextField>(
       find.byKey(const Key('conversation-search-field')),
     );
@@ -504,20 +540,45 @@ void main() {
       find.byKey(const Key('shell-tab-page-surface')),
     );
     expect(pageSurface.color, AwikiMeColors.surface);
+    final compactHeader = find.byKey(const Key('shell-compact-header'));
+    expect(tester.getRect(compactHeader), const Rect.fromLTWH(0, 0, 393, 64));
+    final title = tester.widget<Text>(
+      find.descendant(of: compactHeader, matching: find.text('消息')),
+    );
+    expect(title.style?.fontSize, 16);
+    expect(title.style?.fontWeight, FontWeight.w600);
+    expect(title.style?.height, 1.25);
+    expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('shell-quick-actions-button')),
+        matching: find.byIcon(CupertinoIcons.add_circled),
+      ),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const Key('compact-conversation-inline-empty-state')),
       findsOneWidget,
     );
     expect(find.byType(EmptyStateCard), findsNothing);
 
-    await tester.tap(find.byKey(const Key('shell-quick-actions-button')));
+    final trigger = find.byKey(const Key('shell-quick-actions-button'));
+    await tester.tap(trigger);
     await tester.pumpAndSettle();
 
-    expect(find.byType(AppDropMenu), findsOneWidget);
-    expect(
-      find.byType(CompactActionSheet, skipOffstage: false),
-      findsOneWidget,
-    );
+    expect(find.byType(AppDropMenu), findsNothing);
+    expect(find.byType(CompactActionSheet, skipOffstage: false), findsNothing);
+    final menu = find.byKey(const Key('compact-quick-actions-menu'));
+    final pointer = find.byKey(const Key('compact-quick-actions-pointer'));
+    expect(menu, findsOneWidget);
+    expect(pointer, findsOneWidget);
+    final menuRect = tester.getRect(menu);
+    final triggerRect = tester.getRect(trigger);
+    expect(menuRect.right, 385);
+    expect(menuRect.width, 196);
+    expect(menuRect.height, 208);
+    expect(menuRect.top, greaterThan(triggerRect.bottom));
+    expect(tester.getSize(pointer), const Size(20, 10));
     const expectedIcons = <(String, IconData)>[
       ('quick-action-start-conversation', CupertinoIcons.chat_bubble),
       ('quick-action-create-group', CupertinoIcons.person_2),
@@ -532,6 +593,8 @@ void main() {
         ),
       );
       expect(icon.icon, entry.$2);
+      expect(icon.color, AwikiMePalette.actionBlue);
+      expect(tester.getSize(find.byKey(Key(entry.$1))).height, 52);
     }
 
     await tester.tapAt(const Offset(8, 8));
@@ -539,6 +602,47 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('窄屏消息分隔线从文字列开始', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final conversation = ConversationSummary(
+      threadId: 'dm:separator',
+      conversationId: 'dm:separator',
+      displayName: 'Separator',
+      lastMessagePreview: 'Preview',
+      lastMessageAt: DateTime(2026, 8, 1),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:separator',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation];
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final separator = tester.getRect(
+      find.byKey(const Key('conversation-row-separator:dm:separator')),
+    );
+    expect(separator.left, 80);
+    expect(separator.right, 390);
+    expect(separator.height, 1);
   });
 
   testWidgets('macOS 最近会话点击不等待恢复最近列表完成', (tester) async {
@@ -807,7 +911,9 @@ void main() {
     await tester.pump();
 
     expect(find.bySemanticsLabel('Agent 收件箱'), findsNothing);
-    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await tester.tap(find.byKey(const Key('chat-information-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chat-information-peer-row')));
     await tester.pumpAndSettle();
 
     expect(find.text('智能体信息'), findsOneWidget);
@@ -1538,7 +1644,7 @@ void main() {
     expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
   });
 
-  testWidgets('macOS 聊天头部移除身份卡按钮但头像仍可打开用户信息弹窗', (tester) async {
+  testWidgets('macOS 聊天头像打开统一用户信息页', (tester) async {
     const peerProfile = UserProfile(
       did: 'did:peer',
       nickName: 'Marcus Chen',
@@ -1588,12 +1694,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('用户信息'), findsOneWidget);
-    expect(find.text('负责融资协作。'), findsOneWidget);
-    expect(find.text('@marcus'), findsOneWidget);
-    expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('融资协作 Agent'), findsOneWidget);
+    expect(find.text('@marcus'), findsNothing);
+    expect(find.byKey(const Key('peer-profile-did-value')), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
+    await tester.tap(find.byKey(const Key('peer-profile-back-button')));
     await tester.pumpAndSettle();
     expect(find.text('用户信息'), findsNothing);
 
@@ -1704,8 +1811,8 @@ void main() {
       find.byKey(const Key('group-info-dialog-add-member-button')),
       findsOneWidget,
     );
-    expect(find.text('owner.awiki'), findsOneWidget);
-    expect(find.text('member.awiki'), findsOneWidget);
+    expect(find.text('@owner.awiki'), findsOneWidget);
+    expect(find.text('@member.awiki'), findsOneWidget);
     expect(find.textContaining('did:test:owner'), findsNothing);
     expect(find.textContaining('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
@@ -2125,7 +2232,7 @@ void main() {
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.text('群聊信息'), findsWidgets);
     expect(find.text('同步融资材料和里程碑'), findsOneWidget);
-    expect(find.text('owner.awiki'), findsOneWidget);
+    expect(find.text('@owner.awiki'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
@@ -2220,7 +2327,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(feedback, isNull);
-    expect(find.text('late-member.awiki'), findsOneWidget);
+    expect(find.text('@late-member.awiki'), findsOneWidget);
     expect(find.textContaining('did:test:late-member'), findsNothing);
     expect(find.text('late-role-hidden'), findsNothing);
 
@@ -2617,6 +2724,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ChatView), findsNothing);
     expect(find.byType(FriendsWorkspacePage), findsOneWidget);
+    expect(
+      find.byKey(const Key('friends-expanded-list-header')),
+      findsOneWidget,
+    );
 
     controller.upsertConversation(incoming);
     await tester.pumpAndSettle();
@@ -3160,6 +3271,357 @@ void main() {
     tester.view.resetDevicePixelRatio();
   });
 
+  testWidgets('Android 系统返回从 compact 私聊回到消息列表', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(
+      Key('conversation-row:${conversation.conversationId}'),
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+
+    for (var round = 0; round < 5; round += 1) {
+      await tester.tap(row);
+      // Deliberately stop after the page reconciliation frame. The old
+      // NavigatorPopHandler needed one more frame for NavigationNotification
+      // to rebuild its PopScope and could leak this back to the root route.
+      await tester.pump();
+
+      expect(find.byType(ChatView), findsOneWidget, reason: 'round $round');
+      final backScope = tester.widget<CompactNestedNavigatorBackScope>(
+        find.byKey(const Key('conversation-compact-back-scope')),
+      );
+      expect(backScope.active, isTrue, reason: 'round $round');
+      expect(backScope.hasNestedRoute, isTrue, reason: 'round $round');
+      expect(
+        container.read(selectedConversationProvider),
+        conversation.conversationId,
+        reason: 'round $round',
+      );
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppShell), findsOneWidget, reason: 'round $round');
+      expect(find.byType(ChatView), findsNothing, reason: 'round $round');
+      expect(row, findsOneWidget, reason: 'round $round');
+      expect(
+        container.read(selectedConversationProvider),
+        isNull,
+        reason: 'round $round',
+      );
+      expect(
+        find.byKey(const Key('compact-bottom-navigation')),
+        findsOneWidget,
+        reason: 'round $round',
+      );
+    }
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('Android retained 非激活我页不消费消息页系统返回', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:retained-back-owner',
+      credentialName: 'retained-back.json',
+      displayName: 'Retained Back Owner',
+      handle: 'retained-back-owner',
+    );
+    const profile = UserProfile(
+      did: 'did:test:retained-back-owner',
+      displayName: 'Retained Back Owner',
+      bio: '',
+      tags: <String>[],
+      profileMarkdown: '',
+      handle: 'retained-back-owner',
+    );
+    final gateway = FakeAwikiGateway()
+      ..myProfile = profile
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        profile: profile,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+
+    await tester.tap(find.byKey(const Key('compact-nav-profile')));
+    await tester.pumpAndSettle();
+    container.read(profileRelationshipListTypeProvider.notifier).state =
+        FriendsRelationshipListType.following;
+    await tester.pumpAndSettle();
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+
+    container
+        .read(shellDestinationProvider.notifier)
+        .selectCompact(ShellDestination.messages);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+    );
+    await tester.pump();
+    expect(find.byType(ChatView), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatView), findsNothing);
+    expect(container.read(selectedConversationProvider), isNull);
+    expect(
+      container.read(profileRelationshipListTypeProvider),
+      FriendsRelationshipListType.following,
+    );
+
+    container
+        .read(shellDestinationProvider.notifier)
+        .selectCompact(ShellDestination.profile);
+    await tester.pumpAndSettle();
+    expect(find.byType(RelationshipListPage), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('Android 从我的信息返回消息列表后保留我页根路由', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    const profile = UserProfile(
+      did: 'did:test:me',
+      displayName: 'Mia',
+      bio: 'Product lead',
+      tags: <String>[],
+      profileMarkdown: '',
+      fullHandle: 'mia.awiki.ai',
+    );
+    final ownMessage = ChatMessage(
+      localId: 'own-message-profile-return',
+      remoteId: 'own-message-profile-return',
+      conversationId: conversation.conversationId,
+      threadId: conversation.threadId,
+      senderDid: session.did,
+      senderName: session.displayName,
+      receiverDid: conversation.targetDid,
+      content: 'hello from me',
+      createdAt: conversation.lastMessageAt,
+      isMine: true,
+      sendState: MessageSendState.sent,
+    );
+    final gateway = FakeAwikiGateway()
+      ..myProfile = profile
+      ..conversations = <ConversationSummary>[conversation]
+      ..localDmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[ownMessage],
+      }
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{
+        'did:peer': <ChatMessage>[ownMessage],
+      };
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        profile: profile,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('compact-nav-profile')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('compact-nav-messages')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        const Key('chat-message-avatar:own-message-profile-return:mine'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('我的信息'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('我的信息'), findsNothing);
+    expect(find.byType(ChatView), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(ChatView), findsNothing);
+    expect(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('compact-nav-profile')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  testWidgets('Android 系统返回逐层关闭用户信息和聊天信息页', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      credentialName: 'me.json',
+      displayName: 'Mia',
+      handle: 'mia',
+      jwtToken: 'token',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[conversation]
+      ..dmHistoryByPeerDid = <String, List<ChatMessage>>{'did:peer': history};
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) =>
+                _StaticConversationListController(ref, gateway.conversations),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(Key('conversation-row:${conversation.conversationId}')),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ConversationWorkspacePage)),
+    );
+    await tester.tap(find.byKey(const Key('chat-information-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('聊天信息'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-information-peer-row')));
+    await tester.pumpAndSettle();
+    expect(find.text('用户信息'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('用户信息'), findsNothing);
+    expect(find.text('聊天信息'), findsOneWidget);
+    expect(
+      container.read(selectedConversationProvider),
+      conversation.conversationId,
+    );
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('聊天信息'), findsNothing);
+    expect(find.byType(ChatView), findsOneWidget);
+    expect(
+      container.read(selectedConversationProvider),
+      conversation.conversationId,
+    );
+
+    debugDefaultTargetPlatformOverride = null;
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
   testWidgets('macOS 最近会话列表分栏可以拖动调整宽度', (tester) async {
     final gateway = FakeAwikiGateway()
       ..conversations = <ConversationSummary>[conversation]
@@ -3351,7 +3813,7 @@ void main() {
     expect(find.byKey(const Key('conversation-search-field')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const Key('conversation-search-field'))).height,
-      closeTo(36 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(52 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
     expect(find.text('Marcus Chen'), findsOneWidget);
     expect(find.text('融资协作群'), findsOneWidget);
@@ -3467,10 +3929,10 @@ void main() {
       ),
     );
     for (final size in iconSlotSizes) {
-      expect(size, const Size.square(23 * AwikiDisplayScale.layoutBaseline));
+      expect(size, const Size.square(22 * AwikiDisplayScale.layoutBaseline));
     }
     final bottomNavHeight = tester.getSize(navRow).height;
-    expect(bottomNavHeight, closeTo(56, 0.1));
+    expect(bottomNavHeight, closeTo(62, 0.1));
     final navRowCenterY = tester.getCenter(navRow).dy;
     final messageLabelCenterY = tester.getCenter(find.text('消息').last).dy;
     expect(messageLabelCenterY, lessThan(navRowCenterY + 22));
@@ -3488,7 +3950,7 @@ void main() {
         .whereType<String>()
         .where((label) => <String>{'消息', '智能体', '联系人', '我'}.contains(label))
         .toList();
-    expect(navLabels, ['消息', '智能体', '联系人', '我']);
+    expect(navLabels, ['消息', '联系人', '智能体', '我']);
 
     await tester.tap(find.text('智能体'));
     await tester.pumpAndSettle();
@@ -3501,7 +3963,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('compact-nav-profile')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
+    expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
     expect(find.byKey(const Key('profile-back-button')), findsNothing);
     expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
     expect(
@@ -3523,7 +3985,7 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
-    expect(find.byKey(const Key('profile-display-name')), findsNothing);
+    expect(find.byKey(const Key('profile-compact-summary')), findsNothing);
     expect(
       find.byKey(const Key('mobile-messages-unread-badge')),
       findsOneWidget,
@@ -3536,7 +3998,9 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.bySemanticsLabel('设置'));
+    await tester.tap(find.byKey(const Key('compact-nav-profile')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile-settings-row')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('settings-profile-row')), findsOneWidget);
     expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
@@ -3663,15 +4127,117 @@ void main() {
     final metaRect = tester.getRect(
       find.byKey(const Key('conversation-row-right-meta')),
     );
-    expect(rowRect.height, closeTo(68 * AwikiDisplayScale.layoutBaseline, 0.1));
+    expect(rowRect.height, closeTo(74 * AwikiDisplayScale.layoutBaseline, 0.1));
     final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
     expect(unreadBadge, findsOneWidget);
     final unreadBadgeRect = tester.getRect(unreadBadge);
+    final avatarRect = tester.getRect(
+      find.byKey(const Key('conversation-row-avatar:dm:mobile-right-meta')),
+    );
     final timeRect = tester.getRect(find.text('12-31'));
     expect(metaRect.right, lessThanOrEqualTo(rowRect.right));
     expect(timeRect.right, lessThanOrEqualTo(rowRect.right - 2));
     expect(unreadBadgeRect.left, greaterThanOrEqualTo(rowRect.left));
     expect(unreadBadgeRect.right, lessThanOrEqualTo(rowRect.right));
+    expect(unreadBadgeRect.center.dx, greaterThan(avatarRect.center.dx));
+    expect(unreadBadgeRect.center.dy, lessThan(avatarRect.center.dy));
+    expect(unreadBadgeRect.width, closeTo(unreadBadgeRect.height, 0.01));
+    expect(
+      (tester.widget<Container>(unreadBadge).decoration! as BoxDecoration)
+          .shape,
+      BoxShape.circle,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('手机会话左滑显示删除操作并使用紧凑确认框', (tester) async {
+    const session = SessionIdentity(
+      did: 'did:human:me',
+      credentialName: 'me.json',
+      displayName: 'Me',
+      handle: 'me',
+    );
+    final target = ConversationSummary(
+      threadId: 'dm:swipe-delete',
+      conversationId: 'dm:swipe-delete',
+      displayName: 'Swipe Target',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 8, 3, 14, 20),
+      unreadCount: 1,
+      isGroup: false,
+      targetDid: 'did:test:swipe-target',
+    );
+    final gateway = FakeAwikiGateway()
+      ..conversations = <ConversationSummary>[target];
+    late _RecordingDeleteConversationListController controller;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith((ref) {
+            controller = _RecordingDeleteConversationListController(
+              ref,
+              gateway.conversations,
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(Key('conversation-row:${target.conversationId}'));
+    await tester.drag(row, const Offset(-120, 0));
+    await tester.pumpAndSettle();
+
+    final deleteAction = find.byKey(
+      Key('conversation-row-delete:${target.conversationId}'),
+    );
+    expect(deleteAction, findsOneWidget);
+    final rowSurface = find.descendant(
+      of: row,
+      matching: find.byType(AppPressableTile),
+    );
+    expect(
+      tester.getTopLeft(rowSurface).dx,
+      lessThan(tester.getTopLeft(row).dx),
+    );
+
+    await tester.tap(deleteAction);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AppConfirmationDialog);
+    expect(dialog, findsOneWidget);
+    expect(deleteAction, findsNothing);
+    expect(find.text('删除会话'), findsOneWidget);
+    expect(find.text('从最近列表移除该会话'), findsOneWidget);
+    expect(find.text('同时清空历史消息'), findsOneWidget);
+    expect(find.text('单会话历史清理待 Core 支持'), findsOneWidget);
+    expect(
+      tester
+          .widget<CupertinoCheckbox>(find.byType(CupertinoCheckbox))
+          .onChanged,
+      isNull,
+    );
+    expect(controller.deletedConversation, isNull);
+
+    await tester.tap(find.descendant(of: dialog, matching: find.text('删除')));
+    await tester.pumpAndSettle();
+
+    expect(
+      controller.deletedConversation?.conversationId,
+      target.conversationId,
+    );
+    expect(row, findsNothing);
     expect(tester.takeException(), isNull);
   });
 

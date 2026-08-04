@@ -5,8 +5,10 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/settings/language_selection_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
@@ -59,8 +61,8 @@ void main() {
       buildLocalizedTestApp(home: const SettingsPage(), gateway: gateway),
     );
 
-    expect(find.text('当前暂无可导出的登录凭证'), findsOneWidget);
-    expect(find.text('退出并删除当前登录凭证'), findsOneWidget);
+    expect(find.text('当前暂无可导出的登录凭证'), findsNothing);
+    expect(find.text('退出并删除当前登录凭证'), findsNothing);
 
     await tester.tap(find.text('导出身份凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
@@ -127,20 +129,200 @@ void main() {
     expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(256));
   });
 
-  testWidgets('紧凑设置页使用单层窄边距扩大设置行宽度', (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(393, 852));
+  testWidgets('紧凑设置页按图1使用连续全宽列表并在首屏展示全部安全操作', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const session = SessionIdentity(
+      did: 'did:test:compact-settings',
+      credentialName: 'compact-settings',
+      displayName: 'newhandle2',
+      handle: 'newhandle2.agent-connect.cn',
+    );
 
-    await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const SettingsPage(), session: session),
+    );
     await tester.pumpAndSettle();
 
-    final sectionSurface = find
-        .descendant(
-          of: find.byKey(const Key('settings-general-section')),
-          matching: find.byType(DecoratedBox),
+    final headerRect = tester.getRect(
+      find.byKey(const Key('settings-compact-header')),
+    );
+    final avatarRect = tester.getRect(
+      find.byKey(const Key('settings-profile-avatar')),
+    );
+    final accountFinder = find.byKey(const Key('settings-account-group'));
+    final appFinder = find.byKey(const Key('settings-app-group'));
+    final securityFinder = find.byKey(const Key('settings-security-group'));
+    final accountRect = tester.getRect(accountFinder);
+    final appRect = tester.getRect(appFinder);
+    final securityRect = tester.getRect(securityFinder);
+    final profileRect = tester.getRect(
+      find.byKey(const Key('settings-profile-row')),
+    );
+    final compactScaffold = tester.widget<CupertinoPageScaffold>(
+      find.byType(CupertinoPageScaffold),
+    );
+
+    expect(compactScaffold.backgroundColor, AwikiMeColors.background);
+    expect(headerRect, const Rect.fromLTWH(0, 0, 390, 64));
+    expect(
+      tester.getRect(find.byKey(const Key('settings-back-button'))),
+      const Rect.fromLTWH(8, 10, 44, 44),
+    );
+    expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
+    expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
+    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
+    expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 183));
+
+    for (final titleKey in <String>[
+      'settings-account-section-title',
+      'settings-app-section-title',
+      'settings-security-section-title',
+    ]) {
+      final title = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(Key(titleKey)),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(title.style?.fontSize, 13);
+      expect(title.maxLines, 1);
+      expect(title.overflow, TextOverflow.ellipsis);
+    }
+    final versionRow = find.byKey(const Key('settings-current-version-row'));
+    expect(
+      tester.getRect(find.byKey(const Key('settings-current-version-icon'))),
+      const Rect.fromLTWH(28, 327, 24, 24),
+    );
+    expect(tester.getRect(find.text('当前版本')).left, closeTo(68, 0.1));
+    expect(tester.getSize(versionRow).height, 60);
+    expect(
+      find.descendant(
+        of: versionRow,
+        matching: find.byIcon(CupertinoIcons.chevron_right),
+      ),
+      findsNothing,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-devices-row'))).height,
+      60,
+    );
+    expect(find.byKey(const Key('settings-personal-agent-row')), findsNothing);
+    expect(find.text('个人助理'), findsNothing);
+    expect(find.text('配置个人助理的启用、暂停和 Daemon 管理'), findsNothing);
+    expect(find.text('查看已授权设备并审批新设备'), findsNothing);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-check-updates-row')))
+          .height,
+      60,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-language-row'))).height,
+      60,
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-export-credential-row')))
+          .height,
+      60,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-logout-row'))).height,
+      60,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-profile-row'))).height,
+      greaterThanOrEqualTo(44),
+    );
+    expect(
+      find.byKey(const Key('settings-danger-section-title')),
+      findsNothing,
+    );
+    expect(find.text('导出身份凭证'), findsOneWidget);
+    expect(find.text('退出登录'), findsOneWidget);
+    expect(find.text('退出并删除当前凭证'), findsOneWidget);
+    expect(tester.getRect(find.text('退出并删除当前凭证')).bottom, lessThan(844));
+    final securitySurface = tester.widget<ColoredBox>(
+      find
+          .descendant(of: securityFinder, matching: find.byType(ColoredBox))
+          .first,
+    );
+    expect(securitySurface.color, AwikiMeColors.surface);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('settings-delete-credential-row')))
+          .height,
+      60,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('settings-delete-credential-icon'))),
+      const Size.square(24),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('紧凑设置页仅保留身份信息和右侧状态且不溢出', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(320, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const longCredential =
+        'credential-with-an-extremely-long-name-that-must-not-overflow';
+    const session = SessionIdentity(
+      did: 'did:test:compact-settings-long-values',
+      credentialName: longCredential,
+      displayName: 'A Very Long Settings Display Name For Narrow Screens',
+      handle: 'a-very-long-handle.very-long-tenant.example',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const SettingsPage(), session: session),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final profileTexts = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byKey(const Key('settings-profile-row')),
+            matching: find.byType(Text),
+          ),
         )
-        .first;
-    expect(tester.getSize(sectionSurface).width, greaterThanOrEqualTo(373));
+        .where((text) => text.maxLines == 1);
+    expect(profileTexts, hasLength(2));
+    for (final text in profileTexts) {
+      expect(text.maxLines, 1);
+      expect(text.overflow, TextOverflow.ellipsis);
+    }
+    final languageValue = tester.widget<Text>(
+      find.byKey(const Key('settings-language-value')),
+    );
+    expect(languageValue.maxLines, 1);
+    expect(languageValue.softWrap, isFalse);
+    expect(languageValue.overflow, TextOverflow.ellipsis);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('settings-export-credential-row')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final exportTexts = tester.widgetList<Text>(
+      find.descendant(
+        of: find.byKey(const Key('settings-export-credential-row')),
+        matching: find.byType(Text),
+      ),
+    );
+    expect(exportTexts, hasLength(1));
+    expect(exportTexts.single.data, '导出身份凭证');
+    expect(find.textContaining(longCredential), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -164,13 +346,14 @@ void main() {
     );
 
     expect(find.text('退出并删除当前凭证'), findsOneWidget);
-    expect(find.text('删除本地凭证：default'), findsOneWidget);
+    expect(find.text('删除本地凭证：default'), findsNothing);
 
     await tester.ensureVisible(find.text('退出并删除当前凭证'));
     await tester.tap(find.text('退出并删除当前凭证'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('将退出当前登录，并删除本地凭证 "default"'), findsOneWidget);
+    expect(find.text('退出 default 并删除本机凭证'), findsOneWidget);
+    expect(find.text('不会注销身份或影响其他设备'), findsOneWidget);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(SettingsPage)),
@@ -285,7 +468,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('登录状态已失效或此设备已被取消授权，请重新登录。'), findsOneWidget);
+    expect(find.text('登录状态已失效或此设备已被取消授权，请重新登录。'), findsNothing);
     expect(find.text('重新登录'), findsOneWidget);
 
     await tester.tap(find.text('重新登录'));
@@ -322,7 +505,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('正在恢复近期消息和当前已读状态…'), findsOneWidget);
+    expect(find.text('正在恢复近期消息和当前已读状态…'), findsNothing);
     expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
     expect(find.text('重试'), findsNothing);
   });
@@ -352,7 +535,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsOneWidget);
+    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
     expect(find.text('重试'), findsOneWidget);
 
     await tester.tap(find.text('重试'));
@@ -833,8 +1016,14 @@ void main() {
     expect(actions.deleteTenantCalls, 0);
   });
 
-  testWidgets('设置页展示语言设置并支持切换选项', (tester) async {
+  testWidgets('设置页进入独立语言页并即时保存选项', (tester) async {
     final localePreferenceService = FakeLocalePreferenceService();
+
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -847,22 +1036,113 @@ void main() {
     expect(find.text('语言'), findsOneWidget);
     expect(find.text('跟随系统'), findsOneWidget);
 
-    await tester.tap(find.text('语言'));
+    await tester.tap(find.byKey(const Key('settings-language-row')));
     await tester.pumpAndSettle();
 
+    expect(find.byType(LanguageSelectionPage), findsOneWidget);
+    expect(find.byKey(const Key('language-selection-page')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('language-selection-header'))),
+      const Rect.fromLTWH(0, 0, 390, 64),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('language-selection-back-button'))),
+      const Rect.fromLTWH(8, 10, 44, 44),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('language-selection-options'))),
+      const Rect.fromLTWH(16, 88, 358, 208),
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-system'))).height,
+      78,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-zh-hans'))).height,
+      64,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-english'))).height,
+      64,
+    );
+    expect(find.text('使用设备语言'), findsOneWidget);
     expect(find.text('简体中文'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
     expect(find.text('取消'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('language-option-system')),
+        matching: find.byKey(const Key('language-option-selected-check')),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text('English').last);
+    await tester.tap(find.byKey(const Key('language-option-english')));
     await tester.pumpAndSettle();
 
     expect(find.text('English'), findsWidgets);
+    expect(find.text('Language'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('language-option-english')),
+        matching: find.byKey(const Key('language-option-selected-check')),
+      ),
+      findsOneWidget,
+    );
     expect(localePreferenceService.saveCalls, 1);
     expect(await localePreferenceService.loadMode(), AppLocaleMode.english);
+
+    await tester.tap(find.byKey(const Key('language-selection-back-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsOneWidget);
+    expect(find.byType(LanguageSelectionPage), findsNothing);
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
   });
 
-  testWidgets('设置页可进入 Personal Agent 独立设置页并从真实入口启用', (tester) async {
+  testWidgets('语言页在小屏横向和放大字体下保持可滚动且无溢出', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: LanguageSelectionPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-system'))).height,
+      117,
+    );
+    expect(
+      tester.getSize(find.byKey(const Key('language-option-english'))).height,
+      96,
+    );
+
+    tester.view.physicalSize = const Size(568, 320);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('language-option-english')),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('language-option-english')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Personal Agent 独立设置页可启用', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -888,7 +1168,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const PersonalAgentSettingsPage(),
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -902,10 +1182,6 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
-
-    expect(find.text('个人助理'), findsOneWidget);
-    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
 
     expect(
@@ -933,7 +1209,7 @@ void main() {
     expect(find.textContaining('代发'), findsNothing);
   });
 
-  testWidgets('Personal Agent feature 关闭时设置入口禁用且不触发授权', (tester) async {
+  testWidgets('设置页不再显示 Personal Agent 入口', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -974,7 +1250,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Personal Agent'), findsNothing);
-    expect(find.text('实验功能关闭'), findsOneWidget);
+    expect(find.text('实验功能关闭'), findsNothing);
     expect(find.text('个人助理'), findsNothing);
     expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
@@ -996,7 +1272,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const PersonalAgentSettingsPage(),
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -1009,9 +1285,6 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
 
     expect(
@@ -1091,7 +1364,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const PersonalAgentSettingsPage(),
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -1107,8 +1380,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('个人助理'));
-    await tester.pumpAndSettle();
     expect(find.text('当前运行 Daemon：运行 Daemon 1'), findsOneWidget);
 
     await tester.tap(find.text('运行 Daemon 2').first);

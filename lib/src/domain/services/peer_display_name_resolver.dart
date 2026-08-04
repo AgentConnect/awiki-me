@@ -8,20 +8,35 @@ class PeerDisplayNameResolver {
     String? senderNameSnapshot,
     String? did,
     String unknownLabel = '',
+    bool compactQualifiedHandle = false,
   }) {
     final normalizedDid = did?.trim() ?? '';
     final compact = compactDid(normalizedDid);
-    for (final candidate in <String?>[localNote, nickname]) {
-      final value = _humanName(candidate, normalizedDid, compact);
-      if (value.isNotEmpty) {
-        return value;
-      }
+    final note = _humanName(localNote, normalizedDid, compact);
+    if (note.isNotEmpty) {
+      return note;
     }
     final handle = cleanHandle(fullHandle);
-    if (handle.isNotEmpty && handle != normalizedDid) {
-      return handle;
+    final name = _visibleName(
+      nickname,
+      fullHandle: handle,
+      did: normalizedDid,
+      compactDid: compact,
+      compactQualifiedHandle: compactQualifiedHandle,
+    );
+    if (name.isNotEmpty) {
+      return name;
     }
-    final snapshot = _humanName(senderNameSnapshot, normalizedDid, compact);
+    if (handle.isNotEmpty && handle != normalizedDid) {
+      return compactQualifiedHandle ? compactHandle(handle) : handle;
+    }
+    final snapshot = _visibleName(
+      senderNameSnapshot,
+      fullHandle: handle,
+      did: normalizedDid,
+      compactDid: compact,
+      compactQualifiedHandle: compactQualifiedHandle,
+    );
     if (snapshot.isNotEmpty) {
       return snapshot;
     }
@@ -37,6 +52,17 @@ class PeerDisplayNameResolver {
       value = value.substring(1).trimLeft();
     }
     return value;
+  }
+
+  /// Returns the user-facing local part of a domain-qualified Handle while
+  /// leaving the complete Handle available to identity and routing surfaces.
+  static String compactHandle(String? source) {
+    final handle = cleanHandle(source);
+    final separator = handle.indexOf('.');
+    if (separator <= 0) {
+      return handle;
+    }
+    return handle.substring(0, separator);
   }
 
   static String compactDid(String source) {
@@ -61,5 +87,35 @@ class PeerDisplayNameResolver {
       return '';
     }
     return value;
+  }
+
+  static String _visibleName(
+    String? source, {
+    required String fullHandle,
+    required String did,
+    required String compactDid,
+    required bool compactQualifiedHandle,
+  }) {
+    final value = _humanName(source, did, compactDid);
+    if (value.isEmpty) {
+      return '';
+    }
+    final cleaned = cleanHandle(value);
+    final representsKnownHandle =
+        fullHandle.isNotEmpty &&
+        cleaned.toLowerCase() == fullHandle.toLowerCase();
+    if (compactQualifiedHandle &&
+        (representsKnownHandle ||
+            (fullHandle.isEmpty && _looksLikeQualifiedHandle(cleaned)))) {
+      return compactHandle(cleaned);
+    }
+    return value;
+  }
+
+  static bool _looksLikeQualifiedHandle(String value) {
+    return RegExp(
+      r'^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$',
+      caseSensitive: false,
+    ).hasMatch(value);
   }
 }

@@ -105,7 +105,7 @@ class IdentityProfileHeader extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final stackTrailing = trailing != null && constraints.maxWidth < 330;
+        final stackTrailing = trailing != null && constraints.maxWidth < 270;
         final identity = Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[

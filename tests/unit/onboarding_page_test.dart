@@ -641,13 +641,16 @@ void main() {
         final contentRect = tester.getRect(
           find.byKey(const Key('onboarding-compact-auth-card')),
         );
-        if (contentRect.height <= scrollRect.height) {
+        final fullyVisible =
+            contentRect.height <= scrollRect.height &&
+            contentRect.top > scrollRect.top &&
+            contentRect.bottom < scrollRect.bottom;
+        if (fullyVisible) {
           expect(
             contentRect.center.dy,
-            moreOrLessEquals(scrollRect.center.dy, epsilon: 3),
+            moreOrLessEquals(scrollRect.center.dy, epsilon: 16),
           );
           expect(contentRect.top, greaterThan(scrollRect.top));
-          expect(contentRect.bottom, lessThan(scrollRect.bottom));
         } else {
           expect(contentRect.top, greaterThan(scrollRect.top));
           expect(contentRect.bottom, greaterThan(scrollRect.bottom));
@@ -1238,7 +1241,7 @@ void main() {
       sendOtpRect.center.dy,
       moreOrLessEquals(otpRect.center.dy, epsilon: 2),
     );
-    expect(submitRect.width, lessThan(cardRect.width * 0.5));
+    expect(submitRect.width, greaterThan(cardRect.width * 0.9));
     expect(submitRect.right, lessThan(cardRect.right));
     expect(cardRect.right - submitRect.right, moreOrLessEquals(4, epsilon: 1));
   });

@@ -530,7 +530,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get conversationsDeleteContent =>
-      'This conversation will be removed from recents, but message history will be kept. It will appear again when you reopen it or receive a new message.';
+      'Remove this conversation from recents';
+
+  @override
+  String get conversationsDeleteClearHistory => 'Also clear message history';
+
+  @override
+  String get conversationsDeleteClearHistoryUnavailable =>
+      'Single-conversation history clearing requires Core support';
+
+  @override
+  String get conversationsSwipeDelete => 'Delete';
 
   @override
   String conversationsUnreadTag(Object count) {
@@ -644,6 +654,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get friendsTitle => 'Contacts';
 
   @override
+  String get friendsSearchPlaceholder => 'Search contacts';
+
+  @override
+  String get friendsSearchGroupsPlaceholder => 'Search groups';
+
+  @override
+  String get friendsTabAll => 'All';
+
+  @override
+  String get friendsTabFollowing => 'Following';
+
+  @override
+  String get friendsTabFollowers => 'Followers';
+
+  @override
+  String get friendsTabGroups => 'Groups';
+
+  @override
+  String get friendsAllEmpty => 'No contacts yet.';
+
+  @override
+  String get friendsNoResults => 'No matching contacts found.';
+
+  @override
+  String get friendsMessage => 'Message';
+
+  @override
+  String get friendsFollowBack => 'Follow back';
+
+  @override
   String get friendsGroups => 'Groups';
 
   @override
@@ -681,6 +721,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileMeTitle => 'Me';
 
   @override
+  String get profileMyInformationTitle => 'My info';
+
+  @override
+  String get profileIdentitySectionTitle => 'Identity';
+
+  @override
+  String get profileIdentityCardSubtitle =>
+      'Complete details for trusted collaboration';
+
+  @override
+  String get profileSettingsSubtitle => 'Account, devices, and app preferences';
+
+  @override
   String get profileFollowers => 'Followers';
 
   @override
@@ -699,7 +752,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileBioPlaceholder => 'Bio';
 
   @override
+  String get profileBioHint => 'Introduce yourself';
+
+  @override
+  String get profileAvatarLabel => 'Avatar';
+
+  @override
+  String get profileAvatarChange => 'Change';
+
+  @override
+  String get profileTagsLabel => 'Tags';
+
+  @override
+  String get profileTagsLimit => 'Up to 5 tags';
+
+  @override
   String get profileTagsPlaceholder => 'Tags, separated by commas';
+
+  @override
+  String get profileTagAdd => 'Add';
+
+  @override
+  String get profileTagInputPlaceholder => 'Enter tag';
+
+  @override
+  String profileTagRemove(String tag) {
+    return 'Remove $tag';
+  }
 
   @override
   String get profileHomepageLabel => 'Homepage';
@@ -709,6 +788,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsAccountDevicesSection => 'Account & devices';
+
+  @override
+  String get settingsAppSection => 'App';
+
+  @override
+  String get settingsSecuritySection => 'Security';
 
   @override
   String get settingsDevices => 'Devices';
@@ -983,6 +1071,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageSystem => 'Follow system';
 
   @override
+  String get settingsLanguageSystemSubtitle => 'Use device language';
+
+  @override
   String get settingsLanguageZhHans => '简体中文';
 
   @override
@@ -1145,8 +1236,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String settingsDeleteCredentialConfirmContent(Object credentialName) {
-    return 'This will sign you out and delete the local credential \"$credentialName\". To use it again, you will need to import or recover the identity. Continue?';
+    return 'Sign out of $credentialName and delete its credential from this device';
   }
+
+  @override
+  String get settingsDeleteCredentialConfirmHint =>
+      'This does not delete the identity or affect other devices';
 
   @override
   String get settingsDeleteCredentialConfirmAction => 'Sign out and delete';
@@ -1728,7 +1823,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get peerProfileUnfollow => 'Unfollow';
 
   @override
-  String get peerProfileDeleteThread => 'Delete local chat history';
+  String get peerProfileDeleteThread => 'Clear chat history';
+
+  @override
+  String get peerProfileDeleteThreadConfirmTitle => 'Clear chat history?';
+
+  @override
+  String get peerProfileDeleteThreadConfirmMessage =>
+      'This clears the local chat history with this user';
 
   @override
   String get peerProfileUnfollowed => 'Unfollowed';
@@ -1738,6 +1840,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentPageTitle => 'Agents';
+
+  @override
+  String get agentMineSection => 'My agents';
+
+  @override
+  String get agentInstallDaemonAction => 'Install a new Daemon';
 
   @override
   String get agentCreateDaemon => 'Create Daemon';
@@ -2555,7 +2663,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get personalAgentSettingsSubtitle =>
-      'Configure enablement, pause, and daemon message authorization.';
+      'Configure enablement, pause, and Daemon management';
 
   @override
   String get personalAgentSettingsDisabledSubtitle =>
@@ -3023,6 +3131,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatGroupProfileUpdated => 'Group info updated';
+
+  @override
+  String get chatInformationTitle => 'Chat Info';
+
+  @override
+  String get chatOpenInformation => 'Open chat information';
+
+  @override
+  String get chatSearchHistory => 'Search Chat History';
+
+  @override
+  String get chatSearchHistoryPlaceholder => 'Search chat history';
+
+  @override
+  String get chatSearchHistoryEmpty => 'No matching chat history';
+
+  @override
+  String get chatMuteNotifications => 'Mute Notifications';
+
+  @override
+  String get chatPinConversation => 'Pin Chat';
+
+  @override
+  String get chatRemoveConversation => 'Remove from Messages';
+
+  @override
+  String get chatRemoveConversationConfirmTitle => 'Remove from Messages?';
+
+  @override
+  String get chatRemoveConversationConfirmMessage =>
+      'This only removes the conversation from Messages. Its history is preserved and the conversation will return when reopened or when a new message arrives.';
 
   @override
   String get handleRecoveryUnavailable =>

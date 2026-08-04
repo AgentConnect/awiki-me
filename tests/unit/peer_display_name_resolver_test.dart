@@ -31,6 +31,41 @@ void main() {
     );
   });
 
+  test('removes the domain only from handle-shaped visible names', () {
+    expect(
+      resolver.resolve(
+        nickname: 'alice.awiki.info',
+        fullHandle: 'alice.awiki.info',
+        compactQualifiedHandle: true,
+      ),
+      'alice',
+    );
+    expect(
+      resolver.resolve(
+        senderNameSnapshot: '@bob.agent-connect.cn',
+        compactQualifiedHandle: true,
+      ),
+      'bob',
+    );
+    expect(
+      resolver.resolve(
+        localNote: 'alice.awiki.info',
+        fullHandle: 'alice.awiki.info',
+        compactQualifiedHandle: true,
+      ),
+      'alice.awiki.info',
+      reason: 'an explicit local contact note must remain unchanged',
+    );
+    expect(
+      resolver.resolve(
+        nickname: 'Alice Zhang',
+        fullHandle: 'alice.awiki.info',
+        compactQualifiedHandle: true,
+      ),
+      'Alice Zhang',
+    );
+  });
+
   test('uses snapshot only when current profile identity is unavailable', () {
     expect(
       resolver.resolve(

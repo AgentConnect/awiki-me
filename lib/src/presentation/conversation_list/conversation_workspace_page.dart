@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/conversation_summary.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/navigation_provider.dart';
 import '../app_shell/providers/selected_conversation_provider.dart';
 import '../chat/chat_page.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/compact_nested_navigator_back_scope.dart';
 import '../shared/copyable_did_line.dart';
 import '../shared/formatters/localized_ui_formatters.dart';
 import '../shared/responsive_layout.dart';
@@ -21,45 +23,68 @@ part 'parts/conversation_workspace_mac_layout_part.dart';
 part 'parts/conversation_workspace_panel_widgets_part.dart';
 part 'parts/conversation_workspace_agent_detail_part.dart';
 
-class ConversationWorkspacePage extends ConsumerWidget {
+class ConversationWorkspacePage extends ConsumerStatefulWidget {
   const ConversationWorkspacePage({super.key, this.listFooter});
 
   final Widget? listFooter;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ConversationWorkspacePage> createState() =>
+      _ConversationWorkspacePageState();
+}
+
+class _ConversationWorkspacePageState
+    extends ConsumerState<ConversationWorkspacePage> {
+  final GlobalKey<NavigatorState> _compactNavigatorKey =
+      GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final selectedConversation = _selectedConversation(
       ref.watch(selectedConversationProvider),
       ref.watch(conversationListProvider).conversations,
     );
     if (!responsive.supportsTwoPane) {
-      return Navigator(
-        pages: <Page<void>>[
-          CupertinoPage<void>(
-            key: const ValueKey<String>('conversation-directory'),
-            child: ConversationListPage(
-              selectedConversationId: selectedConversation?.conversationId,
-              onConversationSelected: (conversation) async {
-                ref
-                    .read(selectedConversationProvider.notifier)
-                    .selectConversation(conversation);
-              },
-            ),
-          ),
-          if (selectedConversation != null)
-            CupertinoPage<void>(
-              key: ValueKey<String>(
-                'conversation-chat:${selectedConversation.conversationId}',
-              ),
-              child: ChatPage(conversation: selectedConversation),
-            ),
-        ],
-        onDidRemovePage: (page) {
-          if (page.key != const ValueKey<String>('conversation-directory')) {
-            ref.read(selectedConversationProvider.notifier).clearSelection();
-          }
+      final active =
+          !AwikiShellNavigationScope.isPresent(context) ||
+          ref.watch(shellDestinationProvider) == ShellDestination.messages;
+      return CompactNestedNavigatorBackScope(
+        key: const Key('conversation-compact-back-scope'),
+        active: active,
+        hasNestedRoute: selectedConversation != null,
+        navigatorKey: _compactNavigatorKey,
+        onMissingNestedRoute: () {
+          ref.read(selectedConversationProvider.notifier).clearSelection();
         },
+        child: Navigator(
+          key: _compactNavigatorKey,
+          pages: <Page<void>>[
+            CupertinoPage<void>(
+              key: const ValueKey<String>('conversation-directory'),
+              child: ConversationListPage(
+                selectedConversationId: selectedConversation?.conversationId,
+                onConversationSelected: (conversation) async {
+                  ref
+                      .read(selectedConversationProvider.notifier)
+                      .selectConversation(conversation);
+                },
+              ),
+            ),
+            if (selectedConversation != null)
+              CupertinoPage<void>(
+                key: ValueKey<String>(
+                  'conversation-chat:${selectedConversation.conversationId}',
+                ),
+                child: ChatPage(conversation: selectedConversation),
+              ),
+          ],
+          onDidRemovePage: (page) {
+            if (page.key != const ValueKey<String>('conversation-directory')) {
+              ref.read(selectedConversationProvider.notifier).clearSelection();
+            }
+          },
+        ),
       );
     }
 
@@ -77,11 +102,11 @@ class ConversationWorkspacePage extends ConsumerWidget {
       );
     }
     return AwikiSidebarWorkspace(
-      footer: listFooter,
+      footer: widget.listFooter,
       sidebar: ConversationListPage(
         embedded: true,
         selectedConversationId: selectedConversation?.conversationId,
-        bottomInset: listFooter == null ? 24 : 16,
+        bottomInset: widget.listFooter == null ? 24 : 16,
         onConversationSelected: (conversation) async {
           ref
               .read(selectedConversationProvider.notifier)

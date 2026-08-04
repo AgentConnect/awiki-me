@@ -8,6 +8,7 @@ import 'package:awiki_me/src/application/conversation_service.dart';
 import 'package:awiki_me/src/application/messaging_service.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/models/message_sync_diagnostics.dart';
+import 'package:awiki_me/src/application/models/product_local_models.dart';
 import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
@@ -1218,6 +1219,51 @@ void main() {
   );
 
   test(
+    'muted conversation suppresses committed message presentation',
+    () async {
+      final localStore = FakeProductLocalStore();
+      await localStore.upsertConversationOverlayByConversationId(
+        ProductConversationOverlay(
+          ownerDid: 'did:test:me',
+          threadId: 'dm:peer-scope:v1:peer',
+          conversationId: 'dm:peer-scope:v1:peer',
+          muted: true,
+          updatedAt: DateTime.utc(2026, 8, 2),
+        ),
+      );
+      final notifications = FakeNotificationFacade();
+      final committed = _committedIncoming(
+        eventId: 'event-muted',
+        logicalId: 'message-muted',
+      );
+      final sync = FakeMessageSyncService(
+        deltaResult: MessageSyncOutcome(
+          status: MessageSyncStatus.changed,
+          eventsApplied: 1,
+          pagesFetched: 1,
+          committedIncomingMessages: <CommittedIncomingMessage>[committed],
+        ),
+      );
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+        productLocalStore: localStore,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestSync('muted_realtime_message', immediate: true);
+      await pumpEventQueue();
+
+      expect(notifications.inAppCalls, 0);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test(
     'macOS inactive window uses a system notification while Flutter is resumed',
     () async {
       const channel = MethodChannel('ai.awiki.awikime/app_presentation');
@@ -1874,6 +1920,7 @@ ProviderContainer _container(
   SessionIdentity? session,
   FakeMessagingService? messagingService,
   ConversationService? conversationService,
+  FakeProductLocalStore? productLocalStore,
 }) {
   return ProviderContainer(
     overrides: <Override>[
@@ -1898,6 +1945,8 @@ ProviderContainer _container(
         conversationService: conversationService,
         agentControlService: agentControl,
       ),
+      if (productLocalStore != null)
+        productLocalStoreProvider.overrideWithValue(productLocalStore),
       messageSyncCoordinatorProvider.overrideWith(
         (ref) => MessageSyncCoordinator(
           ref,

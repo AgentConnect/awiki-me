@@ -1255,10 +1255,16 @@ class AppSecondaryButton extends StatelessWidget {
 }
 
 class AppDangerButton extends StatelessWidget {
-  const AppDangerButton({super.key, required this.label, this.onPressed});
+  const AppDangerButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.filled = false,
+  });
 
   final String label;
   final VoidCallback? onPressed;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
@@ -1288,7 +1294,7 @@ class AppDangerButton extends StatelessWidget {
       },
       child: AppSurface(
         padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
-        color: theme.dangerContainer,
+        color: filled ? theme.danger : theme.dangerContainer,
         radius: AwikiMeRadii.sm,
         constraints: BoxConstraints(minHeight: responsive.controlHeight),
         child: Center(
@@ -1301,7 +1307,7 @@ class AppDangerButton extends StatelessWidget {
               forceStrutHeight: true,
             ),
             style: AwikiMeTextStyles.buttonLabel.copyWith(
-              color: theme.danger,
+              color: filled ? CupertinoColors.white : theme.danger,
               fontSize: responsive.bodyMd,
               height: 1,
             ),

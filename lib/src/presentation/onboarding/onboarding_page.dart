@@ -337,6 +337,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         _OnboardingAlignedAction(
           key: const Key('onboarding-no-verification-complete-action'),
           width: responsive.displayScaled(148),
+          fillAvailableWidth: responsive.isPhone,
           child: AppPrimaryButton(
             label: context.l10n.onboardingCompleteRegister,
             semanticsIdentifier: 'e2e-complete-login-button',
@@ -404,6 +405,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         _OnboardingAlignedAction(
           key: const Key('onboarding-phone-submit-action'),
           width: responsive.displayScaled(148),
+          fillAvailableWidth: responsive.isPhone,
           child: AppPrimaryButton(
             label: context.l10n.onboardingPhoneLoginOrRegisterAction,
             semanticsIdentifier: 'e2e-complete-login-button',

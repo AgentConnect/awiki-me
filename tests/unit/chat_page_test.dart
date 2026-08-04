@@ -37,8 +37,11 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
+import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_top_bar.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
@@ -57,6 +60,22 @@ import 'test_support.dart';
 Uint8List _tinyPngBytes() => base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
 );
+
+Future<void> _openCompactChatPeerInfo(
+  WidgetTester tester, {
+  bool settlePeerInfo = true,
+}) async {
+  await tester.tap(find.byKey(const Key('chat-information-button')));
+  await tester.pumpAndSettle();
+  expect(find.byKey(const Key('chat-information-page')), findsOneWidget);
+  await tester.tap(find.byKey(const Key('chat-information-peer-row')));
+  if (settlePeerInfo) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+  }
+}
 
 Widget _testImageWidgetBuilder({
   String? path,
@@ -422,6 +441,7 @@ Future<ProviderContainer> _pumpScrollableChatView(
   AttachmentPreviewBytesReader? attachmentPreviewBytesReader,
   AttachmentPickerService? attachmentPickerService,
   AttachmentOpenService? attachmentOpenService,
+  List<Override> additionalProviderOverrides = const <Override>[],
   Size surfaceSize = const Size(390, 640),
   bool macStyle = false,
 }) async {
@@ -475,6 +495,7 @@ Future<ProviderContainer> _pumpScrollableChatView(
           attachmentOpenServiceProvider.overrideWithValue(
             attachmentOpenService,
           ),
+        ...additionalProviderOverrides,
       ],
     ),
   );
@@ -542,7 +563,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const Key('chat-header'))).height,
-      closeTo(52 * AwikiDisplayScale.layoutBaseline, 0.01),
+      closeTo(64 * AwikiDisplayScale.layoutBaseline, 0.01),
     );
 
     final incomingBubble = find.byKey(
@@ -551,16 +572,28 @@ void main() {
     final outgoingBubble = find.byKey(
       const Key('chat-message-bubble:compact-outgoing'),
     );
-    expect(
-      (tester.widget<Container>(incomingBubble).decoration as BoxDecoration)
-          .color,
-      AwikiMePalette.messageIncoming,
-    );
-    expect(
-      (tester.widget<Container>(outgoingBubble).decoration as BoxDecoration)
-          .color,
-      AwikiMePalette.messageOutgoing,
-    );
+    final incomingBubbleWidget = tester.widget<Container>(incomingBubble);
+    final outgoingBubbleWidget = tester.widget<Container>(outgoingBubble);
+    final incomingDecoration =
+        incomingBubbleWidget.decoration! as ShapeDecoration;
+    final outgoingDecoration =
+        outgoingBubbleWidget.decoration! as ShapeDecoration;
+    expect(incomingDecoration.color, AwikiMePalette.content);
+    expect(outgoingDecoration.color, AwikiMePalette.messageOutgoing);
+    for (final decoration in <ShapeDecoration>[
+      incomingDecoration,
+      outgoingDecoration,
+    ]) {
+      final outline = decoration.shape.getOuterPath(
+        const Rect.fromLTWH(0, 0, 120, 44),
+      );
+      expect(outline.computeMetrics().length, 1);
+      expect(decoration.shape.dimensions, EdgeInsets.zero);
+    }
+    final incomingPadding = incomingBubbleWidget.padding! as EdgeInsets;
+    final outgoingPadding = outgoingBubbleWidget.padding! as EdgeInsets;
+    expect(incomingPadding.left, greaterThan(incomingPadding.right));
+    expect(outgoingPadding.right, greaterThan(outgoingPadding.left));
     final incomingAvatar = find.byKey(
       const Key('chat-message-avatar:compact-incoming:peer'),
     );
@@ -569,6 +602,14 @@ void main() {
     );
     expect(incomingAvatar, findsOneWidget);
     expect(outgoingAvatar, findsOneWidget);
+    expect(
+      find.byKey(const Key('chat-message-tail:compact-incoming')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('chat-message-tail:compact-outgoing')),
+      findsNothing,
+    );
     expect(
       tester.getRect(incomingAvatar).right,
       lessThan(tester.getRect(incomingBubble).left),
@@ -629,6 +670,145 @@ void main() {
       1,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('聊天信息页支持三点入口、搜索、偏好持久化和头像资料导航', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = FakeAwikiGateway()
+      ..publicProfile = const UserProfile(
+        did: 'did:test:alice',
+        nickName: 'Alice',
+        bio: '连接人与 Agent，保持简单而高效',
+        tags: <String>['开发者', 'AI 协作'],
+        profileMarkdown: '',
+        fullHandle: 'alice.agent-connect.cn',
+      );
+    final conversation = _scrollConversation('dm:chat-information-functional')
+        .copyWith(
+          displayName: 'alice.agent-connect.cn',
+          targetDid:
+              'did:wba:agent-connect.cn:user:alice:e1_abcdefghijklmnopqrstuvwxyz',
+          targetPeer:
+              'did:wba:agent-connect.cn:user:alice:e1_abcdefghijklmnopqrstuvwxyz',
+        );
+    final messages = <ChatMessage>[
+      ChatMessage(
+        localId: 'chat-info-incoming',
+        remoteId: 'chat-info-incoming',
+        conversationId: conversation.conversationId,
+        threadId: conversation.threadId,
+        senderDid: 'did:test:alice',
+        senderName: 'Alice',
+        receiverDid: 'did:test:me',
+        content: '需要查找的聊天记录',
+        createdAt: DateTime(2026, 8, 2, 12),
+        isMine: false,
+        sendState: MessageSendState.sent,
+      ),
+    ];
+    final localStore = FakeProductLocalStore();
+
+    await _pumpScrollableChatView(
+      tester,
+      gateway: gateway,
+      conversation: conversation,
+      messages: messages,
+      surfaceSize: const Size(390, 844),
+      additionalProviderOverrides: <Override>[
+        productLocalStoreProvider.overrideWithValue(localStore),
+      ],
+    );
+
+    expect(find.byKey(const Key('chat-information-button')), findsOneWidget);
+    expect(find.byKey(const Key('chat-peer-info-avatar-button')), findsNothing);
+    await tester.tap(find.byKey(const Key('chat-information-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('聊天信息'), findsOneWidget);
+    expect(find.byKey(const Key('chat-information-peer-row')), findsOneWidget);
+    expect(find.text('alice'), findsOneWidget);
+    expect(find.text('@alice.agent-connect.cn'), findsOneWidget);
+    expect(find.text('查找聊天记录'), findsOneWidget);
+    expect(find.text('消息免打扰'), findsOneWidget);
+    expect(find.text('置顶聊天'), findsOneWidget);
+    expect(find.text('移出消息列表'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chat-information-mute-switch')));
+    await tester.pumpAndSettle();
+    var saved = await localStore.loadConversationOverlayByConversationId(
+      ownerDid: 'did:test:me',
+      conversationId: conversation.conversationId,
+    );
+    expect(saved?.muted, isTrue);
+
+    await tester.tap(find.byKey(const Key('chat-information-pin-switch')));
+    await tester.pumpAndSettle();
+    saved = await localStore.loadConversationOverlayByConversationId(
+      ownerDid: 'did:test:me',
+      conversationId: conversation.conversationId,
+    );
+    expect(saved?.pinned, isTrue);
+
+    await tester.tap(find.byKey(const Key('chat-information-search-row')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('chat-history-search-field')),
+      '需要查找',
+    );
+    await tester.pump();
+    expect(find.text('需要查找的聊天记录'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('chat-information-back-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const Key('chat-information-remove-conversation')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('chat-information-clear-confirm')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('chat-information-back-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('chat-message-avatar:chat-info-incoming:peer')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('用户信息'), findsOneWidget);
+    final userInfoTopBar = tester.widget<AwikiMeTopBar>(
+      find.ancestor(
+        of: find.text('用户信息'),
+        matching: find.byType(AwikiMeTopBar),
+      ),
+    );
+    expect(userInfoTopBar.titleFontSize, 16);
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
+          .data,
+      'Alice',
+    );
+    expect(find.text('连接人与 Agent，保持简单而高效'), findsNothing);
+    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('连接人与 Agent，保持简单而高效'), findsOneWidget);
+    expect(find.text('开发者'), findsOneWidget);
+    expect(find.text('AI 协作'), findsOneWidget);
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('peer-info-identity-document')), findsNothing);
+    expect(
+      tester.getSize(find.byKey(const Key('peer-profile-avatar'))),
+      const Size.square(64),
+    );
+    expect(find.byKey(const Key('peer-profile-back-button')), findsOneWidget);
   });
 
   testWidgets('群聊发送者名称不改变 compact 和 macStyle 的头像气泡顶部基准', (tester) async {
@@ -736,6 +916,11 @@ void main() {
     ),
   ]) {
     testWidgets('${scenario.label}中点击自己的消息头像打开当前身份资料', (tester) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(390, 640);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       const profile = UserProfile(
         did: 'did:test:me',
         displayName: 'Current Identity',
@@ -780,13 +965,20 @@ void main() {
 
       expect(
         find.byKey(const Key('desktop-current-identity-dialog')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(
-        tester.widget<Text>(find.byKey(const Key('profile-display-name'))).data,
-        profile.displayName,
-      );
+      expect(find.byType(ProfilePage), findsOneWidget);
+      expect(find.text('我的信息'), findsOneWidget);
+      expect(tester.widget<Text>(find.text('我的信息')).style?.fontSize, 16);
+      expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
+      expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
+      expect(find.byKey(const Key('profile-handle-value')), findsNothing);
       expect(find.byKey(const Key('peer-info-identity-card')), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('我的信息'), findsNothing);
+      expect(find.byType(ChatView), findsOneWidget);
     });
   }
 
@@ -1176,6 +1368,36 @@ void main() {
     expect(profileService.loadPublicProfileCalls, 0);
   });
 
+  testWidgets('单聊页头在只有完整 Handle 时隐藏域名', (tester) async {
+    final conversation = ConversationSummary(
+      threadId: 'dm:compact-handle-header',
+      conversationId: 'dm:compact-handle-header',
+      displayName: 'newhandle1.agent-connect.cn',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:newhandle1',
+      targetPeer: 'newhandle1.agent-connect.cn',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: FakeAwikiGateway(),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('chat-header-title'))).data,
+      'newhandle1',
+    );
+    expect(find.text('newhandle1.agent-connect.cn'), findsNothing);
+  });
+
   testWidgets('单聊页头在 current DID 缺失时仍按 Persona 读取本地昵称', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
@@ -1285,6 +1507,38 @@ void main() {
     expect(find.text('zhuocheng'), findsOneWidget);
     expect(find.text('lzc.awiki.ai'), findsNothing);
     expect(profileService.loadPublicProfileCalls, 0);
+  });
+
+  testWidgets('最近会话在只有完整 Handle 时隐藏域名', (tester) async {
+    final conversation = ConversationSummary(
+      threadId: 'dm:compact-handle-list',
+      conversationId: 'dm:compact-handle-list',
+      displayName: 'newhandle2.agent-connect.cn',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:newhandle2',
+      targetPeer: 'newhandle2.agent-connect.cn',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[conversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('newhandle2'), findsOneWidget);
+    expect(find.text('newhandle2.agent-connect.cn'), findsNothing);
   });
 
   testWidgets('最近会话中的群系统消息使用本地昵称投影', (tester) async {
@@ -1464,13 +1718,17 @@ void main() {
         providerOverrides: <Override>[
           profileApplicationServiceProvider.overrideWithValue(profileService),
           agentControlServiceProvider.overrideWithValue(control),
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = AgentsState(agents: control.agents);
+            return controller;
+          }),
         ],
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-    await tester.pump();
+    await _openCompactChatPeerInfo(tester, settlePeerInfo: false);
 
     expect(profileService.loadPublicProfileCalls, 1);
     expect(profileService.lastPublicProfileQuery, 'did:test:slow-agent');
@@ -1500,7 +1758,11 @@ void main() {
 
     expect(find.text('Profile Agent'), findsWidgets);
     expect(
-      tester.widget<Text>(find.byKey(const Key('chat-header-title'))).data,
+      tester
+          .widget<Text>(
+            find.byKey(const Key('chat-header-title'), skipOffstage: false),
+          )
+          .data,
       '本地智能体',
     );
     expect(find.text('profile 加载完成后的介绍'), findsOneWidget);
@@ -1556,16 +1818,132 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('peer-info-close-button')), findsOneWidget);
-    expect(find.byKey(const Key('chat-follow-button')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('chat-follow-button')));
+    await _openCompactChatPeerInfo(tester);
+    expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('peer-profile-follow')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
+    expect(find.text('取关'), findsOneWidget);
+    expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
+  });
+
+  testWidgets('compact Agent DID 信息页匹配 23:214 且关注后几何稳定', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const agentDid =
+        'did:wba:agent-connect.cn:agent:skill:skill-cc44721e0153c892';
+    const homepageHost = 'skill-cc44721e0153c892.agent-connect.cn';
+    final gateway = FakeAwikiGateway()
+      ..publicProfile = const UserProfile(
+        did: agentDid,
+        displayName: 'Agent Lab',
+        bio: '',
+        tags: <String>[],
+        profileMarkdown: '',
+        handle: 'skill-agent',
+        fullHandle: homepageHost,
+      );
+    final control = FakeAgentControlService()..agents = <AgentSummary>[];
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      threadId: 'dm:agent-info-23-214',
+      conversationId: 'dm:agent-info-23-214',
+      displayName: 'Agent Lab',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 8, 1, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: agentDid,
+      targetPeer: 'skill-agent',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _openCompactChatPeerInfo(tester);
+
+    final header = find.byKey(const Key('peer-info-compact-agent-header'));
+    final avatar = find.byKey(const Key('peer-info-avatar'));
+    final name = find.byKey(const Key('peer-info-dialog-handle-value'));
+    final handle = find.byKey(const Key('peer-info-dialog-display-name'));
+    final follow = find.byKey(const Key('chat-follow-button'));
+    final badges = find.byKey(const Key('peer-info-compact-agent-badges'));
+    final didRow = find.byKey(const Key('peer-info-compact-agent-did-row'));
+    final metadataDivider = find.byKey(
+      const Key('peer-info-compact-agent-metadata-divider'),
+    );
+    final homepage = find.byKey(
+      const Key('peer-info-compact-agent-homepage-row'),
+    );
+    final identity = find.byKey(const Key('peer-info-identity-document'));
+    final sectionDivider = find.byKey(
+      const Key('peer-info-compact-agent-section-divider'),
+    );
+
+    expect(find.text('智能体信息'), findsOneWidget);
+    expect(tester.getRect(header), const Rect.fromLTWH(0, 0, 390, 64));
+    expect(tester.getRect(avatar), const Rect.fromLTWH(155, 92, 80, 80));
+    expect(tester.getRect(name).top, closeTo(190, 1));
+    expect(tester.widget<Text>(name).style?.fontSize, 24);
+    expect(tester.getCenter(name).dx, closeTo(195, 1));
+    expect(tester.getRect(handle).top, closeTo(224, 4));
+    expect(tester.widget<Text>(handle).data, '@skill-agent');
+    expect(tester.widget<Text>(handle).style?.fontSize, 14);
+    expect(tester.getRect(follow), const Rect.fromLTWH(96, 274, 198, 48));
+    expect(tester.getRect(badges), const Rect.fromLTWH(0, 344, 390, 28));
+    expect(tester.getRect(didRow), const Rect.fromLTWH(0, 414, 390, 58));
+    expect(
+      tester.getRect(metadataDivider),
+      const Rect.fromLTWH(92, 471, 274, 1),
+    );
+    expect(tester.getRect(homepage), const Rect.fromLTWH(0, 484, 390, 60));
+    expect(tester.getRect(sectionDivider), const Rect.fromLTWH(0, 544, 390, 1));
+    expect(tester.getRect(identity), const Rect.fromLTWH(24, 570, 342, 104));
+    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('未关注'), findsOneWidget);
+    expect(
+      find.byKey(const Key('peer-info-agent-rename-button')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('compact-bottom-navigation')), findsNothing);
+    expect(
+      tester
+          .getSize(find.byKey(const Key('peer-info-dialog-copy-did-button')))
+          .shortestSide,
+      greaterThanOrEqualTo(44),
+    );
+    expect(tester.getSize(homepage).height, greaterThanOrEqualTo(44));
+
+    final initialButtonRect = tester.getRect(follow);
+    final initialBadgeRect = tester.getRect(badges);
+    await tester.tap(follow);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastFollowedDidOrHandle, agentDid);
     expect(find.text('已关注'), findsWidgets);
-    expect(find.byKey(const Key('chat-unfollow-button')), findsOneWidget);
+    final unfollow = find.byKey(const Key('chat-unfollow-button'));
+    expect(tester.getRect(unfollow), initialButtonRect);
+    expect(tester.getRect(badges), initialBadgeRect);
   });
 
   testWidgets('聊天头部关注失败时保持未关注并提示错误', (tester) async {
@@ -1606,16 +1984,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-follow-button')));
+    await _openCompactChatPeerInfo(tester);
+    await tester.tap(find.byKey(const Key('peer-profile-follow')));
     await tester.pumpAndSettle();
 
     expect(find.text('关注'), findsOneWidget);
     expect(find.text('已关注'), findsNothing);
 
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(ChatView)),
+      tester.element(find.byKey(const Key('peer-profile-follow'))),
     );
     expect(container.read(uiFeedbackProvider)?.danger, isTrue);
     expect(gateway.following, isEmpty);
@@ -1688,8 +2065,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
-    await tester.pumpAndSettle();
+    await _openCompactChatPeerInfo(tester);
 
     expect(find.text('智能体信息'), findsOneWidget);
     expect(find.text('我的智能体'), findsWidgets);
@@ -1771,16 +2147,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('chat-peer-info-avatar-button')));
+    await _openCompactChatPeerInfo(tester);
+    await tester.tap(find.byKey(const Key('peer-profile-unfollow')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('chat-unfollow-button')));
-    await tester.pump();
-
-    expect(gateway.lastUnfollowedDidOrHandle, isNull);
-
-    expect(find.byKey(const Key('confirm-unfollow-button')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('confirm-unfollow-button')));
-    await tester.pump();
 
     expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
   });
@@ -3644,10 +4013,10 @@ void main() {
     final bareBubble = tester.widget<Container>(
       find.byKey(const Key('chat-message-bubble:bare-image-card')),
     );
-    final bareDecoration = bareBubble.decoration! as BoxDecoration;
+    final bareDecoration = bareBubble.decoration! as ShapeDecoration;
     expect(bareBubble.padding, isNot(EdgeInsets.zero));
     expect(bareDecoration.color, isNot(CupertinoColors.transparent));
-    expect(bareDecoration.boxShadow, isNotEmpty);
+    expect(bareDecoration.shadows, isNotEmpty);
     expect(
       find.byKey(const Key('chat-attachment-caption-divider')),
       findsOneWidget,
@@ -3666,7 +4035,7 @@ void main() {
     expect(
       bubbleSize.width,
       moreOrLessEquals(
-        imageSize.width + 26 * AwikiDisplayScale.layoutBaseline,
+        imageSize.width + 32 * AwikiDisplayScale.layoutBaseline,
         epsilon: 1,
       ),
     );
@@ -4649,7 +5018,7 @@ void main() {
     final previewLeft = tester.getTopLeft(find.text('draft reply')).dx;
     expect(mentionLeft, lessThan(draftLeft));
     expect(draftLeft, lessThan(previewLeft));
-    expect(tester.getRect(unreadBadge).right, lessThan(mentionLeft));
+    expect(tester.getRect(unreadBadge).left, greaterThan(previewLeft));
   });
 
   testWidgets('发送中消息只在气泡左侧显示转圈标志且发送按钮保持禁用样式', (tester) async {
@@ -7822,7 +8191,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final peerInfoAvatar = tester.widget<AvatarBadge>(
-      find.byKey(const Key('peer-info-avatar')),
+      find.byKey(const Key('peer-profile-avatar')),
     );
     expect(peerInfoAvatar.seed, '卓诚');
     expect(peerInfoAvatar.avatarUri, avatarUri);

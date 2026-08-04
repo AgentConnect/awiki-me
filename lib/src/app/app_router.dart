@@ -26,9 +26,14 @@ class AppNavigator {
     systemNavigationBarDividerColor: AwikiMePalette.navigationBorder,
   );
 
-  static Future<T?> push<T>(BuildContext context, WidgetBuilder builder) {
+  static Future<T?> push<T>(
+    BuildContext context,
+    WidgetBuilder builder, {
+    bool rootNavigator = false,
+  }) {
     return Navigator.of(
       context,
+      rootNavigator: rootNavigator,
     ).push<T>(CupertinoPageRoute<T>(builder: builder));
   }
 
@@ -65,7 +70,7 @@ class AppNavigator {
       try {
         return await showCupertinoModalPopup<T>(
           context: context,
-          barrierColor: const Color(0x57000000),
+          barrierColor: const Color(0x66000000),
           barrierDismissible: barrierDismissible,
           semanticsDismissible: true,
           useRootNavigator: true,

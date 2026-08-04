@@ -29,21 +29,25 @@ import '../test_support.dart';
 
 void main() {
   for (final scenario
-      in <({String label, Size size, Key layoutKey, double dotSize})>[
+      in <
+        ({String label, Size size, Key layoutKey, double dotSize, bool compact})
+      >[
         (
           label: '移动端',
           size: const Size(390, 844),
           layoutKey: const Key('agents-compact-layout'),
-          dotSize: 10 * AwikiDisplayScale.layoutBaseline,
+          dotSize: 8,
+          compact: true,
         ),
         (
           label: '桌面端',
           size: const Size(1200, 900),
           layoutKey: const Key('agents-expanded-layout'),
           dotSize: 9 * AwikiDisplayScale.layoutBaseline,
+          compact: false,
         ),
       ]) {
-    testWidgets('${scenario.label}智能体列表把状态圆点叠在图标右下角', (tester) async {
+    testWidgets('${scenario.label}智能体列表按对应布局展示状态圆点', (tester) async {
       final control = FakeAgentControlService()
         ..agents = const <AgentSummary>[
           AgentSummary(
@@ -98,28 +102,176 @@ void main() {
         agentDid: 'did:agent:daemon:status-layout',
         title: 'Layout Daemon',
         expectedDotSize: scenario.dotSize,
+        compact: scenario.compact,
       );
       _expectAgentListStatusAnchoredToIcon(
         tester,
         agentDid: 'did:agent:runtime:status-layout',
         title: 'Layout Agent',
         expectedDotSize: scenario.dotSize,
+        compact: scenario.compact,
+      );
+      final runtimeAnchor = find.byKey(
+        const Key('agent-list-status-anchor-did:agent:runtime:status-layout'),
       );
       expect(
-        find.descendant(
-          of: find.byKey(
-            const Key(
-              'agent-list-status-anchor-did:agent:runtime:status-layout',
-            ),
-          ),
-          matching: find.byType(AvatarBadge),
-        ),
-        findsOneWidget,
+        find.descendant(of: runtimeAnchor, matching: find.byType(AvatarBadge)),
+        scenario.compact ? findsNothing : findsOneWidget,
       );
     });
   }
 
-  testWidgets('创建中的智能体同样把状态圆点叠在临时图标右下角', (tester) async {
+  testWidgets('compact Agent list renders Daemon runtime tree geometry', (
+    tester,
+  ) async {
+    const daemonDid = 'did:agent:daemon:compact-tree';
+    const codexDid = 'did:agent:runtime:compact-tree-codex';
+    const hermesDid = 'did:agent:runtime:compact-tree-hermes';
+    final control = FakeAgentControlService()
+      ..agents = const <AgentSummary>[
+        AgentSummary(
+          agentDid: daemonDid,
+          kind: AgentKind.daemon,
+          displayName: 'Local Daemon',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: codexDid,
+          kind: AgentKind.runtime,
+          daemonAgentDid: daemonDid,
+          runtime: 'codex',
+          displayName: 'Codex UI',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+        AgentSummary(
+          agentDid: hermesDid,
+          kind: AgentKind.runtime,
+          daemonAgentDid: daemonDid,
+          runtime: 'hermes',
+          displayName: 'Hermes UI',
+          activeState: 'active',
+          latest: AgentLatestStatus(status: 'ready'),
+        ),
+      ];
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final vertical = find.byKey(const Key('agent-tree-vertical-$daemonDid'));
+    final daemonIcon = find.byKey(const Key('agent-list-kind-icon-$daemonDid'));
+    final daemonTile = find.byKey(const Key('agent-list-tile-$daemonDid'));
+    final installRow = find.byKey(const Key('agents-install-daemon-row'));
+    final header = find.byKey(const Key('agents-compact-list-header'));
+    final section = find.byKey(const Key('agents-compact-section-header'));
+    final listPane = tester.widget<ColoredBox>(
+      find.byKey(const Key('agents-list-pane')),
+    );
+
+    expect(vertical, findsOneWidget);
+    expect(daemonIcon, findsOneWidget);
+    expect(
+      find.descendant(of: daemonIcon, matching: find.byType(DecoratedBox)),
+      findsNothing,
+    );
+    expect(tester.getSize(daemonTile).height, closeTo(65, 0.1));
+    expect(tester.getSize(installRow).height, closeTo(56, 0.1));
+    expect(tester.getRect(header), const Rect.fromLTWH(0, 0, 390, 64));
+    final compactTitle = tester.widget<Text>(
+      find.descendant(of: header, matching: find.text('智能体')),
+    );
+    expect(compactTitle.style?.fontSize, 16);
+    expect(compactTitle.style?.fontWeight, FontWeight.w600);
+    expect(compactTitle.style?.height, 1.25);
+    expect(tester.getRect(section), const Rect.fromLTWH(0, 64, 390, 60));
+    expect(listPane.color, AwikiMeColors.background);
+    final sectionSurface = tester.widget<DecoratedBox>(
+      find.descendant(of: section, matching: find.byType(DecoratedBox)),
+    );
+    final sectionDecoration = sectionSurface.decoration as BoxDecoration;
+    expect(sectionDecoration.color, AwikiMeColors.surface);
+    expect(
+      (sectionDecoration.border! as Border).bottom.color,
+      AwikiMeColors.border,
+    );
+    expect(
+      tester.getCenter(find.byKey(const Key('agents-more-actions-button'))).dx,
+      closeTo(300, 1.5),
+    );
+    expect(
+      tester
+          .getCenter(find.byKey(const Key('agents-install-daemon-button')))
+          .dx,
+      closeTo(356, 1.5),
+    );
+    expect(tester.getRect(daemonTile).top, closeTo(124, 0.1));
+    expect(tester.getTopLeft(find.text('我的智能体')).dx, closeTo(20, 0.1));
+    expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
+    expect(
+      tester.widget<Container>(vertical).color,
+      AwikiMePalette.navigationBorder,
+    );
+
+    final verticalRect = tester.getRect(vertical);
+    final runtimeCenters = <double>[];
+    for (final runtimeDid in <String>[codexDid, hermesDid]) {
+      final tile = find.byKey(Key('agent-list-tile-$runtimeDid'));
+      final branch = find.byKey(Key('agent-tree-branch-$runtimeDid'));
+      final icon = find.byKey(Key('agent-list-kind-icon-$runtimeDid'));
+      final branchRect = tester.getRect(branch);
+      final iconRect = tester.getRect(icon);
+
+      expect(branch, findsOneWidget);
+      expect(
+        tester
+            .widget<ColoredBox>(
+              find.descendant(of: branch, matching: find.byType(ColoredBox)),
+            )
+            .color,
+        AwikiMePalette.navigationBorder,
+      );
+      expect(tester.getSize(tile).height, closeTo(75.5, 0.1));
+      expect(branchRect.left, closeTo(verticalRect.center.dx, 0.6));
+      expect(branchRect.right, closeTo(iconRect.left, 0.6));
+      expect(branchRect.center.dy, closeTo(iconRect.center.dy, 0.6));
+      runtimeCenters.add(iconRect.center.dy);
+    }
+    expect(
+      tester.getRect(find.byKey(const Key('agent-list-tile-$codexDid'))).top,
+      closeTo(189, 0.1),
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('agent-list-tile-$hermesDid'))).top,
+      closeTo(264.5, 0.1),
+    );
+    expect(tester.getRect(installRow).top, closeTo(340, 0.1));
+    final daemonChevron = find.descendant(
+      of: daemonTile,
+      matching: find.byIcon(CupertinoIcons.chevron_right),
+    );
+    expect(390 - tester.getRect(daemonChevron).right, closeTo(24.7, 1));
+    expect(verticalRect.top, lessThan(runtimeCenters.first));
+    expect(verticalRect.bottom, greaterThan(runtimeCenters.last));
+  });
+
+  testWidgets('创建中的智能体同样在 metadata 行前展示状态圆点', (tester) async {
     const daemonDid = 'did:agent:daemon:pending-layout';
     const requestId = 'pending-layout-request';
     tester.view.physicalSize = const Size(390, 844);
@@ -171,20 +323,13 @@ void main() {
     final anchor = find.byKey(
       const Key('agent-list-status-anchor-pending-$requestId'),
     );
-    final dot = find.descendant(
-      of: anchor,
-      matching: find.byType(AgentStatusDot),
-    );
+    final dot = anchor;
     expect(anchor, findsOneWidget);
     expect(dot, findsOneWidget);
+    expect(tester.widget<AgentStatusDot>(dot).size, 8);
     expect(
-      tester.widget<AgentStatusDot>(dot).size,
-      10 * AwikiDisplayScale.layoutBaseline,
-    );
-    _expectBottomRightOverlay(tester, anchor: anchor, indicator: dot);
-    expect(
-      tester.getCenter(dot).dx,
-      lessThan(tester.getRect(find.text('Pending Agent')).left),
+      tester.getCenter(dot).dy,
+      greaterThan(tester.getRect(find.text('Pending Agent')).bottom),
     );
   });
 
@@ -2719,13 +2864,13 @@ void _expectAgentListStatusAnchoredToIcon(
   required String agentDid,
   required String title,
   required double expectedDotSize,
+  required bool compact,
 }) {
   final tile = find.byKey(Key('agent-list-tile-$agentDid'));
   final anchor = find.byKey(Key('agent-list-status-anchor-$agentDid'));
-  final indicator = find.descendant(
-    of: anchor,
-    matching: find.byType(AgentStatusDot),
-  );
+  final indicator = compact
+      ? anchor
+      : find.descendant(of: anchor, matching: find.byType(AgentStatusDot));
   final titleFinder = find.descendant(of: tile, matching: find.text(title));
 
   expect(tile, findsOneWidget);
@@ -2736,11 +2881,18 @@ void _expectAgentListStatusAnchoredToIcon(
     find.descendant(of: tile, matching: find.byType(AgentStatusDot)),
     findsOneWidget,
   );
-  _expectBottomRightOverlay(tester, anchor: anchor, indicator: indicator);
-  expect(
-    tester.getCenter(indicator).dx,
-    lessThan(tester.getRect(titleFinder).left),
-  );
+  if (compact) {
+    expect(
+      tester.getCenter(indicator).dy,
+      greaterThan(tester.getRect(titleFinder).bottom),
+    );
+  } else {
+    _expectBottomRightOverlay(tester, anchor: anchor, indicator: indicator);
+    expect(
+      tester.getCenter(indicator).dx,
+      lessThan(tester.getRect(titleFinder).left),
+    );
+  }
 }
 
 void _expectBottomRightOverlay(
