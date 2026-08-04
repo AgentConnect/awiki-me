@@ -5,7 +5,7 @@
 
 整体流程以 Core 仓库的
 [多设备架构](../../awiki-cli-rs2/docs/architecture/multi-device/multi-device-architecter.md)
-和 [Step 08](../../plan/20260718-awiki-multi-device-implementation/steps/08-mls-multi-device.md)
+和 [Step 08](../../awiki-plan/20260718-awiki-multi-device-implementation/steps/08-mls-multi-device.md)
 为准。本文只记录 AWiki Me 的产品边界。
 
 ## 产品状态

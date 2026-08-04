@@ -3,7 +3,7 @@
 状态：Step 3 V1 active contract；唯一原生生产路径
 
 总体协议与密码学边界以
-[`v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md`](../../plan/20260718-awiki-multi-device-implementation/refactor/v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md)
+[`v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md`](../../awiki-plan/20260718-awiki-multi-device-implementation/refactor/v1-step3-root-key-transfer-and-management-readiness-implementation-plan.md)
 为准。本文只记录 AWiki Me 的产品入口、Host API 和状态边界。
 
 ## 1. 唯一产品入口
