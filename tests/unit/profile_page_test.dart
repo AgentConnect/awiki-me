@@ -72,6 +72,10 @@ void main() {
       tester.getRect(find.byKey(const Key('profile-compact-header'))),
       const Rect.fromLTWH(0, 0, 390, 64),
     );
+    expect(
+      tester.getRect(find.byKey(const Key('profile-compact-summary'))).top,
+      64,
+    );
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
   });
 

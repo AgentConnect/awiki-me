@@ -108,7 +108,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         padding: responsive.isCompact
             ? EdgeInsets.fromLTRB(
                 0,
-                40,
+                0,
                 0,
                 widget.embedded ? widget.bottomInset : 88,
               )
