@@ -53,6 +53,9 @@ class DidDisplayFormatter {
     return _cleanHandle(profile.handle);
   }
 
+  static String compactProfileHandle(UserProfile profile) =>
+      PeerDisplayNameResolver.compactHandle(profileHandle(profile));
+
   static String profileHandleLabel(UserProfile profile) {
     final handle = profileHandle(profile);
     return handle.isEmpty ? profileName(profile) : '@$handle';
@@ -145,6 +148,7 @@ class DidDisplayFormatter {
       nickname: profile.displayName,
       fullHandle: profile.fullHandle ?? profile.handle,
       did: profile.did,
+      compactQualifiedHandle: true,
     );
   }
 

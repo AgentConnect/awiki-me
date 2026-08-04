@@ -99,7 +99,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final handleLabel = DidDisplayFormatter.identityLookupSecondaryHandle(
       profile,
     );
-    final compactHandle = DidDisplayFormatter.profileHandle(profile);
+    final compactHandle = DidDisplayFormatter.compactProfileHandle(profile);
     final homepageUrl = ref
         .watch(profileHomepageResolverProvider)
         .homepageUrl(profile);

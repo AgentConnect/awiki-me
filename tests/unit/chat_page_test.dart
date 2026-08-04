@@ -1351,6 +1351,36 @@ void main() {
     expect(profileService.loadPublicProfileCalls, 0);
   });
 
+  testWidgets('单聊页头在只有完整 Handle 时隐藏域名', (tester) async {
+    final conversation = ConversationSummary(
+      threadId: 'dm:compact-handle-header',
+      conversationId: 'dm:compact-handle-header',
+      displayName: 'newhandle1.agent-connect.cn',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:newhandle1',
+      targetPeer: 'newhandle1.agent-connect.cn',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: FakeAwikiGateway(),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('chat-header-title'))).data,
+      'newhandle1',
+    );
+    expect(find.text('newhandle1.agent-connect.cn'), findsNothing);
+  });
+
   testWidgets('单聊页头在 current DID 缺失时仍按 Persona 读取本地昵称', (tester) async {
     final profileCompleter = Completer<UserProfile>();
     final profileService = _DelayedProfileApplicationService(profileCompleter);
@@ -1460,6 +1490,38 @@ void main() {
     expect(find.text('zhuocheng'), findsOneWidget);
     expect(find.text('lzc.awiki.ai'), findsNothing);
     expect(profileService.loadPublicProfileCalls, 0);
+  });
+
+  testWidgets('最近会话在只有完整 Handle 时隐藏域名', (tester) async {
+    final conversation = ConversationSummary(
+      threadId: 'dm:compact-handle-list',
+      conversationId: 'dm:compact-handle-list',
+      displayName: 'newhandle2.agent-connect.cn',
+      lastMessagePreview: 'hello',
+      lastMessageAt: DateTime(2026, 4, 5, 12),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:test:newhandle2',
+      targetPeer: 'newhandle2.agent-connect.cn',
+    );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const ConversationListPage(embedded: true, bottomInset: 0),
+        providerOverrides: <Override>[
+          conversationListProvider.overrideWith(
+            (ref) => _StaticConversationListController(
+              ref,
+              <ConversationSummary>[conversation],
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('newhandle2'), findsOneWidget);
+    expect(find.text('newhandle2.agent-connect.cn'), findsNothing);
   });
 
   testWidgets('最近会话中的群系统消息使用本地昵称投影', (tester) async {

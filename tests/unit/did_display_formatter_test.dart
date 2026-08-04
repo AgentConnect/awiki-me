@@ -39,7 +39,7 @@ void main() {
           handle: 'bob.awiki.ai',
         ),
       ),
-      'bob.awiki.ai',
+      'bob',
     );
   });
 
@@ -127,13 +127,10 @@ void main() {
       profileMarkdown: '',
     );
 
-    expect(
-      DidDisplayFormatter.identityLookupTitle(withHandle),
-      'alice.awiki.ai',
-    );
+    expect(DidDisplayFormatter.identityLookupTitle(withHandle), 'alice');
     expect(
       DidDisplayFormatter.identityLookupSecondaryHandle(withHandle),
-      isEmpty,
+      '@alice.awiki.ai',
     );
     expect(DidDisplayFormatter.identityLookupTitle(didOnly), 'bob');
     expect(DidDisplayFormatter.identityLookupSecondaryHandle(didOnly), isEmpty);

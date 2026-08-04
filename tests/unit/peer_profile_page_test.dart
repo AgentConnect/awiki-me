@@ -258,6 +258,18 @@ void main() {
     expect(find.text('主页'), findsOneWidget);
     expect(find.text('身份卡'), findsOneWidget);
     expect(find.text('暂无资料'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
+          .data,
+      'newhandle1',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-handle-value')))
+          .data,
+      '@newhandle1.agent-connect.cn',
+    );
 
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-avatar'))),

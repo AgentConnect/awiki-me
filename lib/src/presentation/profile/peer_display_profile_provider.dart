@@ -571,6 +571,7 @@ String _resolvePeerDisplayName({
     senderNameSnapshot: request.senderNameSnapshot,
     did: request.did,
     unknownLabel: request.unknownLabel,
+    compactQualifiedHandle: true,
   );
 }
 

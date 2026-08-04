@@ -155,7 +155,7 @@ void main() {
     final handle = tester.widget<Text>(
       find.byKey(const Key('profile-handle-value')),
     );
-    expect(handle.data, 'newhandle2.agent-connect.cn');
+    expect(handle.data, 'newhandle2');
     expect(handle.maxLines, 1);
     expect(handle.softWrap, isFalse);
     expect(
