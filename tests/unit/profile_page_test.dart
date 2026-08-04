@@ -112,10 +112,13 @@ void main() {
       tester.getSize(find.byKey(const Key('profile-avatar'))),
       const Size.square(72),
     );
+    expect(find.text('编辑个人资料'), findsNothing);
     expect(
       tester.getSize(find.byKey(const Key('profile-edit-button'))).height,
-      48,
+      greaterThanOrEqualTo(104),
     );
+    expect(find.byKey(const Key('profile-edit-chevron')), findsOneWidget);
+    expect(find.byKey(const Key('profile-statistics-divider')), findsNothing);
     expect(find.byKey(const Key('profile-handle-value')), findsNothing);
     expect(find.text('身份卡'), findsNothing);
     expect(

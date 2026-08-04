@@ -506,124 +506,145 @@ class _CompactProfileSummary extends StatelessWidget {
         .toList(growable: false);
     return Container(
       key: const Key('profile-compact-summary'),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.subtleSurface,
         borderRadius: BorderRadius.circular(20),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              AvatarBadge(
-                key: const Key('profile-avatar'),
-                seed: displayName,
-                size: 72,
-                avatarUri: avatarUri,
+          SelectionContainer.disabled(
+            child: AppPressable(
+              key: const Key('profile-edit-button'),
+              onTap: isSaving ? null : onEdit,
+              semanticLabel: context.l10n.profileEditTitle,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: <Widget>[
-                    Text(
-                      displayName,
-                      key: const Key('profile-display-name'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: theme.title,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        height: 1.25,
+                    AvatarBadge(
+                      key: const Key('profile-avatar'),
+                      seed: displayName,
+                      size: 72,
+                      avatarUri: avatarUri,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            displayName,
+                            key: const Key('profile-display-name'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.title,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                            ),
+                          ),
+                          if (bio.trim().isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 6),
+                            Text(
+                              bio.trim(),
+                              key: const Key('profile-bio'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: theme.secondaryText,
+                                fontSize: 14,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                          if (visibleTags.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 10),
+                            Wrap(
+                              key: const Key('profile-tags'),
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: visibleTags
+                                  .map((tag) => _CompactProfileTag(label: tag))
+                                  .toList(growable: false),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    if (bio.trim().isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 6),
-                      Text(
-                        bio.trim(),
-                        key: const Key('profile-bio'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Center(
+                        child: Icon(
+                          CupertinoIcons.chevron_right,
+                          key: const Key('profile-edit-chevron'),
+                          size: 20,
                           color: theme.secondaryText,
-                          fontSize: 14,
-                          height: 1.45,
                         ),
                       ),
-                    ],
-                    if (visibleTags.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 10),
-                      Wrap(
-                        key: const Key('profile-tags'),
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: visibleTags
-                            .map(
-                              (tag) => IdentityProfileBadge(
-                                label: tag,
-                                tone: IdentityProfileBadgeTone.outlined,
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: SelectionContainer.disabled(
-                  child: AppPressable(
-                    key: const Key('profile-edit-button'),
-                    onTap: isSaving ? null : onEdit,
-                    semanticLabel: context.l10n.profileEditTitle,
-                    borderRadius: BorderRadius.circular(14),
-                    child: Container(
-                      height: 48,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: theme.primary,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        context.l10n.profileEditTitle,
-                        style: TextStyle(
-                          color: theme.primaryForeground,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+          Container(
+            key: const Key('profile-statistics-top-divider'),
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            color: theme.border,
+          ),
+          SelectionContainer.disabled(
+            child: SizedBox(
+              height: 50,
+              child: _CompactProfileStatistics(
+                followersCount: followersCount,
+                followingCount: followingCount,
+                onFollowingTap: onFollowingTap,
+                onFollowersTap: onFollowersTap,
               ),
-              const SizedBox(width: 12),
-              SelectionContainer.disabled(
-                child: Container(
-                  width: 126,
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: theme.surface,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: _CompactProfileStatistics(
-                    followersCount: followersCount,
-                    followingCount: followingCount,
-                    onFollowingTap: onFollowingTap,
-                    onFollowersTap: onFollowersTap,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CompactProfileTag extends StatelessWidget {
+  const _CompactProfileTag({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: CupertinoColors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AwikiMePalette.actionBlue.withValues(alpha: 0.42),
+        ),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: theme.secondaryText,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          height: 1,
+        ),
       ),
     );
   }
@@ -649,7 +670,7 @@ class _CompactProfileStatistics extends StatelessWidget {
     return Stack(
       children: <Widget>[
         const Positioned(
-          top: 7,
+          top: 10,
           left: 0,
           right: 0,
           height: 30,
@@ -664,12 +685,6 @@ class _CompactProfileStatistics extends StatelessWidget {
                 label: context.l10n.profileFollowing,
                 onTap: onFollowingTap,
               ),
-            ),
-            Container(
-              key: const Key('profile-statistics-divider'),
-              width: 1,
-              height: 30,
-              color: context.awikiTheme.border,
             ),
             Expanded(
               child: _ProfileStatAction(
