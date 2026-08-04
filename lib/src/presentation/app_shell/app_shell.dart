@@ -8,12 +8,14 @@ import '../../app/e2e_semantics.dart';
 import '../../app/app_router.dart';
 import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
+import '../../application/tenant/app_tenant.dart';
 import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/services/realtime_gateway.dart';
 import '../../l10n/l10n.dart';
 import '../conversation_list/conversation_workspace_page.dart';
 import '../conversation_list/conversation_provider.dart';
+import '../chat/chat_provider.dart';
 import '../devices/device_join_approval_sheet.dart';
 import '../devices/devices_provider.dart';
 import '../agents/agents_page.dart';
@@ -31,8 +33,10 @@ import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/startup_splash.dart';
 import '../shared/widgets/app_widgets.dart';
+import 'foreground_message_banner.dart';
 import 'providers/app_update_provider.dart';
 import 'providers/app_runtime_provider.dart';
+import 'providers/foreground_message_banner_provider.dart';
 import 'providers/message_sync_coordinator_provider.dart';
 import 'providers/navigation_provider.dart';
 import 'providers/selected_conversation_provider.dart';
@@ -111,6 +115,23 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     final messageSync = ref.watch(messageSyncCoordinatorProvider);
+    final foregroundMessageBanner = ref.watch(foregroundMessageBannerProvider);
+    final visibleForegroundMessageBanner =
+        foregroundMessageBanner != null &&
+            _isForegroundMessageBannerCurrent(foregroundMessageBanner)
+        ? foregroundMessageBanner
+        : null;
+    if (foregroundMessageBanner != null &&
+        visibleForegroundMessageBanner == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ref
+            .read(foregroundMessageBannerProvider.notifier)
+            .dismiss(sequence: foregroundMessageBanner.sequence);
+      });
+    }
     final realtimeStatus = ref
         .watch(realtimeConnectionStatusProvider)
         .maybeWhen(
@@ -257,6 +278,21 @@ class _AppShellState extends ConsumerState<AppShell> {
               deviceId: pendingJoinRequest.protocolDeviceId,
               onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
             ),
+          if (pendingJoinRequest == null &&
+              visibleForegroundMessageBanner != null)
+            _ForegroundMessageBannerOverlay(
+              event: visibleForegroundMessageBanner,
+              onTap: () => unawaited(
+                _openForegroundMessageConversation(
+                  visibleForegroundMessageBanner,
+                ),
+              ),
+              onDismiss: () {
+                ref
+                    .read(foregroundMessageBannerProvider.notifier)
+                    .dismiss(sequence: visibleForegroundMessageBanner.sequence);
+              },
+            ),
           if (runtime.isBusy)
             AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
           if (_shouldShowRealtimeToast(realtimeStatus))
@@ -313,6 +349,60 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
     if (mounted) {
       await ref.read(devicesProvider.notifier).refreshJoinInbox();
+    }
+  }
+
+  bool _isForegroundMessageBannerCurrent(ForegroundMessageBannerEvent event) {
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    return epoch != null &&
+        event.storageScopeId ==
+            ref.read(activeAppTenantProvider).storageScopeId &&
+        event.ownerDid == epoch.ownerDid &&
+        event.sessionGeneration == epoch.generation;
+  }
+
+  Future<void> _openForegroundMessageConversation(
+    ForegroundMessageBannerEvent event,
+  ) async {
+    if (!_isForegroundMessageBannerCurrent(event)) {
+      ref
+          .read(foregroundMessageBannerProvider.notifier)
+          .dismiss(sequence: event.sequence);
+      return;
+    }
+    final epoch = ref.read(sessionProvider).activeEpoch!;
+    ref
+        .read(foregroundMessageBannerProvider.notifier)
+        .dismiss(sequence: event.sequence);
+    try {
+      final conversation = await ref
+          .read(conversationListProvider.notifier)
+          .commitConversationId(event.conversationId, expectedEpoch: epoch);
+      if (!mounted || ref.read(sessionProvider).activeEpoch != epoch) {
+        return;
+      }
+      await ref
+          .read(chatThreadsProvider.notifier)
+          .openConversation(conversation);
+      if (!mounted || ref.read(sessionProvider).activeEpoch != epoch) {
+        return;
+      }
+      ref
+          .read(selectedConversationProvider.notifier)
+          .selectConversation(conversation);
+      ref
+          .read(shellDestinationProvider.notifier)
+          .selectForLayout(
+            ShellDestination.messages,
+            expanded: context.awikiResponsive.usesDesktopLayout,
+          );
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) {
+        navigator.popUntil((route) => route.isFirst);
+      }
+    } on Object {
+      // A stale or deleted committed conversation leaves the current page
+      // unchanged. The banner has already been dismissed by the user's tap.
     }
   }
 
@@ -455,6 +545,41 @@ class _RetainedDestinationPage extends StatelessWidget {
         child: ExcludeSemantics(
           excluding: !active,
           child: IgnorePointer(ignoring: !active, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _ForegroundMessageBannerOverlay extends StatelessWidget {
+  const _ForegroundMessageBannerOverlay({
+    required this.event,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  final ForegroundMessageBannerEvent event;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    return Positioned(
+      left: responsive.isPhone ? 12 : 20,
+      right: responsive.isPhone ? 12 : 20,
+      top: 12,
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: ForegroundMessageBanner(
+              event: event,
+              onTap: onTap,
+              onDismiss: onDismiss,
+            ),
+          ),
         ),
       ),
     );

@@ -43,6 +43,7 @@ import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/domain/services/remote_push_client.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/foreground_message_banner_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/remote_push_coordinator_provider.dart';
@@ -1007,7 +1008,7 @@ void main() {
       expect(gateway.lastFetchedLocalDmPeerDid, conversation.targetDid);
     });
 
-    test('前台收到消息时显示真实 UI feedback', () async {
+    test('前台收到消息时显示可交互 App 内 Banner', () async {
       gateway.nextRealtimeUpdate = buildUpdate();
       container
           .read(appLifecycleProvider.notifier)
@@ -1016,15 +1017,16 @@ void main() {
       await activate();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
 
-      final feedback = container.read(uiFeedbackProvider);
-      expect(feedback?.message.id, 'newMessageArrived');
-      expect(feedback?.detail, 'Peer：hello');
-      expect(feedback?.danger, isFalse);
+      final banner = container.read(foregroundMessageBannerProvider);
+      expect(banner?.content.conversationTitle, 'Peer');
+      expect(banner?.content.senderLabel, 'Peer');
+      expect(banner?.content.preview, 'hello');
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('前台当前可见会话收到消息时不显示全局 UI feedback', () async {
+    test('前台当前可见会话收到消息时不显示全局 Banner', () async {
       final update = buildUpdate();
       gateway.nextRealtimeUpdate = update;
       container
@@ -1853,6 +1855,50 @@ void main() {
       expect(notificationFacade.lastInAppTitle, isNull);
     });
 
+    test(
+      'opaque group E2EE payload never reaches Banner or system notification',
+      () async {
+        gateway.nextRealtimeUpdate = RealtimeUpdate(
+          ownerDid: 'did:test:me',
+          message: ChatMessage(
+            localId: 'opaque-group-control',
+            remoteId: 'opaque-group-control',
+            conversationId: 'group:secure-group',
+            threadId: 'group:secure-group',
+            senderDid: 'did:test:peer',
+            senderName: 'Peer',
+            groupId: 'secure-group',
+            content: 'opaque ciphertext must not be presented',
+            originalType: 'application/awiki-group-e2ee+json',
+            createdAt: DateTime(2026, 8, 4, 19, 30),
+            isMine: false,
+            isEncrypted: true,
+            sendState: MessageSendState.sent,
+          ),
+          conversationHint: ConversationSummary(
+            threadId: 'group:secure-group',
+            conversationId: 'group:secure-group',
+            displayName: 'Secure Group',
+            lastMessagePreview: 'opaque ciphertext must not be presented',
+            lastMessageAt: DateTime(2026, 8, 4, 19, 30),
+            unreadCount: 1,
+            isGroup: true,
+            groupId: 'secure-group',
+          ),
+        );
+        container
+            .read(appLifecycleProvider.notifier)
+            .setLifecycle(AppLifecycleState.paused);
+
+        await activate();
+        await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+        expect(container.read(foregroundMessageBannerProvider), isNull);
+        expect(notificationFacade.lastSystemTitle, isNull);
+        expect(notificationFacade.lastSystemBody, isNull);
+      },
+    );
+
     test('后台系统通知标题使用发信人短昵称', () async {
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2506,7 +2552,11 @@ void main() {
       expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
       expect(container.read(conversationListProvider).conversations, isEmpty);
-      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
+      expect(
+        container.read(foregroundMessageBannerProvider)?.content.preview,
+        'hello',
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
@@ -2553,7 +2603,12 @@ void main() {
       );
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
-      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello group');
+      final groupBanner = container.read(foregroundMessageBannerProvider);
+      expect(groupBanner?.content.conversationTitle, '融资协作群');
+      expect(groupBanner?.content.senderLabel, 'Peer');
+      expect(groupBanner?.content.preview, 'hello group');
+      expect(groupBanner?.content.isGroup, isTrue);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
     });
 
@@ -2596,7 +2651,7 @@ void main() {
       await pumpEventQueue();
       messageSyncService.syncReasons.clear();
 
-      final incoming = buildUpdate().message!;
+      final incoming = buildUpdate().message!.copyWith(conversationId: 'dm:1');
       messageSyncService.deltaResult = MessageSyncOutcome(
         status: MessageSyncStatus.changed,
         eventsApplied: 1,
@@ -2633,7 +2688,11 @@ void main() {
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups, isEmpty);
       expect(notificationFacade.inAppCalls, 0);
-      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
+      expect(
+        container.read(foregroundMessageBannerProvider)?.content.preview,
+        'hello',
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.systemCalls, 0);
 
       messageSyncService.deltaResult = const MessageSyncOutcome(
@@ -2666,7 +2725,10 @@ void main() {
 
       expect(container.read(groupProvider).groups, isEmpty);
       expect(notificationFacade.inAppCalls, 0);
-      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
+      expect(
+        container.read(foregroundMessageBannerProvider)?.content.preview,
+        'hello',
+      );
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2698,14 +2760,18 @@ void main() {
       await pumpEventQueue();
 
       expect(notificationFacade.inAppCalls, 0);
-      expect(
-        container.read(uiFeedbackProvider)?.detail,
-        contains('Encrypted Peer'),
+      final encryptedDirectBanner = container.read(
+        foregroundMessageBannerProvider,
       );
       expect(
-        container.read(uiFeedbackProvider)?.detail,
-        contains('existing secure realtime payload'),
+        encryptedDirectBanner?.content.conversationTitle,
+        'Encrypted Peer',
       );
+      expect(
+        encryptedDirectBanner?.content.preview,
+        'existing secure realtime payload',
+      );
+      expect(container.read(uiFeedbackProvider), isNull);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2754,9 +2820,16 @@ void main() {
         'secure-group',
       );
       expect(notificationFacade.inAppCalls, 0);
+      final afterOpaqueGroupControl = container.read(
+        foregroundMessageBannerProvider,
+      );
       expect(
-        container.read(uiFeedbackProvider)?.detail,
-        contains('Encrypted Peer'),
+        afterOpaqueGroupControl?.sequence,
+        encryptedDirectBanner?.sequence,
+      );
+      expect(
+        afterOpaqueGroupControl?.content.preview,
+        'existing secure realtime payload',
       );
     });
 

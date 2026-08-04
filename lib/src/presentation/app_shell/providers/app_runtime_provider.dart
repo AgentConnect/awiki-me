@@ -41,6 +41,7 @@ import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
 import 'account_state_sync_coordinator_provider.dart';
 import 'agent_terminal_notification_provider.dart';
+import 'foreground_message_banner_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'navigation_provider.dart';
 import 'remote_push_coordinator_provider.dart';
@@ -1387,7 +1388,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ConversationSummary conversationHint,
   ) {
     final message = update.message;
-    if (message == null) {
+    if (message == null || !isOrdinaryMessagePresentationEligible(message)) {
       return;
     }
     final title = _notificationTitle(update, conversationHint);
@@ -1436,9 +1437,23 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
           .isConversationVisible(conversationHint.conversationId)) {
         return;
       }
+      final content = resolveForegroundMessageBannerContent(
+        message: message,
+        conversation: conversationHint,
+        senderLabel: title,
+        preview: body,
+        groupFallbackTitle: l10n.conversationPeerTypeGroup,
+      );
       ref
-          .read(uiFeedbackProvider.notifier)
-          .showInfo(AppMessage.newMessageArrived(), detail: '$title：$body');
+          .read(foregroundMessageBannerProvider.notifier)
+          .show(
+            storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+            ownerDid: expectedEpoch.ownerDid,
+            sessionGeneration: expectedEpoch.generation,
+            conversationId: conversationHint.conversationId,
+            content: content,
+            receivedAt: message.createdAt,
+          );
     } else {
       final target = NotificationTarget(
         storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,

@@ -7,7 +7,6 @@ import 'package:flutter/widgets.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
-import '../../../app/ui_feedback.dart';
 import '../../../application/messaging_service.dart';
 import '../../../application/models/message_sync_diagnostics.dart';
 import '../../../application/models/remote_push_sync_receipt.dart';
@@ -28,6 +27,7 @@ import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
 import 'agent_terminal_notification_provider.dart';
 import 'app_lifecycle_provider.dart';
+import 'foreground_message_banner_provider.dart';
 import 'session_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
@@ -1222,6 +1222,9 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     ChatMessage message, {
     bool suppressWhenForeground = false,
   }) async {
+    if (!isOrdinaryMessagePresentationEligible(message)) {
+      return;
+    }
     final epoch = ref.read(sessionProvider).activeEpoch;
     if (_disposed || epoch == null) {
       return;
@@ -1335,11 +1338,25 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
               .isConversationVisible(conversationId)) {
         return;
       }
+      final conversation = ref
+          .read(conversationListProvider)
+          .entitiesById[conversationId];
+      final content = resolveForegroundMessageBannerContent(
+        message: message,
+        conversation: conversation,
+        senderLabel: resolvedTitle,
+        preview: body,
+        groupFallbackTitle: l10n.conversationPeerTypeGroup,
+      );
       ref
-          .read(uiFeedbackProvider.notifier)
-          .showInfo(
-            AppMessage.newMessageArrived(),
-            detail: '$resolvedTitle：$body',
+          .read(foregroundMessageBannerProvider.notifier)
+          .show(
+            storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+            ownerDid: epoch.ownerDid,
+            sessionGeneration: epoch.generation,
+            conversationId: conversationId,
+            content: content,
+            receivedAt: message.createdAt,
           );
     } else {
       final session = ref.read(sessionProvider).session;
