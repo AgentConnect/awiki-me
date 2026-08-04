@@ -67,6 +67,7 @@ class MessageSyncCoordinatorState {
     this.lastFailureHttpStatus,
     this.retryableFailureSurfaceAt,
     this.retryableFailureVisible = false,
+    this.transientFailurePresentationSuppressed = false,
     this.consecutiveRetryableFailures = 0,
     this.automaticRetryPending = false,
   });
@@ -93,6 +94,7 @@ class MessageSyncCoordinatorState {
   final int? lastFailureHttpStatus;
   final DateTime? retryableFailureSurfaceAt;
   final bool retryableFailureVisible;
+  final bool transientFailurePresentationSuppressed;
   final int consecutiveRetryableFailures;
   final bool automaticRetryPending;
 
@@ -160,6 +162,7 @@ class MessageSyncCoordinatorState {
     Object? lastFailureHttpStatus = _unset,
     Object? retryableFailureSurfaceAt = _unset,
     bool? retryableFailureVisible,
+    bool? transientFailurePresentationSuppressed,
     int? consecutiveRetryableFailures,
     bool? automaticRetryPending,
   }) {
@@ -217,6 +220,9 @@ class MessageSyncCoordinatorState {
           : retryableFailureSurfaceAt as DateTime?,
       retryableFailureVisible:
           retryableFailureVisible ?? this.retryableFailureVisible,
+      transientFailurePresentationSuppressed:
+          transientFailurePresentationSuppressed ??
+          this.transientFailurePresentationSuppressed,
       consecutiveRetryableFailures:
           consecutiveRetryableFailures ?? this.consecutiveRetryableFailures,
       automaticRetryPending:
@@ -301,7 +307,10 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     return _requestSync(
       'remote_push',
       immediate: true,
-      policy: _MessageSyncRequestPolicy(suppressNotificationPresentation: true),
+      policy: _MessageSyncRequestPolicy(
+        suppressNotificationPresentation: true,
+        suppressTransientFailurePresentation: true,
+      ),
       remotePushRequest: true,
     );
   }
@@ -360,6 +369,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         active.policy.merge(
           suppressNotificationPresentation:
               policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              policy.suppressTransientFailurePresentation,
         );
         if (remotePushRequest) {
           _messageSyncTrace(
@@ -378,6 +389,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queuedPolicy.merge(
           suppressNotificationPresentation:
               active.policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              active.policy.suppressTransientFailurePresentation,
         );
       }
       final queuedFuture = _queueAfterActive(
@@ -485,6 +498,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queuedPolicy.merge(
           suppressNotificationPresentation:
               active.policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              active.policy.suppressTransientFailurePresentation,
         );
       }
       _queueAfterActive(
@@ -841,6 +856,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     queued.immediate = queued.immediate || immediate;
     queued.policy.merge(
       suppressNotificationPresentation: policy.suppressNotificationPresentation,
+      suppressTransientFailurePresentation:
+          policy.suppressTransientFailurePresentation,
     );
     if (waiter != null) {
       queued.waiters.add(waiter);
@@ -875,6 +892,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       lastFailureHttpStatus: httpStatus,
       retryableFailureSurfaceAt: surfaceAt,
       retryableFailureVisible: failureVisible,
+      transientFailurePresentationSuppressed:
+          policy.suppressTransientFailurePresentation,
       consecutiveRetryableFailures: failureCount,
       automaticRetryPending: scheduleAutomaticRetry,
     );
@@ -892,6 +911,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queued.policy.merge(
           suppressNotificationPresentation:
               policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              policy.suppressTransientFailurePresentation,
         );
       }
     }
@@ -904,6 +925,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       firstRetryableFailureAt: null,
       retryableFailureSurfaceAt: null,
       retryableFailureVisible: false,
+      transientFailurePresentationSuppressed: false,
       consecutiveRetryableFailures: 0,
       automaticRetryPending: false,
     );
@@ -1521,18 +1543,29 @@ class _QueuedMessageSync {
 }
 
 class _MessageSyncRequestPolicy {
-  _MessageSyncRequestPolicy({this.suppressNotificationPresentation = false});
+  _MessageSyncRequestPolicy({
+    this.suppressNotificationPresentation = false,
+    this.suppressTransientFailurePresentation = false,
+  });
 
   bool suppressNotificationPresentation;
+  bool suppressTransientFailurePresentation;
 
-  void merge({required bool suppressNotificationPresentation}) {
+  void merge({
+    required bool suppressNotificationPresentation,
+    required bool suppressTransientFailurePresentation,
+  }) {
     this.suppressNotificationPresentation =
         this.suppressNotificationPresentation ||
         suppressNotificationPresentation;
+    this.suppressTransientFailurePresentation =
+        this.suppressTransientFailurePresentation ||
+        suppressTransientFailurePresentation;
   }
 
   _MessageSyncRequestPolicy copy() => _MessageSyncRequestPolicy(
     suppressNotificationPresentation: suppressNotificationPresentation,
+    suppressTransientFailurePresentation: suppressTransientFailurePresentation,
   );
 }
 

@@ -324,7 +324,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _shouldShowMessageSyncBanner(MessageSyncCoordinatorState state) {
     return state.status == MessageSyncCoordinatorStatus.recoveryRequired ||
         state.status == MessageSyncCoordinatorStatus.recovering ||
-        state.status == MessageSyncCoordinatorStatus.retryableFailure ||
+        (state.status == MessageSyncCoordinatorStatus.retryableFailure &&
+            (!state.transientFailurePresentationSuppressed ||
+                state.shouldSurfaceRetryableFailure)) ||
         state.status == MessageSyncCoordinatorStatus.projectionRefreshFailed ||
         state.status == MessageSyncCoordinatorStatus.authRevoked;
   }

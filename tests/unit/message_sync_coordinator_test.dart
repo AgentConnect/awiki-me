@@ -150,6 +150,50 @@ void main() {
     expect(receipt.canAcknowledge, isFalse);
   });
 
+  test(
+    'remote Push suppresses transient failure presentation while retrying',
+    () async {
+      final container = _container(
+        FakeAwikiGateway(),
+        _FailingMessageSyncService(),
+        failureBackoff: const Duration(minutes: 1),
+        failureSurfaceDelay: const Duration(seconds: 30),
+      );
+      addTearDown(container.dispose);
+
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+      final state = container.read(messageSyncCoordinatorProvider);
+
+      expect(receipt.disposition, RemotePushSyncDisposition.retryableFailure);
+      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+      expect(state.transientFailurePresentationSuppressed, isTrue);
+      expect(state.automaticRetryPending, isTrue);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
+    },
+  );
+
+  test('normal sync keeps transient failure presentation enabled', () async {
+    final container = _container(
+      FakeAwikiGateway(),
+      _FailingMessageSyncService(),
+      failureBackoff: const Duration(minutes: 1),
+      failureSurfaceDelay: const Duration(seconds: 30),
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('foreground_periodic', immediate: true);
+    final state = container.read(messageSyncCoordinatorProvider);
+
+    expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+    expect(state.transientFailurePresentationSuppressed, isFalse);
+    expect(state.automaticRetryPending, isTrue);
+    expect(state.shouldSurfaceRetryableFailure, isFalse);
+  });
+
   test('remote Push completion after an identity change is stale', () async {
     final completion = Completer<void>();
     final sync = FakeMessageSyncService()..syncNowCompleter = completion;
@@ -217,6 +261,42 @@ void main() {
       expect(sync.syncReasons, ['websocket_hint']);
       expect(notifications.inAppCalls, 0);
       expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test(
+    'remote Push joining app resume suppresses its transient failure state',
+    () async {
+      final completion = Completer<void>();
+      final sync = FakeMessageSyncService()
+        ..syncNowCompleter = completion
+        ..nextDeltaError = StateError('wake_network_transition');
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        failureBackoff: const Duration(minutes: 1),
+        failureSurfaceDelay: const Duration(seconds: 30),
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      final resumed = coordinator.requestSync('app_resumed', immediate: true);
+      await pumpEventQueue();
+      final remotePush = coordinator.requestRemotePushSync();
+      completion.complete();
+
+      final receipt = await remotePush;
+      await resumed;
+      final state = container.read(messageSyncCoordinatorProvider);
+
+      expect(receipt.disposition, RemotePushSyncDisposition.retryableFailure);
+      expect(sync.syncReasons, ['app_resumed']);
+      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+      expect(state.transientFailurePresentationSuppressed, isTrue);
+      expect(state.automaticRetryPending, isTrue);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
     },
   );
 
