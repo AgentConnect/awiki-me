@@ -114,6 +114,7 @@ void main() {
       );
 
       await client.publish('joiner', 'functional_ready');
+      await client.publish('joiner', 'functional_tail_only_verified');
       await client.publish(
         'admin',
         'functional_agents_created',
@@ -124,6 +125,8 @@ void main() {
           'codexHandle': 'codex',
           'claudeDid': 'did:wba:awiki.info:agent:runtime:e1_claude',
           'claudeHandle': 'claude',
+          'archiveDid': 'did:wba:awiki.info:agent:runtime:e1_archive',
+          'archiveHandle': 'archive',
         },
       );
       await client.publish('joiner', 'functional_agents_converged');
@@ -142,6 +145,9 @@ void main() {
         data: const <String, Object?>{
           'peerDid': 'did:wba:awiki.info:e1_peer',
           'peerHandle': 'peer',
+          'conversationId': 'dm:peer-scope:v1:peer',
+          'historicalMessageId': 'msg-before-join',
+          'historicalText': 'before-join-message',
         },
       );
       await client.publish(
@@ -181,6 +187,79 @@ void main() {
       );
     },
   );
+
+  test('account-state checkpoints accept every exact route shape', () async {
+    final server = await AppPairCoordinatorServer.start(
+      token: List<String>.filled(48, 't').join(),
+    );
+    addTearDown(server.close);
+    final client = AppPairCoordinatorClient(
+      endpoint: server.endpoint,
+      token: server.token,
+    );
+    const routes = <String, List<String>>{
+      'joiner\u0000account_state_stage4_baseline_ready': <String>[],
+      'admin\u0000account_state_agent_renamed': <String>[
+        'agentDid',
+        'displayName',
+      ],
+      'joiner\u0000account_state_agent_rename_converged': <String>[],
+      'admin\u0000account_state_agent_unbound': <String>['agentDid'],
+      'joiner\u0000account_state_agent_unbind_converged': <String>[],
+      'admin\u0000account_state_archive_fixture_ready': <String>[
+        'agentDid',
+        'displayName',
+        'handle',
+      ],
+      'joiner\u0000account_state_archive_fixture_converged_active': <String>[],
+      'admin\u0000account_state_archive_product_delete_completed': <String>[
+        'agentDid',
+      ],
+      'joiner\u0000account_state_archive_converged': <String>[],
+      'admin\u0000account_state_agent_deleted': <String>['agentDid'],
+      'joiner\u0000account_state_agent_delete_converged': <String>[],
+      'admin\u0000account_state_profile_updated': <String>[
+        'displayName',
+        'bio',
+      ],
+      'joiner\u0000account_state_profile_converged': <String>[],
+      'admin\u0000account_state_isolation_fixture_ready': <String>[
+        'agentDid',
+        'displayName',
+      ],
+      'joiner\u0000account_state_isolation_fixture_converged': <String>[],
+      'admin\u0000account_state_isolation_mutated': <String>[
+        'agentDid',
+        'oldDisplayName',
+        'newDisplayName',
+        'profileDisplayName',
+        'messageId',
+        'receiptId',
+      ],
+      'joiner\u0000account_state_isolation_recovered': <String>[],
+      'admin\u0000account_state_registry_ready': <String>[],
+      'joiner\u0000account_state_registry_observer_ready': <String>[],
+      'admin\u0000account_state_registry_revoked': <String>[],
+      'joiner\u0000account_state_registry_fence_observed': <String>[],
+      'admin\u0000account_state_post_revoke_message_committed': <String>[
+        'messageId',
+      ],
+      'joiner\u0000account_state_revoked_device_auth_fenced': <String>[],
+    };
+
+    for (final entry in routes.entries) {
+      final separator = entry.key.indexOf('\u0000');
+      final role = entry.key.substring(0, separator);
+      final phase = entry.key.substring(separator + 1);
+      await client.publish(
+        role,
+        phase,
+        data: <String, Object?>{
+          for (final field in entry.value) field: 'value-$field',
+        },
+      );
+    }
+  });
 
   test('mismatched SAS returns only a negative comparison', () async {
     final server = await AppPairCoordinatorServer.start(

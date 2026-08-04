@@ -1,6 +1,6 @@
-// [INPUT]: One E2E target, isolated state/build roots, bundle identity, and Dart defines.
+// [INPUT]: One E2E target, isolated runtime/artifact roots, a reusable role build root, bundle identity, and stable Dart defines.
 // [OUTPUT]: A signed Debug macOS App bundle plus a machine-readable artifact manifest.
-// [POS]: Reusable build boundary for E2E modes that need concurrently runnable App processes.
+// [POS]: Reusable incremental build boundary for E2E modes that need concurrently runnable App processes.
 
 import 'dart:convert';
 import 'dart:io';
@@ -199,7 +199,6 @@ class IsolatedE2eAppBuildRequest {
         '--no-pub',
         '--target=$target',
         '--dart-define=AWIKI_E2E=true',
-        '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${stateRoot.path}',
         for (final define in dartDefines) '--dart-define=$define',
       ],
     );

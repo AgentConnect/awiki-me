@@ -408,7 +408,10 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     final reused = !requirePostCommitRead && _refreshOperation != null;
     final activeRefresh = reused
         ? _refreshOperation!
-        : _startRefresh(fastLocal: true);
+        : _startRefresh(
+            fastLocal: true,
+            acceptCommittedReadState: requirePostCommitRead,
+          );
     if (!reused && state.conversations.isEmpty) {
       final session = ref.read(sessionProvider).session;
       final sessionEpoch = ref.read(sessionProvider).activeEpoch;
@@ -463,21 +466,33 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     }
   }
 
-  Future<void> _startRefresh({required bool fastLocal}) {
+  Future<void> _startRefresh({
+    required bool fastLocal,
+    bool acceptCommittedReadState = false,
+  }) {
     final generation = ++_refreshGeneration;
     late final Future<void> operation;
-    operation = _refresh(generation, fastLocal: fastLocal).whenComplete(() {
-      if (identical(_refreshOperation, operation)) {
-        _refreshOperation = null;
-        _refreshOperationFastLocal = false;
-      }
-    });
+    operation =
+        _refresh(
+          generation,
+          fastLocal: fastLocal,
+          acceptCommittedReadState: acceptCommittedReadState,
+        ).whenComplete(() {
+          if (identical(_refreshOperation, operation)) {
+            _refreshOperation = null;
+            _refreshOperationFastLocal = false;
+          }
+        });
     _refreshOperation = operation;
     _refreshOperationFastLocal = fastLocal;
     return operation;
   }
 
-  Future<void> _refresh(int generation, {required bool fastLocal}) async {
+  Future<void> _refresh(
+    int generation, {
+    required bool fastLocal,
+    bool acceptCommittedReadState = false,
+  }) async {
     final totalWatch = Stopwatch()..start();
     _publishConversationListState(
       state.copyWith(isLoading: true, errorCode: null),
@@ -563,6 +578,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
         label: 'conversation_list.refresh_fast_local',
         keepLocalOnly: !_snapshotBootstrapActive,
         badgeSource: 'refresh_fast_local',
+        acceptCommittedReadState: acceptCommittedReadState,
       );
       totalWatch.stop();
       AwikiPerformanceLogger.log(
@@ -1547,6 +1563,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
     bool keepLocalOnly = true,
     String? badgeSource,
     int? version,
+    bool acceptCommittedReadState = false,
   }) async {
     if (generation != _refreshGeneration) {
       return false;
@@ -1564,6 +1581,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
             keepLocalOnly: keepLocalOnly,
           ),
           ownerDid: _currentOwnerDid,
+          acceptCommittedReadState: acceptCommittedReadState,
         ),
       ),
       fields: <String, Object?>{
@@ -2076,13 +2094,19 @@ class ConversationListController extends StateNotifier<ConversationListState> {
   ConversationSummary _applyReadPresentation(
     ConversationSummary conversation, {
     required String? ownerDid,
+    bool acceptCommittedReadState = false,
   }) {
-    return _readPresentation.project(conversation, ownerDid: ownerDid);
+    return _readPresentation.project(
+      conversation,
+      ownerDid: ownerDid,
+      acceptCommittedReadState: acceptCommittedReadState,
+    );
   }
 
   List<ConversationSummary> _applyReadPresentationAll(
     List<ConversationSummary> conversations, {
     required String? ownerDid,
+    bool acceptCommittedReadState = false,
   }) {
     var changed = false;
     final next = conversations
@@ -2090,6 +2114,7 @@ class ConversationListController extends StateNotifier<ConversationListState> {
           final applied = _applyReadPresentation(
             conversation,
             ownerDid: ownerDid,
+            acceptCommittedReadState: acceptCommittedReadState,
           );
           changed = changed || !identical(applied, conversation);
           return applied;
@@ -2506,6 +2531,7 @@ class _ConversationReadPresentationStore {
   ConversationSummary project(
     ConversationSummary conversation, {
     required String? ownerDid,
+    bool acceptCommittedReadState = false,
   }) {
     final state = _stateFor(conversation, ownerDid: ownerDid);
     final incoming = _UnreadWatermark.fromConversation(conversation);
@@ -2526,7 +2552,10 @@ class _ConversationReadPresentationStore {
           ? conversation.firstUnreadMentionMessageId
           : null;
     } else if (state.latest == null || incoming.sameMessageAs(state.latest)) {
-      state.mergeSameLatestEvidence(conversation);
+      state.mergeSameLatestEvidence(
+        conversation,
+        acceptCommittedReadState: acceptCommittedReadState,
+      );
     } else {
       state.advanceVisibleRead(incoming, conversation: conversation);
       state.recomputeUnread(conversation);
@@ -2618,9 +2647,14 @@ class _ConversationReadPresentationState {
     advanceRead(_ReadWatermark.fromUnread(watermark));
   }
 
-  void mergeSameLatestEvidence(ConversationSummary conversation) {
+  void mergeSameLatestEvidence(
+    ConversationSummary conversation, {
+    required bool acceptCommittedReadState,
+  }) {
     final incomingUnread = _normalizedUnreadCount(conversation);
-    if (incomingUnread <= 0 && displayUnreadCount > 0) {
+    if (!acceptCommittedReadState &&
+        incomingUnread <= 0 &&
+        displayUnreadCount > 0) {
       return;
     }
     displayUnreadMentionCount = _nonNegativeInt(

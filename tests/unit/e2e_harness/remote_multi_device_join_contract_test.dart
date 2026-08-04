@@ -102,16 +102,28 @@ void main() {
       );
     });
 
-    test('accepts only the deployed Globe provider failure in staged mode', () {
-      expect(
-        evaluateRemoteMultiDeviceSmsResponse(
-          statusCode: 503,
-          contentType: 'application/problem+json',
-          body: _validSmsProblemBody(),
-          allowStagedOtpOnSmsError: true,
+    test('accepts only reviewed Globe provider failures in staged mode', () {
+      for (final failure in <({String code, String message})>[
+        (
+          code: 'MOBILE_NUMBER_ILLEGAL',
+          message: 'The mobile number is illegal.',
         ),
-        RemoteMultiDeviceSmsDecision.stagedAfterSmsError,
-      );
+        (code: 'PROVIDER_TIMEOUT', message: 'Provider request timed out.'),
+        (code: 'PROVIDER_UNAVAILABLE', message: 'Provider request failed.'),
+      ]) {
+        expect(
+          evaluateRemoteMultiDeviceSmsResponse(
+            statusCode: 503,
+            contentType: 'application/problem+json',
+            body: _validSmsProblemBody(
+              providerCode: failure.code,
+              providerMessage: failure.message,
+            ),
+            allowStagedOtpOnSmsError: true,
+          ),
+          RemoteMultiDeviceSmsDecision.stagedAfterSmsError,
+        );
+      }
       expect(
         () => evaluateRemoteMultiDeviceSmsResponse(
           statusCode: 503,
@@ -144,6 +156,18 @@ void main() {
           'detail':
               '[SMS_ERROR] Globe SMS send failed: [OTHER_PROVIDER_ERROR] '
               'The mobile number is illegal.',
+        },
+        <String, Object?>{
+          ...valid,
+          'detail':
+              '[SMS_ERROR] Globe SMS send failed: [PROVIDER_UNAVAILABLE] '
+              'network error',
+        },
+        <String, Object?>{
+          ...valid,
+          'detail':
+              '[SMS_ERROR] Globe SMS send failed: [PROVIDER_TIMEOUT] '
+              'Provider request failed.',
         },
         <String, Object?>{
           ...valid,
@@ -264,6 +288,15 @@ void main() {
       expect(isSixDigitAsciiOtp('１２３４５６'), isFalse);
       expect(isSixDigitAsciiOtp('48291a'), isFalse);
     });
+
+    test('honors bounded Retry-After before repeating an OTP request', () {
+      expect(remoteMultiDeviceOtpRetryDelay('42'), const Duration(seconds: 43));
+      expect(remoteMultiDeviceOtpRetryDelay(null), const Duration(seconds: 61));
+      expect(
+        remoteMultiDeviceOtpRetryDelay('301'),
+        const Duration(seconds: 61),
+      );
+    });
   });
 
   group('remote foreground CLI Join SAS prompts', () {
@@ -355,13 +388,14 @@ void main() {
 }
 
 String _validSmsProblemBody({
+  String providerCode = 'MOBILE_NUMBER_ILLEGAL',
   String providerMessage = 'The mobile number is illegal.',
 }) => jsonEncode(<String, Object?>{
   'type': 'about:blank',
   'title': 'SMS Service Error',
   'status': 503,
   'detail':
-      '[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] '
+      '[SMS_ERROR] Globe SMS send failed: [$providerCode] '
       '$providerMessage',
   'instance': '/user-service/auth/sms-codes',
 });

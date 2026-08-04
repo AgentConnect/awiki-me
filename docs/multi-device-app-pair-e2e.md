@@ -16,7 +16,7 @@ The two roles are product processes, not two widget trees in one test process:
 | Boundary | Admin App | Joining App |
 | --- | --- | --- |
 | Bundle ID | `ai.awiki.awikime.dev.e2e.pair.admin` | `ai.awiki.awikime.dev.e2e.pair.joiner` |
-| Flutter build directory | run-local `build/admin` root | run-local `build/joiner` root |
+| Flutter build directory | stable role cache under `.e2e/build-cache/` | separate stable role cache under `.e2e/build-cache/` |
 | App bundle | `AWikiMe-admin.app` | `AWikiMe-joiner.app` |
 | App/native Core state | fresh admin Storage Scope | fresh joiner Storage Scope |
 | Flutter driver | attaches to the admin VM service | attaches to the joiner VM service |
@@ -24,8 +24,9 @@ The two roles are product processes, not two widget trees in one test process:
 The runner builds the roles sequentially, launches both bundles directly, then
 attaches two `flutter drive --use-existing-app` processes concurrently. The
 stable, distinct bundle IDs keep the operating-system application identities
-separate; the per-run build and state roots prevent one role from reusing the
-other role's binary product or identity vault.
+separate. Stable per-role build roots may reuse only compiler intermediates;
+per-run state roots and E2E scope-secret repositories prevent either role from
+reusing another run's product data or credential material.
 
 ## Coordination boundary
 
@@ -63,8 +64,15 @@ before surfacing that bounded diagnostic.
 `integration_test/*_test.dart` target, isolated state/work/artifact roots, a
 bundle ID, and repeated Dart defines. It always makes a Debug macOS build with
 `--no-pub`; each work root owns its Flutter XDG settings and build directory.
-All three roots must be non-overlapping descendants of the repository so the
-Flutter relative build-dir contract and cleanup boundary remain auditable.
+The App-pair runner keeps one stable work root per role under
+`.e2e/build-cache/multi-device-app-pair/`, so later runs reuse Flutter,
+CocoaPods, Swift, and Xcode intermediates. Only the fixed E2E gate and role are
+compile-time inputs. Run config, attestation paths, scenario IDs, and run IDs
+are supplied to the launched processes, so a new run does not invalidate the
+role build. Runtime state, E2E credential storage, and copied App artifacts
+remain per-run, and the Admin and Joiner retain distinct bundle IDs. All three
+roots must be non-overlapping descendants of the repository so the Flutter
+relative build-dir contract and cleanup boundary remain auditable.
 On the current Intel development host it rejects any executable that is not
 x86_64-only. The output is one JSON artifact manifest containing the copied App
 and executable paths.
@@ -93,7 +101,8 @@ For the explicitly authorized synthetic test number, also set
 `AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`. This keeps the same
 strict response-shape and exact reviewed-resolver checks documented in
 [testing.md](testing.md); it does not convert arbitrary SMS failures into
-success.
+success. HTTP 429 uses the service's bounded `Retry-After` contract and does
+not enter staged-OTP resolution.
 
 The operator must complete the real macOS user-presence prompt in the admin
 App. `--prepare-only` validates prerequisites but intentionally does not build
@@ -116,6 +125,15 @@ Account State fixture/fail-once action accepts only the reviewed
 `/etc/awiki/user-service.env`. A local `/home/ecs-user/...` command, mutable
 source checkout, alternate host, shell, or implicit remote environment fails
 before either App starts.
+For the one-shot Account State domain-isolation phase, the joining test App
+temporarily detaches the presentation request bus and pauses its foreground
+catch-up timer while the server failpoint is armed. Realtime message delivery
+remains available. The test still calls the real coordinator and remote service
+directly for the failing reconcile and the successful retry, then restores the
+normal lifecycle and request bus. This prevents a realtime hint or the periodic
+foreground reconcile from consuming the one-shot fixture before the asserted
+request without changing production scheduling or weakening the remote
+protocol assertions.
 The Stage-3 retention-gap action follows the same reviewed boundary. It runs
 only through the fixed `ssh ali -- sudo -n /usr/bin/env ...` command, executes
 the immutable `/opt/awiki/services/message-service/current` helper with

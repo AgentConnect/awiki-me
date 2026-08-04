@@ -1,5 +1,5 @@
 // [INPUT]: Isolated E2E App builder arguments and temporary local roots.
-// [OUTPUT]: Deterministic Debug build plans with distinct bundle/build/state paths.
+// [OUTPUT]: Deterministic Debug build plans with distinct bundle/build/state paths and run-independent compile inputs.
 // [POS]: Side-effect-free contract for the reusable multi-process App builder.
 
 import 'dart:io';
@@ -44,13 +44,36 @@ void main() {
     expect(plan.flutterArguments, contains('--no-pub'));
     expect(
       plan.flutterArguments,
-      contains(
-        '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${root.path}/state/joiner',
+      isNot(
+        contains(
+          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${root.path}/state/joiner',
+        ),
       ),
     );
     expect(
       plan.flutterArguments,
       contains('--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=joiner'),
+    );
+  });
+
+  test('runtime state changes do not invalidate a role build', () {
+    IsolatedE2eAppBuildPlan planFor(String runId) {
+      final project = Directory('/tmp/awiki-app-pair-builder-test/project');
+      return IsolatedE2eAppBuildRequest.parse(<String>[
+        '--name=admin',
+        '--target=integration_test/multi_device_app_pair_test.dart',
+        '--state-root=${project.path}/.e2e/$runId/state/admin',
+        '--work-root=${project.path}/.e2e/build-cache/admin',
+        '--artifact-root=${project.path}/.e2e/$runId/artifacts',
+        '--bundle-id=ai.awiki.awikime.dev.e2e.pair.admin',
+        '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=admin',
+        '--dry-run',
+      ], projectRoot: project).toPlan();
+    }
+
+    expect(
+      planFor('run-a').flutterArguments,
+      planFor('run-b').flutterArguments,
     );
   });
 

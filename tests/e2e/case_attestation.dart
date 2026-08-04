@@ -15,6 +15,16 @@ File e2eScenarioProgressFileForAttestation(File attestationFile) =>
 File e2eFailureObservationFileForAttestation(File attestationFile) =>
     File('${attestationFile.parent.path}/$e2eFailureObservationFileName');
 
+String e2eInvocationValue(
+  String key, {
+  required String compiledValue,
+  Map<String, String>? environment,
+}) {
+  final compiled = compiledValue.trim();
+  if (compiled.isNotEmpty) return compiled;
+  return (environment ?? Platform.environment)[key]?.trim() ?? '';
+}
+
 /// First fail-closed E2E observation retained independently from case pass
 /// attestation. Codes are stable diagnostics and must not contain payloads,
 /// handles, DIDs, credentials, or local paths.
@@ -110,11 +120,18 @@ class E2eFailureObservationWriter {
     required String code,
     String? caseId,
   }) async {
-    const attestationPath = String.fromEnvironment(
+    final attestationPath = e2eInvocationValue(
       e2eCaseAttestationPathDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
     );
-    const scenario = String.fromEnvironment(e2eCaseScenarioDefine);
-    const runId = String.fromEnvironment(e2eCaseRunIdDefine);
+    final scenario = e2eInvocationValue(
+      e2eCaseScenarioDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseScenarioDefine),
+    );
+    final runId = e2eInvocationValue(
+      e2eCaseRunIdDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseRunIdDefine),
+    );
     if (attestationPath.trim().isEmpty ||
         scenario.trim().isEmpty ||
         runId.trim().isEmpty) {
@@ -424,9 +441,9 @@ class E2eCaseAttestationValidation {
 
 /// Writes case evidence from inside a real Flutter scenario.
 ///
-/// Direct shim debugging may omit all attestation dart-defines. A runner-owned
-/// invocation must provide the complete define set and is validated later by
-/// the outer runner before it can report `passed`.
+/// Direct shim debugging may omit all attestation inputs. A runner-owned
+/// invocation must provide the complete compile-time or launch-environment set
+/// and is validated later by the outer runner before it can report `passed`.
 class E2eCaseAttestationWriter {
   E2eCaseAttestationWriter._();
 
@@ -435,10 +452,22 @@ class E2eCaseAttestationWriter {
     required List<String> phases,
     DateTime? startedAt,
   }) async {
-    const path = String.fromEnvironment(e2eCaseAttestationPathDefine);
-    const scenario = String.fromEnvironment(e2eCaseScenarioDefine);
-    const runId = String.fromEnvironment(e2eCaseRunIdDefine);
-    const encodedCaseIds = String.fromEnvironment(e2eCaseIdsDefine);
+    final path = e2eInvocationValue(
+      e2eCaseAttestationPathDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
+    );
+    final scenario = e2eInvocationValue(
+      e2eCaseScenarioDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseScenarioDefine),
+    );
+    final runId = e2eInvocationValue(
+      e2eCaseRunIdDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseRunIdDefine),
+    );
+    final encodedCaseIds = e2eInvocationValue(
+      e2eCaseIdsDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseIdsDefine),
+    );
     if (path.trim().isEmpty &&
         scenario.trim().isEmpty &&
         runId.trim().isEmpty &&
@@ -479,11 +508,11 @@ class E2eCaseAttestationWriter {
         );
       }
     } else {
-      existing = const E2eCaseAttestation(
+      existing = E2eCaseAttestation(
         scenario: scenario,
         runId: runId,
         mode: 'real',
-        cases: <E2eCaseAttestationResult>[],
+        cases: const <E2eCaseAttestationResult>[],
       );
     }
 
@@ -534,11 +563,18 @@ class E2eScenarioProgressWriter {
   E2eScenarioProgressWriter._();
 
   static Future<void> record(String phase) async {
-    const attestationPath = String.fromEnvironment(
+    final attestationPath = e2eInvocationValue(
       e2eCaseAttestationPathDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseAttestationPathDefine),
     );
-    const scenario = String.fromEnvironment(e2eCaseScenarioDefine);
-    const runId = String.fromEnvironment(e2eCaseRunIdDefine);
+    final scenario = e2eInvocationValue(
+      e2eCaseScenarioDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseScenarioDefine),
+    );
+    final runId = e2eInvocationValue(
+      e2eCaseRunIdDefine,
+      compiledValue: const String.fromEnvironment(e2eCaseRunIdDefine),
+    );
     final normalized = phase.trim();
     if (attestationPath.trim().isEmpty ||
         scenario.trim().isEmpty ||

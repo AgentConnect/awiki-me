@@ -336,14 +336,16 @@ class AppTestCatalog {
         'Handle Recovery acceptance.',
       )
       ..writeln(
-        '- `multi-device-remote-join` is a separate, operator-confirmed '
+        '- `multi-device-remote-join` is a separate, explicitly activated '
         '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002` only. It runs both '
         'App-new-device/CLI-admin and App-admin/CLI-new-device directions '
         'with independent native roots, dynamically resolved one-time OTPs, '
         'SAS comparison, pending-session App restart coverage, the production '
         'CLI foreground contract, fixed member authorization, CLI listener '
-        'host wake, App global review entry, and real macOS user presence '
-        'where the App approves. The tests do not directly call Message Inbox '
+        'host wake, App global review entry, and exactly one E2E-only '
+        'user-presence decision where the App approves. Production continues '
+        'to use macOS LocalAuthentication and is not attested by this suite. '
+        'The tests do not directly call Message Inbox '
         'hydration, requestSync(), or refreshJoinInbox() to discover Join. '
         'It does not execute root transfer, revoke, or MLS; the root lifecycle '
         'is registered by `full`. A checked-in '
@@ -358,7 +360,9 @@ class AppTestCatalog {
         'loopback coordinator carries only lifecycle checkpoints and compares '
         'transient SAS values in memory; it cannot call product APIs or write '
         'SAS evidence. This mode currently covers only '
-        '`DEVICE-JOIN-E2E-004` and retains real macOS user presence.',
+        '`DEVICE-JOIN-E2E-004`; its E2E-only UserPresencePort keeps the '
+        'two-process run unattended without attesting production '
+        'LocalAuthentication.',
       )
       ..writeln(
         '- `multi-device-app-pair-functional` reuses the same two isolated '

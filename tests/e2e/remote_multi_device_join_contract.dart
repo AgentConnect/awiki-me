@@ -1,5 +1,6 @@
-// [INPUT]: Operator-provided OTP resolver argv, redacted SMS response metadata,
-//          and in-memory output from real foreground CLI poll/approval processes.
+// [INPUT]: Operator-provided OTP resolver argv, redacted SMS response metadata
+//          including Retry-After, and in-memory output from real foreground CLI
+//          poll/approval processes.
 // [OUTPUT]: Strict, secret-free validation, resolver-continuation decisions,
 //           and exact CLI SAS prompt recognition for remote Join E2E only.
 // [POS]: Shared runner/integration-test security gate; rejects provider drift,
@@ -9,7 +10,11 @@ import 'dart:convert';
 
 const String remoteMultiDeviceStagedOtpFlag =
     'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR';
-const String _stagedSmsProviderCode = 'MOBILE_NUMBER_ILLEGAL';
+const Map<String, String?> _stagedSmsProviderFailures = <String, String?>{
+  'MOBILE_NUMBER_ILLEGAL': null,
+  'PROVIDER_TIMEOUT': 'Provider request timed out.',
+  'PROVIDER_UNAVAILABLE': 'Provider request failed.',
+};
 const String _cliPollSasPrefix = "This device's one-time SAS: ";
 const String _cliApprovalSasPrefix =
     'Compare this one-time SAS with the new device: ';
@@ -136,12 +141,19 @@ RemoteMultiDeviceSmsDecision evaluateRemoteMultiDeviceSmsResponse({
   final match = _stagedSmsDetailPattern.firstMatch(detail);
   if (match == null ||
       match.group(0) != detail ||
-      match.group(1) != _stagedSmsProviderCode ||
+      !_stagedSmsProviderFailures.containsKey(match.group(1)) ||
       !_hasExactStagedSmsMarkers(detail) ||
+      !_hasReviewedProviderMessage(match.group(1)!, match.group(2)!) ||
       !_isSafeStagedSmsProviderMessage(match.group(2)!)) {
     throw const FormatException('SMS error response is invalid.');
   }
   return RemoteMultiDeviceSmsDecision.stagedAfterSmsError;
+}
+
+Duration remoteMultiDeviceOtpRetryDelay(String? retryAfter) {
+  final parsed = int.tryParse(retryAfter?.trim() ?? '');
+  final seconds = parsed == null || parsed < 1 || parsed > 300 ? 60 : parsed;
+  return Duration(seconds: seconds + 1);
 }
 
 T continueRemoteMultiDeviceOtpAfterSmsResponse<T>({
@@ -211,7 +223,14 @@ bool _hasExactStagedSmsMarkers(String detail) {
       .toList(growable: false);
   return markers.length == 2 &&
       markers[0] == '[SMS_ERROR]' &&
-      markers[1] == '[$_stagedSmsProviderCode]';
+      _stagedSmsProviderFailures.containsKey(
+        markers[1]!.substring(1, markers[1]!.length - 1),
+      );
+}
+
+bool _hasReviewedProviderMessage(String code, String message) {
+  final exactMessage = _stagedSmsProviderFailures[code];
+  return exactMessage == null || message == exactMessage;
 }
 
 bool _isSafeStagedSmsProviderMessage(String message) {

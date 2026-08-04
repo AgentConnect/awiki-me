@@ -1386,6 +1386,58 @@ void main() {
   );
 
   test(
+    'post-commit refresh accepts sibling read for the same latest message',
+    () async {
+      final messageAt = DateTime.utc(2026, 7, 31, 14);
+      final unread =
+          _conversation(
+            threadId: 'dm:alice:bob',
+            displayName: 'Bob',
+            unreadCount: 1,
+            lastMessageAt: messageAt,
+          ).copyWith(
+            lastMessagePreview: 'read on sibling',
+            lastMessageSnapshot: ChatMessage(
+              localId: 'local-sibling-read',
+              remoteId: 'remote-sibling-read',
+              threadId: 'dm:alice:bob',
+              senderDid: 'did:bob',
+              receiverDid: 'did:alice',
+              content: 'read on sibling',
+              createdAt: messageAt,
+              isMine: false,
+              serverSequence: 12,
+              sendState: MessageSendState.sent,
+            ),
+          );
+      final service = _MutableConversationService(
+        conversations: <ConversationSummary>[unread],
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _conversationContainer(
+        service: service,
+        notifications: notifications,
+        ownerDid: 'did:alice',
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container.read(conversationListProvider.notifier);
+      notifier.upsertConversation(unread);
+      service.currentConversations = <ConversationSummary>[
+        unread.copyWith(unreadCount: 0),
+      ];
+
+      await notifier.refreshFastLocal();
+      expect(container.read(conversationListProvider).unreadCount, 1);
+
+      await notifier.refreshFastLocalAfterCoreCommit();
+
+      expect(container.read(conversationListProvider).unreadCount, 0);
+      expect(notifications.lastBadgeCount, 0);
+    },
+  );
+
+  test(
     'visible conversation keeps unread presentation stable across refresh sources',
     () async {
       final initialAt = DateTime.utc(2026, 6, 27, 2);

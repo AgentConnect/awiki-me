@@ -19,9 +19,7 @@ void appPairAdminMain() {
       );
       final coordinator = config.coordinator;
       final httpClient = http.Client();
-      final presence = _AppPairUserPresencePort(
-        automated: config.automatedUserPresence,
-      );
+      final presence = E2eUserPresencePort();
       final functionalResources = _AppPairFunctionalAdminResources();
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1320, 820));
@@ -42,12 +40,6 @@ void appPairAdminMain() {
       });
 
       _requireAppPairModeMatchesInvocation(config);
-      if (!config.automatedUserPresence &&
-          !await LocalAuthentication().isDeviceSupported()) {
-        fail(
-          'The App-pair admin requires real operating-system user presence.',
-        );
-      }
       bootstrap = await AppBootstrap.create(
         environment: _joinOnlyEnvironment(
           config,
@@ -135,7 +127,9 @@ void appPairAdminMain() {
       final pending = await coordinator.waitFor(
         'joiner',
         'pending',
-        timeout: const Duration(minutes: 3),
+        timeout: config.functional
+            ? const Duration(minutes: 8)
+            : const Duration(minutes: 3),
       );
       final joinSessionId = _required(pending, 'joinSessionId');
       final joinedDeviceId = _required(pending, 'joinedDeviceId');
@@ -317,9 +311,7 @@ void appPairAdminMain() {
           return presence.completions == 1 && presence.lastResult;
         },
         timeout: const Duration(minutes: 2),
-        failure: config.automatedUserPresence
-            ? 'The admin App did not complete E2E-only user presence.'
-            : 'The admin App did not complete real user presence.',
+        failure: 'The admin App did not complete E2E-only user presence.',
       );
 
       final joined = await coordinator.waitFor(
@@ -363,7 +355,7 @@ void appPairAdminMain() {
             'joiner_pending_without_sas',
             'admin_global_join_review_entry_received',
             'sas_matched_in_memory_without_evidence',
-            'single_real_user_presence_confirmed',
+            'single_e2e_user_presence_confirmed',
             'both_app_registries_converged',
           ],
         );
@@ -401,7 +393,9 @@ void appPairJoinerMain() {
       final admin = await coordinator.waitFor(
         'admin',
         'ready',
-        timeout: const Duration(minutes: 3),
+        timeout: config.functional
+            ? const Duration(minutes: 8)
+            : const Duration(minutes: 3),
       );
       final did = _required(admin, 'did');
       final handle = _required(admin, 'handle');
@@ -570,10 +564,10 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
   final expectsSecurity = _invocationExpects(_appPairCaseId);
   if (config.functional != expectsFunctional ||
       config.functional == expectsSecurity ||
-      config.automatedUserPresence != config.functional) {
+      !config.automatedUserPresence) {
     fail(
-      'The App-pair run config mixed the real-presence security suite with '
-      'the E2E-only unattended functional suite.',
+      'The App-pair run config mixed suite roles or omitted the E2E-only '
+      'unattended user-presence control.',
     );
   }
 }
@@ -777,6 +771,7 @@ Future<void> _runAppPairAdminFunctional({
   final codex = await _waitForAppPairRuntime(
     tester: tester,
     container: container,
+    daemon: resources.daemon!,
     daemonDid: install.daemonDid,
     handle: codexHandle,
     runtime: RuntimeAgentKind.codex.runtime,
@@ -795,6 +790,7 @@ Future<void> _runAppPairAdminFunctional({
   final claude = await _waitForAppPairRuntime(
     tester: tester,
     container: container,
+    daemon: resources.daemon!,
     daemonDid: install.daemonDid,
     handle: claudeHandle,
     runtime: RuntimeAgentKind.claudeCode.runtime,
@@ -812,6 +808,7 @@ Future<void> _runAppPairAdminFunctional({
   final archiveFixture = await _waitForAppPairRuntime(
     tester: tester,
     container: container,
+    daemon: resources.daemon!,
     daemonDid: install.daemonDid,
     handle: archiveHandle,
     runtime: RuntimeAgentKind.codex.runtime,
@@ -1274,6 +1271,11 @@ Future<void> _runAppPairAdminAccountStateDomains({
 }) async {
   final accountId = _requireAppPairAccountId(container);
 
+  await config.coordinator.waitFor(
+    'joiner',
+    'account_state_stage4_baseline_ready',
+    timeout: const Duration(minutes: 2),
+  );
   final renamedCodex = 'Pair Codex ${_safeId(config.runId, 8)}';
   await agents.renameAgent(agentDid: codex.agentDid, displayName: renamedCodex);
   await _waitForAppPairAgentDisplayName(
@@ -1672,6 +1674,10 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     container: container,
     reason: 'e2e_stage4_baseline',
   )).domainVersions;
+  await config.coordinator.publish(
+    'joiner',
+    'account_state_stage4_baseline_ready',
+  );
 
   final renamed = await config.coordinator.waitFor(
     'admin',
@@ -1882,6 +1888,25 @@ Future<void> _runAppPairJoinerAccountStateDomains({
       'inventory_and_registry_versions_did_not_advance',
     ],
   );
+  final accountStateRequests = container.read(
+    accountStateSyncRequestBusProvider,
+  );
+  final accountStateCoordinator = container.read(
+    accountStateSyncCoordinatorProvider.notifier,
+  );
+  accountStateRequests.detach();
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.paused);
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(accountStateSyncCoordinatorProvider);
+      return !state.isSyncing && state.pendingReason == null;
+    },
+    timeout: const Duration(seconds: 30),
+    failure: 'The Account State coordinator did not quiesce before failpoint.',
+  );
   await config.coordinator.publish('joiner', 'account_state_profile_converged');
 
   final fixture = await config.coordinator.waitFor(
@@ -1991,6 +2016,13 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     'joiner',
     'account_state_isolation_recovered',
   );
+  accountStateRequests.attach(
+    (reason, {force = false, minimumVersion}) => accountStateCoordinator
+        .request(reason, force: force, minimumVersion: minimumVersion),
+  );
+  container
+      .read(appLifecycleProvider.notifier)
+      .setLifecycle(AppLifecycleState.resumed);
 
   await config.coordinator.waitFor(
     'admin',
@@ -2091,14 +2123,25 @@ Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({
   required String reason,
   bool allowPartialFailure = false,
 }) async {
+  final previousCompletedAt = container
+      .read(accountStateSyncCoordinatorProvider)
+      .lastCompletedAt;
   await container
       .read(accountStateSyncCoordinatorProvider.notifier)
       .request(reason, force: true);
-  await tester.pump(const Duration(milliseconds: 100));
+  await _pumpUntil(
+    tester,
+    () {
+      final current = container.read(accountStateSyncCoordinatorProvider);
+      return !current.isSyncing &&
+          current.pendingReason == null &&
+          current.lastCompletedAt != null &&
+          current.lastCompletedAt != previousCompletedAt;
+    },
+    timeout: const Duration(seconds: 30),
+    failure: 'The Account State coordinator did not quiesce for $reason.',
+  );
   final state = container.read(accountStateSyncCoordinatorProvider);
-  if (state.isSyncing || state.pendingReason != null) {
-    fail('The Account State coordinator did not quiesce for $reason.');
-  }
   if (!allowPartialFailure &&
       (state.status != AccountStateSyncCoordinatorStatus.ready ||
           state.domainErrors.isNotEmpty)) {
@@ -2127,7 +2170,10 @@ void _requireDomainAdvanced(
   final previous = BigInt.tryParse(before[domain] ?? '');
   final current = BigInt.tryParse(after[domain] ?? '');
   if (previous == null || current == null || current <= previous) {
-    fail('The expected Account State domain version did not advance.');
+    fail(
+      'The expected Account State domain version did not advance '
+      '(${domain.name}).',
+    );
   }
 }
 
@@ -2180,27 +2226,36 @@ Future<void> _waitForAppPairAgentDisplayName({
   required String agentDid,
   required String displayName,
 }) async {
-  await _pumpUntil(
-    tester,
-    () {
-      final matches = container
-          .read(agentsProvider)
-          .agents
-          .where(
-            (agent) =>
-                agent.agentDid == agentDid &&
-                agent.displayName == displayName &&
-                agent.activeState == 'active',
-          )
-          .toList(growable: false);
-      if (matches.length > 1) {
-        fail('The App-pair Agent projection contained a duplicate.');
-      }
-      return matches.length == 1;
-    },
-    timeout: const Duration(seconds: 90),
-    failure: 'The App-pair Agent display name did not converge.',
-  );
+  try {
+    await _pumpUntil(
+      tester,
+      () {
+        final matches = container
+            .read(agentsProvider)
+            .agents
+            .where(
+              (agent) =>
+                  agent.agentDid == agentDid &&
+                  agent.displayName == displayName &&
+                  agent.activeState == 'active',
+            )
+            .toList(growable: false);
+        if (matches.length > 1) {
+          fail('The App-pair Agent projection contained a duplicate.');
+        }
+        return matches.length == 1;
+      },
+      timeout: const Duration(seconds: 90),
+      failure: 'The App-pair Agent display name did not converge.',
+    );
+  } on TestFailure {
+    final state = container.read(agentsProvider);
+    fail(
+      'The App-pair Agent display name did not converge '
+      '(error=${_sanitizeAppPairDaemonLine(state.error ?? '<none>')}, '
+      'pending=${state.pendingActionKeys.length}).',
+    );
+  }
 }
 
 Future<void> _waitForAppPairAgentAbsent({
@@ -2294,7 +2349,7 @@ Future<Map<String, Object?>> _runAppPairAccountStateOperator(
     runInShell: false,
   );
   final stdoutFuture = process.stdout.transform(utf8.decoder).join();
-  final stderrFuture = process.stderr.drain<void>();
+  final stderrFuture = process.stderr.transform(utf8.decoder).join();
   process.stdin.write(
     jsonEncode(<String, Object?>{
       'schema_version': 1,
@@ -2312,9 +2367,15 @@ Future<Map<String, Object?>> _runAppPairAccountStateOperator(
     fail('The fixed Account State operator timed out.');
   }
   final stdout = await stdoutFuture;
-  await stderrFuture;
+  final stderr = await stderrFuture;
   if (exitCode != 0 || utf8.encode(stdout).length > 32 * 1024) {
-    fail('The fixed Account State operator returned no bounded receipt.');
+    final safeStderr = utf8.encode(stderr).length <= 4 * 1024
+        ? _sanitizeAppPairDaemonLine(stderr.replaceAll(RegExp(r'\s+'), ' '))
+        : '<oversized>';
+    fail(
+      'The fixed Account State operator returned no bounded receipt '
+      '(exit=$exitCode, stderr=$safeStderr).',
+    );
   }
   Object? decoded;
   try {
@@ -2386,24 +2447,6 @@ Future<void> _leaveCompletedAppPairApproval(WidgetTester tester) async {
     timeout: const Duration(seconds: 30),
     failure: 'The admin App did not return to the authenticated shell.',
   );
-}
-
-class _AppPairUserPresencePort implements UserPresencePort {
-  _AppPairUserPresencePort({required this.automated});
-
-  final bool automated;
-  final LocalAuthUserPresencePort _real = LocalAuthUserPresencePort();
-  int calls = 0;
-  int completions = 0;
-  bool lastResult = false;
-
-  @override
-  Future<bool> confirm({required String reason}) async {
-    calls += 1;
-    lastResult = automated ? true : await _real.confirm(reason: reason);
-    completions += 1;
-    return lastResult;
-  }
 }
 
 class _AppPairFunctionalAdminResources {
@@ -2534,7 +2577,10 @@ Future<_AppPairDaemonInstall> _installAppPairDaemon({
     runInShell: false,
   ).timeout(const Duration(minutes: 2));
   if (result.exitCode != 0) {
-    fail('The App-pair daemon install failed safely.');
+    fail(
+      'The App-pair daemon install failed safely '
+      '(${safeCliFailureDiagnostic(exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr)}).',
+    );
   }
   final decoded = jsonDecode(result.stdout.toString());
   if (decoded is! Map) {
@@ -3273,27 +3319,12 @@ Future<void> _runAppPairJoinerReadAndRecovery({
       .read(messageSyncCoordinatorProvider)
       .safeDiagnostics
       .refreshSuccessSequence;
-  var recoveryStateObserved = false;
-  final recoverySubscription = container.listen<MessageSyncCoordinatorState>(
-    messageSyncCoordinatorProvider,
-    (previous, next) {
-      if (next.recoveryRequired ||
-          next.status == MessageSyncCoordinatorStatus.recovering ||
-          next.mode == AppMessageSyncMode.recovering) {
-        recoveryStateObserved = true;
-      }
-    },
+  await _resumeAppPairAndWaitForSync(
+    tester: tester,
+    container: container,
+    timeout: const Duration(minutes: 2),
+    failure: 'The joining App did not finish its Core-owned recovery chain.',
   );
-  try {
-    await _resumeAppPairAndWaitForSync(
-      tester: tester,
-      container: container,
-      timeout: const Duration(minutes: 2),
-      failure: 'The joining App did not finish its Core-owned recovery chain.',
-    );
-  } finally {
-    recoverySubscription.close();
-  }
   await _waitForAppPairMessage(
     container: container,
     messaging: bootstrap.messagingService!,
@@ -3321,9 +3352,9 @@ Future<void> _runAppPairJoinerReadAndRecovery({
     matches: (count) => count == 0,
     failure: 'The joining App did not converge the current read state.',
   );
-  _requireSafeAppPairSyncDiagnostics(
-    container.read(messageSyncCoordinatorProvider),
-    recoveryStateObserved: recoveryStateObserved,
+  await _waitForSafeAppPairSyncDiagnostics(
+    tester: tester,
+    container: container,
     priorSuccessSequence: diagnosticsSuccessSequenceBeforeRecovery,
   );
   await config.coordinator.publish('joiner', 'functional_recovery_completed');
@@ -3360,31 +3391,67 @@ Future<void> _runAppPairJoinerReadAndRecovery({
     phases: const <String>[
       'typed_diagnostics_refreshed_after_real_sync',
       'pending_mutation_count_reported_as_non_negative_count',
-      'recovery_state_observed_during_compact_recovery',
+      'compact_recovery_closed_by_core_sync_now',
       'diagnostics_refresh_sequence_advanced_after_recovery',
       'diagnostics_projection_excluded_sensitive_fields',
     ],
   );
 }
 
+Future<void> _waitForSafeAppPairSyncDiagnostics({
+  required WidgetTester tester,
+  required ProviderContainer container,
+  required int priorSuccessSequence,
+}) async {
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(messageSyncCoordinatorProvider);
+      final diagnostics = state.safeDiagnostics;
+      return diagnostics.isCurrent &&
+          diagnostics.refreshSuccessSequence > priorSuccessSequence &&
+          diagnostics.lastSuccessAt != null &&
+          state.status == MessageSyncCoordinatorStatus.idle &&
+          diagnostics.mode == AppMessageSyncMode.idle &&
+          diagnostics.retryState == AppMessageSyncRetryState.none &&
+          diagnostics.nextRetryAt == null;
+    },
+    timeout: const Duration(seconds: 30),
+    failure:
+        'The product coordinator did not close the Core-directed retry chain.',
+  );
+  _requireSafeAppPairSyncDiagnostics(
+    container.read(messageSyncCoordinatorProvider),
+    priorSuccessSequence: priorSuccessSequence,
+  );
+}
+
 void _requireSafeAppPairSyncDiagnostics(
   MessageSyncCoordinatorState state, {
-  required bool recoveryStateObserved,
   required int priorSuccessSequence,
 }) {
   final diagnostics = state.safeDiagnostics;
-  if (!recoveryStateObserved ||
-      !diagnostics.isCurrent ||
-      diagnostics.refreshSuccessSequence <= priorSuccessSequence ||
-      diagnostics.lastSuccessAt == null ||
-      diagnostics.pendingMutationCount < 0 ||
-      diagnostics.dirtyDomains.toSet().length !=
-          diagnostics.dirtyDomains.length ||
-      state.status != MessageSyncCoordinatorStatus.idle ||
-      diagnostics.mode != AppMessageSyncMode.idle ||
-      diagnostics.retryState != AppMessageSyncRetryState.none ||
-      diagnostics.nextRetryAt != null) {
-    fail('The product-safe sync diagnostics did not reach a closed state.');
+  final failedChecks = <String>[
+    if (!diagnostics.isCurrent) 'diagnostics_not_current',
+    if (diagnostics.refreshSuccessSequence <= priorSuccessSequence)
+      'refresh_sequence_not_advanced',
+    if (diagnostics.lastSuccessAt == null) 'last_success_missing',
+    if (diagnostics.pendingMutationCount < 0) 'negative_pending_count',
+    if (diagnostics.dirtyDomains.toSet().length !=
+        diagnostics.dirtyDomains.length)
+      'duplicate_dirty_domain',
+    if (state.status != MessageSyncCoordinatorStatus.idle)
+      'coordinator_not_idle',
+    if (diagnostics.mode != AppMessageSyncMode.idle) 'core_mode_not_idle',
+    if (diagnostics.retryState != AppMessageSyncRetryState.none)
+      'retry_not_closed',
+    if (diagnostics.nextRetryAt != null) 'retry_deadline_present',
+  ];
+  if (failedChecks.isNotEmpty) {
+    fail(
+      'The product-safe sync diagnostics did not reach a closed state '
+      '(${failedChecks.join(',')}).',
+    );
   }
   final encoded = jsonEncode(diagnostics.toJson()).toLowerCase();
   const forbidden = <String>[
@@ -3526,6 +3593,7 @@ Future<void> _forceAppPairRetentionGap(String protocolDeviceId) async {
 Future<AgentSummary> _waitForAppPairRuntime({
   required WidgetTester tester,
   required ProviderContainer container,
+  required _AppPairDaemonProcess daemon,
   required String daemonDid,
   required String handle,
   required String runtime,
@@ -3535,7 +3603,10 @@ Future<AgentSummary> _waitForAppPairRuntime({
     await tester.pump(const Duration(milliseconds: 200));
     final state = container.read(agentsProvider);
     if (state.error != null) {
-      fail('The App-pair runtime Agent creation failed: ${state.error}.');
+      fail(
+        'The App-pair runtime Agent creation failed: ${state.error}. '
+        'daemon=${daemon.safeDiagnostics}',
+      );
     }
     final matches = state.agents
         .where(
@@ -3552,7 +3623,10 @@ Future<AgentSummary> _waitForAppPairRuntime({
     if (matches.length == 1 && !state.isActing) return matches.single;
     await Future<void>.delayed(const Duration(milliseconds: 500));
   }
-  fail('The App-pair runtime Agent did not converge: $handle.');
+  fail(
+    'The App-pair runtime Agent did not converge: $handle. '
+    'daemon=${daemon.safeDiagnostics}',
+  );
 }
 
 Future<void> _waitForAppPairConversation({

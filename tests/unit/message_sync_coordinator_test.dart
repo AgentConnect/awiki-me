@@ -1055,7 +1055,7 @@ void main() {
       'retryable_failure_surface_at': null,
       'retryable_failure_visible': false,
       'consecutive_retryable_failures': 0,
-      'automatic_retry_pending': false,
+      'automatic_retry_pending': true,
     });
 
     messaging.nextDiagnosticsError = StateError('diagnostics unavailable');
@@ -1079,6 +1079,60 @@ void main() {
     expect(staleSafe.refreshSuccessSequence, 1);
     expect(staleSafe.refreshedAt, firstSafe.refreshedAt);
     expect(staleSafe.toJson()['current'], isFalse);
+  });
+
+  test('successful sync honors the Core mutation retry deadline', () async {
+    final gateway = FakeAwikiGateway();
+    final retryAt = DateTime.now().add(const Duration(milliseconds: 40));
+    final retryObserved = Completer<void>();
+    final messaging = _SequencedDiagnosticMessagingService(
+      gateway,
+      diagnostics: <AppMessageSyncDiagnostics>[
+        AppMessageSyncDiagnostics(
+          mode: AppMessageSyncMode.retryable,
+          pendingMutationCount: 1,
+          dirtyDomains: const <AppMessageSyncDirtyDomain>[
+            AppMessageSyncDirtyDomain.readState,
+          ],
+          retryState: AppMessageSyncRetryState.scheduled,
+          nextRetryAt: retryAt,
+        ),
+        const AppMessageSyncDiagnostics(
+          mode: AppMessageSyncMode.idle,
+          pendingMutationCount: 0,
+          retryState: AppMessageSyncRetryState.none,
+        ),
+      ],
+      onSecondRefresh: retryObserved,
+    );
+    final sync = FakeMessageSyncService();
+    final container = _container(
+      gateway,
+      sync,
+      minInterval: const Duration(milliseconds: 5),
+      messagingService: messaging,
+    );
+    addTearDown(container.dispose);
+    final coordinator = container.read(messageSyncCoordinatorProvider.notifier);
+
+    await coordinator.requestSync('startup', immediate: true);
+
+    expect(sync.syncReasons, ['startup']);
+    expect(
+      container.read(messageSyncCoordinatorProvider).automaticRetryPending,
+      isTrue,
+    );
+
+    await retryObserved.future.timeout(const Duration(seconds: 1));
+    await pumpEventQueue();
+
+    expect(sync.syncReasons, ['startup', 'core_directed_retry']);
+    final state = container.read(messageSyncCoordinatorProvider);
+    expect(state.status, MessageSyncCoordinatorStatus.idle);
+    expect(state.pendingMutationCount, 0);
+    expect(state.retryState, AppMessageSyncRetryState.none);
+    expect(state.automaticRetryPending, isFalse);
+    expect(state.lastError, isNull);
   });
 
   test(
@@ -2140,6 +2194,29 @@ class _DiagnosticMessagingService extends FakeMessagingService
       throw error;
     }
     return diagnostics;
+  }
+}
+
+class _SequencedDiagnosticMessagingService extends FakeMessagingService
+    implements MessageSyncDiagnosticsService {
+  _SequencedDiagnosticMessagingService(
+    super.gateway, {
+    required this.diagnostics,
+    required this.onSecondRefresh,
+  });
+
+  final List<AppMessageSyncDiagnostics> diagnostics;
+  final Completer<void> onSecondRefresh;
+  int _index = 0;
+
+  @override
+  Future<AppMessageSyncDiagnostics> syncDiagnostics() async {
+    final current = diagnostics[_index.clamp(0, diagnostics.length - 1)];
+    _index += 1;
+    if (_index == 2 && !onSecondRefresh.isCompleted) {
+      onSecondRefresh.complete();
+    }
+    return current;
   }
 }
 

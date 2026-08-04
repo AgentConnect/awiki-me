@@ -392,9 +392,7 @@ class DesktopE2eRunner {
     appPairDaemonReadyFile = File(
       '${appPairDaemonStateRootDir.path}/ready.json',
     );
-    appPairBuildRootDir = Directory(
-      '${root.path}/.e2e/$runScope/$runId/app-pair/build',
-    );
+    appPairBuildRootDir = appPairBuildCacheRoot(root);
     appPairArtifactRootDir = Directory(
       '${root.path}/.e2e/$runScope/$runId/app-pair/artifacts',
     );
@@ -498,11 +496,15 @@ class DesktopE2eRunner {
     if (!options.dryRun &&
         (options.e2eCase == DesktopE2eCase.multiDeviceAppPair ||
             options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional)) {
-      appPairAdminStateRootDir.createSync(recursive: true);
-      appPairJoinerStateRootDir.createSync(recursive: true);
-      if (options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional) {
-        appPairDaemonStateRootDir.createSync(recursive: true);
-      }
+      resetAppPairRuntimeDirectories(
+        functional:
+            options.e2eCase == DesktopE2eCase.multiDeviceAppPairFunctional,
+        adminStateRoot: appPairAdminStateRootDir,
+        joinerStateRoot: appPairJoinerStateRootDir,
+        daemonStateRoot: appPairDaemonStateRootDir,
+        cliWorkspace: cliWorkspaceDir,
+        cliHome: cliHomeDir,
+      );
       appPairBuildRootDir.createSync(recursive: true);
       appPairArtifactRootDir.createSync(recursive: true);
     }
@@ -683,6 +685,8 @@ class DesktopE2eRunner {
         'status': options.dryRun ? 'dry_run' : 'passed',
         'auditedRemoteTarget': true,
         'cliSourceVerified': !options.dryRun,
+        'automatedUserPresence': true,
+        'realUserPresenceAttested': false,
         'containsRawDids': false,
       };
     });
@@ -783,8 +787,8 @@ class DesktopE2eRunner {
         'status': options.dryRun ? 'dry_run' : 'passed',
         'auditedRemoteTarget': true,
         'twoIsolatedAppProcesses': true,
-        'automatedUserPresence': pairConfig.functional,
-        'realUserPresenceAttested': !pairConfig.functional,
+        'automatedUserPresence': true,
+        'realUserPresenceAttested': false,
         'cliSourceVerified':
             pairConfig.functional && !options.dryRun && !commands.dryRun,
         'containsRawDids': false,
@@ -847,21 +851,28 @@ class DesktopE2eRunner {
             _multiDeviceRemoteJoinGateEnv: '1',
             _multiDeviceRemotePhoneEnv: pairConfig.phone,
             _multiDeviceRemoteOtpCommandEnv: pairConfig.otpCommandJson,
+            'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG': appPairRunConfigFile.path,
+            e2eCaseAttestationPathDefine: caseAttestationFile.path,
+            e2eCaseScenarioDefine: options.e2eCase.scenario,
+            e2eCaseRunIdDefine: runId,
+            e2eCaseIdsDefine: options.e2eCase.caseIds.join(','),
             remoteMultiDeviceStagedOtpFlag: pairConfig.allowStagedOtpOnSmsError
                 ? '1'
                 : '0',
-            _syncRecoveryEnableEnv:
-                Platform.environment[_syncRecoveryEnableEnv]!,
-            _syncRecoveryOperatorModeEnv:
-                Platform.environment[_syncRecoveryOperatorModeEnv]!,
-            _syncRecoveryTargetEnv:
-                Platform.environment[_syncRecoveryTargetEnv]!,
-            _accountStateEnableEnv:
-                Platform.environment[_accountStateEnableEnv]!,
-            _accountStateOperatorCommandEnv:
-                Platform.environment[_accountStateOperatorCommandEnv]!,
-            _accountStateFailpointEnableEnv:
-                Platform.environment[_accountStateFailpointEnableEnv]!,
+            if (pairConfig.functional) ...<String, String>{
+              _syncRecoveryEnableEnv:
+                  Platform.environment[_syncRecoveryEnableEnv]!,
+              _syncRecoveryOperatorModeEnv:
+                  Platform.environment[_syncRecoveryOperatorModeEnv]!,
+              _syncRecoveryTargetEnv:
+                  Platform.environment[_syncRecoveryTargetEnv]!,
+              _accountStateEnableEnv:
+                  Platform.environment[_accountStateEnableEnv]!,
+              _accountStateOperatorCommandEnv:
+                  Platform.environment[_accountStateOperatorCommandEnv]!,
+              _accountStateFailpointEnableEnv:
+                  Platform.environment[_accountStateFailpointEnableEnv]!,
+            },
           };
           adminApp = await _RunningIsolatedApp.start(
             role: 'admin',
@@ -891,6 +902,10 @@ class DesktopE2eRunner {
           await _deleteDirectoryBestEffort(appPairAdminStateRootDir);
           await _deleteDirectoryBestEffort(appPairJoinerStateRootDir);
           await _deleteDirectoryBestEffort(appPairDaemonStateRootDir);
+          if (pairConfig.functional) {
+            await _deleteDirectoryBestEffort(cliWorkspaceDir);
+            await _deleteDirectoryBestEffort(cliHomeDir);
+          }
           if (appPairDaemonReadyFile.existsSync()) {
             appPairDaemonReadyFile.deleteSync();
           }
@@ -921,6 +936,7 @@ class DesktopE2eRunner {
         'handlePrefix': pairConfig.handlePrefix,
         'allowStagedOtpOnSmsError': pairConfig.allowStagedOtpOnSmsError,
       },
+      'testControl': <String, Object?>{'automatedUserPresence': true},
       'coordinator': <String, Object?>{
         'baseUrl': coordinator.endpoint.toString(),
         'token': token,
@@ -937,7 +953,6 @@ class DesktopE2eRunner {
       },
       if (pairConfig.functional)
         'functional': <String, Object?>{
-          'automatedUserPresence': true,
           'cliPeer': <String, Object?>{
             'binary': pairConfig.cliBin,
             'sourceRef': pairConfig.cliSourceRef,
@@ -995,8 +1010,6 @@ class DesktopE2eRunner {
       '--bundle-id=$bundleId',
       '--flutter-bin=$flutterBin',
       '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_ROLE=$role',
-      '--dart-define=AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG=${appPairRunConfigFile.path}',
-      ..._caseAttestationDartDefines(options.e2eCase.caseIds),
     ], timeout: const Duration(minutes: 12));
     return _IsolatedAppArtifact.fromBuilderOutput(result.output);
   }
@@ -1109,6 +1122,7 @@ class DesktopE2eRunner {
         'handlePrefix': joinConfig.handlePrefix,
         'allowStagedOtpOnSmsError': joinConfig.allowStagedOtpOnSmsError,
       },
+      'testControl': <String, Object?>{'automatedUserPresence': true},
       'cliJoiningDevice': <String, Object?>{
         'binary': joinConfig.cliBin,
         'sourceRef': joinConfig.cliSourceRef,
@@ -2394,6 +2408,9 @@ class DesktopE2eRunner {
   }
 }
 
+Directory appPairBuildCacheRoot(Directory root) =>
+    Directory('${root.absolute.path}/.e2e/build-cache/multi-device-app-pair');
+
 ({String code, String summary}) classifyDesktopE2eFailureMessage(
   String message,
 ) {
@@ -3408,6 +3425,27 @@ Future<void> _deleteDirectoryBestEffort(Directory directory) async {
   }
 }
 
+void resetAppPairRuntimeDirectories({
+  required bool functional,
+  required Directory adminStateRoot,
+  required Directory joinerStateRoot,
+  required Directory daemonStateRoot,
+  required Directory cliWorkspace,
+  required Directory cliHome,
+}) {
+  final directories = <Directory>[
+    adminStateRoot,
+    joinerStateRoot,
+    if (functional) ...<Directory>[daemonStateRoot, cliWorkspace, cliHome],
+  ];
+  for (final directory in directories) {
+    if (directory.existsSync()) {
+      directory.deleteSync(recursive: true);
+    }
+    directory.createSync(recursive: true);
+  }
+}
+
 Future<List<int>> competingFlutterIntegrationTestPids() async {
   if (Platform.isWindows) {
     return const <int>[];
@@ -3672,13 +3710,16 @@ Options:
   --case smoke|multi-device|multi-device-remote-join|multi-device-app-pair|multi-device-app-pair-functional|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
-                               operator-confirmed real App/CLI message-driven
+                               unattended real App/CLI message-driven
                                member Join flow in both directions against
-                               awiki.info.
+                               awiki.info. Only its test-scoped user-presence
+                               port is automated; production LocalAuthentication
+                               is unchanged and not attested.
                                multi-device-app-pair builds and drives two
                                isolated real macOS App processes on one host;
                                it currently runs only the remote member Join
-                               flow and requires real macOS user presence.
+                               flow with an E2E-only unattended user-presence
+                               decision.
                                multi-device-app-pair-functional reuses the two
                                isolated Apps with an E2E-only user-presence
                                port to run unattended Agent-inventory and
@@ -3687,8 +3728,7 @@ Options:
                                full runs the audited App+CLI peer flow and then
                                one real App-admin/CLI-member Join + root
                                completion lifecycle; it therefore also requires
-                               the remote Join gate, dedicated OTP resolver, and
-                               real macOS user presence.
+                               the remote Join gate and dedicated OTP resolver.
                                The other cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
@@ -3757,8 +3797,8 @@ class _RemoteMultiDeviceBaseConfig {
     final platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
     if (platform != DesktopE2ePlatform.macos) {
       throw E2eFailure(
-        'Remote multi-device App Join currently requires macOS so the real '
-        'operating-system user-presence prompt can be completed.',
+        'Remote multi-device App Join currently requires macOS because the '
+        'suite drives real AWiki Me desktop processes.',
       );
     }
     final serviceBaseUrl = _requiredConfig(
