@@ -10,8 +10,6 @@ import '../app_shell/providers/app_runtime_provider.dart';
 import '../app_shell/providers/message_sync_coordinator_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
-import '../agents/agents_page.dart';
-import '../agents/agents_provider.dart';
 import '../devices/devices_page.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/app_dialog.dart';
@@ -44,7 +42,6 @@ class SettingsPage extends ConsumerWidget {
     final messageSync = ref.watch(messageSyncCoordinatorProvider);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
-    final personalAgentEnabled = ref.watch(agentImEnabledProvider);
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     Widget? leading(Widget icon) => responsive.usesDesktopLayout ? null : icon;
@@ -110,28 +107,6 @@ class SettingsPage extends ConsumerWidget {
         ),
         SizedBox(height: responsive.spacing(14)),
       ],
-      _SettingsSection(
-        key: const Key('settings-personal-agent-section'),
-        children: <Widget>[
-          AppListTile(
-            title: personalAgentEnabled
-                ? l10n.personalAgentTitle
-                : l10n.personalAgentExperimentDisabled,
-            leading: leading(
-              const _SettingsIcon(
-                icon: CupertinoIcons.person_crop_circle_badge_checkmark,
-              ),
-            ),
-            onTap: personalAgentEnabled
-                ? () => AppNavigator.push<void>(
-                    context,
-                    (_) => const PersonalAgentSettingsPage(),
-                  )
-                : null,
-          ),
-        ],
-      ),
-      SizedBox(height: responsive.spacing(14)),
       _SettingsSection(
         key: const Key('settings-general-section'),
         children: <Widget>[
@@ -275,21 +250,6 @@ class SettingsPage extends ConsumerWidget {
             onTap: () =>
                 AppNavigator.push<void>(context, (_) => const DevicesPage()),
           ),
-        _QuietSettingsRow(
-          key: const Key('settings-personal-agent-row'),
-          icon: CupertinoIcons.gear_alt,
-          iconKey: const Key('settings-personal-agent-icon'),
-          title: personalAgentEnabled
-              ? l10n.personalAgentTitle
-              : l10n.personalAgentExperimentDisabled,
-          height: optionRowHeight,
-          onTap: personalAgentEnabled
-              ? () => AppNavigator.push<void>(
-                  context,
-                  (_) => const PersonalAgentSettingsPage(),
-                )
-              : null,
-        ),
         if (messageSync.status != MessageSyncCoordinatorStatus.idle)
           _QuietSettingsRow(
             key: const ValueKey<String>('message-sync-status'),

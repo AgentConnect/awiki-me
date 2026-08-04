@@ -791,10 +791,9 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
                 homepageUrl: homepageUrl,
                 onOpenHomepage: onOpenHomepage,
               ),
-            Container(
-              key: const Key('profile-homepage-divider'),
-              height: 1,
-              color: theme.border,
+            const SizedBox(
+              key: Key('profile-homepage-settings-gap'),
+              height: 8,
             ),
           ],
           _CompactProfileNavigationRow(

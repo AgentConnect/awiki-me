@@ -5,6 +5,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
+import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/settings/language_selection_page.dart';
@@ -173,9 +174,9 @@ void main() {
     );
     expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
-    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 122));
-    expect(appRect, const Rect.fromLTWH(0, 370, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 183));
+    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
+    expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 183));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -195,7 +196,7 @@ void main() {
     final versionRow = find.byKey(const Key('settings-current-version-row'));
     expect(
       tester.getRect(find.byKey(const Key('settings-current-version-icon'))),
-      const Rect.fromLTWH(28, 388, 24, 24),
+      const Rect.fromLTWH(28, 327, 24, 24),
     );
     expect(tester.getRect(find.text('当前版本')).left, closeTo(68, 0.1));
     expect(tester.getSize(versionRow).height, 60);
@@ -210,12 +211,8 @@ void main() {
       tester.getSize(find.byKey(const Key('settings-devices-row'))).height,
       60,
     );
-    expect(
-      tester
-          .getSize(find.byKey(const Key('settings-personal-agent-row')))
-          .height,
-      60,
-    );
+    expect(find.byKey(const Key('settings-personal-agent-row')), findsNothing);
+    expect(find.text('个人助理'), findsNothing);
     expect(find.text('配置个人助理的启用、暂停和 Daemon 管理'), findsNothing);
     expect(find.text('查看已授权设备并审批新设备'), findsNothing);
     expect(
@@ -1145,7 +1142,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('设置页可进入 Personal Agent 独立设置页并从真实入口启用', (tester) async {
+  testWidgets('Personal Agent 独立设置页可启用', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -1171,7 +1168,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const PersonalAgentSettingsPage(),
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -1185,10 +1182,6 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
-
-    expect(find.text('个人助理'), findsOneWidget);
-    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
 
     expect(
@@ -1216,7 +1209,7 @@ void main() {
     expect(find.textContaining('代发'), findsNothing);
   });
 
-  testWidgets('Personal Agent feature 关闭时设置入口禁用且不触发授权', (tester) async {
+  testWidgets('设置页不再显示 Personal Agent 入口', (tester) async {
     final control = FakeAgentControlService()
       ..agents = const <AgentSummary>[
         AgentSummary(
@@ -1257,7 +1250,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Personal Agent'), findsNothing);
-    expect(find.text('实验功能关闭'), findsOneWidget);
+    expect(find.text('实验功能关闭'), findsNothing);
     expect(find.text('个人助理'), findsNothing);
     expect(identities.lastEnsuredDaemonSubkeySelector, isNull);
     expect(control.lastBootstrapDaemonDid, isNull);
@@ -1279,7 +1272,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const PersonalAgentSettingsPage(),
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -1292,9 +1285,6 @@ void main() {
         ],
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('个人助理'));
     await tester.pumpAndSettle();
 
     expect(
@@ -1374,7 +1364,7 @@ void main() {
 
     await tester.pumpWidget(
       buildLocalizedTestApp(
-        home: const SettingsPage(),
+        home: const PersonalAgentSettingsPage(),
         session: const SessionIdentity(
           did: 'did:human:me',
           credentialName: 'default',
@@ -1390,8 +1380,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('个人助理'));
-    await tester.pumpAndSettle();
     expect(find.text('当前运行 Daemon：运行 Daemon 1'), findsOneWidget);
 
     await tester.tap(find.text('运行 Daemon 2').first);

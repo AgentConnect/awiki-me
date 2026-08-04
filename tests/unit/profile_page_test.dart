@@ -155,6 +155,11 @@ void main() {
     expect(find.byKey(const Key('profile-did-row')), findsOneWidget);
     expect(find.byKey(const Key('profile-homepage-row')), findsOneWidget);
     expect(find.byKey(const Key('profile-settings-row')), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(const Key('profile-settings-row'))).top -
+          tester.getRect(find.byKey(const Key('profile-homepage-row'))).bottom,
+      8,
+    );
     expect(tester.takeException(), isNull);
   });
 
