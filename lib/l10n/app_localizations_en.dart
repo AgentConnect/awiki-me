@@ -2905,23 +2905,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get newMessageArrived => 'You received a new message';
 
   @override
-  String get foregroundMessageBannerJustNow => 'Just now';
-
-  @override
-  String foregroundMessageBannerGroupPreview(Object sender, Object preview) {
-    return '$sender: $preview';
-  }
-
-  @override
-  String foregroundMessageBannerSemanticLabel(
-    Object sender,
-    Object conversation,
-    Object preview,
-  ) {
-    return 'New message from $sender in $conversation: $preview. Tap to open.';
-  }
-
-  @override
   String get updateAlreadyLatest => 'You\'re already on the latest version.';
 
   @override

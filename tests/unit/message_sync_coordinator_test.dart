@@ -23,7 +23,6 @@ import 'package:awiki_me/src/data/services/method_channel_app_presentation_servi
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/agent_terminal_notification_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/foreground_message_banner_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
@@ -178,7 +177,7 @@ void main() {
   );
 
   test(
-    'intercepted foreground Push presents once outside its conversation',
+    'intercepted foreground Push stays silent outside its conversation',
     () async {
       final committed = _committedIncoming(
         eventId: 'event-foreground-push',
@@ -208,10 +207,6 @@ void main() {
           );
       await pumpEventQueue();
 
-      final banner = container.read(foregroundMessageBannerProvider);
-      expect(banner?.content.conversationTitle, 'Peer');
-      expect(banner?.content.senderLabel, 'Peer');
-      expect(banner?.content.preview, 'committed logical-foreground-push');
       expect(container.read(uiFeedbackProvider), isNull);
       expect(notifications.systemCalls, 0);
     },
@@ -454,9 +449,6 @@ void main() {
 
       expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
       expect(sync.syncReasons, ['startup', 'websocket_hint']);
-      final banner = container.read(foregroundMessageBannerProvider);
-      expect(banner?.content.conversationTitle, 'Peer');
-      expect(banner?.content.preview, 'committed logical-queue-first');
       expect(container.read(uiFeedbackProvider), isNull);
       expect(notifications.systemCalls, 0);
     },
@@ -1349,6 +1341,9 @@ void main() {
         syncV2ReadEnabled: true,
       );
       addTearDown(container.dispose);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
       final coordinator = container.read(
         messageSyncCoordinatorProvider.notifier,
       );
@@ -1388,11 +1383,8 @@ void main() {
       );
       await pumpEventQueue();
 
-      final banner = container.read(foregroundMessageBannerProvider);
-      expect(banner?.sequence, 1);
-      expect(banner?.content.senderLabel, 'Peer');
-      expect(banner?.content.preview, 'committed hello');
       expect(container.read(uiFeedbackProvider), isNull);
+      expect(notifications.systemCalls, 1);
     },
   );
 
@@ -1430,6 +1422,9 @@ void main() {
         productLocalStore: localStore,
       );
       addTearDown(container.dispose);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
 
       await container
           .read(messageSyncCoordinatorProvider.notifier)

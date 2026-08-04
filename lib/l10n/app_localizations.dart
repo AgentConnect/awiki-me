@@ -5226,28 +5226,6 @@ abstract class AppLocalizations {
   /// **'你收到了新消息'**
   String get newMessageArrived;
 
-  /// No description provided for @foregroundMessageBannerJustNow.
-  ///
-  /// In zh, this message translates to:
-  /// **'刚刚'**
-  String get foregroundMessageBannerJustNow;
-
-  /// No description provided for @foregroundMessageBannerGroupPreview.
-  ///
-  /// In zh, this message translates to:
-  /// **'{sender}：{preview}'**
-  String foregroundMessageBannerGroupPreview(Object sender, Object preview);
-
-  /// No description provided for @foregroundMessageBannerSemanticLabel.
-  ///
-  /// In zh, this message translates to:
-  /// **'来自{sender}的新消息，位于{conversation}：{preview}。点击打开会话。'**
-  String foregroundMessageBannerSemanticLabel(
-    Object sender,
-    Object conversation,
-    Object preview,
-  );
-
   /// No description provided for @updateAlreadyLatest.
   ///
   /// In zh, this message translates to:

@@ -105,7 +105,7 @@
       "exactOracles": [
         "User Service records one active installation bound to the authenticated account and the Android EMAS registration without exposing credentials or a full provider device identifier.",
         "Foreground Push for the current account and same visible conversation commits and projects the direct message without a system notification or global App toast; when scrolled up, only the existing in-chat new-message affordance appears.",
-        "Foreground Push for the current account while another conversation or page is visible produces exactly one App in-app notification after committed sync.",
+        "Foreground Push for the current account while another conversation or page is visible commits and projects the message, updates recents and unread state, and produces no Toast, Banner, or system notification.",
         "A missing or mismatched opaque target fails open to provider presentation without exposing a raw DID or conversation identifier.",
         "Background delivery renders exactly one EMAS NOTICE for the message.",
         "A terminated-process notification tap starts Core sync and opens only the exact conversation matched from the newly committed message.",

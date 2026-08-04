@@ -2751,23 +2751,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get newMessageArrived => '你收到了新消息';
 
   @override
-  String get foregroundMessageBannerJustNow => '刚刚';
-
-  @override
-  String foregroundMessageBannerGroupPreview(Object sender, Object preview) {
-    return '$sender：$preview';
-  }
-
-  @override
-  String foregroundMessageBannerSemanticLabel(
-    Object sender,
-    Object conversation,
-    Object preview,
-  ) {
-    return '来自$sender的新消息，位于$conversation：$preview。点击打开会话。';
-  }
-
-  @override
   String get updateAlreadyLatest => '已是最新版本';
 
   @override

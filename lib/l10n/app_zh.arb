@@ -1216,22 +1216,6 @@
   },
   "noLocalCredentialsFound": "未识别到本地凭证",
   "newMessageArrived": "你收到了新消息",
-  "foregroundMessageBannerJustNow": "刚刚",
-  "foregroundMessageBannerGroupPreview": "{sender}：{preview}",
-  "@foregroundMessageBannerGroupPreview": {
-    "placeholders": {
-      "sender": {},
-      "preview": {}
-    }
-  },
-  "foregroundMessageBannerSemanticLabel": "来自{sender}的新消息，位于{conversation}：{preview}。点击打开会话。",
-  "@foregroundMessageBannerSemanticLabel": {
-    "placeholders": {
-      "sender": {},
-      "conversation": {},
-      "preview": {}
-    }
-  },
   "updateAlreadyLatest": "已是最新版本",
   "updateCheckFailed": "检查更新失败，请稍后重试。",
   "updateOpenReleaseNotesFailed": "无法打开更新日志，请稍后重试。",

@@ -18,7 +18,6 @@ import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/notification_target.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
-import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
@@ -27,7 +26,7 @@ import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
 import 'agent_terminal_notification_provider.dart';
 import 'app_lifecycle_provider.dart';
-import 'foreground_message_banner_provider.dart';
+import 'ordinary_message_presentation_policy.dart';
 import 'session_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
@@ -1190,12 +1189,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         deduplicator.acceptRuntimeMessageIds(
           messageIds,
           releaseNotification: () {
-            unawaited(
-              _showCommittedMessageNotification(
-                message,
-                suppressWhenForeground: true,
-              ),
-            );
+            unawaited(_showCommittedMessageNotification(message));
           },
         );
       } else if (deduplicator.acceptMessageIds(messageIds)) {
@@ -1218,15 +1212,36 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     }
   }
 
-  Future<void> _showCommittedMessageNotification(
-    ChatMessage message, {
-    bool suppressWhenForeground = false,
-  }) async {
+  Future<void> _showCommittedMessageNotification(ChatMessage message) async {
     if (!isOrdinaryMessagePresentationEligible(message)) {
       return;
     }
     final epoch = ref.read(sessionProvider).activeEpoch;
     if (_disposed || epoch == null) {
+      return;
+    }
+    final lifecycle = ref.read(appLifecycleProvider);
+    final nativePresentation = lifecycle == AppLifecycleState.resumed
+        ? await ref.read(appPresentationServiceProvider).currentState()
+        : null;
+    if (_disposed || ref.read(sessionProvider).session == null) {
+      return;
+    }
+    final isForeground =
+        lifecycle == AppLifecycleState.resumed &&
+        (nativePresentation?.isForeground ?? true);
+    _messageSyncTrace(
+      'notification.route',
+      fields: <String, Object?>{
+        'lifecycle': lifecycle.name,
+        'native_state_available': nativePresentation != null,
+        'application_active': nativePresentation?.applicationActive,
+        'window_visible': nativePresentation?.windowVisible,
+        'window_miniaturized': nativePresentation?.windowMiniaturized,
+        'route': isForeground ? 'silent_foreground' : 'system',
+      },
+    );
+    if (isForeground) {
       return;
     }
     final conversationId = message.conversationId?.trim() ?? '';
@@ -1306,77 +1321,25 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     final resolvedTitle = title.isNotEmpty
         ? title
         : AppMessage.newMessageArrived().resolveForFallback();
-    final lifecycle = ref.read(appLifecycleProvider);
-    final nativePresentation = lifecycle == AppLifecycleState.resumed
-        ? await ref.read(appPresentationServiceProvider).currentState()
-        : null;
-    if (_disposed || ref.read(sessionProvider).session == null) {
+    final session = ref.read(sessionProvider).session;
+    final targetConversationId = message.conversationId?.trim();
+    if (session == null ||
+        targetConversationId == null ||
+        targetConversationId.isEmpty) {
       return;
     }
-    final isForeground =
-        lifecycle == AppLifecycleState.resumed &&
-        (nativePresentation?.isForeground ?? true);
-    _messageSyncTrace(
-      'notification.route',
-      fields: <String, Object?>{
-        'lifecycle': lifecycle.name,
-        'native_state_available': nativePresentation != null,
-        'application_active': nativePresentation?.applicationActive,
-        'window_visible': nativePresentation?.windowVisible,
-        'window_miniaturized': nativePresentation?.windowMiniaturized,
-        'route': isForeground ? 'foreground' : 'system',
-        'suppress_when_foreground': suppressWhenForeground,
-      },
+    final target = NotificationTarget(
+      storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+      ownerDid: session.did,
+      conversationId: targetConversationId,
     );
-    if (isForeground) {
-      if (suppressWhenForeground) {
-        return;
-      }
-      if (conversationId.isNotEmpty &&
-          ref
-              .read(chatThreadsProvider.notifier)
-              .isConversationVisible(conversationId)) {
-        return;
-      }
-      final conversation = ref
-          .read(conversationListProvider)
-          .entitiesById[conversationId];
-      final content = resolveForegroundMessageBannerContent(
-        message: message,
-        conversation: conversation,
-        senderLabel: resolvedTitle,
-        preview: body,
-        groupFallbackTitle: l10n.conversationPeerTypeGroup,
-      );
-      ref
-          .read(foregroundMessageBannerProvider.notifier)
-          .show(
-            storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
-            ownerDid: epoch.ownerDid,
-            sessionGeneration: epoch.generation,
-            conversationId: conversationId,
-            content: content,
-            receivedAt: message.createdAt,
-          );
-    } else {
-      final session = ref.read(sessionProvider).session;
-      final conversationId = message.conversationId?.trim();
-      if (session == null || conversationId == null || conversationId.isEmpty) {
-        return;
-      }
-      final target = NotificationTarget(
-        storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
-        ownerDid: session.did,
-        conversationId: conversationId,
-      );
-      await ref
-          .read(notificationFacadeProvider)
-          .showSystemNotification(
-            title: resolvedTitle,
-            body: body,
-            target: target,
-          );
-    }
+    await ref
+        .read(notificationFacadeProvider)
+        .showSystemNotification(
+          title: resolvedTitle,
+          body: body,
+          target: target,
+        );
   }
 
   String? _agentDisplayNameForSender(AppLocalizations l10n, String senderDid) {

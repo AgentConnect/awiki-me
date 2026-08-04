@@ -27,8 +27,8 @@ The future runner must attest all of the following in one isolated scenario:
    App toast. Repeat while scrolled away from the bottom and prove that only
    the existing in-chat new-message affordance appears.
 4. With the App foregrounded on another conversation or page, intercept the
-   matching-account ordinary `NOTICE`, complete Core sync, and display exactly
-   one App in-app notification for the committed message.
+   matching-account ordinary `NOTICE`, complete Core sync, update recents and
+   unread state, and display no Toast, Banner, or system notification.
 5. Repeat with a missing or mismatched opaque target and prove that native
    interception fails open to provider presentation without exposing a raw DID
    or conversation identifier.

@@ -1216,22 +1216,6 @@
   },
   "noLocalCredentialsFound": "No local credentials found",
   "newMessageArrived": "You received a new message",
-  "foregroundMessageBannerJustNow": "Just now",
-  "foregroundMessageBannerGroupPreview": "{sender}: {preview}",
-  "@foregroundMessageBannerGroupPreview": {
-    "placeholders": {
-      "sender": {},
-      "preview": {}
-    }
-  },
-  "foregroundMessageBannerSemanticLabel": "New message from {sender} in {conversation}: {preview}. Tap to open.",
-  "@foregroundMessageBannerSemanticLabel": {
-    "placeholders": {
-      "sender": {},
-      "conversation": {},
-      "preview": {}
-    }
-  },
   "updateAlreadyLatest": "You're already on the latest version.",
   "updateCheckFailed": "Update check failed. Please try again later.",
   "updateOpenReleaseNotesFailed": "Couldn't open the release notes.",

@@ -41,9 +41,9 @@ import '../../shared/realtime_conversation_identity_projection.dart';
 import 'app_lifecycle_provider.dart';
 import 'account_state_sync_coordinator_provider.dart';
 import 'agent_terminal_notification_provider.dart';
-import 'foreground_message_banner_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'navigation_provider.dart';
+import 'ordinary_message_presentation_policy.dart';
 import 'remote_push_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
@@ -1391,6 +1391,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (message == null || !isOrdinaryMessagePresentationEligible(message)) {
       return;
     }
+    if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
+      return;
+    }
     final title = _notificationTitle(update, conversationHint);
     final l10n = _currentLocalizations();
     final systemEvent = message.groupSystemEvent;
@@ -1423,47 +1426,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final body = preview.isNotEmpty
         ? preview
         : AppMessage.newMessageArrived().resolveForFallback();
-    final isForeground =
-        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
-    if (isForeground) {
-      final isAgentMessage = message.senderDid.trim().toLowerCase().contains(
-        ':agent:',
-      );
-      if (isAgentMessage) {
-        return;
-      }
-      if (ref
-          .read(chatThreadsProvider.notifier)
-          .isConversationVisible(conversationHint.conversationId)) {
-        return;
-      }
-      final content = resolveForegroundMessageBannerContent(
-        message: message,
-        conversation: conversationHint,
-        senderLabel: title,
-        preview: body,
-        groupFallbackTitle: l10n.conversationPeerTypeGroup,
-      );
-      ref
-          .read(foregroundMessageBannerProvider.notifier)
-          .show(
-            storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
-            ownerDid: expectedEpoch.ownerDid,
-            sessionGeneration: expectedEpoch.generation,
-            conversationId: conversationHint.conversationId,
-            content: content,
-            receivedAt: message.createdAt,
-          );
-    } else {
-      final target = NotificationTarget(
-        storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
-        ownerDid: expectedEpoch.ownerDid,
-        conversationId: conversationHint.conversationId,
-      );
-      ref
-          .read(notificationFacadeProvider)
-          .showSystemNotification(title: title, body: body, target: target);
-    }
+    final target = NotificationTarget(
+      storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+      ownerDid: expectedEpoch.ownerDid,
+      conversationId: conversationHint.conversationId,
+    );
+    ref
+        .read(notificationFacadeProvider)
+        .showSystemNotification(title: title, body: body, target: target);
   }
 
   void _showAgentTerminalNotification(AgentTerminalNotification notification) {
