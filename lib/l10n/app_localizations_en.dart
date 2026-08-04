@@ -1823,7 +1823,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get peerProfileUnfollow => 'Unfollow';
 
   @override
-  String get peerProfileDeleteThread => 'Delete local chat history';
+  String get peerProfileDeleteThread => 'Clear chat history';
+
+  @override
+  String get peerProfileDeleteThreadConfirmTitle => 'Clear chat history?';
+
+  @override
+  String get peerProfileDeleteThreadConfirmMessage =>
+      'This clears the local chat history with this user';
 
   @override
   String get peerProfileUnfollowed => 'Unfollowed';

@@ -23,6 +23,7 @@ void main() {
   );
 
   testWidgets('未关注的公开资料可执行真实关注并更新关系状态', (tester) async {
+    _useCompactSurface(tester);
     const did = 'did:test:peer-to-follow';
     const profile = UserProfile(
       did: did,
@@ -45,7 +46,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('peer-profile-identity-hero')), findsOneWidget);
-    expect(find.byKey(const Key('peer-profile-action-row')), findsOneWidget);
+    expect(find.byKey(const Key('peer-profile-action-group')), findsOneWidget);
     expect(find.text('身份卡'), findsNothing);
     expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
     await tester.tap(find.byKey(const Key('peer-profile-follow')));
@@ -53,10 +54,11 @@ void main() {
 
     expect(gateway.lastFollowedDidOrHandle, did);
     expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
-    expect(find.text('取消关注'), findsOneWidget);
+    expect(find.text('取关'), findsOneWidget);
   });
 
   testWidgets('关注列表已有联系人时资料页显示取消关注而不是重复关注', (tester) async {
+    _useCompactSurface(tester);
     const did = 'did:test:already-following';
     const profile = UserProfile(
       did: did,
@@ -100,7 +102,7 @@ void main() {
 
     expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
     expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
-    expect(find.text('取消关注'), findsOneWidget);
+    expect(find.text('取关'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('peer-profile-unfollow')));
     await tester.pumpAndSettle();
@@ -110,7 +112,8 @@ void main() {
     expect(find.text('关注'), findsOneWidget);
   });
 
-  testWidgets('私聊资料页按昵称、简介、标签、DID 排列并复制完整 DID', (tester) async {
+  testWidgets('用户信息资料卡与 DID 选项卡按需展开并复制完整 DID', (tester) async {
+    _useCompactSurface(tester);
     const longDid =
         'did:awiki:user:cgw-agent-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
     const profile = UserProfile(
@@ -149,14 +152,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final didFinder = find.byKey(const Key('peer-profile-did-value'));
-    expect(didFinder, findsOneWidget);
-    final didText = tester.widget<Text>(didFinder);
-    expect(didText.data, isNot(longDid));
-    expect(didText.data, startsWith('did:awiki:user:cgw-agent-lab:e1_'));
-    expect(didText.data, contains('…'));
-    expect(didText.data, endsWith('yz0123456789'));
-    expect(didText.maxLines, 2);
+    expect(find.byKey(const Key('peer-profile-summary-details')), findsNothing);
+    expect(find.byKey(const Key('peer-profile-did-value')), findsNothing);
     expect(find.byKey(const Key('peer-profile-handle-value')), findsNothing);
     expect(
       tester
@@ -165,9 +162,26 @@ void main() {
       'CGW Agent',
     );
     expect(find.text('CGW Agent'), findsOneWidget);
+    expect(find.text('融资协作 Agent'), findsNothing);
+    expect(find.text('Agent'), findsNothing);
+    expect(find.text('身份卡'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('peer-profile-summary-details')),
+      findsOneWidget,
+    );
     expect(find.text('融资协作 Agent'), findsOneWidget);
     expect(find.text('Agent'), findsOneWidget);
-    expect(find.text('身份卡'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('peer-profile-did-row')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('peer-profile-summary-details')), findsNothing);
+    final didFinder = find.byKey(const Key('peer-profile-did-value'));
+    expect(didFinder, findsOneWidget);
+    final didText = tester.widget<Text>(didFinder);
+    expect(didText.data, longDid);
     expect(
       find.byKey(const Key('peer-profile-copy-did-button')),
       findsOneWidget,
@@ -183,6 +197,7 @@ void main() {
   });
 
   testWidgets('私聊资料页主页链接优先使用 fullHandle', (tester) async {
+    _useCompactSurface(tester);
     const did = 'did:wba:anpclaw.com:zhuocheng:e1_key';
     const profile = UserProfile(
       did: did,
@@ -210,16 +225,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requestedHomepageUrl, 'https://zhuocheng.anpclaw.com');
+    expect(find.byKey(const Key('peer-profile-homepage-value')), findsNothing);
+    await tester.tap(find.byKey(const Key('peer-profile-homepage-row')));
+    await tester.pumpAndSettle();
     expect(
-      find.descendant(
-        of: find.byKey(const Key('peer-profile-details')),
-        matching: find.text('zhuocheng.anpclaw.com'),
-      ),
-      findsOneWidget,
+      tester
+          .widget<Text>(find.byKey(const Key('peer-profile-homepage-value')))
+          .data,
+      'https://zhuocheng.anpclaw.com',
     );
   });
 
-  testWidgets('窄屏第 3 版资料页使用 16px 紧凑按钮并保留 48dp 触控区', (tester) async {
+  testWidgets('窄屏用户信息使用紧凑取关与全宽操作行', (tester) async {
     tester.view
       ..devicePixelRatio = 1
       ..physicalSize = const Size(390, 844);
@@ -265,37 +282,36 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-avatar'))),
-      const Size(72, 72),
+      const Size(64, 64),
     );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-send-message'))).height,
-      48,
+      56,
     );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-follow'))).height,
-      48,
+      greaterThanOrEqualTo(44),
     );
     expect(
       tester
           .getSize(find.byKey(const Key('peer-profile-send-message-visual')))
           .height,
-      40,
+      56,
     );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-relationship-visual'))),
-      const Size(80, 40),
+      const Size(48, 32),
     );
     expect(
       tester
           .getSize(find.byKey(const Key('peer-profile-delete-thread-visual')))
           .height,
-      40,
+      56,
     );
 
     for (final entry in <(Key, String)>[
       (const Key('peer-profile-send-message-visual'), '发消息'),
-      (const Key('peer-profile-relationship-visual'), '关注'),
-      (const Key('peer-profile-delete-thread-visual'), '删除本地聊天记录'),
+      (const Key('peer-profile-delete-thread-visual'), '清空聊天记录'),
     ]) {
       final text = tester.widget<Text>(
         find.descendant(
@@ -305,15 +321,28 @@ void main() {
       );
       expect(text.style?.fontSize, 16);
     }
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const Key('peer-profile-relationship-visual')),
+              matching: find.text('关注'),
+            ),
+          )
+          .style
+          ?.fontSize,
+      13,
+    );
 
     final sendRect = tester.getRect(
       find.byKey(const Key('peer-profile-send-message-visual')),
     );
-    final followRect = tester.getRect(
-      find.byKey(const Key('peer-profile-relationship-visual')),
+    final clearRect = tester.getRect(
+      find.byKey(const Key('peer-profile-delete-thread-visual')),
     );
-    expect(sendRect.center.dy, followRect.center.dy);
-    expect(sendRect.right, lessThan(followRect.left));
+    expect(sendRect.left, clearRect.left);
+    expect(sendRect.right, clearRect.right);
+    expect(sendRect.bottom, lessThan(clearRect.top));
     expect(tester.takeException(), isNull);
   });
 
@@ -400,7 +429,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('删除本地聊天记录'));
+    await tester.tap(find.text('清空聊天记录'));
+    await tester.pumpAndSettle();
+    expect(find.text('清空聊天记录？'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const Key('peer-profile-delete-thread-confirm')),
+    );
     await tester.pumpAndSettle();
 
     expect(chatThreads.deletedConversationIds, isEmpty);
@@ -456,11 +490,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('删除本地聊天记录'));
+    await tester.tap(find.text('清空聊天记录'));
+    await tester.pumpAndSettle();
+    expect(chatThreads.deletedConversationIds, isEmpty);
+    await tester.tap(
+      find.byKey(const Key('peer-profile-delete-thread-confirm')),
+    );
     await tester.pumpAndSettle();
 
     expect(chatThreads.deletedConversationIds, <String>[conversationId]);
   });
+}
+
+void _useCompactSurface(WidgetTester tester) {
+  tester.view
+    ..devicePixelRatio = 1
+    ..physicalSize = const Size(390, 844);
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
 }
 
 class _RecordingChatThreadsControllerPlaceholder {

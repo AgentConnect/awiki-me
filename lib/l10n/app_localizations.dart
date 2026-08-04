@@ -3345,14 +3345,26 @@ abstract class AppLocalizations {
   /// No description provided for @peerProfileUnfollow.
   ///
   /// In zh, this message translates to:
-  /// **'取消关注'**
+  /// **'取关'**
   String get peerProfileUnfollow;
 
   /// No description provided for @peerProfileDeleteThread.
   ///
   /// In zh, this message translates to:
-  /// **'删除本地聊天记录'**
+  /// **'清空聊天记录'**
   String get peerProfileDeleteThread;
+
+  /// No description provided for @peerProfileDeleteThreadConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'清空聊天记录？'**
+  String get peerProfileDeleteThreadConfirmTitle;
+
+  /// No description provided for @peerProfileDeleteThreadConfirmMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'将清空与该用户的本地聊天记录'**
+  String get peerProfileDeleteThreadConfirmMessage;
 
   /// No description provided for @peerProfileUnfollowed.
   ///

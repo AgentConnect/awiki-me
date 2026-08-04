@@ -113,6 +113,26 @@ class _ChatInformationPageState extends ConsumerState<_ChatInformationPage> {
   }
 
   Future<void> _openPeerInfo() {
+    final runtimeAgent = localRuntimeAgentForConversationTarget(
+      widget.target.targetDid,
+      ref.read(agentsProvider).agents,
+    );
+    final isAgent =
+        runtimeAgent != null ||
+        conversationTargetDidLooksLikeAgent(widget.target.targetDid);
+    if (widget.target.targetDid.isNotEmpty && !isAgent) {
+      return AppNavigator.push<void>(
+        context,
+        (_) => PeerProfilePage(
+          did: widget.target.targetDid,
+          peerPersonaId: widget.target.peerPersonaId,
+          initialDisplayName: widget.target.displayName,
+          initialFullHandle: widget.target.fullHandle,
+          initialAvatarUri: widget.target.avatarUri,
+          returnToPreviousOnSend: true,
+        ),
+      );
+    }
     return AppNavigator.push<void>(
       context,
       (_) => _PeerInfoDialog(target: widget.target, fullPage: true),

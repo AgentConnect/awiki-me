@@ -1723,10 +1723,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get peerProfileSendMessage => '发消息';
 
   @override
-  String get peerProfileUnfollow => '取消关注';
+  String get peerProfileUnfollow => '取关';
 
   @override
-  String get peerProfileDeleteThread => '删除本地聊天记录';
+  String get peerProfileDeleteThread => '清空聊天记录';
+
+  @override
+  String get peerProfileDeleteThreadConfirmTitle => '清空聊天记录？';
+
+  @override
+  String get peerProfileDeleteThreadConfirmMessage => '将清空与该用户的本地聊天记录';
 
   @override
   String get peerProfileUnfollowed => '已取消关注';

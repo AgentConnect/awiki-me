@@ -747,6 +747,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('Responsive profile'), findsNothing);
+    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
+    await tester.pumpAndSettle();
     expect(find.text('Responsive profile'), findsOneWidget);
 
     tester.view.physicalSize = const Size(1280, 900);

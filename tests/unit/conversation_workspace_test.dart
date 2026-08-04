@@ -34,6 +34,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_list_page.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_workspace_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
@@ -1629,7 +1630,7 @@ void main() {
     expect(find.text('智能体已删除，无法继续发送消息'), findsOneWidget);
   });
 
-  testWidgets('macOS 聊天头部移除身份卡按钮但头像仍可打开用户信息弹窗', (tester) async {
+  testWidgets('macOS 聊天头像打开统一用户信息页', (tester) async {
     const peerProfile = UserProfile(
       did: 'did:peer',
       nickName: 'Marcus Chen',
@@ -1679,12 +1680,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('用户信息'), findsOneWidget);
-    expect(find.text('负责融资协作。'), findsOneWidget);
-    expect(find.text('@marcus'), findsOneWidget);
-    expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
+    expect(find.byType(PeerProfilePage), findsOneWidget);
+    expect(find.text('融资协作 Agent'), findsOneWidget);
+    expect(find.text('@marcus'), findsNothing);
+    expect(find.byKey(const Key('peer-profile-did-value')), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
 
-    await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
+    await tester.tap(find.byKey(const Key('peer-profile-back-button')));
     await tester.pumpAndSettle();
     expect(find.text('用户信息'), findsNothing);
 

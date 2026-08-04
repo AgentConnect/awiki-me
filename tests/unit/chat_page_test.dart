@@ -37,6 +37,7 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
+import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_page.dart';
 import 'package:awiki_me/src/presentation/shared/adaptive_overlays.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
@@ -788,34 +789,26 @@ void main() {
       ),
     );
     expect(userInfoTopBar.titleFontSize, 16);
-    expect(
-      find.byKey(const Key('peer-info-compact-user-layout')),
-      findsOneWidget,
-    );
+    expect(find.byType(PeerProfilePage), findsOneWidget);
     expect(
       tester
-          .widget<Text>(find.byKey(const Key('peer-info-dialog-handle-value')))
+          .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
           .data,
       'Alice',
     );
+    expect(find.text('连接人与 Agent，保持简单而高效'), findsNothing);
+    await tester.tap(find.byKey(const Key('peer-profile-summary-toggle')));
+    await tester.pumpAndSettle();
     expect(find.text('连接人与 Agent，保持简单而高效'), findsOneWidget);
     expect(find.text('开发者'), findsOneWidget);
     expect(find.text('AI 协作'), findsOneWidget);
-    expect(
-      find.byKey(const Key('peer-info-dialog-display-name')),
-      findsNothing,
-    );
     expect(find.text('身份卡'), findsNothing);
     expect(find.byKey(const Key('peer-info-identity-document')), findsNothing);
     expect(
-      tester.getSize(find.byKey(const Key('peer-info-avatar'))),
-      const Size.square(72),
+      tester.getSize(find.byKey(const Key('peer-profile-avatar'))),
+      const Size.square(64),
     );
-    expect(
-      find.byKey(const Key('peer-info-back-button')).evaluate().length +
-          find.byKey(const Key('peer-info-close-button')).evaluate().length,
-      1,
-    );
+    expect(find.byKey(const Key('peer-profile-back-button')), findsOneWidget);
   });
 
   testWidgets('群聊发送者名称不改变 compact 和 macStyle 的头像气泡顶部基准', (tester) async {
@@ -1826,13 +1819,13 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openCompactChatPeerInfo(tester);
-    expect(find.byKey(const Key('chat-follow-button')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('chat-follow-button')));
+    expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('peer-profile-follow')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastFollowedDidOrHandle, 'did:test:peer');
-    expect(find.text('已关注'), findsWidgets);
-    expect(find.byKey(const Key('chat-unfollow-button')), findsOneWidget);
+    expect(find.text('取关'), findsOneWidget);
+    expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
   });
 
   testWidgets('compact Agent DID 信息页匹配 23:214 且关注后几何稳定', (tester) async {
@@ -1992,14 +1985,14 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openCompactChatPeerInfo(tester);
-    await tester.tap(find.byKey(const Key('chat-follow-button')));
+    await tester.tap(find.byKey(const Key('peer-profile-follow')));
     await tester.pumpAndSettle();
 
     expect(find.text('关注'), findsOneWidget);
     expect(find.text('已关注'), findsNothing);
 
     final container = ProviderScope.containerOf(
-      tester.element(find.byKey(const Key('chat-follow-button'))),
+      tester.element(find.byKey(const Key('peer-profile-follow'))),
     );
     expect(container.read(uiFeedbackProvider)?.danger, isTrue);
     expect(gateway.following, isEmpty);
@@ -2155,14 +2148,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await _openCompactChatPeerInfo(tester);
-    await tester.tap(find.byKey(const Key('chat-unfollow-button')));
-    await tester.pump();
-
-    expect(gateway.lastUnfollowedDidOrHandle, isNull);
-
-    expect(find.byKey(const Key('confirm-unfollow-button')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('confirm-unfollow-button')));
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('peer-profile-unfollow')));
+    await tester.pumpAndSettle();
 
     expect(gateway.lastUnfollowedDidOrHandle, 'did:test:peer');
   });
@@ -8204,7 +8191,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final peerInfoAvatar = tester.widget<AvatarBadge>(
-      find.byKey(const Key('peer-info-avatar')),
+      find.byKey(const Key('peer-profile-avatar')),
     );
     expect(peerInfoAvatar.seed, '卓诚');
     expect(peerInfoAvatar.avatarUri, avatarUri);

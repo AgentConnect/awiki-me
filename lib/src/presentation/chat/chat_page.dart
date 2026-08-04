@@ -65,6 +65,7 @@ import '../friends/friends_provider.dart';
 import '../group/group_list_page.dart';
 import '../group/group_provider.dart';
 import '../profile/peer_profile_provider.dart';
+import '../profile/peer_profile_page.dart';
 import '../profile/peer_display_profile_provider.dart';
 import '../profile/profile_markdown.dart';
 import '../profile/profile_workspace_page.dart';
@@ -1453,6 +1454,28 @@ class _ChatViewState extends ConsumerState<ChatView> {
   }
 
   Future<void> _showPeerInfoTarget(_PeerInfoTarget target) async {
+    final runtimeAgent = localRuntimeAgentForConversationTarget(
+      target.targetDid,
+      ref.read(agentsProvider).agents,
+    );
+    final isAgent =
+        runtimeAgent != null ||
+        conversationTargetDidLooksLikeAgent(target.targetDid);
+    if (target.targetDid.isNotEmpty && !isAgent) {
+      await AppNavigator.push<void>(
+        context,
+        (_) => PeerProfilePage(
+          did: target.targetDid,
+          peerPersonaId: target.peerPersonaId,
+          initialDisplayName: target.displayName,
+          initialFullHandle: target.fullHandle,
+          initialAvatarUri: target.avatarUri,
+          returnToPreviousOnSend: true,
+        ),
+        rootNavigator: context.awikiResponsive.isCompact,
+      );
+      return;
+    }
     if (context.awikiResponsive.isCompact) {
       await AppNavigator.push<void>(
         context,
