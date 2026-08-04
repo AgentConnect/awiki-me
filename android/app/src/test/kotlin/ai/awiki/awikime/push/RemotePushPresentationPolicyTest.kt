@@ -15,10 +15,10 @@ class RemotePushPresentationPolicyTest {
     }
 
     @Test
-    fun `resumed activity without window focus remains provider presented`() {
+    fun `resumed activity intercepts ordinary messages without window focus`() {
         policy.activityResumed = true
 
-        assertTrue(policy.shouldShowNotification(ordinaryEnvelope()))
+        assertFalse(policy.shouldShowNotification(ordinaryEnvelope()))
     }
 
     @Test
@@ -43,12 +43,12 @@ class RemotePushPresentationPolicyTest {
     }
 
     @Test
-    fun `foreground fails open without an active session`() {
+    fun `foreground intercepts ordinary messages before target fence is installed`() {
         policy.activityResumed = true
         policy.windowFocused = true
         policy.activeTargetReference = null
 
-        assertTrue(policy.shouldShowNotification(ordinaryEnvelope()))
+        assertFalse(policy.shouldShowNotification(ordinaryEnvelope()))
     }
 
     @Test

@@ -2,12 +2,13 @@ package ai.awiki.awikime.push
 
 internal class RemotePushPresentationPolicy {
     var activityResumed: Boolean = false
+    // Retained as bridge-owned session/window metadata. Neither value may gate
+    // ordinary foreground suppression; Dart fences queued events by opaque target.
     var windowFocused: Boolean = false
     var activeTargetReference: String? = null
 
     fun shouldShowNotification(extraMap: Map<String, String>?): Boolean {
-        if (!activityResumed || !windowFocused) return true
-        activeTargetReference ?: return true
+        if (!activityResumed) return true
         val envelope = extraMap ?: return true
         if (envelope["ty"] !in ordinaryMessageTypes) return true
         val targetReference = envelope["ts"] ?: return true

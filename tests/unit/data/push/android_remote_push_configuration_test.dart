@@ -157,7 +157,14 @@ void main() {
         expect(bridge, contains('setActiveNotificationTargetReference'));
         expect(activity, contains('setActivityResumed(true)'));
         expect(activity, contains('setActivityResumed(false)'));
-        expect(activity, contains('setWindowFocused(hasFocus)'));
+        expect(
+          presentationState,
+          isNot(contains('if (!activityResumed || !windowFocused)')),
+        );
+        expect(
+          presentationState,
+          isNot(contains('activeTargetReference ?: return true')),
+        );
         expect(
           presentationState,
           contains('targetReferencePattern.matches(targetReference)'),
