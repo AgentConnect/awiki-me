@@ -169,6 +169,8 @@ void main() {
           presentationState,
           contains('targetReferencePattern.matches(targetReference)'),
         );
+        expect(presentationState, contains('data["ext"]'));
+        expect(presentationState, contains('JSONObject(rawEnvelope)'));
         expect(presentationState, contains('direct_message'));
         expect(presentationState, contains('group_message'));
       },

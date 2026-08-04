@@ -22,6 +22,14 @@ class RemotePushPresentationPolicyTest {
     }
 
     @Test
+    fun `resumed activity intercepts ordinary message from raw EMAS ext`() {
+        policy.activityResumed = true
+
+        assertFalse(policy.shouldShowNotification(rawEmasPush("direct_message")))
+        assertFalse(policy.shouldShowNotification(rawEmasPush("group_message")))
+    }
+
+    @Test
     fun `focused foreground intercepts matching direct and group messages`() {
         policy.activityResumed = true
         policy.windowFocused = true
@@ -64,11 +72,25 @@ class RemotePushPresentationPolicyTest {
             ),
         )
         assertTrue(policy.shouldShowNotification(ordinaryEnvelope("group_system_event")))
+        assertTrue(policy.shouldShowNotification(mapOf("ext" to "not-json")))
+        assertTrue(
+            policy.shouldShowNotification(
+                mapOf("ext" to "{\"ty\":\"direct_message\",\"ts\":\"target_invalid\"}"),
+            ),
+        )
+        assertTrue(policy.shouldShowNotification(rawEmasPush("group_system_event")))
     }
 
     private fun ordinaryEnvelope(type: String = "group_message") = mapOf(
         "ty" to type,
         "ts" to TARGET,
+    )
+
+    private fun rawEmasPush(type: String) = mapOf(
+        "type" to "1",
+        "title" to "Sender",
+        "content" to "Preview",
+        "ext" to "{\"v\":\"1\",\"ty\":\"$type\",\"ts\":\"$TARGET\"}",
     )
 
     companion object {
