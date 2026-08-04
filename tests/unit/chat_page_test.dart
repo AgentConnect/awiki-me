@@ -978,7 +978,8 @@ void main() {
       expect(find.text('我的信息'), findsOneWidget);
       expect(tester.widget<Text>(find.text('我的信息')).style?.fontSize, 16);
       expect(find.byKey(const Key('profile-compact-summary')), findsOneWidget);
-      expect(find.byKey(const Key('profile-handle-value')), findsOneWidget);
+      expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
+      expect(find.byKey(const Key('profile-handle-value')), findsNothing);
       expect(find.byKey(const Key('peer-info-identity-card')), findsNothing);
 
       await tester.binding.handlePopRoute();

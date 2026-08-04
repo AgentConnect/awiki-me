@@ -1795,8 +1795,8 @@ void main() {
       find.byKey(const Key('group-info-dialog-add-member-button')),
       findsOneWidget,
     );
-    expect(find.text('owner.awiki'), findsOneWidget);
-    expect(find.text('member.awiki'), findsOneWidget);
+    expect(find.text('@owner.awiki'), findsOneWidget);
+    expect(find.text('@member.awiki'), findsOneWidget);
     expect(find.textContaining('did:test:owner'), findsNothing);
     expect(find.textContaining('did:test:member'), findsNothing);
     expect(find.byType(GroupDetailPage), findsNothing);
@@ -2216,7 +2216,7 @@ void main() {
     expect(find.byKey(const Key('mac-side-panel')), findsNothing);
     expect(find.text('群聊信息'), findsWidgets);
     expect(find.text('同步融资材料和里程碑'), findsOneWidget);
-    expect(find.text('owner.awiki'), findsOneWidget);
+    expect(find.text('@owner.awiki'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('关闭信息弹窗'));
     await tester.pumpAndSettle();
@@ -2311,7 +2311,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(feedback, isNull);
-    expect(find.text('late-member.awiki'), findsOneWidget);
+    expect(find.text('@late-member.awiki'), findsOneWidget);
     expect(find.textContaining('did:test:late-member'), findsNothing);
     expect(find.text('late-role-hidden'), findsNothing);
 
