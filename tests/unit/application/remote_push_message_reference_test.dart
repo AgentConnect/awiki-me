@@ -37,4 +37,22 @@ void main() {
       }
     });
   });
+
+  group('remotePushOpaqueTargetReference', () {
+    test('matches the release Message Service target vector', () {
+      expect(
+        remotePushOpaqueTargetReference('did:wba:example.test:alice'),
+        'target__O36e96xvUp2bpAWguuIrcdZ',
+      );
+    });
+
+    test('rejects unsafe owner DIDs', () {
+      for (final ownerDid in <String>['', ' did:test:alice', 'did:test:a\n']) {
+        expect(
+          () => remotePushOpaqueTargetReference(ownerDid),
+          throwsArgumentError,
+        );
+      }
+    });
+  });
 }

@@ -182,14 +182,6 @@ class AppNotificationFacade implements NotificationFacade {
   }
 
   @override
-  Future<void> showInAppBanner({
-    required String title,
-    required String body,
-  }) async {
-    debugPrint('[awiki_me][in-app-notification] $title: $body');
-  }
-
-  @override
   Future<void> updateBadgeCount(int count) async {
     final normalizedCount = max(0, count);
     if (_lastBadgeCount == normalizedCount) {

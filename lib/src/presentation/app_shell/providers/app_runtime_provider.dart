@@ -1431,6 +1431,11 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       if (isAgentMessage) {
         return;
       }
+      if (ref
+          .read(chatThreadsProvider.notifier)
+          .isConversationVisible(conversationHint.conversationId)) {
+        return;
+      }
       ref
           .read(uiFeedbackProvider.notifier)
           .showInfo(AppMessage.newMessageArrived(), detail: '$title：$body');

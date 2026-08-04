@@ -42,3 +42,7 @@ abstract interface class RemotePushClient {
 
   Future<void> dispose();
 }
+
+abstract interface class RemotePushPresentationTargetClient {
+  Future<void> setActiveNotificationTargetReference(String? targetReference);
+}

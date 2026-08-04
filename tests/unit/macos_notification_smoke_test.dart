@@ -52,12 +52,6 @@ class _RecordingNotificationFacade implements NotificationFacade {
   }
 
   @override
-  Future<void> showInAppBanner({
-    required String title,
-    required String body,
-  }) async {}
-
-  @override
   Future<void> updateBadgeCount(int count) async {}
 
   @override

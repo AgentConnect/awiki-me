@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../../app/app_services.dart';
 import '../../../app/app_locale.dart';
+import '../../../app/ui_feedback.dart';
 import '../../../application/messaging_service.dart';
 import '../../../application/models/message_sync_diagnostics.dart';
 import '../../../application/models/remote_push_sync_receipt.dart';
@@ -18,6 +19,7 @@ import '../../../domain/entities/chat_message.dart';
 import '../../../domain/entities/notification_target.dart';
 import '../../../l10n/app_message.dart';
 import '../../agents/agents_provider.dart';
+import '../../chat/chat_provider.dart';
 import '../../conversation_list/conversation_peer_classifier.dart';
 import '../../profile/peer_display_profile_provider.dart';
 import '../../shared/formatters/display_formatters.dart';
@@ -303,12 +305,16 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   }
 
   @override
-  Future<RemotePushSyncReceipt> requestRemotePushSync() {
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) {
     return _requestSync(
       'remote_push',
       immediate: true,
       policy: _MessageSyncRequestPolicy(
-        suppressNotificationPresentation: true,
+        suppressNotificationPresentation:
+            presentation == RemotePushPresentationDisposition.providerPresented,
         suppressTransientFailurePresentation: true,
       ),
       remotePushRequest: true,
@@ -1297,7 +1303,6 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     final resolvedTitle = title.isNotEmpty
         ? title
         : AppMessage.newMessageArrived().resolveForFallback();
-    final notifications = ref.read(notificationFacadeProvider);
     final lifecycle = ref.read(appLifecycleProvider);
     final nativePresentation = lifecycle == AppLifecycleState.resumed
         ? await ref.read(appPresentationServiceProvider).currentState()
@@ -1324,7 +1329,18 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       if (suppressWhenForeground) {
         return;
       }
-      await notifications.showInAppBanner(title: resolvedTitle, body: body);
+      if (conversationId.isNotEmpty &&
+          ref
+              .read(chatThreadsProvider.notifier)
+              .isConversationVisible(conversationId)) {
+        return;
+      }
+      ref
+          .read(uiFeedbackProvider.notifier)
+          .showInfo(
+            AppMessage.newMessageArrived(),
+            detail: '$resolvedTitle：$body',
+          );
     } else {
       final session = ref.read(sessionProvider).session;
       final conversationId = message.conversationId?.trim();
@@ -1336,11 +1352,13 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         ownerDid: session.did,
         conversationId: conversationId,
       );
-      await notifications.showSystemNotification(
-        title: resolvedTitle,
-        body: body,
-        target: target,
-      );
+      await ref
+          .read(notificationFacadeProvider)
+          .showSystemNotification(
+            title: resolvedTitle,
+            body: body,
+            target: target,
+          );
     }
   }
 

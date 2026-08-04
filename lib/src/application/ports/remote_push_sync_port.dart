@@ -21,7 +21,15 @@ final class RemotePushSessionContext {
 }
 
 abstract interface class RemotePushSyncPort {
-  Future<RemotePushSyncReceipt> requestRemotePushSync();
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  });
+}
+
+enum RemotePushPresentationDisposition {
+  providerPresented,
+  appPresentationRequired,
 }
 
 abstract interface class RemotePushNavigationPort {

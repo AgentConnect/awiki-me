@@ -8,6 +8,7 @@ import android.provider.OpenableColumns
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import ai.awiki.awikime.push.RemotePushEventBridge
+import ai.awiki.awikime.push.RemotePushPresentationState
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -31,6 +32,22 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingSaveResult: MethodChannel.Result? = null
     private var pendingPickResult: MethodChannel.Result? = null
     private var pendingSaveMimeType: String = "application/octet-stream"
+
+    override fun onResume() {
+        super.onResume()
+        RemotePushPresentationState.setActivityResumed(true)
+    }
+
+    override fun onPause() {
+        RemotePushPresentationState.setActivityResumed(false)
+        RemotePushPresentationState.setWindowFocused(false)
+        super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        RemotePushPresentationState.setWindowFocused(hasFocus)
+    }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)

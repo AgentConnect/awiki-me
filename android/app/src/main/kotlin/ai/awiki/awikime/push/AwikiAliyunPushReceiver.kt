@@ -6,6 +6,13 @@ import com.alibaba.sdk.android.push.MessageReceiver
 import com.alibaba.sdk.android.push.notification.CPushMessage
 
 class AwikiAliyunPushReceiver : MessageReceiver() {
+    override fun showNotificationNow(
+        context: Context,
+        extraMap: MutableMap<String, String>?,
+    ): Boolean {
+        return RemotePushPresentationState.shouldShowNotification(extraMap)
+    }
+
     override fun onNotification(
         context: Context,
         title: String?,

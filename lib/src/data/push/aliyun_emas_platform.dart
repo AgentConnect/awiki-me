@@ -24,6 +24,8 @@ abstract interface class AliyunEmasPlatform {
 
   Future<void> acknowledgePendingEvents(Iterable<String> deliveryIds);
 
+  Future<void> setActiveNotificationTargetReference(String? targetReference);
+
   Future<void> dispose();
 }
 
@@ -105,6 +107,14 @@ class PluginAliyunEmasPlatform implements AliyunEmasPlatform {
     return _eventChannel.invokeMethod<void>(
       'acknowledgePendingEvents',
       deliveryIds.toList(growable: false),
+    );
+  }
+
+  @override
+  Future<void> setActiveNotificationTargetReference(String? targetReference) {
+    return _eventChannel.invokeMethod<void>(
+      'setActiveNotificationTargetReference',
+      targetReference,
     );
   }
 

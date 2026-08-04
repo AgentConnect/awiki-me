@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
@@ -24,6 +25,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/agent_terminal_not
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -171,6 +173,95 @@ void main() {
       expect(state.transientFailurePresentationSuppressed, isTrue);
       expect(state.automaticRetryPending, isTrue);
       expect(state.shouldSurfaceRetryableFailure, isFalse);
+    },
+  );
+
+  test(
+    'intercepted foreground Push presents once outside its conversation',
+    () async {
+      final committed = _committedIncoming(
+        eventId: 'event-foreground-push',
+        logicalId: 'logical-foreground-push',
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[committed],
+          ),
+        ),
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync(
+            presentation:
+                RemotePushPresentationDisposition.appPresentationRequired,
+          );
+      await pumpEventQueue();
+
+      expect(
+        container.read(uiFeedbackProvider)?.detail,
+        'Peer：committed logical-foreground-push',
+      );
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test(
+    'intercepted foreground Push stays silent in the visible conversation',
+    () async {
+      final committed = _committedIncoming(
+        eventId: 'event-visible-push',
+        logicalId: 'logical-visible-push',
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[committed],
+          ),
+        ),
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      container
+          .read(chatThreadsProvider.notifier)
+          .markConversationVisible(
+            ConversationSummary(
+              threadId: 'dm:peer-scope:v1:peer',
+              conversationId: 'dm:peer-scope:v1:peer',
+              displayName: 'Peer',
+              lastMessagePreview: '',
+              lastMessageAt: DateTime.utc(2026, 7, 30, 9),
+              unreadCount: 0,
+              isGroup: false,
+              targetDid: 'did:test:peer',
+            ),
+          );
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync(
+            presentation:
+                RemotePushPresentationDisposition.appPresentationRequired,
+          );
+      await pumpEventQueue();
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notifications.systemCalls, 0);
     },
   );
 
@@ -361,7 +452,10 @@ void main() {
 
       expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
       expect(sync.syncReasons, ['startup', 'websocket_hint']);
-      expect(notifications.inAppCalls, 1);
+      expect(
+        container.read(uiFeedbackProvider)?.detail,
+        'Peer：committed logical-queue-first',
+      );
       expect(notifications.systemCalls, 0);
     },
   );
@@ -1292,9 +1386,11 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(notifications.inAppCalls, 1);
-      expect(notifications.lastInAppTitle, 'Peer');
-      expect(notifications.lastInAppBody, 'committed hello');
+      expect(container.read(uiFeedbackProvider)?.id, 1);
+      expect(
+        container.read(uiFeedbackProvider)?.detail,
+        'Peer：committed hello',
+      );
     },
   );
 

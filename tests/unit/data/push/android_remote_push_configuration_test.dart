@@ -134,6 +134,33 @@ void main() {
       expect(activity, contains('RemotePushEventBridge.detach'));
     });
 
+    test('intercepts only matching foreground ordinary notices', () {
+      final receiver = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'AwikiAliyunPushReceiver.kt',
+      ).readAsStringSync();
+      final bridge = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/RemotePushEventBridge.kt',
+      ).readAsStringSync();
+      final activity = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/MainActivity.kt',
+      ).readAsStringSync();
+      final presentationState = File(
+        'android/app/src/main/kotlin/ai/awiki/awikime/push/'
+        'RemotePushPresentationState.kt',
+      ).readAsStringSync();
+
+      expect(receiver, contains('override fun showNotificationNow'));
+      expect(receiver, contains('shouldShowNotification(extraMap)'));
+      expect(bridge, contains('setActiveNotificationTargetReference'));
+      expect(activity, contains('setActivityResumed(true)'));
+      expect(activity, contains('setActivityResumed(false)'));
+      expect(activity, contains('setWindowFocused(hasFocus)'));
+      expect(presentationState, contains('envelope["ts"] != expectedTarget'));
+      expect(presentationState, contains('direct_message'));
+      expect(presentationState, contains('group_message'));
+    });
+
     test('exposes the enabled EMAS AppKey without exposing its secret', () {
       final bridge = File(
         'android/app/src/main/kotlin/ai/awiki/awikime/push/RemotePushEventBridge.kt',

@@ -111,6 +111,54 @@ void main() {
     });
 
     test(
+      'forwards target fences and retains intercepted notice metadata',
+      () async {
+        final platform = _FakeAliyunEmasPlatform();
+        final client = AliyunEmasRemotePushClient(platform: platform);
+        await client.initialize();
+
+        await client.setActiveNotificationTargetReference(
+          'target_AAAAAAAAAAAAAAAAAAAAAAAA',
+        );
+        await platform.emit(<Object?>[
+          <String, Object?>{
+            'delivery_id': 'delivery-intercepted',
+            'kind': 'notification_received_in_app',
+            'received_at_ms': DateTime.now().millisecondsSinceEpoch,
+            'payload': <String, Object?>{
+              'title': 'must not be retained',
+              'summary': 'must not be retained',
+              'extraMap': <String, Object?>{
+                'ty': 'group_message',
+                'ts': 'target_AAAAAAAAAAAAAAAAAAAAAAAA',
+                'unsafe': 'must not be retained',
+              },
+            },
+          },
+        ]);
+
+        expect(
+          platform.activeTargetReference,
+          'target_AAAAAAAAAAAAAAAAAAAAAAAA',
+        );
+        expect(
+          client.pendingEvents.single.kind,
+          RemotePushEventKind.notificationReceivedInApp,
+        );
+        expect(client.pendingEvents.single.payload, <String, Object?>{
+          'extraMap': <String, Object?>{
+            'ty': 'group_message',
+            'ts': 'target_AAAAAAAAAAAAAAAAAAAAAAAA',
+          },
+        });
+
+        await client.setActiveNotificationTargetReference(null);
+        expect(platform.activeTargetReference, isNull);
+        await client.dispose();
+      },
+    );
+
+    test(
       'retries initialization after a transient registration error',
       () async {
         final platform = _FakeAliyunEmasPlatform(
@@ -340,10 +388,18 @@ class _FakeAliyunEmasPlatform implements AliyunEmasPlatform {
   String? channelId;
   String? channelName;
   Set<String> acknowledgedDeliveryIds = <String>{};
+  String? activeTargetReference;
 
   @override
   Future<void> acknowledgePendingEvents(Iterable<String> deliveryIds) async {
     acknowledgedDeliveryIds = deliveryIds.toSet();
+  }
+
+  @override
+  Future<void> setActiveNotificationTargetReference(
+    String? targetReference,
+  ) async {
+    activeTargetReference = targetReference;
   }
 
   @override

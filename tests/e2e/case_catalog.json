@@ -104,7 +104,9 @@
       "action": "Upsert the authenticated Android installation, send one real direct message through Message Service outbox and EMAS, exercise foreground, background, terminated-process tap, WebSocket-plus-Push convergence, offline retry recovery, and finally logout.",
       "exactOracles": [
         "User Service records one active installation bound to the authenticated account and the Android EMAS registration without exposing credentials or a full provider device identifier.",
-        "Foreground Push is a silent dirty hint: Core sync commits and projects the direct message without an App-owned duplicate notification.",
+        "Foreground Push for the current account and same visible conversation commits and projects the direct message without a system notification or global App toast; when scrolled up, only the existing in-chat new-message affordance appears.",
+        "Foreground Push for the current account while another conversation or page is visible produces exactly one App in-app notification after committed sync.",
+        "A missing or mismatched opaque target fails open to provider presentation without exposing a raw DID or conversation identifier.",
         "Background delivery renders exactly one EMAS NOTICE for the message.",
         "A terminated-process notification tap starts Core sync and opens only the exact conversation matched from the newly committed message.",
         "WebSocket and Push convergence produces one committed canonical message and one presentation outcome.",

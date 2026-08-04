@@ -1,7 +1,8 @@
 import '../../domain/entities/remote_push_event.dart';
 import '../../domain/services/remote_push_client.dart';
 
-class NoopRemotePushClient implements RemotePushClient {
+class NoopRemotePushClient
+    implements RemotePushClient, RemotePushPresentationTargetClient {
   const NoopRemotePushClient();
 
   @override
@@ -18,6 +19,11 @@ class NoopRemotePushClient implements RemotePushClient {
 
   @override
   Future<RemotePushRegistration?> initialize() async => null;
+
+  @override
+  Future<void> setActiveNotificationTargetReference(
+    String? targetReference,
+  ) async {}
 
   @override
   Future<void> dispose() async {}

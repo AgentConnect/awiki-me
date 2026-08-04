@@ -1024,6 +1024,24 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
+    test('前台当前可见会话收到消息时不显示全局 UI feedback', () async {
+      final update = buildUpdate();
+      gateway.nextRealtimeUpdate = update;
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      container
+          .read(chatThreadsProvider.notifier)
+          .markConversationVisible(update.conversationHint!);
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
     test('激活身份后后台调度 startup 可靠同步', () async {
       final conversation = ConversationSummary(
         threadId: 'dm:startup-seed',
@@ -2614,7 +2632,8 @@ void main() {
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups, isEmpty);
-      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.inAppCalls, 0);
+      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
       expect(notificationFacade.systemCalls, 0);
 
       messageSyncService.deltaResult = const MessageSyncOutcome(
@@ -2646,7 +2665,8 @@ void main() {
       }
 
       expect(container.read(groupProvider).groups, isEmpty);
-      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.inAppCalls, 0);
+      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2677,7 +2697,7 @@ void main() {
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
 
-      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.inAppCalls, 0);
       expect(
         container.read(uiFeedbackProvider)?.detail,
         contains('Encrypted Peer'),
@@ -2733,7 +2753,7 @@ void main() {
         container.read(groupProvider).groups.single.groupId,
         'secure-group',
       );
-      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.inAppCalls, 0);
       expect(
         container.read(uiFeedbackProvider)?.detail,
         contains('Encrypted Peer'),
@@ -4589,7 +4609,10 @@ final class _RecordingRemotePushSyncPort implements RemotePushSyncPort {
   int calls = 0;
 
   @override
-  Future<RemotePushSyncReceipt> requestRemotePushSync() async {
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) async {
     calls += 1;
     beforeReturn?.call();
     return receipt;
