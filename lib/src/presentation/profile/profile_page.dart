@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart'
-    show Icons, SelectionArea, SelectionContainer;
+import 'package:flutter/material.dart' show SelectionArea, SelectionContainer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,11 +22,10 @@ import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
-import 'profile_markdown.dart';
 import 'profile_edit_page.dart';
 import 'profile_provider.dart';
 
-enum _CompactProfileSection { did, homepage, identity }
+enum _CompactProfileSection { did, homepage }
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({
@@ -60,7 +58,6 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   String? _loadedHomepageUrl;
   bool _requestedRelationshipCounts = false;
-  bool? _identityDocumentExpanded;
   _CompactProfileSection? _compactExpandedSection;
 
   @override
@@ -99,27 +96,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final handleLabel = DidDisplayFormatter.identityLookupSecondaryHandle(
       profile,
     );
-    final compactHandle = DidDisplayFormatter.compactProfileHandle(profile);
     final homepageUrl = ref
         .watch(profileHomepageResolverProvider)
         .homepageUrl(profile);
-    final profileContent = DidDisplayFormatter.withoutRedundantIdentityMetadata(
-      ref.read(profileProvider.notifier).visibleProfileContent(),
-    );
-    final identityDocumentContent = profileArticleBody(profileContent);
     final responsive = context.awikiResponsive;
     final pageTitle = widget.title ?? context.l10n.profileMeTitle;
     final friendsState = ref.watch(friendsProvider);
-    final identityDocumentExpanded = responsive.isCompact
-        ? _compactExpandedSection == _CompactProfileSection.identity
-        : _identityDocumentExpanded ?? true;
-    final hasIdentityDocument =
-        identityDocumentContent.trim().isNotEmpty || profile.tags.isNotEmpty;
-    final showCompactIdentityEmptyState =
-        responsive.isCompact &&
-        identityDocumentExpanded &&
-        !hasIdentityDocument;
-
     final profileBody = SelectionArea(
       child: ListView(
         shrinkWrap: widget.shrinkWrap,
@@ -149,48 +131,26 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: _CompactProfileSummary(
                         displayName: displayName,
-                        handle: compactHandle.isEmpty
-                            ? displayName
-                            : compactHandle,
+                        bio: profile.bio,
+                        tags: profile.tags,
                         avatarUri: profile.avatarUri,
                         isSaving: state.isSaving,
                         onEdit: () => _showEditProfileDialog(context, profile),
+                        followersCount: friendsState.followers.length,
+                        followingCount: friendsState.following.length,
+                        onFollowingTap: widget.onFollowingTap,
+                        onFollowersTap: widget.onFollowersTap,
                       ),
                     ),
-                    const SizedBox(height: 13),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: SelectionContainer.disabled(
-                        child: SizedBox(
-                          height: 44,
-                          child: _CompactProfileStatistics(
-                            followersCount: friendsState.followers.length,
-                            followingCount: friendsState.following.length,
-                            onFollowingTap: widget.onFollowingTap,
-                            onFollowersTap: widget.onFollowersTap,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 20),
                     SelectionContainer.disabled(
                       child: _CompactProfileNavigationGroup(
                         did: profile.did,
                         homepageUrl: homepageUrl,
                         didTitle: 'DID',
                         homepageTitle: context.l10n.profileHomepageLabel,
-                        identityTitle: context.l10n.chatPeerInfoIdentityCard,
                         settingsTitle: context.l10n.settingsTitle,
                         expandedSection: _compactExpandedSection,
-                        showEmptyState: showCompactIdentityEmptyState,
-                        identityDetails:
-                            identityDocumentExpanded && hasIdentityDocument
-                            ? _CompactProfileIdentityDetails(
-                                content: identityDocumentContent,
-                                emptyText: context.l10n.profileEmpty,
-                                tags: profile.tags,
-                              )
-                            : null,
                         onDidTap: () => setState(
                           () => _compactExpandedSection =
                               _compactExpandedSection ==
@@ -206,13 +166,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                               : _CompactProfileSection.homepage,
                         ),
                         onOpenHomepage: () => _openHomepage(homepageUrl),
-                        onIdentityTap: () => setState(
-                          () => _compactExpandedSection =
-                              _compactExpandedSection ==
-                                  _CompactProfileSection.identity
-                              ? null
-                              : _CompactProfileSection.identity,
-                        ),
                         onSettingsTap: () => _openSettings(context),
                       ),
                     ),
@@ -302,18 +255,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       ),
                     SelectionContainer.disabled(
                       child: _ProfileNavigationRow(
-                        key: const Key('profile-identity-document-row'),
-                        icon: CupertinoIcons.person_crop_rectangle,
-                        title: context.l10n.chatPeerInfoIdentityCard,
-                        subtitle: context.l10n.profileIdentityCardSubtitle,
-                        onTap: () => setState(
-                          () => _identityDocumentExpanded =
-                              !identityDocumentExpanded,
-                        ),
-                      ),
-                    ),
-                    SelectionContainer.disabled(
-                      child: _ProfileNavigationRow(
                         key: const Key('profile-settings-row'),
                         icon: CupertinoIcons.gear,
                         title: context.l10n.settingsTitle,
@@ -322,18 +263,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         onTap: () => _openSettings(context),
                       ),
                     ),
-                    if (identityDocumentExpanded) ...<Widget>[
-                      SizedBox(height: responsive.spacing(10)),
-                      IdentityDocumentCard(
-                        key: const Key('profile-identity-document'),
-                        title: context.l10n.chatPeerInfoIdentityCard,
-                        child: IdentityDocumentContent(
-                          content: identityDocumentContent,
-                          emptyText: context.l10n.profileEmpty,
-                          tags: profile.tags,
-                        ),
-                      ),
-                    ],
                   ],
                 ],
               ),
@@ -545,72 +474,157 @@ class _CompactProfileFrame extends StatelessWidget {
 class _CompactProfileSummary extends StatelessWidget {
   const _CompactProfileSummary({
     required this.displayName,
-    required this.handle,
+    required this.bio,
+    required this.tags,
     required this.avatarUri,
     required this.isSaving,
     required this.onEdit,
+    required this.followersCount,
+    required this.followingCount,
+    required this.onFollowingTap,
+    required this.onFollowersTap,
   });
 
   final String displayName;
-  final String handle;
+  final String bio;
+  final List<String> tags;
   final String? avatarUri;
   final bool isSaving;
   final VoidCallback onEdit;
+  final int followersCount;
+  final int followingCount;
+  final VoidCallback? onFollowingTap;
+  final VoidCallback? onFollowersTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
-    return Column(
+    final visibleTags = tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    return Container(
       key: const Key('profile-compact-summary'),
-      children: <Widget>[
-        AvatarBadge(
-          key: const Key('profile-avatar'),
-          seed: displayName,
-          size: 104,
-          avatarUri: avatarUri,
-        ),
-        const SizedBox(height: 20),
-        SizedBox(
-          height: 44,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.subtleSurface,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Flexible(
-                child: Text(
-                  handle,
-                  key: const Key('profile-handle-value'),
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: theme.title,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
+              AvatarBadge(
+                key: const Key('profile-avatar'),
+                seed: displayName,
+                size: 72,
+                avatarUri: avatarUri,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      displayName,
+                      key: const Key('profile-display-name'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.title,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    if (bio.trim().isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Text(
+                        bio.trim(),
+                        key: const Key('profile-bio'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.secondaryText,
+                          fontSize: 14,
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                    if (visibleTags.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        key: const Key('profile-tags'),
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: visibleTags
+                            .map(
+                              (tag) => IdentityProfileBadge(
+                                label: tag,
+                                tone: IdentityProfileBadgeTone.outlined,
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: SelectionContainer.disabled(
+                  child: AppPressable(
+                    key: const Key('profile-edit-button'),
+                    onTap: isSaving ? null : onEdit,
+                    semanticLabel: context.l10n.profileEditTitle,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      height: 48,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: theme.primary,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        context.l10n.profileEditTitle,
+                        style: TextStyle(
+                          color: theme.primaryForeground,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 12),
               SelectionContainer.disabled(
-                child: AppIconButton(
-                  key: const Key('profile-edit-button'),
-                  onPressed: isSaving ? null : onEdit,
-                  semanticLabel: context.l10n.profileEditTitle,
-                  tooltip: context.l10n.profileEditTitle,
-                  size: 44,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Icon(
-                    Icons.border_color_outlined,
-                    size: 22,
-                    color: theme.primaryDark,
+                child: Container(
+                  width: 126,
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: theme.surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: _CompactProfileStatistics(
+                    followersCount: followersCount,
+                    followingCount: followingCount,
+                    onFollowingTap: onFollowingTap,
+                    onFollowersTap: onFollowersTap,
                   ),
                 ),
               ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -696,15 +710,11 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
     required this.homepageUrl,
     required this.didTitle,
     required this.homepageTitle,
-    required this.identityTitle,
     required this.settingsTitle,
     required this.expandedSection,
-    required this.showEmptyState,
-    required this.identityDetails,
     required this.onDidTap,
     required this.onHomepageTap,
     required this.onOpenHomepage,
-    required this.onIdentityTap,
     required this.onSettingsTap,
   });
 
@@ -712,15 +722,11 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
   final String homepageUrl;
   final String didTitle;
   final String homepageTitle;
-  final String identityTitle;
   final String settingsTitle;
   final _CompactProfileSection? expandedSection;
-  final bool showEmptyState;
-  final Widget? identityDetails;
   final VoidCallback onDidTap;
   final VoidCallback onHomepageTap;
   final VoidCallback onOpenHomepage;
-  final VoidCallback onIdentityTap;
   final VoidCallback onSettingsTap;
 
   @override
@@ -730,7 +736,6 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
     final didExpanded = expandedSection == _CompactProfileSection.did;
     final homepageExpanded =
         hasHomepage && expandedSection == _CompactProfileSection.homepage;
-    final identityExpanded = expandedSection == _CompactProfileSection.identity;
     return SizedBox(
       key: const Key('profile-navigation-group'),
       width: double.infinity,
@@ -787,44 +792,6 @@ class _CompactProfileNavigationGroup extends StatelessWidget {
               color: theme.border,
             ),
           ],
-          _CompactProfileNavigationRow(
-            key: const Key('profile-identity-document-row'),
-            iconBoxKey: const Key('profile-identity-document-icon-box'),
-            iconTargetKey: const Key('profile-identity-document-icon-target'),
-            arrowKey: const Key('profile-identity-document-arrow'),
-            icon: CupertinoIcons.person_crop_rectangle,
-            iconColor: AwikiMePalette.actionBlue,
-            title: identityTitle,
-            arrowIcon: identityExpanded
-                ? CupertinoIcons.chevron_down
-                : CupertinoIcons.chevron_right,
-            isExpanded: identityExpanded,
-            onTap: onIdentityTap,
-          ),
-          if (identityDetails != null) identityDetails!,
-          if (showEmptyState)
-            Container(
-              key: const Key('profile-identity-empty-state'),
-              height: 28,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              alignment: Alignment.centerLeft,
-              color: theme.subtleSurface,
-              child: Text(
-                context.l10n.profileEmpty,
-                key: const Key('profile-identity-empty-state-text'),
-                style: TextStyle(
-                  color: theme.secondaryText,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  height: 18 / 13,
-                ),
-              ),
-            ),
-          Container(
-            key: const Key('profile-navigation-divider'),
-            height: 1,
-            color: theme.border,
-          ),
           _CompactProfileNavigationRow(
             key: const Key('profile-settings-row'),
             iconBoxKey: const Key('profile-settings-icon-box'),
@@ -935,35 +902,6 @@ class _CompactProfileHomepageDetails extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CompactProfileIdentityDetails extends StatelessWidget {
-  const _CompactProfileIdentityDetails({
-    required this.content,
-    required this.emptyText,
-    required this.tags,
-  });
-
-  final String content;
-  final String emptyText;
-  final List<String> tags;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    return Container(
-      key: const Key('profile-identity-document'),
-      width: double.infinity,
-      color: theme.subtleSurface,
-      padding: const EdgeInsets.fromLTRB(36, 14, 16, 16),
-      child: IdentityDocumentContent(
-        content: content,
-        emptyText: emptyText,
-        tags: tags,
-        emptyState: const SizedBox.shrink(),
       ),
     );
   }

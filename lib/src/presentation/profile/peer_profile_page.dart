@@ -22,7 +22,6 @@ import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'peer_display_profile_provider.dart';
-import 'profile_markdown.dart';
 import 'peer_profile_provider.dart';
 
 class PeerProfilePage extends ConsumerWidget {
@@ -44,14 +43,6 @@ class PeerProfilePage extends ConsumerWidget {
     final state = ref.watch(peerProfileProvider(did));
     final theme = context.awikiTheme;
     final profile = state.profile;
-    final rawProfileContent = profile == null
-        ? ''
-        : (profile.profileMarkdown.trim().isNotEmpty
-              ? profile.profileMarkdown.trim()
-              : profile.bio.trim());
-    final profileContent = profileArticleBody(
-      DidDisplayFormatter.withoutRedundantIdentityMetadata(rawProfileContent),
-    );
     final displayName = profile == null
         ? ''
         : ref.watch(
@@ -64,9 +55,6 @@ class PeerProfilePage extends ConsumerWidget {
               ),
             ),
           );
-    final handleLabel = profile == null
-        ? ''
-        : DidDisplayFormatter.profileHandleLabel(profile);
     final homepageUrl = profile == null
         ? ''
         : ref.watch(profileHomepageResolverProvider).homepageUrl(profile);
@@ -156,7 +144,7 @@ class PeerProfilePage extends ConsumerWidget {
                         padding: EdgeInsets.only(top: responsive.spacing(14)),
                         sliver: SliverToBoxAdapter(
                           child: AwikiMeTopBar(
-                            title: context.l10n.peerProfileTitle,
+                            title: context.l10n.chatPeerInfoUserTitle,
                             padding: EdgeInsets.zero,
                             leading: embedded && onBack == null
                                 ? const SizedBox.shrink()
@@ -182,12 +170,9 @@ class PeerProfilePage extends ConsumerWidget {
                             constraints: const BoxConstraints(maxWidth: 640),
                             child: _PeerProfileHero(
                               displayName: displayName,
-                              handle: handleLabel,
+                              bio: profile.bio,
+                              tags: profile.tags,
                               avatarUri: profile.avatarUri,
-                              relationshipLabel: localizeRelationshipLabel(
-                                context.l10n,
-                                relationship,
-                              ),
                               following: isFollowing,
                               onSendMessage: sendMessage,
                               onToggleRelationship: toggleRelationship,
@@ -203,8 +188,6 @@ class PeerProfilePage extends ConsumerWidget {
                             child: _PeerProfileDetails(
                               did: profile.did,
                               homepageUrl: homepageUrl,
-                              profileContent: profileContent,
-                              tags: profile.tags,
                               onOpenHomepage: homepageUrl.isEmpty
                                   ? null
                                   : () async {
@@ -257,8 +240,8 @@ class PeerProfilePage extends ConsumerWidget {
 class _PeerProfileHero extends StatelessWidget {
   const _PeerProfileHero({
     required this.displayName,
-    required this.handle,
-    required this.relationshipLabel,
+    required this.bio,
+    required this.tags,
     required this.following,
     required this.onSendMessage,
     required this.onToggleRelationship,
@@ -266,8 +249,8 @@ class _PeerProfileHero extends StatelessWidget {
   });
 
   final String displayName;
-  final String handle;
-  final String relationshipLabel;
+  final String bio;
+  final List<String> tags;
   final bool following;
   final String? avatarUri;
   final Future<void> Function() onSendMessage;
@@ -277,103 +260,127 @@ class _PeerProfileHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
+    final visibleTags = tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
     return Padding(
       key: const Key('peer-profile-identity-hero'),
       padding: EdgeInsets.fromLTRB(
         IdentityProfileLayout.contentInset(context),
-        responsive.spacing(20),
+        responsive.spacing(16),
         IdentityProfileLayout.contentInset(context),
         responsive.spacing(18),
       ),
-      child: Column(
-        children: <Widget>[
-          AvatarBadge(
-            key: const Key('peer-profile-avatar'),
-            seed: displayName,
-            avatarUri: avatarUri,
-            size: responsive.isCompact ? 60 : responsive.displayScaled(54),
-          ),
-          SizedBox(height: responsive.spacing(14)),
-          SelectionArea(
-            child: Column(
+      child: Container(
+        padding: EdgeInsets.all(
+          responsive.isCompact ? 16 : responsive.spacing(18),
+        ),
+        decoration: BoxDecoration(
+          color: theme.subtleSurface,
+          borderRadius: BorderRadius.circular(responsive.radius(20)),
+        ),
+        child: Column(
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Text(
-                    displayName,
-                    key: const Key('peer-profile-display-name'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: theme.title,
-                      fontSize: responsive.titleXl,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
+                AvatarBadge(
+                  key: const Key('peer-profile-avatar'),
+                  seed: displayName,
+                  avatarUri: avatarUri,
+                  size: responsive.isCompact
+                      ? 72
+                      : responsive.displayScaled(64),
+                ),
+                SizedBox(width: responsive.spacing(16)),
+                Expanded(
+                  child: SelectionArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          displayName,
+                          key: const Key('peer-profile-display-name'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.title,
+                            fontSize: responsive.isCompact
+                                ? 20
+                                : responsive.titleXl,
+                            fontWeight: FontWeight.w700,
+                            height: 1.25,
+                          ),
+                        ),
+                        if (bio.trim().isNotEmpty) ...<Widget>[
+                          SizedBox(height: responsive.spacing(6)),
+                          Text(
+                            bio.trim(),
+                            key: const Key('peer-profile-bio'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.secondaryText,
+                              fontSize: responsive.isCompact
+                                  ? 14
+                                  : responsive.bodyMd,
+                              height: 1.45,
+                            ),
+                          ),
+                        ],
+                        if (visibleTags.isNotEmpty) ...<Widget>[
+                          SizedBox(height: responsive.spacing(10)),
+                          Wrap(
+                            key: const Key('peer-profile-tags'),
+                            spacing: responsive.spacing(8),
+                            runSpacing: responsive.spacing(8),
+                            children: visibleTags
+                                .map(
+                                  (tag) => IdentityProfileBadge(
+                                    label: tag,
+                                    tone: IdentityProfileBadgeTone.outlined,
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-                if (handle.trim().isNotEmpty) ...<Widget>[
-                  SizedBox(height: responsive.spacing(6)),
-                  Text(
-                    handle,
-                    key: const Key('peer-profile-handle-value'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: theme.secondaryText,
-                      fontSize: responsive.bodyMd,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
               ],
             ),
-          ),
-          SizedBox(height: responsive.spacing(10)),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: responsive.spacing(8),
-            runSpacing: responsive.spacing(8),
-            children: <Widget>[
-              IdentityProfileBadge(
-                label: context.l10n.identityTypeUser,
-                tone: IdentityProfileBadgeTone.outlined,
-              ),
-              IdentityProfileBadge(
-                label: relationshipLabel,
-                tone: IdentityProfileBadgeTone.outlined,
-              ),
-            ],
-          ),
-          SizedBox(height: responsive.spacing(12)),
-          Wrap(
-            key: const Key('peer-profile-action-row'),
-            alignment: WrapAlignment.center,
-            spacing: responsive.spacing(10),
-            runSpacing: responsive.spacing(8),
-            children: <Widget>[
-              _PeerProfileCompactActionButton(
-                key: const Key('peer-profile-send-message'),
-                visualKey: const Key('peer-profile-send-message-visual'),
-                label: context.l10n.peerProfileSendMessage,
-                emphasized: true,
-                onPressed: onSendMessage,
-              ),
-              _PeerProfileCompactActionButton(
-                key: following
-                    ? const Key('peer-profile-unfollow')
-                    : const Key('peer-profile-follow'),
-                visualKey: const Key('peer-profile-relationship-visual'),
-                label: following
-                    ? context.l10n.peerProfileUnfollow
-                    : context.l10n.friendsFollow,
-                onPressed: onToggleRelationship,
-              ),
-            ],
-          ),
-        ],
+            SizedBox(height: responsive.spacing(16)),
+            Row(
+              key: const Key('peer-profile-action-row'),
+              children: <Widget>[
+                Expanded(
+                  child: _PeerProfileCompactActionButton(
+                    key: const Key('peer-profile-send-message'),
+                    visualKey: const Key('peer-profile-send-message-visual'),
+                    label: context.l10n.peerProfileSendMessage,
+                    emphasized: true,
+                    onPressed: onSendMessage,
+                    expand: true,
+                  ),
+                ),
+                SizedBox(width: responsive.spacing(12)),
+                _PeerProfileCompactActionButton(
+                  key: following
+                      ? const Key('peer-profile-unfollow')
+                      : const Key('peer-profile-follow'),
+                  visualKey: const Key('peer-profile-relationship-visual'),
+                  label: following
+                      ? context.l10n.peerProfileUnfollow
+                      : context.l10n.friendsFollow,
+                  onPressed: onToggleRelationship,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -386,12 +393,14 @@ class _PeerProfileCompactActionButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.emphasized = false,
+    this.expand = false,
   });
 
   final Key visualKey;
   final String label;
   final VoidCallback onPressed;
   final bool emphasized;
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -400,7 +409,9 @@ class _PeerProfileCompactActionButton extends StatelessWidget {
     final baseWidth = emphasized
         ? 84.0
         : (label.runes.length > 2 ? 104.0 : 80.0);
-    final width = responsive.isCompact
+    final width = expand
+        ? double.infinity
+        : responsive.isCompact
         ? baseWidth
         : responsive.displayScaled(baseWidth);
     final tapHeight = responsive.isCompact
@@ -462,15 +473,11 @@ class _PeerProfileDetails extends StatelessWidget {
   const _PeerProfileDetails({
     required this.did,
     required this.homepageUrl,
-    required this.profileContent,
-    required this.tags,
     required this.onOpenHomepage,
   });
 
   final String did;
   final String homepageUrl;
-  final String profileContent;
-  final List<String> tags;
   final VoidCallback? onOpenHomepage;
 
   @override
@@ -490,6 +497,7 @@ class _PeerProfileDetails extends StatelessWidget {
           children: <Widget>[
             _PeerProfileDetailRow(
               label: 'DID',
+              showDivider: homepageUrl.isNotEmpty,
               child: CopyableDidLine(
                 value: did,
                 displayValue: DidDisplayFormatter.compactDidPath(did),
@@ -511,22 +519,13 @@ class _PeerProfileDetails extends StatelessWidget {
             if (homepageUrl.isNotEmpty)
               _PeerProfileDetailRow(
                 label: context.l10n.profileHomepageLabel,
+                showDivider: false,
                 child: IdentityProfileLinkValue(
                   value: _compactHomepageLabel(homepageUrl),
                   actionLabel: context.l10n.profileOpenHomepage,
                   onTap: onOpenHomepage!,
                 ),
               ),
-            _PeerProfileDetailRow(
-              key: const Key('peer-profile-identity-document'),
-              label: context.l10n.chatPeerInfoIdentityCard,
-              showDivider: false,
-              child: IdentityDocumentContent(
-                content: profileContent,
-                emptyText: context.l10n.profileEmpty,
-                tags: tags,
-              ),
-            ),
           ],
         ),
       ),
@@ -536,7 +535,6 @@ class _PeerProfileDetails extends StatelessWidget {
 
 class _PeerProfileDetailRow extends StatelessWidget {
   const _PeerProfileDetailRow({
-    super.key,
     required this.label,
     required this.child,
     this.showDivider = true,

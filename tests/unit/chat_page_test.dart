@@ -681,8 +681,8 @@ void main() {
       ..publicProfile = const UserProfile(
         did: 'did:test:alice',
         nickName: 'Alice',
-        bio: '',
-        tags: <String>[],
+        bio: '连接人与 Agent，保持简单而高效',
+        tags: <String>['开发者', 'AI 协作'],
         profileMarkdown: '',
         fullHandle: 'alice.agent-connect.cn',
       );
@@ -788,6 +788,29 @@ void main() {
       ),
     );
     expect(userInfoTopBar.titleFontSize, 16);
+    expect(
+      find.byKey(const Key('peer-info-compact-user-layout')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('peer-info-dialog-handle-value')))
+          .data,
+      'Alice',
+    );
+    expect(find.text('连接人与 Agent，保持简单而高效'), findsOneWidget);
+    expect(find.text('开发者'), findsOneWidget);
+    expect(find.text('AI 协作'), findsOneWidget);
+    expect(
+      find.byKey(const Key('peer-info-dialog-display-name')),
+      findsNothing,
+    );
+    expect(find.text('身份卡'), findsNothing);
+    expect(find.byKey(const Key('peer-info-identity-document')), findsNothing);
+    expect(
+      tester.getSize(find.byKey(const Key('peer-info-avatar'))),
+      const Size.square(72),
+    );
     expect(
       find.byKey(const Key('peer-info-back-button')).evaluate().length +
           find.byKey(const Key('peer-info-close-button')).evaluate().length,

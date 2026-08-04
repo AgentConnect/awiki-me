@@ -93,8 +93,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     );
     if (widget.fullPage) {
       return CupertinoPageScaffold(
-        backgroundColor:
-            context.awikiResponsive.isCompact && targetLooksLikeAgent
+        backgroundColor: context.awikiResponsive.isCompact
             ? context.awikiTheme.background
             : context.awikiTheme.surface,
         child: SafeArea(bottom: false, child: content),
@@ -203,6 +202,18 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         isFollowing: isFollowing,
         relationship: relationship,
         hasPositiveRelationship: hasPositiveRelationship,
+        canFollowProfile: canFollowProfile,
+      );
+    }
+    if (widget.fullPage && responsive.isCompact) {
+      return _buildCompactUserProfileContent(
+        profileDid: profileDid,
+        displayName: primaryIdentity,
+        bio: profile?.bio ?? '',
+        tags: profile?.tags ?? const <String>[],
+        avatarUri: avatarUri,
+        homepageUrl: homepageUrl,
+        isFollowing: isFollowing,
         canFollowProfile: canFollowProfile,
       );
     }
@@ -371,6 +382,192 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactUserProfileContent({
+    required String profileDid,
+    required String displayName,
+    required String bio,
+    required List<String> tags,
+    required String? avatarUri,
+    required String homepageUrl,
+    required bool isFollowing,
+    required bool canFollowProfile,
+  }) {
+    final theme = context.awikiTheme;
+    final visibleTags = tags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .take(3)
+        .toList(growable: false);
+    return SingleChildScrollView(
+      key: const Key('peer-info-compact-user-layout'),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Container(
+            key: const Key('peer-info-compact-user-header'),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.subtleSurface,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    AvatarBadge(
+                      key: const Key('peer-info-avatar'),
+                      seed: displayName,
+                      size: 72,
+                      avatarUri: avatarUri,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: SelectionArea(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              displayName,
+                              key: const Key('peer-info-dialog-handle-value'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: theme.title,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                height: 1.25,
+                              ),
+                            ),
+                            if (bio.trim().isNotEmpty) ...<Widget>[
+                              const SizedBox(height: 6),
+                              Text(
+                                bio.trim(),
+                                key: const Key('peer-info-user-bio'),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: theme.secondaryText,
+                                  fontSize: 14,
+                                  height: 1.45,
+                                ),
+                              ),
+                            ],
+                            if (visibleTags.isNotEmpty) ...<Widget>[
+                              const SizedBox(height: 10),
+                              Wrap(
+                                key: const Key('peer-info-user-tags'),
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: visibleTags
+                                    .map(
+                                      (tag) => IdentityProfileBadge(
+                                        label: tag,
+                                        tone: IdentityProfileBadgeTone.outlined,
+                                      ),
+                                    )
+                                    .toList(growable: false),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: AppPressable(
+                        key: const Key('peer-info-return-to-chat-button'),
+                        onTap: () => Navigator.of(context).pop(),
+                        semanticLabel: context.l10n.peerProfileSendMessage,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          height: 48,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: theme.primary,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            context.l10n.peerProfileSendMessage,
+                            style: TextStyle(
+                              color: theme.primaryForeground,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (canFollowProfile) ...<Widget>[
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 100,
+                        height: 48,
+                        child: _ChatFollowButton(
+                          isFollowing: isFollowing,
+                          onTap: () => _toggleFollow(profileDid),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            key: const Key('peer-info-compact-user-metadata'),
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: <Widget>[
+                if (profileDid.isNotEmpty)
+                  _CompactAgentInfoMetadataRow(
+                    key: const Key('peer-info-compact-user-did-row'),
+                    height: 72,
+                    label: 'DID',
+                    showDivider: homepageUrl.isNotEmpty,
+                    child: CopyableDidLine(
+                      value: profileDid,
+                      displayValue: DidDisplayFormatter.compactDidPath(
+                        profileDid,
+                      ),
+                      maxLines: 2,
+                      copySemanticLabel: context.l10n.chatPeerInfoCopyDid,
+                      copiedMessage: context.l10n.chatPeerInfoDidCopied,
+                      textKey: const Key('peer-info-dialog-did-value'),
+                      buttonKey: const Key('peer-info-dialog-copy-did-button'),
+                      textStyle: TextStyle(
+                        color: theme.secondaryText,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                      buttonSize: 44,
+                      iconSize: 20,
+                      showButtonChrome: false,
+                    ),
+                  ),
+                if (homepageUrl.isNotEmpty)
+                  _CompactAgentHomepageRow(
+                    homepageUrl: homepageUrl,
+                    onTap: () => _openHomepage(homepageUrl),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

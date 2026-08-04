@@ -46,7 +46,7 @@ void main() {
 
     expect(find.byKey(const Key('peer-profile-identity-hero')), findsOneWidget);
     expect(find.byKey(const Key('peer-profile-action-row')), findsOneWidget);
-    expect(find.byType(IdentityDocumentContent), findsOneWidget);
+    expect(find.text('身份卡'), findsNothing);
     expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
     await tester.tap(find.byKey(const Key('peer-profile-follow')));
     await tester.pumpAndSettle();
@@ -100,17 +100,17 @@ void main() {
 
     expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
     expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
-    expect(find.text('朋友'), findsOneWidget);
+    expect(find.text('取消关注'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('peer-profile-unfollow')));
     await tester.pumpAndSettle();
 
     expect(gateway.lastUnfollowedDidOrHandle, did);
     expect(find.byKey(const Key('peer-profile-follow')), findsOneWidget);
-    expect(find.text('关注了我'), findsOneWidget);
+    expect(find.text('关注'), findsOneWidget);
   });
 
-  testWidgets('私聊资料页按名称、handle、DID 排列并复制完整 DID', (tester) async {
+  testWidgets('私聊资料页按昵称、简介、标签、DID 排列并复制完整 DID', (tester) async {
     const longDid =
         'did:awiki:user:cgw-agent-lab:e1_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789';
     const profile = UserProfile(
@@ -157,12 +157,7 @@ void main() {
     expect(didText.data, contains('…'));
     expect(didText.data, endsWith('yz0123456789'));
     expect(didText.maxLines, 2);
-    expect(
-      tester
-          .widget<Text>(find.byKey(const Key('peer-profile-handle-value')))
-          .data,
-      '@cgw.awiki.ai',
-    );
+    expect(find.byKey(const Key('peer-profile-handle-value')), findsNothing);
     expect(
       tester
           .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
@@ -170,7 +165,9 @@ void main() {
       'CGW Agent',
     );
     expect(find.text('CGW Agent'), findsOneWidget);
-    expect(find.text('@cgw.awiki.ai'), findsOneWidget);
+    expect(find.text('融资协作 Agent'), findsOneWidget);
+    expect(find.text('Agent'), findsOneWidget);
+    expect(find.text('身份卡'), findsNothing);
     expect(
       find.byKey(const Key('peer-profile-copy-did-button')),
       findsOneWidget,
@@ -253,27 +250,22 @@ void main() {
 
     expect(find.byType(IdentityProfileCard), findsNothing);
     expect(find.byType(IdentityDocumentCard), findsNothing);
+    expect(find.text('用户信息'), findsOneWidget);
     expect(find.byKey(const Key('peer-profile-details')), findsOneWidget);
     expect(find.text('DID'), findsOneWidget);
     expect(find.text('主页'), findsOneWidget);
-    expect(find.text('身份卡'), findsOneWidget);
-    expect(find.text('暂无资料'), findsOneWidget);
+    expect(find.text('身份卡'), findsNothing);
     expect(
       tester
           .widget<Text>(find.byKey(const Key('peer-profile-display-name')))
           .data,
       'newhandle1',
     );
-    expect(
-      tester
-          .widget<Text>(find.byKey(const Key('peer-profile-handle-value')))
-          .data,
-      '@newhandle1.agent-connect.cn',
-    );
+    expect(find.byKey(const Key('peer-profile-handle-value')), findsNothing);
 
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-avatar'))),
-      const Size(60, 60),
+      const Size(72, 72),
     );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-send-message'))).height,
@@ -284,8 +276,10 @@ void main() {
       48,
     );
     expect(
-      tester.getSize(find.byKey(const Key('peer-profile-send-message-visual'))),
-      const Size(84, 40),
+      tester
+          .getSize(find.byKey(const Key('peer-profile-send-message-visual')))
+          .height,
+      40,
     );
     expect(
       tester.getSize(find.byKey(const Key('peer-profile-relationship-visual'))),

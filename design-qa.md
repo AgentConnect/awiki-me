@@ -971,3 +971,23 @@ final result: passed
 - 最终设备状态为 AWiki Me 前台消息列表；未发送消息或附件，未关注/取关，未删除会话，未创建/退出群，未添加/移除成员，未退出登录或修改设置。Release、iOS 与其他 Android 机型保持 **UNVERIFIED**。
 
 final result: passed
+
+---
+
+## 我 / 用户信息横向资料头重构复验（2026-08-04）
+
+> 选用 ImageGen 第 2 版并同步到 Ardot「核心UI 重构V1」。视觉对照图和 P0110 截图仅作为本地验收证据，未提交到仓库。未使用 Superpowers 技能。
+
+### 设计与实现
+
+- 「我」、聊天头像进入的「用户信息」、联系人进入的「用户信息」统一为横向资料头：左侧 72dp 头像，右侧昵称、简介和最多三个标签；昵称不再显示租户域名。
+- 操作区使用 48dp 紧凑按钮；保留编辑、关注/粉丝、发消息、关注/取关、DID 复制、主页打开和设置入口。
+- 移除 compact 用户资料路径中的「身份卡」入口、空状态和正文卡片；智能体资料页保持原有合同。
+
+### 自动化与 P0110
+
+- 相关 profile、peer profile、chat avatar 和 contacts entry 回归通过；`flutter analyze --no-pub`、`git diff --check` 与 Android arm64 Debug 构建通过。
+- P0110 使用保留数据覆盖安装。聊天头像和联系人两条入口均显示 16px「用户信息」标题、短昵称、DID/主页操作且无身份卡；返回链路分别回到聊天与联系人。
+- P0110 当前 `newhandle1` 未提供简介和标签，因此真机按数据驱动收起空字段；测试数据已覆盖简介和标签的可见状态。其他 Android 尺寸、iOS 真机和正式签名发布保持 **UNVERIFIED**。
+
+final result: passed

@@ -1238,7 +1238,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PeerProfilePage), findsOneWidget);
-    expect(find.text('个人资料'), findsOneWidget);
+    expect(find.text('用户信息'), findsOneWidget);
     await tester.tap(find.byKey(const Key('peer-profile-send-message')));
     await tester.pumpAndSettle();
 
