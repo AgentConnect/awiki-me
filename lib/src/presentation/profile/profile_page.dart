@@ -139,6 +139,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       onFollowingTap: widget.onFollowingTap,
                       onFollowersTap: widget.onFollowersTap,
                     ),
+                    const SizedBox(height: 8),
                     SelectionContainer.disabled(
                       child: _CompactProfileNavigationGroup(
                         did: profile.did,
@@ -502,7 +503,7 @@ class _CompactProfileSummary extends StatelessWidget {
         .toList(growable: false);
     return Container(
       key: const Key('profile-compact-summary'),
-      color: theme.subtleSurface,
+      color: theme.surface,
       child: Column(
         children: <Widget>[
           SelectionContainer.disabled(

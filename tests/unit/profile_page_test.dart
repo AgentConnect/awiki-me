@@ -133,6 +133,19 @@ void main() {
           .decoration,
       isNull,
     );
+    expect(
+      tester
+          .widget<Container>(find.byKey(const Key('profile-compact-summary')))
+          .color,
+      AwikiMeColors.surface,
+    );
+    expect(
+      tester.getRect(find.byKey(const Key('profile-navigation-group'))).top -
+          tester
+              .getRect(find.byKey(const Key('profile-compact-summary')))
+              .bottom,
+      8,
+    );
     expect(find.byKey(const Key('profile-handle-value')), findsNothing);
     expect(find.text('身份卡'), findsNothing);
     expect(
