@@ -307,6 +307,20 @@ void main() {
       find.descendant(of: unreadBadge, matching: find.text('2')),
       findsOneWidget,
     );
+    final avatar = find.byKey(
+      const Key('conversation-row-avatar:group:did:group:mentions'),
+    );
+    expect(avatar, findsOneWidget);
+    final avatarRect = tester.getRect(avatar);
+    final badgeRect = tester.getRect(unreadBadge);
+    expect(badgeRect.center.dx, greaterThan(avatarRect.center.dx));
+    expect(badgeRect.center.dy, lessThan(avatarRect.center.dy));
+    expect(badgeRect.width, closeTo(badgeRect.height, 0.01));
+    expect(
+      (tester.widget<Container>(unreadBadge).decoration! as BoxDecoration)
+          .shape,
+      BoxShape.circle,
+    );
     expect(find.text('未读 2'), findsNothing);
     expect(find.text('@我'), findsOneWidget);
   });
@@ -4117,11 +4131,22 @@ void main() {
     final unreadBadge = find.byKey(const Key('conversation-row-unread-badge'));
     expect(unreadBadge, findsOneWidget);
     final unreadBadgeRect = tester.getRect(unreadBadge);
+    final avatarRect = tester.getRect(
+      find.byKey(const Key('conversation-row-avatar:dm:mobile-right-meta')),
+    );
     final timeRect = tester.getRect(find.text('12-31'));
     expect(metaRect.right, lessThanOrEqualTo(rowRect.right));
     expect(timeRect.right, lessThanOrEqualTo(rowRect.right - 2));
     expect(unreadBadgeRect.left, greaterThanOrEqualTo(rowRect.left));
     expect(unreadBadgeRect.right, lessThanOrEqualTo(rowRect.right));
+    expect(unreadBadgeRect.center.dx, greaterThan(avatarRect.center.dx));
+    expect(unreadBadgeRect.center.dy, lessThan(avatarRect.center.dy));
+    expect(unreadBadgeRect.width, closeTo(unreadBadgeRect.height, 0.01));
+    expect(
+      (tester.widget<Container>(unreadBadge).decoration! as BoxDecoration)
+          .shape,
+      BoxShape.circle,
+    );
     expect(tester.takeException(), isNull);
   });
 

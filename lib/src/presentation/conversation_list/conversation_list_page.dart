@@ -1287,6 +1287,7 @@ class _ConversationRow extends StatelessWidget {
             child: Row(
               children: <Widget>[
                 Stack(
+                  key: Key('conversation-row-avatar:$conversationId'),
                   clipBehavior: Clip.none,
                   children: <Widget>[
                     AvatarBadge(
@@ -1294,6 +1295,12 @@ class _ConversationRow extends StatelessWidget {
                       size: responsive.displayScaled(48),
                       avatarUri: avatarUri,
                     ),
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: responsive.displayScaled(-4),
+                        top: responsive.displayScaled(-4),
+                        child: _ConversationUnreadBadge(count: unreadCount),
+                      ),
                     if (agentStatus != null)
                       Positioned(
                         right: responsive.displayScaled(-1),
@@ -1380,10 +1387,7 @@ class _ConversationRow extends StatelessWidget {
                         ),
                       ),
                       SizedBox(height: responsive.spacing(5)),
-                      if (unreadCount > 0)
-                        _ConversationUnreadBadge(count: unreadCount)
-                      else
-                        SizedBox(height: responsive.displayScaled(18)),
+                      SizedBox(height: responsive.displayScaled(18)),
                     ],
                   ),
                 ),
@@ -1833,26 +1837,32 @@ class _ConversationUnreadBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final label = count > 99 ? '99+' : '$count';
+    final diameter = responsive.displayScaled(
+      count > 99
+          ? 26
+          : count > 9
+          ? 22
+          : 18,
+    );
     return Container(
       key: const Key('conversation-row-unread-badge'),
-      constraints: BoxConstraints(
-        minWidth: responsive.displayScaled(18),
-        minHeight: responsive.displayScaled(18),
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(label.length > 2 ? 4 : 5),
-      ),
+      width: diameter,
+      height: diameter,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: context.awikiTheme.unread,
-        borderRadius: BorderRadius.circular(999),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: context.awikiTheme.surface,
+          width: responsive.displayScaled(1.5),
+        ),
       ),
       child: Text(
         label,
         maxLines: 1,
         style: TextStyle(
           color: context.awikiTheme.surface,
-          fontSize: responsive.displayScaled(10.5),
+          fontSize: responsive.displayScaled(count > 99 ? 9 : 10.5),
           fontWeight: FontWeight.w600,
           height: 1,
           fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
