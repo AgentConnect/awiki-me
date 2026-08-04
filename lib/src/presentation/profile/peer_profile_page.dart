@@ -453,7 +453,6 @@ class _PeerProfileCompactContent extends StatelessWidget {
               _PeerProfileFullWidthActionRow(
                 key: const Key('peer-profile-send-message'),
                 visualKey: const Key('peer-profile-send-message-visual'),
-                icon: CupertinoIcons.chat_bubble,
                 label: context.l10n.peerProfileSendMessage,
                 color: theme.primary,
                 onTap: onSendMessage,
@@ -462,7 +461,6 @@ class _PeerProfileCompactContent extends StatelessWidget {
               _PeerProfileFullWidthActionRow(
                 key: const Key('peer-profile-delete-thread'),
                 visualKey: const Key('peer-profile-delete-thread-visual'),
-                icon: CupertinoIcons.trash,
                 label: context.l10n.peerProfileDeleteThread,
                 color: theme.danger,
                 onTap: onClearHistory,
@@ -647,6 +645,7 @@ class _PeerProfileRelationshipButton extends StatelessWidget {
     final label = following
         ? context.l10n.peerProfileUnfollow
         : context.l10n.friendsFollow;
+    final color = following ? theme.danger : theme.primary;
     return AppPressable(
       key: following
           ? const Key('peer-profile-unfollow')
@@ -665,13 +664,13 @@ class _PeerProfileRelationshipButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.surface,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: theme.primary),
+            border: Border.all(color: color),
           ),
           child: Text(
             label,
             maxLines: 1,
             style: TextStyle(
-              color: theme.primary,
+              color: color,
               fontSize: 13,
               fontWeight: FontWeight.w600,
               height: 1,
@@ -874,21 +873,18 @@ class _PeerProfileFullWidthActionRow extends StatelessWidget {
   const _PeerProfileFullWidthActionRow({
     super.key,
     required this.visualKey,
-    required this.icon,
     required this.label,
     required this.color,
     required this.onTap,
   });
 
   final Key visualKey;
-  final IconData icon;
   final String label;
   final Color color;
   final Future<void> Function() onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
     return AppPressable(
       onTap: onTap,
       semanticLabel: label,
@@ -896,34 +892,15 @@ class _PeerProfileFullWidthActionRow extends StatelessWidget {
       child: SizedBox(
         key: visualKey,
         height: 56,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: <Widget>[
-              SizedBox.square(
-                dimension: 34,
-                child: Icon(icon, size: 22, color: color),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              SizedBox.square(
-                dimension: 44,
-                child: Icon(
-                  CupertinoIcons.chevron_right,
-                  size: 18,
-                  color: theme.tertiaryText,
-                ),
-              ),
-            ],
+        child: Center(
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: color,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),

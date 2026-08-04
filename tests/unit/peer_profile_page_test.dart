@@ -7,6 +7,7 @@ import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/profile/peer_profile_page.dart';
+import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/identity_profile_surface.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -103,6 +104,19 @@ void main() {
     expect(find.byKey(const Key('peer-profile-follow')), findsNothing);
     expect(find.byKey(const Key('peer-profile-unfollow')), findsOneWidget);
     expect(find.text('取关'), findsOneWidget);
+    final relationshipVisual = tester.widget<Container>(
+      find.byKey(const Key('peer-profile-relationship-visual')),
+    );
+    final relationshipDecoration =
+        relationshipVisual.decoration! as BoxDecoration;
+    expect(
+      (relationshipDecoration.border! as Border).top.color,
+      AwikiMePalette.dangerRed,
+    );
+    expect(
+      tester.widget<Text>(find.text('取关')).style?.color,
+      AwikiMePalette.dangerRed,
+    );
 
     await tester.tap(find.byKey(const Key('peer-profile-unfollow')));
     await tester.pumpAndSettle();
@@ -320,6 +334,11 @@ void main() {
         ),
       );
       expect(text.style?.fontSize, 16);
+      expect(text.textAlign, TextAlign.center);
+      expect(
+        find.descendant(of: find.byKey(entry.$1), matching: find.byType(Icon)),
+        findsNothing,
+      );
     }
     expect(
       tester
