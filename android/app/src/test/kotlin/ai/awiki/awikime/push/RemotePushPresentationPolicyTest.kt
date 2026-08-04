@@ -31,7 +31,28 @@ class RemotePushPresentationPolicyTest {
     }
 
     @Test
-    fun `foreground fails open for missing mismatched or unsupported envelope`() {
+    fun `focused foreground intercepts ordinary messages for another local account`() {
+        policy.activityResumed = true
+        policy.windowFocused = true
+
+        assertFalse(
+            policy.shouldShowNotification(
+                ordinaryEnvelope() + ("ts" to "target_BBBBBBBBBBBBBBBBBBBBBBBB"),
+            ),
+        )
+    }
+
+    @Test
+    fun `foreground fails open without an active session`() {
+        policy.activityResumed = true
+        policy.windowFocused = true
+        policy.activeTargetReference = null
+
+        assertTrue(policy.shouldShowNotification(ordinaryEnvelope()))
+    }
+
+    @Test
+    fun `foreground fails open for missing malformed or unsupported envelope`() {
         policy.activityResumed = true
         policy.windowFocused = true
 
@@ -39,7 +60,7 @@ class RemotePushPresentationPolicyTest {
         assertTrue(policy.shouldShowNotification(mapOf("ty" to "direct_message")))
         assertTrue(
             policy.shouldShowNotification(
-                ordinaryEnvelope() + ("ts" to "target_BBBBBBBBBBBBBBBBBBBBBBBB"),
+                ordinaryEnvelope() + ("ts" to "target_invalid"),
             ),
         )
         assertTrue(policy.shouldShowNotification(ordinaryEnvelope("group_system_event")))

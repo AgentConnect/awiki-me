@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
+import 'package:awiki_me/src/application/remote_push_message_reference.dart';
 import 'package:awiki_me/src/application/remote_push_message_sync_coordinator.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -158,6 +159,75 @@ void main() {
       expect(client.activeTargetReferences.last, isNull);
     },
   );
+
+  test(
+    'ordinary Push for another local account stays pending until account switch',
+    () async {
+      final event = _event(
+        'bob-foreground',
+        kind: RemotePushEventKind.notificationReceivedInApp,
+        type: 'direct_message',
+        target: remotePushOpaqueTargetReference(_bob.ownerDid),
+      );
+      final client = _FakeRemotePushClient(pending: <RemotePushEvent>[event]);
+      final sync = _FakeRemotePushSyncPort();
+      final coordinator = _coordinator(
+        client: client,
+        sync: sync,
+        navigation: _FakeRemotePushNavigationPort(),
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        await client.dispose();
+      });
+      coordinator.start();
+
+      await coordinator.activateSession(_alice);
+
+      expect(sync.callCount, 0);
+      expect(client.acknowledged, isEmpty);
+      expect(client.pendingEvents, <RemotePushEvent>[event]);
+
+      await coordinator.activateSession(_bob);
+
+      expect(sync.callCount, 1);
+      expect(sync.presentations, <RemotePushPresentationDisposition>[
+        RemotePushPresentationDisposition.appPresentationRequired,
+      ]);
+      expect(client.acknowledged, <List<String>>[
+        <String>['bob-foreground'],
+      ]);
+      expect(client.pendingEvents, isEmpty);
+    },
+  );
+
+  test('ordinary Push with matching target drains immediately', () async {
+    final event = _event(
+      'alice-foreground',
+      kind: RemotePushEventKind.notificationReceivedInApp,
+      type: 'group_message',
+      target: remotePushOpaqueTargetReference(_alice.ownerDid),
+    );
+    final client = _FakeRemotePushClient(pending: <RemotePushEvent>[event]);
+    final sync = _FakeRemotePushSyncPort();
+    final coordinator = _coordinator(
+      client: client,
+      sync: sync,
+      navigation: _FakeRemotePushNavigationPort(),
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      await client.dispose();
+    });
+    coordinator.start();
+
+    await coordinator.activateSession(_alice);
+
+    expect(sync.callCount, 1);
+    expect(client.acknowledged, <List<String>>[
+      <String>['alice-foreground'],
+    ]);
+  });
 
   test('registration change refreshes installation without syncing', () async {
     final client = _FakeRemotePushClient();
@@ -972,10 +1042,14 @@ RemotePushEvent _event(
   RemotePushEventKind kind = RemotePushEventKind.messageReceived,
   String? mid,
   int? exp,
+  String? type,
+  String? target,
 }) {
   final extraMap = <String, Object?>{
     if (mid != null) 'mid': mid,
     if (exp != null) 'exp': exp,
+    if (type != null) 'ty': type,
+    if (target != null) 'ts': target,
   };
   return RemotePushEvent(
     deliveryId: deliveryId,

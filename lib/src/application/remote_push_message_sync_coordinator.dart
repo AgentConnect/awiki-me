@@ -160,7 +160,12 @@ class RemotePushMessageSyncCoordinator {
     final context = _activeSession;
     if (context == null || _queuedEvents.isEmpty || _disposed) return;
 
-    final batch = List<RemotePushEvent>.unmodifiable(_queuedEvents.values);
+    final batch = List<RemotePushEvent>.unmodifiable(
+      _queuedEvents.values.where(
+        (event) => _eventTargetsSession(event, context),
+      ),
+    );
+    if (batch.isEmpty) return;
     final deliveryIds = batch
         .map((event) => event.deliveryId)
         .toList(growable: false);
@@ -204,6 +209,29 @@ class RemotePushMessageSyncCoordinator {
       _queuedEvents.remove(deliveryId);
     }
     if (!_isCurrent(context)) return;
+  }
+
+  bool _eventTargetsSession(
+    RemotePushEvent event,
+    RemotePushSessionContext context,
+  ) {
+    final extraMap = event.payload['extraMap'];
+    if (extraMap is! Map) return true;
+    if (extraMap['ty'] case final String type
+        when _ordinaryMessageTypes.contains(type)) {
+      final targetReference = extraMap['ts'];
+      if (targetReference is! String ||
+          !_opaqueTargetPattern.hasMatch(targetReference)) {
+        return true;
+      }
+      try {
+        return remotePushOpaqueTargetReference(context.ownerDid) ==
+            targetReference;
+      } on ArgumentError {
+        return false;
+      }
+    }
+    return true;
   }
 
   RemotePushEvent? _lastOpenedEvent(List<RemotePushEvent> batch) {
@@ -336,4 +364,9 @@ class RemotePushMessageSyncCoordinator {
 }
 
 final RegExp _opaqueMessagePattern = RegExp(r'^message_[A-Za-z0-9_-]{24}$');
+final RegExp _opaqueTargetPattern = RegExp(r'^target_[A-Za-z0-9_-]{24}$');
+const Set<String> _ordinaryMessageTypes = <String>{
+  'direct_message',
+  'group_message',
+};
 const int _maxSupportedExpirySeconds = 8640000000000;

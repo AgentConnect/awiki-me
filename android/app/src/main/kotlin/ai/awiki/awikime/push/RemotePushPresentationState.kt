@@ -7,14 +7,16 @@ internal class RemotePushPresentationPolicy {
 
     fun shouldShowNotification(extraMap: Map<String, String>?): Boolean {
         if (!activityResumed || !windowFocused) return true
-        val expectedTarget = activeTargetReference ?: return true
+        activeTargetReference ?: return true
         val envelope = extraMap ?: return true
-        if (envelope["ts"] != expectedTarget) return true
-        return envelope["ty"] !in ordinaryMessageTypes
+        if (envelope["ty"] !in ordinaryMessageTypes) return true
+        val targetReference = envelope["ts"] ?: return true
+        return !targetReferencePattern.matches(targetReference)
     }
 
     companion object {
         private val ordinaryMessageTypes = setOf("direct_message", "group_message")
+        private val targetReferencePattern = Regex("^target_[A-Za-z0-9_-]{24}$")
     }
 }
 
