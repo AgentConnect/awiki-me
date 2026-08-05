@@ -192,6 +192,7 @@ class ImCoreOnboardingService implements OnboardingService {
     return IdentityRegistrationResult(
       status: IdentityRegistrationStatus.registered,
       identity: session,
+      warnings: result.warnings,
     );
   }
 

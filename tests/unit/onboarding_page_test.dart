@@ -8,6 +8,7 @@ import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
@@ -1344,6 +1345,84 @@ void main() {
     expect(feedback?.message.detail, 'otp gateway unavailable');
   });
 
+  testWidgets('服务端限流会按结构化剩余时间禁用当前手机号', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..nextRegistrationOtpRateLimit = RegistrationOtpRateLimited(
+        retryAfterSeconds: 37,
+        retryAt: DateTime.now().toUtc().add(const Duration(seconds: 37)),
+      );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(CupertinoTextField).at(0),
+      '13800138000',
+    );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    final state = container.read(onboardingProvider);
+    expect(state.otpResendCountdown, 37);
+    expect(state.otpCooldownPhone, '+8613800138000');
+    expect(state.otpTargetFullHandle, isNull);
+    expect(find.textContaining('重新发送（'), findsOneWidget);
+    expect(container.read(uiFeedbackProvider)?.message.id, 'otpRateLimited');
+    expect(container.read(uiFeedbackProvider)?.message.value, '37');
+  });
+
+  testWidgets('手机号限流独立于 Handle 并在切回手机号后恢复', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..registrationOtpCooldown = const Duration(seconds: 90);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(container.read(onboardingProvider).otpResendCountdown, 90);
+
+    await tester.enterText(fields.at(1), 'bob');
+    await tester.pump();
+    var state = container.read(onboardingProvider);
+    expect(state.otpTargetFullHandle, isNull);
+    expect(state.otpResendCountdown, 90);
+
+    await tester.tap(find.byKey(const Key('auth-mode-email')));
+    await tester.pump();
+    expect(container.read(onboardingProvider).otpResendCountdown, 0);
+    await tester.tap(find.byKey(const Key('auth-mode-phone')));
+    await tester.pump();
+    state = container.read(onboardingProvider);
+    expect(state.otpCooldownPhone, '+8613800138000');
+    expect(state.otpResendCountdown, 90);
+
+    await tester.enterText(fields.at(0), '13900139000');
+    await tester.pump();
+    state = container.read(onboardingProvider);
+    expect(state.otpCooldownPhone, '+8613900139000');
+    expect(state.otpResendCountdown, 0);
+
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.pump();
+    state = container.read(onboardingProvider);
+    expect(state.otpCooldownPhone, '+8613800138000');
+    expect(state.otpResendCountdown, 90);
+  });
+
   testWidgets('手机号或 Handle 修改后已发送验证码不能继续提交', (tester) async {
     for (final mutation in <({int fieldIndex, String replacement})>[
       (fieldIndex: 0, replacement: '13900139000'),
@@ -1678,7 +1757,7 @@ class _RecordingOnboardingSupportService extends FakeOnboardingSupportService {
   String? fullHandle;
 
   @override
-  Future<void> sendRegistrationOtp({
+  Future<RegistrationOtpSendReceipt> sendRegistrationOtp({
     required String phone,
     required String handle,
     required String domain,
@@ -1688,6 +1767,10 @@ class _RecordingOnboardingSupportService extends FakeOnboardingSupportService {
     this.handle = handle;
     this.domain = domain;
     this.fullHandle = fullHandle;
+    return RegistrationOtpSendReceipt(
+      retryAfterSeconds: 60,
+      retryAt: DateTime.now().toUtc().add(const Duration(seconds: 60)),
+    );
   }
 }
 

@@ -41,25 +41,43 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<void> sendRegistrationOtp({
+  Future<RegistrationOtpSendReceipt> sendRegistrationOtp({
     required String phone,
     required String handle,
     required String domain,
     required String fullHandle,
-  }) {
+  }) async {
     final normalizedHandle = _normalizeHandle(handle);
     final normalizedDomain = _normalizeDomain(domain);
     final canonicalFullHandle = '$normalizedHandle.$normalizedDomain';
     if (fullHandle != canonicalFullHandle) {
       throw ArgumentError('full_handle_not_canonical');
     }
-    return _users.sendRegistrationOtp(
-      phone: _normalizePhone(phone),
-      purpose: AwikiOnboardingUtilityClient.registrationOtpPurpose,
-      handle: normalizedHandle,
-      domain: normalizedDomain,
-      fullHandle: canonicalFullHandle,
-    );
+    try {
+      final payload = await _users.sendRegistrationOtp(
+        phone: _normalizePhone(phone),
+        purpose: AwikiOnboardingUtilityClient.registrationOtpPurpose,
+        handle: normalizedHandle,
+        domain: normalizedDomain,
+        fullHandle: canonicalFullHandle,
+      );
+      return _registrationOtpReceipt(payload);
+    } on AwikiOnboardingUtilityError catch (error) {
+      final data = error.data;
+      if (error.rpcCode == -32005 && data is Map) {
+        final payload = data.map<String, Object?>(
+          (key, value) => MapEntry(key.toString(), value),
+        );
+        if (payload['code'] == 'otp_rate_limited') {
+          final receipt = _registrationOtpReceipt(payload);
+          throw RegistrationOtpRateLimited(
+            retryAfterSeconds: receipt.retryAfterSeconds,
+            retryAt: receipt.retryAt,
+          );
+        }
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -110,6 +128,28 @@ class AwikiOnboardingSupportService implements OnboardingSupportService {
       message: result['message']?.toString(),
     );
   }
+}
+
+RegistrationOtpSendReceipt _registrationOtpReceipt(
+  Map<String, Object?> payload,
+) {
+  final seconds = int.tryParse(
+    payload['retry_after_seconds']?.toString() ?? '',
+  );
+  final retryAtRaw = payload['retry_at']?.toString();
+  final retryAt = retryAtRaw == null ? null : DateTime.tryParse(retryAtRaw);
+  if (seconds == null ||
+      seconds < 1 ||
+      seconds > 3600 ||
+      retryAt == null ||
+      !retryAt.isUtc ||
+      !retryAtRaw!.endsWith('Z')) {
+    throw const FormatException('registration_otp_retry_boundary_invalid');
+  }
+  return RegistrationOtpSendReceipt(
+    retryAfterSeconds: seconds,
+    retryAt: retryAt,
+  );
 }
 
 String _normalizeDomain(String domain) {

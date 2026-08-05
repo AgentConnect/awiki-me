@@ -18,7 +18,10 @@ void main() {
   test(
     'registerHandleWithPhone normalizes input and patches markdown',
     () async {
-      final identities = _FakeIdentities();
+      final identities = _FakeIdentities()
+        ..registrationWarnings = const <String>[
+          'registration_prekey_publish_pending',
+        ];
       final sessions = _FakeSessions();
       final profiles = _FakeProfiles();
       final service = ImCoreOnboardingService(
@@ -38,6 +41,9 @@ void main() {
 
       expect(result.status, IdentityRegistrationStatus.registered);
       expect(result.identity?.identityId, 'phone-id');
+      expect(result.warnings, const <String>[
+        'registration_prekey_publish_pending',
+      ]);
       expect(identities.lastPhone, '+8613800138000');
       expect(identities.lastOtp, '123456');
       expect(identities.lastHandle, 'alice');
@@ -154,6 +160,7 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
   Completer<IdentityRegistrationResult>? registerPhoneCompleter;
   IdentityRegistrationStatus registrationStatus =
       IdentityRegistrationStatus.registered;
+  List<String> registrationWarnings = const <String>[];
 
   @override
   Future<SessionAccountBinding> activeSyncAccountBinding() {
@@ -213,6 +220,7 @@ class _FakeIdentities implements IdentityCorePort, LegacyIdentityUpgradePort {
           registrationStatus == IdentityRegistrationStatus.joinRequired
           ? _joinProgress
           : null,
+      warnings: registrationWarnings,
     );
   }
 

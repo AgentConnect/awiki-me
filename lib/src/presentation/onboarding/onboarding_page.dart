@@ -58,7 +58,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     emailController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetEmailActivationTarget);
     handleController.addListener(_resetPhoneOtpTarget);
-    phoneController.addListener(_resetPhoneOtpTarget);
+    phoneController.addListener(_updatePhoneOtpState);
     _tenantSubscription = ref.listenManual<AppTenantProfile>(
       activeAppTenantProvider,
       (previous, next) {
@@ -85,7 +85,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     emailController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetEmailActivationTarget);
     handleController.removeListener(_resetPhoneOtpTarget);
-    phoneController.removeListener(_resetPhoneOtpTarget);
+    phoneController.removeListener(_updatePhoneOtpState);
     phoneController.dispose();
     otpController.dispose();
     emailController.dispose();
@@ -115,7 +115,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           emailController: emailController,
           handleController: handleController,
           onLogin: _loginWithLocalCredential,
-          onAuthModeChanged: ref.read(onboardingProvider.notifier).setAuthMode,
+          onAuthModeChanged: _setAuthMode,
           onRequestOtp: _requestOtp,
           onRequestEmailActivation: _requestEmailActivation,
           onCheckEmailActivation: _checkEmailActivation,
@@ -172,9 +172,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                     alignment: Alignment.center,
                                     child: _CompactOnboardingCard(
                                       onboarding: onboarding,
-                                      onAuthModeChanged: ref
-                                          .read(onboardingProvider.notifier)
-                                          .setAuthMode,
+                                      onAuthModeChanged: _setAuthMode,
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.stretch,
@@ -575,6 +573,21 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       return;
     }
     ref.read(onboardingProvider.notifier).resetPhoneOtpTarget();
+  }
+
+  void _updatePhoneOtpState() {
+    if (!mounted || ref.read(onboardingProvider).authMode != 'phone') {
+      return;
+    }
+    ref.read(onboardingProvider.notifier).updateOtpPhone(phoneController.text);
+  }
+
+  void _setAuthMode(String value) {
+    final controller = ref.read(onboardingProvider.notifier);
+    controller.setAuthMode(value);
+    if (value == 'phone') {
+      controller.updateOtpPhone(phoneController.text);
+    }
   }
 
   Future<void> _loginWithLocalCredential(String credentialName) {

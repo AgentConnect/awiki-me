@@ -155,14 +155,14 @@ class AwikiOnboardingUtilityClient {
     );
   }
 
-  Future<void> sendRegistrationOtp({
+  Future<Map<String, Object?>> sendRegistrationOtp({
     required String phone,
     required String purpose,
     required String handle,
     required String domain,
     required String fullHandle,
   }) async {
-    await _serviceClient.rpcCall(
+    return _serviceClient.rpcCall(
       path: handleRpcEndpoint,
       method: 'send_otp',
       params: <String, Object?>{

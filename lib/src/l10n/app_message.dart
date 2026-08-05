@@ -83,6 +83,9 @@ class AppMessage {
 
   factory AppMessage.otpSent() => const AppMessage._('otpSent');
 
+  factory AppMessage.otpRateLimited(int seconds) =>
+      AppMessage._('otpRateLimited', value: '$seconds');
+
   factory AppMessage.activationEmailSent() =>
       const AppMessage._('activationEmailSent');
 
@@ -414,6 +417,8 @@ class AppMessage {
         return l10n.featureNotImplemented;
       case 'otpSent':
         return l10n.otpSent;
+      case 'otpRateLimited':
+        return l10n.deviceJoinOtpRateLimited(int.tryParse(value ?? '') ?? 1);
       case 'activationEmailSent':
         return l10n.activationEmailSent;
       case 'emailNotActivatedClickLink':
@@ -543,6 +548,8 @@ class AppMessage {
         return 'This feature is not available yet.';
       case 'otpSent':
         return 'Verification code sent. Please check your messages.';
+      case 'otpRateLimited':
+        return 'Verification codes are being sent too frequently. Try again in ${value ?? '1'} seconds.';
       case 'activationEmailSent':
         return 'Activation email sent. Please check your inbox.';
       case 'registrationMethodUnavailable':

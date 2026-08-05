@@ -680,6 +680,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool failNextFetchDmHistory = false;
   bool failNextFetchLocalDmHistory = false;
   bool failNextSendOtp = false;
+  RegistrationOtpRateLimited? nextRegistrationOtpRateLimit;
+  Duration registrationOtpCooldown = const Duration(seconds: 60);
   bool failListFollowing = false;
   bool failListFollowers = false;
   bool failNextJoinGroup = false;
@@ -3908,17 +3910,27 @@ class FakeOnboardingSupportService implements OnboardingSupportService {
   }
 
   @override
-  Future<void> sendRegistrationOtp({
+  Future<RegistrationOtpSendReceipt> sendRegistrationOtp({
     required String phone,
     required String handle,
     required String domain,
     required String fullHandle,
-  }) {
+  }) async {
     gateway.lastRegistrationOtpPhone = phone;
     gateway.lastRegistrationOtpHandle = handle;
     gateway.lastRegistrationOtpDomain = domain;
     gateway.lastRegistrationOtpFullHandle = fullHandle;
-    return gateway.sendOtp(phone: phone);
+    final rateLimit = gateway.nextRegistrationOtpRateLimit;
+    if (rateLimit != null) {
+      gateway.nextRegistrationOtpRateLimit = null;
+      throw rateLimit;
+    }
+    await gateway.sendOtp(phone: phone);
+    final cooldown = gateway.registrationOtpCooldown;
+    return RegistrationOtpSendReceipt(
+      retryAfterSeconds: cooldown.inSeconds,
+      retryAt: DateTime.now().toUtc().add(cooldown),
+    );
   }
 }
 

@@ -11,11 +11,13 @@ class IdentityRegistrationResult {
     required this.status,
     this.identity,
     this.joinProgress,
+    this.warnings = const <String>[],
   });
 
   final IdentityRegistrationStatus status;
   final AppSession? identity;
   final DeviceJoinProgress? joinProgress;
+  final List<String> warnings;
 }
 
 abstract interface class IdentityCorePort {

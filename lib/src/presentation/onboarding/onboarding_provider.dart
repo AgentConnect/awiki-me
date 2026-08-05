@@ -6,6 +6,7 @@ import '../../app/app_services.dart';
 import '../../app/ui_feedback.dart';
 import '../../application/app_session_service.dart';
 import '../../application/models/onboarding_server_info.dart';
+import '../../application/onboarding_support_service.dart';
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/session_identity.dart';
@@ -27,6 +28,9 @@ class OnboardingState {
     this.isBusy = false,
     this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
     this.otpTargetFullHandle,
+    this.otpTargetPhone,
+    this.otpCooldownPhone,
+    this.otpRetryAt,
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
@@ -40,6 +44,9 @@ class OnboardingState {
   final bool isBusy;
   final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
   final String? otpTargetFullHandle;
+  final String? otpTargetPhone;
+  final String? otpCooldownPhone;
+  final DateTime? otpRetryAt;
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
@@ -103,6 +110,9 @@ class OnboardingState {
     bool? isBusy,
     LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
     Object? otpTargetFullHandle = _unset,
+    Object? otpTargetPhone = _unset,
+    Object? otpCooldownPhone = _unset,
+    Object? otpRetryAt = _unset,
     OnboardingServerInfoStatus? serverInfoStatus,
     Object? serverInfo = _unset,
     Object? serverInfoError = _unset,
@@ -118,6 +128,15 @@ class OnboardingState {
       otpTargetFullHandle: identical(otpTargetFullHandle, _unset)
           ? this.otpTargetFullHandle
           : otpTargetFullHandle as String?,
+      otpTargetPhone: identical(otpTargetPhone, _unset)
+          ? this.otpTargetPhone
+          : otpTargetPhone as String?,
+      otpCooldownPhone: identical(otpCooldownPhone, _unset)
+          ? this.otpCooldownPhone
+          : otpCooldownPhone as String?,
+      otpRetryAt: identical(otpRetryAt, _unset)
+          ? this.otpRetryAt
+          : otpRetryAt as DateTime?,
       serverInfoStatus: serverInfoStatus ?? this.serverInfoStatus,
       serverInfo: identical(serverInfo, _unset)
           ? this.serverInfo
@@ -141,10 +160,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
   late final AppSessionService _sessionService = ref.read(
     appSessionServiceProvider,
   );
-  static const int _otpResendCooldownSeconds = 60;
   static const int _emailResendCooldownSeconds = 60;
   Timer? _otpResendTimer;
   Timer? _emailResendTimer;
+  final Map<String, DateTime> _otpRetryAtByPhone = <String, DateTime>{};
   int _busyGeneration = 0;
   AppSessionTransition? _activeSessionTransition;
 
@@ -178,6 +197,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       entryMode: value,
       emailVerified: value == 'login' ? false : state.emailVerified,
       otpResendCountdown: value == 'login' ? 0 : state.otpResendCountdown,
+      otpTargetFullHandle: value == 'login' ? null : state.otpTargetFullHandle,
+      otpTargetPhone: value == 'login' ? null : state.otpTargetPhone,
+      otpCooldownPhone: value == 'login' ? null : state.otpCooldownPhone,
+      otpRetryAt: value == 'login' ? null : state.otpRetryAt,
       emailResendCountdown: value == 'login' ? 0 : state.emailResendCountdown,
     );
     if (value == 'login') {
@@ -195,6 +218,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       authMode: value,
       emailVerified: false,
       otpResendCountdown: 0,
+      otpTargetFullHandle: null,
+      otpTargetPhone: null,
+      otpCooldownPhone: null,
+      otpRetryAt: null,
       emailResendCountdown: 0,
     );
     _cancelOtpResendCountdown();
@@ -242,34 +269,61 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       return;
     }
     String? fullHandle;
+    RegistrationOtpSendReceipt? receipt;
+    final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
     var success = false;
     await _runBusy(() async {
       final normalizedHandle = _normalizeHandleForOtp(handle);
       final domain = _normalizeHandleDomain(handleDomain);
       fullHandle = '$normalizedHandle.$domain';
-      await ref
-          .read(onboardingSupportServiceProvider)
-          .sendRegistrationOtp(
-            phone: phone,
-            handle: normalizedHandle,
-            domain: domain,
-            fullHandle: fullHandle!,
-          );
+      try {
+        receipt = await ref
+            .read(onboardingSupportServiceProvider)
+            .sendRegistrationOtp(
+              phone: phone,
+              handle: normalizedHandle,
+              domain: domain,
+              fullHandle: fullHandle!,
+            );
+      } on RegistrationOtpRateLimited catch (error) {
+        if (normalizedPhone != null) {
+          _recordOtpRetryBoundary(normalizedPhone, error.retryAt);
+        }
+        ref
+            .read(uiFeedbackProvider.notifier)
+            .showError(AppMessage.otpRateLimited(error.retryAfterSeconds));
+        return;
+      }
       success = true;
     });
-    if (success) {
-      state = state.copyWith(otpTargetFullHandle: fullHandle!);
-      _startOtpResendCountdown();
+    if (success && receipt != null && normalizedPhone != null) {
+      state = state.copyWith(
+        otpTargetFullHandle: fullHandle!,
+        otpTargetPhone: normalizedPhone,
+      );
+      _recordOtpRetryBoundary(normalizedPhone, receipt!.retryAt);
       ref.read(uiFeedbackProvider.notifier).showInfo(AppMessage.otpSent());
     }
   }
 
   void resetPhoneOtpTarget() {
-    if (state.otpResendCountdown == 0 && state.otpTargetFullHandle == null) {
+    if (state.otpTargetFullHandle == null && state.otpTargetPhone == null) {
       return;
     }
-    _cancelOtpResendCountdown();
-    state = state.copyWith(otpResendCountdown: 0, otpTargetFullHandle: null);
+    state = state.copyWith(otpTargetFullHandle: null, otpTargetPhone: null);
+  }
+
+  void updateOtpPhone(String phone) {
+    final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
+    final phoneChanged = normalizedPhone != state.otpCooldownPhone;
+    if (!phoneChanged && state.otpTargetPhone == normalizedPhone) {
+      return;
+    }
+    state = state.copyWith(otpTargetFullHandle: null, otpTargetPhone: null);
+    if (!phoneChanged) {
+      return;
+    }
+    _showOtpRetryBoundaryForPhone(normalizedPhone);
   }
 
   Future<void> requestEmailActivation({
@@ -345,7 +399,10 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     final domain = _normalizeHandleDomain(handleDomain);
     final normalizedHandle = handle.trim().toLowerCase();
-    if (state.otpTargetFullHandle != '$normalizedHandle.$domain') {
+    final normalizedPhone = _normalizePhoneForOtpCooldown(phone);
+    if (normalizedPhone == null ||
+        state.otpTargetPhone != normalizedPhone ||
+        state.otpTargetFullHandle != '$normalizedHandle.$domain') {
       ref
           .read(uiFeedbackProvider.notifier)
           .showError(AppMessage.operationFailedRetry());
@@ -591,14 +648,48 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     });
   }
 
-  void _startOtpResendCountdown() {
+  void _recordOtpRetryBoundary(String phone, DateTime retryAt) {
+    final authoritative = retryAt.toUtc();
+    _otpRetryAtByPhone[phone] = authoritative;
+    _showOtpRetryBoundaryForPhone(phone);
+  }
+
+  void _showOtpRetryBoundaryForPhone(String? phone) {
     _otpResendTimer?.cancel();
-    state = state.copyWith(otpResendCountdown: _otpResendCooldownSeconds);
+    if (phone == null) {
+      state = state.copyWith(
+        otpResendCountdown: 0,
+        otpCooldownPhone: null,
+        otpRetryAt: null,
+      );
+      return;
+    }
+    final retryAt = _otpRetryAtByPhone[phone];
+    final remaining = _otpSecondsRemaining(retryAt);
+    if (retryAt == null || remaining == 0) {
+      _otpRetryAtByPhone.remove(phone);
+      state = state.copyWith(
+        otpResendCountdown: 0,
+        otpCooldownPhone: phone,
+        otpRetryAt: null,
+      );
+      return;
+    }
+    state = state.copyWith(
+      otpResendCountdown: remaining,
+      otpCooldownPhone: phone,
+      otpRetryAt: retryAt,
+    );
     _otpResendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      final next = state.otpResendCountdown - 1;
-      if (next <= 0) {
+      if (state.otpCooldownPhone != phone || state.otpRetryAt != retryAt) {
         timer.cancel();
-        state = state.copyWith(otpResendCountdown: 0);
+        return;
+      }
+      final next = _otpSecondsRemaining(retryAt);
+      if (next == 0) {
+        timer.cancel();
+        _otpRetryAtByPhone.remove(phone);
+        state = state.copyWith(otpResendCountdown: 0, otpRetryAt: null);
         return;
       }
       state = state.copyWith(otpResendCountdown: next);
@@ -636,6 +727,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       otpTargetFullHandle: authChanged || method == null
           ? null
           : state.otpTargetFullHandle,
+      otpTargetPhone: authChanged || method == null
+          ? null
+          : state.otpTargetPhone,
+      otpCooldownPhone: authChanged || method == null
+          ? null
+          : state.otpCooldownPhone,
+      otpRetryAt: authChanged || method == null ? null : state.otpRetryAt,
       emailResendCountdown: authChanged || method == null
           ? 0
           : state.emailResendCountdown,
@@ -660,6 +758,31 @@ class OnboardingController extends StateNotifier<OnboardingState> {
     }
     return state.serverInfo?.registrationMethod(id);
   }
+}
+
+int _otpSecondsRemaining(DateTime? retryAt) {
+  if (retryAt == null) {
+    return 0;
+  }
+  final milliseconds = retryAt
+      .toUtc()
+      .difference(DateTime.now().toUtc())
+      .inMilliseconds;
+  if (milliseconds <= 0) {
+    return 0;
+  }
+  return (milliseconds / Duration.millisecondsPerSecond).ceil();
+}
+
+String? _normalizePhoneForOtpCooldown(String phone) {
+  final raw = phone.trim();
+  if (RegExp(r'^1[3-9]\d{9}$').hasMatch(raw)) {
+    return '+86$raw';
+  }
+  if (RegExp(r'^\+\d{7,17}$').hasMatch(raw)) {
+    return raw;
+  }
+  return null;
 }
 
 String _normalizeHandleForOtp(String handle) {

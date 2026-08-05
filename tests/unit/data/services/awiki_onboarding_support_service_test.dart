@@ -1,6 +1,7 @@
 import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/data/services/awiki_onboarding_support_service.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
+import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -34,7 +35,7 @@ void main() {
       userClient: userClient,
     );
 
-    await service.sendRegistrationOtp(
+    final receipt = await service.sendRegistrationOtp(
       phone: '13800138000',
       handle: ' Alice ',
       domain: ' AWIKI.AI ',
@@ -55,6 +56,8 @@ void main() {
     expect(userClient.sentOtpHandles, ['alice']);
     expect(userClient.sentOtpDomains, ['awiki.ai']);
     expect(userClient.sentOtpFullHandles, ['alice.awiki.ai']);
+    expect(receipt.retryAfterSeconds, 60);
+    expect(receipt.retryAt, DateTime.utc(2026, 8, 5, 6, 1));
     expect(userClient.sentEmailBaseUrls, ['https://example.test']);
     expect(userClient.sentEmails, ['alice@example.test']);
     expect(userClient.sentEmailHandles, ['alice']);
@@ -85,6 +88,71 @@ void main() {
 
     expect(userClient.sentOtpPhones, isEmpty);
   });
+
+  test(
+    'maps the structured server rate limit without parsing its message',
+    () async {
+      final userClient = _FakeUserClient(
+        registrationOtpError: const AwikiOnboardingUtilityError(
+          rpcCode: -32005,
+          message: 'localized text may change',
+          data: <String, Object?>{
+            'code': 'otp_rate_limited',
+            'retry_after_seconds': 37,
+            'retry_at': '2026-08-05T06:00:37Z',
+          },
+        ),
+      );
+      final service = AwikiOnboardingSupportService(
+        userServiceUrl: 'https://example.test',
+        userClient: userClient,
+      );
+
+      await expectLater(
+        service.sendRegistrationOtp(
+          phone: '13800138000',
+          handle: 'alice',
+          domain: 'awiki.ai',
+          fullHandle: 'alice.awiki.ai',
+        ),
+        throwsA(
+          isA<RegistrationOtpRateLimited>()
+              .having((error) => error.retryAfterSeconds, 'seconds', 37)
+              .having(
+                (error) => error.retryAt,
+                'retryAt',
+                DateTime.utc(2026, 8, 5, 6, 0, 37),
+              ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'fails closed when the registration OTP retry boundary is invalid',
+    () async {
+      final userClient = _FakeUserClient(
+        registrationOtpResult: const <String, Object?>{
+          'retry_after_seconds': 60,
+          'retry_at': '2026-08-05T06:01:00+08:00',
+        },
+      );
+      final service = AwikiOnboardingSupportService(
+        userServiceUrl: 'https://example.test',
+        userClient: userClient,
+      );
+
+      await expectLater(
+        service.sendRegistrationOtp(
+          phone: '13800138000',
+          handle: 'alice',
+          domain: 'awiki.ai',
+          fullHandle: 'alice.awiki.ai',
+        ),
+        throwsA(isA<FormatException>()),
+      );
+    },
+  );
 
   test('normalizes handle availability input and maps result fields', () async {
     final userClient = _FakeUserClient(
@@ -217,14 +285,22 @@ class _RecordingRpcClient extends AwikiOnboardingUtilityHttpClient {
 }
 
 class _FakeUserClient extends AwikiOnboardingUtilityClient {
-  _FakeUserClient({this.availabilityResult = const <String, Object?>{}})
-    : super(
-        serviceClient: AwikiOnboardingUtilityHttpClient(
-          baseUrl: 'https://example.test',
-        ),
-      );
+  _FakeUserClient({
+    this.availabilityResult = const <String, Object?>{},
+    this.registrationOtpResult = const <String, Object?>{
+      'retry_after_seconds': 60,
+      'retry_at': '2026-08-05T06:01:00Z',
+    },
+    this.registrationOtpError,
+  }) : super(
+         serviceClient: AwikiOnboardingUtilityHttpClient(
+           baseUrl: 'https://example.test',
+         ),
+       );
 
   final Map<String, Object?> availabilityResult;
+  final Map<String, Object?> registrationOtpResult;
+  final AwikiOnboardingUtilityError? registrationOtpError;
   final List<String> sentOtpPhones = <String>[];
   final List<String> sentOtpPurposes = <String>[];
   final List<String> sentOtpHandles = <String>[];
@@ -280,7 +356,7 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
   }
 
   @override
-  Future<void> sendRegistrationOtp({
+  Future<Map<String, Object?>> sendRegistrationOtp({
     required String phone,
     required String purpose,
     required String handle,
@@ -292,6 +368,11 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
     sentOtpHandles.add(handle);
     sentOtpDomains.add(domain);
     sentOtpFullHandles.add(fullHandle);
+    final error = registrationOtpError;
+    if (error != null) {
+      throw error;
+    }
+    return registrationOtpResult;
   }
 
   @override

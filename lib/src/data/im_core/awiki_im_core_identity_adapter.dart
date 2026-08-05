@@ -231,6 +231,7 @@ class AwikiImCoreIdentityAdapter
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
         joinProgress: deviceJoinProgressFromCore(progress),
+        warnings: List<String>.unmodifiable(result.warnings),
       );
     }
     if (normalizedState != 'registered') {
@@ -245,6 +246,7 @@ class AwikiImCoreIdentityAdapter
     return IdentityRegistrationResult(
       status: IdentityRegistrationStatus.registered,
       identity: _mappers.appSessionFromIdentity(identity),
+      warnings: List<String>.unmodifiable(result.warnings),
     );
   }
 }
