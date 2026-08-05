@@ -27,8 +27,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
-import 'package:flutter/cupertino.dart'
-    show CupertinoActivityIndicator, CupertinoTextField;
+import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'
     show JSONMessageCodec, LogicalKeyboardKey, SystemChannels;
@@ -766,7 +765,7 @@ void main() {
   });
 
   testWidgets(
-    'AwikiMeApp Android settings stays stable during periodic message sync',
+    'AwikiMeApp Android settings hides message sync row and stays stable',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       tester.view
@@ -803,8 +802,8 @@ void main() {
 
         final appGroup = find.byKey(const Key('settings-app-group'));
         final idleRect = tester.getRect(appGroup);
-        expect(find.text('消息同步'), findsOneWidget);
-        expect(find.text('已是最新状态'), findsOneWidget);
+        expect(find.text('消息同步'), findsNothing);
+        expect(find.text('已是最新状态'), findsNothing);
 
         coordinator.publish(
           const MessageSyncCoordinatorState(
@@ -814,13 +813,13 @@ void main() {
         await tester.pump();
 
         expect(tester.getRect(appGroup), idleRect);
-        expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+        expect(find.text('消息同步'), findsNothing);
 
         coordinator.publish(const MessageSyncCoordinatorState());
         await tester.pump();
 
         expect(tester.getRect(appGroup), idleRect);
-        expect(find.text('已是最新状态'), findsOneWidget);
+        expect(find.text('消息同步'), findsNothing);
         expect(tester.takeException(), isNull);
       } finally {
         debugDefaultTargetPlatformOverride = null;
