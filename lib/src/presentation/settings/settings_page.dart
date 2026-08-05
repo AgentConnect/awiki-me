@@ -86,7 +86,7 @@ class SettingsPage extends ConsumerWidget {
         ),
         SizedBox(height: responsive.spacing(14)),
       ],
-      if (messageSync.status != MessageSyncCoordinatorStatus.idle) ...<Widget>[
+      if (session != null) ...<Widget>[
         _SettingsSection(
           key: const Key('settings-message-sync-section'),
           children: <Widget>[
@@ -250,7 +250,7 @@ class SettingsPage extends ConsumerWidget {
             onTap: () =>
                 AppNavigator.push<void>(context, (_) => const DevicesPage()),
           ),
-        if (messageSync.status != MessageSyncCoordinatorStatus.idle)
+        if (session != null)
           _QuietSettingsRow(
             key: const ValueKey<String>('message-sync-status'),
             icon: CupertinoIcons.arrow_clockwise,
@@ -500,7 +500,14 @@ class SettingsPage extends ConsumerWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
-      MessageSyncCoordinatorStatus.idle => null,
+      MessageSyncCoordinatorStatus.idle => Text(
+        context.l10n.messageSyncStatusIdle,
+        style: TextStyle(
+          color: context.awikiTheme.secondaryText,
+          fontSize: context.awikiResponsive.bodySm,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     };
   }
 

@@ -174,9 +174,9 @@ void main() {
     );
     expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
-    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
-    expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 183));
+    expect(accountRect, const Rect.fromLTWH(0, 208, 390, 122));
+    expect(appRect, const Rect.fromLTWH(0, 370, 390, 183));
+    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 183));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -196,7 +196,7 @@ void main() {
     final versionRow = find.byKey(const Key('settings-current-version-row'));
     expect(
       tester.getRect(find.byKey(const Key('settings-current-version-icon'))),
-      const Rect.fromLTWH(28, 327, 24, 24),
+      const Rect.fromLTWH(28, 388, 24, 24),
     );
     expect(tester.getRect(find.text('当前版本')).left, closeTo(68, 0.1));
     expect(tester.getSize(versionRow).height, 60);
@@ -438,6 +438,58 @@ void main() {
     expect(find.text('下载更新'), findsNothing);
     expect(find.text('立即更新'), findsNothing);
     expect(find.text('消息推送通知'), findsNothing);
+  });
+
+  testWidgets('紧凑设置页消息同步状态变化不改变后续分组位置', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    late _FixedMessageSyncCoordinator coordinator;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const SettingsPage(),
+        session: const SessionIdentity(
+          did: 'did:test:stable-sync-settings',
+          credentialName: 'stable-sync-settings',
+          displayName: 'Stable Sync Settings',
+        ),
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith((ref) {
+            return coordinator = _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(),
+            );
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final appGroup = find.byKey(const Key('settings-app-group'));
+    final idleRect = tester.getRect(appGroup);
+    expect(find.text('消息同步'), findsOneWidget);
+    expect(find.text('已是最新状态'), findsOneWidget);
+
+    coordinator.publish(
+      const MessageSyncCoordinatorState(
+        status: MessageSyncCoordinatorStatus.syncing,
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.getRect(appGroup), idleRect);
+    expect(find.text('消息同步'), findsOneWidget);
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+
+    coordinator.publish(const MessageSyncCoordinatorState());
+    await tester.pump();
+
+    expect(tester.getRect(appGroup), idleRect);
+    expect(find.text('已是最新状态'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('设置页展示撤权同步状态并进入重新登录', (tester) async {
@@ -1408,6 +1460,10 @@ class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
   }
 
   final List<String> requestReasons = <String>[];
+
+  void publish(MessageSyncCoordinatorState next) {
+    state = next;
+  }
 
   @override
   Future<void> requestSync(String reason, {bool immediate = false}) {
