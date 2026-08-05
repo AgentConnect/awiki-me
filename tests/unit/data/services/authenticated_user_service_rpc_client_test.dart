@@ -38,7 +38,7 @@ void main() {
     );
 
     final result = await client.rpcCall(
-      path: '/user-service/agent-inventory/rpc',
+      path: '/user-service/v1/agent-inventory/rpc',
       method: 'list_agents',
       params: const <String, Object?>{'include_inactive': false},
     );
@@ -97,7 +97,7 @@ void main() {
 
     await expectLater(
       client.rpcCall(
-        path: '/user-service/agent-inventory/rpc',
+        path: '/user-service/v1/agent-inventory/rpc',
         method: 'list_agents',
         params: const <String, Object?>{'include_inactive': false},
       ),
@@ -134,7 +134,7 @@ void main() {
       );
 
       final result = await client.rpcCall(
-        path: '/user-service/agent-registration/rpc',
+        path: '/user-service/v1/agent-registration/rpc',
         method: 'issue_token',
         params: const <String, Object?>{'agent_kind': 'daemon'},
       );
@@ -170,7 +170,7 @@ void main() {
 
     await expectLater(
       client.rpcCall(
-        path: '/user-service/agent-inventory/rpc',
+        path: '/user-service/v1/agent-inventory/rpc',
         method: 'list_agents',
         params: const <String, Object?>{'include_inactive': false},
       ),
@@ -217,7 +217,7 @@ void main() {
     );
 
     final request = client.rpcCall(
-      path: '/user-service/agent-inventory/rpc',
+      path: '/user-service/v1/agent-inventory/rpc',
       method: 'list_agents',
       params: const <String, Object?>{'include_inactive': false},
     );

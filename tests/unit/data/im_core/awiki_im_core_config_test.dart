@@ -27,6 +27,12 @@ void main() {
     const config = AwikiImCoreEnvironmentConfig(
       serviceBaseUrl: 'https://example.test',
       didDomain: 'example.test',
+      clientVersionInfo: core.AwikiClientVersionInfo(
+        product: 'awiki-me',
+        release: '0714',
+        version: '0.1.15',
+        build: 25,
+      ),
       anpServiceEndpoint: 'https://example.test/anp-im/rpc',
       anpServiceDid: 'did:wba:example.test',
       mailServiceEndpoint: 'https://mail.example.test',
@@ -36,6 +42,10 @@ void main() {
     final coreConfig = config.toCoreConfig();
 
     expect(coreConfig.mailServiceEndpoint, 'https://mail.example.test');
+    expect(coreConfig.clientVersionInfo?.product, 'awiki-me');
+    expect(coreConfig.clientVersionInfo?.release, '0714');
+    expect(coreConfig.clientVersionInfo?.version, '0.1.15');
+    expect(coreConfig.clientVersionInfo?.build, 25);
     expect(coreConfig.anpServiceEndpoint, 'https://example.test/anp-im/rpc');
     expect(coreConfig.anpServiceDid, 'did:wba:example.test');
     expect(

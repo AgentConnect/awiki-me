@@ -672,7 +672,7 @@ void main() {
 
     test('staged OTP mode requires the exact reviewed resolver argv', () {
       const fixedResolver =
-          '["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]';
+          '["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/v1/current/.venv/bin/python","/opt/awiki/services/user-service/v1/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]';
       final config = RemoteMultiDeviceJoinConfig.from(
         fileConfig: fileConfig,
         environment: const <String, String>{

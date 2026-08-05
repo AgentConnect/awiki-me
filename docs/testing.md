@@ -291,7 +291,7 @@ after the dedicated ali deployment and account have been reviewed:
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
 AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]' \
+AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/v1/current/.venv/bin/python","/opt/awiki/services/user-service/v1/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
@@ -311,7 +311,7 @@ requires exactly one successful decision, so this suite is unattended.
 Production continues to use LocalAuthentication, which this suite does not
 attest.
 
-By default the purpose-bound `/user-service/auth/sms-codes` request remains
+By default the purpose-bound `/user-service/v1/auth/sms-codes` request remains
 strictly 200-only. For the user-authorized synthetic test number, an explicit
 operator-only mode may be added to the command above:
 
@@ -327,7 +327,7 @@ It permits one non-retried HTTP 503 only when the response media type is
 `application/problem+json` and its object contains exactly `type`, `title`,
 `status`, `detail`, and `instance`: `type=about:blank`,
 `title="SMS Service Error"`, integer `status=503`,
-`instance=/user-service/auth/sms-codes`, and `detail` matching the deployed
+`instance=/user-service/v1/auth/sms-codes`, and `detail` matching the deployed
 `[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` shape. The two
 fixed markers must appear exactly once; another channel prefix, provider code,
 additional marker, secret-related word, or standalone six-digit value fails
@@ -383,7 +383,7 @@ test-scoped port.
 The macOS runner is not the service host. Account State test actions therefore
 require `AWIKI_MULTI_DEVICE_E2E_OPERATOR_MODE=ali` and the exact reviewed
 Mac-to-Ali JSON argv. The command uses non-interactive sudo, immutable
-`/opt/awiki/services/user-service/current` code, the protected
+`/opt/awiki/services/user-service/v1/current` code, the protected
 `/etc/awiki/user-service.env`, explicit deployed `PYTHONPATH`, and
 `PYTHONDONTWRITEBYTECODE=1`. The last setting is part of the integrity
 boundary: running Python without it can mutate bytecode beneath an otherwise

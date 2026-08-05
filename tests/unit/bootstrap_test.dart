@@ -115,7 +115,7 @@ void main() {
       expect(bootstrap.remotePushClient, same(client));
       expect(bootstrap.remotePushInstallationCoordinator, isNotNull);
       expect(requests, hasLength(1));
-      expect(requests.single.url.path, '/user-service/push/rpc');
+      expect(requests.single.url.path, '/user-service/v1/push/rpc');
       expect(requests.single.headers['authorization'], 'Bearer bearer-a');
       expect(
         jsonDecode(requests.single.body),

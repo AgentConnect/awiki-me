@@ -120,7 +120,7 @@ suite remain fail-closed and continue to use `LocalAuthUserPresencePort`.
 Because the runner executes on macOS while `awiki.info` is managed on Ali, its
 Account State fixture/fail-once action accepts only the reviewed
 `ssh ali -- sudo -n /usr/bin/env ...` argv. That argv runs the immutable
-`/opt/awiki/services/user-service/current` script, sets
+`/opt/awiki/services/user-service/v1/current` script, sets
 `PYTHONDONTWRITEBYTECODE=1` and the deployed `PYTHONPATH`, and loads only
 `/etc/awiki/user-service.env`. A local `/home/ecs-user/...` command, mutable
 source checkout, alternate host, shell, or implicit remote environment fails

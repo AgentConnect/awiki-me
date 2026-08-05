@@ -42,8 +42,8 @@ const List<String> reviewedStagedOtpResolverCommand = <String>[
   '-n',
   '/usr/bin/env',
   'PYTHONDONTWRITEBYTECODE=1',
-  '/opt/awiki/services/user-service/current/.venv/bin/python',
-  '/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py',
+  '/opt/awiki/services/user-service/v1/current/.venv/bin/python',
+  '/opt/awiki/services/user-service/v1/current/scripts/issue_multi_device_test_otp.py',
   '--env-file',
   '/etc/awiki/user-service.env',
   '--apply',
@@ -134,7 +134,7 @@ RemoteMultiDeviceSmsDecision evaluateRemoteMultiDeviceSmsResponse({
       decoded['status'] is! int ||
       decoded['status'] != 503 ||
       decoded['detail'] is! String ||
-      decoded['instance'] != '/user-service/auth/sms-codes') {
+      decoded['instance'] != '/user-service/v1/auth/sms-codes') {
     throw const FormatException('SMS error response is invalid.');
   }
   final detail = decoded['detail'] as String;

@@ -86,7 +86,7 @@ installation. After session activation, AWiki Me initializes the native
 transport and calls the authenticated public RPC endpoint:
 
 ```text
-POST /user-service/push/rpc
+POST /user-service/v1/push/rpc
 ```
 
 The adapter uses `upsert_installation` with only these safe binding fields:

@@ -29,7 +29,7 @@ void main() {
       final installation = await harness.adapter.upsert(registration);
 
       expect(harness.httpClient.requestCount, 1);
-      expect(harness.httpClient.lastPath, '/user-service/push/rpc');
+      expect(harness.httpClient.lastPath, '/user-service/v1/push/rpc');
       expect(
         harness.httpClient.lastAuthorization,
         'Bearer device-access-token',
@@ -99,7 +99,7 @@ void main() {
 
       final installation = await harness.adapter.disable('installation-1');
 
-      expect(harness.httpClient.lastPath, '/user-service/push/rpc');
+      expect(harness.httpClient.lastPath, '/user-service/v1/push/rpc');
       expect(
         harness.httpClient.lastAuthorization,
         'Bearer device-access-token',

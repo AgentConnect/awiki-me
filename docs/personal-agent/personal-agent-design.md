@@ -599,7 +599,7 @@ MVP 完成时，应能验证：
   - active Personal Agent runtime 调用 `msg.send` / `attachment.send` 时会被拒绝，避免 MVP 代发；唯一 host 内部 final outbox 仍只能把 runtime final 转为发给 owner 的 message sync。
   - revoked / disabled binding 会 fail closed，不再继续拉取 delegated inbox 或启动 runtime。
 - `user-service`
-  - `/user-service/personal-agent/rpc` 是 owner + daemon + runtime Personal Agent binding 的服务端事实源。
+  - `/user-service/v1/personal-agent/rpc` 是 owner + daemon + runtime Personal Agent binding 的服务端事实源。
   - `ensure_binding` 校验 Human ownership、active daemon、daemon 托管 runtime、`runtime_provider`、active delegated key 和敏感字段拒收。
   - `disable_binding` 只停 binding；`revoke_binding` 要求 delegated key registry 已经 revoked，否则 fail closed。
   - delegated key public registration 默认是 read-only scope：`message.inbox.read.plain`、`message.history.read.plain`；不默认包含 `message.send.plain`。
@@ -655,7 +655,7 @@ handle 配额已满，可以用 `AWIKI_PERSONAL_AGENT_E2E_APP_HANDLE`、
 
 - 当前默认构建可以展示独立 Personal Agent 设置入口，但仍应受 `AWIKI_AGENT_IM_ENABLED` 灰度开关约束；关闭时不能触发生命周期请求。
 - 发布默认开启构建前确认 daemon 版本包含 secure bootstrap、bootstrap public key diagnostics、no-send enforcement、inactive binding fail-closed 和 App outbox 回收。
-- 发布默认开启构建前确认 user-service 已部署 `/user-service/personal-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
+- 发布默认开启构建前确认 user-service 已部署 `/user-service/v1/personal-agent/rpc`，并且 delegated key 默认 scope 不包含 `message.send.plain`。
 - 发布默认开启构建前确认 message-service 能接受 Human DID `#daemon-key-1` 作为当前 DID Document authentication 中的 delegated client。
 - 发布候选必须运行 full UI real backend gate。当前 gate 已不再 skip；如果失败，应按真实 blocker 处理，而不是降低断言或改回 focused probe。
 - 监控 binding 创建失败、bootstrap 解密失败、daemon `mark_seen`、Hermes session 创建失败、runtime_final outbox retry、action result 回传失败和 delegated WSS 连接失败。

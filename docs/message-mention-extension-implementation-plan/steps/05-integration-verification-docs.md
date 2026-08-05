@@ -144,7 +144,7 @@ Step index：05
 - `cd awiki-cli-rs2-group && cargo build -p awiki-cli --bin awiki-cli --release --locked`：Done。
 - `cd awiki-cli-rs2-group && scripts/flutter/build-apple.sh --macos`：Done，生成本地 macOS `AwikiImCore.xcframework` 用于 worktree E2E。
 - 真实远端 E2E：历史验证 runId `mention-p9-20260614g` 已通过；当前 runner 已改为只从 `tests/e2e/configs/e2e.local.yaml` 读取配置，等价入口为 `dart run tests/e2e/runner.dart --case group --run-id mention-p9-20260614g`。
-- `cd awiki-cli-rs2-group && cargo test --workspace --locked`：运行到 `awiki-cli --test identity_live_contract` 时 11 个 live tests 因本地 `127.0.0.1:* /user-service/did-auth/rpc` transport_unavailable 失败，非 P9 回归；focused tests 已覆盖本功能。
+- `cd awiki-cli-rs2-group && cargo test --workspace --locked`：运行到 `awiki-cli --test identity_live_contract` 时 11 个 live tests 因本地 `127.0.0.1:* /user-service/v1/did-auth/rpc` transport_unavailable 失败，非 P9 回归；focused tests 已覆盖本功能。
 - `git diff --check`：两仓库通过。
 
 ## 14. 风险、回滚与后续文档

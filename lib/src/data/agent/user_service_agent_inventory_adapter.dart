@@ -38,12 +38,14 @@ class UserServiceAgentInventoryAdapter
 
   factory UserServiceAgentInventoryAdapter.fromEnvironment({
     AwikiEnvironmentConfig? environment,
+    AwikiOnboardingUtilityHttpClient? client,
   }) {
     final effectiveEnvironment =
         environment ?? AwikiEnvironmentConfig.fromEnvironment();
     return UserServiceAgentInventoryAdapter._(
       userServiceUrl: effectiveEnvironment.userServiceUrl,
       environment: effectiveEnvironment,
+      client: client,
     );
   }
 
@@ -70,9 +72,9 @@ class UserServiceAgentInventoryAdapter
     );
   }
 
-  static const String inventoryEndpoint = '/user-service/agent-inventory/rpc';
+  static const String inventoryEndpoint = '/user-service/v1/agent-inventory/rpc';
   static const String registrationEndpoint =
-      '/user-service/agent-registration/rpc';
+      '/user-service/v1/agent-registration/rpc';
 
   AwikiOnboardingUtilityHttpClient get httpClient => _client;
 
