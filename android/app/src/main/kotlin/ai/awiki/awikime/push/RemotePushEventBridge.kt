@@ -78,6 +78,12 @@ object RemotePushEventBridge {
                         NotificationScreenWakeController.wakeIfNeeded(applicationContext)
                         result.success(null)
                     }
+                    "setActiveNotificationTargetReference" -> {
+                        RemotePushPresentationState.setActiveTargetReference(
+                            call.arguments as? String,
+                        )
+                        result.success(null)
+                    }
                     "loadPendingEvents" -> result.success(load(applicationContext))
                     "acknowledgePendingEvents" -> {
                         val deliveryIds = (call.arguments as? List<*>)
@@ -173,6 +179,7 @@ object RemotePushEventBridge {
     }
 
     fun detach() {
+        RemotePushPresentationState.setActiveTargetReference(null)
         channel?.setMethodCallHandler(null)
         channel = null
     }
@@ -270,7 +277,12 @@ object RemotePushEventBridge {
     private fun eventForPersistence(event: Map<String, Any?>): Map<String, Any?>? {
         val kind = event["kind"] as? String ?: return null
         val deliveryId = boundedString(event["delivery_id"]) ?: return null
-        if (kind != "notification_opened" && kind != "message_received") {
+        if (
+            kind != "notification_opened" &&
+            kind != "message_received" &&
+            kind != "notification_received" &&
+            kind != "notification_received_in_app"
+        ) {
             return null
         }
         val sourcePayload = event["payload"] as? Map<*, *> ?: emptyMap<Any?, Any?>()

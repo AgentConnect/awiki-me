@@ -26,6 +26,7 @@ import '../../conversation_list/conversation_provider.dart';
 import '../../devices/devices_provider.dart';
 import 'agent_terminal_notification_provider.dart';
 import 'app_lifecycle_provider.dart';
+import 'ordinary_message_presentation_policy.dart';
 import 'session_provider.dart';
 
 const bool _messageSyncCoordinatorTraceEnabled = bool.fromEnvironment(
@@ -67,6 +68,7 @@ class MessageSyncCoordinatorState {
     this.lastFailureHttpStatus,
     this.retryableFailureSurfaceAt,
     this.retryableFailureVisible = false,
+    this.transientFailurePresentationSuppressed = false,
     this.consecutiveRetryableFailures = 0,
     this.automaticRetryPending = false,
   });
@@ -93,6 +95,7 @@ class MessageSyncCoordinatorState {
   final int? lastFailureHttpStatus;
   final DateTime? retryableFailureSurfaceAt;
   final bool retryableFailureVisible;
+  final bool transientFailurePresentationSuppressed;
   final int consecutiveRetryableFailures;
   final bool automaticRetryPending;
 
@@ -160,6 +163,7 @@ class MessageSyncCoordinatorState {
     Object? lastFailureHttpStatus = _unset,
     Object? retryableFailureSurfaceAt = _unset,
     bool? retryableFailureVisible,
+    bool? transientFailurePresentationSuppressed,
     int? consecutiveRetryableFailures,
     bool? automaticRetryPending,
   }) {
@@ -217,6 +221,9 @@ class MessageSyncCoordinatorState {
           : retryableFailureSurfaceAt as DateTime?,
       retryableFailureVisible:
           retryableFailureVisible ?? this.retryableFailureVisible,
+      transientFailurePresentationSuppressed:
+          transientFailurePresentationSuppressed ??
+          this.transientFailurePresentationSuppressed,
       consecutiveRetryableFailures:
           consecutiveRetryableFailures ?? this.consecutiveRetryableFailures,
       automaticRetryPending:
@@ -297,11 +304,18 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
   }
 
   @override
-  Future<RemotePushSyncReceipt> requestRemotePushSync() {
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) {
     return _requestSync(
       'remote_push',
       immediate: true,
-      policy: _MessageSyncRequestPolicy(suppressNotificationPresentation: true),
+      policy: _MessageSyncRequestPolicy(
+        suppressNotificationPresentation:
+            presentation == RemotePushPresentationDisposition.providerPresented,
+        suppressTransientFailurePresentation: true,
+      ),
       remotePushRequest: true,
     );
   }
@@ -360,6 +374,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         active.policy.merge(
           suppressNotificationPresentation:
               policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              policy.suppressTransientFailurePresentation,
         );
         if (remotePushRequest) {
           _messageSyncTrace(
@@ -378,6 +394,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queuedPolicy.merge(
           suppressNotificationPresentation:
               active.policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              active.policy.suppressTransientFailurePresentation,
         );
       }
       final queuedFuture = _queueAfterActive(
@@ -485,6 +503,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queuedPolicy.merge(
           suppressNotificationPresentation:
               active.policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              active.policy.suppressTransientFailurePresentation,
         );
       }
       _queueAfterActive(
@@ -841,6 +861,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     queued.immediate = queued.immediate || immediate;
     queued.policy.merge(
       suppressNotificationPresentation: policy.suppressNotificationPresentation,
+      suppressTransientFailurePresentation:
+          policy.suppressTransientFailurePresentation,
     );
     if (waiter != null) {
       queued.waiters.add(waiter);
@@ -875,6 +897,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       lastFailureHttpStatus: httpStatus,
       retryableFailureSurfaceAt: surfaceAt,
       retryableFailureVisible: failureVisible,
+      transientFailurePresentationSuppressed:
+          policy.suppressTransientFailurePresentation,
       consecutiveRetryableFailures: failureCount,
       automaticRetryPending: scheduleAutomaticRetry,
     );
@@ -892,6 +916,8 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         queued.policy.merge(
           suppressNotificationPresentation:
               policy.suppressNotificationPresentation,
+          suppressTransientFailurePresentation:
+              policy.suppressTransientFailurePresentation,
         );
       }
     }
@@ -904,6 +930,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
       firstRetryableFailureAt: null,
       retryableFailureSurfaceAt: null,
       retryableFailureVisible: false,
+      transientFailurePresentationSuppressed: false,
       consecutiveRetryableFailures: 0,
       automaticRetryPending: false,
     );
@@ -1162,12 +1189,7 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
         deduplicator.acceptRuntimeMessageIds(
           messageIds,
           releaseNotification: () {
-            unawaited(
-              _showCommittedMessageNotification(
-                message,
-                suppressWhenForeground: true,
-              ),
-            );
+            unawaited(_showCommittedMessageNotification(message));
           },
         );
       } else if (deduplicator.acceptMessageIds(messageIds)) {
@@ -1190,12 +1212,36 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     }
   }
 
-  Future<void> _showCommittedMessageNotification(
-    ChatMessage message, {
-    bool suppressWhenForeground = false,
-  }) async {
+  Future<void> _showCommittedMessageNotification(ChatMessage message) async {
+    if (!isOrdinaryMessagePresentationEligible(message)) {
+      return;
+    }
     final epoch = ref.read(sessionProvider).activeEpoch;
     if (_disposed || epoch == null) {
+      return;
+    }
+    final lifecycle = ref.read(appLifecycleProvider);
+    final nativePresentation = lifecycle == AppLifecycleState.resumed
+        ? await ref.read(appPresentationServiceProvider).currentState()
+        : null;
+    if (_disposed || ref.read(sessionProvider).session == null) {
+      return;
+    }
+    final isForeground =
+        lifecycle == AppLifecycleState.resumed &&
+        (nativePresentation?.isForeground ?? true);
+    _messageSyncTrace(
+      'notification.route',
+      fields: <String, Object?>{
+        'lifecycle': lifecycle.name,
+        'native_state_available': nativePresentation != null,
+        'application_active': nativePresentation?.applicationActive,
+        'window_visible': nativePresentation?.windowVisible,
+        'window_miniaturized': nativePresentation?.windowMiniaturized,
+        'route': isForeground ? 'silent_foreground' : 'system',
+      },
+    );
+    if (isForeground) {
       return;
     }
     final conversationId = message.conversationId?.trim() ?? '';
@@ -1275,51 +1321,25 @@ class MessageSyncCoordinator extends StateNotifier<MessageSyncCoordinatorState>
     final resolvedTitle = title.isNotEmpty
         ? title
         : AppMessage.newMessageArrived().resolveForFallback();
-    final notifications = ref.read(notificationFacadeProvider);
-    final lifecycle = ref.read(appLifecycleProvider);
-    final nativePresentation = lifecycle == AppLifecycleState.resumed
-        ? await ref.read(appPresentationServiceProvider).currentState()
-        : null;
-    if (_disposed || ref.read(sessionProvider).session == null) {
+    final session = ref.read(sessionProvider).session;
+    final targetConversationId = message.conversationId?.trim();
+    if (session == null ||
+        targetConversationId == null ||
+        targetConversationId.isEmpty) {
       return;
     }
-    final isForeground =
-        lifecycle == AppLifecycleState.resumed &&
-        (nativePresentation?.isForeground ?? true);
-    _messageSyncTrace(
-      'notification.route',
-      fields: <String, Object?>{
-        'lifecycle': lifecycle.name,
-        'native_state_available': nativePresentation != null,
-        'application_active': nativePresentation?.applicationActive,
-        'window_visible': nativePresentation?.windowVisible,
-        'window_miniaturized': nativePresentation?.windowMiniaturized,
-        'route': isForeground ? 'foreground' : 'system',
-        'suppress_when_foreground': suppressWhenForeground,
-      },
+    final target = NotificationTarget(
+      storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+      ownerDid: session.did,
+      conversationId: targetConversationId,
     );
-    if (isForeground) {
-      if (suppressWhenForeground) {
-        return;
-      }
-      await notifications.showInAppBanner(title: resolvedTitle, body: body);
-    } else {
-      final session = ref.read(sessionProvider).session;
-      final conversationId = message.conversationId?.trim();
-      if (session == null || conversationId == null || conversationId.isEmpty) {
-        return;
-      }
-      final target = NotificationTarget(
-        storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
-        ownerDid: session.did,
-        conversationId: conversationId,
-      );
-      await notifications.showSystemNotification(
-        title: resolvedTitle,
-        body: body,
-        target: target,
-      );
-    }
+    await ref
+        .read(notificationFacadeProvider)
+        .showSystemNotification(
+          title: resolvedTitle,
+          body: body,
+          target: target,
+        );
   }
 
   String? _agentDisplayNameForSender(AppLocalizations l10n, String senderDid) {
@@ -1521,18 +1541,29 @@ class _QueuedMessageSync {
 }
 
 class _MessageSyncRequestPolicy {
-  _MessageSyncRequestPolicy({this.suppressNotificationPresentation = false});
+  _MessageSyncRequestPolicy({
+    this.suppressNotificationPresentation = false,
+    this.suppressTransientFailurePresentation = false,
+  });
 
   bool suppressNotificationPresentation;
+  bool suppressTransientFailurePresentation;
 
-  void merge({required bool suppressNotificationPresentation}) {
+  void merge({
+    required bool suppressNotificationPresentation,
+    required bool suppressTransientFailurePresentation,
+  }) {
     this.suppressNotificationPresentation =
         this.suppressNotificationPresentation ||
         suppressNotificationPresentation;
+    this.suppressTransientFailurePresentation =
+        this.suppressTransientFailurePresentation ||
+        suppressTransientFailurePresentation;
   }
 
   _MessageSyncRequestPolicy copy() => _MessageSyncRequestPolicy(
     suppressNotificationPresentation: suppressNotificationPresentation,
+    suppressTransientFailurePresentation: suppressTransientFailurePresentation,
   );
 }
 

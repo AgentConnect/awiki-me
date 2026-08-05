@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:awiki_me/src/application/models/remote_push_sync_receipt.dart';
 import 'package:awiki_me/src/application/ports/message_sync_core_port.dart';
 import 'package:awiki_me/src/application/ports/remote_push_sync_port.dart';
+import 'package:awiki_me/src/application/remote_push_message_reference.dart';
 import 'package:awiki_me/src/application/remote_push_message_sync_coordinator.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/chat_message.dart';
@@ -97,8 +98,136 @@ void main() {
 
       expect(sync.callCount, 1);
       expect(client.acknowledged.single, <String>['delivery']);
+      expect(sync.presentations.single, switch (kind) {
+        RemotePushEventKind.notificationReceived ||
+        RemotePushEventKind.notificationOpened =>
+          RemotePushPresentationDisposition.providerPresented,
+        _ => RemotePushPresentationDisposition.appPresentationRequired,
+      });
     });
   }
+
+  test('a provider-presented event suppresses a mixed batch', () async {
+    final client = _FakeRemotePushClient(
+      pending: <RemotePushEvent>[
+        _event('in-app', kind: RemotePushEventKind.notificationReceivedInApp),
+        _event('provider', kind: RemotePushEventKind.notificationReceived),
+      ],
+    );
+    final sync = _FakeRemotePushSyncPort();
+    final coordinator = _coordinator(
+      client: client,
+      sync: sync,
+      navigation: _FakeRemotePushNavigationPort(),
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      await client.dispose();
+    });
+    coordinator.start();
+
+    await coordinator.activateSession(_alice);
+
+    expect(sync.presentations, <RemotePushPresentationDisposition>[
+      RemotePushPresentationDisposition.providerPresented,
+    ]);
+  });
+
+  test(
+    'session activation installs and deactivation clears target fence',
+    () async {
+      final client = _FakeRemotePushClient();
+      final coordinator = _coordinator(
+        client: client,
+        sync: _FakeRemotePushSyncPort(),
+        navigation: _FakeRemotePushNavigationPort(),
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        await client.dispose();
+      });
+      coordinator.start();
+
+      await coordinator.activateSession(_alice);
+      expect(client.activeTargetReferences, <String?>[
+        'target__O36e96xvUp2bpAWguuIrcdZ',
+      ]);
+
+      coordinator.deactivateSession(_alice);
+      await _flushEvents();
+
+      expect(client.activeTargetReferences.last, isNull);
+    },
+  );
+
+  test(
+    'ordinary Push for another local account stays pending until account switch',
+    () async {
+      final event = _event(
+        'bob-foreground',
+        kind: RemotePushEventKind.notificationReceivedInApp,
+        type: 'direct_message',
+        target: remotePushOpaqueTargetReference(_bob.ownerDid),
+      );
+      final client = _FakeRemotePushClient(pending: <RemotePushEvent>[event]);
+      final sync = _FakeRemotePushSyncPort();
+      final coordinator = _coordinator(
+        client: client,
+        sync: sync,
+        navigation: _FakeRemotePushNavigationPort(),
+      );
+      addTearDown(() async {
+        await coordinator.dispose();
+        await client.dispose();
+      });
+      coordinator.start();
+
+      await coordinator.activateSession(_alice);
+
+      expect(sync.callCount, 0);
+      expect(client.acknowledged, isEmpty);
+      expect(client.pendingEvents, <RemotePushEvent>[event]);
+
+      await coordinator.activateSession(_bob);
+
+      expect(sync.callCount, 1);
+      expect(sync.presentations, <RemotePushPresentationDisposition>[
+        RemotePushPresentationDisposition.appPresentationRequired,
+      ]);
+      expect(client.acknowledged, <List<String>>[
+        <String>['bob-foreground'],
+      ]);
+      expect(client.pendingEvents, isEmpty);
+    },
+  );
+
+  test('ordinary Push with matching target drains immediately', () async {
+    final event = _event(
+      'alice-foreground',
+      kind: RemotePushEventKind.notificationReceivedInApp,
+      type: 'group_message',
+      target: remotePushOpaqueTargetReference(_alice.ownerDid),
+    );
+    final client = _FakeRemotePushClient(pending: <RemotePushEvent>[event]);
+    final sync = _FakeRemotePushSyncPort();
+    final coordinator = _coordinator(
+      client: client,
+      sync: sync,
+      navigation: _FakeRemotePushNavigationPort(),
+    );
+    addTearDown(() async {
+      await coordinator.dispose();
+      await client.dispose();
+    });
+    coordinator.start();
+
+    await coordinator.activateSession(_alice);
+
+    expect(sync.callCount, 1);
+    expect(client.acknowledged, <List<String>>[
+      <String>['alice-foreground'],
+    ]);
+  });
 
   test('registration change refreshes installation without syncing', () async {
     final client = _FakeRemotePushClient();
@@ -913,10 +1042,14 @@ RemotePushEvent _event(
   RemotePushEventKind kind = RemotePushEventKind.messageReceived,
   String? mid,
   int? exp,
+  String? type,
+  String? target,
 }) {
   final extraMap = <String, Object?>{
     if (mid != null) 'mid': mid,
     if (exp != null) 'exp': exp,
+    if (type != null) 'ty': type,
+    if (target != null) 'ts': target,
   };
   return RemotePushEvent(
     deliveryId: deliveryId,
@@ -955,7 +1088,8 @@ Future<void> _flushEvents() async {
   }
 }
 
-final class _FakeRemotePushClient implements RemotePushClient {
+final class _FakeRemotePushClient
+    implements RemotePushClient, RemotePushPresentationTargetClient {
   _FakeRemotePushClient({
     List<RemotePushEvent> pending = const <RemotePushEvent>[],
     this.acknowledgeError,
@@ -971,6 +1105,7 @@ final class _FakeRemotePushClient implements RemotePushClient {
   final Completer<void>? acknowledgeGate;
   final Completer<void> acknowledgementStarted = Completer<void>();
   final List<List<String>> acknowledged = <List<String>>[];
+  final List<String?> activeTargetReferences = <String?>[];
 
   void emit(RemotePushEvent event) => _events.add(event);
 
@@ -1005,6 +1140,13 @@ final class _FakeRemotePushClient implements RemotePushClient {
   Future<RemotePushRegistration?> initialize() async => null;
 
   @override
+  Future<void> setActiveNotificationTargetReference(
+    String? targetReference,
+  ) async {
+    activeTargetReferences.add(targetReference);
+  }
+
+  @override
   Future<void> dispose() => _events.close();
 }
 
@@ -1021,11 +1163,17 @@ final class _FakeRemotePushSyncPort implements RemotePushSyncPort {
   Object? error;
   final Completer<RemotePushSyncReceipt>? gate;
   final List<Completer<void>> _callWaiters = <Completer<void>>[];
+  final List<RemotePushPresentationDisposition> presentations =
+      <RemotePushPresentationDisposition>[];
   int callCount = 0;
 
   @override
-  Future<RemotePushSyncReceipt> requestRemotePushSync() async {
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) async {
     callCount += 1;
+    presentations.add(presentation);
     for (final waiter in _callWaiters) {
       if (!waiter.isCompleted) waiter.complete();
     }
@@ -1054,7 +1202,10 @@ final class _SequencedRemotePushSyncPort implements RemotePushSyncPort {
   int callCount = 0;
 
   @override
-  Future<RemotePushSyncReceipt> requestRemotePushSync() {
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) {
     callCount += 1;
     if (!firstCallStarted.isCompleted) firstCallStarted.complete();
     if (_results.isEmpty) {

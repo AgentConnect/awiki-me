@@ -3967,6 +3967,18 @@ class ChatThreadsController
     _scheduleHiddenThreadCacheTrim(threadId);
   }
 
+  bool isConversationVisible(String conversationId) {
+    final normalizedConversationId = conversationId.trim();
+    if (normalizedConversationId.isEmpty) {
+      return false;
+    }
+    return _cacheMetadataByThreadId.values.any((metadata) {
+      return metadata.isVisible &&
+          metadata.visibleConversation?.conversationId.trim() ==
+              normalizedConversationId;
+    });
+  }
+
   void trimForAppBackground() {
     _trimInactiveThreads(
       hiddenLimit: _cachePolicy.coldThreadMessageLimit,

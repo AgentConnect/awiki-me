@@ -25,10 +25,12 @@
 11. WebSocket 和 Android remote Push 都只是 hint-only sync trigger。两者都只能调度
     `MessageSyncCoordinator`；该协调器是 Core commit、conversation/timeline projection、
     normal message notification 和 Coding Agent notification 去重的唯一 owner。
-12. Android Push 触发的合并同步由 EMAS `NOTICE` 独占系统展示，App 普通消息通知在整次
-    coalesced sync（含排队和自动重试）中保持抑制，但 committed projection 与各通知去重
-    ledger 仍照常更新。Push acknowledgement 和通知打开导航必须同时通过 SessionEpoch 与
-    tenant fence，旧身份或旧租户的异步完成不得确认事件或改变当前选择。
+12. Android Push 的后台/锁屏展示仍由 EMAS `NOTICE` 独占；只有 native 确认 Activity
+    resumed、窗口有焦点且 opaque target 与当前 SessionEpoch owner 匹配时，ordinary direct/group
+    `NOTICE` 才转成 in-app callback。该 callback 只触发 committed sync；App 在前台时全局静默，
+    只更新 timeline、recents、排序和未读状态（离底部时复用聊天页“新消息”入口）。
+    Push acknowledgement 和通知打开导航必须同时通过 SessionEpoch 与 tenant fence，旧身份或旧
+    租户的异步完成不得确认事件或改变当前选择。
 
 App list/detail/read/send/realtime 主链路必须通过 `ConversationIdentity.conversationId` / `AppConversationReadRef` 消费 core projection。`ThreadRef`、alias、targetPeer/targetDid、visibility key 只允许作为 legacy adapter、migration fallback 或 diagnostic input，不再作为消息归属、read correctness、send correctness 或 realtime correctness 的机制。
 
@@ -92,7 +94,7 @@ Rust im-core
 | realtime / backfill | Rust `im-core` sync/realtime committed projection | realtime hint 调度 `syncDelta`，conversation-after 补新，projection commit 后 patch | App 不从 realtime typed event 直接写 list/timeline truth；只消费 core patch/read model 并在 gap 时 repair |
 | remote Push hint | Android native EMAS transport + `RemotePushMessageSyncCoordinator` | message/notification/open callback、activation、resume、registration refresh | 只以 `remote_push` 原因请求同一个 `MessageSyncCoordinator`；payload 不写 list/timeline，不携带 message truth |
 | Core commit / projection / notification dedupe | `MessageSyncCoordinator` | WebSocket、remote Push、startup、resume、repair 等可靠触发合并后调用 Core sync | Core commit 后统一刷新 recents、Join inbox、timeline，并以 committed message identity 执行普通消息与 Coding Agent 通知去重 |
-| remote Push presentation | Android EMAS `NOTICE` | provider/native notification channel | Push-triggered coalesced sync 抑制 App 普通消息系统通知；EMAS 是该路径唯一 Android presentation owner |
+| remote Push presentation | Android native EMAS receiver + `MessageSyncCoordinator` | native foreground/target fence、provider callback kind、committed conversation visibility | 后台/锁屏由 EMAS `NOTICE` 展示；匹配账号的前台 ordinary notice 转 in-app callback 并静默同步，不显示 Toast、Banner 或系统通知 |
 | remote Push acknowledgement / navigation | `RemotePushMessageSyncCoordinator` | Core sync receipt、opaque `mid`、future `exp`、canonical committed conversation | 仅在同 SessionEpoch/tenant 下同步、刷新和路由成功后确认；stale、offline、失败或不安全 hint 保留/降级且不能跨身份导航 |
 | SDK message DTO | Flutter SDK / Rust `im-core` | SDK `messages`、`groups`、`realtime` API | 只允许 `awiki-me/lib/src/data/im_core/` 生产路径直接消费 |
 | SDK DTO -> App message projection | `awiki-me` data mapper | `AwikiImCoreMappers.chatMessageFromCore`、`chatMessageFromSnapshot` | `ChatMessage` |
@@ -259,11 +261,23 @@ projection 可能变脏。`RemotePushMessageSyncCoordinator` 将事件串行合�
 路径。它不解析 Push title/body 来生成 `ChatMessage`，也不直接 upsert recents 或 timeline。
 
 `MessageSyncCoordinator` 仍是唯一的 Core commit、conversation/Join/timeline 刷新和
-notification dedupe owner。remote-push presentation policy 在 active/queued coalescing 和
-automatic retry 中按 OR 传播：只抑制 App 普通消息系统通知，不跳过 normal message ledger、
-Runtime Agent final-message deduper 或 committed projection。Android 系统展示只由已送达的
-EMAS `NOTICE` 拥有，从而使 foreground 保持安静，并避免 WebSocket 与 Push 同时到达时出现
-第二条 App-owned notification。
+notification dedupe owner。native receiver 在 `showNotificationNow` 之前只用三项安全事实做
+fail-open 决策：Activity resumed、窗口有焦点、当前 session 派生的 `target_*` 与 envelope `ts`
+相等；类型还必须是 ordinary `direct_message` / `group_message`。任一事实缺失、失焦、账号不匹配
+或类型不支持时都返回 provider presentation，继续由 EMAS `NOTICE` 展示。这里不读取 WebSocket
+在线状态，也不把 raw DID、conversation ID 或消息正文写入 native presentation state。
+
+被 native 拦截的 notice 通过 `notification_received_in_app` 进入同一 committed-sync 路径；
+`message_received` 也按 App presentation required 处理。已由 provider 展示的
+`notification_received` / `notification_opened` 继续抑制 App duplicate；混合 batch 只要包含
+provider-presented event 就选择抑制。该 policy 在 active/queued coalescing 和 automatic retry
+中按 OR 传播，不跳过 normal message ledger、Runtime Agent final-message deduper 或 committed
+projection。
+
+前台 App presentation 全局静默：无论用户是否位于消息所属会话，都不显示 Toast、Banner 或系统
+通知，只更新 timeline、recents、排序和未读状态；用户在当前聊天离开底部时继续由 ChatPage 现有
+“新消息”入口提示。App 后台、锁屏、窗口失焦或 opaque target 不匹配时，native 不拦截，仍只
+显示一次 EMAS `NOTICE`。
 
 native delivery ID 只有在 typed sync receipt 表明 Core 成功、所有本地刷新完成、且通知打开
 路由也成功后才能确认。打开事件只接受 `extraMap.mid` 的安全 opaque message reference 和
@@ -499,11 +513,11 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/agents/agent_terminal_notification_test.dart`：用 fake time 验证三种业务终态、真实运行失败、严格 fail-closed、message-first / status-first、1 秒 timeout fallback、clear timer cleanup、有界 replay ledger 和普通最终回复关联。
 - `tests/unit/message_sync_coordinator_test.dart`：除 single-flight、节流和 snapshot-required 外，验证 A active sync 不会 coalesce 或满足 B startup sync，旧 identity 的 delayed request 在快速切换后不会执行；Core sync commit 后必须启动新一代 fast-local read，不能复用提交前仍在运行的旧刷新；V2 committed incoming notification 与终态通知共享 message identity 去重，不因 reliable sync 投影再次提醒；后台消息发送者匹配当前 Agent inventory 时，系统通知标题必须使用 App 的本地化 Agent 展示名，而不是消息携带的内部 `skill-*` 名称。
 - `tests/unit/message_sync_service_test.dart` 与 `tests/unit/message_sync_coordinator_test.dart`：固定 remote-push typed receipt 的六种 disposition、successful-sync 后 committed incoming identity、active/queued/automatic-retry presentation suppression OR 传播，以及抑制通知时仍更新 projection 与 dedupe ledger。
-- `tests/unit/application/remote_push_message_reference_test.dart`：固定 opaque message reference 的 SHA-256 向量，并拒绝空白、控制字符、前后空格和超长 message ID。
-- `tests/unit/application/remote_push_message_sync_coordinator_test.dart`：固定 pending native event 的串行 batch、真实触发重试、成功后 exact acknowledgement、opaque open matching、过期/畸形 hint 降级，以及 session/tenant stale 时不 ack、不导航。
+- `tests/unit/application/remote_push_message_reference_test.dart`：固定 opaque message/target reference 的 SHA-256 向量，并拒绝空白、控制字符、前后空格和超长输入。
+- `tests/unit/application/remote_push_message_sync_coordinator_test.dart`：固定 pending native event 的串行 batch、provider-presented 与 app-presentation-required disposition、session target 安装/清除、真实触发重试、成功后 exact acknowledgement、opaque open matching、过期/畸形 hint 降级，以及 session/tenant stale 时不 ack、不导航。
 - `tests/unit/application/remote_push_installation_coordinator_test.dart` 与 `tests/unit/data/push/user_service_push_installation_adapter_test.dart`：固定 authenticated installation upsert/disable、安全字段、response binding、registration refresh 和旧 session fencing。
 - `tests/unit/session_provider_test.dart`：固定 clear、A→B 和快速身份替换推进 epoch，同一 identity 的 JWT/profile refresh 保持 epoch。
-- `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state；同时从 `loginWithLocalCredential` 身份切换入口证明新 session epoch 会自动调度自己的 `startup` reliable sync，并在不由测试手动调用 coordinator、sync service 或 conversation-after 的情况下把 committed unread 和 hydrated preview 发布到会话列表。通知路由只受 session epoch 约束，不能被同身份下并发的列表 refresh generation 误取消；还覆盖前台安静、后台终态通知、三种 outcome 的 message-first exact-once、status-first、timeout fallback 和 logout cleanup。Android remote Push 回归还固定 patch-ready 前不启动 sync、cold pending event 优先使用 `remote_push`、前台 presentation 抑制、opened exact conversation、unmatched list fallback、logout/identity switch stale fence、resume retention 与 registration refresh。
+- `tests/unit/app_runtime_notification_test.dart`：验证 realtime notification / sync hint 只调度 SDK sync、dirty/gap/repair 和通知 / runtime 分发边界，不直接写 list/detail authoritative state；同时从 `loginWithLocalCredential` 身份切换入口证明新 session epoch 会自动调度自己的 `startup` reliable sync，并在不由测试手动调用 coordinator、sync service 或 conversation-after 的情况下把 committed unread 和 hydrated preview 发布到会话列表。通知路由只受 session epoch 约束，不能被同身份下并发的列表 refresh generation 误取消；还覆盖前台任意页面全局静默、后台终态通知、三种 outcome 的 message-first exact-once、status-first、timeout fallback 和 logout cleanup。Android remote Push 回归还固定 patch-ready 前不启动 sync、cold pending event 优先使用 `remote_push`、provider/App presentation disposition、opened exact conversation、unmatched list fallback、logout/identity switch stale fence、resume retention 与 registration refresh。
 - `tests/unit/agent_terminal_notification_widget_test.dart`：验证所有业务终态与真实运行失败在前台均不形成 App 内横幅，并覆盖 message-first 语义胜出和 dispose timer cleanup。
 - `tests/unit/conversation_list_provider_test.dart`：验证 base row 先于 enrichment 展示、patch upsert/remove/reorder/repair 全部按 canonical ID、clear 后不回填、snapshot bootstrap guard、local hidden waterline 不被旧 patch 冲破、不同 canonical ID 不因 DID/Handle 相同而合并、selected state 仅保存 ID，以及所有 recents 发布入口应用同一 read presentation waterline。
 - `tests/unit/conversation_list_provider_test.dart` 还必须验证 patch-ready single-flight、订阅先于 seed、seed 期间 patch 不丢不重、stream error/close 单次重建，以及同 DID auth generation 切换后旧 patch / Profile 异步结果失效。

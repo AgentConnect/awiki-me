@@ -41,7 +41,8 @@ class RemotePushInitializationException implements Exception {
   }
 }
 
-class AliyunEmasRemotePushClient implements RemotePushClient {
+class AliyunEmasRemotePushClient
+    implements RemotePushClient, RemotePushPresentationTargetClient {
   AliyunEmasRemotePushClient({
     AliyunEmasPlatform? platform,
     this.clientPlatform = 'android',
@@ -76,6 +77,11 @@ class AliyunEmasRemotePushClient implements RemotePushClient {
     if (ids.isEmpty) return;
     await _platform.acknowledgePendingEvents(ids);
     _pendingEvents.removeWhere((deliveryId, _) => ids.contains(deliveryId));
+  }
+
+  @override
+  Future<void> setActiveNotificationTargetReference(String? targetReference) {
+    return _platform.setActiveNotificationTargetReference(targetReference);
   }
 
   @override
@@ -171,7 +177,9 @@ class AliyunEmasRemotePushClient implements RemotePushClient {
 
   void _retainPendingEvent(RemotePushEvent event) {
     if (event.kind != RemotePushEventKind.notificationOpened &&
-        event.kind != RemotePushEventKind.messageReceived) {
+        event.kind != RemotePushEventKind.messageReceived &&
+        event.kind != RemotePushEventKind.notificationReceived &&
+        event.kind != RemotePushEventKind.notificationReceivedInApp) {
       return;
     }
     final payload = <String, Object?>{};

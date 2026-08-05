@@ -51,12 +51,49 @@ class RemotePushMessageSyncCoordinator {
     }
     _activeSession = context;
     _mergePendingEvents();
-    return _serialize(_drainOneBatch);
+    return _serialize(() => _activateAndDrain(context));
   }
 
   void deactivateSession(RemotePushSessionContext context) {
     if (context.matches(_activeSession)) {
       _activeSession = null;
+      unawaited(
+        _serialize(() async {
+          if (_activeSession == null && !_disposed) {
+            await _setActiveNotificationTargetReference(null);
+          }
+        }),
+      );
+    }
+  }
+
+  Future<void> _activateAndDrain(RemotePushSessionContext context) {
+    if (!_isCurrent(context)) return Future<void>.value();
+    if (_client case final RemotePushPresentationTargetClient targetClient) {
+      return _installTargetAndDrain(context, targetClient);
+    }
+    return _drainOneBatch();
+  }
+
+  Future<void> _installTargetAndDrain(
+    RemotePushSessionContext context,
+    RemotePushPresentationTargetClient targetClient,
+  ) async {
+    try {
+      await targetClient.setActiveNotificationTargetReference(
+        remotePushOpaqueTargetReference(context.ownerDid),
+      );
+    } on Object {
+      // Provider presentation remains enabled when the session fence cannot
+      // be installed, so activation must remain best-effort.
+    }
+    if (!_isCurrent(context)) return;
+    await _drainOneBatch();
+  }
+
+  Future<void> _setActiveNotificationTargetReference(String? value) async {
+    if (_client case final RemotePushPresentationTargetClient targetClient) {
+      await targetClient.setActiveNotificationTargetReference(value);
     }
   }
 
@@ -123,14 +160,21 @@ class RemotePushMessageSyncCoordinator {
     final context = _activeSession;
     if (context == null || _queuedEvents.isEmpty || _disposed) return;
 
-    final batch = List<RemotePushEvent>.unmodifiable(_queuedEvents.values);
+    final batch = List<RemotePushEvent>.unmodifiable(
+      _queuedEvents.values.where(
+        (event) => _eventTargetsSession(event, context),
+      ),
+    );
+    if (batch.isEmpty) return;
     final deliveryIds = batch
         .map((event) => event.deliveryId)
         .toList(growable: false);
 
     final RemotePushSyncReceipt receipt;
     try {
-      receipt = await _sync.requestRemotePushSync();
+      receipt = await _sync.requestRemotePushSync(
+        presentation: _presentationDisposition(batch),
+      );
     } on Object {
       return;
     }
@@ -167,6 +211,29 @@ class RemotePushMessageSyncCoordinator {
     if (!_isCurrent(context)) return;
   }
 
+  bool _eventTargetsSession(
+    RemotePushEvent event,
+    RemotePushSessionContext context,
+  ) {
+    final extraMap = event.payload['extraMap'];
+    if (extraMap is! Map) return true;
+    if (extraMap['ty'] case final String type
+        when _ordinaryMessageTypes.contains(type)) {
+      final targetReference = extraMap['ts'];
+      if (targetReference is! String ||
+          !_opaqueTargetPattern.hasMatch(targetReference)) {
+        return true;
+      }
+      try {
+        return remotePushOpaqueTargetReference(context.ownerDid) ==
+            targetReference;
+      } on ArgumentError {
+        return false;
+      }
+    }
+    return true;
+  }
+
   RemotePushEvent? _lastOpenedEvent(List<RemotePushEvent> batch) {
     for (var index = batch.length - 1; index >= 0; index -= 1) {
       final event = batch[index];
@@ -175,6 +242,18 @@ class RemotePushMessageSyncCoordinator {
       }
     }
     return null;
+  }
+
+  RemotePushPresentationDisposition _presentationDisposition(
+    List<RemotePushEvent> batch,
+  ) {
+    for (final event in batch) {
+      if (event.kind == RemotePushEventKind.notificationReceived ||
+          event.kind == RemotePushEventKind.notificationOpened) {
+        return RemotePushPresentationDisposition.providerPresented;
+      }
+    }
+    return RemotePushPresentationDisposition.appPresentationRequired;
   }
 
   String? _resolveConversationId(
@@ -275,9 +354,19 @@ class RemotePushMessageSyncCoordinator {
       await subscription.cancel();
     }
     await _operationTail;
+    try {
+      await _setActiveNotificationTargetReference(null);
+    } on Object {
+      // The native bridge may already be detached during application teardown.
+    }
     _queuedEvents.clear();
   }
 }
 
 final RegExp _opaqueMessagePattern = RegExp(r'^message_[A-Za-z0-9_-]{24}$');
+final RegExp _opaqueTargetPattern = RegExp(r'^target_[A-Za-z0-9_-]{24}$');
+const Set<String> _ordinaryMessageTypes = <String>{
+  'direct_message',
+  'group_message',
+};
 const int _maxSupportedExpirySeconds = 8640000000000;

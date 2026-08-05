@@ -11,8 +11,6 @@ abstract class NotificationFacade {
     NotificationTarget? target,
   });
 
-  Future<void> showInAppBanner({required String title, required String body});
-
   Future<void> updateBadgeCount(int count);
 
   Future<void> dispose();

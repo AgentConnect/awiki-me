@@ -4405,16 +4405,6 @@ class FakeNotificationFacade implements NotificationFacade {
   }
 
   @override
-  Future<void> showInAppBanner({
-    required String title,
-    required String body,
-  }) async {
-    inAppNotificationCount += 1;
-    lastInAppTitle = title;
-    lastInAppBody = body;
-  }
-
-  @override
   Future<void> updateBadgeCount(int count) async {
     lastBadgeCount = count;
   }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/app_presentation_service.dart';
 import 'package:awiki_me/src/application/message_sync_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
@@ -24,6 +25,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/agent_terminal_not
 import 'package:awiki_me/src/presentation/app_shell/providers/app_lifecycle_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/chat/chat_provider.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -150,6 +152,136 @@ void main() {
     expect(receipt.canAcknowledge, isFalse);
   });
 
+  test(
+    'remote Push suppresses transient failure presentation while retrying',
+    () async {
+      final container = _container(
+        FakeAwikiGateway(),
+        _FailingMessageSyncService(),
+        failureBackoff: const Duration(minutes: 1),
+        failureSurfaceDelay: const Duration(seconds: 30),
+      );
+      addTearDown(container.dispose);
+
+      final receipt = await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync();
+      final state = container.read(messageSyncCoordinatorProvider);
+
+      expect(receipt.disposition, RemotePushSyncDisposition.retryableFailure);
+      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+      expect(state.transientFailurePresentationSuppressed, isTrue);
+      expect(state.automaticRetryPending, isTrue);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
+    },
+  );
+
+  test(
+    'intercepted foreground Push stays silent outside its conversation',
+    () async {
+      final committed = _committedIncoming(
+        eventId: 'event-foreground-push',
+        logicalId: 'logical-foreground-push',
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[committed],
+          ),
+        ),
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync(
+            presentation:
+                RemotePushPresentationDisposition.appPresentationRequired,
+          );
+      await pumpEventQueue();
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test(
+    'intercepted foreground Push stays silent in the visible conversation',
+    () async {
+      final committed = _committedIncoming(
+        eventId: 'event-visible-push',
+        logicalId: 'logical-visible-push',
+      );
+      final notifications = FakeNotificationFacade();
+      final container = _container(
+        FakeAwikiGateway(),
+        FakeMessageSyncService(
+          deltaResult: MessageSyncOutcome(
+            status: MessageSyncStatus.changed,
+            eventsApplied: 1,
+            pagesFetched: 1,
+            committedIncomingMessages: <CommittedIncomingMessage>[committed],
+          ),
+        ),
+        notifications: notifications,
+        syncV2ReadEnabled: true,
+      );
+      addTearDown(container.dispose);
+      container
+          .read(chatThreadsProvider.notifier)
+          .markConversationVisible(
+            ConversationSummary(
+              threadId: 'dm:peer-scope:v1:peer',
+              conversationId: 'dm:peer-scope:v1:peer',
+              displayName: 'Peer',
+              lastMessagePreview: '',
+              lastMessageAt: DateTime.utc(2026, 7, 30, 9),
+              unreadCount: 0,
+              isGroup: false,
+              targetDid: 'did:test:peer',
+            ),
+          );
+
+      await container
+          .read(messageSyncCoordinatorProvider.notifier)
+          .requestRemotePushSync(
+            presentation:
+                RemotePushPresentationDisposition.appPresentationRequired,
+          );
+      await pumpEventQueue();
+
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notifications.systemCalls, 0);
+    },
+  );
+
+  test('normal sync keeps transient failure presentation enabled', () async {
+    final container = _container(
+      FakeAwikiGateway(),
+      _FailingMessageSyncService(),
+      failureBackoff: const Duration(minutes: 1),
+      failureSurfaceDelay: const Duration(seconds: 30),
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(messageSyncCoordinatorProvider.notifier)
+        .requestSync('foreground_periodic', immediate: true);
+    final state = container.read(messageSyncCoordinatorProvider);
+
+    expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+    expect(state.transientFailurePresentationSuppressed, isFalse);
+    expect(state.automaticRetryPending, isTrue);
+    expect(state.shouldSurfaceRetryableFailure, isFalse);
+  });
+
   test('remote Push completion after an identity change is stale', () async {
     final completion = Completer<void>();
     final sync = FakeMessageSyncService()..syncNowCompleter = completion;
@@ -221,6 +353,42 @@ void main() {
   );
 
   test(
+    'remote Push joining app resume suppresses its transient failure state',
+    () async {
+      final completion = Completer<void>();
+      final sync = FakeMessageSyncService()
+        ..syncNowCompleter = completion
+        ..nextDeltaError = StateError('wake_network_transition');
+      final container = _container(
+        FakeAwikiGateway(),
+        sync,
+        failureBackoff: const Duration(minutes: 1),
+        failureSurfaceDelay: const Duration(seconds: 30),
+      );
+      addTearDown(container.dispose);
+      final coordinator = container.read(
+        messageSyncCoordinatorProvider.notifier,
+      );
+
+      final resumed = coordinator.requestSync('app_resumed', immediate: true);
+      await pumpEventQueue();
+      final remotePush = coordinator.requestRemotePushSync();
+      completion.complete();
+
+      final receipt = await remotePush;
+      await resumed;
+      final state = container.read(messageSyncCoordinatorProvider);
+
+      expect(receipt.disposition, RemotePushSyncDisposition.retryableFailure);
+      expect(sync.syncReasons, ['app_resumed']);
+      expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
+      expect(state.transientFailurePresentationSuppressed, isTrue);
+      expect(state.automaticRetryPending, isTrue);
+      expect(state.shouldSurfaceRetryableFailure, isFalse);
+    },
+  );
+
+  test(
     'queued suppression is sticky when a later normal request coalesces',
     () async {
       final first = _committedIncoming(
@@ -281,7 +449,7 @@ void main() {
 
       expect(receipt.disposition, RemotePushSyncDisposition.succeeded);
       expect(sync.syncReasons, ['startup', 'websocket_hint']);
-      expect(notifications.inAppCalls, 1);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notifications.systemCalls, 0);
     },
   );
@@ -1173,6 +1341,9 @@ void main() {
         syncV2ReadEnabled: true,
       );
       addTearDown(container.dispose);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
       final coordinator = container.read(
         messageSyncCoordinatorProvider.notifier,
       );
@@ -1212,9 +1383,8 @@ void main() {
       );
       await pumpEventQueue();
 
-      expect(notifications.inAppCalls, 1);
-      expect(notifications.lastInAppTitle, 'Peer');
-      expect(notifications.lastInAppBody, 'committed hello');
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notifications.systemCalls, 1);
     },
   );
 
@@ -1252,6 +1422,9 @@ void main() {
         productLocalStore: localStore,
       );
       addTearDown(container.dispose);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
 
       await container
           .read(messageSyncCoordinatorProvider.notifier)

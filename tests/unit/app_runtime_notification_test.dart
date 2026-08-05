@@ -1007,7 +1007,7 @@ void main() {
       expect(gateway.lastFetchedLocalDmPeerDid, conversation.targetDid);
     });
 
-    test('前台收到消息时显示真实 UI feedback', () async {
+    test('前台收到消息时静默同步，不显示 UI feedback 或系统通知', () async {
       gateway.nextRealtimeUpdate = buildUpdate();
       container
           .read(appLifecycleProvider.notifier)
@@ -1016,10 +1016,25 @@ void main() {
       await activate();
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
 
-      final feedback = container.read(uiFeedbackProvider);
-      expect(feedback?.message.id, 'newMessageArrived');
-      expect(feedback?.detail, 'Peer：hello');
-      expect(feedback?.danger, isFalse);
+      expect(container.read(uiFeedbackProvider), isNull);
+      expect(notificationFacade.lastInAppTitle, isNull);
+      expect(notificationFacade.lastSystemTitle, isNull);
+    });
+
+    test('前台当前可见会话收到消息时不显示全局 UI feedback', () async {
+      final update = buildUpdate();
+      gateway.nextRealtimeUpdate = update;
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await activate();
+      container
+          .read(chatThreadsProvider.notifier)
+          .markConversationVisible(update.conversationHint!);
+
+      await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
+
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
       expect(notificationFacade.lastSystemTitle, isNull);
     });
@@ -2488,7 +2503,7 @@ void main() {
       expect(messageSyncService.syncReasons, contains('realtime_message'));
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
       expect(container.read(conversationListProvider).conversations, isEmpty);
-      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello');
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
@@ -2535,7 +2550,7 @@ void main() {
       );
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups.single.groupId, 'group-1');
-      expect(container.read(uiFeedbackProvider)?.detail, 'Peer：hello group');
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.lastInAppTitle, isNull);
     });
 
@@ -2614,7 +2629,8 @@ void main() {
       expect(container.read(chatThreadProvider('dm:1')).messages, isEmpty);
       expect(container.read(conversationListProvider).conversations, isEmpty);
       expect(container.read(groupProvider).groups, isEmpty);
-      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.inAppCalls, 0);
+      expect(container.read(uiFeedbackProvider), isNull);
       expect(notificationFacade.systemCalls, 0);
 
       messageSyncService.deltaResult = const MessageSyncOutcome(
@@ -2646,7 +2662,8 @@ void main() {
       }
 
       expect(container.read(groupProvider).groups, isEmpty);
-      expect(notificationFacade.inAppCalls, 1);
+      expect(notificationFacade.inAppCalls, 0);
+      expect(container.read(uiFeedbackProvider), isNull);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2677,15 +2694,8 @@ void main() {
       await realtimeGateway.emit(const <String, Object?>{'type': 'message'});
       await pumpEventQueue();
 
-      expect(notificationFacade.inAppCalls, 1);
-      expect(
-        container.read(uiFeedbackProvider)?.detail,
-        contains('Encrypted Peer'),
-      );
-      expect(
-        container.read(uiFeedbackProvider)?.detail,
-        contains('existing secure realtime payload'),
-      );
+      expect(notificationFacade.inAppCalls, 0);
+      expect(container.read(uiFeedbackProvider), isNull);
 
       gateway.nextRealtimeUpdate = RealtimeUpdate(
         ownerDid: 'did:test:me',
@@ -2733,11 +2743,8 @@ void main() {
         container.read(groupProvider).groups.single.groupId,
         'secure-group',
       );
-      expect(notificationFacade.inAppCalls, 1);
-      expect(
-        container.read(uiFeedbackProvider)?.detail,
-        contains('Encrypted Peer'),
-      );
+      expect(notificationFacade.inAppCalls, 0);
+      expect(container.read(uiFeedbackProvider), isNull);
     });
 
     test('实时消息更新最近会话但不会覆盖未读 @ 我状态', () async {
@@ -4589,7 +4596,10 @@ final class _RecordingRemotePushSyncPort implements RemotePushSyncPort {
   int calls = 0;
 
   @override
-  Future<RemotePushSyncReceipt> requestRemotePushSync() async {
+  Future<RemotePushSyncReceipt> requestRemotePushSync({
+    RemotePushPresentationDisposition presentation =
+        RemotePushPresentationDisposition.providerPresented,
+  }) async {
     calls += 1;
     beforeReturn?.call();
     return receipt;

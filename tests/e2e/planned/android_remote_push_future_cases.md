@@ -21,18 +21,27 @@ The future runner must attest all of the following in one isolated scenario:
    result, with no `PUSH_20110` failure reaching Flutter. Evidence may contain
    only non-sensitive identifiers or suffixes.
 2. Send one real direct message through Message Service outbox and EMAS.
-3. With the App foregrounded, treat Push as a dirty hint, complete Core sync,
-   project one canonical message, and display no App-owned notification.
-4. With the App backgrounded, display exactly one EMAS `NOTICE`.
-5. Terminate the App process, tap the delivered notification, complete Core
+3. With the App foregrounded on the same visible conversation, intercept the
+   matching-account ordinary `NOTICE`, complete Core sync, project one
+   canonical message, and display neither a system notification nor a global
+   App toast. Repeat while scrolled away from the bottom and prove that only
+   the existing in-chat new-message affordance appears.
+4. With the App foregrounded on another conversation or page, intercept the
+   matching-account ordinary `NOTICE`, complete Core sync, update recents and
+   unread state, and display no Toast, Banner, or system notification.
+5. Repeat with a missing or mismatched opaque target and prove that native
+   interception fails open to provider presentation without exposing a raw DID
+   or conversation identifier.
+6. With the App backgrounded, display exactly one EMAS `NOTICE`.
+7. Terminate the App process, tap the delivered notification, complete Core
    sync, and open the exact conversation derived from the newly committed
    message.
-6. Deliver the same logical message through WebSocket and Push and prove
+8. Deliver the same logical message through WebSocket and Push and prove
    convergence to one committed canonical message and one presentation.
-7. Repeat while offline: the native event must remain pending and
+9. Repeat while offline: the native event must remain pending and
    unacknowledged. Restore connectivity, complete sync and any required
    routing, then prove that the exact delivery is acknowledged.
-8. Log out, prove the active installation is disabled, send again, and prove
+10. Log out, prove the active installation is disabled, send again, and prove
    the old-DID installation is excluded from delivery.
 
 Provider API success, Message Service outbox `done`, a fake Push facade,

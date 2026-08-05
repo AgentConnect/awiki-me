@@ -43,6 +43,7 @@ import 'account_state_sync_coordinator_provider.dart';
 import 'agent_terminal_notification_provider.dart';
 import 'message_sync_coordinator_provider.dart';
 import 'navigation_provider.dart';
+import 'ordinary_message_presentation_policy.dart';
 import 'remote_push_coordinator_provider.dart';
 import 'selected_conversation_provider.dart';
 import 'session_provider.dart';
@@ -1387,7 +1388,10 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     ConversationSummary conversationHint,
   ) {
     final message = update.message;
-    if (message == null) {
+    if (message == null || !isOrdinaryMessagePresentationEligible(message)) {
+      return;
+    }
+    if (ref.read(appLifecycleProvider) == AppLifecycleState.resumed) {
       return;
     }
     final title = _notificationTitle(update, conversationHint);
@@ -1422,28 +1426,14 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     final body = preview.isNotEmpty
         ? preview
         : AppMessage.newMessageArrived().resolveForFallback();
-    final isForeground =
-        ref.read(appLifecycleProvider) == AppLifecycleState.resumed;
-    if (isForeground) {
-      final isAgentMessage = message.senderDid.trim().toLowerCase().contains(
-        ':agent:',
-      );
-      if (isAgentMessage) {
-        return;
-      }
-      ref
-          .read(uiFeedbackProvider.notifier)
-          .showInfo(AppMessage.newMessageArrived(), detail: '$title：$body');
-    } else {
-      final target = NotificationTarget(
-        storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
-        ownerDid: expectedEpoch.ownerDid,
-        conversationId: conversationHint.conversationId,
-      );
-      ref
-          .read(notificationFacadeProvider)
-          .showSystemNotification(title: title, body: body, target: target);
-    }
+    final target = NotificationTarget(
+      storageScopeId: ref.read(activeAppTenantProvider).storageScopeId,
+      ownerDid: expectedEpoch.ownerDid,
+      conversationId: conversationHint.conversationId,
+    );
+    ref
+        .read(notificationFacadeProvider)
+        .showSystemNotification(title: title, body: body, target: target);
   }
 
   void _showAgentTerminalNotification(AgentTerminalNotification notification) {

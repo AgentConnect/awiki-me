@@ -144,6 +144,32 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
   });
 
+  testWidgets('AppShell 不展示远程通知唤醒产生的瞬态同步失败', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.retryableFailure,
+                consecutiveRetryableFailures: 1,
+                automaticRetryPending: true,
+                transientFailurePresentationSuppressed: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
+  });
+
   testWidgets('AppShell 持续时间阈值后显示全局同步错误', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -158,6 +184,7 @@ void main() {
                 status: MessageSyncCoordinatorStatus.retryableFailure,
                 consecutiveRetryableFailures: 2,
                 retryableFailureVisible: true,
+                transientFailurePresentationSuppressed: true,
               ),
             ),
           ),
