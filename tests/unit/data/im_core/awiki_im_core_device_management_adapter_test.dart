@@ -28,7 +28,7 @@ void main() {
           }) async => _coreProgress(),
     );
 
-    await adapter.sendJoinSmsOtp(
+    final receipt = await adapter.sendJoinSmsOtp(
       handle: ' Alice.AWIKI.INFO ',
       phone: ' +8613800138000 ',
     );
@@ -42,7 +42,9 @@ void main() {
       'purpose': 'awiki.device.join.v1',
       'target_handle': 'alice',
       'target_handle_domain': 'awiki.info',
+      'rate_limit_seconds': 60,
     });
+    expect(receipt.retryAfterSeconds, 60);
   });
 
   test('maps SMS 429 Retry-After to a bounded typed error', () async {

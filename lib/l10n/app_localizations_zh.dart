@@ -1025,6 +1025,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLanguageEnglish => 'English';
 
   @override
+  String get settingsDisplayAndWindow => '显示与窗口';
+
+  @override
+  String get settingsDisplayScale => '界面缩放';
+
+  @override
+  String get settingsDisplayScaleReset => '恢复 100%';
+
+  @override
+  String get settingsWindowPlacementReset => '重置窗口大小和位置';
+
+  @override
   String get settingsPushNotification => '消息推送通知';
 
   @override

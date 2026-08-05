@@ -716,16 +716,31 @@ class AgentsController extends StateNotifier<AgentsState> {
     final visible = fullyMerged
         .where((agent) => agent.activeState == 'active')
         .toList(growable: false);
+    final authoritativeVisible = topology
+        .where((agent) => agent.activeState == 'active')
+        .toList(growable: false);
+    final cacheOwner = _accountAgentCacheOwner(
+      ownerIdentityId: inventory.binding.ownerIdentityId,
+      accountId: inventory.binding.accountId,
+    );
+    final pendingRuntimeCreations =
+        await _reconcileAuthoritativeRuntimeCreationIntents(
+          cacheOwner: cacheOwner,
+          authoritativeAgents: authoritativeVisible,
+          projectedAgents: visible,
+          isCurrent: isSessionCurrent,
+        );
+    if (pendingRuntimeCreations == null) {
+      return;
+    }
     state = state.copyWith(
       agents: visible,
       selectedAgentDid: _nextSelection(visible),
       isLoading: false,
+      pendingRuntimeCreations: pendingRuntimeCreations,
       clearError: true,
     );
-    _loadedCacheOwner = _accountAgentCacheOwner(
-      ownerIdentityId: inventory.binding.ownerIdentityId,
-      accountId: inventory.binding.accountId,
-    );
+    _loadedCacheOwner = cacheOwner;
     _loadedCacheOperation = _captureOwnerOperation();
     _syncControlEventSubscriptions(visible);
   }
@@ -791,13 +806,17 @@ class AgentsController extends StateNotifier<AgentsState> {
       }
       _pruneConfirmedTopologyControlOverlays(remoteAgents);
       final agents = _applyTopologyControlOverlays(statusMergedAgents);
-      await _reconcileRuntimeAgentIdentityRoutes(cacheOwner, agents);
-      if (!_isCurrentCacheOwner(cacheOwner, operation: ownerOperation)) {
+      final pendingRuntimeCreations =
+          await _reconcileAuthoritativeRuntimeCreationIntents(
+            cacheOwner: cacheOwner,
+            authoritativeAgents: remoteAgents,
+            projectedAgents: agents,
+            isCurrent: () =>
+                _isCurrentCacheOwner(cacheOwner, operation: ownerOperation),
+          );
+      if (pendingRuntimeCreations == null) {
         return;
       }
-      final pendingRuntimeCreations = _pendingCreationsAfterAgents(
-        remoteAgents,
-      );
       final pendingDaemonUpgrades = _pendingDaemonUpgradesAfterAgents(agents);
       final cancellingDaemonUpgrades = _cancellingDaemonUpgradesAfterAgents(
         agents,
@@ -871,6 +890,26 @@ class AgentsController extends StateNotifier<AgentsState> {
 
   void clearSelection() {
     state = state.copyWith(clearSelection: true);
+  }
+
+  Future<List<PendingRuntimeCreation>?>
+  _reconcileAuthoritativeRuntimeCreationIntents({
+    required String cacheOwner,
+    required List<AgentSummary> authoritativeAgents,
+    required List<AgentSummary> projectedAgents,
+    required bool Function() isCurrent,
+  }) async {
+    if (!isCurrent()) {
+      return null;
+    }
+    await _reconcileRuntimeAgentIdentityRoutes(cacheOwner, projectedAgents);
+    if (!isCurrent()) {
+      return null;
+    }
+    // Control overlays can make a runtime visible early, but only an
+    // authoritative Inventory row with a canonical Direct route may complete
+    // the device-local creation intent.
+    return _pendingCreationsAfterAgents(authoritativeAgents);
   }
 
   Future<void> _reconcileRuntimeAgentIdentityRoutes(
@@ -3681,6 +3720,7 @@ class AgentsController extends StateNotifier<AgentsState> {
     for (final pending in state.pendingRuntimeCreations) {
       if (_hasMatchingRuntimeAgentWithConfirmedRoute(agents, pending)) {
         _runtimeCreationTimeouts.remove(pending.requestId)?.cancel();
+        _runtimeCreationReconcileTimers.remove(pending.requestId)?.cancel();
         continue;
       }
       retained.add(pending);

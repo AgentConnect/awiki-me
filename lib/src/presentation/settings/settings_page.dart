@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
@@ -21,6 +22,8 @@ import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'language_selection_page.dart';
+import 'display_settings_page.dart';
+import '../shared/display_scale.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
@@ -42,6 +45,10 @@ class SettingsPage extends ConsumerWidget {
     final messageSync = ref.watch(messageSyncCoordinatorProvider);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
+    final displayScale = ref.watch(displayScaleProvider);
+    final isDesktopPlatform =
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
     Widget? leading(Widget icon) => responsive.usesDesktopLayout ? null : icon;
@@ -163,6 +170,29 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
+          if (isDesktopPlatform) ...<Widget>[
+            const AppSectionDivider(),
+            AppListTile(
+              key: const Key('settings-display-row'),
+              title: l10n.settingsDisplayAndWindow,
+              leading: leading(
+                const _SettingsIcon(icon: CupertinoIcons.textformat_size),
+              ),
+              trailing: Text(
+                '${(displayScale * 100).round()}%',
+                key: const Key('settings-display-value'),
+                style: TextStyle(
+                  color: theme.secondaryText,
+                  fontSize: context.awikiResponsive.bodySm,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () => AppNavigator.push<void>(
+                context,
+                (_) => const DisplaySettingsPage(),
+              ),
+            ),
+          ],
         ],
       ),
       SizedBox(height: responsive.spacing(14)),
@@ -328,6 +358,19 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            if (isDesktopPlatform)
+              _QuietSettingsRow(
+                key: const Key('settings-display-row'),
+                icon: CupertinoIcons.textformat_size,
+                iconKey: const Key('settings-display-icon'),
+                title: l10n.settingsDisplayAndWindow,
+                trailingText: '${(displayScale * 100).round()}%',
+                height: optionRowHeight,
+                onTap: () => AppNavigator.push<void>(
+                  context,
+                  (_) => const DisplaySettingsPage(),
+                ),
+              ),
           ],
         ),
         _QuietSettingsSectionTitle(

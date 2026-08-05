@@ -1080,6 +1080,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguageEnglish => 'English';
 
   @override
+  String get settingsDisplayAndWindow => 'Display & window';
+
+  @override
+  String get settingsDisplayScale => 'Interface scale';
+
+  @override
+  String get settingsDisplayScaleReset => 'Reset to 100%';
+
+  @override
+  String get settingsWindowPlacementReset => 'Reset window size and position';
+
+  @override
   String get settingsPushNotification => 'Push notifications';
 
   @override

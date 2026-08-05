@@ -5,14 +5,32 @@ import 'dart:async';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/app/tenant_aware_awiki_me_app.dart';
+import 'package:awiki_me/src/application/desktop_startup_presentation_service.dart';
+import 'package:awiki_me/src/presentation/shared/desktop_startup_ready_boundary.dart';
+import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+final class _RecordingDesktopStartupPresentationService
+    implements DesktopStartupPresentationService {
+  int callCount = 0;
+
+  @override
+  Future<void> presentReadyContent() async {
+    callCount += 1;
+  }
+}
 
 void main() {
   testWidgets('bootstrap error app renders only redacted diagnostics', (
     tester,
   ) async {
+    final presentation = _RecordingDesktopStartupPresentationService();
     await tester.pumpWidget(
-      buildTenantBootstrapErrorApp(StateError('native bridge mismatch')),
+      buildTenantBootstrapErrorApp(
+        StateError('native bridge mismatch'),
+        startupPresentationService: presentation,
+      ),
     );
 
     expect(find.text('AWikiMe failed to start.'), findsOneWidget);
@@ -20,6 +38,7 @@ void main() {
     expect(find.text('Diagnostic code: bootstrap_failed'), findsOneWidget);
     expect(find.text('Copy diagnostics'), findsOneWidget);
     expect(find.text('Exit'), findsOneWidget);
+    expect(presentation.callCount, 1);
     expect(tester.takeException(), isNull);
   });
 
@@ -68,7 +87,7 @@ void main() {
     await tester.pumpWidget(
       buildTenantBootstrapLoadingApp(AppBootstrapProgress.preparing),
     );
-    expect(find.text('AWiki'), findsOneWidget);
+    expect(find.byType(AwikiMeStartupSplash), findsOneWidget);
     expect(find.textContaining('Upgrading local data'), findsNothing);
 
     await tester.pumpWidget(
@@ -83,6 +102,37 @@ void main() {
     );
     expect(find.text('Finishing local data upgrade…'), findsOneWidget);
   });
+
+  testWidgets(
+    'desktop bootstrap uses a neutral placeholder instead of splash',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await tester.pumpWidget(
+          buildTenantBootstrapLoadingApp(AppBootstrapProgress.preparing),
+        );
+
+        expect(find.byType(AwikiMeStartupSplash), findsNothing);
+        expect(
+          find.byKey(const Key('app-desktop-startup-placeholder')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('startup-splash-brand')), findsNothing);
+        expect(find.byKey(const Key('startup-splash-feature-0')), findsNothing);
+        expect(find.byType(DesktopStartupReadyBoundary), findsNothing);
+
+        await tester.pumpWidget(
+          buildTenantBootstrapLoadingApp(
+            AppBootstrapProgress.upgradingLocalState,
+          ),
+        );
+        expect(find.text('Upgrading local data securely…'), findsOneWidget);
+        expect(find.byType(AwikiMeStartupSplash), findsNothing);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 
   test(
     'tenant runtime opens only after previous dispose barrier completes',

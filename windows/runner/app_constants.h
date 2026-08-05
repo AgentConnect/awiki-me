@@ -24,9 +24,14 @@ inline constexpr char kDesktopShellChannel[] = "ai.awiki.awikime/desktop_shell";
 inline constexpr char kAttachmentPickerChannel[] =
     "ai.awiki.awikime/attachment_picker";
 inline constexpr char kScopeSecretChannel[] = "ai.awiki.awikime/scope_secret";
+inline constexpr char kDesktopWindowChannel[] =
+    "ai.awiki.awikime/desktop_window";
+inline constexpr char kDesktopStartupChannel[] =
+    "ai.awiki.awikime/desktop_startup";
 
 inline constexpr UINT kTrayCallbackMessage = WM_APP + 0x31;
 inline constexpr UINT kExitReadyMessage = WM_APP + 0x32;
+inline constexpr UINT_PTR kStartupPresentationTimerId = 0x7103;
 inline constexpr UINT kTrayOpenCommand = 0x7101;
 inline constexpr UINT kTrayExitCommand = 0x7102;
 

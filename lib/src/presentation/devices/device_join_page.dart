@@ -13,6 +13,7 @@ import '../../application/ports/device_management_core_port.dart';
 import '../../domain/entities/device_management.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
+import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_top_bar.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
@@ -20,6 +21,10 @@ import '../app_shell/providers/app_runtime_provider.dart';
 import 'device_labels.dart';
 import 'devices_provider.dart';
 import '../recovery/handle_recovery_provider.dart';
+
+final deviceJoinClockProvider = Provider<DateTime Function()>(
+  (ref) => DateTime.now,
+);
 
 class DeviceJoinPage extends ConsumerStatefulWidget {
   const DeviceJoinPage({super.key, this.autoPoll = true});
@@ -36,8 +41,11 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   final _otpController = TextEditingController();
   Timer? _pollTimer;
   Timer? _otpCooldownTimer;
+  final Map<String, DateTime> _otpRetryAtByTarget = <String, DateTime>{};
+  final Set<String> _rateLimitedOtpTargets = <String>{};
   bool _sendingOtp = false;
   bool _otpSendFailed = false;
+  bool _otpRateLimited = false;
   int _otpRetryAfterSeconds = 0;
   bool _activationPending = false;
   bool _activationFailed = false;
@@ -47,6 +55,8 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   @override
   void initState() {
     super.initState();
+    _handleController.addListener(_handleOtpTargetChanged);
+    _phoneController.addListener(_handleOtpTargetChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await ref.read(devicesProvider.notifier).loadNewDevice();
@@ -64,6 +74,8 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   void dispose() {
     _pollTimer?.cancel();
     _otpCooldownTimer?.cancel();
+    _handleController.removeListener(_handleOtpTargetChanged);
+    _phoneController.removeListener(_handleOtpTargetChanged);
     _handleController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
@@ -107,7 +119,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
               ),
               const SizedBox(height: 12),
             ],
-            if (_otpRetryAfterSeconds > 0) ...<Widget>[
+            if (_otpRateLimited && _otpRetryAfterSeconds > 0) ...<Widget>[
               _DeviceJoinNotice(
                 message: context.l10n.deviceJoinOtpRateLimited(
                   _otpRetryAfterSeconds,
@@ -133,6 +145,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   }
 
   Widget _buildStartForm(BuildContext context, DevicesState state) {
+    final responsive = context.awikiResponsive;
     return AppCardSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -143,13 +156,6 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           ),
           const SizedBox(height: 16),
           AppTextField(
-            controller: _handleController,
-            label: context.l10n.deviceJoinHandle,
-            placeholder: 'alice',
-            semanticsIdentifier: 'multi-device-join-handle',
-          ),
-          const SizedBox(height: 12),
-          AppTextField(
             controller: _phoneController,
             label: context.l10n.deviceJoinPhone,
             placeholder: '+8613800138000',
@@ -158,40 +164,45 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           ),
           const SizedBox(height: 12),
           AppTextField(
+            controller: _handleController,
+            label: context.l10n.deviceJoinHandle,
+            placeholder: 'alice',
+            semanticsIdentifier: 'multi-device-join-handle',
+          ),
+          const SizedBox(height: 12),
+          AppTextField(
             controller: _otpController,
             label: context.l10n.deviceJoinOtp,
             placeholder: '123456',
             keyboardType: TextInputType.number,
             semanticsIdentifier: 'multi-device-join-otp',
+            suffix: AppInlineActionButton(
+              label: _otpRetryAfterSeconds > 0
+                  ? context.l10n.deviceJoinResendOtpIn(_otpRetryAfterSeconds)
+                  : context.l10n.deviceJoinSendOtp,
+              semanticsIdentifier: 'multi-device-send-otp',
+              isLoading: _sendingOtp,
+              onPressed:
+                  state.isActionPending ||
+                      _sendingOtp ||
+                      _otpRetryAfterSeconds > 0
+                  ? null
+                  : _sendOtp,
+            ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: AppSecondaryButton(
-                  label: _otpRetryAfterSeconds > 0
-                      ? context.l10n.deviceJoinResendOtpIn(
-                          _otpRetryAfterSeconds,
-                        )
-                      : context.l10n.deviceJoinSendOtp,
-                  semanticsIdentifier: 'multi-device-send-otp',
-                  onPressed:
-                      state.isActionPending ||
-                          _sendingOtp ||
-                          _otpRetryAfterSeconds > 0
-                      ? null
-                      : _sendOtp,
-                ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: responsive.isPhone
+                  ? double.infinity
+                  : responsive.displayScaled(148),
+              child: AppPrimaryButton(
+                label: context.l10n.deviceJoinStart,
+                semanticsIdentifier: 'multi-device-start-join',
+                onPressed: state.isActionPending ? null : _begin,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: AppPrimaryButton(
-                  label: context.l10n.deviceJoinStart,
-                  semanticsIdentifier: 'multi-device-start-join',
-                  onPressed: state.isActionPending ? null : _begin,
-                ),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -301,46 +312,130 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   Future<void> _sendOtp() async {
     final phone = _phoneController.text.trim();
     final handle = _handleController.text.trim();
-    if (phone.isEmpty || handle.isEmpty) return;
+    final targetKey = _otpTargetKey(handle: handle, phone: phone);
+    if (targetKey == null || _sendingOtp || _otpRetryAfterSeconds > 0) return;
     setState(() {
       _sendingOtp = true;
       _otpSendFailed = false;
-      _otpRetryAfterSeconds = 0;
     });
     try {
-      await ref
+      final receipt = await ref
           .read(deviceManagementServiceProvider)
           .sendJoinSmsOtp(handle: handle, phone: phone);
+      if (!mounted) return;
+      _startOtpCooldown(
+        targetKey: targetKey,
+        seconds: receipt.retryAfterSeconds,
+        rateLimited: false,
+      );
+      AwikiMeToast.show(context, context.l10n.otpSent);
     } on DeviceJoinSmsOtpRateLimited catch (error) {
       if (mounted) {
-        _startOtpCooldown(error.retryAfterSeconds);
+        _startOtpCooldown(
+          targetKey: targetKey,
+          seconds: error.retryAfterSeconds,
+          rateLimited: true,
+        );
       }
     } catch (_) {
-      if (mounted) setState(() => _otpSendFailed = true);
+      if (mounted && _currentOtpTargetKey == targetKey) {
+        setState(() => _otpSendFailed = true);
+      }
     } finally {
       if (mounted) setState(() => _sendingOtp = false);
     }
   }
 
-  void _startOtpCooldown(int seconds) {
-    _otpCooldownTimer?.cancel();
+  String? _otpTargetKey({required String handle, required String phone}) {
+    final normalizedHandle = handle.trim().toLowerCase();
+    final normalizedPhone = phone.trim();
+    if (normalizedHandle.isEmpty || normalizedPhone.isEmpty) return null;
+    return '$normalizedHandle\u0000$normalizedPhone';
+  }
+
+  String? get _currentOtpTargetKey => _otpTargetKey(
+    handle: _handleController.text,
+    phone: _phoneController.text,
+  );
+
+  void _handleOtpTargetChanged() {
+    if (!mounted) return;
+    _syncOtpCooldownForCurrentTarget(clearFailure: true);
+  }
+
+  void _startOtpCooldown({
+    required String targetKey,
+    required int seconds,
+    required bool rateLimited,
+  }) {
     final boundedSeconds = seconds.clamp(1, 3600).toInt();
+    final retryAt = ref
+        .read(deviceJoinClockProvider)()
+        .toUtc()
+        .add(Duration(seconds: boundedSeconds));
+    final previousRetryAt = _otpRetryAtByTarget[targetKey];
+    if (previousRetryAt == null || retryAt.isAfter(previousRetryAt)) {
+      _otpRetryAtByTarget[targetKey] = retryAt;
+    }
+    if (rateLimited) {
+      _rateLimitedOtpTargets.add(targetKey);
+    } else {
+      _rateLimitedOtpTargets.remove(targetKey);
+    }
+    _syncOtpCooldownForCurrentTarget();
+  }
+
+  void _syncOtpCooldownForCurrentTarget({bool clearFailure = false}) {
+    _otpCooldownTimer?.cancel();
+    final targetKey = _currentOtpTargetKey;
+    final retryAt = targetKey == null ? null : _otpRetryAtByTarget[targetKey];
+    final remaining = _otpSecondsRemaining(retryAt);
+    if (targetKey != null && remaining == 0) {
+      _otpRetryAtByTarget.remove(targetKey);
+      _rateLimitedOtpTargets.remove(targetKey);
+    }
     setState(() {
-      _otpSendFailed = false;
-      _otpRetryAfterSeconds = boundedSeconds;
+      if (clearFailure) _otpSendFailed = false;
+      _otpRateLimited =
+          targetKey != null &&
+          remaining > 0 &&
+          _rateLimitedOtpTargets.contains(targetKey);
+      _otpRetryAfterSeconds = remaining;
     });
+    if (remaining == 0) return;
     _otpCooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
-      if (_otpRetryAfterSeconds <= 1) {
+      final currentTargetKey = _currentOtpTargetKey;
+      final currentRetryAt = currentTargetKey == null
+          ? null
+          : _otpRetryAtByTarget[currentTargetKey];
+      final next = _otpSecondsRemaining(currentRetryAt);
+      if (next == 0) {
         timer.cancel();
-        setState(() => _otpRetryAfterSeconds = 0);
+        if (currentTargetKey != null) {
+          _otpRetryAtByTarget.remove(currentTargetKey);
+          _rateLimitedOtpTargets.remove(currentTargetKey);
+        }
+        setState(() {
+          _otpRateLimited = false;
+          _otpRetryAfterSeconds = 0;
+        });
         return;
       }
-      setState(() => _otpRetryAfterSeconds -= 1);
+      setState(() => _otpRetryAfterSeconds = next);
     });
+  }
+
+  int _otpSecondsRemaining(DateTime? retryAt) {
+    if (retryAt == null) return 0;
+    final milliseconds = retryAt
+        .difference(ref.read(deviceJoinClockProvider)().toUtc())
+        .inMilliseconds;
+    if (milliseconds <= 0) return 0;
+    return ((milliseconds + 999) ~/ 1000).clamp(1, 3600).toInt();
   }
 
   Future<void> _begin() async {

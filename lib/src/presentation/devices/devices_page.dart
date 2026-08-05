@@ -27,6 +27,8 @@ class DevicesPage extends ConsumerStatefulWidget {
 }
 
 class _DevicesPageState extends ConsumerState<DevicesPage> {
+  bool _isRefreshing = false;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +48,7 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
       multiDeviceDeviceRevokeEnabledProvider,
     );
     final joinRequests = state.visibleJoinRequests;
+    final refreshPending = _isRefreshing || state.isLoading;
     return CupertinoPageScaffold(
       backgroundColor: context.awikiTheme.background,
       child: AwikiAdaptiveScaffold(
@@ -68,8 +71,22 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
               ),
               trailing: TopBarActionButton(
                 key: const Key('devices-refresh'),
-                onTap: state.isLoading ? null : _refresh,
-                child: const Icon(CupertinoIcons.refresh, size: 20),
+                onTap: refreshPending ? null : _refresh,
+                semanticsLabel: context.l10n.commonRefresh,
+                tooltip: context.l10n.commonRefresh,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  child: refreshPending
+                      ? const CupertinoActivityIndicator(
+                          key: Key('devices-refresh-loading'),
+                          radius: 8,
+                        )
+                      : const Icon(
+                          CupertinoIcons.refresh,
+                          key: Key('devices-refresh-icon'),
+                          size: 20,
+                        ),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -230,12 +247,18 @@ class _DevicesPageState extends ConsumerState<DevicesPage> {
 
   Future<void> _refresh() async {
     final state = ref.read(devicesProvider);
-    if (state.revokeSubmittingDeviceId != null ||
-        state.revokeConfirmingDeviceId != null) {
-      await ref.read(devicesProvider.notifier).refreshRegistryOnly();
-      return;
+    if (_isRefreshing || state.isLoading) return;
+    setState(() => _isRefreshing = true);
+    try {
+      if (state.revokeSubmittingDeviceId != null ||
+          state.revokeConfirmingDeviceId != null) {
+        await ref.read(devicesProvider.notifier).refreshRegistryOnly();
+        return;
+      }
+      await ref.read(devicesProvider.notifier).loadManagement();
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
     }
-    await ref.read(devicesProvider.notifier).loadManagement();
   }
 }
 

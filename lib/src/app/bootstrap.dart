@@ -16,6 +16,7 @@ import '../application/auth/auth_session_coordinator.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
+import '../application/display_scale_preference_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
@@ -71,6 +72,7 @@ import '../data/services/awiki_onboarding_support_service.dart';
 import '../data/services/awiki_onboarding_utility_client.dart';
 import '../data/services/user_service_account_state_sync_adapter.dart';
 import '../data/services/key_value_active_session_store.dart';
+import '../data/services/key_value_display_scale_preference_service.dart';
 import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
@@ -107,6 +109,8 @@ class AppBootstrap {
     required this.e2eeFacade,
     required this.localePreferenceService,
     required this.updateService,
+    this.displayScalePreferenceService =
+        const NoopDisplayScalePreferenceService(),
     this.desktopShellService = const NoopDesktopShellService(),
     this.appSessionService,
     this.identityCorePort,
@@ -148,6 +152,7 @@ class AppBootstrap {
   final E2eeFacade e2eeFacade;
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
+  final DisplayScalePreferenceService displayScalePreferenceService;
   final DesktopShellService desktopShellService;
   final AppSessionService? appSessionService;
   final IdentityCorePort? identityCorePort;
@@ -430,6 +435,8 @@ class AppBootstrap {
       final localePreferenceService = LocalePreferenceService(
         storage: preferenceStorage,
       );
+      final displayScalePreferenceService =
+          KeyValueDisplayScalePreferenceService(storage: preferenceStorage);
       final updateService = AppUpdateService(storage: preferenceStorage);
       final bootstrap = AppBootstrap(
         environment: effectiveEnvironment,
@@ -439,6 +446,7 @@ class AppBootstrap {
         notificationFacade: effectiveNotificationFacade,
         e2eeFacade: e2eeFacade,
         localePreferenceService: localePreferenceService,
+        displayScalePreferenceService: displayScalePreferenceService,
         updateService: updateService,
         desktopShellService: shell,
         appSessionService: appSessionService,
@@ -537,6 +545,7 @@ class AppBootstrap {
       notificationFacade: notificationFacade,
       e2eeFacade: e2eeFacade,
       localePreferenceService: localePreferenceService,
+      displayScalePreferenceService: displayScalePreferenceService,
       updateService: updateService,
       desktopShellService: desktopShellService,
       appSessionService: appSessionService,

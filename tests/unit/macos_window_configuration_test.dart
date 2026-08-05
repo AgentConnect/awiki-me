@@ -42,6 +42,43 @@ void main() {
     );
   });
 
+  test('macOS persists a visible responsive main-window placement', () {
+    final source = File(
+      'macos/Runner/MainFlutterWindow.swift',
+    ).readAsStringSync();
+
+    expect(source, contains('frameAutosaveName = "AWikiMeMainWindowV1"'));
+    expect(source, contains('zoomedPreferenceKey'));
+    expect(
+      source,
+      contains('minimumContentSize = NSSize(width: 360, height: 600)'),
+    );
+    expect(source, contains('setFrameUsingName'));
+    expect(source, contains('constrainRestoredFrameToVisibleScreen()'));
+    expect(source, contains('applyDefaultWindowPlacement()'));
+    expect(source, contains('name: "ai.awiki.awikime/desktop_window"'));
+    expect(source, contains('case "resetPlacement":'));
+    expect(source, contains('name: NSWindow.didMoveNotification'));
+  });
+
+  test('macOS presents only destination content after protected startup', () {
+    final source = File(
+      'macos/Runner/MainFlutterWindow.swift',
+    ).readAsStringSync();
+
+    expect(source, contains('alphaValue = 0'));
+    expect(source, contains('ignoresMouseEvents = true'));
+    expect(source, contains('name: "ai.awiki.awikime/desktop_startup"'));
+    expect(source, contains('case "presentReadyContent":'));
+    expect(source, contains('presentReadyContent(animated: true)'));
+    expect(source, contains('fallbackDelay: TimeInterval = 12'));
+    expect(source, contains('beginProtectedStartupOperation()'));
+    expect(source, contains('defer { self.endProtectedStartupOperation() }'));
+    expect(source, contains('scheduleStartupPresentationFallback()'));
+    expect(source, contains('accessibilityDisplayShouldReduceMotion'));
+    expect(source, contains('animator().alphaValue = 1'));
+  });
+
   test('menu bar controller retains the main window for reopen', () {
     final source = File(
       'macos/Runner/MenuBarStatusController.swift',

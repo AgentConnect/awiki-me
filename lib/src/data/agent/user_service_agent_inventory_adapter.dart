@@ -275,7 +275,6 @@ class UserServiceAgentInventoryAdapter
       'controller_did': controllerDid,
       'controller_handle': normalizedControllerHandle,
       'metadata': <String, Object?>{
-        'default_display_name': 'Daemon 1',
         'client': 'awiki-me',
         'client_platform': clientPlatform,
         'base_url': _environment.baseUrl,

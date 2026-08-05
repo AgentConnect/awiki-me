@@ -11,6 +11,9 @@
 #include "win32_window.h"
 #include "windows_region_capture.h"
 
+#include <flutter/encodable_value.h>
+#include <flutter/method_channel.h>
+
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
@@ -28,6 +31,8 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  void PresentStartupContent();
+
   // The project to run.
   flutter::DartProject project_;
 
@@ -36,8 +41,13 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<DesktopShell> desktop_shell_;
   std::unique_ptr<WindowsRegionCapture> windows_region_capture_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      desktop_window_channel_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      desktop_startup_channel_;
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       scope_secret_channel_;
   ScopeSecretStore scope_secret_store_;
+  bool startup_content_presented_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

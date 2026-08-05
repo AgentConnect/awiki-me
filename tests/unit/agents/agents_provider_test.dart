@@ -218,6 +218,91 @@ void main() {
   );
 
   test(
+    'account-state snapshot clears local create only after canonical route projection',
+    () async {
+      final control = FakeAgentControlService();
+      final directory = _EventuallyAvailableDirectoryApplicationService(
+        failuresBeforeSuccess: 1,
+      );
+      final container = _container(
+        control,
+        directory: directory,
+        session: const SessionIdentity(
+          did: 'did:human:current',
+          credentialName: 'identity-current',
+          displayName: 'Current',
+          handle: 'current.awiki.info',
+          accountBinding: SessionAccountBinding(
+            ownerIdentityId: 'owner-1',
+            accountId: 'account-1',
+            currentDid: 'did:human:current',
+            protocolDeviceId: 'device-1',
+            identityGeneration: '1',
+            deviceAuthGeneration: '1',
+          ),
+        ),
+      );
+      addTearDown(container.dispose);
+      container
+          .read(accountStateSyncRequestBusProvider)
+          .attach((_, {force = false, minimumVersion}) async {});
+      final controller = container.read(agentsProvider.notifier);
+
+      await controller.applyAccountStateSnapshots(
+        inventory: _accountAgentInventorySnapshot(includeRuntime: false),
+        isSessionCurrent: () => true,
+      );
+      await controller.createRuntimeAgent(
+        'did:agent:daemon',
+        options: const RuntimeAgentCreateOptions(
+          kind: RuntimeAgentKind.codex,
+          handle: 'current-codex',
+          displayName: 'Current Codex',
+        ),
+      );
+      expect(
+        container.read(agentsProvider).pendingRuntimeCreations,
+        hasLength(1),
+      );
+
+      await controller.applyAccountStateSnapshots(
+        inventory: _accountAgentInventorySnapshot(includeRuntime: true),
+        isSessionCurrent: () => true,
+      );
+
+      var state = container.read(agentsProvider);
+      final runtime = state.agents.singleWhere(
+        (agent) => agent.agentDid == 'did:agent:runtime-current-codex',
+      );
+      expect(runtime.latest.status, 'ready');
+      expect(directory.resolveAttempts, 1);
+      expect(
+        state.pendingRuntimeCreations,
+        hasLength(1),
+        reason: 'Inventory presence alone must not bypass route confirmation.',
+      );
+
+      await controller.applyAccountStateSnapshots(
+        inventory: _accountAgentInventorySnapshot(includeRuntime: true),
+        isSessionCurrent: () => true,
+      );
+
+      state = container.read(agentsProvider);
+      expect(directory.resolveAttempts, 2);
+      expect(state.pendingRuntimeCreations, isEmpty);
+      expect(
+        state.agents
+            .singleWhere(
+              (agent) => agent.agentDid == 'did:agent:runtime-current-codex',
+            )
+            .latest
+            .status,
+        'ready',
+      );
+    },
+  );
+
+  test(
     'next identity does not reuse or accept a stale inventory load',
     () async {
       final control = _BlockingFirstListAgentControlService();
@@ -4413,6 +4498,39 @@ ProviderContainer _container(
       sessionProvider.overrideWith((ref) {
         return SessionController()..setSession(session);
       }),
+    ],
+  );
+}
+
+ProductAgentInventorySnapshot _accountAgentInventorySnapshot({
+  required bool includeRuntime,
+}) {
+  return ProductAgentInventorySnapshot(
+    binding: const ProductAccountBinding(
+      ownerIdentityId: 'owner-1',
+      accountId: 'account-1',
+    ),
+    domainVersion: includeRuntime ? '8' : '7',
+    refreshedAt: DateTime.utc(2026, 8, 5),
+    agents: <ProductAgentInventoryItem>[
+      const ProductAgentInventoryItem(
+        agentDid: 'did:agent:daemon',
+        activeState: 'active',
+        payloadJson:
+            '{"agent_kind":"daemon","handle":"current-daemon",'
+            '"display_name":"Daemon","status":{"status":"ready"}}',
+      ),
+      if (includeRuntime)
+        const ProductAgentInventoryItem(
+          agentDid: 'did:agent:runtime-current-codex',
+          activeState: 'active',
+          payloadJson:
+              '{"agent_kind":"runtime",'
+              '"daemon_agent_did":"did:agent:daemon",'
+              '"runtime":"codex","handle":"current-codex",'
+              '"display_name":"Current Codex",'
+              '"status":{"status":"ready"}}',
+        ),
     ],
   );
 }

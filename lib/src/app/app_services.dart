@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/attachment_picker_service.dart';
 import '../application/app_presentation_service.dart';
 import '../application/desktop_shell_service.dart';
+import '../application/desktop_startup_presentation_service.dart';
+import '../application/desktop_window_placement_service.dart';
 import '../application/attachment_cache_service.dart';
 import '../application/attachment_open_service.dart';
 import '../application/attachment_preview_service.dart';
@@ -47,6 +49,7 @@ import '../data/services/locale_preference_service.dart';
 import '../data/services/local_auth_user_presence_port.dart';
 import '../data/services/method_channel_attachment_picker_service.dart';
 import '../data/services/method_channel_app_presentation_service.dart';
+import '../data/services/method_channel_desktop_window_placement_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
 import '../domain/entities/realtime_update.dart';
 import '../domain/repositories/awiki_account_gateway.dart';
@@ -289,6 +292,16 @@ final remotePushStorageScopeIdProvider = Provider<StorageScopeId?>(
 final desktopShellServiceProvider = Provider<DesktopShellService>(
   (ref) => const NoopDesktopShellService(),
 );
+
+final desktopStartupPresentationServiceProvider =
+    Provider<DesktopStartupPresentationService>(
+      (ref) => const NoopDesktopStartupPresentationService(),
+    );
+
+final desktopWindowPlacementServiceProvider =
+    Provider<DesktopWindowPlacementService>(
+      (ref) => const MethodChannelDesktopWindowPlacementService(),
+    );
 
 final e2eeFacadeProvider = Provider<E2eeFacade>(
   (ref) => throw UnimplementedError('e2eeFacadeProvider must be overridden'),

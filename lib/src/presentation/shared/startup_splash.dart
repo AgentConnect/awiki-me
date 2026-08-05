@@ -1,8 +1,67 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 
 import 'awiki_me_design.dart';
+
+bool usesBrandedStartupSplash(TargetPlatform platform) {
+  return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+}
+
+class AwikiMeStartupPlaceholder extends StatelessWidget {
+  const AwikiMeStartupPlaceholder({super.key, this.statusLabel});
+
+  final String? statusLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (usesBrandedStartupSplash(defaultTargetPlatform)) {
+      return AwikiMeStartupSplash(statusLabel: statusLabel);
+    }
+
+    final theme = context.awikiTheme;
+    final status = statusLabel?.trim();
+    final semanticStatus = status == null || status.isEmpty
+        ? _StartupSplashCopy.resolve(context).loadingLabel
+        : status;
+    return CupertinoPageScaffold(
+      key: const Key('app-desktop-startup-placeholder'),
+      backgroundColor: theme.background,
+      child: Semantics(
+        container: true,
+        liveRegion: true,
+        label: semanticStatus,
+        child: ExcludeSemantics(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                CupertinoActivityIndicator(
+                  key: const Key('desktop-startup-progress'),
+                  radius: 10,
+                  color: theme.primary,
+                ),
+                if (status != null && status.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    status,
+                    key: const Key('desktop-startup-status'),
+                    style: TextStyle(
+                      color: theme.secondaryText,
+                      fontSize: 12,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class AwikiMeStartupSplash extends StatefulWidget {
   const AwikiMeStartupSplash({super.key, this.statusLabel});

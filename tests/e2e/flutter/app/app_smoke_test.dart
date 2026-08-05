@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/desktop_startup_presentation_service.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/models/app_session.dart';
 import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
@@ -27,6 +28,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'
@@ -40,6 +42,16 @@ import 'package:integration_test/integration_test.dart';
 import '../../../unit/test_support.dart' as test_support;
 import '../../case_attestation.dart';
 import '../support/fake_app_bootstrap.dart';
+
+final class _RecordingDesktopStartupPresentationService
+    implements DesktopStartupPresentationService {
+  int callCount = 0;
+
+  @override
+  Future<void> presentReadyContent() async {
+    callCount += 1;
+  }
+}
 
 class _StaticConversationListController extends ConversationListController {
   _StaticConversationListController(
@@ -98,6 +110,55 @@ Future<void> _activateRuntimeSession(
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('desktop startup excludes the mobile branded splash', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await tester.pumpWidget(
+        test_support.buildLocalizedTestApp(
+          home: const AwikiMeStartupPlaceholder(),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(AwikiMeStartupSplash), findsNothing);
+      expect(
+        find.byKey(const Key('app-desktop-startup-placeholder')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('startup-splash-brand')), findsNothing);
+      expect(find.byKey(const Key('startup-splash-feature-0')), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('desktop startup presents fake-bootstrap onboarding once', (
+    tester,
+  ) async {
+    final harness = createFakeAwikiMeAppHarness();
+    final presentation = _RecordingDesktopStartupPresentationService();
+
+    await tester.pumpWidget(
+      AwikiMeApp(
+        bootstrap: harness.bootstrap,
+        providerOverrides: <Override>[
+          ...harness.providerOverrides,
+          desktopStartupPresentationServiceProvider.overrideWithValue(
+            presentation,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppShell), findsOneWidget);
+    expect(find.byType(OnboardingPage), findsOneWidget);
+    expect(presentation.callCount, 1);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('AwikiMeApp starts with fake bootstrap and shows onboarding', (
     tester,

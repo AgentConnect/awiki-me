@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:awiki_me/src/app/app_services.dart';
+import 'package:awiki_me/src/application/desktop_startup_presentation_service.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
@@ -7,10 +9,21 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
+
+final class _RecordingDesktopStartupPresentationService
+    implements DesktopStartupPresentationService {
+  int callCount = 0;
+
+  @override
+  Future<void> presentReadyContent() async {
+    callCount += 1;
+  }
+}
 
 class _ControlledStartupRuntimeController extends AppRuntimeController {
   _ControlledStartupRuntimeController(
@@ -86,6 +99,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('桌面缩到移动端尺寸仍跳过开屏并在恢复后直接进入登录页', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      _setTestViewSize(tester, const Size(390, 844));
+      final ready = Completer<void>();
+      final presentation = _RecordingDesktopStartupPresentationService();
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AppShell(),
+          providerOverrides: <Override>[
+            appRuntimeProvider.overrideWith(
+              (ref) =>
+                  _ControlledStartupRuntimeController(ref, ready: ready.future),
+            ),
+            desktopStartupPresentationServiceProvider.overrideWithValue(
+              presentation,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(AwikiMeStartupSplash), findsNothing);
+      expect(
+        find.byKey(const Key('app-desktop-startup-placeholder')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('startup-splash-brand')), findsNothing);
+      expect(find.byKey(const Key('startup-splash-feature-0')), findsNothing);
+      expect(find.byType(OnboardingPage), findsNothing);
+      expect(presentation.callCount, 0);
+
+      ready.complete();
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        find.byKey(const Key('app-desktop-startup-placeholder')),
+        findsNothing,
+      );
+      expect(find.byType(OnboardingPage), findsOneWidget);
+      expect(presentation.callCount, 1);
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  test('品牌开屏严格限定在 Android 和 iOS', () {
+    expect(usesBrandedStartupSplash(TargetPlatform.android), isTrue);
+    expect(usesBrandedStartupSplash(TargetPlatform.iOS), isTrue);
+    expect(usesBrandedStartupSplash(TargetPlatform.macOS), isFalse);
+    expect(usesBrandedStartupSplash(TargetPlatform.windows), isFalse);
+    expect(usesBrandedStartupSplash(TargetPlatform.linux), isFalse);
+  });
+
   testWidgets('已保存会话冷启动从开屏直接进入消息工作区', (tester) async {
     _setTestViewSize(tester, const Size(390, 844));
     final ready = Completer<void>();
@@ -126,6 +196,67 @@ void main() {
     expect(find.byKey(const Key('app-shell-page-background')), findsOneWidget);
     expect(find.byKey(const Key('compact-bottom-navigation')), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('桌面已保存会话恢复后才呈现消息工作区', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      _setTestViewSize(tester, const Size(390, 844));
+      final ready = Completer<void>();
+      final presentation = _RecordingDesktopStartupPresentationService();
+      const session = SessionIdentity(
+        did: 'did:test:desktop-alice',
+        credentialName: 'desktop-alice.json',
+        displayName: 'Desktop Alice',
+        handle: 'desktop-alice',
+        jwtToken: 'desktop-token',
+      );
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const AppShell(),
+          providerOverrides: <Override>[
+            appRuntimeProvider.overrideWith(
+              (ref) => _ControlledStartupRuntimeController(
+                ref,
+                ready: ready.future,
+                restoredSession: session,
+              ),
+            ),
+            desktopStartupPresentationServiceProvider.overrideWithValue(
+              presentation,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byType(AwikiMeStartupSplash), findsNothing);
+      expect(
+        find.byKey(const Key('app-desktop-startup-placeholder')),
+        findsOneWidget,
+      );
+      expect(presentation.callCount, 0);
+
+      ready.complete();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(
+        find.byKey(const Key('app-desktop-startup-placeholder')),
+        findsNothing,
+      );
+      expect(find.byType(OnboardingPage), findsNothing);
+      expect(
+        find.byKey(const Key('app-shell-page-background')),
+        findsOneWidget,
+      );
+      expect(presentation.callCount, 1);
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('运行时已初始化且无会话时立即显示登录页', (tester) async {

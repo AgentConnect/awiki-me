@@ -304,13 +304,13 @@ void main() {
         expect(AwikiDisplayScaleScope.of(appContext()), greaterThan(1));
         expect(
           appContext().awikiResponsive.displayScale,
-          closeTo(AwikiDisplayScale.effective(1.06), 0.0001),
+          closeTo(AwikiDisplayScale.effective(1.1), 0.0001),
         );
         expect(
           find.byKey(const Key('display-scale-indicator')),
           findsOneWidget,
         );
-        expect(find.text('Display scale 106%'), findsOneWidget);
+        expect(find.text('Display scale 110%'), findsOneWidget);
 
         await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
         await tester.sendKeyEvent(LogicalKeyboardKey.digit0);

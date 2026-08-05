@@ -505,7 +505,7 @@ Future<AgentSummary> _waitForRuntimeAgentByHandle({
         '${matchingRuntimes.length}. Last agents: $lastState',
       );
     }
-    if (matchingRuntimes.length == 1) {
+    if (matchingRuntimes.length == 1 && !hasMatchingPending) {
       return matchingRuntimes.single;
     }
     await Future<void>.delayed(const Duration(seconds: 1));

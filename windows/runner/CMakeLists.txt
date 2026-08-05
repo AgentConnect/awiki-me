@@ -13,6 +13,7 @@ add_executable(${BINARY_NAME} WIN32
   "scope_secret_store.cpp"
   "utils.cpp"
   "win32_window.cpp"
+  "window_placement.cpp"
   "windows_region_capture.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
   "Runner.rc"

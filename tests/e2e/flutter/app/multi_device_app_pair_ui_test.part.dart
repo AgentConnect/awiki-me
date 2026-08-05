@@ -3620,11 +3620,18 @@ Future<AgentSummary> _waitForAppPairRuntime({
     if (matches.length > 1) {
       fail('The App-pair runtime inventory projected a duplicate Agent.');
     }
-    if (matches.length == 1 && !state.isActing) return matches.single;
+    final hasMatchingPending = state.pendingRuntimeCreations.any(
+      (pending) =>
+          pending.daemonAgentDid == daemonDid && pending.handle == handle,
+    );
+    if (matches.length == 1 && !state.isActing && !hasMatchingPending) {
+      return matches.single;
+    }
     await Future<void>.delayed(const Duration(milliseconds: 500));
   }
   fail(
-    'The App-pair runtime Agent did not converge: $handle. '
+    'The App-pair runtime Agent or its local creation state did not converge: '
+    '$handle. '
     'daemon=${daemon.safeDiagnostics}',
   );
 }

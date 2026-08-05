@@ -155,7 +155,14 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  WINDOWPLACEMENT placement{};
+  placement.length = sizeof(placement);
+  const int show_command =
+      ::GetWindowPlacement(window_handle_, &placement) &&
+          placement.showCmd == SW_SHOWMAXIMIZED
+      ? SW_SHOWMAXIMIZED
+      : SW_SHOWNORMAL;
+  return ShowWindow(window_handle_, show_command);
 }
 
 // static

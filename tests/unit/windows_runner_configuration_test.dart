@@ -69,8 +69,7 @@ void main() {
     expect(cmake, contains('AWiki Me for Windows supports x64 builds only'));
     expect(cmake, contains('NOT CMAKE_SIZEOF_VOID_P EQUAL 8'));
     expect(main, contains('Win32Window::Size size(1280, 800)'));
-    expect(window, contains('::MulDiv(960, dpi, 96)'));
-    expect(window, contains('::MulDiv(640, dpi, 96)'));
+    expect(window, contains('WindowPlacementStore::MinimumTrackSize'));
     expect(manifest, contains('>PerMonitorV2</dpiAwareness>'));
     expect(manifest, contains('>true</longPathAware>'));
     expect(
@@ -81,8 +80,47 @@ void main() {
     expect(resources, contains('VALUE "ProductName", "AWiki Me"'));
     expect(resources, contains('VALUE "OriginalFilename", "AWikiMe.exe"'));
     expect(runnerCmake, contains('AWIKI_RELEASE_SCOPE=1'));
+    expect(runnerCmake, contains('"window_placement.cpp"'));
     expect(runnerCmake, contains('uuid.lib'));
     expect(runnerCmake, contains('windowsapp.lib'));
+  });
+
+  test('Windows restores and validates the responsive window placement', () {
+    final placement = File(
+      'windows/runner/window_placement.cpp',
+    ).readAsStringSync();
+    final window = File('windows/runner/flutter_window.cpp').readAsStringSync();
+    final constants = File('windows/runner/app_constants.h').readAsStringSync();
+
+    expect(placement, contains('kMinimumClientWidth = 360'));
+    expect(placement, contains('kMinimumClientHeight = 600'));
+    expect(placement, contains('MainWindowPlacementV1'));
+    expect(placement, contains('AWikiMeDevelopment'));
+    expect(placement, contains('#ifdef AWIKI_RELEASE_SCOPE'));
+    expect(placement, contains('ClampToWorkArea'));
+    expect(placement, contains('ApplyDefaultWindowPlacement(window, false)'));
+    expect(placement, contains('AdjustWindowRectExForDpi'));
+    expect(placement, contains('MONITOR_DEFAULTTONULL'));
+    expect(window, contains('WindowPlacementStore::Restore(GetHandle())'));
+    expect(window, contains('call.method_name() == "resetPlacement"'));
+    expect(constants, contains('ai.awiki.awikime/desktop_window'));
+  });
+
+  test('Windows waits for destination content before showing the window', () {
+    final window = File('windows/runner/flutter_window.cpp').readAsStringSync();
+    final header = File('windows/runner/flutter_window.h').readAsStringSync();
+    final constants = File('windows/runner/app_constants.h').readAsStringSync();
+
+    expect(constants, contains('ai.awiki.awikime/desktop_startup'));
+    expect(constants, contains('kStartupPresentationTimerId'));
+    expect(window, contains('call.method_name() == "presentReadyContent"'));
+    expect(window, contains('PresentStartupContent();'));
+    expect(window, contains('::SetTimer('));
+    expect(window, contains('== 0)'));
+    expect(window, contains('message == WM_TIMER'));
+    expect(window, contains('::KillTimer('));
+    expect(window, isNot(contains('SetNextFrameCallback')));
+    expect(header, contains('bool startup_content_presented_ = false'));
   });
 
   test('Windows shell uses one IPC and graceful-exit boundary', () {

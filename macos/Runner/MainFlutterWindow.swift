@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import QuartzCore
 import Security
 import UniformTypeIdentifiers
 
@@ -58,20 +59,41 @@ class MainFlutterWindow: NSWindow {
     static let preferredGap: CGFloat = 8
   }
 
+  private enum WindowPlacement {
+    static let frameAutosaveName = "AWikiMeMainWindowV1"
+    static let zoomedPreferenceKey = "AWikiMeMainWindowZoomedV1"
+    static let defaultContentSize = NSSize(width: 1280, height: 800)
+    static let minimumContentSize = NSSize(width: 360, height: 600)
+    static let screenInset: CGFloat = 24
+  }
+
+  private enum StartupPresentation {
+    static let fallbackDelay: TimeInterval = 12
+    static let fadeDuration: TimeInterval = 0.12
+  }
+
   private var trafficLightRailWidth: CGFloat?
   private var defaultTrafficLightXOrigins: [CGFloat]?
+  private var windowPlacementConfigured = false
+  private var startupContentPresented = false
+  private var protectedStartupOperations = 0
+  private var startupFallbackWorkItem: DispatchWorkItem?
 
   override func awakeFromNib() {
+    prepareStartupPresentation()
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     captureDefaultTrafficLightOrigins()
     configureChrome()
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    configureWindowPlacement()
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     registerWindowChromeChannel(flutterViewController: flutterViewController)
     registerAppPresentationChannel(flutterViewController: flutterViewController)
+    registerDesktopWindowChannel(flutterViewController: flutterViewController)
+    registerDesktopStartupChannel(flutterViewController: flutterViewController)
     registerMenuBarStatusChannel(flutterViewController: flutterViewController)
     registerAttachmentChannel(flutterViewController: flutterViewController)
     registerKeychainAccessChannel(flutterViewController: flutterViewController)
@@ -79,6 +101,7 @@ class MainFlutterWindow: NSWindow {
     MenuBarStatusController.shared.configure(mainWindow: self)
 
     super.awakeFromNib()
+    scheduleStartupPresentationFallback()
     scheduleTrafficLightLayout()
   }
 
@@ -107,17 +130,200 @@ class MainFlutterWindow: NSWindow {
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(handleWindowFrameChanged),
+      name: NSWindow.didMoveNotification,
+      object: self
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(handleWindowFrameChanged),
       name: NSWindow.didEndLiveResizeNotification,
       object: self
     )
     scheduleTrafficLightLayout()
   }
 
+  private func configureWindowPlacement() {
+    contentMinSize = WindowPlacement.minimumContentSize
+    if setFrameUsingName(WindowPlacement.frameAutosaveName) {
+      constrainRestoredFrameToVisibleScreen()
+    } else {
+      applyDefaultWindowPlacement()
+    }
+    _ = setFrameAutosaveName(WindowPlacement.frameAutosaveName)
+    windowPlacementConfigured = true
+    if UserDefaults.standard.bool(
+      forKey: WindowPlacement.zoomedPreferenceKey
+    ) && !isZoomed {
+      zoom(nil)
+    }
+  }
+
+  private func prepareStartupPresentation() {
+    alphaValue = 0
+    ignoresMouseEvents = true
+  }
+
+  private func presentReadyContent(animated: Bool) {
+    guard !startupContentPresented else { return }
+    startupContentPresented = true
+    startupFallbackWorkItem?.cancel()
+    startupFallbackWorkItem = nil
+    ignoresMouseEvents = false
+    makeKeyAndOrderFront(nil)
+
+    let shouldAnimate = animated
+      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    guard shouldAnimate else {
+      alphaValue = 1
+      return
+    }
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = StartupPresentation.fadeDuration
+      context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+      animator().alphaValue = 1
+    }
+  }
+
+  private func scheduleStartupPresentationFallback(
+    after delay: TimeInterval = StartupPresentation.fallbackDelay
+  ) {
+    startupFallbackWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self, !self.startupContentPresented else { return }
+      self.presentReadyContent(animated: false)
+    }
+    startupFallbackWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+  }
+
+  private func beginProtectedStartupOperation() {
+    guard !startupContentPresented else { return }
+    if protectedStartupOperations == 0 {
+      startupFallbackWorkItem?.cancel()
+      startupFallbackWorkItem = nil
+    }
+    protectedStartupOperations += 1
+  }
+
+  private func endProtectedStartupOperation() {
+    guard protectedStartupOperations > 0 else { return }
+    protectedStartupOperations -= 1
+    if protectedStartupOperations == 0 && !startupContentPresented {
+      scheduleStartupPresentationFallback()
+    }
+  }
+
+  private func resetWindowPlacement() {
+    if isZoomed {
+      zoom(nil)
+    }
+    UserDefaults.standard.removeObject(
+      forKey: "NSWindow Frame \(WindowPlacement.frameAutosaveName)"
+    )
+    UserDefaults.standard.removeObject(
+      forKey: WindowPlacement.zoomedPreferenceKey
+    )
+    applyDefaultWindowPlacement()
+    _ = setFrameAutosaveName(WindowPlacement.frameAutosaveName)
+    makeKeyAndOrderFront(nil)
+  }
+
+  private func applyDefaultWindowPlacement() {
+    guard let screen = screen ?? NSScreen.main ?? NSScreen.screens.first else {
+      setContentSize(WindowPlacement.defaultContentSize)
+      center()
+      return
+    }
+    let visibleFrame = screen.visibleFrame.insetBy(
+      dx: WindowPlacement.screenInset,
+      dy: WindowPlacement.screenInset
+    )
+    let availableFrame = visibleFrame.width > 0 && visibleFrame.height > 0
+      ? visibleFrame
+      : screen.visibleFrame
+    let contentSize = NSSize(
+      width: min(WindowPlacement.defaultContentSize.width, availableFrame.width),
+      height: min(WindowPlacement.defaultContentSize.height, availableFrame.height)
+    )
+    var defaultFrame = frameRect(
+      forContentRect: NSRect(origin: .zero, size: contentSize)
+    )
+    defaultFrame.size.width = min(defaultFrame.width, availableFrame.width)
+    defaultFrame.size.height = min(defaultFrame.height, availableFrame.height)
+    defaultFrame.origin.x = availableFrame.midX - defaultFrame.width / 2
+    defaultFrame.origin.y = availableFrame.midY - defaultFrame.height / 2
+    setFrame(defaultFrame, display: false)
+  }
+
+  private func constrainRestoredFrameToVisibleScreen() {
+    guard frameIsFinite(frame) else {
+      applyDefaultWindowPlacement()
+      return
+    }
+    let targetScreen = NSScreen.screens.max { lhs, rhs in
+      intersectionArea(frame, lhs.visibleFrame)
+        < intersectionArea(frame, rhs.visibleFrame)
+    } ?? NSScreen.main
+    guard let targetScreen else {
+      applyDefaultWindowPlacement()
+      return
+    }
+    let visibleFrame = targetScreen.visibleFrame
+    let minimumFrame = frameRect(
+      forContentRect: NSRect(
+        origin: .zero,
+        size: WindowPlacement.minimumContentSize
+      )
+    )
+    var restoredFrame = frame
+    restoredFrame.size.width = min(
+      max(restoredFrame.width, minimumFrame.width),
+      visibleFrame.width
+    )
+    restoredFrame.size.height = min(
+      max(restoredFrame.height, minimumFrame.height),
+      visibleFrame.height
+    )
+    restoredFrame.origin.x = min(
+      max(restoredFrame.minX, visibleFrame.minX),
+      visibleFrame.maxX - restoredFrame.width
+    )
+    restoredFrame.origin.y = min(
+      max(restoredFrame.minY, visibleFrame.minY),
+      visibleFrame.maxY - restoredFrame.height
+    )
+    setFrame(restoredFrame, display: false)
+  }
+
+  private func frameIsFinite(_ frame: NSRect) -> Bool {
+    frame.origin.x.isFinite
+      && frame.origin.y.isFinite
+      && frame.width.isFinite
+      && frame.height.isFinite
+      && frame.width > 0
+      && frame.height > 0
+  }
+
+  private func intersectionArea(_ lhs: NSRect, _ rhs: NSRect) -> CGFloat {
+    let intersection = lhs.intersection(rhs)
+    if intersection.isNull || intersection.isEmpty {
+      return 0
+    }
+    return intersection.width * intersection.height
+  }
+
   deinit {
+    startupFallbackWorkItem?.cancel()
     NotificationCenter.default.removeObserver(self)
   }
 
   @objc private func handleWindowFrameChanged() {
+    if windowPlacementConfigured && !styleMask.contains(.fullScreen) {
+      UserDefaults.standard.set(
+        isZoomed,
+        forKey: WindowPlacement.zoomedPreferenceKey
+      )
+    }
     scheduleTrafficLightLayout()
   }
 
@@ -257,6 +463,62 @@ class MainFlutterWindow: NSWindow {
           "windowVisible": self.isVisible,
           "windowMiniaturized": self.isMiniaturized,
         ])
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func registerDesktopWindowChannel(
+    flutterViewController: FlutterViewController
+  ) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/desktop_window",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(
+          FlutterError(
+            code: "window_unavailable",
+            message: "Main window is unavailable",
+            details: nil
+          )
+        )
+        return
+      }
+      switch call.method {
+      case "resetPlacement":
+        self.resetWindowPlacement()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func registerDesktopStartupChannel(
+    flutterViewController: FlutterViewController
+  ) {
+    let channel = FlutterMethodChannel(
+      name: "ai.awiki.awikime/desktop_startup",
+      binaryMessenger: flutterViewController.engine.binaryMessenger
+    )
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(
+          FlutterError(
+            code: "window_unavailable",
+            message: "Main window is unavailable",
+            details: nil
+          )
+        )
+        return
+      }
+      switch call.method {
+      case "presentReadyContent":
+        self.presentReadyContent(animated: true)
+        result(nil)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -403,6 +665,7 @@ class MainFlutterWindow: NSWindow {
       requireExpectedRevision: false,
       result: result
     ) else { return }
+    beginProtectedStartupOperation()
     scopeSecretQueue.async {
       let response = self.readGenericPassword(service: request.service, account: request.account)
       if response.status == errSecSuccess {
@@ -412,6 +675,7 @@ class MainFlutterWindow: NSWindow {
         )
       }
       DispatchQueue.main.async {
+        defer { self.endProtectedStartupOperation() }
         switch response.status {
         case errSecSuccess:
           result(response.value)

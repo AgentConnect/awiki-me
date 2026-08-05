@@ -73,6 +73,12 @@ DID and Handle are not cache owners.
   the visible Agent list.
 - The visible Agent projection merges authoritative topology, remote status,
   and Core-owned control overlays in that order.
+- A device-local Runtime Agent creation intent completes only when an
+  authoritative Inventory row matches the intended Daemon and Handle and Core
+  has projected its canonical Direct route. Account State publication and the
+  legacy Inventory loader share this reconciliation rule. Control events and
+  ordinary Agent messages may accelerate visible feedback, but cannot clear
+  the intent by themselves.
 - Profile UI reads the committed Profile cache.
 - Device UI may display the newer of the account cache and a fresh Core
   Registry read, comparing arbitrary-precision string versions.

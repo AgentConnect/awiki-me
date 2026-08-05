@@ -24,7 +24,10 @@ class DeviceManagementService {
   final Set<String> _approvalSessionsInFlight = <String>{};
   final Set<String> _revokeDeviceIdsInFlight = <String>{};
 
-  Future<void> sendJoinSmsOtp({required String handle, required String phone}) {
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
+    required String handle,
+    required String phone,
+  }) {
     return _core.sendJoinSmsOtp(
       handle: _required(handle, 'handle').toLowerCase(),
       phone: _required(phone, 'phone'),

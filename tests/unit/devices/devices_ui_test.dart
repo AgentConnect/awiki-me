@@ -21,6 +21,7 @@ import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -320,6 +321,39 @@ void main() {
       expect(find.text('pc-new'), findsOneWidget);
     },
   );
+
+  testWidgets('device refresh is single-flight and shows inline progress', (
+    tester,
+  ) async {
+    final refreshStarted = Completer<void>();
+    final refreshResult = Completer<DeviceRegistrySnapshot>();
+    final core = FakeDeviceManagementCore();
+    await tester.pumpWidget(_app(const DevicesPage(), core));
+    await tester.pumpAndSettle();
+    expect(core.registryCalls, 1);
+
+    core.registryLoader = (selector) {
+      if (!refreshStarted.isCompleted) refreshStarted.complete();
+      return refreshResult.future;
+    };
+    final refreshButton = find.byKey(const Key('devices-refresh'));
+    await tester.tap(refreshButton);
+    await refreshStarted.future;
+    await tester.pump();
+
+    expect(find.byKey(const Key('devices-refresh-loading')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const Key('devices-refresh-icon')), findsNothing);
+    expect(core.registryCalls, 2);
+    await tester.tap(refreshButton);
+    await tester.pump();
+    expect(core.registryCalls, 2);
+
+    refreshResult.complete(core.registry);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('devices-refresh-loading')), findsNothing);
+    expect(find.byKey(const Key('devices-refresh-icon')), findsOneWidget);
+  });
 
   testWidgets(
     'permanent revoke requires explicit intent then one user-presence prompt',
@@ -706,8 +740,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), 'alice');
-    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
     await tester.enterText(fields.at(2), '987580');
     await tester.tap(find.text('开始关联'));
     await tester.pumpAndSettle();
@@ -755,8 +789,8 @@ void main() {
       await tester.pumpAndSettle();
 
       final fields = find.byType(CupertinoTextField);
-      await tester.enterText(fields.at(0), 'alice.awiki.info');
-      await tester.enterText(fields.at(1), '+8613800138000');
+      await tester.enterText(fields.at(0), '+8613800138000');
+      await tester.enterText(fields.at(1), 'alice.awiki.info');
       await tester.enterText(fields.at(2), '987580');
       await tester.tap(find.text('开始关联'));
       await tester.pumpAndSettle();
@@ -900,8 +934,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       final fields = find.byType(CupertinoTextField);
-      await tester.enterText(fields.at(0), 'alice.awiki.info');
-      await tester.enterText(fields.at(1), '+8613800138000');
+      await tester.enterText(fields.at(0), '+8613800138000');
+      await tester.enterText(fields.at(1), 'alice.awiki.info');
       await tester.enterText(fields.at(2), '987580');
       await tester.tap(find.text('开始关联'));
       await tester.pumpAndSettle();
@@ -965,8 +999,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), 'alice.awiki.info');
-    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice.awiki.info');
     await tester.enterText(fields.at(2), '987580');
     await tester.tap(find.text('开始关联'));
     await tester.pumpAndSettle();
@@ -1030,8 +1064,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), 'alice.awiki.info');
-    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice.awiki.info');
     await tester.enterText(fields.at(2), '987580');
     await tester.tap(find.text('开始关联'));
     await tester.pumpAndSettle();
@@ -1697,8 +1731,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), 'alice');
-    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
     await tester.enterText(fields.at(2), '987580');
     await tester.tap(find.text('开始关联'));
     await tester.pumpAndSettle();
@@ -1709,7 +1743,7 @@ void main() {
     expect(find.text('等待管理设备响应'), findsOneWidget);
   });
 
-  testWidgets('new-device form sends OTP through the Join auth boundary', (
+  testWidgets('new-device form follows login field and inline action layout', (
     tester,
   ) async {
     final core = FakeDeviceManagementCore();
@@ -1719,12 +1753,73 @@ void main() {
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), 'alice');
-    await tester.enterText(fields.at(1), '+8613800138000');
-    await tester.tap(find.text('发送验证码'));
+    final phone = fields.at(0);
+    final handle = fields.at(1);
+    final otp = fields.at(2);
+    final send = find.byType(AppInlineActionButton);
+    expect(tester.getTopLeft(phone).dy, lessThan(tester.getTopLeft(handle).dy));
+    expect(tester.getTopLeft(handle).dy, lessThan(tester.getTopLeft(otp).dy));
+    expect(tester.getCenter(send).dx, greaterThan(tester.getCenter(otp).dx));
+    expect(
+      (tester.getCenter(send).dy - tester.getCenter(otp).dy).abs(),
+      lessThan(2),
+    );
+  });
+
+  testWidgets('Join OTP send shows progress, success, and resend cooldown', (
+    tester,
+  ) async {
+    final sendResult = Completer<DeviceJoinSmsOtpSendReceipt>();
+    final core = FakeDeviceManagementCore()
+      ..sendOtpLoader = () => sendResult.future;
+    await tester.pumpWidget(
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        core,
+        session: null,
+        deviceJoinNow: tester.binding.clock.now,
+      ),
+    );
     await tester.pumpAndSettle();
 
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    final sendButton = find.byType(AppInlineActionButton);
+    await tester.tap(sendButton);
+    await tester.pump();
+
     expect(core.sendOtpCalls, 1);
+    expect(
+      find.descendant(
+        of: sendButton,
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(sendButton);
+    await tester.pump();
+    expect(core.sendOtpCalls, 1);
+
+    sendResult.complete(
+      const DeviceJoinSmsOtpSendReceipt(retryAfterSeconds: 2),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('验证码已发送，请留意短信。'), findsOneWidget);
+    expect(find.text('重新发送（2秒）'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: sendButton,
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.text('重新发送（2秒）'));
+    await tester.pump();
+    expect(core.sendOtpCalls, 1);
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('Join SMS rate limit shows retry reason and disables resend', (
@@ -1733,13 +1828,18 @@ void main() {
     final core = FakeDeviceManagementCore()
       ..sendOtpError = const DeviceJoinSmsOtpRateLimited(retryAfterSeconds: 2);
     await tester.pumpWidget(
-      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        core,
+        session: null,
+        deviceJoinNow: tester.binding.clock.now,
+      ),
     );
     await tester.pumpAndSettle();
 
     final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), 'alice');
-    await tester.enterText(fields.at(1), '+8613800138000');
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
     await tester.tap(find.text('发送验证码'));
     await tester.pump();
 
@@ -1751,7 +1851,7 @@ void main() {
     expect(core.sendOtpCalls, 1);
 
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('验证码发送过于频繁，请 1 秒后重试'), findsOneWidget);
+    expect(find.textContaining('验证码发送过于频繁'), findsOneWidget);
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.textContaining('验证码发送过于频繁'), findsNothing);
@@ -1910,6 +2010,7 @@ Widget _app(
   bool deviceRevokeEnabled = false,
   bool handleRecoveryEnabled = false,
   SessionIdentity? session = _session,
+  DateTime Function()? deviceJoinNow,
 }) {
   return buildLocalizedTestApp(
     home: home,
@@ -1923,6 +2024,8 @@ Widget _app(
         handleRecoveryEnabled,
       ),
       deviceManagementCorePortProvider.overrideWithValue(core),
+      if (deviceJoinNow != null)
+        deviceJoinClockProvider.overrideWithValue(deviceJoinNow),
       rootKeyTransferPortProvider.overrideWithValue(
         rootTransfer ?? FakeRootKeyTransferPort(),
       ),

@@ -1109,6 +1109,84 @@ class _AppTextFieldState extends State<AppTextField> {
   }
 }
 
+class AppInlineActionButton extends StatelessWidget {
+  const AppInlineActionButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.semanticsIdentifier,
+    this.isLoading = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final String? semanticsIdentifier;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final responsive = context.awikiResponsive;
+    final enabled = onPressed != null && !isLoading;
+    return AppPressable(
+      onTap: enabled ? onPressed : null,
+      semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
+      enabled: enabled,
+      scaleOnPress: true,
+      pressedScale: 0.98,
+      borderRadius: BorderRadius.circular(responsive.radius(8)),
+      builder: (context, state, child) {
+        return AnimatedOpacity(
+          opacity: state.enabled
+              ? state.pressed
+                    ? 0.78
+                    : state.hovered || state.focused
+                    ? 0.90
+                    : 1
+              : 0.55,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          child: child,
+        );
+      },
+      child: Container(
+        constraints: BoxConstraints(
+          minWidth: responsive.scaled(92),
+          maxWidth: responsive.scaled(132),
+          minHeight: responsive.compactControlHeight,
+        ),
+        padding: EdgeInsets.symmetric(horizontal: responsive.spacing(12)),
+        decoration: BoxDecoration(
+          color: AwikiMePalette.actionBlueSoft,
+          borderRadius: BorderRadius.circular(responsive.radius(8)),
+          border: Border.all(color: AwikiMePalette.actionBlueBorder),
+        ),
+        alignment: Alignment.center,
+        child: isLoading
+            ? CupertinoActivityIndicator(radius: responsive.scaled(8))
+            : FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  strutStyle: StrutStyle(
+                    fontSize: responsive.bodySm,
+                    height: 1,
+                    forceStrutHeight: true,
+                  ),
+                  style: AwikiMeTextStyles.buttonLabel.copyWith(
+                    color: AwikiMePalette.actionBlue,
+                    fontSize: responsive.bodySm,
+                    height: 1,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 class AppPrimaryButton extends StatelessWidget {
   const AppPrimaryButton({
     super.key,

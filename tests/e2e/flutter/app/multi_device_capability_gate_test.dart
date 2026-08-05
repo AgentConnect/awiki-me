@@ -73,6 +73,30 @@ void main() {
           findsOneWidget,
         );
         expect(
+          find.bySemanticsIdentifier('multi-device-send-otp'),
+          findsOneWidget,
+        );
+        final phoneField = find.bySemanticsIdentifier(
+          'multi-device-join-phone',
+        );
+        final handleField = find.bySemanticsIdentifier(
+          'multi-device-join-handle',
+        );
+        final otpField = find.bySemanticsIdentifier('multi-device-join-otp');
+        final sendOtp = find.bySemanticsIdentifier('multi-device-send-otp');
+        expect(
+          tester.getTopLeft(phoneField).dy,
+          lessThan(tester.getTopLeft(handleField).dy),
+        );
+        expect(
+          tester.getTopLeft(handleField).dy,
+          lessThan(tester.getTopLeft(otpField).dy),
+        );
+        expect(
+          tester.getCenter(sendOtp).dx,
+          greaterThan(tester.getCenter(otpField).dx),
+        );
+        expect(
           find.bySemanticsIdentifier('multi-device-start-join'),
           findsOneWidget,
         );

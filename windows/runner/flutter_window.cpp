@@ -7,6 +7,7 @@
 
 #include "app_constants.h"
 #include "flutter/generated_plugin_registrant.h"
+#include "window_placement.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -17,6 +18,8 @@ bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
     return false;
   }
+
+  awiki::WindowPlacementStore::Restore(GetHandle());
 
   RECT frame = GetClientArea();
 
@@ -35,6 +38,38 @@ bool FlutterWindow::OnCreate() {
       GetHandle(), flutter_controller_->engine());
   windows_region_capture_ = std::make_unique<WindowsRegionCapture>(
       GetHandle(), flutter_controller_->engine());
+  desktop_window_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          awiki::kDesktopWindowChannel,
+          &flutter::StandardMethodCodec::GetInstance());
+  desktop_window_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "resetPlacement") {
+          awiki::WindowPlacementStore::Reset(GetHandle());
+          result->Success();
+          return;
+        }
+        result->NotImplemented();
+      });
+  desktop_startup_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          awiki::kDesktopStartupChannel,
+          &flutter::StandardMethodCodec::GetInstance());
+  desktop_startup_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        if (call.method_name() == "presentReadyContent") {
+          PresentStartupContent();
+          result->Success();
+          return;
+        }
+        result->NotImplemented();
+      });
   scope_secret_channel_ =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(),
@@ -47,18 +82,29 @@ bool FlutterWindow::OnCreate() {
         scope_secret_store_.HandleMethodCall(call, std::move(result));
       });
 
-  flutter_controller_->engine()->SetNextFrameCallback(
-      [this]() { this->Show(); });
+  if (::SetTimer(GetHandle(), awiki::kStartupPresentationTimerId, 12000,
+                 nullptr) == 0) {
+    PresentStartupContent();
+  }
 
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
+  // Keep rendering while hidden so Flutter can finish the real destination
+  // frame and signal that the native window is ready to be presented.
   flutter_controller_->ForceRedraw();
 
   return true;
 }
 
 void FlutterWindow::OnDestroy() {
+  ::KillTimer(GetHandle(), awiki::kStartupPresentationTimerId);
+  awiki::WindowPlacementStore::Save(GetHandle());
+  if (desktop_startup_channel_ != nullptr) {
+    desktop_startup_channel_->SetMethodCallHandler(nullptr);
+  }
+  desktop_startup_channel_.reset();
+  if (desktop_window_channel_ != nullptr) {
+    desktop_window_channel_->SetMethodCallHandler(nullptr);
+  }
+  desktop_window_channel_.reset();
   if (scope_secret_channel_ != nullptr) {
     scope_secret_channel_->SetMethodCallHandler(nullptr);
   }
@@ -72,6 +118,15 @@ void FlutterWindow::OnDestroy() {
   Win32Window::OnDestroy();
 }
 
+void FlutterWindow::PresentStartupContent() {
+  if (startup_content_presented_) {
+    return;
+  }
+  startup_content_presented_ = true;
+  ::KillTimer(GetHandle(), awiki::kStartupPresentationTimerId);
+  Show();
+}
+
 LRESULT
 FlutterWindow::MessageHandler(HWND hwnd,
                               UINT const message,
@@ -83,6 +138,17 @@ FlutterWindow::MessageHandler(HWND hwnd,
   if (message == awiki::kExitReadyMessage) {
     ::DestroyWindow(hwnd);
     return 0;
+  }
+
+  if (message == WM_TIMER &&
+      wparam == awiki::kStartupPresentationTimerId) {
+    PresentStartupContent();
+    return 0;
+  }
+
+  if (message == WM_EXITSIZEMOVE ||
+      (message == WM_SIZE && wparam == SIZE_MAXIMIZED)) {
+    awiki::WindowPlacementStore::Save(hwnd);
   }
 
   if (desktop_shell_) {
@@ -112,8 +178,10 @@ FlutterWindow::MessageHandler(HWND hwnd,
     case WM_GETMINMAXINFO: {
       auto* min_max = reinterpret_cast<MINMAXINFO*>(lparam);
       const UINT dpi = ::GetDpiForWindow(hwnd);
-      min_max->ptMinTrackSize.x = ::MulDiv(960, dpi, 96);
-      min_max->ptMinTrackSize.y = ::MulDiv(640, dpi, 96);
+      const SIZE minimum =
+          awiki::WindowPlacementStore::MinimumTrackSize(hwnd, dpi);
+      min_max->ptMinTrackSize.x = minimum.cx;
+      min_max->ptMinTrackSize.y = minimum.cy;
       return 0;
     }
   }

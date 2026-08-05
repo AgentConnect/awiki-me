@@ -385,7 +385,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           keyboardType: TextInputType.number,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-otp-input',
-          suffix: _VerificationInlineButton(
+          suffix: AppInlineActionButton(
             semanticsIdentifier: 'e2e-send-otp-button',
             label: onboarding.isOtpResendCoolingDown
                 ? context.l10n.onboardingResendOtpIn(
@@ -427,7 +427,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           placeholder: context.l10n.onboardingEmailPlaceholder,
           keyboardType: TextInputType.emailAddress,
           showLabel: !responsive.isPhone,
-          suffix: _VerificationInlineButton(
+          suffix: AppInlineActionButton(
             label: onboarding.isEmailResendCoolingDown
                 ? context.l10n.onboardingResendActivationEmailIn(
                     onboarding.emailResendCountdown,

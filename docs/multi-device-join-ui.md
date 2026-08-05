@@ -76,7 +76,10 @@ SMS OTP 只进入发起方法；域内 exchange 返回的 account token 只存�
 发码端返回 HTTP `429` 时，User Service 的 `Retry-After` 是重试时间的机器可读事实源；
 data adapter 只把有界秒数投影为 typed rate-limit error，不向 presentation 透传 Problem
 JSON 或供应商详情。Join 页面显示明确的“发送过于频繁”提示并在剩余时间内禁用重发，
-不得将限流降级为通用“设备操作失败”。
+不得将限流降级为通用“设备操作失败”。发码成功时，adapter 同样只返回不含手机号、
+Handle 或供应商信息的重发等待时间；页面按手机号与 Handle 组成的当前目标维护短生命周期
+倒计时，发送中禁用重复请求，成功后给出轻量提示。切换目标只切换当前展示的倒计时，
+不会丢失原目标尚未结束的重发边界。
 
 JoinRequested / JoinClaimed / JoinResponseVerified 是通用系统通知承载的业务 payload。
 Message Service 按标准 P3 signed message 传输，Core 负责验证可信 service DID、proof、

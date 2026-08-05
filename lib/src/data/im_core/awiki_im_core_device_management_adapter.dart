@@ -109,6 +109,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   static const String accountVerificationExchangePath =
       '/user-service/auth/account-verification/exchange';
   static const String smsCodePath = '/user-service/auth/sms-codes';
+  static const int joinSmsResendCooldownSeconds = 60;
 
   final AwikiImCoreInstance _coreInstance;
   final String userServiceUrl;
@@ -120,7 +121,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   final AwikiImCoreRevokeDevice _revokeDevice;
 
   @override
-  Future<void> sendJoinSmsOtp({
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,
   }) async {
@@ -136,6 +137,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
               'purpose': 'awiki.device.join.v1',
               'target_handle': target.handle,
               'target_handle_domain': target.domain,
+              'rate_limit_seconds': joinSmsResendCooldownSeconds,
             }),
           )
           .timeout(_timeout);
@@ -152,6 +154,9 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
         'sms_code_http_${response.statusCode}',
       );
     }
+    return const DeviceJoinSmsOtpSendReceipt(
+      retryAfterSeconds: joinSmsResendCooldownSeconds,
+    );
   }
 
   @override

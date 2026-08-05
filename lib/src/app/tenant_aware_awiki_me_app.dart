@@ -10,10 +10,12 @@ import 'package:flutter/services.dart';
 import '../../l10n/app_localizations.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/desktop_shell_service.dart';
+import '../application/desktop_startup_presentation_service.dart';
 import '../application/tenant/app_tenant.dart';
 import '../data/tenant/app_tenant_store.dart';
 import '../data/services/app_notification_facade.dart';
 import '../data/services/method_channel_desktop_shell_service.dart';
+import '../data/services/method_channel_desktop_startup_presentation_service.dart';
 import '../data/storage/scope_secret_repository_factory.dart';
 import '../data/im_core/awiki_im_core_runtime.dart';
 import '../data/im_core/awiki_im_core_secret_storage.dart';
@@ -21,9 +23,11 @@ import '../data/im_core/storage_scope_im_core_validator.dart';
 import '../data/push/remote_push_client_factory.dart';
 import '../domain/services/remote_push_client.dart';
 import '../presentation/shared/awiki_me_design.dart';
+import '../presentation/shared/desktop_startup_ready_boundary.dart';
 import '../presentation/shared/responsive_layout.dart';
 import '../presentation/shared/startup_splash.dart';
 import 'app_locale.dart';
+import 'app_services.dart';
 import 'awiki_me_app.dart';
 import 'bootstrap.dart';
 
@@ -32,11 +36,13 @@ class TenantAwareAwikiMeApp extends StatefulWidget {
     super.key,
     this.appStateRoot,
     this.desktopShellService,
+    this.desktopStartupPresentationService,
     this.remotePushClient,
   });
 
   final String? appStateRoot;
   final DesktopShellService? desktopShellService;
+  final DesktopStartupPresentationService? desktopStartupPresentationService;
   final RemotePushClient? remotePushClient;
 
   @override
@@ -48,6 +54,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     implements AppTenantActions {
   late final AppTenantStore _store;
   late final DesktopShellService _desktopShell;
+  late final DesktopStartupPresentationService _desktopStartupPresentation;
   late final DesktopShellLifecycleCoordinator _shellLifecycle;
   late final StreamSubscription<DesktopShellEvent> _shellSubscription;
   late final Future<void> _shellReady;
@@ -69,6 +76,9 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         (Platform.isWindows
             ? MethodChannelDesktopShellService()
             : const NoopDesktopShellService());
+    _desktopStartupPresentation =
+        widget.desktopStartupPresentationService ??
+        buildDesktopStartupPresentationService();
     _shellLifecycle = DesktopShellLifecycleCoordinator(shell: _desktopShell);
     _shellSubscription = _desktopShell.events.listen(_handleShellEvent);
     _shellReady = _desktopShell.initialize();
@@ -194,10 +204,13 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
       },
     );
     final localeMode = await bootstrap.localePreferenceService.loadMode();
+    final displayScale = await bootstrap.displayScalePreferenceService
+        .loadScale();
     return _TenantRuntime(
       registry: registry,
       bootstrap: bootstrap,
       localeMode: localeMode,
+      displayScale: displayScale,
     );
   }
 
@@ -419,6 +432,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
             return buildTenantBootstrapErrorApp(
               snapshot.error,
               onRetry: () => setState(_startInitialLoad),
+              startupPresentationService: _desktopStartupPresentation,
             );
           }
           return _TenantBootstrapLoadingApp(progress: _bootstrapProgress);
@@ -426,6 +440,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
         return AwikiMeApp(
           key: ValueKey<String>(runtime.registry.activeTenant.id),
           bootstrap: runtime.bootstrap,
+          initialDisplayScale: runtime.displayScale,
           providerOverrides: <Override>[
             appLocaleModeProvider.overrideWith((ref) => runtime.localeMode),
             appTenantRegistryProvider.overrideWithValue(runtime.registry),
@@ -433,6 +448,9 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
               runtime.registry.activeTenant,
             ),
             appTenantActionsProvider.overrideWithValue(this),
+            desktopStartupPresentationServiceProvider.overrideWithValue(
+              _desktopStartupPresentation,
+            ),
           ],
         );
       },
@@ -443,11 +461,13 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
 class _TenantBootstrapErrorApp extends StatelessWidget {
   const _TenantBootstrapErrorApp({
     required this.error,
+    required this.startupPresentationService,
     this.onRetry,
     this.onExit,
   });
 
   final Object? error;
+  final DesktopStartupPresentationService startupPresentationService;
   final VoidCallback? onRetry;
   final VoidCallback? onExit;
 
@@ -460,60 +480,63 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
       theme: appTheme.cupertinoTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: CupertinoPageScaffold(
-        backgroundColor: AwikiMePalette.canvas,
-        child: AwikiAdaptiveScaffold(
-          maxWidth: 420,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                const Text(
-                  'AWikiMe failed to start.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AwikiMePalette.actionInk,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SelectionArea(
-                  child: Text(
-                    'Diagnostic code: $diagnosticCode',
+      home: DesktopStartupReadyBoundary(
+        presentationService: startupPresentationService,
+        child: CupertinoPageScaffold(
+          backgroundColor: AwikiMePalette.canvas,
+          child: AwikiAdaptiveScaffold(
+            maxWidth: 420,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const Text(
+                    'AWikiMe failed to start.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AwikiMePalette.actionMuted,
-                      fontSize: 13,
-                      height: 1.35,
+                    style: TextStyle(
+                      color: AwikiMePalette.actionInk,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  alignment: WrapAlignment.center,
-                  children: <Widget>[
-                    CupertinoButton(
-                      onPressed: () => Clipboard.setData(
-                        ClipboardData(text: diagnosticCode),
+                  const SizedBox(height: 12),
+                  SelectionArea(
+                    child: Text(
+                      'Diagnostic code: $diagnosticCode',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AwikiMePalette.actionMuted,
+                        fontSize: 13,
+                        height: 1.35,
                       ),
-                      child: const Text('Copy diagnostics'),
                     ),
-                    CupertinoButton(
-                      onPressed: onExit ?? SystemNavigator.pop,
-                      child: const Text('Exit'),
-                    ),
-                    if (onRetry != null)
-                      CupertinoButton.filled(
-                        onPressed: onRetry,
-                        child: const Text('Retry'),
+                  ),
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: <Widget>[
+                      CupertinoButton(
+                        onPressed: () => Clipboard.setData(
+                          ClipboardData(text: diagnosticCode),
+                        ),
+                        child: const Text('Copy diagnostics'),
                       ),
-                  ],
-                ),
-              ],
+                      CupertinoButton(
+                        onPressed: onExit ?? SystemNavigator.pop,
+                        child: const Text('Exit'),
+                      ),
+                      if (onRetry != null)
+                        CupertinoButton.filled(
+                          onPressed: onRetry,
+                          child: const Text('Retry'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -527,7 +550,14 @@ Widget buildTenantBootstrapErrorApp(
   Object? error, {
   VoidCallback? onRetry,
   VoidCallback? onExit,
-}) => _TenantBootstrapErrorApp(error: error, onRetry: onRetry, onExit: onExit);
+  DesktopStartupPresentationService startupPresentationService =
+      const NoopDesktopStartupPresentationService(),
+}) => _TenantBootstrapErrorApp(
+  error: error,
+  startupPresentationService: startupPresentationService,
+  onRetry: onRetry,
+  onExit: onExit,
+);
 
 @visibleForTesting
 String tenantBootstrapDiagnosticCode(Object? error) {
@@ -557,17 +587,20 @@ class _TenantRuntime {
     required this.registry,
     required this.bootstrap,
     required this.localeMode,
+    required this.displayScale,
   });
 
   final AppTenantRegistry registry;
   final AppBootstrap bootstrap;
   final AppLocaleMode localeMode;
+  final double displayScale;
 
   _TenantRuntime copyWith({AppTenantRegistry? registry}) {
     return _TenantRuntime(
       registry: registry ?? this.registry,
       bootstrap: bootstrap,
       localeMode: localeMode,
+      displayScale: displayScale,
     );
   }
 }
@@ -593,7 +626,7 @@ class _TenantBootstrapLoadingApp extends StatelessWidget {
       theme: appTheme.cupertinoTheme,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: AwikiMeStartupSplash(statusLabel: statusLabel),
+      home: AwikiMeStartupPlaceholder(statusLabel: statusLabel),
     );
   }
 }

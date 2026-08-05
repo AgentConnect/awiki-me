@@ -2052,6 +2052,30 @@ abstract class AppLocalizations {
   /// **'English'**
   String get settingsLanguageEnglish;
 
+  /// No description provided for @settingsDisplayAndWindow.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示与窗口'**
+  String get settingsDisplayAndWindow;
+
+  /// No description provided for @settingsDisplayScale.
+  ///
+  /// In zh, this message translates to:
+  /// **'界面缩放'**
+  String get settingsDisplayScale;
+
+  /// No description provided for @settingsDisplayScaleReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复 100%'**
+  String get settingsDisplayScaleReset;
+
+  /// No description provided for @settingsWindowPlacementReset.
+  ///
+  /// In zh, this message translates to:
+  /// **'重置窗口大小和位置'**
+  String get settingsWindowPlacementReset;
+
   /// No description provided for @settingsPushNotification.
   ///
   /// In zh, this message translates to:

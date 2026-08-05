@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/app/app_locale.dart';
 import 'package:awiki_me/src/app/ui_feedback.dart';
+import 'package:awiki_me/src/application/desktop_window_placement_service.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
@@ -9,12 +10,14 @@ import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/settings/language_selection_page.dart';
+import 'package:awiki_me/src/presentation/settings/display_settings_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +25,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets(
+    'desktop display settings remain usable at the minimum compact width',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await tester.binding.setSurfaceSize(const Size(360, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final placement = _FakeDesktopWindowPlacementService();
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const _DisplayScaleTestHost(),
+          providerOverrides: <Override>[
+            desktopWindowPlacementServiceProvider.overrideWithValue(placement),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      final displayRow = find.byKey(const Key('settings-display-row'));
+      await tester.ensureVisible(displayRow);
+      await tester.tap(displayRow);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DisplaySettingsPage), findsOneWidget);
+      expect(find.byKey(const Key('display-scale-slider')), findsOneWidget);
+      expect(find.text('100%'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(DisplaySettingsPage)),
+      );
+      container.read(displayScaleProvider.notifier).setScale(1.3);
+      await tester.pump();
+      expect(find.text('130%'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.byKey(const Key('display-scale-reset-row')));
+      await tester.pump();
+      expect(find.text('100%'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('window-placement-reset-row')));
+      await tester.pump();
+      expect(placement.resetCalls, 1);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
   testWidgets('设置页导出身份凭证显示暂未实现普通提示', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
@@ -1397,6 +1448,28 @@ void main() {
     expect(control.lastRevokedPersonalAgentDid, 'did:agent:message:two');
     expect(identities.lastRevokedDaemonSubkeySelector, isNull);
   });
+}
+
+final class _FakeDesktopWindowPlacementService
+    implements DesktopWindowPlacementService {
+  int resetCalls = 0;
+
+  @override
+  Future<void> resetPlacement() async {
+    resetCalls += 1;
+  }
+}
+
+final class _DisplayScaleTestHost extends ConsumerWidget {
+  const _DisplayScaleTestHost();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AwikiDisplayScaleScope(
+      scale: ref.watch(displayScaleProvider),
+      child: const SettingsPage(),
+    );
+  }
 }
 
 class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {

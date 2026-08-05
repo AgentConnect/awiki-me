@@ -1,44 +1,66 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AwikiDisplayScale {
-  const AwikiDisplayScale._();
+import '../../application/display_scale_preference_service.dart';
 
-  // User-facing 100% uses the former 106% layout as the product baseline.
-  static const double layoutBaseline = 1.06;
-  static const double min = 0.76;
-  static const double max = 1.32;
-  static const double step = 0.06;
-  static const double normal = 1.0;
-
-  static double normalize(double value) {
-    return value.clamp(min, max).toDouble();
-  }
-
-  static double effective(double userScale) {
-    return normalize(userScale) * layoutBaseline;
-  }
-}
+export '../../application/display_scale_preference_service.dart'
+    show AwikiDisplayScale;
 
 class DisplayScaleController extends StateNotifier<double> {
-  DisplayScaleController() : super(AwikiDisplayScale.normal);
+  DisplayScaleController({
+    double initialScale = AwikiDisplayScale.normal,
+    DisplayScalePreferenceService preferenceService =
+        const NoopDisplayScalePreferenceService(),
+  }) : _preferenceService = preferenceService,
+       super(AwikiDisplayScale.nearestLevel(initialScale));
+
+  final DisplayScalePreferenceService _preferenceService;
+  Future<void> _pendingSave = Future<void>.value();
+
+  double get scale => state;
 
   void increase() {
-    state = AwikiDisplayScale.normalize(state + AwikiDisplayScale.step);
+    _setScale(AwikiDisplayScale.increase(state));
   }
 
   void decrease() {
-    state = AwikiDisplayScale.normalize(state - AwikiDisplayScale.step);
+    _setScale(AwikiDisplayScale.decrease(state));
   }
 
   void reset() {
-    state = AwikiDisplayScale.normal;
+    _setScale(AwikiDisplayScale.normal);
+  }
+
+  void setScale(double scale) {
+    _setScale(AwikiDisplayScale.nearestLevel(scale));
+  }
+
+  void _setScale(double scale) {
+    if (state == scale) return;
+    state = scale;
+    _pendingSave = _pendingSave
+        .then((_) => _preferenceService.saveScale(scale))
+        .catchError((Object _, StackTrace __) {});
   }
 }
 
+final initialDisplayScaleProvider = Provider<double>(
+  (ref) => AwikiDisplayScale.normal,
+);
+
+final displayScalePreferenceServiceProvider =
+    Provider<DisplayScalePreferenceService>(
+      (ref) => const NoopDisplayScalePreferenceService(),
+    );
+
 final displayScaleProvider =
     StateNotifierProvider<DisplayScaleController, double>(
-      (ref) => DisplayScaleController(),
+      (ref) => DisplayScaleController(
+        initialScale: ref.watch(initialDisplayScaleProvider),
+        preferenceService: ref.watch(displayScalePreferenceServiceProvider),
+      ),
     );
 
 class AwikiDisplayScaleScope extends InheritedWidget {

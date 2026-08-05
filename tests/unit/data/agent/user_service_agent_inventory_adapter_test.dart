@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 
 void main() {
   test(
-    'issueDaemonToken sends controller_handle without daemon handle',
+    'issueDaemonToken delegates the default name and daemon handle to the server',
     () async {
       final httpClient = _CapturingHttpClient();
       final adapter = UserServiceAgentInventoryAdapter(
@@ -35,6 +35,10 @@ void main() {
       expect(params['controller_did'], 'did:human:alice');
       expect(params['controller_handle'], 'alice.anpclaw.com');
       expect(params.containsKey('handle'), isFalse);
+      final metadata = params['metadata'] as Map;
+      expect(metadata.containsKey('default_display_name'), isFalse);
+      expect(metadata['client'], 'awiki-me');
+      expect(metadata['client_platform'], 'macos');
     },
   );
 

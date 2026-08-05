@@ -47,6 +47,9 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   Future<DeviceJoinProgress> Function(String joinSessionId)? pollNewLoader;
   Object? pollError;
   Object? sendOtpError;
+  Future<DeviceJoinSmsOtpSendReceipt> Function()? sendOtpLoader;
+  DeviceJoinSmsOtpSendReceipt sendOtpReceipt =
+      const DeviceJoinSmsOtpSendReceipt(retryAfterSeconds: 60);
   Object? revokeError;
   Future<DeviceRevokeResult> Function({
     required String selector,
@@ -75,7 +78,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   bool? lastRevokePresenceConfirmed;
 
   @override
-  Future<void> sendJoinSmsOtp({
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
     required String handle,
     required String phone,
   }) async {
@@ -84,6 +87,8 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     if (error != null) {
       throw error;
     }
+    final loader = sendOtpLoader;
+    return loader == null ? sendOtpReceipt : loader();
   }
 
   @override

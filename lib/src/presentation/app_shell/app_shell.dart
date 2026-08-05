@@ -27,6 +27,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/awiki_me_semantic_icon.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/desktop_startup_ready_boundary.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sidebar_workspace.dart';
 import '../shared/startup_splash.dart';
@@ -107,7 +108,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final runtime = ref.watch(appRuntimeProvider);
     final session = ref.watch(sessionProvider);
     if (!runtime.isInitialized) {
-      return const AwikiMeStartupSplash();
+      return const AwikiMeStartupPlaceholder();
     }
 
     final messageSync = ref.watch(messageSyncCoordinatorProvider);
@@ -134,17 +135,22 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
 
     if (!session.isLoggedIn) {
-      return Stack(
-        children: <Widget>[
-          const OnboardingPage(),
-          if (runtime.isBusy) const AwikiMeLoadingMask(),
-          if (messageSync.status == MessageSyncCoordinatorStatus.authRevoked)
-            AwikiMePersistentToast(
-              message: context.l10n.messageSyncStatusAuthRevoked,
-              danger: true,
-              bottom: 32,
-            ),
-        ],
+      return DesktopStartupReadyBoundary(
+        presentationService: ref.read(
+          desktopStartupPresentationServiceProvider,
+        ),
+        child: Stack(
+          children: <Widget>[
+            const OnboardingPage(),
+            if (runtime.isBusy) const AwikiMeLoadingMask(),
+            if (messageSync.status == MessageSyncCoordinatorStatus.authRevoked)
+              AwikiMePersistentToast(
+                message: context.l10n.messageSyncStatusAuthRevoked,
+                danger: true,
+                bottom: 32,
+              ),
+          ],
+        ),
       );
     }
 
@@ -238,58 +244,61 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           );
 
-    return AwikiShellNavigationScope(
-      child: Stack(
-        children: <Widget>[
-          e2eSemantics(
-            identifier: 'e2e-authenticated',
-            child: AwikiMeWidgets.pageBackground(
-              key: const Key('app-shell-page-background'),
-              color: expanded ? null : context.awikiTheme.surface,
-              child: SafeArea(
-                bottom: false,
-                child: AwikiSystemNavigationClearance(child: content),
+    return DesktopStartupReadyBoundary(
+      presentationService: ref.read(desktopStartupPresentationServiceProvider),
+      child: AwikiShellNavigationScope(
+        child: Stack(
+          children: <Widget>[
+            e2eSemantics(
+              identifier: 'e2e-authenticated',
+              child: AwikiMeWidgets.pageBackground(
+                key: const Key('app-shell-page-background'),
+                color: expanded ? null : context.awikiTheme.surface,
+                child: SafeArea(
+                  bottom: false,
+                  child: AwikiSystemNavigationClearance(child: content),
+                ),
               ),
             ),
-          ),
-          if (pendingJoinRequest != null)
-            _DeviceJoinRequestBanner(
-              deviceId: pendingJoinRequest.protocolDeviceId,
-              onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
-            ),
-          if (runtime.isBusy)
-            AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
-          if (_shouldShowRealtimeToast(realtimeStatus))
-            AwikiMePersistentToast(
-              message: _realtimeToastMessage(context, realtimeStatus),
-              danger:
-                  realtimeStatus == RealtimeConnectionStatus.disconnected ||
-                  realtimeStatus == RealtimeConnectionStatus.failed,
-              showSpinner:
-                  realtimeStatus == RealtimeConnectionStatus.connecting ||
-                  realtimeStatus == RealtimeConnectionStatus.reconnecting,
-              bottom: responsive.isPhone ? 96 : 32,
-            ),
-          if (_shouldShowMessageSyncBanner(messageSync))
-            AwikiMePersistentToast(
-              message: _messageSyncBannerMessage(context, messageSync),
-              danger:
-                  messageSync.shouldSurfaceRetryableFailure ||
-                  messageSync.status ==
-                      MessageSyncCoordinatorStatus.authRevoked,
-              showSpinner:
-                  messageSync.status ==
-                      MessageSyncCoordinatorStatus.recoveryRequired ||
-                  messageSync.status ==
-                      MessageSyncCoordinatorStatus.recovering ||
-                  (messageSync.status ==
-                          MessageSyncCoordinatorStatus.retryableFailure &&
-                      !messageSync.shouldSurfaceRetryableFailure),
-              bottom: _shouldShowRealtimeToast(realtimeStatus)
-                  ? (responsive.isPhone ? 154 : 90)
-                  : (responsive.isPhone ? 96 : 32),
-            ),
-        ],
+            if (pendingJoinRequest != null)
+              _DeviceJoinRequestBanner(
+                deviceId: pendingJoinRequest.protocolDeviceId,
+                onReview: () => _openDeviceJoinRequest(pendingJoinRequest),
+              ),
+            if (runtime.isBusy)
+              AwikiMeLoadingMask(label: context.l10n.commonPleaseWait),
+            if (_shouldShowRealtimeToast(realtimeStatus))
+              AwikiMePersistentToast(
+                message: _realtimeToastMessage(context, realtimeStatus),
+                danger:
+                    realtimeStatus == RealtimeConnectionStatus.disconnected ||
+                    realtimeStatus == RealtimeConnectionStatus.failed,
+                showSpinner:
+                    realtimeStatus == RealtimeConnectionStatus.connecting ||
+                    realtimeStatus == RealtimeConnectionStatus.reconnecting,
+                bottom: responsive.isPhone ? 96 : 32,
+              ),
+            if (_shouldShowMessageSyncBanner(messageSync))
+              AwikiMePersistentToast(
+                message: _messageSyncBannerMessage(context, messageSync),
+                danger:
+                    messageSync.shouldSurfaceRetryableFailure ||
+                    messageSync.status ==
+                        MessageSyncCoordinatorStatus.authRevoked,
+                showSpinner:
+                    messageSync.status ==
+                        MessageSyncCoordinatorStatus.recoveryRequired ||
+                    messageSync.status ==
+                        MessageSyncCoordinatorStatus.recovering ||
+                    (messageSync.status ==
+                            MessageSyncCoordinatorStatus.retryableFailure &&
+                        !messageSync.shouldSurfaceRetryableFailure),
+                bottom: _shouldShowRealtimeToast(realtimeStatus)
+                    ? (responsive.isPhone ? 154 : 90)
+                    : (responsive.isPhone ? 96 : 32),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -37,11 +37,13 @@ class AwikiMeApp extends StatelessWidget {
   const AwikiMeApp({
     super.key,
     required this.bootstrap,
+    this.initialDisplayScale = AwikiDisplayScale.normal,
     this.providerOverrides = const <Override>[],
     this.testFontFamily,
   });
 
   final AppBootstrap bootstrap;
+  final double initialDisplayScale;
   final List<Override> providerOverrides;
   final String? testFontFamily;
 
@@ -75,6 +77,10 @@ class AwikiMeApp extends StatelessWidget {
         localePreferenceServiceProvider.overrideWithValue(
           bootstrap.localePreferenceService,
         ),
+        displayScalePreferenceServiceProvider.overrideWithValue(
+          bootstrap.displayScalePreferenceService,
+        ),
+        initialDisplayScaleProvider.overrideWithValue(initialDisplayScale),
         updateServiceProvider.overrideWithValue(bootstrap.updateService),
         if (bootstrap.attachmentCacheService != null)
           attachmentCacheServiceProvider.overrideWithValue(

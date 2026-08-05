@@ -14,6 +14,13 @@ class DeviceJoinSmsOtpRateLimited implements Exception {
       'DeviceJoinSmsOtpRateLimited(retryAfterSeconds: $retryAfterSeconds)';
 }
 
+/// Secret-free resend boundary returned after a Join SMS request is accepted.
+class DeviceJoinSmsOtpSendReceipt {
+  const DeviceJoinSmsOtpSendReceipt({required this.retryAfterSeconds});
+
+  final int retryAfterSeconds;
+}
+
 /// Secret-free projection and action boundary used by AWiki Me.
 ///
 /// The SMS OTP is a write-only input to [beginDeviceJoinWithSms]. The adapter
@@ -24,7 +31,10 @@ class DeviceJoinSmsOtpRateLimited implements Exception {
 /// Permanent revoke accepts only an identity selector, opaque target device ID,
 /// and Host user-presence result; versions, hashes and proofs stay below Core.
 abstract interface class DeviceManagementCorePort {
-  Future<void> sendJoinSmsOtp({required String handle, required String phone});
+  Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
+    required String handle,
+    required String phone,
+  });
 
   Future<String> resolveJoinDid(String handle);
 
