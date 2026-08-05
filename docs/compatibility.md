@@ -31,11 +31,12 @@ AWiki Me currently enables Agent and Daemon features only for these exact realms
 
 ```text
 awiki.ai
+agent-connect.cn
 awiki.info
 anpclaw.com
 ```
 
-The backend must be the HTTPS origin for that hostname, the DID host must match the hostname exactly, and the realm must be in the built-in allowlist.
+The backend must be the HTTPS origin for that hostname, the DID host must match the hostname exactly, and the realm must be in the built-in allowlist. Skill Agent onboarding additionally requires the current tenant's `/user-service/server-info` response to advertise the supported V1 protocol and fixed same-origin `/cli/onboarding.md` path. A realm name alone never enables Skill onboarding.
 
 Other tenants should:
 

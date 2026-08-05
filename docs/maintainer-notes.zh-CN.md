@@ -57,7 +57,7 @@ README 有意没有写入未经验证的下载地址。发布前确认：
 
 - Web 当前不可用；
 - iOS 不应与 macOS/Android 使用同等发布措辞；
-- Agent/Daemon realm allowlist 是 `awiki.ai`、`awiki.info`、`anpclaw.com`；
+- Agent/Daemon realm allowlist 是 `awiki.ai`、`agent-connect.cn`、`awiki.info`、`anpclaw.com`；Skill onboarding 还必须有同源 server-info 能力声明；
 - AWiki Open Server 无 E2EE；
 - App 不直接拥有私钥/JWT/SecretVault root key；
 - Debug 与 Release 数据和 Keychain service 隔离；

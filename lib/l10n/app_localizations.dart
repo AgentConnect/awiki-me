@@ -4167,7 +4167,7 @@ abstract class AppLocalizations {
   /// No description provided for @agentSkillUnsupportedTenant.
   ///
   /// In zh, this message translates to:
-  /// **'Skill Agent onboarding 当前仅支持 awiki.info。'**
+  /// **'当前租户尚未启用 Skill Agent onboarding。'**
   String get agentSkillUnsupportedTenant;
 
   /// No description provided for @agentSkillInvalidResponse.

@@ -51,6 +51,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
@@ -120,6 +121,24 @@ const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
     },
   },
 };
+
+OnboardingServerInfo skillOnboardingTestServerInfo({bool enabled = true}) {
+  final base = OnboardingServerInfo.userServiceDefault();
+  return OnboardingServerInfo(
+    schemaVersion: base.schemaVersion,
+    service: base.service,
+    identity: base.identity,
+    agents: OnboardingAgentCapabilities(
+      skillOnboarding: enabled
+          ? const SkillOnboardingCapability(
+              enabled: true,
+              protocolVersion: skillOnboardingProtocolVersion,
+              onboardingPath: skillOnboardingDocumentPath,
+            )
+          : const SkillOnboardingCapability.disabled(),
+    ),
+  );
+}
 
 ConversationSummary? selectedConversationSummary(ProviderContainer container) {
   final selectedId = container.read(selectedConversationProvider);
@@ -670,6 +689,7 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   SessionIdentity? loginResult;
   bool emailVerificationResult = false;
   OnboardingServerInfo serverInfo = OnboardingServerInfo.userServiceDefault();
+  Completer<OnboardingServerInfo>? serverInfoCompleter;
   Object? serverInfoError;
   String? lastLoginCredentialName;
   ProfilePatch? lastProfilePatch;
@@ -1173,6 +1193,11 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
 
   Future<OnboardingServerInfo> loadServerInfo() async {
     loadServerInfoCalls += 1;
+    final completer = serverInfoCompleter;
+    if (completer != null) {
+      serverInfoCompleter = null;
+      return completer.future;
+    }
     final error = serverInfoError;
     if (error != null) {
       throw error;

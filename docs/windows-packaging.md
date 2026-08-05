@@ -145,6 +145,25 @@ dart run tool/generate_windows_icon.dart --check
 The packaging worker runs the check before compiling the Windows executable and
 installer.
 
+## Window placement and DPI contract
+
+Windows declares `PerMonitorV2` DPI awareness. Default and minimum client sizes
+are therefore expressed in device-independent pixels (DIP) and converted to
+physical pixels with the target monitor DPI before applying a Win32 window
+rectangle. The default client size is `1280 x 800` DIP at every supported
+Windows display scale; for example it becomes `2560 x 1600` physical pixels at
+200%. Flutter must still observe the same logical size and select the expanded
+desktop layout whenever the monitor work area can contain it.
+
+Normal window placement is stored per Windows user under the release or
+development registry namespace together with the DPI at which it was saved.
+Restore rescales the physical rectangle when the target monitor DPI changes and
+clamps it to the target work area. `MainWindowPlacementV2` is the first
+DIP-correct record. V1 records are ignored and deleted after V2 is written, so
+an upgrade cannot preserve the earlier physical-pixel default as a compact
+Flutter window. The in-app reset action deletes both record generations before
+applying the centered DIP-correct default.
+
 ## Verification
 
 The Windows worker verifies the PE x64 machine type, required FRB exports,

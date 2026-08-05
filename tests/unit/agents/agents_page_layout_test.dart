@@ -2448,6 +2448,8 @@ void main() {
     (tester) async {
       final control = FakeAgentControlService();
       final skillPort = _SkillOnboardingPortStub();
+      final gateway = FakeAwikiGateway()
+        ..serverInfo = skillOnboardingTestServerInfo();
       String? clipboardText;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         SystemChannels.platform,
@@ -2482,6 +2484,9 @@ void main() {
                 baseUrl: 'https://awiki.info',
                 didDomain: 'awiki.info',
               ),
+            ),
+            onboardingSupportServiceProvider.overrideWithValue(
+              FakeOnboardingSupportService(gateway),
             ),
             skillOnboardingPortProvider.overrideWithValue(skillPort),
           ],

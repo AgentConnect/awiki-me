@@ -31,6 +31,7 @@ AWiki Me 当前只对以下精确 realm 启用 Agent 与 Daemon 功能：
 
 ```text
 awiki.ai
+agent-connect.cn
 awiki.info
 anpclaw.com
 ```
@@ -40,6 +41,10 @@ anpclaw.com
 - backend 是对应 hostname 的 HTTPS origin；
 - DID host 与 hostname 完全一致；
 - realm 位于内置 allowlist。
+
+Skill Agent onboarding 还要求当前租户的 `/user-service/server-info` 明确声明支持 V1
+协议和固定同源 `/cli/onboarding.md` 路径。不能只根据 realm 名称推断或启用 Skill
+onboarding。
 
 其他租户应：
 

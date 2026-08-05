@@ -1,12 +1,24 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
+import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/ports/skill_onboarding_port.dart';
+import 'package:awiki_me/src/data/services/awiki_onboarding_utility_client.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../test_support.dart';
+
+const _enabledCapability = SkillOnboardingCapability(
+  enabled: true,
+  protocolVersion: skillOnboardingProtocolVersion,
+  onboardingPath: skillOnboardingDocumentPath,
+);
 
 void main() {
   test(
@@ -22,6 +34,8 @@ void main() {
           serviceOrigin: 'https://awiki.info',
           expiresAt: DateTime.utc(2026, 7, 21, 12, 30),
         ),
+        capability: _enabledCapability,
+        expectedServiceOrigin: 'https://awiki.info',
         expectedControllerDid: 'did:wba:awiki.info:user:alice',
         expectedControllerHandle: '@Alice.AWIKI.INFO',
         now: () => DateTime.utc(2026, 7, 21, 12),
@@ -74,6 +88,8 @@ void main() {
         expect(
           () => buildSkillOnboardingInstruction(
             grant: value,
+            capability: _enabledCapability,
+            expectedServiceOrigin: 'https://awiki.info',
             expectedControllerDid: 'did:wba:awiki.info:user:alice',
             expectedControllerHandle: 'alice.awiki.info',
             now: () => DateTime.utc(2026, 7, 21, 12),
@@ -84,40 +100,77 @@ void main() {
     },
   );
 
-  test('prompt builder accepts the agent-connect.cn tenant', () {
+  test('prompt builder accepts the advertised anpclaw.com tenant', () {
     final instruction = buildSkillOnboardingInstruction(
       grant: SkillOnboardingGrant(
-        token: 'awsk1_agent_connect_test_secret',
-        tokenId: 'agtok_skill_agent_connect',
-        controllerHandle: 'newhandle1.agent-connect.cn',
-        agentHandle: 'skill-test.agent-connect.cn',
-        serviceOrigin: 'https://agent-connect.cn',
+        token: 'awsk1_anpclaw_test_secret',
+        tokenId: 'agtok_skill_anpclaw',
+        controllerHandle: 'newhandle1.anpclaw.com',
+        agentHandle: 'skill-test.anpclaw.com',
+        serviceOrigin: 'https://anpclaw.com',
         expiresAt: DateTime.utc(2026, 7, 30, 13),
       ),
+      capability: _enabledCapability,
+      expectedServiceOrigin: 'https://anpclaw.com',
       expectedControllerDid:
-          'did:wba:agent-connect.cn:user:newhandle1:e1_controller',
-      expectedControllerHandle: 'newhandle1.agent-connect.cn',
+          'did:wba:anpclaw.com:user:newhandle1:e1_controller',
+      expectedControllerHandle: 'newhandle1.anpclaw.com',
       now: () => DateTime.utc(2026, 7, 30, 12),
     );
 
     expect(
       instruction.prompt,
-      contains('https://agent-connect.cn/cli/onboarding.md'),
+      contains('https://anpclaw.com/cli/onboarding.md'),
     );
     expect(
       instruction.prompt,
-      contains('service_base_url=https://agent-connect.cn'),
+      contains('service_base_url=https://anpclaw.com'),
     );
-    expect(
-      instruction.prompt,
-      contains('agent_handle=skill-test.agent-connect.cn'),
+    expect(instruction.prompt, contains('agent_handle=skill-test.anpclaw.com'));
+  });
+
+  test('prompt builder rejects disabled or malformed capabilities', () {
+    final grant = SkillOnboardingGrant(
+      token: 'awsk1_unit_test_secret_value',
+      tokenId: 'agtok_skill_1',
+      controllerHandle: 'alice.awiki.info',
+      agentHandle: 'skill-test.awiki.info',
+      serviceOrigin: 'https://awiki.info',
+      expiresAt: DateTime.utc(2026, 7, 21, 12, 30),
     );
+
+    for (final capability in <SkillOnboardingCapability>[
+      const SkillOnboardingCapability.disabled(),
+      const SkillOnboardingCapability(
+        enabled: true,
+        protocolVersion: 2,
+        onboardingPath: skillOnboardingDocumentPath,
+      ),
+      const SkillOnboardingCapability(
+        enabled: true,
+        protocolVersion: skillOnboardingProtocolVersion,
+        onboardingPath: 'https://example.com/onboarding.md',
+      ),
+    ]) {
+      expect(
+        () => buildSkillOnboardingInstruction(
+          grant: grant,
+          capability: capability,
+          expectedServiceOrigin: 'https://awiki.info',
+          expectedControllerDid: 'did:wba:awiki.info:user:alice',
+          expectedControllerHandle: 'alice.awiki.info',
+          now: () => DateTime.utc(2026, 7, 21, 12),
+        ),
+        throwsFormatException,
+      );
+    }
   });
 
   test(
     'controller keeps the instruction in memory and clears on session change',
     () async {
       final port = _FakeSkillOnboardingPort();
+      final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
       final container = ProviderContainer(
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
@@ -125,6 +178,9 @@ void main() {
               baseUrl: 'https://awiki.info',
               didDomain: 'awiki.info',
             ),
+          ),
+          onboardingSupportServiceProvider.overrideWithValue(
+            FakeOnboardingSupportService(gateway),
           ),
           skillOnboardingPortProvider.overrideWithValue(port),
         ],
@@ -153,48 +209,21 @@ void main() {
     },
   );
 
-  test('controller issues a token for the agent-connect.cn tenant', () async {
-    final port = _FakeSkillOnboardingPort(domain: 'agent-connect.cn');
-    final container = ProviderContainer(
-      overrides: <Override>[
-        awikiEnvironmentConfigProvider.overrideWithValue(
-          AwikiEnvironmentConfig(
-            baseUrl: 'https://agent-connect.cn',
-            didDomain: 'agent-connect.cn',
-          ),
-        ),
-        skillOnboardingPortProvider.overrideWithValue(port),
-      ],
-    );
-    addTearDown(container.dispose);
-    container
-        .read(sessionProvider.notifier)
-        .setSession(
-          const SessionIdentity(
-            did: 'did:wba:agent-connect.cn:user:newhandle1:e1_controller',
-            credentialName: 'newhandle1',
-            displayName: 'newhandle1',
-            handle: 'newhandle1.agent-connect.cn',
-          ),
-        );
-
-    await container.read(skillOnboardingProvider.notifier).generate();
-
-    expect(container.read(skillOnboardingProvider).error, isNull);
-    expect(container.read(skillOnboardingProvider).instruction, isNotNull);
-  });
-
   test(
-    'controller rejects non-domestic tenant before issuing a token',
+    'controller issues a token for the advertised Singapore tenant',
     () async {
-      final port = _FakeSkillOnboardingPort();
+      final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+      final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
       final container = ProviderContainer(
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
             AwikiEnvironmentConfig(
-              baseUrl: 'https://awiki.ai',
-              didDomain: 'awiki.ai',
+              baseUrl: 'https://anpclaw.com',
+              didDomain: 'anpclaw.com',
             ),
+          ),
+          onboardingSupportServiceProvider.overrideWithValue(
+            FakeOnboardingSupportService(gateway),
           ),
           skillOnboardingPortProvider.overrideWithValue(port),
         ],
@@ -204,15 +233,94 @@ void main() {
           .read(sessionProvider.notifier)
           .setSession(
             const SessionIdentity(
-              did: 'did:wba:awiki.ai:user:alice',
-              credentialName: 'alice',
-              displayName: 'Alice',
-              handle: 'alice.awiki.ai',
+              did: 'did:wba:anpclaw.com:user:newhandle1:e1_controller',
+              credentialName: 'newhandle1',
+              displayName: 'newhandle1',
+              handle: 'newhandle1.anpclaw.com',
             ),
           );
 
       await container.read(skillOnboardingProvider.notifier).generate();
 
+      expect(container.read(skillOnboardingProvider).error, isNull);
+      expect(container.read(skillOnboardingProvider).instruction, isNotNull);
+    },
+  );
+
+  test(
+    'controller rejects an untrusted tenant before capability discovery',
+    () async {
+      final port = _FakeSkillOnboardingPort(domain: 'example.com');
+      final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
+      final container = ProviderContainer(
+        overrides: <Override>[
+          awikiEnvironmentConfigProvider.overrideWithValue(
+            AwikiEnvironmentConfig(
+              baseUrl: 'https://example.com',
+              didDomain: 'example.com',
+            ),
+          ),
+          onboardingSupportServiceProvider.overrideWithValue(
+            FakeOnboardingSupportService(gateway),
+          ),
+          skillOnboardingPortProvider.overrideWithValue(port),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:wba:example.com:user:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              handle: 'alice.example.com',
+            ),
+          );
+
+      await container.read(skillOnboardingProvider.notifier).generate();
+
+      expect(port.calls, 0);
+      expect(gateway.loadServerInfoCalls, 0);
+      expect(
+        container.read(skillOnboardingProvider).error,
+        SkillOnboardingError.unsupportedTenant,
+      );
+    },
+  );
+
+  test(
+    'controller rejects a trusted tenant that has not enabled Skill',
+    () async {
+      final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+      final gateway = FakeAwikiGateway()
+        ..serverInfo = _skillServerInfo(enabled: false);
+      final container = ProviderContainer(
+        overrides: <Override>[
+          awikiEnvironmentConfigProvider.overrideWithValue(
+            AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+          ),
+          onboardingSupportServiceProvider.overrideWithValue(
+            FakeOnboardingSupportService(gateway),
+          ),
+          skillOnboardingPortProvider.overrideWithValue(port),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:wba:anpclaw.com:user:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              handle: 'alice.anpclaw.com',
+            ),
+          );
+
+      await container.read(skillOnboardingProvider.notifier).generate();
+
+      expect(gateway.loadServerInfoCalls, 1);
       expect(port.calls, 0);
       expect(
         container.read(skillOnboardingProvider).error,
@@ -220,12 +328,108 @@ void main() {
       );
     },
   );
+
+  test('session changes cancel an in-flight capability request', () async {
+    final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+    final capability = Completer<OnboardingServerInfo>();
+    final gateway = FakeAwikiGateway()..serverInfoCompleter = capability;
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(
+          AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+        ),
+        onboardingSupportServiceProvider.overrideWithValue(
+          FakeOnboardingSupportService(gateway),
+        ),
+        skillOnboardingPortProvider.overrideWithValue(port),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:wba:anpclaw.com:user:alice',
+            credentialName: 'alice',
+            displayName: 'Alice',
+            handle: 'alice.anpclaw.com',
+          ),
+        );
+
+    final pending = container.read(skillOnboardingProvider.notifier).generate();
+    await Future<void>.delayed(Duration.zero);
+    container.read(sessionProvider.notifier).clear();
+    capability.complete(_skillServerInfo());
+    await pending;
+
+    expect(port.calls, 0);
+    expect(container.read(skillOnboardingProvider).isLoading, isFalse);
+    expect(container.read(skillOnboardingProvider).instruction, isNull);
+  });
+
+  test('a server-side rollout race maps to unsupported tenant', () async {
+    final port = _FakeSkillOnboardingPort(
+      domain: 'anpclaw.com',
+      error: const AwikiOnboardingUtilityError(
+        rpcCode: -32001,
+        message: 'disabled',
+        data: <String, Object?>{
+          'reason': 'skill_onboarding_capability_disabled',
+        },
+      ),
+    );
+    final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(
+          AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+        ),
+        onboardingSupportServiceProvider.overrideWithValue(
+          FakeOnboardingSupportService(gateway),
+        ),
+        skillOnboardingPortProvider.overrideWithValue(port),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:wba:anpclaw.com:user:alice',
+            credentialName: 'alice',
+            displayName: 'Alice',
+            handle: 'alice.anpclaw.com',
+          ),
+        );
+
+    await container.read(skillOnboardingProvider.notifier).generate();
+
+    expect(
+      container.read(skillOnboardingProvider).error,
+      SkillOnboardingError.unsupportedTenant,
+    );
+  });
+}
+
+OnboardingServerInfo _skillServerInfo({bool enabled = true}) {
+  final base = OnboardingServerInfo.userServiceDefault();
+  return OnboardingServerInfo(
+    schemaVersion: base.schemaVersion,
+    service: base.service,
+    identity: base.identity,
+    agents: OnboardingAgentCapabilities(
+      skillOnboarding: enabled
+          ? _enabledCapability
+          : const SkillOnboardingCapability.disabled(),
+    ),
+  );
 }
 
 class _FakeSkillOnboardingPort implements SkillOnboardingPort {
-  _FakeSkillOnboardingPort({this.domain = 'awiki.info'});
+  _FakeSkillOnboardingPort({this.domain = 'awiki.info', this.error});
 
   final String domain;
+  final Object? error;
   int calls = 0;
   String? controllerDid;
   String? controllerHandle;
@@ -237,6 +441,9 @@ class _FakeSkillOnboardingPort implements SkillOnboardingPort {
     required String clientPlatform,
   }) async {
     calls += 1;
+    if (error != null) {
+      throw error!;
+    }
     this.controllerDid = controllerDid;
     this.controllerHandle = controllerHandle;
     return SkillOnboardingGrant(

@@ -916,6 +916,7 @@ void main() {
       jwtToken: 'test-jwt',
     );
     final harness = createFakeAwikiMeAppHarness(session: session);
+    harness.gateway.serverInfo = test_support.skillOnboardingTestServerInfo();
     final control =
         harness.bootstrap.agentControlService!
             as test_support.FakeAgentControlService;

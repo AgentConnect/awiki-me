@@ -1,14 +1,18 @@
+import '../../domain/entities/agent/skill_onboarding_instruction.dart';
+
 class OnboardingServerInfo {
   const OnboardingServerInfo({
     required this.schemaVersion,
     required this.service,
     required this.identity,
+    this.agents = const OnboardingAgentCapabilities.disabled(),
     this.deployment,
   });
 
   final int schemaVersion;
   final OnboardingServerServiceInfo service;
   final OnboardingIdentityCapabilities identity;
+  final OnboardingAgentCapabilities agents;
   final Map<String, Object?>? deployment;
 
   factory OnboardingServerInfo.fromJson(Map<String, Object?> json) {
@@ -24,6 +28,7 @@ class OnboardingServerInfo {
       identity: OnboardingIdentityCapabilities.fromJson(
         _objectValue(json['identity'], 'identity'),
       ),
+      agents: OnboardingAgentCapabilities.fromJson(json['agents']),
       deployment: _optionalObjectValue(json['deployment']),
     );
   }
@@ -148,6 +153,47 @@ class OnboardingServerInfo {
 
   bool get supportsPhoneHandleRecovery =>
       identity.handleRecovery.supportsPhoneOtp;
+}
+
+class OnboardingAgentCapabilities {
+  const OnboardingAgentCapabilities({required this.skillOnboarding});
+
+  const OnboardingAgentCapabilities.disabled()
+    : skillOnboarding = const SkillOnboardingCapability.disabled();
+
+  final SkillOnboardingCapability skillOnboarding;
+
+  factory OnboardingAgentCapabilities.fromJson(Object? raw) {
+    if (raw is! Map) {
+      return const OnboardingAgentCapabilities.disabled();
+    }
+    final agents = raw.map<String, Object?>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    final skillRaw = agents['skill_onboarding'];
+    if (skillRaw is! Map) {
+      return const OnboardingAgentCapabilities.disabled();
+    }
+    final skill = skillRaw.map<String, Object?>(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    if (skill['enabled'] != true) {
+      return const OnboardingAgentCapabilities.disabled();
+    }
+    final protocolVersion = skill['protocol_version'];
+    final onboardingPath = skill['onboarding_path'];
+    if (protocolVersion is! int || onboardingPath is! String) {
+      return const OnboardingAgentCapabilities.disabled();
+    }
+    final capability = SkillOnboardingCapability(
+      enabled: true,
+      protocolVersion: protocolVersion,
+      onboardingPath: onboardingPath,
+    );
+    return capability.supportsCurrentProtocol
+        ? OnboardingAgentCapabilities(skillOnboarding: capability)
+        : const OnboardingAgentCapabilities.disabled();
+  }
 }
 
 class OnboardingServerServiceInfo {

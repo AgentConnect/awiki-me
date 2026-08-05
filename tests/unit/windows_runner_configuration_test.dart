@@ -16,6 +16,8 @@ void expectWindowsHeaderBefore(String path, List<String> dependentHeaders) {
   }
 }
 
+int dipToPixels(int dips, int dpi) => ((dips * dpi) + 48) ~/ 96;
+
 void main() {
   test('Windows SDK headers follow the required base-header order', () {
     expectWindowsHeaderBefore('windows/runner/desktop_shell.h', <String>[
@@ -92,11 +94,19 @@ void main() {
     final window = File('windows/runner/flutter_window.cpp').readAsStringSync();
     final constants = File('windows/runner/app_constants.h').readAsStringSync();
 
-    expect(placement, contains('kMinimumClientWidth = 360'));
-    expect(placement, contains('kMinimumClientHeight = 600'));
-    expect(placement, contains('MainWindowPlacementV1'));
+    expect(placement, contains('kMinimumClientWidthDip = 360'));
+    expect(placement, contains('kMinimumClientHeightDip = 600'));
+    expect(placement, contains('kDefaultClientWidthDip = 1280'));
+    expect(placement, contains('kDefaultClientHeightDip = 800'));
+    expect(placement, contains('MainWindowPlacementV2'));
+    expect(placement, contains('kPlacementVersion = 2'));
+    expect(placement, contains('kLegacyRegistryValue'));
     expect(placement, contains('AWikiMeDevelopment'));
     expect(placement, contains('#ifdef AWIKI_RELEASE_SCOPE'));
+    expect(placement, contains('LONG DipToPixels(LONG dips, UINT dpi)'));
+    expect(placement, contains('DipToPixels(width_dip, normalized_dpi)'));
+    expect(placement, contains('DipToPixels(height_dip, normalized_dpi)'));
+    expect(placement, contains('::RegDeleteValueW(key, kLegacyRegistryValue)'));
     expect(placement, contains('ClampToWorkArea'));
     expect(placement, contains('ApplyDefaultWindowPlacement(window, false)'));
     expect(placement, contains('AdjustWindowRectExForDpi'));
@@ -104,6 +114,22 @@ void main() {
     expect(window, contains('WindowPlacementStore::Restore(GetHandle())'));
     expect(window, contains('call.method_name() == "resetPlacement"'));
     expect(constants, contains('ai.awiki.awikime/desktop_window'));
+  });
+
+  test('Windows default client DIP size is stable from 100% through 200%', () {
+    const widthDip = 1280;
+    const heightDip = 800;
+    const scaleDpi = <int>[96, 120, 144, 168, 192];
+
+    for (final dpi in scaleDpi) {
+      final physicalWidth = dipToPixels(widthDip, dpi);
+      final physicalHeight = dipToPixels(heightDip, dpi);
+      expect(physicalWidth * 96 ~/ dpi, widthDip, reason: 'dpi=$dpi width');
+      expect(physicalHeight * 96 ~/ dpi, heightDip, reason: 'dpi=$dpi height');
+    }
+
+    expect(dipToPixels(widthDip, 192), 2560);
+    expect(dipToPixels(heightDip, 192), 1600);
   });
 
   test('Windows waits for destination content before showing the window', () {

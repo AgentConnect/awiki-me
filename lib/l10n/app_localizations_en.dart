@@ -2301,7 +2301,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentSkillUnsupportedTenant =>
-      'Skill Agent onboarding is currently available only on awiki.info.';
+      'Skill Agent onboarding is not enabled for this tenant.';
 
   @override
   String get agentSkillInvalidResponse =>

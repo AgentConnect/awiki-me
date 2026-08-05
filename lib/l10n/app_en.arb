@@ -999,7 +999,7 @@
   },
   "agentErrorLoginRequired": "Please log in first.",
   "agentErrorHandleUnavailable": "This account has no available Handle, so a daemon install command cannot be created right now.",
-  "agentSkillUnsupportedTenant": "Skill Agent onboarding is currently available only on awiki.info.",
+  "agentSkillUnsupportedTenant": "Skill Agent onboarding is not enabled for this tenant.",
   "agentSkillInvalidResponse": "The registration scope returned by the service does not match this account.",
   "agentSkillRequestFailed": "The Skill Agent instruction could not be generated. Try again.",
   "agentErrorPersonalAgentDisabled": "Personal Agent is not enabled.",

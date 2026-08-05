@@ -999,7 +999,7 @@
   },
   "agentErrorLoginRequired": "请先登录。",
   "agentErrorHandleUnavailable": "当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。",
-  "agentSkillUnsupportedTenant": "Skill Agent onboarding 当前仅支持 awiki.info。",
+  "agentSkillUnsupportedTenant": "当前租户尚未启用 Skill Agent onboarding。",
   "agentSkillInvalidResponse": "服务端返回的注册范围与当前账号不一致。",
   "agentSkillRequestFailed": "暂时无法生成 Skill Agent 安装指令，请重试。",
   "agentErrorPersonalAgentDisabled": "个人助理功能未开启。",

@@ -45,13 +45,35 @@ class SkillOnboardingInstruction {
   }
 }
 
-const Set<String> skillOnboardingTenantDomains = <String>{
-  'awiki.info',
-  'agent-connect.cn',
-};
+const int skillOnboardingProtocolVersion = 1;
+const String skillOnboardingDocumentPath = '/cli/onboarding.md';
+
+class SkillOnboardingCapability {
+  const SkillOnboardingCapability({
+    required this.enabled,
+    required this.protocolVersion,
+    required this.onboardingPath,
+  });
+
+  const SkillOnboardingCapability.disabled()
+    : enabled = false,
+      protocolVersion = 0,
+      onboardingPath = '';
+
+  final bool enabled;
+  final int protocolVersion;
+  final String onboardingPath;
+
+  bool get supportsCurrentProtocol =>
+      enabled &&
+      protocolVersion == skillOnboardingProtocolVersion &&
+      onboardingPath == skillOnboardingDocumentPath;
+}
 
 SkillOnboardingInstruction buildSkillOnboardingInstruction({
   required SkillOnboardingGrant grant,
+  required SkillOnboardingCapability capability,
+  required String expectedServiceOrigin,
   required String expectedControllerDid,
   required String expectedControllerHandle,
   DateTime Function()? now,
@@ -59,6 +81,9 @@ SkillOnboardingInstruction buildSkillOnboardingInstruction({
   final serviceOrigin = grant.serviceOrigin.trim();
   final serviceUri = Uri.tryParse(serviceOrigin);
   final serviceDomain = serviceUri?.host.trim().toLowerCase() ?? '';
+  final expectedOrigin = expectedServiceOrigin.trim();
+  final expectedUri = Uri.tryParse(expectedOrigin);
+  final expectedDomain = expectedUri?.host.trim().toLowerCase() ?? '';
   final controllerDid = expectedControllerDid.trim();
   final controllerHandle = _normalizeHandle(expectedControllerHandle);
   final responseControllerHandle = _normalizeHandle(grant.controllerHandle);
@@ -67,11 +92,15 @@ SkillOnboardingInstruction buildSkillOnboardingInstruction({
   final expiresAt = grant.expiresAt.toUtc();
   final currentTime = (now ?? DateTime.now)().toUtc();
 
-  if (serviceUri == null ||
+  if (!capability.supportsCurrentProtocol ||
+      !_isCanonicalHttpsOrigin(expectedUri, expectedOrigin, expectedDomain) ||
+      serviceUri == null ||
       serviceUri.scheme != 'https' ||
       serviceOrigin != 'https://$serviceDomain' ||
-      !skillOnboardingTenantDomains.contains(serviceDomain) ||
+      serviceOrigin != expectedOrigin ||
+      serviceDomain != expectedDomain ||
       controllerDid.isEmpty ||
+      !_didUsesDomain(controllerDid, serviceDomain) ||
       controllerHandle.isEmpty ||
       responseControllerHandle != controllerHandle ||
       !controllerHandle.endsWith('.$serviceDomain') ||
@@ -85,7 +114,7 @@ SkillOnboardingInstruction buildSkillOnboardingInstruction({
 
   final expiresAtText = expiresAt.toIso8601String();
   final prompt =
-      '''Read $serviceOrigin/cli/onboarding.md and follow the instructions to install AWiki CLI and Skill, initialize a new or empty workspace, then automatically claim the one-time Skill Agent registration below and complete first-use checks.
+      '''Read $serviceOrigin${capability.onboardingPath} and follow the instructions to install AWiki CLI and Skill, initialize a new or empty workspace, then automatically claim the one-time Skill Agent registration below and complete first-use checks.
 
 AWIKI_SKILL_ONBOARDING_V1
 service_base_url=$serviceOrigin
@@ -107,4 +136,24 @@ The token authorizes exactly one new Skill Agent DID and one fixed greeting to i
 
 String _normalizeHandle(String value) {
   return value.trim().replaceFirst(RegExp(r'^@+'), '').toLowerCase();
+}
+
+bool _isCanonicalHttpsOrigin(Uri? uri, String origin, String domain) {
+  return uri != null &&
+      uri.scheme == 'https' &&
+      domain.isNotEmpty &&
+      !uri.hasPort &&
+      uri.userInfo.isEmpty &&
+      (uri.path.isEmpty || uri.path == '/') &&
+      !uri.hasQuery &&
+      !uri.hasFragment &&
+      origin == 'https://$domain';
+}
+
+bool _didUsesDomain(String did, String domain) {
+  final parts = did.split(':');
+  return parts.length >= 4 &&
+      parts[0] == 'did' &&
+      parts[1] == 'wba' &&
+      parts[2].toLowerCase() == domain;
 }

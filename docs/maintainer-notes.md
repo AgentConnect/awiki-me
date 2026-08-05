@@ -38,7 +38,7 @@ Changing the status to Beta or Stable also requires a version policy, upgrade co
 
 - Web is currently unavailable.
 - iOS must not use the same release wording as macOS and Android.
-- The Agent/Daemon realm allowlist is `awiki.ai`, `awiki.info`, and `anpclaw.com`.
+- The Agent/Daemon realm allowlist is `awiki.ai`, `agent-connect.cn`, `awiki.info`, and `anpclaw.com`; Skill onboarding also requires an explicit same-origin server-info capability.
 - AWiki Open Server has no E2EE.
 - The app does not directly own private keys, JWTs, or the SecretVault root key.
 - Debug and Release data and Keychain services are isolated.

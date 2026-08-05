@@ -63,6 +63,7 @@ void main() {
     expect(userClient.sentEmailHandles, ['alice']);
     expect(serverInfo.service.kind, 'user-service');
     expect(serverInfo.supportsPhoneHandleRecovery, isTrue);
+    expect(serverInfo.agents.skillOnboarding.supportsCurrentProtocol, isTrue);
     expect(userClient.loadServerInfoCalls, 1);
     expect(verified, isTrue);
     expect(userClient.checkedEmails, ['alice@example.test']);
@@ -232,6 +233,79 @@ void main() {
       isFalse,
     );
   });
+
+  test('Skill onboarding capability is optional and fails closed', () {
+    expect(
+      _serverInfoWithAgents(
+        null,
+      ).agents.skillOnboarding.supportsCurrentProtocol,
+      isFalse,
+    );
+    expect(
+      _serverInfoWithAgents(<String, Object?>{
+        'skill_onboarding': <String, Object?>{
+          'enabled': true,
+          'protocol_version': 1,
+          'onboarding_path': '/cli/onboarding.md',
+        },
+      }).agents.skillOnboarding.supportsCurrentProtocol,
+      isTrue,
+    );
+    for (final malformed in <Object?>[
+      <String, Object?>{
+        'skill_onboarding': <String, Object?>{
+          'enabled': true,
+          'protocol_version': 2,
+          'onboarding_path': '/cli/onboarding.md',
+        },
+      },
+      <String, Object?>{
+        'skill_onboarding': <String, Object?>{
+          'enabled': true,
+          'protocol_version': 1,
+          'onboarding_path': 'https://example.com/onboarding.md',
+        },
+      },
+      <String, Object?>{
+        'skill_onboarding': <String, Object?>{
+          'enabled': 'true',
+          'protocol_version': 1,
+          'onboarding_path': '/cli/onboarding.md',
+        },
+      },
+      <String, Object?>{
+        'skill_onboarding': <String, Object?>{
+          'enabled': true,
+          'protocol_version': '1',
+          'onboarding_path': '/cli/onboarding.md',
+        },
+      },
+    ]) {
+      expect(
+        _serverInfoWithAgents(
+          malformed,
+        ).agents.skillOnboarding.supportsCurrentProtocol,
+        isFalse,
+      );
+    }
+  });
+}
+
+OnboardingServerInfo _serverInfoWithAgents(Object? agents) {
+  return OnboardingServerInfo.fromJson(<String, Object?>{
+    'schema_version': 1,
+    'service': <String, Object?>{
+      'kind': 'user-service',
+      'name': 'AWiki User Service',
+    },
+    'identity': <String, Object?>{
+      'handle_registration': <String, Object?>{
+        'enabled': true,
+        'methods': <Object?>[],
+      },
+    },
+    if (agents != null) 'agents': agents,
+  });
 }
 
 OnboardingServerInfo _serverInfoWithRecovery(Object? recovery) {
@@ -350,6 +424,13 @@ class _FakeUserClient extends AwikiOnboardingUtilityClient {
               },
             },
           ],
+        },
+      },
+      'agents': <String, Object?>{
+        'skill_onboarding': <String, Object?>{
+          'enabled': true,
+          'protocol_version': 1,
+          'onboarding_path': '/cli/onboarding.md',
         },
       },
     };

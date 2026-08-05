@@ -2182,8 +2182,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '当前账号没有可用 Handle，暂时不能生成 Daemon 安装命令。';
 
   @override
-  String get agentSkillUnsupportedTenant =>
-      'Skill Agent onboarding 当前仅支持 awiki.info。';
+  String get agentSkillUnsupportedTenant => '当前租户尚未启用 Skill Agent onboarding。';
 
   @override
   String get agentSkillInvalidResponse => '服务端返回的注册范围与当前账号不一致。';
