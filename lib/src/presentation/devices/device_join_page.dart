@@ -44,7 +44,10 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   final Map<String, DateTime> _otpRetryAtByTarget = <String, DateTime>{};
   final Set<String> _rateLimitedOtpTargets = <String>{};
   bool _sendingOtp = false;
+  bool _normalizingPhoneInput = false;
   bool _otpSendFailed = false;
+  bool _otpDailyLimitReached = false;
+  bool _otpServiceUnavailable = false;
   bool _otpRateLimited = false;
   int _otpRetryAfterSeconds = 0;
   bool _activationPending = false;
@@ -57,6 +60,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     super.initState();
     _handleController.addListener(_handleOtpTargetChanged);
     _phoneController.addListener(_handleOtpTargetChanged);
+    _otpController.addListener(_handleJoinInputChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await ref.read(devicesProvider.notifier).loadNewDevice();
@@ -76,6 +80,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
     _otpCooldownTimer?.cancel();
     _handleController.removeListener(_handleOtpTargetChanged);
     _phoneController.removeListener(_handleOtpTargetChanged);
+    _otpController.removeListener(_handleJoinInputChanged);
     _handleController.dispose();
     _phoneController.dispose();
     _otpController.dispose();
@@ -127,6 +132,18 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
                 danger: true,
               ),
               const SizedBox(height: 12),
+            ] else if (_otpDailyLimitReached) ...<Widget>[
+              _DeviceJoinNotice(
+                message: context.l10n.deviceJoinOtpDailyLimitReached,
+                danger: true,
+              ),
+              const SizedBox(height: 12),
+            ] else if (_otpServiceUnavailable) ...<Widget>[
+              _DeviceJoinNotice(
+                message: context.l10n.deviceJoinOtpUnavailable,
+                danger: true,
+              ),
+              const SizedBox(height: 12),
             ] else if (_otpSendFailed) ...<Widget>[
               _DeviceJoinNotice(
                 message: context.l10n.deviceJoinErrorFailed,
@@ -146,6 +163,11 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
 
   Widget _buildStartForm(BuildContext context, DevicesState state) {
     final responsive = context.awikiResponsive;
+    final canSendOtp =
+        _currentOtpTargetKey != null &&
+        !state.isActionPending &&
+        !_sendingOtp &&
+        _otpRetryAfterSeconds == 0;
     return AppCardSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -158,23 +180,27 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           AppTextField(
             controller: _phoneController,
             label: context.l10n.deviceJoinPhone,
-            placeholder: '+8613800138000',
+            placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
+            showLabel: !responsive.isPhone,
+            prefix: const AppPhoneCountryCodePrefix(),
             semanticsIdentifier: 'multi-device-join-phone',
           ),
           const SizedBox(height: 12),
           AppTextField(
             controller: _handleController,
             label: context.l10n.deviceJoinHandle,
-            placeholder: 'alice',
+            placeholder: context.l10n.onboardingHandlePlaceholder,
+            showLabel: !responsive.isPhone,
             semanticsIdentifier: 'multi-device-join-handle',
           ),
           const SizedBox(height: 12),
           AppTextField(
             controller: _otpController,
             label: context.l10n.deviceJoinOtp,
-            placeholder: '123456',
+            placeholder: context.l10n.onboardingOtpPlaceholder,
             keyboardType: TextInputType.number,
+            showLabel: !responsive.isPhone,
             semanticsIdentifier: 'multi-device-join-otp',
             suffix: AppInlineActionButton(
               label: _otpRetryAfterSeconds > 0
@@ -182,12 +208,8 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
                   : context.l10n.deviceJoinSendOtp,
               semanticsIdentifier: 'multi-device-send-otp',
               isLoading: _sendingOtp,
-              onPressed:
-                  state.isActionPending ||
-                      _sendingOtp ||
-                      _otpRetryAfterSeconds > 0
-                  ? null
-                  : _sendOtp,
+              loadingLabel: context.l10n.deviceJoinSendingOtp,
+              onPressed: canSendOtp ? _sendOtp : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -310,13 +332,16 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
   }
 
   Future<void> _sendOtp() async {
-    final phone = _phoneController.text.trim();
+    final phone = _normalizedPhone;
     final handle = _handleController.text.trim();
     final targetKey = _otpTargetKey(handle: handle, phone: phone);
     if (targetKey == null || _sendingOtp || _otpRetryAfterSeconds > 0) return;
+    ref.read(devicesProvider.notifier).clearError();
     setState(() {
       _sendingOtp = true;
       _otpSendFailed = false;
+      _otpDailyLimitReached = false;
+      _otpServiceUnavailable = false;
     });
     try {
       final receipt = await ref
@@ -337,6 +362,14 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           rateLimited: true,
         );
       }
+    } on DeviceJoinSmsOtpDailyLimitReached {
+      if (mounted && _currentOtpTargetKey == targetKey) {
+        setState(() => _otpDailyLimitReached = true);
+      }
+    } on DeviceJoinSmsOtpUnavailable {
+      if (mounted && _currentOtpTargetKey == targetKey) {
+        setState(() => _otpServiceUnavailable = true);
+      }
     } catch (_) {
       if (mounted && _currentOtpTargetKey == targetKey) {
         setState(() => _otpSendFailed = true);
@@ -348,10 +381,23 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
 
   String? _otpTargetKey({required String handle, required String phone}) {
     final normalizedHandle = handle.trim().toLowerCase();
-    final normalizedPhone = phone.trim();
-    if (normalizedHandle.isEmpty || normalizedPhone.isEmpty) return null;
+    final normalizedPhone = _normalizePhone(phone);
+    if (normalizedHandle.isEmpty || !_isValidChinaMobile(normalizedPhone)) {
+      return null;
+    }
     return '$normalizedHandle\u0000$normalizedPhone';
   }
+
+  String get _normalizedPhone => _normalizePhone(_phoneController.text);
+
+  String _normalizePhone(String phone) {
+    final compact = phone.trim().replaceAll(RegExp(r'[\s-]+'), '');
+    if (compact.isEmpty || compact.startsWith('+')) return compact;
+    return '+86$compact';
+  }
+
+  bool _isValidChinaMobile(String phone) =>
+      RegExp(r'^\+861\d{10}$').hasMatch(phone);
 
   String? get _currentOtpTargetKey => _otpTargetKey(
     handle: _handleController.text,
@@ -360,7 +406,25 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
 
   void _handleOtpTargetChanged() {
     if (!mounted) return;
+    _handleJoinInputChanged();
+    if (!_normalizingPhoneInput) {
+      final raw = _phoneController.text.trim();
+      if (raw.startsWith('+86')) {
+        _normalizingPhoneInput = true;
+        final local = raw.substring(3).trimLeft();
+        _phoneController.value = TextEditingValue(
+          text: local,
+          selection: TextSelection.collapsed(offset: local.length),
+        );
+        _normalizingPhoneInput = false;
+      }
+    }
     _syncOtpCooldownForCurrentTarget(clearFailure: true);
+  }
+
+  void _handleJoinInputChanged() {
+    if (!mounted) return;
+    ref.read(devicesProvider.notifier).clearError();
   }
 
   void _startOtpCooldown({
@@ -395,7 +459,11 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
       _rateLimitedOtpTargets.remove(targetKey);
     }
     setState(() {
-      if (clearFailure) _otpSendFailed = false;
+      if (clearFailure) {
+        _otpSendFailed = false;
+        _otpDailyLimitReached = false;
+        _otpServiceUnavailable = false;
+      }
       _otpRateLimited =
           targetKey != null &&
           remaining > 0 &&
@@ -445,7 +513,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
         .read(devicesProvider.notifier)
         .beginNewDeviceJoin(
           handle: _handleController.text,
-          phone: _phoneController.text,
+          phone: _normalizedPhone,
           otp: otp,
           presenceReason: context.l10n.handleRecoveryPresenceReason,
         );

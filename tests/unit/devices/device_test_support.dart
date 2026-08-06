@@ -35,6 +35,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
       const <DeviceJoinRequestNotice>[];
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
   DeviceJoinProgress? beginResult;
+  Object? beginError;
   DeviceJoinProgress? verificationProgress;
   DeviceJoinProgress? pollNewResult;
   DeviceJoinProgress? confirmResult;
@@ -70,6 +71,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   int rejectCalls = 0;
   int cancelCalls = 0;
   int revokeCalls = 0;
+  String? lastPhone;
   String? lastOtp;
   bool? lastPreparedSasConfirmed;
   DeviceJoinRejectReason? lastRejectReason;
@@ -83,6 +85,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     required String phone,
   }) async {
     sendOtpCalls += 1;
+    lastPhone = phone;
     final error = sendOtpError;
     if (error != null) {
       throw error;
@@ -103,7 +106,12 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
     required int ttlSeconds,
   }) async {
     beginCalls += 1;
+    lastPhone = phone;
     lastOtp = otp;
+    final error = beginError;
+    if (error != null) {
+      throw error;
+    }
     return beginResult ??
         testJoinProgress(
           side: DeviceJoinSide.newDevice,

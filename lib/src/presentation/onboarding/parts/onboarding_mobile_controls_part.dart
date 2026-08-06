@@ -371,33 +371,6 @@ class _OnboardingCapabilityPanel extends StatelessWidget {
   }
 }
 
-class _PhoneFieldPrefix extends StatelessWidget {
-  const _PhoneFieldPrefix({required this.code});
-
-  final String code;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = context.awikiTheme;
-    final responsive = context.awikiResponsive;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          code,
-          style: TextStyle(
-            fontSize: responsive.bodyMd,
-            fontWeight: FontWeight.w600,
-            color: theme.title,
-          ),
-        ),
-        SizedBox(width: responsive.spacing(10)),
-        Container(width: 1, height: responsive.scaled(26), color: theme.border),
-      ],
-    );
-  }
-}
-
 class _OtpCompleteMarker extends StatelessWidget {
   const _OtpCompleteMarker({required this.controller});
 

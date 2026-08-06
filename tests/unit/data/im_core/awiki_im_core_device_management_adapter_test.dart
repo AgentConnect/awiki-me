@@ -100,6 +100,63 @@ void main() {
     );
   });
 
+  test('maps SMS 503 to a safe provider-unavailable error', () async {
+    const sensitive = 'provider detail';
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: _unusedCore,
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      httpClient: MockClient(
+        (_) async => http.Response(
+          '{"detail":"$sensitive"}',
+          503,
+          headers: const <String, String>{
+            'content-type': 'application/problem+json; charset=utf-8',
+          },
+        ),
+      ),
+    );
+
+    Object? error;
+    try {
+      await adapter.sendJoinSmsOtp(handle: 'alice', phone: '+8613800138000');
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error, isA<DeviceJoinSmsOtpUnavailable>());
+    expect(error.toString(), isNot(contains(sensitive)));
+  });
+
+  test('maps provider daily flow control to a safe typed error', () async {
+    const sensitive =
+        '[SMS_ERROR] [isv.BUSINESS_LIMIT_CONTROL] 触发天级流控Permits:20';
+    final adapter = AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+      coreInstance: _unusedCore,
+      userServiceUrl: 'https://awiki.info',
+      targetHandleDomain: 'awiki.info',
+      httpClient: MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, Object?>{'detail': sensitive}),
+          503,
+          headers: const <String, String>{
+            'content-type': 'application/problem+json; charset=utf-8',
+          },
+        ),
+      ),
+    );
+
+    Object? error;
+    try {
+      await adapter.sendJoinSmsOtp(handle: 'alice', phone: '+8613800138000');
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error, isA<DeviceJoinSmsOtpDailyLimitReached>());
+    expect(error.toString(), isNot(contains(sensitive)));
+  });
+
   test(
     'exchanges SMS OTP and immediately passes a redacted grant to Core',
     () async {

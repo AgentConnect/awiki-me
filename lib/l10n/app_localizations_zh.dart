@@ -909,6 +909,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinSendOtp => '发送验证码';
 
   @override
+  String get deviceJoinSendingOtp => '发送中…';
+
+  @override
   String deviceJoinResendOtpIn(int seconds) {
     return '重新发送（$seconds秒）';
   }
@@ -1005,6 +1008,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String deviceJoinOtpRateLimited(int seconds) {
     return '验证码发送过于频繁，请 $seconds 秒后重试';
   }
+
+  @override
+  String get deviceJoinOtpUnavailable => '短信验证码服务暂时不可用，请稍后重试';
+
+  @override
+  String get deviceJoinOtpDailyLimitReached => '验证码发送次数已达今日上限，请明天再试';
 
   @override
   String get deviceJoinErrorFailed => '设备操作失败，请刷新后重试';

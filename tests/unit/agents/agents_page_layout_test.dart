@@ -18,6 +18,7 @@ import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/avatar_badge.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_me/src/presentation/agents/skill_onboarding_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/cupertino.dart';
@@ -463,6 +464,10 @@ void main() {
     expect(menuButton, findsOneWidget);
     expect(refreshButton, findsOneWidget);
     expect(find.byTooltip('刷新智能体列表'), findsOneWidget);
+    final menuIconButton = tester.widget<AppIconButton>(menuButton);
+    expect(menuIconButton.backgroundColor, isNull);
+    expect(menuIconButton.borderColor, isNull);
+    expect(menuIconButton.borderRadius, isNull);
     expect(
       find.descendant(
         of: menuButton,

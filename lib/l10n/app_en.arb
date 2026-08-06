@@ -347,6 +347,7 @@
   "deviceJoinPhone": "Linked phone number",
   "deviceJoinOtp": "SMS verification code",
   "deviceJoinSendOtp": "Send code",
+  "deviceJoinSendingOtp": "Sending…",
   "deviceJoinResendOtpIn": "Resend ({seconds}s)",
   "@deviceJoinResendOtpIn": {
     "placeholders": {
@@ -398,6 +399,8 @@
       "seconds": {"type": "int"}
     }
   },
+  "deviceJoinOtpUnavailable": "The SMS verification service is temporarily unavailable. Try again later.",
+  "deviceJoinOtpDailyLimitReached": "Today's verification-code limit has been reached. Try again tomorrow.",
   "deviceJoinErrorFailed": "Device operation failed. Refresh and try again.",
   "settingsLanguage": "Language",
   "settingsLanguageSystem": "Follow system",

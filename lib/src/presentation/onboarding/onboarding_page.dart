@@ -320,9 +320,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           keyboardType: TextInputType.phone,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-phone-input',
-          prefix: responsive.isPhone
-              ? const _PhoneFieldPrefix(code: '+86')
-              : null,
+          prefix: responsive.isPhone ? const AppPhoneCountryCodePrefix() : null,
         ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(
@@ -365,9 +363,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           keyboardType: TextInputType.phone,
           showLabel: !responsive.isPhone,
           semanticsIdentifier: 'e2e-phone-input',
-          prefix: responsive.isPhone
-              ? const _PhoneFieldPrefix(code: '+86')
-              : null,
+          prefix: responsive.isPhone ? const AppPhoneCountryCodePrefix() : null,
         ),
         SizedBox(height: responsive.spacing(14)),
         AppTextField(

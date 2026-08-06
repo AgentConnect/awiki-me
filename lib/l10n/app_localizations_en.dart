@@ -954,6 +954,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceJoinSendOtp => 'Send code';
 
   @override
+  String get deviceJoinSendingOtp => 'Sending…';
+
+  @override
   String deviceJoinResendOtpIn(int seconds) {
     return 'Resend (${seconds}s)';
   }
@@ -1059,6 +1062,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String deviceJoinOtpRateLimited(int seconds) {
     return 'Verification codes are being sent too frequently. Try again in $seconds seconds.';
   }
+
+  @override
+  String get deviceJoinOtpUnavailable =>
+      'The SMS verification service is temporarily unavailable. Try again later.';
+
+  @override
+  String get deviceJoinOtpDailyLimitReached =>
+      'Today\'s verification-code limit has been reached. Try again tomorrow.';
 
   @override
   String get deviceJoinErrorFailed =>

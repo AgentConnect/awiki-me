@@ -216,6 +216,11 @@ class DevicesController extends StateNotifier<DevicesState> {
   bool get _handleRecoveryEnabled =>
       ref.read(multiDeviceHandleRecoveryEnabledProvider);
 
+  void clearError() {
+    if (!mounted || state.error == null) return;
+    state = state.copyWith(clearError: true);
+  }
+
   String? get _selector {
     final did = ref.read(sessionProvider).session?.did.trim();
     return did == null || did.isEmpty ? null : did;

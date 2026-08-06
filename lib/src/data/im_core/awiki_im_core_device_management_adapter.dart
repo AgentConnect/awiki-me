@@ -155,6 +155,14 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
         retryAfterSeconds: _smsRetryAfterSeconds(response),
       );
     }
+    if (response.statusCode == 502 ||
+        response.statusCode == 503 ||
+        response.statusCode == 504) {
+      if (_isSmsDailyLimitResponse(response)) {
+        throw const DeviceJoinSmsOtpDailyLimitReached();
+      }
+      throw const DeviceJoinSmsOtpUnavailable();
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw DeviceManagementTransportException(
         'sms_code_http_${response.statusCode}',
@@ -444,6 +452,17 @@ int _smsRetryAfterSeconds(http.Response response) {
   }
   final seconds = headerSeconds ?? bodySeconds ?? _defaultSmsRetryAfterSeconds;
   return seconds.clamp(1, _maxSmsRetryAfterSeconds).toInt();
+}
+
+bool _isSmsDailyLimitResponse(http.Response response) {
+  try {
+    final payload = jsonDecode(response.body);
+    final detail = payload is Map ? payload['detail']?.toString() ?? '' : '';
+    return detail.contains('isv.BUSINESS_LIMIT_CONTROL') &&
+        detail.contains('天级流控');
+  } on Object {
+    return false;
+  }
 }
 
 class DeviceManagementTransportException implements Exception {

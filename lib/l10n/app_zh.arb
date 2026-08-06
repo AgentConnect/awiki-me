@@ -347,6 +347,7 @@
   "deviceJoinPhone": "已绑定手机号",
   "deviceJoinOtp": "短信验证码",
   "deviceJoinSendOtp": "发送验证码",
+  "deviceJoinSendingOtp": "发送中…",
   "deviceJoinResendOtpIn": "重新发送（{seconds}秒）",
   "@deviceJoinResendOtpIn": {
     "placeholders": {
@@ -398,6 +399,8 @@
       "seconds": {"type": "int"}
     }
   },
+  "deviceJoinOtpUnavailable": "短信验证码服务暂时不可用，请稍后重试",
+  "deviceJoinOtpDailyLimitReached": "验证码发送次数已达今日上限，请明天再试",
   "deviceJoinErrorFailed": "设备操作失败，请刷新后重试",
   "settingsLanguage": "语言",
   "settingsLanguageSystem": "跟随系统",

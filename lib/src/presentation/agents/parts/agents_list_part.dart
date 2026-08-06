@@ -217,9 +217,6 @@ class _AgentListHeader extends StatelessWidget {
               semanticLabel: context.l10n.commonMoreActions,
               tooltip: context.l10n.commonMoreActions,
               size: responsive.displayScaled(32),
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
-              borderRadius: BorderRadius.circular(999),
               child: Icon(
                 CupertinoIcons.plus,
                 size: responsive.iconMd,

@@ -1757,6 +1757,13 @@ void main() {
     final handle = fields.at(1);
     final otp = fields.at(2);
     final send = find.byType(AppInlineActionButton);
+    final phoneField = tester.widget<AppTextField>(
+      find.byType(AppTextField).at(0),
+    );
+    final sendButton = tester.widget<AppInlineActionButton>(send);
+    expect(phoneField.prefix, isA<AppPhoneCountryCodePrefix>());
+    expect(find.text('+86'), findsOneWidget);
+    expect(sendButton.onPressed, isNull);
     expect(tester.getTopLeft(phone).dy, lessThan(tester.getTopLeft(handle).dy));
     expect(tester.getTopLeft(handle).dy, lessThan(tester.getTopLeft(otp).dy));
     expect(tester.getCenter(send).dx, greaterThan(tester.getCenter(otp).dx));
@@ -1784,12 +1791,30 @@ void main() {
 
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.pump();
+    expect(
+      tester.widget<CupertinoTextField>(fields.at(0)).controller?.text,
+      '13800138000',
+    );
+    expect(
+      tester
+          .widget<AppInlineActionButton>(find.byType(AppInlineActionButton))
+          .onPressed,
+      isNull,
+    );
     await tester.enterText(fields.at(1), 'alice');
+    await tester.pump();
     final sendButton = find.byType(AppInlineActionButton);
+    expect(
+      tester.widget<AppInlineActionButton>(sendButton).onPressed,
+      isNotNull,
+    );
     await tester.tap(sendButton);
     await tester.pump();
 
     expect(core.sendOtpCalls, 1);
+    expect(core.lastPhone, '+8613800138000');
+    expect(find.text('发送中…'), findsOneWidget);
     expect(
       find.descendant(
         of: sendButton,
@@ -1840,6 +1865,7 @@ void main() {
     final fields = find.byType(CupertinoTextField);
     await tester.enterText(fields.at(0), '+8613800138000');
     await tester.enterText(fields.at(1), 'alice');
+    await tester.pump();
     await tester.tap(find.text('发送验证码'));
     await tester.pump();
 
@@ -1855,6 +1881,77 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.textContaining('验证码发送过于频繁'), findsNothing);
+  });
+
+  testWidgets('Join SMS provider failure shows an actionable send error', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..sendOtpError = const DeviceJoinSmsOtpUnavailable();
+    await tester.pumpWidget(
+      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.pump();
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+
+    expect(find.text('短信验证码服务暂时不可用，请稍后重试'), findsOneWidget);
+    expect(find.text('设备操作失败，请刷新后重试'), findsNothing);
+  });
+
+  testWidgets('Join SMS daily limit explains when to retry', (tester) async {
+    final core = FakeDeviceManagementCore()
+      ..sendOtpError = const DeviceJoinSmsOtpDailyLimitReached();
+    await tester.pumpWidget(
+      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.pump();
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+
+    expect(find.text('验证码发送次数已达今日上限，请明天再试'), findsOneWidget);
+    expect(find.text('设备操作失败，请刷新后重试'), findsNothing);
+  });
+
+  testWidgets('Join SMS feedback replaces a stale device operation error', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..beginError = StateError('begin failed')
+      ..sendOtpError = const DeviceJoinSmsOtpRateLimited(retryAfterSeconds: 2);
+    await tester.pumpWidget(
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        core,
+        session: null,
+        deviceJoinNow: tester.binding.clock.now,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '+8613800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await tester.enterText(fields.at(2), '123456');
+    await tester.tap(find.text('开始关联'));
+    await tester.pumpAndSettle();
+    expect(find.text('设备操作失败，请刷新后重试'), findsOneWidget);
+
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+
+    expect(find.text('设备操作失败，请刷新后重试'), findsNothing);
+    expect(find.text('验证码发送过于频繁，请 2 秒后重试'), findsOneWidget);
   });
 
   testWidgets('cancel is projected as one terminal state', (tester) async {

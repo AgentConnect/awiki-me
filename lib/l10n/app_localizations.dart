@@ -1836,6 +1836,12 @@ abstract class AppLocalizations {
   /// **'发送验证码'**
   String get deviceJoinSendOtp;
 
+  /// No description provided for @deviceJoinSendingOtp.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送中…'**
+  String get deviceJoinSendingOtp;
+
   /// No description provided for @deviceJoinResendOtpIn.
   ///
   /// In zh, this message translates to:
@@ -2015,6 +2021,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'验证码发送过于频繁，请 {seconds} 秒后重试'**
   String deviceJoinOtpRateLimited(int seconds);
+
+  /// No description provided for @deviceJoinOtpUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'短信验证码服务暂时不可用，请稍后重试'**
+  String get deviceJoinOtpUnavailable;
+
+  /// No description provided for @deviceJoinOtpDailyLimitReached.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码发送次数已达今日上限，请明天再试'**
+  String get deviceJoinOtpDailyLimitReached;
 
   /// No description provided for @deviceJoinErrorFailed.
   ///

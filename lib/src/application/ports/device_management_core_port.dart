@@ -14,6 +14,20 @@ class DeviceJoinSmsOtpRateLimited implements Exception {
       'DeviceJoinSmsOtpRateLimited(retryAfterSeconds: $retryAfterSeconds)';
 }
 
+/// The SMS provider could not accept the request at this time.
+///
+/// Provider diagnostics stay below the data boundary so the presentation
+/// layer can show a safe, actionable message without exposing vendor details.
+class DeviceJoinSmsOtpUnavailable implements Exception {
+  const DeviceJoinSmsOtpUnavailable();
+}
+
+/// The SMS provider rejected the request because today's send allowance was
+/// exhausted. No provider-specific diagnostics cross this boundary.
+class DeviceJoinSmsOtpDailyLimitReached implements Exception {
+  const DeviceJoinSmsOtpDailyLimitReached();
+}
+
 /// Secret-free resend boundary returned after a Join SMS request is accepted.
 class DeviceJoinSmsOtpSendReceipt {
   const DeviceJoinSmsOtpSendReceipt({required this.retryAfterSeconds});

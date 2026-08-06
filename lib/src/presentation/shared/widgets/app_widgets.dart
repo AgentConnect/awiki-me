@@ -976,6 +976,33 @@ class _AppDropMenuButton extends StatelessWidget {
   }
 }
 
+class AppPhoneCountryCodePrefix extends StatelessWidget {
+  const AppPhoneCountryCodePrefix({super.key, this.code = '+86'});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
+    final responsive = context.awikiResponsive;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          code,
+          style: TextStyle(
+            fontSize: responsive.bodyMd,
+            fontWeight: FontWeight.w600,
+            color: theme.title,
+          ),
+        ),
+        SizedBox(width: responsive.spacing(10)),
+        Container(width: 1, height: responsive.scaled(26), color: theme.border),
+      ],
+    );
+  }
+}
+
 class AppTextField extends StatefulWidget {
   const AppTextField({
     super.key,
@@ -1116,12 +1143,14 @@ class AppInlineActionButton extends StatelessWidget {
     this.onPressed,
     this.semanticsIdentifier,
     this.isLoading = false,
+    this.loadingLabel,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final String? semanticsIdentifier;
   final bool isLoading;
+  final String? loadingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1129,7 +1158,7 @@ class AppInlineActionButton extends StatelessWidget {
     final enabled = onPressed != null && !isLoading;
     return AppPressable(
       onTap: enabled ? onPressed : null,
-      semanticLabel: label,
+      semanticLabel: isLoading ? loadingLabel ?? label : label,
       semanticsIdentifier: semanticsIdentifier,
       enabled: enabled,
       scaleOnPress: true,
@@ -1137,7 +1166,9 @@ class AppInlineActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(responsive.radius(8)),
       builder: (context, state, child) {
         return AnimatedOpacity(
-          opacity: state.enabled
+          opacity: isLoading
+              ? 1
+              : state.enabled
               ? state.pressed
                     ? 0.78
                     : state.hovered || state.focused
@@ -1163,7 +1194,29 @@ class AppInlineActionButton extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: isLoading
-            ? CupertinoActivityIndicator(radius: responsive.scaled(8))
+            ? loadingLabel == null
+                  ? CupertinoActivityIndicator(radius: responsive.scaled(8))
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          CupertinoActivityIndicator(
+                            radius: responsive.scaled(7),
+                          ),
+                          SizedBox(width: responsive.spacing(7)),
+                          Text(
+                            loadingLabel!,
+                            maxLines: 1,
+                            style: AwikiMeTextStyles.buttonLabel.copyWith(
+                              color: AwikiMePalette.actionBlue,
+                              fontSize: responsive.bodySm,
+                              height: 1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
             : FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
