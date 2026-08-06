@@ -2797,7 +2797,7 @@ Future<String> _requestAndResolveOtp({
           .post(
             Uri.parse(
               config.userServiceUrl,
-            ).resolve('/user-service/auth/sms-codes'),
+            ).resolve('/user-service/v1/auth/sms-codes'),
             headers: const <String, String>{'Content-Type': 'application/json'},
             body: jsonEncode(<String, Object?>{
               'phone': account.phone,
@@ -2912,7 +2912,7 @@ Future<String> _exchangeJoinGrant({
         .post(
           Uri.parse(
             config.userServiceUrl,
-          ).resolve('/user-service/auth/account-verification/exchange'),
+          ).resolve('/user-service/v1/auth/account-verification/exchange'),
           headers: const <String, String>{'Content-Type': 'application/json'},
           body: jsonEncode(<String, Object?>{
             'provider': 'sms',

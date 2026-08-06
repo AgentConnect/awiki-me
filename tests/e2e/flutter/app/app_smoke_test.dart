@@ -783,7 +783,7 @@ void main() {
       ]);
       await _pumpSmokeFrame(tester);
 
-      expect(find.text('Smoke test profile.'), findsOneWidget);
+      expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
       final desktopIdentityDialog = find.byKey(
         const Key('desktop-current-identity-dialog'),
       );
@@ -794,7 +794,6 @@ void main() {
         );
         await _pumpSmokeFrame(tester);
       } else {
-        expect(find.byKey(const Key('profile-display-name')), findsOneWidget);
         expect(find.byKey(const Key('profile-back-button')), findsNothing);
         expect(
           find.byKey(const Key('compact-bottom-navigation')),
@@ -824,6 +823,71 @@ void main() {
       await tester.binding.setSurfaceSize(null);
     }
   });
+
+  testWidgets(
+    'AwikiMeApp Android settings hides message sync row and stays stable',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(390, 844);
+      const session = SessionIdentity(
+        did: 'did:test:stable-sync-settings',
+        credentialName: 'stable-sync-settings',
+        handle: 'stable-sync-settings',
+        displayName: 'Stable Sync Settings',
+        jwtToken: 'test-jwt',
+      );
+      final harness = createFakeAwikiMeAppHarness(session: session);
+      late _ControllableMessageSyncCoordinator coordinator;
+
+      try {
+        await tester.pumpWidget(
+          AwikiMeApp(
+            bootstrap: harness.bootstrap,
+            providerOverrides: <Override>[
+              ...harness.providerOverrides,
+              messageSyncCoordinatorProvider.overrideWith(
+                (ref) => coordinator = _ControllableMessageSyncCoordinator(ref),
+              ),
+            ],
+          ),
+        );
+        await _pumpSmokeFrame(tester);
+
+        await tester.tap(find.byKey(const Key('compact-nav-profile')));
+        await _pumpSmokeFrame(tester);
+        await tester.tap(find.byKey(const Key('profile-settings-row')));
+        await _pumpSmokeFrame(tester);
+
+        final appGroup = find.byKey(const Key('settings-app-group'));
+        final idleRect = tester.getRect(appGroup);
+        expect(find.text('消息同步'), findsNothing);
+        expect(find.text('已是最新状态'), findsNothing);
+
+        coordinator.publish(
+          const MessageSyncCoordinatorState(
+            status: MessageSyncCoordinatorStatus.syncing,
+          ),
+        );
+        await tester.pump();
+
+        expect(tester.getRect(appGroup), idleRect);
+        expect(find.text('消息同步'), findsNothing);
+
+        coordinator.publish(const MessageSyncCoordinatorState());
+        await tester.pump();
+
+        expect(tester.getRect(appGroup), idleRect);
+        expect(find.text('消息同步'), findsNothing);
+        expect(tester.takeException(), isNull);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      }
+    },
+  );
 
   testWidgets('AwikiMeApp authenticated smoke shows Personal Agent entry', (
     tester,

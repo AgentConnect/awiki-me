@@ -397,5 +397,5 @@ String _validSmsProblemBody({
   'detail':
       '[SMS_ERROR] Globe SMS send failed: [$providerCode] '
       '$providerMessage',
-  'instance': '/user-service/auth/sms-codes',
+  'instance': '/user-service/v1/auth/sms-codes',
 });

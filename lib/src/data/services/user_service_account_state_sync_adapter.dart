@@ -22,16 +22,18 @@ class UserServiceAccountStateSyncAdapter
 
   factory UserServiceAccountStateSyncAdapter.fromEnvironment({
     AwikiEnvironmentConfig? environment,
+    AwikiOnboardingUtilityHttpClient? client,
   }) {
     final effective = environment ?? AwikiEnvironmentConfig.fromEnvironment();
     return UserServiceAccountStateSyncAdapter(
       userServiceUrl: effective.userServiceUrl,
+      client: client,
     );
   }
 
-  static const String accountStateEndpoint = '/user-service/account-state/rpc';
-  static const String deviceAuthEndpoint = '/user-service/did-auth/rpc';
-  static const String profileEndpoint = '/user-service/me/rpc';
+  static const String accountStateEndpoint = '/user-service/v1/account-state/rpc';
+  static const String deviceAuthEndpoint = '/user-service/v1/did-auth/rpc';
+  static const String profileEndpoint = '/user-service/v1/me/rpc';
 
   final AwikiOnboardingUtilityHttpClient _client;
   final AuthenticatedUserServiceRpcClient? _authenticatedClient;

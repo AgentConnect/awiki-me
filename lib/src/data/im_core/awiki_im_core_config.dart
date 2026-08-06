@@ -6,6 +6,7 @@ class AwikiImCoreEnvironmentConfig {
   const AwikiImCoreEnvironmentConfig({
     required this.serviceBaseUrl,
     required this.didDomain,
+    this.clientVersionInfo,
     this.userServiceEndpoint,
     this.messageServiceEndpoint,
     this.mailServiceEndpoint,
@@ -20,10 +21,12 @@ class AwikiImCoreEnvironmentConfig {
   }
 
   factory AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
-    AwikiEnvironmentConfig environment,
-  ) {
+    AwikiEnvironmentConfig environment, {
+    core.AwikiClientVersionInfo? clientVersionInfo,
+  }) {
     return AwikiImCoreEnvironmentConfig(
       serviceBaseUrl: environment.baseUrl,
+      clientVersionInfo: clientVersionInfo,
       userServiceEndpoint: environment.userServiceUrl,
       messageServiceEndpoint: environment.messageServiceUrl,
       mailServiceEndpoint: environment.mailServiceUrl,
@@ -35,6 +38,7 @@ class AwikiImCoreEnvironmentConfig {
 
   final String serviceBaseUrl;
   final String didDomain;
+  final core.AwikiClientVersionInfo? clientVersionInfo;
   final String? userServiceEndpoint;
   final String? messageServiceEndpoint;
   final String? mailServiceEndpoint;
@@ -46,6 +50,7 @@ class AwikiImCoreEnvironmentConfig {
     return core.AwikiImCoreConfig(
       serviceBaseUrl: serviceBaseUrl,
       didDomain: didDomain,
+      clientVersionInfo: clientVersionInfo,
       userServiceEndpoint: userServiceEndpoint,
       messageServiceEndpoint: messageServiceEndpoint,
       mailServiceEndpoint: mailServiceEndpoint,

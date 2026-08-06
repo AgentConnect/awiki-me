@@ -14,7 +14,7 @@ class UserServiceSkillOnboardingAdapter implements SkillOnboardingPort {
        _bearerTokenProvider = bearerTokenProvider,
        _authenticatedClient = authenticatedClient;
 
-  static const registrationEndpoint = '/user-service/agent-registration/rpc';
+  static const registrationEndpoint = '/user-service/v1/agent-registration/rpc';
 
   final AwikiOnboardingUtilityHttpClient _client;
   final String? Function()? _bearerTokenProvider;

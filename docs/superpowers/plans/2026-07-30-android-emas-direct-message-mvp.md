@@ -165,11 +165,11 @@
   Cover these exact requests:
 
   ```text
-  POST /user-service/push/rpc
+  POST /user-service/v1/push/rpc
   method upsert_installation
   params provider, provider_device_id, platform, logical_device_id, app_id
 
-  POST /user-service/push/rpc
+  POST /user-service/v1/push/rpc
   method disable_installation
   params installation_id
   ```
@@ -228,7 +228,7 @@
 
   ```dart
   class UserServicePushInstallationAdapter implements PushInstallationPort {
-    static const endpoint = '/user-service/push/rpc';
+    static const endpoint = '/user-service/v1/push/rpc';
 
     UserServicePushInstallationAdapter({
       required String userServiceUrl,

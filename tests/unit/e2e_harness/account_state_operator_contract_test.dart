@@ -18,8 +18,8 @@ void main() {
     expect(
       () => parseAccountStateOperatorCommand(
         jsonEncode(<String>[
-          '/home/ecs-user/awiki-space/user-service/.venv/bin/python',
-          '/home/ecs-user/awiki-space/user-service/scripts/'
+          '/home/ecs-user/awiki-space/user-service/v1/.venv/bin/python',
+          '/home/ecs-user/awiki-space/user-service/v1/scripts/'
               'run_account_state_sync_test_action.py',
           '--apply',
         ]),

@@ -311,7 +311,7 @@ requires exactly one successful decision, so this suite is unattended.
 Production continues to use LocalAuthentication, which this suite does not
 attest.
 
-By default the purpose-bound `/user-service/auth/sms-codes` request remains
+By default the purpose-bound `/user-service/v1/auth/sms-codes` request remains
 strictly 200-only. For the user-authorized synthetic test number, an explicit
 operator-only mode may be added to the command above:
 
@@ -327,7 +327,7 @@ It permits one non-retried HTTP 503 only when the response media type is
 `application/problem+json` and its object contains exactly `type`, `title`,
 `status`, `detail`, and `instance`: `type=about:blank`,
 `title="SMS Service Error"`, integer `status=503`,
-`instance=/user-service/auth/sms-codes`, and `detail` matching the deployed
+`instance=/user-service/v1/auth/sms-codes`, and `detail` matching the deployed
 `[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` shape. The two
 fixed markers must appear exactly once; another channel prefix, provider code,
 additional marker, secret-related word, or standalone six-digit value fails

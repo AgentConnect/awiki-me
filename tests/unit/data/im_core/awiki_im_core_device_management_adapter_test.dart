@@ -35,7 +35,7 @@ void main() {
 
     expect(
       request.url.toString(),
-      'https://awiki.info/user-service/auth/sms-codes',
+      'https://awiki.info/user-service/v1/auth/sms-codes',
     );
     expect(jsonDecode(request.body), <String, Object?>{
       'phone': '+8613800138000',
@@ -112,7 +112,7 @@ void main() {
         userServiceUrl: 'https://awiki.info',
         targetHandleDomain: 'awiki.info',
         httpClient: MockClient((request) async {
-          if (request.url.path == '/user-service/did/profile/rpc') {
+          if (request.url.path == '/user-service/v1/did/profile/rpc') {
             profileRequestBody = (jsonDecode(request.body) as Map)
                 .cast<String, Object?>();
             return http.Response(
@@ -126,7 +126,7 @@ void main() {
           }
           expect(
             request.url.path,
-            '/user-service/auth/account-verification/exchange',
+            '/user-service/v1/auth/account-verification/exchange',
           );
           requestBody = (jsonDecode(request.body) as Map)
               .cast<String, Object?>();
@@ -201,7 +201,7 @@ void main() {
         targetHandleDomain: 'awiki.info',
         httpClient: MockClient((request) async {
           requestCalls += 1;
-          expect(request.url.path, '/user-service/did/profile/rpc');
+          expect(request.url.path, '/user-service/v1/did/profile/rpc');
           return http.Response(
             jsonEncode(<String, Object?>{
               'jsonrpc': '2.0',

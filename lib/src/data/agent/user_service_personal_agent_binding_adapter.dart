@@ -33,7 +33,7 @@ class UserServicePersonalAgentBindingAdapter
     );
   }
 
-  static const String endpoint = '/user-service/personal-agent/rpc';
+  static const String endpoint = '/user-service/v1/personal-agent/rpc';
   static const String legacyEndpoint = '/user-service/message-agent/rpc';
 
   AwikiOnboardingUtilityHttpClient get httpClient => _client;

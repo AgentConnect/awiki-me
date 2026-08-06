@@ -8,7 +8,6 @@ import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/presentation/agents/agents_provider.dart';
 import 'package:awiki_me/src/presentation/agents/agents_page.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
 import 'package:awiki_me/src/presentation/settings/language_selection_page.dart';
 import 'package:awiki_me/src/presentation/settings/display_settings_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
@@ -491,108 +490,57 @@ void main() {
     expect(find.text('消息推送通知'), findsNothing);
   });
 
-  testWidgets('设置页展示撤权同步状态并进入重新登录', (tester) async {
-    final gateway = FakeAwikiGateway();
-    const session = SessionIdentity(
-      did: 'did:test:revoked',
-      credentialName: 'revoked',
-      displayName: 'Revoked',
-    );
-
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const SettingsPage(),
-        gateway: gateway,
-        session: session,
-        providerOverrides: <Override>[
-          messageSyncCoordinatorProvider.overrideWith(
-            (ref) => _FixedMessageSyncCoordinator(
-              ref,
-              const MessageSyncCoordinatorState(
-                status: MessageSyncCoordinatorStatus.authRevoked,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('登录状态已失效或此设备已被取消授权，请重新登录。'), findsNothing);
-    expect(find.text('重新登录'), findsOneWidget);
-
-    await tester.tap(find.text('重新登录'));
-    await tester.pumpAndSettle();
-
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(SettingsPage)),
-    );
-    expect(container.read(sessionProvider).session, isNull);
-    expect(gateway.logoutCalls, 1);
-  });
-
-  testWidgets('设置页展示消息恢复进度且恢复期间不可重复触发', (tester) async {
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const SettingsPage(),
-        session: const SessionIdentity(
-          did: 'did:test:recovering',
-          credentialName: 'recovering',
-          displayName: 'Recovering',
-        ),
-        providerOverrides: <Override>[
-          messageSyncCoordinatorProvider.overrideWith(
-            (ref) => _FixedMessageSyncCoordinator(
-              ref,
-              const MessageSyncCoordinatorState(
-                status: MessageSyncCoordinatorStatus.recovering,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('消息同步'), findsOneWidget);
-    expect(find.text('正在恢复近期消息和当前已读状态…'), findsNothing);
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-    expect(find.text('重试'), findsNothing);
-  });
-
-  testWidgets('设置页展示可重试同步失败并调度手动重试', (tester) async {
+  testWidgets('紧凑设置页在所有消息同步状态下均隐藏同步行且布局稳定', (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     late _FixedMessageSyncCoordinator coordinator;
+
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const SettingsPage(),
         session: const SessionIdentity(
-          did: 'did:test:retryable',
-          credentialName: 'retryable',
-          displayName: 'Retryable',
+          did: 'did:test:stable-sync-settings',
+          credentialName: 'stable-sync-settings',
+          displayName: 'Stable Sync Settings',
         ),
         providerOverrides: <Override>[
           messageSyncCoordinatorProvider.overrideWith((ref) {
             return coordinator = _FixedMessageSyncCoordinator(
               ref,
-              const MessageSyncCoordinatorState(
-                status: MessageSyncCoordinatorStatus.retryableFailure,
-                retryableFailureVisible: true,
-              ),
+              const MessageSyncCoordinatorState(),
             );
           }),
         ],
       ),
     );
+    await tester.pumpAndSettle();
+
+    final appGroup = find.byKey(const Key('settings-app-group'));
+    final idleRect = tester.getRect(appGroup);
+    expect(find.text('消息同步'), findsNothing);
+    expect(find.text('已是最新状态'), findsNothing);
+
+    for (final status in MessageSyncCoordinatorStatus.values.where(
+      (status) => status != MessageSyncCoordinatorStatus.authRevoked,
+    )) {
+      coordinator.publish(MessageSyncCoordinatorState(status: status));
+      await tester.pump();
+
+      expect(find.text('消息同步'), findsNothing, reason: status.name);
+      expect(tester.getRect(appGroup), idleRect, reason: status.name);
+    }
+
+    coordinator.publish(
+      const MessageSyncCoordinatorState(
+        status: MessageSyncCoordinatorStatus.authRevoked,
+      ),
+    );
     await tester.pump();
-
-    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
-    expect(find.text('重试'), findsOneWidget);
-
-    await tester.tap(find.text('重试'));
-    await tester.pump();
-
-    expect(coordinator.requestReasons, ['manual_refresh']);
+    expect(find.text('消息同步'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('设置页检查更新调用真实更新服务', (tester) async {
@@ -1480,11 +1428,10 @@ class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
     state = initialState;
   }
 
-  final List<String> requestReasons = <String>[];
+  void publish(MessageSyncCoordinatorState next) {
+    state = next;
+  }
 
   @override
-  Future<void> requestSync(String reason, {bool immediate = false}) {
-    requestReasons.add(reason);
-    return Future<void>.value();
-  }
+  Future<void> requestSync(String reason, {bool immediate = false}) async {}
 }

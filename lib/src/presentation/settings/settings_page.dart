@@ -8,7 +8,6 @@ import '../../domain/entities/session_identity.dart';
 import '../../l10n/l10n.dart';
 import '../app_shell/providers/app_update_provider.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
-import '../app_shell/providers/message_sync_coordinator_provider.dart';
 import '../app_shell/providers/session_provider.dart';
 import '../profile/profile_page.dart';
 import '../devices/devices_page.dart';
@@ -42,7 +41,6 @@ class SettingsPage extends ConsumerWidget {
     final l10n = context.l10n;
     final session = ref.watch(sessionProvider).session;
     final runtime = ref.read(appRuntimeProvider.notifier);
-    final messageSync = ref.watch(messageSyncCoordinatorProvider);
     final updateState = ref.watch(appUpdateProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
@@ -88,27 +86,6 @@ class SettingsPage extends ConsumerWidget {
               ),
               onTap: () =>
                   AppNavigator.push<void>(context, (_) => const DevicesPage()),
-            ),
-          ],
-        ),
-        SizedBox(height: responsive.spacing(14)),
-      ],
-      if (messageSync.status != MessageSyncCoordinatorStatus.idle) ...<Widget>[
-        _SettingsSection(
-          key: const Key('settings-message-sync-section'),
-          children: <Widget>[
-            AppListTile(
-              title: l10n.messageSyncStatusTitle,
-              titleKey: const ValueKey<String>('message-sync-status'),
-              leading: leading(
-                const _SettingsIcon(role: AwikiMeIconRole.refresh),
-              ),
-              trailing: _messageSyncTrailing(context, messageSync),
-              onTap: _messageSyncAction(
-                runtime: runtime,
-                sync: messageSync,
-                coordinator: ref.read(messageSyncCoordinatorProvider.notifier),
-              ),
             ),
           ],
         ),
@@ -279,19 +256,6 @@ class SettingsPage extends ConsumerWidget {
             height: optionRowHeight,
             onTap: () =>
                 AppNavigator.push<void>(context, (_) => const DevicesPage()),
-          ),
-        if (messageSync.status != MessageSyncCoordinatorStatus.idle)
-          _QuietSettingsRow(
-            key: const ValueKey<String>('message-sync-status'),
-            icon: CupertinoIcons.arrow_clockwise,
-            title: l10n.messageSyncStatusTitle,
-            trailing: _messageSyncTrailing(context, messageSync),
-            height: optionRowHeight,
-            onTap: _messageSyncAction(
-              runtime: runtime,
-              sync: messageSync,
-              coordinator: ref.read(messageSyncCoordinatorProvider.notifier),
-            ),
           ),
       ];
       final compactRows = <Widget>[
@@ -511,59 +475,6 @@ class SettingsPage extends ConsumerWidget {
       return l10n.settingsUpdateStatusFailed;
     }
     return l10n.settingsAlreadyLatestVersion;
-  }
-
-  Widget? _messageSyncTrailing(
-    BuildContext context,
-    MessageSyncCoordinatorState state,
-  ) {
-    return switch (state.status) {
-      MessageSyncCoordinatorStatus.syncing ||
-      MessageSyncCoordinatorStatus.recoveryRequired ||
-      MessageSyncCoordinatorStatus.recovering =>
-        const CupertinoActivityIndicator(radius: 9),
-      MessageSyncCoordinatorStatus.retryableFailure => Text(
-        context.l10n.messageSyncRetryAction,
-        style: const TextStyle(
-          color: AwikiMeColors.primary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      MessageSyncCoordinatorStatus.projectionRefreshFailed => Text(
-        context.l10n.messageSyncReloadAction,
-        style: const TextStyle(
-          color: AwikiMeColors.primary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      MessageSyncCoordinatorStatus.authRevoked => Text(
-        context.l10n.messageSyncReauthenticateAction,
-        style: TextStyle(
-          color: context.awikiTheme.danger,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      MessageSyncCoordinatorStatus.idle => null,
-    };
-  }
-
-  VoidCallback? _messageSyncAction({
-    required AppRuntimeController runtime,
-    required MessageSyncCoordinatorState sync,
-    required MessageSyncCoordinator coordinator,
-  }) {
-    return switch (sync.status) {
-      MessageSyncCoordinatorStatus.retryableFailure =>
-        () => coordinator.requestSync('manual_refresh', immediate: true),
-      MessageSyncCoordinatorStatus.projectionRefreshFailed =>
-        () => coordinator.requestSync('projection_reload', immediate: true),
-      MessageSyncCoordinatorStatus.authRevoked =>
-        runtime.reauthenticateAfterAuthRevoked,
-      MessageSyncCoordinatorStatus.idle ||
-      MessageSyncCoordinatorStatus.syncing ||
-      MessageSyncCoordinatorStatus.recoveryRequired ||
-      MessageSyncCoordinatorStatus.recovering => null,
-    };
   }
 
   void _showLogoutDialog(BuildContext context, AppRuntimeController runtime) {
@@ -791,7 +702,6 @@ class _QuietSettingsRow extends StatelessWidget {
     required this.title,
     required this.height,
     this.iconKey,
-    this.trailing,
     this.trailingText,
     this.onTap,
     this.destructive = false,
@@ -801,7 +711,6 @@ class _QuietSettingsRow extends StatelessWidget {
   final Key? iconKey;
   final String title;
   final double height;
-  final Widget? trailing;
   final String? trailingText;
   final VoidCallback? onTap;
   final bool destructive;
@@ -840,12 +749,7 @@ class _QuietSettingsRow extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 132),
-                child: Center(child: trailing),
-              )
-            else if (trailingValue.isNotEmpty)
+            if (trailingValue.isNotEmpty)
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 132),
                 child: Text(

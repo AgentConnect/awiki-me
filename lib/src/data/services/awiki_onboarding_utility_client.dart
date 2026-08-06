@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+const String awikiClientVersionHeaderName = 'X-AWiki-Client-Version';
+
 class AwikiOnboardingUtilityError implements Exception {
   const AwikiOnboardingUtilityError({
     this.statusCode,
@@ -32,11 +34,15 @@ class AwikiOnboardingUtilityHttpClient {
     required this.baseUrl,
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 20),
-  }) : _httpClient = httpClient ?? http.Client();
+    this.clientVersionHeader,
+  }) : _httpClient = httpClient ?? http.Client(),
+       _baseUri = Uri.parse(baseUrl);
 
   final String baseUrl;
   final http.Client _httpClient;
+  final Uri _baseUri;
   final Duration timeout;
+  final String? clientVersionHeader;
 
   Future<Map<String, Object?>> rpcCall({
     required String path,
@@ -46,6 +52,7 @@ class AwikiOnboardingUtilityHttpClient {
     String requestId = 'req-1',
   }) async {
     final headers = <String, String>{'Content-Type': 'application/json'};
+    _appendClientVersionHeader(headers, Uri.parse(baseUrl).resolve(path));
     final token = bearerToken?.trim();
     if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
@@ -105,31 +112,57 @@ class AwikiOnboardingUtilityHttpClient {
     }
     return <String, Object?>{'value': result};
   }
+
+  Future<http.Response> get(Uri uri) {
+    final headers = <String, String>{};
+    _appendClientVersionHeader(headers, uri);
+    return _httpClient.get(uri, headers: headers).timeout(timeout);
+  }
+
+  Future<http.Response> postJson(
+    Uri uri, {
+    required Map<String, Object?> body,
+  }) {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    _appendClientVersionHeader(headers, uri);
+    return _httpClient
+        .post(uri, headers: headers, body: jsonEncode(body))
+        .timeout(timeout);
+  }
+
+  void _appendClientVersionHeader(Map<String, String> headers, Uri uri) {
+    final value = clientVersionHeader?.trim();
+    if (value != null && value.isNotEmpty && _sameOrigin(_baseUri, uri)) {
+      headers[awikiClientVersionHeaderName] = value;
+    }
+  }
 }
+
+bool _sameOrigin(Uri left, Uri right) =>
+    left.scheme.toLowerCase() == right.scheme.toLowerCase() &&
+    left.host.toLowerCase() == right.host.toLowerCase() &&
+    left.port == right.port;
 
 class AwikiOnboardingUtilityClient {
   AwikiOnboardingUtilityClient({
     required AwikiOnboardingUtilityHttpClient serviceClient,
-    http.Client? httpClient,
     this.timeout = const Duration(seconds: 20),
-  }) : _serviceClient = serviceClient,
-       _httpClient = httpClient ?? http.Client();
+  }) : _serviceClient = serviceClient;
 
-  static const String handleRpcEndpoint = '/user-service/handle/rpc';
-  static const String profileRpcEndpoint = '/user-service/did/profile/rpc';
-  static const String serverInfoEndpoint = '/user-service/server-info';
-  static const String emailSendEndpoint = '/user-service/auth/email-send';
-  static const String emailStatusEndpoint = '/user-service/auth/email-status';
+  static const String handleRpcEndpoint = '/user-service/v1/handle/rpc';
+  static const String profileRpcEndpoint = '/user-service/v1/did/profile/rpc';
+  static const String serverInfoEndpoint = '/user-service/v1/server-info';
+  static const String emailSendEndpoint = '/user-service/v1/auth/email-send';
+  static const String emailStatusEndpoint = '/user-service/v1/auth/email-status';
   static const String registrationOtpPurpose = 'awiki.identity.register.v1';
 
   final AwikiOnboardingUtilityHttpClient _serviceClient;
-  final http.Client _httpClient;
   final Duration timeout;
 
   Future<Map<String, Object?>> loadServerInfo() async {
-    final response = await _httpClient
-        .get(Uri.parse(_serviceClient.baseUrl).resolve(serverInfoEndpoint))
-        .timeout(timeout);
+    final response = await _serviceClient.get(
+      Uri.parse(_serviceClient.baseUrl).resolve(serverInfoEndpoint),
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AwikiOnboardingUtilityError(
         statusCode: response.statusCode,
@@ -206,16 +239,13 @@ class AwikiOnboardingUtilityClient {
     required String handle,
   }) async {
     final normalizedHandle = handle.trim().toLowerCase();
-    final response = await _httpClient
-        .post(
-          Uri.parse(baseUrl).resolve(emailSendEndpoint),
-          headers: const <String, String>{'Content-Type': 'application/json'},
-          body: jsonEncode(<String, Object?>{
-            'email': email.trim().toLowerCase(),
-            'handle': normalizedHandle,
-          }),
-        )
-        .timeout(timeout);
+    final response = await _serviceClient.postJson(
+      Uri.parse(baseUrl).resolve(emailSendEndpoint),
+      body: <String, Object?>{
+        'email': email.trim().toLowerCase(),
+        'handle': normalizedHandle,
+      },
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AwikiOnboardingUtilityError(
         statusCode: response.statusCode,
@@ -230,18 +260,16 @@ class AwikiOnboardingUtilityClient {
     required String handle,
   }) async {
     final normalizedHandle = handle.trim().toLowerCase();
-    final response = await _httpClient
-        .get(
-          Uri.parse(baseUrl)
-              .resolve(emailStatusEndpoint)
-              .replace(
-                queryParameters: <String, String>{
-                  'email': email.trim().toLowerCase(),
-                  'handle': normalizedHandle,
-                },
-              ),
-        )
-        .timeout(timeout);
+    final response = await _serviceClient.get(
+      Uri.parse(baseUrl)
+          .resolve(emailStatusEndpoint)
+          .replace(
+            queryParameters: <String, String>{
+              'email': email.trim().toLowerCase(),
+              'handle': normalizedHandle,
+            },
+          ),
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AwikiOnboardingUtilityError(
         statusCode: response.statusCode,

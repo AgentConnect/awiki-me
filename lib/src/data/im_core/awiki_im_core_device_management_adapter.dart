@@ -40,6 +40,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     required String userServiceUrl,
     required String targetHandleDomain,
     http.Client? httpClient,
+    AwikiOnboardingUtilityHttpClient? userServiceClient,
     Duration timeout = const Duration(seconds: 20),
     AwikiImCoreBeginDeviceJoin? beginDeviceJoin,
     AwikiJoinTargetResolver? resolveJoinTarget,
@@ -49,6 +50,7 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
          userServiceUrl: userServiceUrl,
          targetHandleDomain: targetHandleDomain,
          httpClient: httpClient,
+         userServiceClient: userServiceClient,
          timeout: timeout,
          beginDeviceJoin: beginDeviceJoin,
          resolveJoinTarget: resolveJoinTarget,
@@ -60,12 +62,19 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     required this.userServiceUrl,
     required this.targetHandleDomain,
     http.Client? httpClient,
+    AwikiOnboardingUtilityHttpClient? userServiceClient,
     Duration timeout = const Duration(seconds: 20),
     AwikiImCoreBeginDeviceJoin? beginDeviceJoin,
     AwikiJoinTargetResolver? resolveJoinTarget,
     AwikiImCoreRevokeDevice? revokeDevice,
   }) : _coreInstance = coreInstance,
-       _httpClient = httpClient ?? http.Client(),
+       _userServiceClient =
+           userServiceClient ??
+           AwikiOnboardingUtilityHttpClient(
+             baseUrl: userServiceUrl,
+             httpClient: httpClient,
+             timeout: timeout,
+           ),
        _timeout = timeout,
        _beginDeviceJoin =
            beginDeviceJoin ??
@@ -101,20 +110,20 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
         resolveJoinTarget ??
         _publicJoinTargetResolver(
           userServiceUrl,
-          httpClient: _httpClient,
+          serviceClient: _userServiceClient,
           timeout: _timeout,
         );
   }
 
   static const String accountVerificationExchangePath =
-      '/user-service/auth/account-verification/exchange';
-  static const String smsCodePath = '/user-service/auth/sms-codes';
+      '/user-service/v1/auth/account-verification/exchange';
+  static const String smsCodePath = '/user-service/v1/auth/sms-codes';
   static const int joinSmsResendCooldownSeconds = 60;
 
   final AwikiImCoreInstance _coreInstance;
   final String userServiceUrl;
   final String targetHandleDomain;
-  final http.Client _httpClient;
+  final AwikiOnboardingUtilityHttpClient _userServiceClient;
   final Duration _timeout;
   late final AwikiJoinTargetResolver _resolveJoinTarget;
   final AwikiImCoreBeginDeviceJoin _beginDeviceJoin;
@@ -128,19 +137,16 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
     final target = _handleTarget(handle, targetHandleDomain);
     http.Response response;
     try {
-      response = await _httpClient
-          .post(
-            Uri.parse(userServiceUrl).resolve(smsCodePath),
-            headers: const <String, String>{'Content-Type': 'application/json'},
-            body: jsonEncode(<String, Object?>{
-              'phone': phone.trim(),
-              'purpose': 'awiki.device.join.v1',
-              'target_handle': target.handle,
-              'target_handle_domain': target.domain,
-              'rate_limit_seconds': joinSmsResendCooldownSeconds,
-            }),
-          )
-          .timeout(_timeout);
+      response = await _userServiceClient.postJson(
+        Uri.parse(userServiceUrl).resolve(smsCodePath),
+        body: <String, Object?>{
+          'phone': phone.trim(),
+          'purpose': 'awiki.device.join.v1',
+          'target_handle': target.handle,
+          'target_handle_domain': target.domain,
+          'rate_limit_seconds': joinSmsResendCooldownSeconds,
+        },
+      );
     } on Object {
       throw const DeviceManagementTransportException('sms_code_network');
     }
@@ -371,21 +377,18 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   }) async {
     http.Response response;
     try {
-      response = await _httpClient
-          .post(
-            Uri.parse(userServiceUrl).resolve(accountVerificationExchangePath),
-            headers: const <String, String>{'Content-Type': 'application/json'},
-            body: jsonEncode(<String, Object?>{
-              'provider': 'sms',
-              'purpose': 'awiki.device.join.v1',
-              'phone': phone.trim(),
-              'code': otp,
-              'target_handle': targetHandle,
-              'target_handle_domain': targetDomain,
-              'idempotency_scope': operationId,
-            }),
-          )
-          .timeout(_timeout);
+      response = await _userServiceClient.postJson(
+        Uri.parse(userServiceUrl).resolve(accountVerificationExchangePath),
+        body: <String, Object?>{
+          'provider': 'sms',
+          'purpose': 'awiki.device.join.v1',
+          'phone': phone.trim(),
+          'code': otp,
+          'target_handle': targetHandle,
+          'target_handle_domain': targetDomain,
+          'idempotency_scope': operationId,
+        },
+      );
     } on Object {
       throw const DeviceManagementTransportException(
         'account_verification_network',
@@ -632,16 +635,11 @@ core.IdentitySelector _identitySelector(String value) {
 
 AwikiJoinTargetResolver _publicJoinTargetResolver(
   String userServiceUrl, {
-  required http.Client httpClient,
+  required AwikiOnboardingUtilityHttpClient serviceClient,
   required Duration timeout,
 }) {
   final client = AwikiOnboardingUtilityClient(
-    serviceClient: AwikiOnboardingUtilityHttpClient(
-      baseUrl: userServiceUrl,
-      httpClient: httpClient,
-      timeout: timeout,
-    ),
-    httpClient: httpClient,
+    serviceClient: serviceClient,
     timeout: timeout,
   );
   return ({required String handle, required String domain}) async {

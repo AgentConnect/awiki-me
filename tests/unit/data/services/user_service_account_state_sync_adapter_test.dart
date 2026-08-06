@@ -49,7 +49,7 @@ void main() {
     expect(manifest.identityGeneration, '999999999999999999999999999999999999');
     expect(manifest.versionFor(manifest.versions.keys.first), isNotEmpty);
     expect(httpClient.lastAuthorization, 'Bearer device-access-token');
-    expect(httpClient.lastPath, '/user-service/account-state/rpc');
+    expect(httpClient.lastPath, '/user-service/v1/account-state/rpc');
   });
 
   test('rejects unknown manifest fields instead of guessing schema', () async {
@@ -122,7 +122,7 @@ void main() {
 
     expect(mutation.profileVersion, '18446744073709551615');
     expect(mutation.profile.nickName, 'Alice 2');
-    expect(httpClient.lastPath, '/user-service/me/rpc');
+    expect(httpClient.lastPath, '/user-service/v1/me/rpc');
     expect(httpClient.lastMethod, 'update_me');
   });
 

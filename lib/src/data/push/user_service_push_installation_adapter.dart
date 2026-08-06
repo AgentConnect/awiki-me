@@ -15,7 +15,7 @@ final class UserServicePushInstallationAdapter implements PushInstallationPort {
            client ?? AwikiOnboardingUtilityHttpClient(baseUrl: userServiceUrl),
        _authenticatedClient = authenticatedClient;
 
-  static const String endpoint = '/user-service/push/rpc';
+  static const String endpoint = '/user-service/v1/push/rpc';
 
   final AwikiOnboardingUtilityHttpClient _client;
   final AuthenticatedUserServiceRpcClient? _authenticatedClient;

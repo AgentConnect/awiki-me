@@ -134,7 +134,7 @@ RemoteMultiDeviceSmsDecision evaluateRemoteMultiDeviceSmsResponse({
       decoded['status'] is! int ||
       decoded['status'] != 503 ||
       decoded['detail'] is! String ||
-      decoded['instance'] != '/user-service/auth/sms-codes') {
+      decoded['instance'] != '/user-service/v1/auth/sms-codes') {
     throw const FormatException('SMS error response is invalid.');
   }
   final detail = decoded['detail'] as String;

@@ -41,7 +41,7 @@ void main() {
       const core.AwikiImCoreException(
         code: 'transport_unavailable',
         message:
-            'transport unavailable: error sending request for url (https://anpclaw.com/user-service/did/profile/rpc)',
+            'transport unavailable: error sending request for url (https://anpclaw.com/user-service/v1/did/profile/rpc)',
       ),
     );
 

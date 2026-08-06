@@ -16,6 +16,7 @@ void main() {
         client: AwikiOnboardingUtilityHttpClient(
           baseUrl: 'https://awiki.info',
           httpClient: httpClient,
+          clientVersionHeader: 'awiki-me/0714/0.1.15+25',
         ),
         bearerTokenProvider: () => 'user-session-token',
       );
@@ -33,11 +34,25 @@ void main() {
       expect(httpClient.requests, hasLength(1));
       expect(
         httpClient.requests.single.url.path,
-        '/user-service/agent-registration/rpc',
+        '/user-service/v1/agent-registration/rpc',
       );
       expect(
         httpClient.requests.single.headers['authorization'],
         'Bearer user-session-token',
+      );
+      expect(
+        httpClient.requests.single.headers.entries
+            .where(
+              (entry) =>
+                  entry.key.toLowerCase() ==
+                  awikiClientVersionHeaderName.toLowerCase(),
+            )
+            .toList(),
+        hasLength(1),
+      );
+      expect(
+        httpClient.requests.single.headers['x-awiki-client-version'],
+        'awiki-me/0714/0.1.15+25',
       );
       final body = jsonDecode(httpClient.requests.single.body) as Map;
       expect(body['method'], 'issue_token');

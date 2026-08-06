@@ -6,6 +6,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../application/config/awiki_environment_config.dart';
 import '../application/attachment_cache_service.dart';
@@ -99,6 +101,11 @@ enum AppBootstrapProgress {
   startingApplication,
 }
 
+const String awikiMeReleaseLine = String.fromEnvironment(
+  'AWIKI_RELEASE',
+  defaultValue: '0714',
+);
+
 class AppBootstrap {
   AppBootstrap({
     required this.environment,
@@ -137,6 +144,7 @@ class AppBootstrap {
     this.productLocalStore,
     this.peerIdentityService,
     this.attachmentCacheService,
+    this.userServiceHttpClient,
     this.storageScopeLayout,
     this.remotePushClient,
     this.remotePushInstallationCoordinator,
@@ -179,6 +187,7 @@ class AppBootstrap {
   final ProductLocalStore? productLocalStore;
   final PeerIdentityService? peerIdentityService;
   final AttachmentCacheService? attachmentCacheService;
+  final AwikiOnboardingUtilityHttpClient? userServiceHttpClient;
   final AwikiStorageScopeLayout? storageScopeLayout;
   final RemotePushClient? remotePushClient;
   final RemotePushInstallationCoordinator? remotePushInstallationCoordinator;
@@ -245,6 +254,14 @@ class AppBootstrap {
       'bootstrap.preference_store',
       () => _buildPreferenceStore(appStateRoot: appStateRoot),
     );
+    final clientVersion = await _AwikiMeClientVersion.load();
+    final userServiceHttpClient = AwikiOnboardingUtilityHttpClient(
+      baseUrl: effectiveEnvironment.userServiceUrl,
+      clientVersionHeader: clientVersion.headerValue,
+    );
+    final userServiceUtilityClient = AwikiOnboardingUtilityClient(
+      serviceClient: userServiceHttpClient,
+    );
 
     final storageScopeLayout = await tenantStore.layoutForScope(
       registeredTenant.storageScopeId,
@@ -255,6 +272,7 @@ class AppBootstrap {
     final runtime = AwikiImCoreRuntime(
       config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
         effectiveEnvironment,
+        clientVersionInfo: clientVersion.coreInfo,
       ),
       paths: pathLayout,
       scopeId: registeredTenant.storageScopeId,
@@ -307,6 +325,7 @@ class AppBootstrap {
         runtime: runtime,
         userServiceUrl: effectiveEnvironment.userServiceUrl,
         targetHandleDomain: effectiveEnvironment.didDomain,
+        userServiceClient: userServiceHttpClient,
       );
       final rootKeyTransferAdapter = AwikiImCoreRootKeyTransferAdapter(
         runtime: runtime,
@@ -341,13 +360,16 @@ class AppBootstrap {
       final agentInventoryPort =
           UserServiceAgentInventoryAdapter.fromEnvironment(
             environment: effectiveEnvironment,
+            client: userServiceHttpClient,
           );
       final accountStateSyncPort =
           UserServiceAccountStateSyncAdapter.fromEnvironment(
             environment: effectiveEnvironment,
+            client: userServiceHttpClient,
           );
       final personalAgentBindingPort = UserServicePersonalAgentBindingAdapter(
         userServiceUrl: effectiveEnvironment.userServiceUrl,
+        client: userServiceHttpClient,
       );
       final conversationService = ImCoreConversationService(
         conversations: conversationAdapter,
@@ -397,9 +419,11 @@ class AppBootstrap {
       );
       final onboardingSupportService = AwikiOnboardingSupportService(
         userServiceUrl: effectiveEnvironment.userServiceUrl,
+        userClient: userServiceUtilityClient,
       );
       final peerIdentityService = UserServicePeerIdentityService(
         userServiceUrl: effectiveEnvironment.userServiceUrl,
+        userClient: userServiceUtilityClient,
       );
 
       final accountGateway = CompatAwikiAccountGateway(
@@ -474,6 +498,7 @@ class AppBootstrap {
         productLocalStore: productLocalStore,
         peerIdentityService: peerIdentityService,
         attachmentCacheService: attachmentCacheService,
+        userServiceHttpClient: userServiceHttpClient,
         storageScopeLayout: storageScopeLayout,
         disposeNotificationFacade: notificationFacade == null,
       );
@@ -512,6 +537,7 @@ class AppBootstrap {
     }
     final pushHttpClient =
         httpClient ??
+        coreBootstrap.userServiceHttpClient ??
         AwikiOnboardingUtilityHttpClient(
           baseUrl: coreBootstrap.environment.userServiceUrl,
         );
@@ -573,6 +599,7 @@ class AppBootstrap {
       productLocalStore: productLocalStore,
       peerIdentityService: peerIdentityService,
       attachmentCacheService: attachmentCacheService,
+      userServiceHttpClient: userServiceHttpClient,
       storageScopeLayout: storageScopeLayout,
       remotePushClient: client,
       remotePushInstallationCoordinator: coordinator,
@@ -667,3 +694,29 @@ class AppBootstrap {
 }
 
 bool _hasStateRoot(String? value) => value != null && value.trim().isNotEmpty;
+
+final class _AwikiMeClientVersion {
+  const _AwikiMeClientVersion({required this.version, required this.build});
+
+  final String version;
+  final int build;
+
+  static Future<_AwikiMeClientVersion> load() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final version = packageInfo.version.trim();
+    final build = int.tryParse(packageInfo.buildNumber);
+    if (version.isEmpty || build == null || build <= 0) {
+      throw const FormatException('app_package_version_invalid');
+    }
+    return _AwikiMeClientVersion(version: version, build: build);
+  }
+
+  core.AwikiClientVersionInfo get coreInfo => core.AwikiClientVersionInfo(
+    product: 'awiki-me',
+    release: awikiMeReleaseLine,
+    version: version,
+    build: build,
+  );
+
+  String get headerValue => 'awiki-me/$awikiMeReleaseLine/$version+$build';
+}
