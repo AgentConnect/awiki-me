@@ -533,10 +533,123 @@ void appPairJoinerMain() {
           accountDid: did,
           joinedDeviceId: pending.protocolDeviceId,
         );
+      } else {
+        await _leaveCompletedAppPairJoin(tester);
+        await _deleteJoinedCredentialAndOpenFreshJoin(
+          tester: tester,
+          bootstrap: bootstrap,
+          completedJoinSessionId: pending.joinSessionId,
+        );
+        await E2eCaseAttestationWriter.markPassed(
+          _appPairCredentialResetCaseId,
+          phases: const <String>[
+            'joined_device_credential_deleted',
+            'completed_join_retired_from_local_core',
+            'fresh_join_form_visible_without_activation_error',
+          ],
+        );
       }
     },
     timeout: const Timeout(Duration(minutes: 20)),
   );
+}
+
+Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
+  required WidgetTester tester,
+  required AppBootstrap bootstrap,
+  required String completedJoinSessionId,
+}) async {
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-settings-tab'),
+    failure: 'The joined App settings entry was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () => find.byType(SettingsPage).evaluate().length == 1,
+    failure: 'The joined App settings surface did not open.',
+  );
+  final deleteCredential = find.byKey(
+    const Key('settings-delete-credential-row'),
+  );
+  await tester.ensureVisible(deleteCredential);
+  await _tapOne(
+    tester,
+    deleteCredential,
+    failure: 'The joined App delete-credential action was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () => find.byType(AppConfirmationDialog).evaluate().length == 1,
+    failure: 'The joined App delete-credential confirmation did not open.',
+  );
+  final confirmation = find.byType(AppConfirmationDialog);
+  final confirmLabel = tester
+      .element(confirmation)
+      .l10n
+      .settingsDeleteCredentialConfirmAction;
+  await _tapOne(
+    tester,
+    find.descendant(of: confirmation, matching: find.text(confirmLabel)),
+    failure: 'The joined App delete-credential confirmation was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () => find.byType(OnboardingPage).evaluate().length == 1,
+    timeout: const Duration(seconds: 60),
+    failure: 'Deleting the joined credential did not return to onboarding.',
+  );
+
+  final localSessions = await bootstrap.deviceManagementCorePort!
+      .localDeviceJoinSessions();
+  if (localSessions.any(
+    (session) => session.joinSessionId == completedJoinSessionId,
+  )) {
+    fail('The completed New Device Join survived local identity retirement.');
+  }
+
+  await _openNewDeviceJoin(tester);
+  final joinL10n = tester.element(find.byType(DeviceJoinPage)).l10n;
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(DeviceJoinPage)),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(devicesProvider);
+      return !state.isLoading &&
+          !state.isActionPending &&
+          state.activeJoin == null &&
+          state.error == null &&
+          find
+                  .bySemanticsIdentifier('multi-device-join-phone')
+                  .evaluate()
+                  .length ==
+              1 &&
+          find
+                  .bySemanticsIdentifier('multi-device-join-handle')
+                  .evaluate()
+                  .length ==
+              1 &&
+          find
+                  .bySemanticsIdentifier('multi-device-join-otp')
+                  .evaluate()
+                  .length ==
+              1 &&
+          find
+                  .bySemanticsIdentifier('multi-device-start-join')
+                  .evaluate()
+                  .length ==
+              1;
+    },
+    timeout: const Duration(seconds: 60),
+    failure: 'The joined App did not return to a fresh, error-free Join form.',
+  );
+  if (find.byKey(const Key('device-join-error')).evaluate().isNotEmpty ||
+      find.text(joinL10n.deviceJoinAuthorized).evaluate().isNotEmpty ||
+      find.text(joinL10n.deviceJoinActivationRetry).evaluate().isNotEmpty) {
+    fail('The fresh Join page retained a terminal activation failure.');
+  }
 }
 
 void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
@@ -561,7 +674,9 @@ void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
       _invocationExpects(_appPairProfileSyncCaseId) ||
       _invocationExpects(_appPairRegistrySyncCaseId) ||
       _invocationExpects(_appPairDomainIsolationCaseId);
-  final expectsSecurity = _invocationExpects(_appPairCaseId);
+  final expectsSecurity =
+      _invocationExpects(_appPairCaseId) ||
+      _invocationExpects(_appPairCredentialResetCaseId);
   if (config.functional != expectsFunctional ||
       config.functional == expectsSecurity ||
       !config.automatedUserPresence) {

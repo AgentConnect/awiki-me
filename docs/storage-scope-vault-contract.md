@@ -38,6 +38,12 @@ Tenant Profile（App 业务连接配置）
 - 删除单个本地身份由 im-core identity-retirement 事务负责；它不删除 scope
   Keychain item，也不等价于删除整个 Storage Scope。App 只负责先脱离 active session，
   realtime/runtime teardown 不能成为该离线事务的网络前置条件。
+- 已完成的 New Device Join 是本地身份激活的 crash-recovery journal，不是永久会话。
+  identity-retirement 只清理与被删除身份的 DID 和 `protocol_device_id` 同时精确匹配的
+  `authorized` New Device journal；进行中 Join、admin 侧状态、其他身份和 sibling device
+  都必须保留。App 恢复 `authorized` Join 前必须通过 Core 验证本地仍存在同一
+  DID + `protocol_device_id` 绑定；旧版本遗留的孤立 journal 直接忽略并显示新的 Join
+  表单，不能尝试激活已删除身份，也不能由 App 直接删除 Core 文件。
 - 每个有效 scope/account/device binding 默认参加普通消息与账号状态同步，不按本地 scope、
   账号或设备做产品灰度；raw cursor、recovery 和 mutation outbox 仍只属于该 scope 的 Core
   SQLite。测试 operator allowlist 不得写入 scope registry 或业务 cache。

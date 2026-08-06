@@ -359,8 +359,10 @@ class AppTestCatalog {
         'state roots, then concurrently drives their visible Join UI. The '
         'loopback coordinator carries only lifecycle checkpoints and compares '
         'transient SAS values in memory; it cannot call product APIs or write '
-        'SAS evidence. This mode currently covers only '
-        '`DEVICE-JOIN-E2E-004`; its E2E-only UserPresencePort keeps the '
+        'SAS evidence. This mode covers `DEVICE-JOIN-E2E-004` and then '
+        '`DEVICE-JOIN-E2E-005`, which deletes the joined App credential, '
+        'proves the completed local Join journal is retired, and reopens a '
+        'fresh Join form. Its E2E-only UserPresencePort keeps the '
         'two-process run unattended without attesting production '
         'LocalAuthentication.',
       )

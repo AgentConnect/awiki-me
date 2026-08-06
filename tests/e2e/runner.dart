@@ -108,7 +108,10 @@ const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
 ];
-const List<String> _multiDeviceAppPairCaseIds = <String>['DEVICE-JOIN-E2E-004'];
+const List<String> _multiDeviceAppPairCaseIds = <String>[
+  'DEVICE-JOIN-E2E-004',
+  'DEVICE-JOIN-E2E-005',
+];
 const List<String> _multiDeviceAppPairFunctionalCaseIds = <String>[
   'DEVICE-AGENT-SYNC-E2E-001',
   'DEVICE-AGENT-MESSAGE-SYNC-E2E-001',

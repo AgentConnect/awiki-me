@@ -52,6 +52,7 @@ import 'package:awiki_me/src/presentation/group/group_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/app_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
@@ -72,6 +73,7 @@ part 'multi_device_app_pair_ui_test.part.dart';
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
 const String _appPairCaseId = 'DEVICE-JOIN-E2E-004';
+const String _appPairCredentialResetCaseId = 'DEVICE-JOIN-E2E-005';
 const String _appPairAgentSyncCaseId = 'DEVICE-AGENT-SYNC-E2E-001';
 const String _appPairAgentMessageSyncCaseId =
     'DEVICE-AGENT-MESSAGE-SYNC-E2E-001';

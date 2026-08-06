@@ -186,6 +186,32 @@ class AwikiImCoreDeviceManagementAdapter implements DeviceManagementCorePort {
   }
 
   @override
+  Future<bool> localIdentityMatchesDevice({
+    required String did,
+    required String protocolDeviceId,
+  }) async {
+    final normalizedDid = did.trim();
+    final normalizedDeviceId = protocolDeviceId.trim();
+    if (normalizedDid.isEmpty || normalizedDeviceId.isEmpty) {
+      throw const DeviceManagementTransportException(
+        'invalid_identity_device_binding',
+      );
+    }
+    final instance = await _coreInstance();
+    late core.IdentityDeviceSummary summary;
+    try {
+      summary = await instance.identityDeviceSummary(
+        core.IdentitySelector.did(normalizedDid),
+      );
+    } on core.AwikiImCoreException catch (error) {
+      if (error.code == 'identity_not_found') return false;
+      rethrow;
+    }
+    return summary.identity.did == normalizedDid &&
+        summary.protocolDeviceId == normalizedDeviceId;
+  }
+
+  @override
   Future<DeviceJoinProgress> beginDeviceJoinWithSms({
     required String handle,
     required String phone,

@@ -89,7 +89,8 @@
         "isolated_app_state"
       ],
       "caseIds": [
-        "DEVICE-JOIN-E2E-004"
+        "DEVICE-JOIN-E2E-004",
+        "DEVICE-JOIN-E2E-005"
       ]
     },
     "multi-device-app-pair-functional": {

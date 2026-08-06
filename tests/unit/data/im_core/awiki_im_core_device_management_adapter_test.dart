@@ -487,12 +487,131 @@ void main() {
       expect(result.toString(), isNot(contains('document_hash')));
     },
   );
+
+  test(
+    'authorized Join binding matches the exact local DID and device',
+    () async {
+      core.IdentitySelector? capturedSelector;
+      final sdk = _IdentityDeviceSummaryCore((selector) async {
+        capturedSelector = selector;
+        return _identityDeviceSummary(protocolDeviceId: 'device-new');
+      });
+      final adapter = _adapterWithCore(sdk);
+
+      expect(
+        await adapter.localIdentityMatchesDevice(
+          did: _did,
+          protocolDeviceId: 'device-new',
+        ),
+        isTrue,
+      );
+      expect(capturedSelector, isA<core.DidIdentitySelector>());
+      expect((capturedSelector! as core.DidIdentitySelector).did, _did);
+    },
+  );
+
+  test('same local DID with another device does not match', () async {
+    final adapter = _adapterWithCore(
+      _IdentityDeviceSummaryCore(
+        (_) async => _identityDeviceSummary(protocolDeviceId: 'device-other'),
+      ),
+    );
+
+    expect(
+      await adapter.localIdentityMatchesDevice(
+        did: _did,
+        protocolDeviceId: 'device-new',
+      ),
+      isFalse,
+    );
+  });
+
+  test(
+    'missing local identity makes an authorized Join non-resumable',
+    () async {
+      final adapter = _adapterWithCore(
+        _IdentityDeviceSummaryCore(
+          (_) async => throw const core.AwikiImCoreException(
+            code: 'identity_not_found',
+            message: 'not found',
+          ),
+        ),
+      );
+
+      expect(
+        await adapter.localIdentityMatchesDevice(
+          did: _did,
+          protocolDeviceId: 'device-new',
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test('unexpected Core failures are not mistaken for a missing identity', () {
+    const failure = core.AwikiImCoreException(
+      code: 'local_state_unavailable',
+      message: 'vault unavailable',
+    );
+    final adapter = _adapterWithCore(
+      _IdentityDeviceSummaryCore((_) async => throw failure),
+    );
+
+    expect(
+      adapter.localIdentityMatchesDevice(
+        did: _did,
+        protocolDeviceId: 'device-new',
+      ),
+      throwsA(same(failure)),
+    );
+  });
 }
 
 const _did = 'did:wba:awiki.info:user:e1_test';
 
 Future<core.AwikiImCore> _unusedCore() {
   throw StateError('Core access was not expected by this test.');
+}
+
+AwikiImCoreDeviceManagementAdapter _adapterWithCore(core.AwikiImCore sdk) {
+  return AwikiImCoreDeviceManagementAdapter.withCoreInstance(
+    coreInstance: () async => sdk,
+    userServiceUrl: 'https://awiki.info',
+    targetHandleDomain: 'awiki.info',
+  );
+}
+
+core.IdentityDeviceSummary _identityDeviceSummary({
+  required String protocolDeviceId,
+}) {
+  return core.IdentityDeviceSummary(
+    identity: const core.IdentitySummary(
+      id: 'identity-alice',
+      did: _did,
+      isDefault: true,
+      readyForAuth: true,
+      readyForMessaging: true,
+    ),
+    mode: core.IdentityDeviceMode.vNext,
+    protocolDeviceId: protocolDeviceId,
+    role: core.IdentityDeviceRole.member,
+    readiness: core.IdentityDeviceReadiness.memberReady,
+  );
+}
+
+class _IdentityDeviceSummaryCore implements core.AwikiImCore {
+  _IdentityDeviceSummaryCore(this.loader);
+
+  final Future<core.IdentityDeviceSummary> Function(core.IdentitySelector)
+  loader;
+
+  @override
+  Future<core.IdentityDeviceSummary> identityDeviceSummary(
+    core.IdentitySelector selector,
+  ) => loader(selector);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 core.DeviceJoinProgress _coreProgress() {

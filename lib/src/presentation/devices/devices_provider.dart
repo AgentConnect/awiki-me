@@ -479,11 +479,21 @@ class DevicesController extends StateNotifier<DevicesState> {
       var newDeviceSessions = sessions
           .where((session) => session.side == DeviceJoinSide.newDevice)
           .toList(growable: false);
-      var activeJoin = resumable.isNotEmpty
-          ? resumable.last
-          : authorized.isEmpty
-          ? null
-          : authorized.last;
+      DeviceJoinProgress? activeJoin;
+      if (resumable.isNotEmpty) {
+        activeJoin = resumable.last;
+      } else {
+        final deviceService = ref.read(deviceManagementServiceProvider);
+        for (final candidate in authorized.reversed) {
+          final canResume = await deviceService
+              .canResumeAuthorizedNewDeviceJoin(candidate);
+          if (!mounted || generation != _generation) return;
+          if (canResume) {
+            activeJoin = candidate;
+            break;
+          }
+        }
+      }
       if (_handleRecoveryEnabled &&
           activeJoin != null &&
           activeJoin.phase == DeviceJoinPhase.authorized) {
@@ -494,6 +504,7 @@ class DevicesController extends StateNotifier<DevicesState> {
               recoveryExpected:
                   activeJoin.cause == DeviceJoinCause.handleRecovery,
             );
+        if (!mounted || generation != _generation) return;
         activeJoin = restoredActiveJoin;
         newDeviceSessions = _replaceJoin(newDeviceSessions, restoredActiveJoin);
       }

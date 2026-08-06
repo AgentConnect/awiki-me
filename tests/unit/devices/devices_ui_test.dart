@@ -1142,6 +1142,10 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..localIdentityDeviceBindings.add((
+          did: testDid,
+          protocolDeviceId: 'member-new',
+        ))
         ..pollNewResult = _authorizedNewDeviceProgress(
           authorizedDevice: _device(
             id: 'member-new',
@@ -1183,6 +1187,10 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..localIdentityDeviceBindings.add((
+          did: testDid,
+          protocolDeviceId: 'member-new',
+        ))
         ..pollNewResult = _authorizedNewDeviceProgress();
       final gateway = FakeAwikiGateway()
         ..loginResult = const SessionIdentity(
@@ -1234,7 +1242,11 @@ void main() {
             isCurrent: true,
           ),
         ),
-      ];
+      ]
+      ..localIdentityDeviceBindings.add((
+        did: testDid,
+        protocolDeviceId: 'member-new',
+      ));
     final gateway = FakeAwikiGateway()
       ..loginResult = const SessionIdentity(
         did: testDid,
@@ -1257,6 +1269,116 @@ void main() {
     expect(find.byKey(const Key('device-join-error')), findsOneWidget);
     expect(find.text('完成'), findsNothing);
   });
+
+  testWidgets('orphaned authorized Join returns to a fresh device Join form', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..localSessions = <DeviceJoinProgress>[
+        _authorizedNewDeviceProgress(
+          authorizedDevice: _device(
+            id: 'member-new',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+        ),
+      ];
+    final gateway = FakeAwikiGateway();
+
+    await tester.pumpWidget(
+      _app(
+        const DeviceJoinPage(autoPoll: false),
+        core,
+        gateway: gateway,
+        session: null,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CupertinoTextField), findsNWidgets(3));
+    expect(find.text('开始关联'), findsOneWidget);
+    expect(find.text('设备已加入'), findsNothing);
+    expect(find.text('重试设备激活'), findsNothing);
+    expect(find.byKey(const Key('device-join-error')), findsNothing);
+    expect(core.localIdentityDeviceMatchCalls, 1);
+    expect(core.pollCalls, 0);
+    expect(gateway.loginCalls, 0);
+  });
+
+  testWidgets(
+    'same DID on another local device cannot resume an old authorized Join',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..localIdentityDeviceBindings.add((
+          did: testDid,
+          protocolDeviceId: 'member-current',
+        ));
+
+      await tester.pumpWidget(
+        _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CupertinoTextField), findsNWidgets(3));
+      expect(find.text('设备已加入'), findsNothing);
+      expect(core.localIdentityDeviceMatchCalls, 1);
+      expect(core.pollCalls, 0);
+    },
+  );
+
+  testWidgets(
+    'restart selects the newest authorized Join with an exact local binding',
+    (tester) async {
+      final core = FakeDeviceManagementCore()
+        ..localSessions = <DeviceJoinProgress>[
+          _authorizedNewDeviceProgress(
+            joinSessionId: 'join-valid',
+            protocolDeviceId: 'member-valid',
+            authorizedDevice: _device(
+              id: 'member-valid',
+              role: DeviceRole.member,
+              isCurrent: true,
+            ),
+          ),
+          _authorizedNewDeviceProgress(
+            joinSessionId: 'join-orphan',
+            protocolDeviceId: 'member-orphan',
+          ),
+        ]
+        ..localIdentityDeviceBindings.add((
+          did: testDid,
+          protocolDeviceId: 'member-valid',
+        ));
+      final gateway = FakeAwikiGateway()
+        ..loginResult = const SessionIdentity(
+          did: testDid,
+          credentialName: 'member-valid-local',
+          displayName: 'Alice',
+          handle: 'alice',
+        );
+
+      await tester.pumpWidget(
+        _app(
+          const DeviceJoinPage(autoPoll: false),
+          core,
+          gateway: gateway,
+          session: null,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('device-join-page'))),
+      );
+      expect(
+        container.read(devicesProvider).activeJoin?.joinSessionId,
+        'join-valid',
+      );
+      expect(core.localIdentityDeviceMatchCalls, 2);
+      expect(gateway.loginCalls, 1);
+    },
+  );
 
   testWidgets(
     'approval remains completed after consumed request leaves the inbox',
@@ -1987,11 +2109,13 @@ DeviceJoinRequestNotice _request({
 DeviceJoinProgress _authorizedNewDeviceProgress({
   DeviceSummary? authorizedDevice,
   String joinSessionId = 'join-1',
+  String did = testDid,
+  String protocolDeviceId = 'member-new',
 }) {
   return DeviceJoinProgress(
     joinSessionId: joinSessionId,
-    did: testDid,
-    protocolDeviceId: 'member-new',
+    did: did,
+    protocolDeviceId: protocolDeviceId,
     side: DeviceJoinSide.newDevice,
     phase: DeviceJoinPhase.authorized,
     remoteState: DeviceJoinRemoteState.consumed,

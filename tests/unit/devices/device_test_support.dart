@@ -34,6 +34,8 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   List<DeviceJoinRequestNotice> joinRequests =
       const <DeviceJoinRequestNotice>[];
   List<DeviceJoinProgress> localSessions = const <DeviceJoinProgress>[];
+  final Set<({String did, String protocolDeviceId})>
+  localIdentityDeviceBindings = <({String did, String protocolDeviceId})>{};
   DeviceJoinProgress? beginResult;
   DeviceJoinProgress? verificationProgress;
   DeviceJoinProgress? pollNewResult;
@@ -59,6 +61,7 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   revokeLoader;
   int registryCalls = 0;
   int localSessionCalls = 0;
+  int localIdentityDeviceMatchCalls = 0;
   int sendOtpCalls = 0;
   int beginCalls = 0;
   int joinRequestCalls = 0;
@@ -190,6 +193,18 @@ class FakeDeviceManagementCore implements DeviceManagementCorePort {
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async {
     localSessionCalls += 1;
     return localSessions;
+  }
+
+  @override
+  Future<bool> localIdentityMatchesDevice({
+    required String did,
+    required String protocolDeviceId,
+  }) async {
+    localIdentityDeviceMatchCalls += 1;
+    return localIdentityDeviceBindings.contains((
+      did: did,
+      protocolDeviceId: protocolDeviceId,
+    ));
   }
 
   @override

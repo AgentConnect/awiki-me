@@ -56,6 +56,23 @@ class DeviceManagementService {
     return sessions;
   }
 
+  Future<bool> canResumeAuthorizedNewDeviceJoin(
+    DeviceJoinProgress progress,
+  ) async {
+    _validateProgress(progress);
+    if (progress.side != DeviceJoinSide.newDevice ||
+        progress.phase != DeviceJoinPhase.authorized) {
+      return false;
+    }
+    return _core.localIdentityMatchesDevice(
+      did: _required(progress.did, 'did'),
+      protocolDeviceId: _required(
+        progress.protocolDeviceId,
+        'protocolDeviceId',
+      ),
+    );
+  }
+
   Future<List<DeviceJoinRequestNotice>> restoreAdminJoinRequests(
     String selector,
   ) async {

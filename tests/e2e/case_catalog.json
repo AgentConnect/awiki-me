@@ -2376,6 +2376,56 @@
       }
     },
     {
+      "caseId": "DEVICE-JOIN-E2E-005",
+      "feature": "Joined AWiki Me device deletes its local credential and starts Join again",
+      "layer": "remote_product_ui_security",
+      "preconditions": "DEVICE-JOIN-E2E-004 has completed on two isolated real App processes, the joining App is the current active member, and its completed New Device Join journal belongs to the same local identity and protocol device.",
+      "action": "On the joining App, leave the completed Join page, open Settings, confirm Exit and delete current credential through visible UI, verify the completed local Join journal is retired, then reopen Join from onboarding.",
+      "exactOracles": [
+        "Deleting the joined credential returns the real App to onboarding without affecting the admin App or remotely revoking either registered device.",
+        "The joining App Core no longer lists the completed New Device Join session that created the deleted local identity.",
+        "Opening Join again shows one fresh phone, Handle, OTP, and start-action form with no active Join, activation retry, completed-state projection, or device error."
+      ],
+      "negativeChecks": [
+        "A fake Core, direct provider mutation, copied state root, retained completed Join session, DID-only match for another protocol device, stale Device joined page, activation retry, error banner, or missing fresh Join input prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_device_join_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/multi_device_join_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "DEVICE-JOIN-E2E-005:joined_device_credential_deleted",
+          "DEVICE-JOIN-E2E-005:completed_join_retired_from_local_core",
+          "DEVICE-JOIN-E2E-005:fresh_join_form_visible_without_activation_error"
+        ],
+        "exactOracleAssertions": [
+          [
+            "DEVICE-JOIN-E2E-005:joined_device_credential_deleted"
+          ],
+          [
+            "DEVICE-JOIN-E2E-005:completed_join_retired_from_local_core"
+          ],
+          [
+            "DEVICE-JOIN-E2E-005:fresh_join_form_visible_without_activation_error"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "DEVICE-JOIN-E2E-005:joined_device_credential_deleted",
+            "DEVICE-JOIN-E2E-005:completed_join_retired_from_local_core",
+            "DEVICE-JOIN-E2E-005:fresh_join_form_visible_without_activation_error"
+          ]
+        ]
+      }
+    },
+    {
       "caseId": "DEVICE-JOIN-E2E-003",
       "feature": "AWiki Me Join restart and terminal-state convergence",
       "layer": "product_ui",

@@ -42,6 +42,47 @@ void main() {
   );
 
   test(
+    'authorized New Device Join resumes only for its exact binding',
+    () async {
+      final core = _FakeDeviceCore()..localIdentityDeviceMatches = true;
+      final progress = DeviceJoinProgress(
+        joinSessionId: 'join-1',
+        did: 'did:wba:awiki.info:user:alice:e1_test',
+        protocolDeviceId: 'dev-new',
+        side: DeviceJoinSide.newDevice,
+        phase: DeviceJoinPhase.authorized,
+        remoteState: DeviceJoinRemoteState.consumed,
+        expiresAt: DateTime.utc(2030),
+      );
+
+      expect(
+        await _service(core: core).canResumeAuthorizedNewDeviceJoin(progress),
+        isTrue,
+      );
+      expect(core.localIdentityDeviceMatchCalls, 1);
+    },
+  );
+
+  test('non-terminal Join never probes a completed identity binding', () async {
+    final core = _FakeDeviceCore()..localIdentityDeviceMatches = true;
+    final progress = DeviceJoinProgress(
+      joinSessionId: 'join-1',
+      did: 'did:wba:awiki.info:user:alice:e1_test',
+      protocolDeviceId: 'dev-new',
+      side: DeviceJoinSide.newDevice,
+      phase: DeviceJoinPhase.pending,
+      remoteState: DeviceJoinRemoteState.pending,
+      expiresAt: DateTime.utc(2030),
+    );
+
+    expect(
+      await _service(core: core).canResumeAuthorizedNewDeviceJoin(progress),
+      isFalse,
+    );
+    expect(core.localIdentityDeviceMatchCalls, 0);
+  });
+
+  test(
     'approval binds displayed SAS to member-only approval before presence',
     () async {
       final core = _FakeDeviceCore();
@@ -363,6 +404,8 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   int revokeCalls = 0;
   String? revokedTarget;
   bool? revokedPresence;
+  bool localIdentityDeviceMatches = false;
+  int localIdentityDeviceMatchCalls = 0;
 
   @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
@@ -457,6 +500,15 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   @override
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async =>
       localSessions;
+
+  @override
+  Future<bool> localIdentityMatchesDevice({
+    required String did,
+    required String protocolDeviceId,
+  }) async {
+    localIdentityDeviceMatchCalls += 1;
+    return localIdentityDeviceMatches;
+  }
 
   @override
   Future<DeviceRevokeResult> revokeDevice({
