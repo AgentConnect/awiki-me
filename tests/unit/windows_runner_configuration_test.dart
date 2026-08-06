@@ -153,6 +153,7 @@ void main() {
     final constants = File('windows/runner/app_constants.h').readAsStringSync();
     final main = File('windows/runner/main.cpp').readAsStringSync();
     final shell = File('windows/runner/desktop_shell.cpp').readAsStringSync();
+    final smoke = File('scripts/windows/run_pr_smoke.ps1').readAsStringSync();
 
     expect(constants, contains(r'Local\\ai.awiki.awikime.single-instance'));
     expect(constants, contains('AWiki.AWikiMe'));
@@ -160,6 +161,8 @@ void main() {
     expect(main, contains('"--shutdown-for-update"'));
     expect(main, contains('::OpenProcess(SYNCHRONIZE'));
     expect(main, contains('WaitForSingleObject(primary_process, 30000)'));
+    expect(smoke, contains(r'$primary.WaitForExit(20000)'));
+    expect(smoke, contains('bounded 20-second shutdown window'));
     expect(main, isNot(contains('::ReleaseMutex(single_instance)')));
     expect(shell, contains('case WM_CLOSE:'));
     expect(shell, contains('HideWindow();'));
@@ -169,6 +172,27 @@ void main() {
     expect(shell, contains('method == "completeExit"'));
     expect(shell, contains('if (!exit_requested_)'));
     expect(shell, contains('::PostMessageW(window_, awiki::kExitReadyMessage'));
+    expect(constants, contains('kExitFallbackTimerId'));
+    expect(constants, contains('kExitFallbackTimeoutMilliseconds = 15000'));
+    expect(shell, contains('::SetTimer(window_, awiki::kExitFallbackTimerId'));
+    expect(shell, contains('case WM_TIMER:'));
+    expect(shell, contains('wparam == awiki::kExitFallbackTimerId'));
+    expect(
+      shell,
+      contains('::KillTimer(window_, awiki::kExitFallbackTimerId)'),
+    );
+    expect(shell, contains('const bool first_request = !exit_requested_'));
+    expect(shell, contains('first_request || !exit_fallback_armed_'));
+    expect(shell, contains('exit_fallback_armed_ = true'));
+    expect(shell, isNot(contains('if (exit_requested_) {\n    return;')));
+    final completeExit = shell.substring(
+      shell.indexOf('bool DesktopShell::CompleteExit()'),
+      shell.indexOf('void DesktopShell::SendShellEvent'),
+    );
+    expect(
+      completeExit.indexOf('::KillTimer'),
+      greaterThan(completeExit.indexOf('::PostMessageW')),
+    );
     expect(shell, contains('SetMethodCallHandler(nullptr)'));
     expect(
       shell,

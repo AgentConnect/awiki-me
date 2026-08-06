@@ -142,8 +142,8 @@ try {
     if ($shutdown.ExitCode -ne 0) {
         throw "shutdownForUpdate failed with code $($shutdown.ExitCode)"
     }
-    if (-not $primary.WaitForExit(30000)) {
-        throw 'Primary AWikiMe.exe did not exit within 30 seconds'
+    if (-not $primary.WaitForExit(20000)) {
+        throw 'Primary AWikiMe.exe did not exit within the bounded 20-second shutdown window'
     }
 }
 finally {

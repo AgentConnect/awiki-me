@@ -79,7 +79,12 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     _desktopStartupPresentation =
         widget.desktopStartupPresentationService ??
         buildDesktopStartupPresentationService();
-    _shellLifecycle = DesktopShellLifecycleCoordinator(shell: _desktopShell);
+    _shellLifecycle = DesktopShellLifecycleCoordinator(
+      shell: _desktopShell,
+      onExitIssue: (issue) {
+        debugPrint('[awiki_me][desktop-exit] issue=${issue.name}');
+      },
+    );
     _shellSubscription = _desktopShell.events.listen(_handleShellEvent);
     _shellReady = _desktopShell.initialize();
     _notificationFacadeReady = AppNotificationFacade.create(

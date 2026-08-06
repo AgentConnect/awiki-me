@@ -128,6 +128,15 @@ the primary instance has released the desktop shell. A non-zero result aborts
 installation, so a running DLL is never overwritten. The installer permits a
 same-version repair and a higher-version overwrite, but rejects a downgrade.
 
+Tray Exit and update shutdown first give Flutter a bounded opportunity to stop
+realtime work, dispose IM Core, and close local stores. Cleanup failures and
+timeouts are reported with redacted stage-only diagnostics but do not leave the
+process permanently alive. The native runner owns an independent 15-second
+fallback timer, so it can terminate even when Flutter or the method channel no
+longer responds. Repeated exit requests re-deliver the shutdown event without
+extending that deadline. Closing the main window with its title-bar button still
+only hides it to the tray.
+
 The Start menu contains launch and uninstall shortcuts. The launch and
 optional desktop shortcuts use AUMID `AWiki.AWikiMe`. Toast initialization uses
 GUID `42f66431-9bea-46c4-ac14-475b9044a2be`; those identities must remain stable

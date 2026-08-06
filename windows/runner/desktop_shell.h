@@ -36,6 +36,8 @@ class DesktopShell {
   void RemoveTrayIcon();
   void ShowTrayMenu();
   void RequestExit(const char* event_type);
+  void ArmExitFallback();
+  bool CompleteExit();
   void SendShellEvent(const char* event_type);
   void UpdateUnreadCount(int count);
   void ApplyTaskbarOverlay();
@@ -52,6 +54,7 @@ class DesktopShell {
   bool dart_ready_ = false;
   bool exit_requested_ = false;
   bool exit_completed_ = false;
+  bool exit_fallback_armed_ = false;
   std::string pending_exit_type_;
   int unread_count_ = 0;
   UINT activate_message_ = 0;

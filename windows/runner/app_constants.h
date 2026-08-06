@@ -32,6 +32,8 @@ inline constexpr char kDesktopStartupChannel[] =
 inline constexpr UINT kTrayCallbackMessage = WM_APP + 0x31;
 inline constexpr UINT kExitReadyMessage = WM_APP + 0x32;
 inline constexpr UINT_PTR kStartupPresentationTimerId = 0x7103;
+inline constexpr UINT_PTR kExitFallbackTimerId = 0x7104;
+inline constexpr UINT kExitFallbackTimeoutMilliseconds = 15000;
 inline constexpr UINT kTrayOpenCommand = 0x7101;
 inline constexpr UINT kTrayExitCommand = 0x7102;
 

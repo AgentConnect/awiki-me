@@ -109,6 +109,9 @@ DesktopShell::DesktopShell(HWND window, flutter::FlutterEngine* engine)
 }
 
 DesktopShell::~DesktopShell() {
+  if (window_ != nullptr && exit_fallback_armed_) {
+    ::KillTimer(window_, awiki::kExitFallbackTimerId);
+  }
   if (channel_ != nullptr) {
     channel_->SetMethodCallHandler(nullptr);
     channel_.reset();
@@ -177,13 +180,11 @@ void DesktopShell::RegisterMethodChannel(flutter::FlutterEngine* engine) {
             result->Success();
             return;
           }
-          if (::PostMessageW(window_, awiki::kExitReadyMessage, 0, 0) ==
-              FALSE) {
+          if (!CompleteExit()) {
             result->Error("desktop_shell_exit_failed",
                           "The desktop shell could not complete exit");
             return;
           }
-          exit_completed_ = true;
           result->Success();
           return;
         }
@@ -460,14 +461,48 @@ void DesktopShell::HideWindow() {
 }
 
 void DesktopShell::RequestExit(const char* event_type) {
-  if (exit_requested_) {
+  if (exit_completed_) {
     return;
   }
+  const bool first_request = !exit_requested_;
   exit_requested_ = true;
   pending_exit_type_ = event_type;
   if (dart_ready_) {
     SendShellEvent(event_type);
   }
+  if (first_request || !exit_fallback_armed_) {
+    ArmExitFallback();
+  }
+}
+
+void DesktopShell::ArmExitFallback() {
+  if (window_ == nullptr || exit_completed_) {
+    return;
+  }
+  if (::SetTimer(window_, awiki::kExitFallbackTimerId,
+                 awiki::kExitFallbackTimeoutMilliseconds, nullptr) == 0) {
+    CompleteExit();
+    return;
+  }
+  exit_fallback_armed_ = true;
+}
+
+bool DesktopShell::CompleteExit() {
+  if (exit_completed_) {
+    return true;
+  }
+  if (window_ == nullptr) {
+    return false;
+  }
+  if (::PostMessageW(window_, awiki::kExitReadyMessage, 0, 0) == FALSE) {
+    return false;
+  }
+  if (exit_fallback_armed_) {
+    ::KillTimer(window_, awiki::kExitFallbackTimerId);
+    exit_fallback_armed_ = false;
+  }
+  exit_completed_ = true;
+  return true;
 }
 
 void DesktopShell::SendShellEvent(const char* event_type) {
@@ -509,6 +544,13 @@ std::optional<LRESULT> DesktopShell::HandleWindowMessage(UINT message,
   }
 
   switch (message) {
+    case WM_TIMER:
+      if (wparam == awiki::kExitFallbackTimerId && exit_requested_ &&
+          !exit_completed_) {
+        CompleteExit();
+        return 0;
+      }
+      break;
     case WM_DPICHANGED:
       RebuildTrayIcon(HIWORD(wparam));
       break;

@@ -2,6 +2,8 @@ import 'dart:async';
 
 enum DesktopShellEventType { activate, requestExit, shutdownForUpdate }
 
+enum DesktopShellExitIssue { cleanupTimedOut, cleanupFailed, completionFailed }
+
 final class DesktopShellEvent {
   const DesktopShellEvent(this.type);
 
@@ -90,10 +92,18 @@ final class NoopDesktopShellService implements DesktopShellService {
 }
 
 final class DesktopShellLifecycleCoordinator {
-  DesktopShellLifecycleCoordinator({required DesktopShellService shell})
-    : _shell = shell;
+  DesktopShellLifecycleCoordinator({
+    required DesktopShellService shell,
+    Duration cleanupTimeout = const Duration(seconds: 10),
+    void Function(DesktopShellExitIssue issue)? onExitIssue,
+  }) : assert(cleanupTimeout > Duration.zero),
+       _shell = shell,
+       _cleanupTimeout = cleanupTimeout,
+       _onExitIssue = onExitIssue;
 
   final DesktopShellService _shell;
+  final Duration _cleanupTimeout;
+  final void Function(DesktopShellExitIssue issue)? _onExitIssue;
   Future<void>? _exitOperation;
 
   Future<void> handle(
@@ -111,8 +121,19 @@ final class DesktopShellLifecycleCoordinator {
     late final Future<void> operation;
     operation =
         (() async {
-          await disposeRuntime();
-          await _shell.completeExit();
+          try {
+            await disposeRuntime().timeout(_cleanupTimeout);
+          } on TimeoutException {
+            _reportIssue(DesktopShellExitIssue.cleanupTimedOut);
+          } on Object {
+            _reportIssue(DesktopShellExitIssue.cleanupFailed);
+          }
+          try {
+            await _shell.completeExit();
+          } on Object {
+            _reportIssue(DesktopShellExitIssue.completionFailed);
+            rethrow;
+          }
         })().whenComplete(() {
           if (identical(_exitOperation, operation)) {
             _exitOperation = null;
@@ -120,5 +141,13 @@ final class DesktopShellLifecycleCoordinator {
         });
     _exitOperation = operation;
     return operation;
+  }
+
+  void _reportIssue(DesktopShellExitIssue issue) {
+    try {
+      _onExitIssue?.call(issue);
+    } on Object {
+      // Diagnostics must never become another exit precondition.
+    }
   }
 }

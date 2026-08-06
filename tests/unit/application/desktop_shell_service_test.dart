@@ -90,31 +90,115 @@ void main() {
     },
   );
 
-  test('failed runtime disposal does not confirm a safe exit', () async {
+  test(
+    'failed runtime disposal is reported but still completes exit',
+    () async {
+      final shell = _FakeDesktopShellService();
+      final issues = <DesktopShellExitIssue>[];
+      final coordinator = DesktopShellLifecycleCoordinator(
+        shell: shell,
+        onExitIssue: issues.add,
+      );
+
+      await coordinator.handle(
+        const DesktopShellEvent(DesktopShellEventType.requestExit),
+        disposeRuntime: () async => throw StateError('dispose failed'),
+      );
+
+      expect(shell.actions, <String>['complete']);
+      expect(issues, <DesktopShellExitIssue>[
+        DesktopShellExitIssue.cleanupFailed,
+      ]);
+    },
+  );
+
+  test(
+    'runtime disposal timeout is reported but still completes exit',
+    () async {
+      final shell = _FakeDesktopShellService();
+      final issues = <DesktopShellExitIssue>[];
+      final pendingDispose = Completer<void>();
+      final coordinator = DesktopShellLifecycleCoordinator(
+        shell: shell,
+        cleanupTimeout: const Duration(milliseconds: 10),
+        onExitIssue: issues.add,
+      );
+
+      await coordinator.handle(
+        const DesktopShellEvent(DesktopShellEventType.requestExit),
+        disposeRuntime: () => pendingDispose.future,
+      );
+
+      expect(shell.actions, <String>['complete']);
+      expect(issues, <DesktopShellExitIssue>[
+        DesktopShellExitIssue.cleanupTimedOut,
+      ]);
+      pendingDispose.complete();
+    },
+  );
+
+  test('diagnostic failure cannot prevent exit completion', () async {
     final shell = _FakeDesktopShellService();
-    final coordinator = DesktopShellLifecycleCoordinator(shell: shell);
+    final coordinator = DesktopShellLifecycleCoordinator(
+      shell: shell,
+      onExitIssue: (_) => throw StateError('diagnostic failed'),
+    );
+
+    await coordinator.handle(
+      const DesktopShellEvent(DesktopShellEventType.requestExit),
+      disposeRuntime: () async => throw StateError('dispose failed'),
+    );
+
+    expect(shell.actions, <String>['complete']);
+  });
+
+  test('failed native completion is reported and can be retried', () async {
+    final shell = _FakeDesktopShellService(completeFailuresRemaining: 1);
+    final issues = <DesktopShellExitIssue>[];
+    final coordinator = DesktopShellLifecycleCoordinator(
+      shell: shell,
+      onExitIssue: issues.add,
+    );
+    var disposeCalls = 0;
 
     await expectLater(
       coordinator.handle(
         const DesktopShellEvent(DesktopShellEventType.requestExit),
-        disposeRuntime: () async => throw StateError('dispose failed'),
+        disposeRuntime: () async => disposeCalls += 1,
       ),
       throwsStateError,
     );
+    await coordinator.handle(
+      const DesktopShellEvent(DesktopShellEventType.requestExit),
+      disposeRuntime: () async => disposeCalls += 1,
+    );
 
-    expect(shell.actions, isEmpty);
+    expect(shell.actions, <String>['complete', 'complete']);
+    expect(disposeCalls, 2);
+    expect(issues, <DesktopShellExitIssue>[
+      DesktopShellExitIssue.completionFailed,
+    ]);
   });
 }
 
 final class _FakeDesktopShellService implements DesktopShellService {
+  _FakeDesktopShellService({this.completeFailuresRemaining = 0});
+
   final List<String> actions = <String>[];
+  int completeFailuresRemaining;
 
   @override
   Stream<DesktopShellEvent> get events =>
       const Stream<DesktopShellEvent>.empty();
 
   @override
-  Future<void> completeExit() async => actions.add('complete');
+  Future<void> completeExit() async {
+    actions.add('complete');
+    if (completeFailuresRemaining > 0) {
+      completeFailuresRemaining -= 1;
+      throw StateError('complete failed');
+    }
+  }
 
   @override
   Future<void> dispose() async {}
