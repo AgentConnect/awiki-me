@@ -159,7 +159,7 @@ class DeviceManagementService {
     required String selector,
     required String joinSessionId,
     required String operationId,
-    int challengeTtlSeconds = 300,
+    int challengeTtlSeconds = 240,
   }) async {
     final result = await _core.startDeviceJoinVerification(
       selector: _required(selector, 'selector'),
