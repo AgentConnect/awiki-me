@@ -13,9 +13,9 @@ const List<String> reviewedAccountStateOperatorCommand = <String>[
   '-n',
   '/usr/bin/env',
   'PYTHONDONTWRITEBYTECODE=1',
-  'PYTHONPATH=/opt/awiki/services/user-service/v1/current/src',
-  '/opt/awiki/services/user-service/v1/current/.venv/bin/python',
-  '/opt/awiki/services/user-service/v1/current/scripts/'
+  'PYTHONPATH=/opt/awiki/services/user-service/current/src',
+  '/opt/awiki/services/user-service/current/.venv/bin/python',
+  '/opt/awiki/services/user-service/current/scripts/'
       'run_account_state_sync_test_action.py',
   '--env-file',
   '/etc/awiki/user-service.env',
