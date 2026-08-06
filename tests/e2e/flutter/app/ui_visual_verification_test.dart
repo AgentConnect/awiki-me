@@ -298,6 +298,22 @@ void main() {
       _expectAgentListStatusOverlay(tester, _daemonDid);
       _expectAgentListStatusOverlay(tester, _runtimeDid);
       await _captureScreenshot(tester, '08-expanded-agents');
+      await tester.tap(find.byKey(const Key('agents-more-actions-button')));
+      await _pumpVisualFrames(tester);
+      expect(
+        find.byKey(const Key('agent-skill-onboarding-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('agents-list-refresh-button')),
+        findsOneWidget,
+      );
+      expect(find.text('刷新智能体列表'), findsNothing);
+      expect(
+        find.byKey(const Key('agents-install-daemon-button')),
+        findsOneWidget,
+      );
+      await _captureScreenshot(tester, '08b-expanded-agent-actions');
     } finally {
       await _resetEnvironment(tester);
     }
