@@ -21,6 +21,7 @@ import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/tenant_management_dialog.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'onboarding_provider.dart';
@@ -97,6 +98,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final onboarding = ref.watch(onboardingProvider);
+    final otpCooldown = ref.watch(smsOtpCooldownProvider);
     final credentials = ref.watch(sessionProvider).localCredentials;
     final activeTenant = ref.watch(activeAppTenantProvider);
     final localeMode = ref.watch(appLocaleModeProvider);
@@ -109,6 +111,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       return _withLegacyUpgradeProjection(
         _MacOnboardingScaffold(
           onboarding: onboarding,
+          otpCooldown: otpCooldown,
           credentials: credentials,
           phoneController: phoneController,
           otpController: otpController,
@@ -180,6 +183,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                           ..._buildMobileRegisterWidgets(
                                             context: context,
                                             onboarding: onboarding,
+                                            otpCooldown: otpCooldown,
                                             responsive: responsive,
                                             theme: theme,
                                           ),
@@ -268,6 +272,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   List<Widget> _buildMobileRegisterWidgets({
     required BuildContext context,
     required OnboardingState onboarding,
+    required SmsOtpCooldownState otpCooldown,
     required AwikiResponsiveInfo responsive,
     required AwikiMeThemeTokens theme,
   }) {
@@ -387,17 +392,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           semanticsIdentifier: 'e2e-otp-input',
           suffix: AppInlineActionButton(
             semanticsIdentifier: 'e2e-send-otp-button',
-            label: onboarding.isOtpResendCoolingDown
+            label: otpCooldown.isCoolingDown
                 ? context.l10n.onboardingResendOtpIn(
-                    onboarding.otpResendCountdown,
+                    otpCooldown.remainingSeconds,
                   )
                 : context.l10n.onboardingSendOtp,
-            onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
+            onPressed: onboarding.isBusy || !otpCooldown.canSend
                 ? null
                 : _requestOtp,
           ),
         ),
-        if (onboarding.isOtpResendCoolingDown) const E2eMarker('e2e-otp-sent'),
+        if (otpCooldown.isCoolingDown) const E2eMarker('e2e-otp-sent'),
         _OtpCompleteMarker(controller: otpController),
         SizedBox(height: responsive.spacing(16)),
         _OnboardingAlignedAction(
@@ -671,7 +676,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       return;
     }
     final onboarding = ref.read(onboardingProvider);
-    if (onboarding.isOtpResendCoolingDown || onboarding.authMode != 'phone') {
+    final otpCooldown = ref.read(smsOtpCooldownProvider);
+    if (otpCooldown.isCoolingDown || onboarding.authMode != 'phone') {
       _stopE2eOtpRequestLoop();
       return;
     }

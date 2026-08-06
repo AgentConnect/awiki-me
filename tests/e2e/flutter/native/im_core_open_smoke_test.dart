@@ -43,11 +43,19 @@ void main() {
       final firstRecord = await repository.readExisting(tenant.storageScopeId);
       expect(firstRecord.status, ScopeSecretReadStatus.present);
       expect(first.storageScopeLayout?.scopeId, tenant.storageScopeId);
+      final smsRetryAt = DateTime.now().toUtc().add(const Duration(minutes: 2));
+      await first.smsOtpCooldownService.saveRetryAt(smsRetryAt);
+      expect(await first.smsOtpCooldownService.loadRetryAt(), smsRetryAt);
       await first.dispose();
 
       final second = await AppBootstrap.create(
         environment: environment,
         appStateRoot: root.path,
+      );
+      expect(
+        await second.smsOtpCooldownService.loadRetryAt(),
+        smsRetryAt,
+        reason: 'the tenant SMS boundary must survive a real App restart',
       );
       await second.dispose();
       final restored = await repository.readExisting(tenant.storageScopeId);
@@ -78,6 +86,7 @@ void main() {
           'scope_provisioned_exclusive',
           'real_app_bootstrap_open_existing',
           'same_process_reopen_same_root',
+          'tenant_sms_cooldown_restored_after_restart',
           'missing_key_failed_without_recreate',
           'native_paths_validated',
         ],

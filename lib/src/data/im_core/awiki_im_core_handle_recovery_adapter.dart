@@ -2,6 +2,8 @@
 // [OUTPUT]: App-owned secret-free Recovery and legacy Registry-adoption projections.
 // [POS]: Production boundary adapter; it does not recreate or persist Core state.
 
+import 'dart:convert';
+
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
 import '../../application/models/product_local_models.dart';
@@ -50,20 +52,28 @@ class AwikiImCoreHandleRecoveryAdapter
     required String handle,
     required String phone,
     required String operationId,
-  }) {
-    return _runRecovery(() async {
-      final instance = await _coreInstance();
-      final result = await instance.requestHandleRecoveryOtp(
-        phone: phone,
-        handle: handle,
-        operationId: operationId,
-      );
-      return HandleRecoveryOtpResult(
-        handle: result.handle,
-        operationId: result.operationId,
-        accepted: result.accepted,
-      );
-    });
+  }) async {
+    try {
+      return await _runRecovery(() async {
+        final instance = await _coreInstance();
+        final result = await instance.requestHandleRecoveryOtp(
+          phone: phone,
+          handle: handle,
+          operationId: operationId,
+        );
+        return HandleRecoveryOtpResult(
+          handle: result.handle,
+          operationId: result.operationId,
+          accepted: result.accepted,
+          retryAfterSeconds: result.retryAfterSeconds,
+          retryAt: result.retryAt,
+        );
+      });
+    } on core.AwikiImCoreException catch (error) {
+      final rateLimited = _handleRecoveryOtpRateLimit(error);
+      if (rateLimited != null) throw rateLimited;
+      rethrow;
+    }
   }
 
   @override
@@ -185,6 +195,37 @@ Future<T> _runRecovery<T>(Future<T> Function() action) async {
     if (failureCode == null) rethrow;
     throw HandleRecoveryFailure(handleRecoveryFailureCodeFromCore(failureCode));
   }
+}
+
+HandleRecoveryOtpRateLimited? _handleRecoveryOtpRateLimit(
+  core.AwikiImCoreException error,
+) {
+  final raw = error.serviceDataJson;
+  if (raw == null) return null;
+  final Object? decoded;
+  try {
+    decoded = jsonDecode(raw);
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map || decoded['code'] != 'otp_rate_limited') return null;
+  final seconds = int.tryParse(
+    decoded['retry_after_seconds']?.toString() ?? '',
+  );
+  final retryAtRaw = decoded['retry_at']?.toString();
+  final retryAt = retryAtRaw == null ? null : DateTime.tryParse(retryAtRaw);
+  if (seconds == null ||
+      seconds < 1 ||
+      seconds > 3600 ||
+      retryAt == null ||
+      !retryAt.isUtc ||
+      !retryAtRaw!.endsWith('Z')) {
+    return null;
+  }
+  return HandleRecoveryOtpRateLimited(
+    retryAfterSeconds: seconds,
+    retryAt: retryAt,
+  );
 }
 
 HandleRecoveryProgress handleRecoveryProgressFromCore(

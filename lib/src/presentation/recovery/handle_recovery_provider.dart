@@ -8,6 +8,7 @@ import '../../app/app_services.dart';
 import '../../application/handle_recovery_service.dart';
 import '../../application/ports/handle_recovery_core_port.dart';
 import '../../domain/entities/handle_recovery.dart';
+import '../shared/sms_otp_cooldown_provider.dart';
 
 final handleRecoveryCorePortProvider = Provider<HandleRecoveryCorePort>(
   (ref) => throw UnimplementedError(
@@ -35,6 +36,7 @@ enum HandleRecoveryUiError {
   outcomeUnknown,
   localStateUnavailable,
   blocked,
+  rateLimited,
   failed,
 }
 
@@ -55,6 +57,7 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
       HandleRecoveryFailureCode.localStateUnavailable,
     HandleRecoveryUiError.blocked => HandleRecoveryFailureCode.blocked,
     HandleRecoveryUiError.riskConfirmationRequired ||
+    HandleRecoveryUiError.rateLimited ||
     HandleRecoveryUiError.failed => null,
   };
 
@@ -66,8 +69,8 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
     HandleRecoveryUiError.remoteStateChanged ||
     HandleRecoveryUiError.outcomeUnknown => HandleRecoveryUiAction.exactResume,
     HandleRecoveryUiError.riskConfirmationRequired ||
-    HandleRecoveryUiError.userPresenceRequired =>
-      HandleRecoveryUiAction.userAction,
+    HandleRecoveryUiError.userPresenceRequired ||
+    HandleRecoveryUiError.rateLimited => HandleRecoveryUiAction.userAction,
     HandleRecoveryUiError.localStateUnavailable ||
     HandleRecoveryUiError.blocked ||
     HandleRecoveryUiError.failed => HandleRecoveryUiAction.localBlocked,
@@ -77,6 +80,9 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
 }
 
 HandleRecoveryUiError handleRecoveryUiErrorFrom(Object error) {
+  if (error is HandleRecoveryOtpRateLimited) {
+    return HandleRecoveryUiError.rateLimited;
+  }
   if (error is! HandleRecoveryFailure) return HandleRecoveryUiError.failed;
   return switch (error.code) {
     HandleRecoveryFailureCode.notPrepared => HandleRecoveryUiError.notPrepared,
@@ -146,9 +152,11 @@ class HandleRecoveryState {
 }
 
 class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
-  HandleRecoveryController(this._service) : super(const HandleRecoveryState());
+  HandleRecoveryController(this._service, this._otpCooldown)
+    : super(const HandleRecoveryState());
 
   final HandleRecoveryService _service;
+  final SmsOtpCooldownController _otpCooldown;
 
   void setRiskConfirmed(bool value) {
     state = state.copyWith(riskConfirmed: value, clearError: true);
@@ -169,6 +177,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       state = state.copyWith(error: HandleRecoveryUiError.transitionMismatch);
       return;
     }
+    if (!await _otpCooldown.beginSend()) return;
     late final String operationId;
     try {
       final locator = await _service.beginOrRestoreLocator(
@@ -177,6 +186,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       );
       operationId = locator.operationId;
     } catch (error) {
+      _otpCooldown.completeFailed();
       state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
       return;
     }
@@ -194,6 +204,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
         phone: normalizedPhone,
         operationId: operationId,
       );
+      await _otpCooldown.completeAcceptedAt(receipt.retryAt);
       if (mounted) {
         state = state.copyWith(
           otpRequested: true,
@@ -203,10 +214,14 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
         );
       }
     } catch (error) {
+      if (error is HandleRecoveryOtpRateLimited) {
+        await _otpCooldown.completeRateLimitedAt(error.retryAt);
+      }
       if (mounted) {
         state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
       }
     } finally {
+      _otpCooldown.completeFailed();
       if (mounted) state = state.copyWith(isBusy: false);
     }
   }
@@ -327,6 +342,8 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
 
 final handleRecoveryProvider =
     StateNotifierProvider<HandleRecoveryController, HandleRecoveryState>(
-      (ref) =>
-          HandleRecoveryController(ref.watch(handleRecoveryServiceProvider)),
+      (ref) => HandleRecoveryController(
+        ref.watch(handleRecoveryServiceProvider),
+        ref.watch(smsOtpCooldownProvider.notifier),
+      ),
     );

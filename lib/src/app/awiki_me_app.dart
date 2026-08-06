@@ -80,6 +80,9 @@ class AwikiMeApp extends StatelessWidget {
         displayScalePreferenceServiceProvider.overrideWithValue(
           bootstrap.displayScalePreferenceService,
         ),
+        smsOtpCooldownServiceProvider.overrideWithValue(
+          bootstrap.smsOtpCooldownService,
+        ),
         initialDisplayScaleProvider.overrideWithValue(initialDisplayScale),
         updateServiceProvider.overrideWithValue(bootstrap.updateService),
         if (bootstrap.attachmentCacheService != null)

@@ -1563,17 +1563,17 @@
     },
     {
       "caseId": "NATIVE-E2E-001",
-      "feature": "Storage Scope native bootstrap smoke",
+      "feature": "Storage Scope native bootstrap and tenant SMS cooldown smoke",
       "layer": "product_ui",
       "preconditions": "Flutter desktop and debug native IM Core artifacts are available.",
-      "action": "Provision one Storage Scope through the real App bootstrap, reopen the same native vault, then remove its key and retry openExisting.",
+      "action": "Provision one Storage Scope through the real App bootstrap, persist a tenant-scoped SMS retry boundary, reopen the same App root, then remove its key and retry openExisting.",
       "exactOracles": [
         "Provision reaches ready only after the native VaultRequired validator opens.",
-        "A second real App bootstrap reads the identical existing root.",
+        "A second real App bootstrap reads the identical existing root and restores the exact tenant SMS retry boundary.",
         "After key deletion, bootstrap returns vault_key_missing and does not recreate the item."
       ],
       "negativeChecks": [
-        "Native load failure, context/path mismatch, root replacement, or missing-key recreation fails the case."
+        "Native load failure, context/path mismatch, root replacement, lost SMS retry boundary, or missing-key recreation fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "none",

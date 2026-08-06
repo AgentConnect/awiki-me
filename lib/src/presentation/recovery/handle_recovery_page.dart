@@ -9,6 +9,7 @@ import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
+import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'handle_recovery_provider.dart';
 
@@ -58,6 +59,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(handleRecoveryProvider);
+    final otpCooldown = ref.watch(smsOtpCooldownProvider);
     final progress = state.progress;
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
@@ -110,12 +112,17 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                         Expanded(
                           child: AppSecondaryButton(
                             key: const Key('handle-recovery-send-otp'),
-                            label: context.l10n.handleRecoverySendOtp,
+                            label: otpCooldown.isCoolingDown
+                                ? context.l10n.onboardingResendOtpIn(
+                                    otpCooldown.remainingSeconds,
+                                  )
+                                : context.l10n.handleRecoverySendOtp,
                             semanticsIdentifier: 'handle-recovery-send-otp',
                             onPressed:
                                 state.isBusy ||
                                     progress != null ||
-                                    state.otpRequested
+                                    state.otpRequested ||
+                                    !otpCooldown.canSend
                                 ? null
                                 : _requestOtp,
                           ),
@@ -199,7 +206,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
               if (state.error != null) ...<Widget>[
                 const SizedBox(height: 12),
                 Text(
-                  _errorLabel(context, state.error!),
+                  _errorLabel(context, state.error!, otpCooldown),
                   style: TextStyle(color: context.awikiTheme.danger),
                 ),
               ],
@@ -287,27 +294,34 @@ class _RecoveryRiskCard extends StatelessWidget {
   }
 }
 
-String _errorLabel(BuildContext context, HandleRecoveryUiError error) =>
-    switch (error) {
-      HandleRecoveryUiError.riskConfirmationRequired =>
-        context.l10n.handleRecoveryRiskRequired,
-      HandleRecoveryUiError.notPrepared =>
-        context.l10n.handleRecoveryErrorNotPrepared,
-      HandleRecoveryUiError.userPresenceRequired =>
-        context.l10n.handleRecoveryErrorUserPresenceRequired,
-      HandleRecoveryUiError.transitionMismatch =>
-        context.l10n.handleRecoveryErrorTransitionMismatch,
-      HandleRecoveryUiError.transitionChainUnsupported =>
-        context.l10n.handleRecoveryErrorTransitionChainUnsupported,
-      HandleRecoveryUiError.remoteStateChanged =>
-        context.l10n.handleRecoveryErrorRemoteStateChanged,
-      HandleRecoveryUiError.outcomeUnknown =>
-        context.l10n.handleRecoveryErrorOutcomeUnknown,
-      HandleRecoveryUiError.localStateUnavailable =>
-        context.l10n.handleRecoveryErrorLocalStateUnavailable,
-      HandleRecoveryUiError.blocked => context.l10n.handleRecoveryErrorBlocked,
-      HandleRecoveryUiError.failed => context.l10n.handleRecoveryFailed,
-    };
+String _errorLabel(
+  BuildContext context,
+  HandleRecoveryUiError error,
+  SmsOtpCooldownState otpCooldown,
+) => switch (error) {
+  HandleRecoveryUiError.riskConfirmationRequired =>
+    context.l10n.handleRecoveryRiskRequired,
+  HandleRecoveryUiError.notPrepared =>
+    context.l10n.handleRecoveryErrorNotPrepared,
+  HandleRecoveryUiError.userPresenceRequired =>
+    context.l10n.handleRecoveryErrorUserPresenceRequired,
+  HandleRecoveryUiError.transitionMismatch =>
+    context.l10n.handleRecoveryErrorTransitionMismatch,
+  HandleRecoveryUiError.transitionChainUnsupported =>
+    context.l10n.handleRecoveryErrorTransitionChainUnsupported,
+  HandleRecoveryUiError.remoteStateChanged =>
+    context.l10n.handleRecoveryErrorRemoteStateChanged,
+  HandleRecoveryUiError.outcomeUnknown =>
+    context.l10n.handleRecoveryErrorOutcomeUnknown,
+  HandleRecoveryUiError.localStateUnavailable =>
+    context.l10n.handleRecoveryErrorLocalStateUnavailable,
+  HandleRecoveryUiError.blocked => context.l10n.handleRecoveryErrorBlocked,
+  HandleRecoveryUiError.rateLimited =>
+    otpCooldown.isCoolingDown
+        ? context.l10n.deviceJoinOtpRateLimited(otpCooldown.remainingSeconds)
+        : context.l10n.handleRecoveryFailed,
+  HandleRecoveryUiError.failed => context.l10n.handleRecoveryFailed,
+};
 
 String _phaseLabel(
   BuildContext context,

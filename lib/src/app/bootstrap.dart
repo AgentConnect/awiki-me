@@ -40,6 +40,7 @@ import '../application/profile_application_service.dart';
 import '../application/realtime_application_service.dart';
 import '../application/relationship_application_service.dart';
 import '../application/remote_push_installation_coordinator.dart';
+import '../application/sms_otp_cooldown_service.dart';
 import '../data/compat/compat_awiki_account_gateway.dart';
 import '../data/compat/compat_awiki_gateway.dart';
 import '../data/compat/compat_realtime_gateway.dart';
@@ -75,6 +76,7 @@ import '../data/services/awiki_onboarding_utility_client.dart';
 import '../data/services/user_service_account_state_sync_adapter.dart';
 import '../data/services/key_value_active_session_store.dart';
 import '../data/services/key_value_display_scale_preference_service.dart';
+import '../data/services/key_value_sms_otp_cooldown_service.dart';
 import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/locale_preference_service.dart';
 import '../data/services/user_service_peer_identity_service.dart';
@@ -118,6 +120,7 @@ class AppBootstrap {
     required this.updateService,
     this.displayScalePreferenceService =
         const NoopDisplayScalePreferenceService(),
+    this.smsOtpCooldownService = const NoopSmsOtpCooldownService(),
     this.desktopShellService = const NoopDesktopShellService(),
     this.appSessionService,
     this.identityCorePort,
@@ -161,6 +164,7 @@ class AppBootstrap {
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
   final DisplayScalePreferenceService displayScalePreferenceService;
+  final SmsOtpCooldownService smsOtpCooldownService;
   final DesktopShellService desktopShellService;
   final AppSessionService? appSessionService;
   final IdentityCorePort? identityCorePort;
@@ -461,6 +465,10 @@ class AppBootstrap {
       );
       final displayScalePreferenceService =
           KeyValueDisplayScalePreferenceService(storage: preferenceStorage);
+      final smsOtpCooldownService = KeyValueSmsOtpCooldownService(
+        storage: preferenceStorage,
+        scopeId: registeredTenant.storageScopeId.value,
+      );
       final updateService = AppUpdateService(storage: preferenceStorage);
       final bootstrap = AppBootstrap(
         environment: effectiveEnvironment,
@@ -471,6 +479,7 @@ class AppBootstrap {
         e2eeFacade: e2eeFacade,
         localePreferenceService: localePreferenceService,
         displayScalePreferenceService: displayScalePreferenceService,
+        smsOtpCooldownService: smsOtpCooldownService,
         updateService: updateService,
         desktopShellService: shell,
         appSessionService: appSessionService,
@@ -572,6 +581,7 @@ class AppBootstrap {
       e2eeFacade: e2eeFacade,
       localePreferenceService: localePreferenceService,
       displayScalePreferenceService: displayScalePreferenceService,
+      smsOtpCooldownService: smsOtpCooldownService,
       updateService: updateService,
       desktopShellService: desktopShellService,
       appSessionService: appSessionService,

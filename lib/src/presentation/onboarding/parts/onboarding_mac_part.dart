@@ -3,6 +3,7 @@ part of '../onboarding_page.dart';
 class _MacOnboardingScaffold extends StatelessWidget {
   const _MacOnboardingScaffold({
     required this.onboarding,
+    required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
     required this.otpController,
@@ -23,6 +24,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   });
 
   final OnboardingState onboarding;
+  final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
   final TextEditingController otpController;
@@ -56,6 +58,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
             framed: useCompactLayout,
             showCompactBrand: useCompactLayout,
             onboarding: onboarding,
+            otpCooldown: otpCooldown,
             credentials: credentials,
             phoneController: phoneController,
             otpController: otpController,
@@ -376,6 +379,7 @@ class _MacAuthCard extends StatelessWidget {
     required this.framed,
     required this.showCompactBrand,
     required this.onboarding,
+    required this.otpCooldown,
     required this.credentials,
     required this.phoneController,
     required this.otpController,
@@ -395,6 +399,7 @@ class _MacAuthCard extends StatelessWidget {
   final bool framed;
   final bool showCompactBrand;
   final OnboardingState onboarding;
+  final SmsOtpCooldownState otpCooldown;
   final List<SessionIdentity> credentials;
   final TextEditingController phoneController;
   final TextEditingController otpController;
@@ -470,6 +475,7 @@ class _MacAuthCard extends StatelessWidget {
                 child: _MacRegisterForm(
                   key: ValueKey<String>('mac-register-${onboarding.authMode}'),
                   onboarding: onboarding,
+                  otpCooldown: otpCooldown,
                   phoneController: phoneController,
                   otpController: otpController,
                   emailController: emailController,
@@ -835,6 +841,7 @@ class _MacRegisterForm extends StatelessWidget {
   const _MacRegisterForm({
     super.key,
     required this.onboarding,
+    required this.otpCooldown,
     required this.phoneController,
     required this.otpController,
     required this.emailController,
@@ -846,6 +853,7 @@ class _MacRegisterForm extends StatelessWidget {
   });
 
   final OnboardingState onboarding;
+  final SmsOtpCooldownState otpCooldown;
   final TextEditingController phoneController;
   final TextEditingController otpController;
   final TextEditingController emailController;
@@ -941,12 +949,12 @@ class _MacRegisterForm extends StatelessWidget {
             keyboardType: TextInputType.number,
             icon: CupertinoIcons.number,
             suffix: _MacInlineAction(
-              label: onboarding.isOtpResendCoolingDown
+              label: otpCooldown.isCoolingDown
                   ? context.l10n.onboardingResendOtpIn(
-                      onboarding.otpResendCountdown,
+                      otpCooldown.remainingSeconds,
                     )
                   : context.l10n.onboardingSendOtp,
-              onPressed: onboarding.isBusy || onboarding.isOtpResendCoolingDown
+              onPressed: onboarding.isBusy || !otpCooldown.canSend
                   ? null
                   : onRequestOtp,
             ),

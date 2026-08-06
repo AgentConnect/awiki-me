@@ -8,6 +8,7 @@ import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -680,6 +681,67 @@ void main() {
     }
   });
 
+  testWidgets(
+    'structured OTP rate limit survives cancelling and changing the target',
+    (tester) async {
+      final retryAt = DateTime.now().toUtc().add(const Duration(seconds: 30));
+      final core = _FakeHandleRecoveryCore(
+        requestOtpError: HandleRecoveryOtpRateLimited(
+          retryAfterSeconds: 30,
+          retryAt: retryAt,
+        ),
+      );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          home: const HandleRecoveryPage(
+            identityScope: _scope,
+            initialHandle: 'alice.awiki.info',
+          ),
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('handle-recovery-phone')),
+        '+8613800138000',
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-send-otp')));
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('handle-recovery-page'))),
+      );
+      expect(core.requestOtpCalls, 1);
+      expect(
+        container.read(handleRecoveryProvider).error,
+        HandleRecoveryUiError.rateLimited,
+      );
+      expect(
+        container.read(smsOtpCooldownProvider).remainingSeconds,
+        inInclusiveRange(29, 30),
+      );
+
+      await tester.tap(find.byKey(const Key('handle-recovery-cancel-otp')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('handle-recovery-phone')),
+        '+8613900139000',
+      );
+      expect(
+        tester
+            .widget<AppSecondaryButton>(
+              find.byKey(const Key('handle-recovery-send-otp')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(core.requestOtpCalls, 1);
+    },
+  );
+
   testWidgets('page collects OTP, gates activation, and renders V1 risks', (
     tester,
   ) async {
@@ -811,6 +873,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     this.statusPhase = HandleRecoveryProgressPhase.prepared,
     this.includeStatusRegistryReset = false,
     this.requestOtpErrorsRemaining = 0,
+    this.requestOtpError,
     this.joinResetSourceKind = HandleRecoveryTransitionSourceKind.joinedDevice,
     this.joinPhase = DeviceJoinPhase.authorized,
     this.joinRemoteState = DeviceJoinRemoteState.consumed,
@@ -823,6 +886,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final HandleRecoveryProgressPhase statusPhase;
   final bool includeStatusRegistryReset;
   int requestOtpErrorsRemaining;
+  final Object? requestOtpError;
   final HandleRecoveryTransitionSourceKind joinResetSourceKind;
   final DeviceJoinPhase joinPhase;
   final DeviceJoinRemoteState joinRemoteState;
@@ -855,10 +919,14 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
         retryable: true,
       );
     }
+    final requestError = requestOtpError;
+    if (requestError != null) throw requestError;
     return HandleRecoveryOtpResult(
       handle: handle,
       operationId: operationId,
       accepted: true,
+      retryAfterSeconds: 60,
+      retryAt: DateTime.now().toUtc().add(const Duration(seconds: 60)),
     );
   }
 

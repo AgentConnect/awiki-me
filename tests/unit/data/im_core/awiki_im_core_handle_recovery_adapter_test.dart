@@ -1,4 +1,5 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_handle_recovery_adapter.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
@@ -23,6 +24,8 @@ void main() {
       );
       expect(otp.accepted, isTrue);
       expect(otp.operationId, 'recover-op-1');
+      expect(otp.retryAfterSeconds, 60);
+      expect(otp.retryAt, DateTime.utc(2026, 8, 6, 12, 1));
 
       final prepared = await adapter.prepareHandleRecovery(
         scope: const HandleRecoveryIdentityScope(
@@ -133,6 +136,53 @@ void main() {
       throwsA(isA<core.AwikiImCoreException>()),
     );
   });
+
+  test('adapter maps only a structured OTP rate-limit boundary', () async {
+    final sdk = _FakeRecoveryCore()
+      ..error = const core.AwikiImCoreException(
+        code: 'service_error',
+        message: 'rate limited',
+        serviceDataJson:
+            '{"code":"otp_rate_limited","retry_after_seconds":37,'
+            '"retry_at":"2026-08-06T12:00:37Z"}',
+      );
+    final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
+    );
+
+    await expectLater(
+      adapter.requestHandleRecoveryOtp(
+        handle: 'alice.awiki.info',
+        phone: '+8613800138000',
+        operationId: 'recover-op-1',
+      ),
+      throwsA(
+        isA<HandleRecoveryOtpRateLimited>()
+            .having((error) => error.retryAfterSeconds, 'retryAfterSeconds', 37)
+            .having(
+              (error) => error.retryAt,
+              'retryAt',
+              DateTime.utc(2026, 8, 6, 12, 0, 37),
+            ),
+      ),
+    );
+
+    sdk.error = const core.AwikiImCoreException(
+      code: 'service_error',
+      message: 'rate limited',
+      serviceDataJson:
+          '{"code":"otp_rate_limited","retry_after_seconds":37,'
+          '"retry_at":"2026-08-06T12:00:37+00:00"}',
+    );
+    await expectLater(
+      adapter.requestHandleRecoveryOtp(
+        handle: 'alice.awiki.info',
+        phone: '+8613800138000',
+        operationId: 'recover-op-1',
+      ),
+      throwsA(isA<core.AwikiImCoreException>()),
+    );
+  });
 }
 
 class _FakeRecoveryCore implements core.AwikiImCore {
@@ -173,6 +223,8 @@ class _FakeRecoveryCore implements core.AwikiImCore {
       handle: handle,
       operationId: operationId,
       accepted: true,
+      retryAfterSeconds: 60,
+      retryAt: DateTime.utc(2026, 8, 6, 12, 1),
     );
   }
 

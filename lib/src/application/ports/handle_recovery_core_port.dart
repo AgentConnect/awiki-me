@@ -4,6 +4,16 @@
 
 import '../../domain/entities/handle_recovery.dart';
 
+class HandleRecoveryOtpRateLimited implements Exception {
+  const HandleRecoveryOtpRateLimited({
+    required this.retryAfterSeconds,
+    required this.retryAt,
+  });
+
+  final int retryAfterSeconds;
+  final DateTime retryAt;
+}
+
 abstract interface class HandleRecoveryCorePort {
   Future<HandleRecoveryOtpResult> requestHandleRecoveryOtp({
     required String handle,

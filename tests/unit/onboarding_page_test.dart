@@ -9,6 +9,7 @@ import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
+import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
@@ -20,6 +21,7 @@ import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
+import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
@@ -28,6 +30,7 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'devices/device_test_support.dart';
 import 'test_support.dart';
 
 void _setTestViewSize(WidgetTester tester, Size size) {
@@ -1301,9 +1304,9 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
-    final state = container.read(onboardingProvider);
-    expect(state.otpResendCountdown, 60);
-    expect(state.isOtpResendCoolingDown, isTrue);
+    final cooldown = container.read(smsOtpCooldownProvider);
+    expect(cooldown.remainingSeconds, 60);
+    expect(cooldown.isCoolingDown, isTrue);
 
     final feedback = container.read(uiFeedbackProvider);
     expect(feedback?.message.id, 'otpSent');
@@ -1338,7 +1341,7 @@ void main() {
     );
     final state = container.read(onboardingProvider);
     expect(state.isBusy, isFalse);
-    expect(state.otpResendCountdown, 0);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 0);
     final feedback = container.read(uiFeedbackProvider);
     expect(feedback?.danger, isTrue);
     expect(feedback?.message.id, 'raw');
@@ -1368,15 +1371,14 @@ void main() {
       tester.element(find.byType(OnboardingPage)),
     );
     final state = container.read(onboardingProvider);
-    expect(state.otpResendCountdown, 37);
-    expect(state.otpCooldownPhone, '+8613800138000');
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 37);
     expect(state.otpTargetFullHandle, isNull);
     expect(find.textContaining('重新发送（'), findsOneWidget);
     expect(container.read(uiFeedbackProvider)?.message.id, 'otpRateLimited');
     expect(container.read(uiFeedbackProvider)?.message.value, '37');
   });
 
-  testWidgets('手机号限流独立于 Handle 并在切回手机号后恢复', (tester) async {
+  testWidgets('SMS 冷却独立于 Handle 和手机号编辑并跨认证方式保持', (tester) async {
     final gateway = FakeAwikiGateway()
       ..registrationOtpCooldown = const Duration(seconds: 90);
 
@@ -1393,34 +1395,97 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(OnboardingPage)),
     );
-    expect(container.read(onboardingProvider).otpResendCountdown, 90);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
 
     await tester.enterText(fields.at(1), 'bob');
     await tester.pump();
     var state = container.read(onboardingProvider);
     expect(state.otpTargetFullHandle, isNull);
-    expect(state.otpResendCountdown, 90);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
 
     await tester.tap(find.byKey(const Key('auth-mode-email')));
     await tester.pump();
-    expect(container.read(onboardingProvider).otpResendCountdown, 0);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
     await tester.tap(find.byKey(const Key('auth-mode-phone')));
     await tester.pump();
     state = container.read(onboardingProvider);
-    expect(state.otpCooldownPhone, '+8613800138000');
-    expect(state.otpResendCountdown, 90);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
 
     await tester.enterText(fields.at(0), '13900139000');
     await tester.pump();
     state = container.read(onboardingProvider);
-    expect(state.otpCooldownPhone, '+8613900139000');
-    expect(state.otpResendCountdown, 0);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
 
     await tester.enterText(fields.at(0), '13800138000');
     await tester.pump();
     state = container.read(onboardingProvider);
-    expect(state.otpCooldownPhone, '+8613800138000');
-    expect(state.otpResendCountdown, 90);
+    expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
+  });
+
+  testWidgets('注册发码后的共享冷却会延续到设备加入页', (tester) async {
+    final gateway = FakeAwikiGateway()
+      ..registrationOtpCooldown = const Duration(seconds: 90);
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'alice');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('将此设备加入已有账户'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
+    expect(find.text('重新发送（90秒）'), findsOneWidget);
+    expect(
+      tester
+          .widget<AppInlineActionButton>(find.byType(AppInlineActionButton))
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('设备加入发码后的共享冷却会延续回注册页', (tester) async {
+    final core = FakeDeviceManagementCore()
+      ..sendOtpReceipt = const DeviceJoinSmsOtpSendReceipt(
+        retryAfterSeconds: 90,
+      );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        providerOverrides: <Override>[
+          deviceManagementCorePortProvider.overrideWithValue(core),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _tapVisible(tester, find.text('将此设备加入已有账户'));
+    await tester.pumpAndSettle();
+
+    final joinFields = find.byType(CupertinoTextField);
+    await tester.enterText(joinFields.at(0), '+8613800138000');
+    await tester.enterText(joinFields.at(1), 'alice');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pump();
+    await tester.pump();
+    expect(core.sendOtpCalls, 1);
+    expect(find.text('重新发送（90秒）'), findsOneWidget);
+
+    Navigator.of(tester.element(find.byType(DeviceJoinPage))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(OnboardingPage), findsOneWidget);
+    expect(find.textContaining('重新发送（'), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(
+      container.read(smsOtpCooldownProvider).remainingSeconds,
+      inInclusiveRange(89, 90),
+    );
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('手机号或 Handle 修改后已发送验证码不能继续提交', (tester) async {

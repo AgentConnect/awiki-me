@@ -21,6 +21,7 @@ import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -1974,6 +1975,15 @@ void main() {
 
     await tester.pump(const Duration(seconds: 1));
     expect(find.textContaining('验证码发送过于频繁'), findsOneWidget);
+    await tester.enterText(fields.at(0), '+8613900139000');
+    await tester.enterText(fields.at(1), 'bob');
+    await tester.pump();
+    expect(find.text('重新发送（1秒）'), findsOneWidget);
+    expect(find.textContaining('验证码发送过于频繁'), findsNothing);
+    await tester.tap(find.text('重新发送（1秒）'));
+    await tester.pump();
+    expect(core.sendOtpCalls, 1);
+
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('发送验证码'), findsOneWidget);
     expect(find.textContaining('验证码发送过于频繁'), findsNothing);
@@ -2149,7 +2159,7 @@ Widget _app(
       ),
       deviceManagementCorePortProvider.overrideWithValue(core),
       if (deviceJoinNow != null)
-        deviceJoinClockProvider.overrideWithValue(deviceJoinNow),
+        smsOtpCooldownClockProvider.overrideWithValue(deviceJoinNow),
       rootKeyTransferPortProvider.overrideWithValue(
         rootTransfer ?? FakeRootKeyTransferPort(),
       ),
