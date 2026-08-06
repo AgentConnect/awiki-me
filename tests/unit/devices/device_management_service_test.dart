@@ -78,6 +78,7 @@ void main() {
       );
 
       expect(core.startVerificationCalls, 1);
+      expect(core.lastChallengeTtlSeconds, 240);
       expect(progress.side, DeviceJoinSide.admin);
     },
   );
@@ -355,6 +356,7 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   String? beginOtp;
   int prepareCalls = 0;
   int startVerificationCalls = 0;
+  int? lastChallengeTtlSeconds;
   bool? preparedSasConfirmed;
   String? confirmedHandle;
   bool? confirmedPresence;
@@ -419,6 +421,7 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
     required int challengeTtlSeconds,
   }) async {
     startVerificationCalls += 1;
+    lastChallengeTtlSeconds = challengeTtlSeconds;
     return _adminSasProgress();
   }
 
