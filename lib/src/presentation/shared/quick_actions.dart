@@ -67,28 +67,46 @@ Future<void> showCommonQuickActionsMenu(
   ];
 
   if (anchoredToTrigger) {
-    final shown = context.awikiResponsive.isExpanded
-        ? await _showAnchoredQuickActionsMenu(
-            context,
-            items: items,
-            semanticLabel: l10n.quickActionsTitle,
-          )
-        : await _showCompactAnchoredQuickActionsMenu(
-            context,
-            items: items,
-            semanticLabel: l10n.quickActionsTitle,
-          );
-    if (shown) {
-      return;
-    }
-    if (!context.mounted) {
-      return;
-    }
+    await showAnchoredAppDropMenu(
+      context,
+      items: items,
+      semanticLabel: l10n.quickActionsTitle,
+      fallbackTitle: l10n.quickActionsTitle,
+    );
+    return;
   }
 
   await AppNavigator.showSheet<void>(
     context,
     (_) => AppDropMenu(title: l10n.quickActionsTitle, items: items),
+  );
+}
+
+Future<void> showAnchoredAppDropMenu(
+  BuildContext context, {
+  required List<AppDropMenuItem> items,
+  required String semanticLabel,
+  String? fallbackTitle,
+  double? expandedMenuWidth,
+}) async {
+  final shown = context.awikiResponsive.isExpanded
+      ? await _showAnchoredQuickActionsMenu(
+          context,
+          items: items,
+          semanticLabel: semanticLabel,
+          menuWidth: expandedMenuWidth,
+        )
+      : await _showCompactAnchoredQuickActionsMenu(
+          context,
+          items: items,
+          semanticLabel: semanticLabel,
+        );
+  if (shown || !context.mounted) {
+    return;
+  }
+  await AppNavigator.showSheet<void>(
+    context,
+    (_) => AppDropMenu(title: fallbackTitle, items: items),
   );
 }
 
@@ -368,6 +386,7 @@ Future<bool> _showAnchoredQuickActionsMenu(
   BuildContext context, {
   required List<AppDropMenuItem> items,
   required String semanticLabel,
+  double? menuWidth,
 }) async {
   final anchor = context.findRenderObject();
   final overlay = Overlay.of(
@@ -380,18 +399,18 @@ Future<bool> _showAnchoredQuickActionsMenu(
 
   final responsive = context.awikiResponsive;
   final theme = context.awikiTheme;
-  final menuWidth = responsive.displayScaled(200);
+  final resolvedMenuWidth = responsive.displayScaled(menuWidth ?? 200);
   final anchorTopLeft = anchor.localToGlobal(Offset.zero, ancestor: overlay);
   final anchorRect = anchorTopLeft & anchor.size;
-  final maxLeft = overlay.size.width - menuWidth - 8;
-  final menuLeft = (anchorRect.right - menuWidth)
+  final maxLeft = overlay.size.width - resolvedMenuWidth - 8;
+  final menuLeft = (anchorRect.right - resolvedMenuWidth)
       .clamp(8.0, maxLeft)
       .toDouble();
   final menuTop = anchorRect.bottom + responsive.displayScaled(6);
   final position = RelativeRect.fromLTRB(
     menuLeft,
     menuTop,
-    overlay.size.width - menuLeft - menuWidth,
+    overlay.size.width - menuLeft - resolvedMenuWidth,
     overlay.size.height - menuTop,
   );
 
@@ -406,7 +425,7 @@ Future<bool> _showAnchoredQuickActionsMenu(
     shadowColor: theme.title.withValues(alpha: 0.22),
     elevation: 16,
     menuPadding: EdgeInsets.all(responsive.displayScaled(5)),
-    constraints: BoxConstraints.tightFor(width: menuWidth),
+    constraints: BoxConstraints.tightFor(width: resolvedMenuWidth),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(responsive.displayScaled(12)),
       side: BorderSide(color: theme.border),

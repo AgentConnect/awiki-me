@@ -432,6 +432,77 @@ void main() {
     expect(find.text('安装命令'), findsNothing);
   });
 
+  testWidgets('expanded Agent header keeps refresh outside plus menu', (
+    tester,
+  ) async {
+    final control = _CountingListAgentControlService();
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AgentsWorkspacePage(),
+        session: const SessionIdentity(
+          did: 'did:human:me',
+          credentialName: 'default',
+          displayName: 'Me',
+        ),
+        providerOverrides: <Override>[
+          agentControlServiceProvider.overrideWithValue(control),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final header = find.byKey(const Key('agents-expanded-list-header'));
+    final menuButton = find.byKey(const Key('agents-more-actions-button'));
+    final refreshButton = find.byKey(const Key('agents-list-refresh-button'));
+    expect(header, findsOneWidget);
+    expect(menuButton, findsOneWidget);
+    expect(refreshButton, findsOneWidget);
+    expect(find.byTooltip('刷新智能体列表'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: menuButton,
+        matching: find.byIcon(CupertinoIcons.plus),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('agent-skill-onboarding-button')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('agents-install-daemon-button')), findsNothing);
+
+    final listCallsBeforeRefresh = control.listAgentsCalls;
+    await tester.tap(refreshButton);
+    await tester.pumpAndSettle();
+
+    expect(control.listAgentsCalls, listCallsBeforeRefresh + 1);
+
+    await tester.tap(menuButton);
+    await tester.pumpAndSettle();
+
+    final skillAction = find.byKey(const Key('agent-skill-onboarding-button'));
+    final installAction = find.byKey(const Key('agents-install-daemon-button'));
+    expect(skillAction, findsOneWidget);
+    expect(refreshButton, findsOneWidget);
+    expect(installAction, findsOneWidget);
+    expect(find.text('生成 Skill Agent 安装指令'), findsOneWidget);
+    expect(find.text('刷新智能体列表'), findsNothing);
+    expect(
+      find.descendant(of: installAction, matching: find.text('到宿主机安装代理')),
+      findsOneWidget,
+    );
+    expect(
+      tester.getRect(skillAction).top,
+      greaterThan(tester.getRect(menuButton).bottom),
+    );
+    expect(tester.getRect(skillAction).width, inInclusiveRange(230, 250));
+  });
+
   testWidgets('agents workspace re-entry reuses loaded inventory', (
     tester,
   ) async {
@@ -614,7 +685,7 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
     expect(find.byTooltip('刷新智能体列表'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('刷新智能体列表'));
+    await tester.tap(find.byKey(const Key('agents-list-refresh-button')));
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -2384,6 +2455,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _openExpandedAgentActions(tester);
     await tester.tap(find.byKey(const Key('agents-install-daemon-button')));
     await tester.pumpAndSettle();
 
@@ -2494,6 +2566,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await _openExpandedAgentActions(tester);
       await tester.tap(find.byKey(const Key('agent-skill-onboarding-button')));
       await tester.pumpAndSettle();
 
@@ -3051,3 +3124,8 @@ Finder _agentRefreshButton() => find.descendant(
   of: find.byTooltip('刷新状态'),
   matching: find.byIcon(CupertinoIcons.refresh),
 );
+
+Future<void> _openExpandedAgentActions(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('agents-more-actions-button')));
+  await tester.pumpAndSettle();
+}

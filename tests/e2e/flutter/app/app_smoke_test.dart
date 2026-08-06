@@ -1024,6 +1024,8 @@ void main() {
         find.text('Agents'),
       ]);
       await _pumpSmokeFrame(tester);
+      await tester.tap(find.byKey(const Key('agents-more-actions-button')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('agent-skill-onboarding-button')));
       await tester.pumpAndSettle();
 

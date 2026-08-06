@@ -122,13 +122,6 @@ class _AgentListHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final refreshIcon = isLoading
-        ? CupertinoActivityIndicator(radius: responsive.displayScaled(7))
-        : Icon(
-            CupertinoIcons.refresh,
-            size: responsive.iconSm,
-            color: theme.secondaryText,
-          );
     final installIcon = Icon(
       CupertinoIcons.plus,
       size: responsive.iconMd,
@@ -199,17 +192,6 @@ class _AgentListHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           AppIconButton(
-            key: const Key('agent-skill-onboarding-button'),
-            onPressed: isCreatingSkill ? null : onCreateSkill,
-            semanticLabel: context.l10n.agentSkillCreateInstruction,
-            tooltip: context.l10n.agentSkillCreateInstruction,
-            size: responsive.displayScaled(32),
-            isLoading: isCreatingSkill,
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            child: const Icon(CupertinoIcons.command),
-          ),
-          SizedBox(width: responsive.spacing(4)),
-          AppIconButton(
             key: const Key('agents-list-refresh-button'),
             onPressed: isLoading ? null : onRefresh,
             semanticLabel: context.l10n.agentRefreshList,
@@ -217,20 +199,62 @@ class _AgentListHeader extends StatelessWidget {
             size: responsive.displayScaled(32),
             isLoading: isLoading,
             borderRadius: BorderRadius.circular(responsive.radius(8)),
-            child: refreshIcon,
+            child: Icon(
+              CupertinoIcons.refresh,
+              size: responsive.iconMd,
+              color: theme.secondaryText,
+            ),
           ),
           SizedBox(width: responsive.spacing(4)),
-          AppIconButton(
-            key: const Key('agents-install-daemon-button'),
-            onPressed: isInstalling ? null : onInstall,
-            semanticLabel: context.l10n.agentInstallTitle,
-            tooltip: context.l10n.agentInstallTitle,
-            size: responsive.displayScaled(32),
-            borderRadius: BorderRadius.circular(responsive.radius(8)),
-            child: installIcon,
+          Builder(
+            builder: (anchorContext) => AppIconButton(
+              key: const Key('agents-more-actions-button'),
+              onPressed: () => _showExpandedAgentActions(
+                anchorContext,
+                onCreateSkill: onCreateSkill,
+                onInstall: onInstall,
+              ),
+              semanticLabel: context.l10n.commonMoreActions,
+              tooltip: context.l10n.commonMoreActions,
+              size: responsive.displayScaled(32),
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
+              borderRadius: BorderRadius.circular(999),
+              child: Icon(
+                CupertinoIcons.plus,
+                size: responsive.iconMd,
+                color: theme.secondaryText,
+              ),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showExpandedAgentActions(
+    BuildContext context, {
+    required VoidCallback onCreateSkill,
+    required VoidCallback onInstall,
+  }) {
+    return showAnchoredAppDropMenu(
+      context,
+      semanticLabel: context.l10n.commonMoreActions,
+      expandedMenuWidth: 240,
+      items: <AppDropMenuItem>[
+        AppDropMenuItem(
+          buttonKey: const Key('agent-skill-onboarding-button'),
+          label: context.l10n.agentSkillCreateInstruction,
+          icon: CupertinoIcons.command,
+          onTap: isCreatingSkill ? null : onCreateSkill,
+        ),
+        AppDropMenuItem(
+          buttonKey: const Key('agents-install-daemon-button'),
+          label: context.l10n.agentInstallTitle,
+          icon: CupertinoIcons.desktopcomputer,
+          onTap: isInstalling ? null : onInstall,
+        ),
+      ],
     );
   }
 
