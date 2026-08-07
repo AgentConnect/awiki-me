@@ -438,6 +438,7 @@ build_macos() {
       --macos-only \
       --macos-arch "$arch" \
       --skip-codegen-check)
+  AWIKI_IM_CORE_REPO_DIR="$CORE_DIR" scripts/verify_im_core_native_artifact.sh
   flutter pub get
   [[ -d macos/Runner.xcworkspace ]] || fail "macOS Runner workspace is missing"
   filename="AWiki-Me-macOS-$arch_label-$VERSION.dmg"

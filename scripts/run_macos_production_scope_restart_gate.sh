@@ -53,6 +53,11 @@ prepare_native_dependency() {
     echo "native awiki_im_core build failed" >&2
     return 1
   fi
+  if ! AWIKI_IM_CORE_REPO_DIR="$im_core_repo_dir" \
+    "$ROOT_DIR/scripts/verify_im_core_native_artifact.sh"; then
+    echo "native awiki_im_core provenance verification failed" >&2
+    return 1
+  fi
 
   local info_plist="$im_core_xcframework/Info.plist"
   [[ -f "$info_plist" ]] || {

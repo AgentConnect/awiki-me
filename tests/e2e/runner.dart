@@ -601,6 +601,13 @@ class DesktopE2eRunner {
         await commands.requireExecutable('xvfb-run');
       }
     });
+    if (platform == DesktopE2ePlatform.macos) {
+      await _timed('Verifying native IM Core artifact', () {
+        return commands.run('bash', const <String>[
+          'scripts/verify_im_core_native_artifact.sh',
+        ], timeout: const Duration(minutes: 1));
+      });
+    }
     await _timed('Flutter App smoke', () {
       return _runFlutterTest(
         'integration_test/app_smoke_test.dart',

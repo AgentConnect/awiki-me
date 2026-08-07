@@ -13,6 +13,11 @@ void main() {
     expect(script, contains('--macos-only'));
     expect(script, contains(r'if ! "$im_core_build_script" --macos-only'));
     expect(script, contains('native awiki_im_core build failed'));
+    expect(script, contains('verify_im_core_native_artifact.sh'));
+    expect(
+      script,
+      contains('native awiki_im_core provenance verification failed'),
+    );
     expect(script, contains(r'lipo "$library" -verify_arch arm64 x86_64'));
     expect(
       script,

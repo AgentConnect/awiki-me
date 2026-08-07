@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:awiki_me/src/data/services/app_key_value_store.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,18 +93,36 @@ void main() {
       await store.read(key: 'active-session');
       await store.delete(key: 'active-session');
 
-      const expectedOptions = <String, String>{
-        'encryptedSharedPreferences': 'false',
-        'resetOnError': 'false',
-        'keyCipherAlgorithm': 'RSA_ECB_PKCS1Padding',
-        'storageCipherAlgorithm': 'AES_CBC_PKCS7Padding',
-        'sharedPreferencesName': 'FlutterSecureStorage',
-        'preferencesKeyPrefix':
-            'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',
-      };
-      expect(secureStorage.writeAndroidOptions, expectedOptions);
-      expect(secureStorage.readAndroidOptions, expectedOptions);
-      expect(secureStorage.deleteAndroidOptions, expectedOptions);
+      final options = secureStorage.writeAndroidOptions;
+      expect(options, isNotNull);
+      expect(options, containsPair('encryptedSharedPreferences', 'false'));
+      expect(options, containsPair('resetOnError', 'false'));
+      expect(options, containsPair('migrateOnAlgorithmChange', 'true'));
+      expect(options, containsPair('migrateWithBackup', 'true'));
+      expect(
+        options,
+        containsPair(
+          'keyCipherAlgorithm',
+          'RSA_ECB_OAEPwithSHA_256andMGF1Padding',
+        ),
+      );
+      expect(
+        options,
+        containsPair('storageCipherAlgorithm', 'AES_GCM_NoPadding'),
+      );
+      expect(
+        options,
+        containsPair('sharedPreferencesName', 'FlutterSecureStorage'),
+      );
+      expect(
+        options,
+        containsPair(
+          'preferencesKeyPrefix',
+          'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIHNlY3VyZSBzdG9yYWdlCg',
+        ),
+      );
+      expect(secureStorage.readAndroidOptions, options);
+      expect(secureStorage.deleteAndroidOptions, options);
     },
   );
 
@@ -160,6 +179,8 @@ void main() {
         return;
       }
       TestWidgetsFlutterBinding.ensureInitialized();
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       const storageChannel = MethodChannel(
         'plugins.it_nomads.com/flutter_secure_storage',
       );
@@ -187,7 +208,7 @@ void main() {
       expect(legacyCalls, hasLength(1));
       final arguments = legacyCalls.single.arguments as Map<Object?, Object?>;
       final options = arguments['options'] as Map<Object?, Object?>;
-      expect(options['useDataProtectionKeyChain'], 'false');
+      expect(options['usesDataProtectionKeychain'], 'false');
     },
   );
 
@@ -377,11 +398,11 @@ class _CapturingSecureStorage extends FlutterSecureStorage {
   Future<void> write({
     required String key,
     required String? value,
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     writeAndroidOptions = aOptions?.toMap();
@@ -390,11 +411,11 @@ class _CapturingSecureStorage extends FlutterSecureStorage {
   @override
   Future<String?> read({
     required String key,
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     readAndroidOptions = aOptions?.toMap();
@@ -404,11 +425,11 @@ class _CapturingSecureStorage extends FlutterSecureStorage {
   @override
   Future<void> delete({
     required String key,
-    IOSOptions? iOptions,
+    AppleOptions? iOptions,
     AndroidOptions? aOptions,
     LinuxOptions? lOptions,
     WebOptions? webOptions,
-    MacOsOptions? mOptions,
+    AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
     deleteAndroidOptions = aOptions?.toMap();

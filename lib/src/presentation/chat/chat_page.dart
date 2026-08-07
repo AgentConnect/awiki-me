@@ -21,7 +21,7 @@ import 'package:flutter/rendering.dart'
         RenderBox,
         RenderBoxContainerDefaultsMixin,
         ScrollDirection;
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';

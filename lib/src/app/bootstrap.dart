@@ -6,9 +6,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../application/config/awiki_client_version.dart';
 import '../application/config/awiki_environment_config.dart';
 import '../application/attachment_cache_service.dart';
 import '../application/desktop_shell_service.dart';
@@ -258,7 +258,7 @@ class AppBootstrap {
       'bootstrap.preference_store',
       () => _buildPreferenceStore(appStateRoot: appStateRoot),
     );
-    final clientVersion = await _AwikiMeClientVersion.load();
+    final clientVersion = await _loadAwikiMeClientVersion();
     final userServiceHttpClient = AwikiOnboardingUtilityHttpClient(
       baseUrl: effectiveEnvironment.userServiceUrl,
       clientVersionHeader: clientVersion.headerValue,
@@ -276,7 +276,7 @@ class AppBootstrap {
     final runtime = AwikiImCoreRuntime(
       config: AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
         effectiveEnvironment,
-        clientVersionInfo: clientVersion.coreInfo,
+        clientVersionInfo: clientVersion,
       ),
       paths: pathLayout,
       scopeId: registeredTenant.storageScopeId,
@@ -705,28 +705,17 @@ class AppBootstrap {
 
 bool _hasStateRoot(String? value) => value != null && value.trim().isNotEmpty;
 
-final class _AwikiMeClientVersion {
-  const _AwikiMeClientVersion({required this.version, required this.build});
-
-  final String version;
-  final int build;
-
-  static Future<_AwikiMeClientVersion> load() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    final version = packageInfo.version.trim();
-    final build = int.tryParse(packageInfo.buildNumber);
-    if (version.isEmpty || build == null || build <= 0) {
-      throw const FormatException('app_package_version_invalid');
-    }
-    return _AwikiMeClientVersion(version: version, build: build);
+Future<AwikiClientVersion> _loadAwikiMeClientVersion() async {
+  final packageInfo = await PackageInfo.fromPlatform();
+  final version = packageInfo.version.trim();
+  final build = int.tryParse(packageInfo.buildNumber);
+  if (version.isEmpty || build == null || build <= 0) {
+    throw const FormatException('app_package_version_invalid');
   }
-
-  core.AwikiClientVersionInfo get coreInfo => core.AwikiClientVersionInfo(
+  return AwikiClientVersion(
     product: 'awiki-me',
     release: awikiMeReleaseLine,
     version: version,
     build: build,
   );
-
-  String get headerValue => 'awiki-me/$awikiMeReleaseLine/$version+$build';
 }

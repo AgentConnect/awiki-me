@@ -53,6 +53,7 @@ export LC_ALL=en_US.UTF-8
 export LC_CTYPE=en_US.UTF-8
 
 export PUB_HOSTED_URL="${PUB_HOSTED_URL:-https://mirrors.tuna.tsinghua.edu.cn/dart-pub}"
+scripts/verify_im_core_native_artifact.sh
 "$flutter_bin" pub get
 (
   cd macos

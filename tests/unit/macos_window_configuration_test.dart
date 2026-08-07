@@ -25,6 +25,34 @@ void main() {
     expect(scheme, isNot(contains('BlueprintName = "Runner"')));
   });
 
+  test('macOS includes exactly one configuration-specific CocoaPods file', () {
+    final appInfo = File(
+      'macos/Runner/Configs/AppInfo.xcconfig',
+    ).readAsStringSync();
+    final debug = File(
+      'macos/Flutter/Flutter-Debug.xcconfig',
+    ).readAsStringSync();
+    final release = File(
+      'macos/Flutter/Flutter-Release.xcconfig',
+    ).readAsStringSync();
+
+    for (final configuration in ['debug', 'release', 'profile']) {
+      expect(
+        appInfo,
+        isNot(
+          contains(
+            '#include? "../../Pods/Target Support Files/Pods-Runner/'
+            'Pods-Runner.$configuration.xcconfig"',
+          ),
+        ),
+      );
+    }
+    expect('Pods-Runner.debug.xcconfig'.allMatches(debug), hasLength(1));
+    expect(debug, isNot(contains('Pods-Runner.release.xcconfig')));
+    expect('Pods-Runner.release.xcconfig'.allMatches(release), hasLength(1));
+    expect(release, isNot(contains('Pods-Runner.debug.xcconfig')));
+  });
+
   test('macOS main window defaults to the larger chat workspace', () {
     final source = File(
       'macos/Runner/Base.lproj/MainMenu.xib',

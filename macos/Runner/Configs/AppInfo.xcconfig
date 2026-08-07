@@ -4,12 +4,6 @@
 // future. If not, the values below would default to using the project name when this becomes a
 // 'flutter create' template.
 
-// CocoaPods generated settings. These files are created by `pod install`;
-// optional includes keep the project loadable before bootstrap.
-#include? "../../Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
-#include? "../../Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
-#include? "../../Pods/Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"
-
 // The application's name. By default this is also the title of the Flutter window.
 PRODUCT_NAME = AWikiMe
 

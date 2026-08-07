@@ -1,5 +1,6 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 
+import '../../application/config/awiki_client_version.dart';
 import '../../application/config/awiki_environment_config.dart';
 
 class AwikiImCoreEnvironmentConfig {
@@ -22,7 +23,7 @@ class AwikiImCoreEnvironmentConfig {
 
   factory AwikiImCoreEnvironmentConfig.fromAwikiEnvironment(
     AwikiEnvironmentConfig environment, {
-    core.AwikiClientVersionInfo? clientVersionInfo,
+    AwikiClientVersion? clientVersionInfo,
   }) {
     return AwikiImCoreEnvironmentConfig(
       serviceBaseUrl: environment.baseUrl,
@@ -38,7 +39,7 @@ class AwikiImCoreEnvironmentConfig {
 
   final String serviceBaseUrl;
   final String didDomain;
-  final core.AwikiClientVersionInfo? clientVersionInfo;
+  final AwikiClientVersion? clientVersionInfo;
   final String? userServiceEndpoint;
   final String? messageServiceEndpoint;
   final String? mailServiceEndpoint;
@@ -50,7 +51,15 @@ class AwikiImCoreEnvironmentConfig {
     return core.AwikiImCoreConfig(
       serviceBaseUrl: serviceBaseUrl,
       didDomain: didDomain,
-      clientVersionInfo: clientVersionInfo,
+      clientVersionInfo: switch (clientVersionInfo) {
+        null => null,
+        final info => core.AwikiClientVersionInfo(
+          product: info.product,
+          release: info.release,
+          version: info.version,
+          build: info.build,
+        ),
+      },
       userServiceEndpoint: userServiceEndpoint,
       messageServiceEndpoint: messageServiceEndpoint,
       mailServiceEndpoint: mailServiceEndpoint,

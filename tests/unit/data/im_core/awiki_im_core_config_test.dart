@@ -1,4 +1,5 @@
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
+import 'package:awiki_me/src/application/config/awiki_client_version.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/data/im_core/awiki_im_core_config.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +28,7 @@ void main() {
     const config = AwikiImCoreEnvironmentConfig(
       serviceBaseUrl: 'https://example.test',
       didDomain: 'example.test',
-      clientVersionInfo: core.AwikiClientVersionInfo(
+      clientVersionInfo: AwikiClientVersion(
         product: 'awiki-me',
         release: '0714',
         version: '0.1.15',
@@ -46,6 +47,7 @@ void main() {
     expect(coreConfig.clientVersionInfo?.release, '0714');
     expect(coreConfig.clientVersionInfo?.version, '0.1.15');
     expect(coreConfig.clientVersionInfo?.build, 25);
+    expect(config.clientVersionInfo?.headerValue, 'awiki-me/0714/0.1.15+25');
     expect(coreConfig.anpServiceEndpoint, 'https://example.test/anp-im/rpc');
     expect(coreConfig.anpServiceDid, 'did:wba:example.test');
     expect(
