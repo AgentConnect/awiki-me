@@ -33,8 +33,8 @@ void main() {
     expect(config.multiDeviceDeviceRevokeEnabled, isFalse);
     expect(config.multiDeviceDirectE2eeEnabled, isFalse);
     expect(config.multiDeviceGroupE2eeEnabled, isFalse);
-    expect(config.multiDeviceHandleRecoveryEnabled, isFalse);
-    expect(config.multiDeviceAudience, isNull);
+    expect(config.multiDeviceHandleRecoveryEnabled, isTrue);
+    expect(config.multiDeviceAudience, 'awiki-user-service');
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
@@ -138,32 +138,34 @@ void main() {
     expect(config.messageSyncV2ReadEnabled, isTrue);
   });
 
-  test('Handle Recovery requires an explicit valid multi-device audience', () {
-    for (final audience in <String?>[
-      null,
-      '',
-      ' leading',
-      'trailing ',
-      'x' * 256,
-    ]) {
+  test(
+    'Handle Recovery uses a default audience and rejects invalid overrides',
+    () {
       expect(
-        () => AwikiEnvironmentConfig(
-          multiDeviceHandleRecoveryEnabled: true,
-          multiDeviceAudience: audience,
-        ),
-        throwsArgumentError,
-        reason: audience,
+        AwikiEnvironmentConfig().multiDeviceAudience,
+        'awiki-user-service',
       );
-    }
 
-    final config = AwikiEnvironmentConfig(
-      baseUrl: 'https://unrelated.example',
-      didDomain: 'unrelated.example',
-      multiDeviceHandleRecoveryEnabled: true,
-      multiDeviceAudience: 'explicit-authority',
-    );
-    expect(config.multiDeviceAudience, 'explicit-authority');
-  });
+      for (final audience in <String>['', ' leading', 'trailing ', 'x' * 256]) {
+        expect(
+          () => AwikiEnvironmentConfig(
+            multiDeviceHandleRecoveryEnabled: true,
+            multiDeviceAudience: audience,
+          ),
+          throwsArgumentError,
+          reason: audience,
+        );
+      }
+
+      final config = AwikiEnvironmentConfig(
+        baseUrl: 'https://unrelated.example',
+        didDomain: 'unrelated.example',
+        multiDeviceHandleRecoveryEnabled: true,
+        multiDeviceAudience: 'explicit-authority',
+      );
+      expect(config.multiDeviceAudience, 'explicit-authority');
+    },
+  );
 
   test('network route config has no local storage locator', () {
     final first = AwikiEnvironmentConfig(
@@ -191,7 +193,7 @@ void main() {
     expect(container.read(multiDeviceDirectE2eeEnabledProvider), isTrue);
     expect(container.read(multiDeviceDeviceRevokeEnabledProvider), isFalse);
     expect(container.read(multiDeviceGroupE2eeEnabledProvider), isFalse);
-    expect(container.read(multiDeviceHandleRecoveryEnabledProvider), isFalse);
+    expect(container.read(multiDeviceHandleRecoveryEnabledProvider), isTrue);
     expect(container.read(messageSyncV2ReadEnabledProvider), isTrue);
   });
 

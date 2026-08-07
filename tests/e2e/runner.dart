@@ -3944,6 +3944,9 @@ class _RemoteMultiDeviceBaseConfig {
     String flowLabel = 'Join',
     bool requireRealSms = false,
     bool allowFixedLocalOtp = false,
+    Set<DesktopE2ePlatform> supportedPlatforms = const <DesktopE2ePlatform>{
+      DesktopE2ePlatform.macos,
+    },
   }) {
     final sourcePath = fileConfig.path ?? '<missing-config>';
     if (fileConfig.path == null) {
@@ -3959,10 +3962,10 @@ class _RemoteMultiDeviceBaseConfig {
       );
     }
     final platform = fileConfig.platform ?? DesktopE2ePlatform.fromHost();
-    if (platform != DesktopE2ePlatform.macos) {
+    if (!supportedPlatforms.contains(platform)) {
       throw E2eFailure(
-        'Remote multi-device App $flowLabel currently requires macOS because the '
-        'suite drives real AWiki Me desktop processes.',
+        'Remote multi-device App $flowLabel does not support '
+        '${platform.name} on this runner.',
       );
     }
     final serviceBaseUrl = _requiredConfig(
@@ -4083,6 +4086,10 @@ class RemoteHandleRecoveryConfig {
         flowLabel: 'Handle Recovery',
         requireRealSms: true,
         allowFixedLocalOtp: true,
+        supportedPlatforms: const <DesktopE2ePlatform>{
+          DesktopE2ePlatform.macos,
+          DesktopE2ePlatform.linux,
+        },
       ),
     );
   }

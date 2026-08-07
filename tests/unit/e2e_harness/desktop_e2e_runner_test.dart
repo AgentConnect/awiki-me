@@ -827,6 +827,25 @@ void main() {
       expect(config.usesFixedLocalOtp, isTrue);
       expect(config.otpCommand, isEmpty);
     });
+
+    test('supports the Linux Flutter desktop runner', () {
+      final config = RemoteHandleRecoveryConfig.from(
+        fileConfig: const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://awiki.info',
+          didDomain: 'awiki.info',
+          otpPhone: 'local-test-phone',
+          otpCode: '123456',
+        ),
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
+        },
+      );
+
+      expect(config.platform, DesktopE2ePlatform.linux);
+      expect(config.fixedOtp, '123456');
+    });
   });
 
   group('RemoteMultiDeviceAppPairConfig', () {

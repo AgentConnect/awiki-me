@@ -91,6 +91,8 @@ App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 
 `multi-device-remote-recovery` 使用一个 fresh App/native Core root，覆盖已登出本地
 凭据的可见 Recovery 入口、绑定 `awiki.identity.handle-recovery.v1` 与 operation ID 的
 产品发码请求与 operation-bound OTP、不可逆风险确认、activate/bounded resume、Handle 保留和 DID replacement。
+该 Recovery 专项可在 Linux Flutter desktop runner 或 macOS runner 执行；其他远端多设备 App suite
+仍保留各自的平台限制。
 注册与 Recovery 可复用 ignored local YAML 中同一测试手机号和固定验证码；它使用仅测试可见的
 `UserPresencePort`，不证明真实系统认证，并明确拒绝 staged SMS error。远端 rollout/账号前置条件未就绪
 时不得声称通过。其他真实

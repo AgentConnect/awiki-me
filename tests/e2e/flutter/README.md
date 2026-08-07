@@ -164,7 +164,8 @@ visible Recovery entry, operation-bound OTP, irreversible-risk confirmation,
 activation, and bounded resume UI. Registration and Recovery may reuse the
 same ignored-local test phone and fixed six-digit code. It requires Handle
 preservation, DID replacement, one ready current admin, and old-local-DID
-fencing. Staged OTP continuation and the legacy recovery.begin/finalize
+fencing. This focused case supports the Linux Flutter desktop runner as well as
+macOS. Staged OTP continuation and the legacy recovery.begin/finalize
 purposes are rejected. Its E2E-only user-presence decision does not attest
 production LocalAuthentication. See
 [../../../docs/handle-recovery-ui.md](../../../docs/handle-recovery-ui.md).

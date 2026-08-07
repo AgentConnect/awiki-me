@@ -1,5 +1,5 @@
 // [INPUT]: Compile-time flags and optional tenant/service overrides.
-// [OUTPUT]: Normalized AWiki runtime endpoints and independent capability gates.
+// [OUTPUT]: Normalized AWiki runtime endpoints, default-on Handle Recovery, and independent gates.
 // [POS]: Application configuration boundary shared by bootstrap and feature providers.
 
 const String primaryTenantDomainEnvironmentKey = 'AWIKI_PRIMARY_TENANT_DOMAIN';
@@ -22,10 +22,11 @@ const bool defaultMultiDeviceGroupE2eeEnabled = bool.fromEnvironment(
 );
 const bool defaultMultiDeviceHandleRecoveryEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED',
-  defaultValue: false,
+  defaultValue: true,
 );
 const String defaultMultiDeviceAudience = String.fromEnvironment(
   'AWIKI_MULTI_DEVICE_AUDIENCE',
+  defaultValue: 'awiki-user-service',
 );
 const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   'AWIKI_SYNC_V2_READ',

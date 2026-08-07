@@ -312,7 +312,8 @@ Production continues to use LocalAuthentication, which this suite does not
 attest.
 
 Handle Recovery V1 has a separate visible UI suite and must not be inferred
-from the local capability gate or Join suite:
+from the local capability gate or Join suite. This focused suite supports the
+Linux Flutter desktop runner in addition to macOS:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \

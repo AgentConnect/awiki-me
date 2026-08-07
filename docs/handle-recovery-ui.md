@@ -36,7 +36,8 @@ binding，并在手机号验证成功后新增恢复身份。远端人工验证�
 `HANDLE-RECOVERY-V1-E2E-001` 使用一个 fresh App/native Core root 创建 ready-admin
 fixture，登出后从可见入口完成发码、OTP、风险确认、activate 和 bounded resume。
 最终 oracle 要求：Handle 和稳定本地 selector 不变、DID 被替换、Registry 只有一个
-ready current admin，并且旧 DID 不再出现在本地 identity projection。
+ready current admin，并且旧 DID 不再出现在本地 identity projection。该专项支持 Linux
+Flutter desktop runner，也可在 macOS runner 上执行。
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
