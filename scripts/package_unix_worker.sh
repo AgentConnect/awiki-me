@@ -249,6 +249,7 @@ build_android() {
     --target-platform android-arm64 \
     --split-per-abi \
     --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PRIMARY_TENANT_DOMAIN" \
+    --dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true \
     --dart-define="AWIKI_APP_SOURCE_REF=$APP_REF" \
     --dart-define="AWIKI_IM_CORE_SOURCE_REF=$CORE_REF" \
     --build-name "$VERSION" \
@@ -450,6 +451,7 @@ build_macos() {
     --no-pub \
     --config-only \
     --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$PRIMARY_TENANT_DOMAIN" \
+    --dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true \
     --dart-define="AWIKI_APP_SOURCE_REF=$APP_REF" \
     --dart-define="AWIKI_IM_CORE_SOURCE_REF=$CORE_REF" \
     --build-name "$VERSION" \

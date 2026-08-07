@@ -186,8 +186,25 @@ ${{
     final unixWorker = File(
       'scripts/package_unix_worker.sh',
     ).readAsStringSync();
+    final windowsWorker = File(
+      'scripts/package_windows.ps1',
+    ).readAsStringSync();
     expect(unixWorker, contains('--macos-arch "\$arch"'));
     expect(unixWorker, contains('--android-abi arm64-v8a'));
+    expect(
+      RegExp(
+        '--dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true',
+      ).allMatches(unixWorker),
+      hasLength(2),
+      reason: 'Android and macOS release packages must enable Handle Recovery',
+    );
+    expect(
+      windowsWorker,
+      contains(
+        '--dart-define=AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=true',
+      ),
+      reason: 'Windows release packages must enable Handle Recovery',
+    );
 
     final aggregateSteps = aggregate['steps'] as YamlList;
     final aggregateFlutterSetup = _stepNamed(
