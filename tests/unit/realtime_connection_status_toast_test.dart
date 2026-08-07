@@ -118,7 +118,7 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsWidgets);
   });
 
-  testWidgets('AppShell 持续时间阈值前显示非红色自动重试提示', (tester) async {
+  testWidgets('AppShell 前两次连续同步失败保持静默', (tester) async {
     await tester.pumpWidget(
       buildLocalizedTestApp(
         home: const AppShell(),
@@ -130,7 +130,33 @@ void main() {
               ref,
               const MessageSyncCoordinatorState(
                 status: MessageSyncCoordinatorStatus.retryableFailure,
-                consecutiveRetryableFailures: 1,
+                consecutiveRetryableFailures: 2,
+                retryableFailureVisible: true,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
+    expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
+  });
+
+  testWidgets('AppShell 第三次连续同步失败显示自动重试提示', (tester) async {
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gatewayWithProfile(),
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(
+                status: MessageSyncCoordinatorStatus.retryableFailure,
+                consecutiveRetryableFailures: 3,
                 automaticRetryPending: true,
               ),
             ),
@@ -156,7 +182,7 @@ void main() {
               ref,
               const MessageSyncCoordinatorState(
                 status: MessageSyncCoordinatorStatus.retryableFailure,
-                consecutiveRetryableFailures: 1,
+                consecutiveRetryableFailures: 3,
                 automaticRetryPending: true,
                 transientFailurePresentationSuppressed: true,
               ),
@@ -182,7 +208,7 @@ void main() {
               ref,
               const MessageSyncCoordinatorState(
                 status: MessageSyncCoordinatorStatus.retryableFailure,
-                consecutiveRetryableFailures: 2,
+                consecutiveRetryableFailures: 3,
                 retryableFailureVisible: true,
                 transientFailurePresentationSuppressed: true,
               ),

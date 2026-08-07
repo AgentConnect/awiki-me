@@ -1,3 +1,4 @@
+import '../core/app_error_classifier.dart';
 import '../domain/entities/device_management.dart';
 import 'models/device_revoke_outcome.dart';
 import 'ports/device_management_core_port.dart';
@@ -16,11 +17,14 @@ class DeviceManagementService {
   DeviceManagementService({
     required DeviceManagementCorePort core,
     required UserPresencePort userPresence,
+    DateTime Function()? now,
   }) : _core = core,
-       _userPresence = userPresence;
+       _userPresence = userPresence,
+       _now = now ?? DateTime.now;
 
   final DeviceManagementCorePort _core;
   final UserPresencePort _userPresence;
+  final DateTime Function() _now;
   final Set<String> _approvalSessionsInFlight = <String>{};
   final Set<String> _revokeDeviceIdsInFlight = <String>{};
 
@@ -64,13 +68,37 @@ class DeviceManagementService {
         progress.phase != DeviceJoinPhase.authorized) {
       return false;
     }
-    return _core.localIdentityMatchesDevice(
+    if (!progress.expiresAt.isAfter(_now().toUtc())) {
+      return false;
+    }
+    final hasExactLocalBinding = await _core.localIdentityMatchesDevice(
       did: _required(progress.did, 'did'),
       protocolDeviceId: _required(
         progress.protocolDeviceId,
         'protocolDeviceId',
       ),
     );
+    if (!hasExactLocalBinding) {
+      return false;
+    }
+    late final DeviceRegistrySnapshot registry;
+    try {
+      registry = await _core.identityDeviceRegistry(progress.did);
+    } catch (error) {
+      final kind = classifyAppError(error);
+      if (kind == AppErrorKind.authentication ||
+          kind == AppErrorKind.didNotFoundOrRevoked) {
+        return false;
+      }
+      rethrow;
+    }
+    final current = registry.currentDevice;
+    return registry.did == progress.did &&
+        current != null &&
+        current.protocolDeviceId == progress.protocolDeviceId &&
+        current.status == DeviceStatus.active &&
+        current.role == DeviceRole.member &&
+        !current.managementReady;
   }
 
   Future<List<DeviceJoinRequestNotice>> restoreAdminJoinRequests(

@@ -378,7 +378,7 @@ void main() {
   });
 
   testWidgets(
-    'AwikiMeApp escalates a sustained sync failure after the time threshold',
+    'AwikiMeApp waits for three sync failures before sustained escalation',
     (tester) async {
       const session = SessionIdentity(
         did: 'did:test:me',
@@ -411,12 +411,34 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('消息服务暂时不可用，正在自动重试…'), findsOneWidget);
+      expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
+      expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
 
       coordinator.publish(
         const MessageSyncCoordinatorState(
           status: MessageSyncCoordinatorStatus.retryableFailure,
           consecutiveRetryableFailures: 2,
+          automaticRetryPending: true,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息服务暂时不可用，正在自动重试…'), findsNothing);
+      expect(find.text('暂时无法同步新消息，请检查网络后重试。'), findsNothing);
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.retryableFailure,
+          consecutiveRetryableFailures: 3,
+          automaticRetryPending: true,
+        ),
+      );
+      await tester.pump();
+      expect(find.text('消息服务暂时不可用，正在自动重试…'), findsOneWidget);
+
+      coordinator.publish(
+        const MessageSyncCoordinatorState(
+          status: MessageSyncCoordinatorStatus.retryableFailure,
+          consecutiveRetryableFailures: 3,
           retryableFailureVisible: true,
         ),
       );

@@ -42,9 +42,11 @@ void main() {
   );
 
   test(
-    'authorized New Device Join resumes only for its exact binding',
+    'authorized New Device Join resumes only for a live exact binding',
     () async {
-      final core = _FakeDeviceCore()..localIdentityDeviceMatches = true;
+      final core = _FakeDeviceCore()
+        ..localIdentityDeviceMatches = true
+        ..registry = _currentMemberRegistry();
       final progress = DeviceJoinProgress(
         joinSessionId: 'join-1',
         did: 'did:wba:awiki.info:user:alice:e1_test',
@@ -56,10 +58,67 @@ void main() {
       );
 
       expect(
-        await _service(core: core).canResumeAuthorizedNewDeviceJoin(progress),
+        await _service(
+          core: core,
+          now: () => DateTime.utc(2029),
+        ).canResumeAuthorizedNewDeviceJoin(progress),
         isTrue,
       );
       expect(core.localIdentityDeviceMatchCalls, 1);
+      expect(core.registryCalls, 1);
+    },
+  );
+
+  test('expired authorized Join never reuses its local identity', () async {
+    final core = _FakeDeviceCore()
+      ..localIdentityDeviceMatches = true
+      ..registry = _currentMemberRegistry();
+    final progress = DeviceJoinProgress(
+      joinSessionId: 'join-old',
+      did: 'did:wba:awiki.info:user:alice:e1_test',
+      protocolDeviceId: 'dev-new',
+      side: DeviceJoinSide.newDevice,
+      phase: DeviceJoinPhase.authorized,
+      remoteState: DeviceJoinRemoteState.consumed,
+      expiresAt: DateTime.utc(2026, 8, 1),
+    );
+
+    expect(
+      await _service(
+        core: core,
+        now: () => DateTime.utc(2026, 8, 7),
+      ).canResumeAuthorizedNewDeviceJoin(progress),
+      isFalse,
+    );
+    expect(core.localIdentityDeviceMatchCalls, 0);
+    expect(core.registryCalls, 0);
+  });
+
+  test(
+    'revoked authorized Join is not restored as a completed device',
+    () async {
+      final core = _FakeDeviceCore()
+        ..localIdentityDeviceMatches = true
+        ..registryError = StateError('DID not found or revoked');
+      final progress = DeviceJoinProgress(
+        joinSessionId: 'join-revoked',
+        did: 'did:wba:awiki.info:user:alice:e1_test',
+        protocolDeviceId: 'dev-new',
+        side: DeviceJoinSide.newDevice,
+        phase: DeviceJoinPhase.authorized,
+        remoteState: DeviceJoinRemoteState.consumed,
+        expiresAt: DateTime.utc(2030),
+      );
+
+      expect(
+        await _service(
+          core: core,
+          now: () => DateTime.utc(2029),
+        ).canResumeAuthorizedNewDeviceJoin(progress),
+        isFalse,
+      );
+      expect(core.localIdentityDeviceMatchCalls, 1);
+      expect(core.registryCalls, 1);
     },
   );
 
@@ -354,12 +413,29 @@ void main() {
 DeviceManagementService _service({
   required _FakeDeviceCore core,
   _FakeUserPresence? presence,
+  DateTime Function()? now,
 }) {
   return DeviceManagementService(
     core: core,
     userPresence: presence ?? _FakeUserPresence(result: true),
+    now: now,
   );
 }
+
+DeviceRegistrySnapshot _currentMemberRegistry() => const DeviceRegistrySnapshot(
+  did: 'did:wba:awiki.info:user:alice:e1_test',
+  devices: <DeviceSummary>[
+    DeviceSummary(
+      protocolDeviceId: 'dev-new',
+      signingKeyId: 'did:#sign',
+      e2eeKeyId: 'did:#e2ee',
+      status: DeviceStatus.active,
+      role: DeviceRole.member,
+      managementReady: false,
+      isCurrent: true,
+    ),
+  ],
+);
 
 DeviceJoinProgress _adminSasProgress() => DeviceJoinProgress(
   joinSessionId: 'join-1',
@@ -408,6 +484,11 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   bool? revokedPresence;
   bool localIdentityDeviceMatches = false;
   int localIdentityDeviceMatchCalls = 0;
+  DeviceRegistrySnapshot registry = const DeviceRegistrySnapshot(
+    did: 'did:wba:awiki.info:user:alice:e1_test',
+  );
+  Object? registryError;
+  int registryCalls = 0;
 
   @override
   Future<DeviceJoinSmsOtpSendReceipt> sendJoinSmsOtp({
@@ -496,9 +577,12 @@ class _FakeDeviceCore implements DeviceManagementCorePort {
   }
 
   @override
-  Future<DeviceRegistrySnapshot> identityDeviceRegistry(
-    String selector,
-  ) async => DeviceRegistrySnapshot(did: selector);
+  Future<DeviceRegistrySnapshot> identityDeviceRegistry(String selector) async {
+    registryCalls += 1;
+    final error = registryError;
+    if (error != null) throw error;
+    return registry;
+  }
 
   @override
   Future<List<DeviceJoinProgress>> localDeviceJoinSessions() async =>

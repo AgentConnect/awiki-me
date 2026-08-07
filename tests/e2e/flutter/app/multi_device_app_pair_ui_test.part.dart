@@ -2226,10 +2226,53 @@ Future<void> _runAppPairJoinerAccountStateDomains({
     content: postRevokeText,
     messageId: postRevokeMessageId,
   );
+  await _assertRevokedJoinDoesNotRestoreCompletedSession(tester);
   await config.coordinator.publish(
     'joiner',
     'account_state_revoked_device_auth_fenced',
   );
+}
+
+Future<void> _assertRevokedJoinDoesNotRestoreCompletedSession(
+  WidgetTester tester,
+) async {
+  await _openNewDeviceJoin(tester);
+  final joinPage = find.byType(DeviceJoinPage);
+  final joinL10n = tester.element(joinPage).l10n;
+  final container = ProviderScope.containerOf(tester.element(joinPage));
+  await _pumpUntil(
+    tester,
+    () {
+      final state = container.read(devicesProvider);
+      return !state.isLoading &&
+          !state.isActionPending &&
+          state.activeJoin == null &&
+          state.error == null &&
+          find
+                  .bySemanticsIdentifier('multi-device-join-phone')
+                  .evaluate()
+                  .length ==
+              1 &&
+          find
+                  .bySemanticsIdentifier('multi-device-join-handle')
+                  .evaluate()
+                  .length ==
+              1 &&
+          find
+                  .bySemanticsIdentifier('multi-device-join-otp')
+                  .evaluate()
+                  .length ==
+              1;
+    },
+    timeout: const Duration(seconds: 60),
+    failure:
+        'The revoked joining App restored a completed Join instead of a fresh form.',
+  );
+  if (find.byKey(const Key('device-join-error')).evaluate().isNotEmpty ||
+      find.text(joinL10n.deviceJoinAuthorized).evaluate().isNotEmpty ||
+      find.text(joinL10n.deviceJoinActivationRetry).evaluate().isNotEmpty) {
+    fail('The revoked joining App exposed stale authorized Join state.');
+  }
 }
 
 Future<AccountStateSyncCoordinatorState> _requestAppPairAccountState({

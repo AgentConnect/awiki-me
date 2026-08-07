@@ -36,6 +36,13 @@ universal macOS XCFramework during debugging unless the user explicitly asks
 for ARM, universal, Release, or packaging output. Keep the Flutter App itself
 as a Debug incremental build.
 
+For manual macOS dual-App runs, use
+`scripts/build_manual_dual_macos_apps.sh`. It builds normal `lib/main.dart`
+Admin/Joiner Apps with separate build roots and bundle IDs but one tenant
+domain. Never use `.e2e/` App-pair artifacts or
+`tool/build_isolated_e2e_app.dart`; those require the E2E runner and can
+black-screen when opened manually.
+
 ## Coding Style & Naming Conventions
 Target Dart 3.8+ and Flutter 3.41+. Follow the repository lint rules in
 `analysis_options.yaml`. Keep files and functions in `snake_case`, classes in
