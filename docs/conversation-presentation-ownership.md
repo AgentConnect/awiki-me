@@ -335,7 +335,7 @@ Chat presentation 同时是 owner/session-generation scoped：
 
 - `SessionEpoch` 由规范化 owner DID、稳定本机 identity key 和单调 generation 组成。active identity 改变、登出或 clear 都会推进 generation；同一 identity 的 token/profile refresh 不会误伤正在进行的工作。
 - `MessageSyncCoordinator` 只允许同一 epoch 的请求 single-flight/coalesce。A 的 active 或 delayed sync 不能满足 B 的 startup sync；A 完成后只有仍属当前 epoch 的结果可以刷新 recents、Join inbox、prewarm timeline 或更新 coordinator state。精确正文补齐由 Core 在 `syncNow` 中完成并提交本地 projection；App 不再根据 hydration ID 二次调用 `syncConversationAfter`，只在 Core commit 后执行 fast-local summary read、本地 timeline prewarm 和可见窗口刷新。
-- `MessageSyncCoordinator` 将 patch preparation/Core 同步与 Core commit 后的 App 投影刷新分开捕获：认证拒绝立即终止并要求重新登录；普通可重试失败按连续 30 秒阈值升级红色提示；Join inbox 或列表刷新失败只标记 `projectionRefreshFailed`，不能触发网络同步失败重试或声称本地事实未改变。对外诊断只包含 stage/category/稳定 code/HTTP status/count/time 等脱敏字段。
+- `MessageSyncCoordinator` 将 patch preparation/Core 同步与 Core commit 后的 App 投影刷新分开捕获：认证拒绝立即终止并要求重新登录；普通可重试失败前两次保持静默、第 3 次连续失败后才显示提示，并按连续 30 秒阈值升级为红色提示；任何成功同步都会重置连续失败计数；Join inbox 或列表刷新失败只标记 `projectionRefreshFailed`，不能触发网络同步失败重试或声称本地事实未改变。对外诊断只包含 stage/category/稳定 code/HTTP status/count/time 等脱敏字段。
 - `ChatThreadsController` 在 epoch 改变时同步取消旧 patch subscriptions 和 timers，清空 pending history/read/repair、thread window、message route cache 与 composer draft。history、conversation-after、patch repair、read ack、text/attachment send 和 retry 都在 await 后再次校验启动时 epoch。
 - Future、stream callback 或 timer 即使无法底层取消，旧 epoch 完成也只能安静结束；不得删除新 epoch 的 active marker、合并到新 timeline、更新新 recents preview、恢复旧 read intent 或显示旧错误。
 
