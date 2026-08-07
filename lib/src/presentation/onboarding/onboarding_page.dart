@@ -1,5 +1,5 @@
 // [INPUT]: Onboarding/session state, tenant capability, and user registration/recovery intents.
-// [OUTPUT]: Registration, local-login, Join, and exact-identity Handle Recovery navigation.
+// [OUTPUT]: Registration, local-login, Join, Handle-owned Recovery, and its temporary test entry.
 // [POS]: Responsive onboarding surface; Core and application services own identity state.
 
 import 'dart:async';
@@ -132,6 +132,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           onLanguagePressed: _showLanguageSheet,
           onTenantPressed: _showTenantManagementDialog,
           onJoinDevice: () => openDeviceJoinPage(context),
+          onTemporaryRecoverHandle: handleRecoveryAvailable
+              ? () => _openTemporaryHandleRecoveryPage(context)
+              : null,
           onRecoverHandle: handleRecoveryAvailable
               ? (identity) => _openHandleRecoveryPage(context, identity)
               : null,
@@ -191,6 +194,27 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                             responsive: responsive,
                                             theme: theme,
                                           ),
+                                          if (handleRecoveryAvailable) ...<
+                                            Widget
+                                          >[
+                                            SizedBox(
+                                              height: responsive.spacing(18),
+                                            ),
+                                            AppSecondaryButton(
+                                              key: const Key(
+                                                'temporary-handle-recovery-entry',
+                                              ),
+                                              label: context
+                                                  .l10n
+                                                  .handleRecoveryTitle,
+                                              semanticsIdentifier:
+                                                  'temporary-handle-recovery-entry',
+                                              onPressed: () =>
+                                                  _openTemporaryHandleRecoveryPage(
+                                                    context,
+                                                  ),
+                                            ),
+                                          ],
                                           if (credentials
                                               .isNotEmpty) ...<Widget>[
                                             SizedBox(
@@ -498,6 +522,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
         initialHandle: identity.handle,
       ),
     );
+  }
+
+  // TODO: Remove this global entry after manual Handle Recovery verification.
+  Future<void> _openTemporaryHandleRecoveryPage(BuildContext context) {
+    return AppNavigator.push<void>(context, (_) => const HandleRecoveryPage());
   }
 
   Future<void> _submitRegister(BuildContext context) async {

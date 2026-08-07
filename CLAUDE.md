@@ -8,7 +8,7 @@
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
-   - UI session projection 必须同时保留精确 Core identity ID 与 local alias；Handle Recovery 只能使用精确 ID，不能把 `credentialName`/alias 当作 ID selector 或回退猜测。
+   - UI session projection 必须同时保留精确 Core identity ID 与 local alias；身份卡 Handle Recovery 使用精确 ID，全局 Handle Recovery 必须省略 selector 并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。

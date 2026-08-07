@@ -1,5 +1,5 @@
 // [INPUT]: Onboarding page state and callbacks from the parent presentation surface.
-// [OUTPUT]: Desktop and shared local-identity controls, including eligible Recovery actions.
+// [OUTPUT]: Desktop controls, including Handle-owned Recovery and its temporary test entry.
 // [POS]: Part of onboarding_page.dart; it renders but does not resolve identity selectors.
 
 part of '../onboarding_page.dart';
@@ -24,6 +24,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.onLanguagePressed,
     required this.onTenantPressed,
     this.onJoinDevice,
+    this.onTemporaryRecoverHandle,
     this.onRecoverHandle,
   });
 
@@ -45,6 +46,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
   final VoidCallback? onJoinDevice;
+  final VoidCallback? onTemporaryRecoverHandle;
   final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
@@ -75,6 +77,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
             onCheckEmailActivation: onCheckEmailActivation,
             onSubmitRegister: onSubmitRegister,
             onJoinDevice: onJoinDevice,
+            onTemporaryRecoverHandle: onTemporaryRecoverHandle,
             onRecoverHandle: onRecoverHandle,
           );
           if (useCompactLayout) {
@@ -396,6 +399,7 @@ class _MacAuthCard extends StatelessWidget {
     required this.onCheckEmailActivation,
     required this.onSubmitRegister,
     this.onJoinDevice,
+    this.onTemporaryRecoverHandle,
     this.onRecoverHandle,
   });
 
@@ -416,6 +420,7 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onCheckEmailActivation;
   final VoidCallback onSubmitRegister;
   final VoidCallback? onJoinDevice;
+  final VoidCallback? onTemporaryRecoverHandle;
   final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
@@ -490,6 +495,15 @@ class _MacAuthCard extends StatelessWidget {
                   onSubmitRegister: onSubmitRegister,
                 ),
               ),
+              if (onTemporaryRecoverHandle != null) ...<Widget>[
+                const SizedBox(height: 18),
+                AppSecondaryButton(
+                  key: const Key('temporary-handle-recovery-entry'),
+                  label: context.l10n.handleRecoveryTitle,
+                  semanticsIdentifier: 'temporary-handle-recovery-entry',
+                  onPressed: onTemporaryRecoverHandle,
+                ),
+              ],
               if (onJoinDevice != null) ...<Widget>[
                 const SizedBox(height: 18),
                 AppSecondaryButton(

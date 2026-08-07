@@ -84,6 +84,23 @@ void main() {
     },
   );
 
+  test('global Recovery prepare omits the local identity selector', () async {
+    final sdk = _FakeRecoveryCore();
+    final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+      coreInstance: () async => sdk,
+    );
+
+    final prepared = await adapter.prepareHandleRecovery(
+      handle: 'alice.awiki.info',
+      phone: '+8613800138000',
+      otp: '987580',
+      operationId: 'recover-op-1',
+    );
+
+    expect(sdk.selector, isNull);
+    expect(prepared.ownerIdentityId, 'identity-alice');
+  });
+
   test(
     'adapter maps legacy Registry authority without weakening fields',
     () async {
@@ -230,7 +247,7 @@ class _FakeRecoveryCore implements core.AwikiImCore {
 
   @override
   Future<core.HandleRecoveryProgress> prepareHandleRecovery({
-    required core.IdentitySelector selector,
+    core.IdentitySelector? selector,
     required String phone,
     required String code,
     required String handle,

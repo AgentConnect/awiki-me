@@ -5,16 +5,25 @@ Handle Recovery 是一个默认关闭的高风险身份恢复入口。AWiki Me �
 声明支持 phone Handle Recovery 时，才会在已登出但仍保留本地凭据的 onboarding
 页面显示该入口。
 
+当前人工联调构建还会在登录/注册表单下方显示一个临时的全局“恢复 Handle”按钮。
+该按钮只在上述双重 capability 门禁通过时出现。全局入口不绑定当前激活身份：用户输入
+完整 Handle 后，Core 先在本地多身份索引中精确匹配；本地不存在时使用公开 WNS 当前
+binding，并在手机号验证成功后新增恢复身份。远端人工验证完成后必须删除该临时按钮。
+
 ## 当前协议边界
 
 - 当前 OTP purpose 固定为 `awiki.identity.handle-recovery.v1`。
-- App 先为精确的本地 identity selector 生成并持久化 opaque operation ID，再请求
-  OTP；OTP、Handle 和 operation ID 必须在 prepare 阶段保持同一绑定。
+- App 先生成 opaque operation ID，再请求 OTP；OTP、Handle 和 operation ID 必须在
+  prepare 阶段保持同一绑定。身份卡入口可以提供精确本地 selector；全局入口不提供
+  selector，由 Core 按 Handle 精确匹配本地身份或创建新的本地身份。
 - App 的 session projection 必须同时保留 Core `identityId` 与用户可见的 local alias；
-  Recovery 只接收前者，禁止把 `credentialName`/alias 包装成 ID selector 或回退猜测。
+  身份卡 Recovery 只传前者。全局 Recovery 传空 selector，禁止把当前身份、
+  `credentialName` 或 alias 当作目标猜测。
 - OTP 仅作为瞬时输入传给 Core，App 不持久化 OTP、grant、密钥或证明材料。
 - prepare 后 UI 必须展示 Handle 保留、其他设备重新加入、普通本地数据迁移以及
   E2EE/DID-only 限制等不可逆影响；用户明确确认后才允许 activate。
+- 本地已有目标 Handle 时只迁移该身份的普通数据，不切换或覆盖其他身份；本地没有目标
+  Handle 时 `localOrdinaryDataWillMigrate=false`，恢复完成后把新身份加入本地身份列表。
 - activate 需要 user presence。正式 App 使用平台 LocalAuthentication；自动化 E2E
   只能覆盖测试专用 `UserPresencePort`，不能声称验证了真实系统认证。
 - Core 是唯一恢复状态机。App 只展示粗粒度 phase，并在 Core 标记可恢复时提供精确

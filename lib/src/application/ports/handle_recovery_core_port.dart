@@ -1,4 +1,4 @@
-// [INPUT]: Typed host intent, transient phone/OTP input, user-presence result, and safe references.
+// [INPUT]: Typed host intent, optional local identity hint, transient OTP, and safe references.
 // [OUTPUT]: Secret-free coarse Recovery progress from the frozen Core facade boundary.
 // [POS]: App-owned adapter seam; generated Core bindings implement this only in Wave 2.
 
@@ -22,7 +22,7 @@ abstract interface class HandleRecoveryCorePort {
   });
 
   Future<HandleRecoveryProgress> prepareHandleRecovery({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
     required String otp,

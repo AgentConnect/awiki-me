@@ -14,6 +14,8 @@ Usage:
 Environment:
   FLUTTER_BIN                         Flutter executable (default: flutter)
   AWIKI_PRIMARY_TENANT_DOMAIN         Shared tenant domain (default: awiki.info)
+  AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED
+                                      Handle Recovery gate (default: true)
 USAGE
   exit 0
 fi
@@ -35,6 +37,11 @@ command -v "$flutter_bin" >/dev/null 2>&1 || {
 tenant_domain="${AWIKI_PRIMARY_TENANT_DOMAIN:-awiki.info}"
 [[ "$tenant_domain" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]] || {
   echo "error: AWIKI_PRIMARY_TENANT_DOMAIN must be a lowercase hostname" >&2
+  exit 2
+}
+handle_recovery_enabled="${AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED:-true}"
+[[ "$handle_recovery_enabled" == "true" || "$handle_recovery_enabled" == "false" ]] || {
+  echo "error: AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED must be true or false" >&2
   exit 2
 }
 
@@ -85,7 +92,8 @@ build_app() {
       --debug \
       --no-pub \
       --target=lib/main.dart \
-      --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$tenant_domain"
+      --dart-define="AWIKI_PRIMARY_TENANT_DOMAIN=$tenant_domain" \
+      --dart-define="AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=$handle_recovery_enabled"
 }
 
 build_app \

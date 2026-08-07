@@ -1,4 +1,4 @@
-// [INPUT]: App Recovery intent, transient OTP, explicit user-presence, and a frozen Core port.
+// [INPUT]: Handle-owned Recovery intent, optional local identity hint, transient OTP, and user presence.
 // [OUTPUT]: Secret-free coarse progress suitable for presentation.
 // [POS]: Thin application orchestration; Core remains the only durable Recovery state machine.
 
@@ -41,12 +41,18 @@ class HandleRecoveryService {
     return operationId;
   }
 
-  Future<ProductHandleRecoveryLocator> beginOrRestoreLocator({
-    required HandleRecoveryIdentityScope scope,
+  Future<HandleRecoveryHostOperation> beginOrRestoreOperation({
+    HandleRecoveryIdentityScope? scope,
     required String handle,
   }) async {
-    final localIdentityId = _validatedOpaqueReference(scope.localIdentityId);
     final fullHandle = _normalizedHandle(handle);
+    if (scope == null) {
+      return HandleRecoveryHostOperation(
+        operationId: createOperationId(),
+        fullHandle: fullHandle,
+      );
+    }
+    final localIdentityId = _validatedOpaqueReference(scope.localIdentityId);
     final existing = await _local.loadHandleRecoveryLocator(
       localIdentityId: localIdentityId,
     );
@@ -57,7 +63,11 @@ class HandleRecoveryService {
           HandleRecoveryFailureCode.localStateUnavailable,
         );
       }
-      return existing;
+      return HandleRecoveryHostOperation(
+        operationId: existing.operationId,
+        fullHandle: existing.fullHandle,
+        localIdentityId: existing.localIdentityId,
+      );
     }
     final locator = ProductHandleRecoveryLocator(
       localIdentityId: localIdentityId,
@@ -65,7 +75,11 @@ class HandleRecoveryService {
       fullHandle: fullHandle,
     );
     await _local.saveHandleRecoveryLocator(locator);
-    return locator;
+    return HandleRecoveryHostOperation(
+      operationId: locator.operationId,
+      fullHandle: locator.fullHandle,
+      localIdentityId: locator.localIdentityId,
+    );
   }
 
   Future<HandleRecoveryHostRestore?> restoreForIdentity(
@@ -82,7 +96,8 @@ class HandleRecoveryService {
       return HandleRecoveryHostRestore(locator: locator);
     }
     final progress = await status(recoveryId);
-    if (progress.handle != locator.fullHandle) {
+    if (progress.handle != locator.fullHandle ||
+        progress.ownerIdentityId != normalizedIdentityId) {
       throw const HandleRecoveryFailure(
         HandleRecoveryFailureCode.transitionMismatch,
       );
@@ -124,29 +139,33 @@ class HandleRecoveryService {
   }
 
   Future<HandleRecoveryProgress> prepare({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
     required String otp,
     required String operationId,
   }) async {
     final normalizedOperationId = _validatedOpaqueReference(operationId);
-    final localIdentityId = _validatedOpaqueReference(scope.localIdentityId);
     final normalizedHandle = _normalizedHandle(handle);
-    final locator = await _local.loadHandleRecoveryLocator(
-      localIdentityId: localIdentityId,
-    );
-    if (locator == null) {
-      throw const HandleRecoveryFailure(
-        HandleRecoveryFailureCode.localStateUnavailable,
+    ProductHandleRecoveryLocator? locator;
+    String? hintedIdentityId;
+    if (scope != null) {
+      hintedIdentityId = _validatedOpaqueReference(scope.localIdentityId);
+      locator = await _local.loadHandleRecoveryLocator(
+        localIdentityId: hintedIdentityId,
       );
-    }
-    _validateLocator(locator, expectedIdentityId: localIdentityId);
-    if (locator.operationId != normalizedOperationId ||
-        locator.fullHandle != normalizedHandle) {
-      throw const HandleRecoveryFailure(
-        HandleRecoveryFailureCode.transitionMismatch,
-      );
+      if (locator == null) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.localStateUnavailable,
+        );
+      }
+      _validateLocator(locator, expectedIdentityId: hintedIdentityId);
+      if (locator.operationId != normalizedOperationId ||
+          locator.fullHandle != normalizedHandle) {
+        throw const HandleRecoveryFailure(
+          HandleRecoveryFailureCode.transitionMismatch,
+        );
+      }
     }
     final progress = await _core.prepareHandleRecovery(
       scope: scope,
@@ -156,13 +175,26 @@ class HandleRecoveryService {
       operationId: normalizedOperationId,
     );
     if (progress.handle != normalizedHandle ||
+        !_isCanonicalOpaqueReference(progress.ownerIdentityId) ||
         !_isCanonicalOpaqueReference(progress.recoveryId)) {
       throw const HandleRecoveryFailure(
         HandleRecoveryFailureCode.transitionMismatch,
       );
     }
+    if (hintedIdentityId != null &&
+        progress.ownerIdentityId != hintedIdentityId) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.transitionMismatch,
+      );
+    }
     await _local.saveHandleRecoveryLocator(
-      locator.withRecoveryId(progress.recoveryId),
+      locator?.withRecoveryId(progress.recoveryId) ??
+          ProductHandleRecoveryLocator(
+            localIdentityId: progress.ownerIdentityId,
+            operationId: normalizedOperationId,
+            fullHandle: normalizedHandle,
+            recoveryId: progress.recoveryId,
+          ),
     );
     return progress;
   }
@@ -348,6 +380,18 @@ class HandleRecoveryHostRestore {
 
   final ProductHandleRecoveryLocator locator;
   final HandleRecoveryProgress? progress;
+}
+
+class HandleRecoveryHostOperation {
+  const HandleRecoveryHostOperation({
+    required this.operationId,
+    required this.fullHandle,
+    this.localIdentityId,
+  });
+
+  final String operationId;
+  final String fullHandle;
+  final String? localIdentityId;
 }
 
 void _validateLocator(

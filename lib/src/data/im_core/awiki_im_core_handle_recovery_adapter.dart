@@ -78,7 +78,7 @@ class AwikiImCoreHandleRecoveryAdapter
 
   @override
   Future<HandleRecoveryProgress> prepareHandleRecovery({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
     required String otp,
@@ -88,7 +88,7 @@ class AwikiImCoreHandleRecoveryAdapter
       final instance = await _coreInstance();
       return handleRecoveryProgressFromCore(
         await instance.prepareHandleRecovery(
-          selector: _identitySelector(scope),
+          selector: scope == null ? null : _identitySelector(scope),
           phone: phone,
           code: otp,
           handle: handle,
@@ -233,6 +233,7 @@ HandleRecoveryProgress handleRecoveryProgressFromCore(
 ) {
   return HandleRecoveryProgress(
     recoveryId: value.recoveryId,
+    ownerIdentityId: value.ownerIdentityId,
     handle: value.handle,
     phase: switch (value.phase) {
       core.HandleRecoveryPhase.prepared => HandleRecoveryProgressPhase.prepared,

@@ -20,6 +20,106 @@ const _scope = HandleRecoveryIdentityScope(localIdentityId: 'identity-alice');
 
 void main() {
   test(
+    'global recovery resolves by Handle without using the active local identity',
+    () async {
+      final core = _FakeHandleRecoveryCore();
+      final local = InMemoryAwikiProductLocalStore();
+      await local.saveHandleRecoveryLocator(
+        const ProductHandleRecoveryLocator(
+          localIdentityId: 'identity-other',
+          operationId: 'other-operation',
+          fullHandle: 'other.awiki.info',
+        ),
+      );
+      final service = HandleRecoveryService(
+        core: core,
+        userPresence: _FakeUserPresence(),
+        local: local,
+        operationIdFactory: () => 'recover-operation-global',
+      );
+      final container = ProviderContainer(
+        overrides: <Override>[
+          handleRecoveryServiceProvider.overrideWithValue(service),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(handleRecoveryProvider.notifier);
+
+      await controller.requestOtp(
+        handle: 'alice.awiki.info',
+        phone: '+8613800138000',
+      );
+      expect(
+        await local.loadHandleRecoveryLocator(
+          localIdentityId: 'identity-alice',
+        ),
+        isNull,
+        reason: 'unbound pre-prepare state is transient',
+      );
+
+      await controller.prepare(
+        handle: 'alice.awiki.info',
+        phone: '+8613800138000',
+        otp: '987580',
+      );
+
+      expect(core.lastPrepareScope, isNull);
+      expect(
+        container.read(handleRecoveryProvider).localIdentityId,
+        'identity-alice',
+      );
+      final locator = await local.loadHandleRecoveryLocator(
+        localIdentityId: 'identity-alice',
+      );
+      expect(locator?.operationId, 'recover-operation-global');
+      expect(locator?.fullHandle, 'alice.awiki.info');
+      expect(locator?.recoveryId, 'recovery-1');
+      expect(
+        await local.loadHandleRecoveryLocator(
+          localIdentityId: 'identity-other',
+        ),
+        isNotNull,
+        reason: 'another signed-in identity remains untouched',
+      );
+    },
+  );
+
+  test(
+    'global OTP response loss retries the same transient operation id',
+    () async {
+      final core = _FakeHandleRecoveryCore(requestOtpErrorsRemaining: 1);
+      final service = HandleRecoveryService(
+        core: core,
+        userPresence: _FakeUserPresence(),
+        local: InMemoryAwikiProductLocalStore(),
+        operationIdFactory: () => 'recover-operation-global',
+      );
+      final container = ProviderContainer(
+        overrides: <Override>[
+          handleRecoveryServiceProvider.overrideWithValue(service),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(handleRecoveryProvider.notifier);
+
+      await controller.requestOtp(
+        handle: 'alice.awiki.info',
+        phone: '+8613800138000',
+      );
+      await controller.requestOtp(
+        handle: 'alice.awiki.info',
+        phone: '+8613800138000',
+      );
+
+      expect(core.requestOperationIds, <String>[
+        'recover-operation-global',
+        'recover-operation-global',
+      ]);
+      expect(container.read(handleRecoveryProvider).otpRequested, isTrue);
+    },
+  );
+
+  test(
     'OTP response loss retries the pre-generated operation id and prepare reuses it',
     () async {
       final core = _FakeHandleRecoveryCore(requestOtpErrorsRemaining: 1);
@@ -901,6 +1001,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   String? lastRecoveryId;
   String? lastRequestOperationId;
   String? lastPrepareOperationId;
+  HandleRecoveryIdentityScope? lastPrepareScope;
   final List<String> requestOperationIds = <String>[];
 
   @override
@@ -932,13 +1033,14 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryProgress> prepareHandleRecovery({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
     required String otp,
     required String operationId,
   }) async {
     prepareCalls += 1;
+    lastPrepareScope = scope;
     lastOtp = otp;
     lastPrepareOperationId = operationId;
     return _progress(HandleRecoveryProgressPhase.prepared);
@@ -1043,6 +1145,7 @@ HandleRecoveryProgress _progress(
 }) {
   return HandleRecoveryProgress(
     recoveryId: 'recovery-1',
+    ownerIdentityId: 'identity-alice',
     handle: 'alice.awiki.info',
     phase: phase,
     impact: const HandleRecoveryImpact(

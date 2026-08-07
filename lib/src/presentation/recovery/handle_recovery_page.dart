@@ -1,4 +1,4 @@
-// [INPUT]: Explicit local identity scope, transient phone/OTP input, and UI intent.
+// [INPUT]: Optional local identity hint, Handle-owned phone/OTP input, and UI intent.
 // [OUTPUT]: Risk-gated, coarse Handle Recovery presentation.
 // [POS]: App-only V1 surface; Core owns credentials, keys, proof, and state transitions.
 
@@ -14,13 +14,9 @@ import '../shared/widgets/app_widgets.dart';
 import 'handle_recovery_provider.dart';
 
 class HandleRecoveryPage extends ConsumerStatefulWidget {
-  const HandleRecoveryPage({
-    super.key,
-    required this.identityScope,
-    this.initialHandle,
-  });
+  const HandleRecoveryPage({super.key, this.identityScope, this.initialHandle});
 
-  final HandleRecoveryIdentityScope identityScope;
+  final HandleRecoveryIdentityScope? identityScope;
   final String? initialHandle;
 
   @override
@@ -37,9 +33,11 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     super.initState();
     _handleController = TextEditingController(text: widget.initialHandle);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final identityScope = widget.identityScope;
+      if (identityScope == null) return;
       await ref
           .read(handleRecoveryProvider.notifier)
-          .restoreForIdentity(widget.identityScope.localIdentityId);
+          .restoreForIdentity(identityScope.localIdentityId);
       if (!mounted) return;
       final restoredHandle = ref.read(handleRecoveryProvider).otpHandle;
       if (restoredHandle != null) {
@@ -83,6 +81,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                     ),
                     const SizedBox(height: 16),
                     AppTextField(
+                      key: const Key('handle-recovery-handle'),
                       controller: _handleController,
                       label: context.l10n.handleRecoveryHandle,
                       placeholder: 'alice.awiki.info',
@@ -270,8 +269,10 @@ class _RecoveryRiskCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(context.l10n.handleRecoveryOtherDevicesRejoin),
           const SizedBox(height: 8),
-          Text(context.l10n.handleRecoveryLocalOrdinaryMigration),
-          const SizedBox(height: 8),
+          if (progress.impact.localOrdinaryDataWillMigrate) ...<Widget>[
+            Text(context.l10n.handleRecoveryLocalOrdinaryMigration),
+            const SizedBox(height: 8),
+          ],
           Text(context.l10n.handleRecoveryOldE2eeUnavailable),
           const SizedBox(height: 8),
           Text(context.l10n.handleRecoverySingletonRisk),

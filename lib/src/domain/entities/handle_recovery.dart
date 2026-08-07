@@ -1,5 +1,5 @@
 // [INPUT]: Secret-free Handle Recovery projections from the application/Core boundary.
-// [OUTPUT]: Host-neutral identity scope, coarse progress, impact, and stable errors.
+// [OUTPUT]: Optional local identity hint, coarse progress, impact, and stable errors.
 // [POS]: App domain projection only; it never owns grants, keys, or the Core state machine.
 
 import 'device_management.dart';
@@ -7,7 +7,8 @@ import 'device_management.dart';
 class HandleRecoveryIdentityScope {
   const HandleRecoveryIdentityScope({required this.localIdentityId});
 
-  /// Exact local identity ID. Recovery never guesses the default identity.
+  /// Exact local identity ID when the caller starts from one identity card.
+  /// Global Recovery may omit this hint and let Core resolve by Handle.
   final String localIdentityId;
 }
 
@@ -107,6 +108,7 @@ class HandleRecoveryRegistryEpochReset {
 class HandleRecoveryProgress {
   const HandleRecoveryProgress({
     required this.recoveryId,
+    required this.ownerIdentityId,
     required this.handle,
     required this.phase,
     required this.impact,
@@ -117,6 +119,7 @@ class HandleRecoveryProgress {
 
   /// Opaque, non-secret reference. It is not a grant or a Vault reference.
   final String recoveryId;
+  final String ownerIdentityId;
   final String handle;
   final HandleRecoveryProgressPhase phase;
   final HandleRecoveryImpact impact;

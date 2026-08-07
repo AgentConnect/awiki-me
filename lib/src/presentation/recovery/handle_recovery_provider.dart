@@ -1,4 +1,4 @@
-// [INPUT]: Recovery UI intents plus App-owned Core/user-presence/local-store ports.
+// [INPUT]: Handle-owned Recovery UI intents plus optional local identity hints and App ports.
 // [OUTPUT]: Secret-free coarse Recovery UI state.
 // [POS]: Presentation controller; OTP is passed transiently and never stored.
 
@@ -163,7 +163,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
   }
 
   Future<void> requestOtp({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
   }) async {
@@ -171,7 +171,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     final normalizedPhone = phone.trim();
     final pendingOperationId = state.otpOperationId;
     if (pendingOperationId != null &&
-        (state.localIdentityId != scope.localIdentityId ||
+        (state.localIdentityId != scope?.localIdentityId ||
             state.otpHandle != normalizedHandle ||
             (state.otpPhone != null && state.otpPhone != normalizedPhone))) {
       state = state.copyWith(error: HandleRecoveryUiError.transitionMismatch);
@@ -180,11 +180,15 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     if (!await _otpCooldown.beginSend()) return;
     late final String operationId;
     try {
-      final locator = await _service.beginOrRestoreLocator(
-        scope: scope,
-        handle: normalizedHandle,
-      );
-      operationId = locator.operationId;
+      if (pendingOperationId != null) {
+        operationId = pendingOperationId;
+      } else {
+        final operation = await _service.beginOrRestoreOperation(
+          scope: scope,
+          handle: normalizedHandle,
+        );
+        operationId = operation.operationId;
+      }
     } catch (error) {
       _otpCooldown.completeFailed();
       state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
@@ -196,7 +200,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       otpOperationId: operationId,
       otpHandle: normalizedHandle,
       otpPhone: normalizedPhone,
-      localIdentityId: scope.localIdentityId,
+      localIdentityId: scope?.localIdentityId,
     );
     try {
       final receipt = await _service.requestOtp(
@@ -227,7 +231,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
   }
 
   Future<void> prepare({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
     required String otp,
@@ -249,7 +253,12 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
         otp: otp,
         operationId: operationId,
       );
-      if (mounted) state = state.copyWith(progress: progress);
+      if (mounted) {
+        state = state.copyWith(
+          progress: progress,
+          localIdentityId: progress.ownerIdentityId,
+        );
+      }
     } catch (error) {
       if (mounted) {
         state = state.copyWith(error: handleRecoveryUiErrorFrom(error));

@@ -104,7 +104,6 @@ void main() {
         fail('The Recovery fixture did not create one authenticated identity.');
       }
       final oldDid = oldSession.did;
-      final exactLocalIdentityId = oldSession.identityId;
       final stableCredentialName =
           oldSession.localAlias ?? oldSession.identityId;
       final fullHandle = oldSession.handle!.trim().toLowerCase();
@@ -138,22 +137,18 @@ void main() {
         tester,
         () =>
             find
-                .bySemanticsIdentifier(
-                  'handle-recovery-entry:$stableCredentialName',
-                )
+                .bySemanticsIdentifier('temporary-handle-recovery-entry')
                 .evaluate()
                 .length ==
             1,
         timeout: const Duration(seconds: 45),
         failure:
-            'The server-advertised Handle Recovery entry did not become visible.',
+            'The server-advertised global Handle Recovery entry did not become visible.',
       );
       await _tapOne(
         tester,
-        find.bySemanticsIdentifier(
-          'handle-recovery-entry:$stableCredentialName',
-        ),
-        failure: 'The visible Handle Recovery entry was unavailable.',
+        find.bySemanticsIdentifier('temporary-handle-recovery-entry'),
+        failure: 'The visible global Handle Recovery entry was unavailable.',
       );
       await _pumpUntil(
         tester,
@@ -161,6 +156,11 @@ void main() {
         failure: 'The visible Handle Recovery page did not open.',
       );
 
+      await _enterTextByKey(
+        tester,
+        const Key('handle-recovery-handle'),
+        fullHandle,
+      );
       await _enterTextByKey(
         tester,
         const Key('handle-recovery-phone'),
@@ -219,9 +219,8 @@ void main() {
         timeout: const Duration(minutes: 2),
         failure: 'The UI did not reach the prepared Recovery phase.',
       );
-      if (recordingRecoveryCore.preparedLocalIdentityId !=
-          exactLocalIdentityId) {
-        fail('Handle Recovery did not use the exact Core local identity ID.');
+      if (recordingRecoveryCore.preparedLocalIdentityId != null) {
+        fail('Global Handle Recovery unexpectedly used the active identity.');
       }
       if (find.byKey(const Key('handle-recovery-progress')).evaluate().length !=
               1 ||
@@ -389,13 +388,13 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryProgress> prepareHandleRecovery({
-    required HandleRecoveryIdentityScope scope,
+    HandleRecoveryIdentityScope? scope,
     required String handle,
     required String phone,
     required String otp,
     required String operationId,
   }) {
-    preparedLocalIdentityId = scope.localIdentityId;
+    preparedLocalIdentityId = scope?.localIdentityId;
     return _record(
       () => _delegate.prepareHandleRecovery(
         scope: scope,

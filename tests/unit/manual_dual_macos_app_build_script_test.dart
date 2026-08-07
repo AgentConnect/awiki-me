@@ -14,6 +14,8 @@ void main() {
     expect(script, contains('ai.awiki.awikime.dev.manual.joiner'));
     expect(script, contains('joiner-flutter-build'));
     expect(script, contains('AWIKI_PRIMARY_TENANT_DOMAIN'));
+    expect(script, contains('AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED'));
+    expect(script, contains('HANDLE_RECOVERY_ENABLED:-true'));
     expect(script, contains('AWikiMe-Joiner.app'));
     expect(script, contains('/usr/bin/lipo -archs'));
     expect(script, contains('/usr/bin/codesign --verify --deep --strict'));
