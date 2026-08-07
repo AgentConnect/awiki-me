@@ -8,6 +8,7 @@
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
+   - UI session projection 必须同时保留精确 Core identity ID 与 local alias；Handle Recovery 只能使用精确 ID，不能把 `credentialName`/alias 当作 ID selector 或回退猜测。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。
@@ -53,7 +54,7 @@
 - [docs/multi-device-app-pair-e2e.md](docs/multi-device-app-pair-e2e.md)：单机双隔离 App 的构建、驱动、协调与秘密边界。
 - [docs/root-key-transfer-ui.md](docs/root-key-transfer-ui.md)：默认关闭的管理设备根导入、user-presence、management-ready 投影与控制消息过滤边界。
 - [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认关闭的本设备群加密准备/重试/就绪投影与 P6 v2 Core 启用门禁。
-- [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Handle Recovery begin/status/cancel/finalize、独立二次 OTP、secret-free 旧管理设备通知、fresh user-presence 取消与本地-only dismiss 边界。
+- [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Manifest Handle Recovery V1、operation-bound OTP、风险确认、Core-owned activate/resume 与 DID replacement 边界。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
 - [docs/pre-release-storage-cleanup.md](docs/pre-release-storage-cleanup.md)：首发前旧 namespace 目录/Keychain inventory、dry-run、archive 与显式删除 runbook。
@@ -87,9 +88,11 @@ Join 请求发现必须分别经过 CLI foreground listener 的专用 host event
 App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 Inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()` 代替唤醒。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
 只执行 Ali 不可变发布、显式受保护配置并禁止写入 Python bytecode，不证明短信送达。
-`multi-device-remote-recovery` 使用两个隔离账号/设备根，覆盖 durable 旧
-管理设备通知与真实系统认证取消，以及请求设备真实冷静期、独立二次 OTP 和新 DID 激活；
-它明确拒绝 staged SMS error，必须证明产品发码路径成功。远端 rollout/账号前置条件未就绪
+`multi-device-remote-recovery` 使用一个 fresh App/native Core root，覆盖已登出本地
+凭据的可见 Recovery 入口、绑定 `awiki.identity.handle-recovery.v1` 与 operation ID 的
+产品发码请求与 operation-bound OTP、不可逆风险确认、activate/bounded resume、Handle 保留和 DID replacement。
+注册与 Recovery 可复用 ignored local YAML 中同一测试手机号和固定验证码；它使用仅测试可见的
+`UserPresencePort`，不证明真实系统认证，并明确拒绝 staged SMS error。远端 rollout/账号前置条件未就绪
 时不得声称通过。其他真实
 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
 `multi-device-remote-mls` 复用同一受审计远端合同，但以真实 App owner 和独立 CLI Core

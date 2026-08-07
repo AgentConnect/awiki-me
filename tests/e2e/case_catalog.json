@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-31.published-legacy-upgrade-compatibility",
+  "sourceRevision": "2026-07-31.published-legacy-upgrade-compatibility+handle-recovery-v1-ui-e2e",
   "cases": [
     {
       "caseId": "AGENT-NOTIFY-E2E-001",
@@ -2724,10 +2724,10 @@
       "exactOracles": [
         "The launch uses a real Storage Scope ID, and the temporary App root is deleted after native runtime disposal.",
         "With default configuration the production device-management and root-transfer adapters plus the public Join entry exist; the gated group-encryption adapter is absent.",
-        "The public entry opens the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE rollout gates remain closed, and Handle Recovery has no executable V1 flow."
+        "The public entry opens the real Handle/phone/OTP Join form without exposing root transfer before authorized-member eligibility and explicit user presence; revoke and Direct/Group E2EE rollout gates remain closed, and the default Handle Recovery gate stays closed in this no-service case."
       ],
       "negativeChecks": [
-        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry, root-transfer execution from the public form, hidden enablement of a gated capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed fails the case."
+        "A reused/copied Core root, fake provider, backend-dependent oracle, a missing Join entry, root-transfer execution from the public form, hidden enablement of a gated capability, OTP submission, or any claim that remote Join/SAS/Root/Recovery passed in this local gate fails the case."
       ],
       "environment": "no_service",
       "cleanupPolicy": "test_owned_temporary_scope_delete",
@@ -3900,6 +3900,68 @@
             "DEVICE-REGISTRY-SYNC-E2E-001:admin_revoked_exact_active_sibling_with_user_presence",
             "DEVICE-REGISTRY-SYNC-E2E-001:active_admin_registry_cache_converged_higher_version",
             "DEVICE-REGISTRY-SYNC-E2E-001:revoked_sibling_product_request_was_fenced"
+          ]
+        ]
+      }
+    },
+    {
+      "caseId": "HANDLE-RECOVERY-V1-E2E-001",
+      "feature": "AWiki Me visible Manifest Handle Recovery V1 replaces a lost identity DID",
+      "layer": "remote_product_ui_security",
+      "preconditions": "The audited awiki.info target advertises phone Handle Recovery V1; one dedicated allowlisted SMS account is available with either the ignored local fixed test OTP fixture or a reviewed OTP resolver; AWiki Me starts with a fresh isolated production Core root and E2E-only user presence.",
+      "action": "Register one ready-admin fixture through the production onboarding service, log out while retaining its local credential, then use only the visible Handle Recovery entry, phone/OTP form, irreversible-risk confirmation, activation, and bounded resume controls to complete the current operation-bound Recovery flow.",
+      "exactOracles": [
+        "The logged-out App exposes Handle Recovery only after the local feature gate and server capability are both true, and the visible UI requests one OTP bound to purpose awiki.identity.handle-recovery.v1 plus the exact opaque operation ID; one ignored local test phone/code pair may be reused for registration and Recovery.",
+        "The UI reaches prepared, visibly presents irreversible consequences, requires explicit confirmation, and uses exactly one test-only user-presence decision before activation; any intermediate Core phase completes only through the visible bounded resume action.",
+        "Completion preserves the canonical Handle and stable local identity selector, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and removes the old DID from the local identity projection."
+      ],
+      "negativeChecks": [
+        "A fake Core/provider, copied state, checked-in or reported OTP, staged SMS-error continuation, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, surviving old local DID, secret-bearing evidence, or unaudited remote host prevents pass attestation."
+      ],
+      "environment": "awiki_info_remote",
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "implementationPath": "tests/e2e/flutter/app/handle_recovery_ui_test.dart",
+      "evidenceType": "case_attestation",
+      "catalogStatus": "active",
+      "assertionContract": {
+        "assertionIds": [
+          "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_entry_advertised_and_opened",
+          "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
+          "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
+          "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+          "HANDLE-RECOVERY-V1-E2E-001:stable_owner_handle_and_replacement_did_verified",
+          "HANDLE-RECOVERY-V1-E2E-001:old_identity_fenced_from_local_projection"
+        ],
+        "exactOracleAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_entry_advertised_and_opened",
+            "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume"
+          ],
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
+            "HANDLE-RECOVERY-V1-E2E-001:stable_owner_handle_and_replacement_did_verified",
+            "HANDLE-RECOVERY-V1-E2E-001:old_identity_fenced_from_local_projection"
+          ]
+        ],
+        "negativeCheckAssertions": [
+          [
+            "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_entry_advertised_and_opened",
+            "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
+            "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
+            "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
+            "HANDLE-RECOVERY-V1-E2E-001:stable_owner_handle_and_replacement_did_verified",
+            "HANDLE-RECOVERY-V1-E2E-001:old_identity_fenced_from_local_projection"
           ]
         ]
       }

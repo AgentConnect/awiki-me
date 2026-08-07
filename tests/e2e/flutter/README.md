@@ -157,6 +157,18 @@ behavior. See
 [../../../docs/testing.md](../../../docs/testing.md) for the environment
 contract and command.
 
+`--case multi-device-remote-recovery` is the independent visible Manifest
+Handle Recovery V1 gate. It creates one ready-admin fixture in a fresh native
+Core root, logs out while retaining the local credential, then drives the
+visible Recovery entry, operation-bound OTP, irreversible-risk confirmation,
+activation, and bounded resume UI. Registration and Recovery may reuse the
+same ignored-local test phone and fixed six-digit code. It requires Handle
+preservation, DID replacement, one ready current admin, and old-local-DID
+fencing. Staged OTP continuation and the legacy recovery.begin/finalize
+purposes are rejected. Its E2E-only user-presence decision does not attest
+production LocalAuthentication. See
+[../../../docs/handle-recovery-ui.md](../../../docs/handle-recovery-ui.md).
+
 Root transfer, exact-device revoke, and MLS are not executable from the Step 2
 runner. `ROOT-TRANSFER-E2E-002` and `MLS-MULTI-DEVICE-E2E-001` remain planned.
 `ROOT-TRANSFER-E2E-001` is active in its dedicated suite, while

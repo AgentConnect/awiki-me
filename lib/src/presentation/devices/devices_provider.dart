@@ -1,4 +1,4 @@
-// [INPUT]: Session identity, Device Registry/Join/revoke services, root-transfer service, and UI intents.
+// [INPUT]: Session identity with exact local ID, Device Registry/Join/revoke services, root-transfer service, and UI intents.
 // [OUTPUT]: Secret-free device list, Join continuity, revoke, and admin-readiness presentation state.
 // [POS]: Riverpod controller for device management; Registry remains the durable readiness truth.
 
@@ -1307,13 +1307,15 @@ class DevicesController extends StateNotifier<DevicesState> {
         .localCredentials
         .where(
           (credential) =>
-              credential.credentialName.trim().isNotEmpty &&
+              credential.localIdentityId?.trim().isNotEmpty == true &&
+              credential.localIdentityId?.trim() ==
+                  credential.localIdentityId &&
               credential.handle?.trim().toLowerCase() == normalizedHandle,
         )
         .toList(growable: false);
     if (matches.length != 1) return null;
     return HandleRecoveryIdentityScope(
-      localIdentityId: matches.single.credentialName.trim(),
+      localIdentityId: matches.single.localIdentityId!,
     );
   }
 }

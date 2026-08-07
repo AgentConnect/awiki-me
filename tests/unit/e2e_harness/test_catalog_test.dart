@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(97));
+      expect(catalog.cases, hasLength(99));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -34,6 +34,7 @@ void main() {
           'MLS-MULTI-DEVICE-E2E-001',
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
+          'HANDLE-RECOVERY-V1-E2E-001',
           'IDENTITY-DELETE-E2E-001',
           'ANDROID-PUSH-PRODUCT-E2E-001',
           'ANDROID-PUSH-NATIVE-E2E-001',
@@ -45,6 +46,7 @@ void main() {
           'smoke',
           'multi-device',
           'multi-device-remote-join',
+          'multi-device-remote-recovery',
           'multi-device-app-pair',
           'multi-device-app-pair-functional',
           'step4-revoke-mls',
@@ -68,8 +70,12 @@ void main() {
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
       ]);
+      expect(catalog.suiteCaseIds['multi-device-remote-recovery'], <String>[
+        'HANDLE-RECOVERY-V1-E2E-001',
+      ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',
+        'DEVICE-JOIN-E2E-005',
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair-functional'], <String>[
         'DEVICE-AGENT-SYNC-E2E-001',

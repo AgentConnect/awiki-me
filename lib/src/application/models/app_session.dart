@@ -1,3 +1,7 @@
+// [INPUT]: Typed Core session fields and the legacy UI session projection.
+// [OUTPUT]: App session state that preserves exact identity IDs and local aliases.
+// [POS]: Application session model bridging Core identity truth into presentation state.
+
 import '../../domain/entities/session_identity.dart';
 
 class AppSession {
@@ -63,6 +67,7 @@ extension AppSessionLegacyIdentity on AppSession {
   SessionIdentity toLegacySessionIdentity() {
     return SessionIdentity(
       did: did,
+      localIdentityId: identityId,
       credentialName: localAlias ?? identityId,
       displayName: displayName,
       handle: handle,

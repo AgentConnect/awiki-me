@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "2026-07-31.release0714+singapore-staging-v1+performance-timing-v2+native-dependency-v1+android-emas-direct-message-mvp-v1",
+  "sourceRevision": "2026-07-31.release0714+singapore-staging-v1+performance-timing-v2+native-dependency-v1+android-emas-direct-message-mvp-v1+handle-recovery-v1-ui-e2e",
   "suites": {
     "smoke": {
       "tier": "product_ui",
@@ -65,6 +65,31 @@
       "caseIds": [
         "DEVICE-JOIN-E2E-001",
         "DEVICE-JOIN-E2E-002"
+      ]
+    },
+    "multi-device-remote-recovery": {
+      "tier": "remote_product_ui_security",
+      "requiredFor": [
+        "optional_nightly",
+        "release"
+      ],
+      "owner": "awiki-me-identity",
+      "estimatedMinutes": 15,
+      "timeoutMinutes": 20,
+      "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
+      "allowedHosts": [
+        "awiki.info"
+      ],
+      "allowedDidDomains": [
+        "awiki.info"
+      ],
+      "resourceCategories": [
+        "dedicated_test_identity",
+        "handle_recovery_operation",
+        "isolated_app_state"
+      ],
+      "caseIds": [
+        "HANDLE-RECOVERY-V1-E2E-001"
       ]
     },
     "multi-device-app-pair": {

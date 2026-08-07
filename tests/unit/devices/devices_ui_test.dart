@@ -772,7 +772,8 @@ void main() {
         ..localCredentials = const <SessionIdentity>[
           SessionIdentity(
             did: 'did:wba:awiki.info:users:alice-old',
-            credentialName: 'identity-alice',
+            localIdentityId: 'identity-alice',
+            credentialName: 'alice.awiki.info',
             displayName: 'Alice',
             handle: 'alice.awiki.info',
           ),
@@ -806,6 +807,8 @@ void main() {
       expect(find.textContaining('DID-only'), findsOneWidget);
       expect(sdk.activateJoinCalls, 1);
       expect(sdk.resumeJoinCalls, 1);
+      expect(sdk.selector, isA<core.IdIdentitySelector>());
+      expect((sdk.selector! as core.IdIdentitySelector).id, 'identity-alice');
       expect(deviceCore.beginCalls, 0);
       expect(deviceCore.pollCalls, 0);
       expect(gateway.loginCalls, 0);
@@ -830,7 +833,8 @@ void main() {
           SessionController()..setLocalCredentials(const <SessionIdentity>[
             SessionIdentity(
               did: 'did:wba:awiki.info:users:alice-old',
-              credentialName: 'identity-alice',
+              localIdentityId: 'identity-alice',
+              credentialName: 'alice.awiki.info',
               displayName: 'Alice',
               handle: 'alice.awiki.info',
             ),
@@ -918,7 +922,8 @@ void main() {
         ..localCredentials = const <SessionIdentity>[
           SessionIdentity(
             did: 'did:wba:awiki.info:users:alice-old',
-            credentialName: 'identity-alice',
+            localIdentityId: 'identity-alice',
+            credentialName: 'alice.awiki.info',
             displayName: 'Alice',
             handle: 'alice.awiki.info',
           ),
@@ -976,7 +981,8 @@ void main() {
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
           did: 'did:wba:awiki.info:users:alice-old',
-          credentialName: 'identity-alice',
+          localIdentityId: 'identity-alice',
+          credentialName: 'alice.awiki.info',
           displayName: 'Alice',
           handle: 'alice.awiki.info',
         ),
@@ -1041,7 +1047,8 @@ void main() {
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
           did: 'did:wba:awiki.info:users:alice-old',
-          credentialName: 'identity-alice',
+          localIdentityId: 'identity-alice',
+          credentialName: 'alice.awiki.info',
           displayName: 'Alice',
           handle: 'alice.awiki.info',
         ),

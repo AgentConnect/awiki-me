@@ -1,3 +1,7 @@
+// [INPUT]: Onboarding page state and callbacks from the parent presentation surface.
+// [OUTPUT]: Desktop and shared local-identity controls, including eligible Recovery actions.
+// [POS]: Part of onboarding_page.dart; it renders but does not resolve identity selectors.
+
 part of '../onboarding_page.dart';
 
 class _MacOnboardingScaffold extends StatelessWidget {
@@ -733,7 +737,10 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
                   identity: identity,
                   onTap: () => onLogin(identity.credentialName),
                 ),
-                if (onRecoverHandle != null) ...<Widget>[
+                if (onRecoverHandle != null &&
+                    identity.localIdentityId?.trim().isNotEmpty == true &&
+                    identity.localIdentityId?.trim() ==
+                        identity.localIdentityId) ...<Widget>[
                   const SizedBox(height: 6),
                   AppSecondaryButton(
                     key: const Key('handle-recovery-entry'),

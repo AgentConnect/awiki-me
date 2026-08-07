@@ -1,3 +1,7 @@
+// [INPUT]: Onboarding/session state, tenant capability, and user registration/recovery intents.
+// [OUTPUT]: Registration, local-login, Join, and exact-identity Handle Recovery navigation.
+// [POS]: Responsive onboarding surface; Core and application services own identity state.
+
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -479,11 +483,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     BuildContext context,
     SessionIdentity identity,
   ) {
+    final localIdentityId = identity.localIdentityId;
+    if (localIdentityId == null ||
+        localIdentityId.isEmpty ||
+        localIdentityId.trim() != localIdentityId) {
+      return Future<void>.value();
+    }
     return AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
         identityScope: HandleRecoveryIdentityScope(
-          localIdentityId: identity.credentialName,
+          localIdentityId: localIdentityId,
         ),
         initialHandle: identity.handle,
       ),

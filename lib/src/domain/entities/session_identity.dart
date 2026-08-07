@@ -1,3 +1,7 @@
+// [INPUT]: Secret-free identity/session projections from application services.
+// [OUTPUT]: UI-facing local identity, account-binding, and credential metadata.
+// [POS]: Domain session projection; exact Core identity IDs remain distinct from local aliases.
+
 class SessionAccountBinding {
   const SessionAccountBinding({
     required this.ownerIdentityId,
@@ -21,12 +25,17 @@ class SessionIdentity {
     required this.did,
     required this.credentialName,
     required this.displayName,
+    this.localIdentityId,
     this.handle,
     this.jwtToken,
     this.accountBinding,
   });
 
   final String did;
+
+  /// Exact Core local identity ID. This must not be inferred from
+  /// [credentialName], which is normally the user-facing local alias.
+  final String? localIdentityId;
   final String credentialName;
   final String displayName;
   final String? handle;

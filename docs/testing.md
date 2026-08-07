@@ -311,6 +311,25 @@ requires exactly one successful decision, so this suite is unattended.
 Production continues to use LocalAuthentication, which this suite does not
 attest.
 
+Handle Recovery V1 has a separate visible UI suite and must not be inferred
+from the local capability gate or Join suite:
+
+```bash
+AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
+AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
+AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
+AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
+dart run tests/e2e/runner.dart \
+  --case multi-device-remote-recovery \
+  --config <local-awiki-info-config.yaml>
+```
+
+This gate uses current purpose `awiki.identity.handle-recovery.v1`, rejects
+staged SMS-error continuation, and drives prepare/risk confirmation/activate/
+resume through visible Flutter controls. One ignored local YAML phone/code pair
+may be reused for fixture registration and Recovery; resolver mode additionally
+receives the opaque operation ID. See [handle-recovery-ui.md](handle-recovery-ui.md).
+
 By default the purpose-bound `/user-service/v1/auth/sms-codes` request remains
 strictly 200-only. For the user-authorized synthetic test number, an explicit
 operator-only mode may be added to the command above:

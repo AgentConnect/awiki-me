@@ -353,6 +353,17 @@ class AppTestCatalog {
         'test-phone authorization or operator prerequisites are unavailable.',
       )
       ..writeln(
+        '- `multi-device-remote-recovery` is the separately activated '
+        '`awiki.info` Manifest Handle Recovery V1 UI gate. It uses one fresh '
+        'production Core root and a real purpose/operation-bound SMS OTP, '
+        'then drives the visible risk confirmation, activation, and bounded '
+        'resume controls. Its E2E-only UserPresencePort makes the run '
+        'unattended and does not attest production LocalAuthentication. The '
+        'suite proves Handle preservation, DID replacement, ready-admin '
+        'Registry projection, and old-local-DID fencing; it does not revive '
+        'legacy recovery.begin/finalize protocols.',
+      )
+      ..writeln(
         '- `multi-device-app-pair` is the one-host/two-process App↔App mode. '
         'It builds two Debug bundles with stable distinct bundle identifiers, '
         'isolated Flutter build directories, and independent native Core '

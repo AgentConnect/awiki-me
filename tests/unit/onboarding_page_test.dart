@@ -53,7 +53,8 @@ void main() {
         ..localCredentials = const <SessionIdentity>[
           SessionIdentity(
             did: 'did:wba:awiki.ai:alice:e1_old',
-            credentialName: 'identity-alice',
+            localIdentityId: 'identity-alice',
+            credentialName: 'alice.awiki.ai',
             displayName: 'Alice',
             handle: 'alice.awiki.ai',
           ),
@@ -96,6 +97,54 @@ void main() {
       expect(find.textContaining('Daemon'), findsNothing);
     },
   );
+
+  testWidgets('Handle Recovery entry requires an exact local identity id', (
+    tester,
+  ) async {
+    final defaultInfo = OnboardingServerInfo.userServiceDefault();
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: 'did:wba:awiki.ai:alice:e1_old',
+          credentialName: 'alice.awiki.ai',
+          displayName: 'Alice',
+          handle: 'alice.awiki.ai',
+        ),
+      ]
+      ..serverInfo = OnboardingServerInfo(
+        schemaVersion: defaultInfo.schemaVersion,
+        service: defaultInfo.service,
+        identity: OnboardingIdentityCapabilities(
+          handleRegistration: defaultInfo.identity.handleRegistration,
+          handleRecovery: const OnboardingHandleRecoveryCapabilities(
+            enabled: true,
+            methods: <OnboardingIdentityMethod>[
+              OnboardingIdentityMethod(
+                id: OnboardingIdentityMethodId.phone,
+                enabled: true,
+                verification: OnboardingVerificationRequirement(
+                  required: true,
+                  type: OnboardingVerificationType.smsOtp,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('handle-recovery-entry')), findsNothing);
+  });
 
   testWidgets(
     'Handle Recovery entry stays hidden when server omits the capability',
