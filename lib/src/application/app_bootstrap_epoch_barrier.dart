@@ -2,6 +2,8 @@
 // [OUTPUT]: A fail-closed readiness decision before App session activation.
 // [POS]: Single App bootstrap fence; Core owns crypto/control transition, App owns Product reset.
 
+import 'dart:developer' as developer;
+
 import '../domain/entities/handle_recovery.dart';
 import '../domain/entities/session_identity.dart';
 import 'models/app_session.dart';
@@ -44,15 +46,54 @@ class AppBootstrapEpochBarrierFailure implements Exception {
   String toString() => 'AppBootstrapEpochBarrierFailure(${code.name})';
 }
 
+class AppBootstrapEpochBarrierMetrics {
+  AppBootstrapEpochBarrierMetrics({
+    void Function(String metric, String result, int total)? sink,
+  }) : _sink = sink ?? _defaultSink;
+
+  final void Function(String metric, String result, int total) _sink;
+  final Map<String, int> _counts = <String, int>{};
+
+  void record(String result) {
+    final bounded = _barrierMetricResults.contains(result) ? result : 'other';
+    final total = (_counts[bounded] ?? 0) + 1;
+    _counts[bounded] = total;
+    _sink('app_epoch_barrier_total', bounded, total);
+  }
+
+  Map<String, int> snapshot() => Map<String, int>.unmodifiable(_counts);
+
+  static void _defaultSink(String metric, String result, int total) {
+    developer.log('$metric result=$result total=$total', name: 'awiki.metrics');
+  }
+}
+
+final AppBootstrapEpochBarrierMetrics appBootstrapEpochBarrierMetrics =
+    AppBootstrapEpochBarrierMetrics();
+
+const Set<String> _barrierMetricResults = <String>{
+  'ready',
+  'cached_ready',
+  'coalesced',
+  'missing_stable_owner',
+  'unknown_epoch',
+  'receipt_mismatch',
+  'reset_did_not_converge',
+  'error',
+};
+
 class AppBootstrapEpochBarrier implements AppBootstrapEpochBarrierPort {
   AppBootstrapEpochBarrier({
     required HandleRecoveryCorePort recovery,
     required ProductLocalStore local,
+    AppBootstrapEpochBarrierMetrics? metrics,
   }) : _recovery = recovery,
-       _local = local;
+       _local = local,
+       _metrics = metrics ?? appBootstrapEpochBarrierMetrics;
 
   final HandleRecoveryCorePort _recovery;
   final ProductLocalStore _local;
+  final AppBootstrapEpochBarrierMetrics _metrics;
 
   String? _readyKey;
   String? _inFlightKey;
@@ -64,9 +105,22 @@ class AppBootstrapEpochBarrier implements AppBootstrapEpochBarrierPort {
     required SessionAccountBinding binding,
   }) {
     final key = _key(identity.identityId, binding);
-    if (_readyKey == key) return Future<void>.value();
-    if (_inFlightKey == key && _inFlight != null) return _inFlight!;
-    final operation = _ensureReady(identity: identity, binding: binding);
+    if (_readyKey == key) {
+      _metrics.record('cached_ready');
+      return Future<void>.value();
+    }
+    if (_inFlightKey == key && _inFlight != null) {
+      _metrics.record('coalesced');
+      return _inFlight!;
+    }
+    final rawOperation = _ensureReady(identity: identity, binding: binding);
+    final operation = rawOperation.then<void>(
+      (_) => _metrics.record('ready'),
+      onError: (Object error, StackTrace stackTrace) {
+        _metrics.record(_metricResult(error));
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
     _inFlightKey = key;
     _inFlight = operation;
     return operation.whenComplete(() {
@@ -162,6 +216,18 @@ class AppBootstrapEpochBarrier implements AppBootstrapEpochBarrierPort {
   }
 }
 
+String _metricResult(Object error) {
+  if (error is! AppBootstrapEpochBarrierFailure) return 'error';
+  return switch (error.code) {
+    AppBootstrapEpochBarrierFailureCode.missingStableOwner =>
+      'missing_stable_owner',
+    AppBootstrapEpochBarrierFailureCode.unknownEpoch => 'unknown_epoch',
+    AppBootstrapEpochBarrierFailureCode.receiptMismatch => 'receipt_mismatch',
+    AppBootstrapEpochBarrierFailureCode.resetDidNotConverge =>
+      'reset_did_not_converge',
+  };
+}
+
 void _validateReceipt(
   HandleRecoveryRegistryEpochReset receipt, {
   required AppSession identity,
@@ -197,7 +263,7 @@ void _validateReceipt(
 bool _isPositiveVersion(int value) => value > 0;
 
 bool _isPositiveDecimal(String value) =>
-    RegExp(r'^[1-9][0-9]*$').hasMatch(value);
+    value.length <= 255 && RegExp(r'^[1-9][0-9]*$').hasMatch(value);
 
 bool _isSha256Fingerprint(String value) =>
     RegExp(r'^sha256:[0-9a-f]{64}$').hasMatch(value);

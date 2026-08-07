@@ -540,32 +540,34 @@ void main() {
     );
 
     test(
-      'activateIdentity rejects non-canonical binding generations',
+      'activateIdentity rejects binding generations outside the frozen profile',
       () async {
-        final identity = _session('id-generation');
-        final auth = _FakeAuth();
-        final service = ImCoreAppSessionService(
-          runtime: _FakeRuntime(),
-          identities: _FakeIdentities(
-            defaultIdentity: identity,
-            activeBinding: SessionAccountBinding(
-              ownerIdentityId: identity.identityId,
-              accountId: 'account-generation',
-              currentDid: identity.did,
-              protocolDeviceId: 'protocol-device-generation',
-              identityGeneration: '01',
-              deviceAuthGeneration: '2',
+        for (final invalidGeneration in ['01', '1' * 256]) {
+          final identity = _session('id-generation');
+          final auth = _FakeAuth();
+          final service = ImCoreAppSessionService(
+            runtime: _FakeRuntime(),
+            identities: _FakeIdentities(
+              defaultIdentity: identity,
+              activeBinding: SessionAccountBinding(
+                ownerIdentityId: identity.identityId,
+                accountId: 'account-generation',
+                currentDid: identity.did,
+                protocolDeviceId: 'protocol-device-generation',
+                identityGeneration: invalidGeneration,
+                deviceAuthGeneration: '2',
+              ),
             ),
-          ),
-          auth: auth,
-          activeSessionStore: _FakeActiveSessionStore(),
-        );
+            auth: auth,
+            activeSessionStore: _FakeActiveSessionStore(),
+          );
 
-        await expectLater(
-          service.loginWithIdentity('alice-local'),
-          throwsStateError,
-        );
-        expect(auth.ensureCount, 0);
+          await expectLater(
+            service.loginWithIdentity('alice-local'),
+            throwsStateError,
+          );
+          expect(auth.ensureCount, 0);
+        }
       },
     );
 

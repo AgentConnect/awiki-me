@@ -867,7 +867,10 @@ void _assertActiveSyncAccountBinding(
   if (binding.protocolDeviceId == 'default') {
     throw StateError('active_sync_account_binding_device_reserved');
   }
-  if (!_isCanonicalPositiveDecimal(binding.identityGeneration) ||
+  if (!_isCanonicalPositiveDecimal(
+        binding.identityGeneration,
+        maxDigits: 255,
+      ) ||
       !_isCanonicalPositiveDecimal(binding.deviceAuthGeneration)) {
     throw StateError('active_sync_account_binding_generation_invalid');
   }
@@ -879,8 +882,9 @@ void _requireExactBindingValue(String value, String code) {
   }
 }
 
-bool _isCanonicalPositiveDecimal(String value) {
+bool _isCanonicalPositiveDecimal(String value, {int? maxDigits}) {
   if (value.isEmpty ||
+      (maxDigits != null && value.length > maxDigits) ||
       value.codeUnitAt(0) < 0x31 ||
       value.codeUnitAt(0) > 0x39) {
     return false;

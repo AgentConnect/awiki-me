@@ -476,6 +476,42 @@ void main() {
   });
 
   group('AppBootstrapEpochBarrier', () {
+    test('records bounded app_epoch_barrier_total results', () async {
+      final observed = <String>[];
+      final metrics = AppBootstrapEpochBarrierMetrics(
+        sink: (metric, result, total) {
+          observed.add('$metric:$result:$total');
+        },
+      );
+      final local = InMemoryAwikiProductLocalStore();
+      await local.replaceDeviceRegistrySnapshot(
+        _registrySnapshot(
+          did: 'did:wba:awiki.info:users:alice-new',
+          generation: '8',
+        ),
+      );
+      final barrier = AppBootstrapEpochBarrier(
+        recovery: _FakeHandleRecoveryCore(),
+        local: local,
+        metrics: metrics,
+      );
+
+      await barrier.ensureReady(identity: _identity, binding: _binding);
+      await barrier.ensureReady(identity: _identity, binding: _binding);
+      metrics.record('unbounded-input');
+
+      expect(metrics.snapshot(), <String, int>{
+        'ready': 1,
+        'cached_ready': 1,
+        'other': 1,
+      });
+      expect(observed, <String>[
+        'app_epoch_barrier_total:ready:1',
+        'app_epoch_barrier_total:cached_ready:1',
+        'app_epoch_barrier_total:other:1',
+      ]);
+    });
+
     test(
       'matching Product epoch is ready without a Recovery receipt',
       () async {
@@ -596,6 +632,53 @@ void main() {
       );
       expect(epoch?.currentDid, 'did:wba:awiki.info:users:alice-old');
     });
+
+    test(
+      'receipt generation beyond the frozen 255-digit profile is rejected',
+      () async {
+        final local = InMemoryAwikiProductLocalStore();
+        final invalidReceipt = HandleRecoveryRegistryEpochReset(
+          receiptSchemaVersion: _receipt.receiptSchemaVersion,
+          accountUserId: _receipt.accountUserId,
+          ownerIdentityId: _receipt.ownerIdentityId,
+          handle: _receipt.handle,
+          previousDid: _receipt.previousDid,
+          currentDid: _receipt.currentDid,
+          bindingGeneration: '1' * 256,
+          currentDeviceId: _receipt.currentDeviceId,
+          deviceAuthGeneration: _receipt.deviceAuthGeneration,
+          registryVersion: _receipt.registryVersion,
+          stateRootFingerprint: _receipt.stateRootFingerprint,
+          appliedAt: _receipt.appliedAt,
+          metadataJson: _receipt.metadataJson,
+          sourceKind: _receipt.sourceKind,
+          sourceId: _receipt.sourceId,
+        );
+        final core = _FakeHandleRecoveryCore(receipt: invalidReceipt);
+        await local.replaceDeviceRegistrySnapshot(
+          _registrySnapshot(
+            did: 'did:wba:awiki.info:users:alice-old',
+            generation: '7',
+          ),
+        );
+        final barrier = AppBootstrapEpochBarrier(recovery: core, local: local);
+
+        await expectLater(
+          barrier.ensureReady(identity: _identity, binding: _binding),
+          throwsA(
+            isA<AppBootstrapEpochBarrierFailure>().having(
+              (error) => error.code,
+              'code',
+              AppBootstrapEpochBarrierFailureCode.receiptMismatch,
+            ),
+          ),
+        );
+        final epoch = await local.loadDeviceRegistryEpoch(
+          binding: _productBinding,
+        );
+        expect(epoch?.currentDid, 'did:wba:awiki.info:users:alice-old');
+      },
+    );
 
     test('concurrent entry points coalesce the exact same barrier', () async {
       final local = InMemoryAwikiProductLocalStore();
