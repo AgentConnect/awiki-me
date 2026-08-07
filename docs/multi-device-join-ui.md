@@ -49,9 +49,12 @@ Recovery 服务或远端流程，只显示明确的不支持提示。
   -> Core 固定按 member 完成授权
 ```
 
-新设备重启后从 Core 恢复 Session 摘要，并继续使用新设备 status poll；管理设备不再通过
-HTTP pending list、status timer 或 admin poll 发现/推进 Join，只恢复 Core 已验证的本地通知
-投影与本机 verification progress。App 不把 SAS 写入 `ProductLocalStore`、偏好设置或 E2E
+新设备重启后只恢复仍在有效期内、拥有精确本地 DID/device binding，且实时 Registry 仍确认
+为本机 active member 的 Session 摘要，并继续使用新设备 status poll。历史 `authorized`
+记录、已撤销身份、仅 DID 相同但 device 不同的记录都不能恢复成“设备已加入”；网络暂时不可用
+时保持失败关闭，而不是把未验证的本地记录当成当前 Join。管理设备不再通过 HTTP pending
+list、status timer 或 admin poll 发现/推进 Join，只恢复 Core 已验证的本地通知投影与本机
+verification progress。App 不把 SAS 写入 `ProductLocalStore`、偏好设置或 E2E
 报告；终态由 Core 投影，重复点击由 service/provider 和 Core 幂等门禁共同拒绝。请求已由
 另一台管理设备处理时只读展示，不能继续验证或批准。
 

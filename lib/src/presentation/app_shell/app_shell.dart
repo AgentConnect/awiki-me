@@ -334,6 +334,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     return state.status == MessageSyncCoordinatorStatus.recoveryRequired ||
         state.status == MessageSyncCoordinatorStatus.recovering ||
         (state.status == MessageSyncCoordinatorStatus.retryableFailure &&
+            state.consecutiveRetryableFailures >= 3 &&
             (!state.transientFailurePresentationSuppressed ||
                 state.shouldSurfaceRetryableFailure)) ||
         state.status == MessageSyncCoordinatorStatus.projectionRefreshFailed ||

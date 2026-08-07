@@ -42,9 +42,11 @@ abstract interface class DeviceManagementCorePort {
 
   /// Whether this storage scope still owns the exact identity/device binding.
   ///
-  /// An authorized New Device Join is resumable only while this binding still
-  /// exists. Matching only the DID is insufficient because one account may be
-  /// joined by multiple devices over time.
+  /// This is only the local half of authorized-Join resume validation. The
+  /// application also verifies the unexpired Join and the live Registry's
+  /// current active member projection before restoring completed UI state.
+  /// Matching only the DID is insufficient because one account may be joined
+  /// by multiple devices over time.
   Future<bool> localIdentityMatchesDevice({
     required String did,
     required String protocolDeviceId,

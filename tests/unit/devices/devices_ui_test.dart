@@ -1143,6 +1143,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..registry = _currentMemberRegistry('member-new')
         ..localIdentityDeviceBindings.add((
           did: testDid,
           protocolDeviceId: 'member-new',
@@ -1188,6 +1189,7 @@ void main() {
     (tester) async {
       final core = FakeDeviceManagementCore()
         ..localSessions = <DeviceJoinProgress>[_authorizedNewDeviceProgress()]
+        ..registry = _currentMemberRegistry('member-new')
         ..localIdentityDeviceBindings.add((
           did: testDid,
           protocolDeviceId: 'member-new',
@@ -1306,6 +1308,71 @@ void main() {
     expect(gateway.loginCalls, 0);
   });
 
+  testWidgets('expired authorized Join returns to a fresh device Join form', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..localSessions = <DeviceJoinProgress>[
+        _authorizedNewDeviceProgress(
+          expiresAt: DateTime.utc(2026, 8, 1),
+          authorizedDevice: _device(
+            id: 'member-old',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+          protocolDeviceId: 'member-old',
+        ),
+      ]
+      ..localIdentityDeviceBindings.add((
+        did: testDid,
+        protocolDeviceId: 'member-old',
+      ));
+
+    await tester.pumpWidget(
+      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CupertinoTextField), findsNWidgets(3));
+    expect(find.text('开始关联'), findsOneWidget);
+    expect(find.text('设备已加入'), findsNothing);
+    expect(find.text('重试设备激活'), findsNothing);
+    expect(core.localIdentityDeviceMatchCalls, 0);
+    expect(core.registryCalls, 0);
+  });
+
+  testWidgets('revoked authorized Join returns to a fresh device Join form', (
+    tester,
+  ) async {
+    final core = FakeDeviceManagementCore()
+      ..localSessions = <DeviceJoinProgress>[
+        _authorizedNewDeviceProgress(
+          authorizedDevice: _device(
+            id: 'member-new',
+            role: DeviceRole.member,
+            isCurrent: true,
+          ),
+        ),
+      ]
+      ..registryError = StateError('DID not found or revoked')
+      ..localIdentityDeviceBindings.add((
+        did: testDid,
+        protocolDeviceId: 'member-new',
+      ));
+
+    await tester.pumpWidget(
+      _app(const DeviceJoinPage(autoPoll: false), core, session: null),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CupertinoTextField), findsNWidgets(3));
+    expect(find.text('设备已加入'), findsNothing);
+    expect(find.text('重试设备激活'), findsNothing);
+    expect(find.byKey(const Key('device-join-error')), findsNothing);
+    expect(core.localIdentityDeviceMatchCalls, 1);
+    expect(core.registryCalls, 1);
+  });
+
   testWidgets(
     'same DID on another local device cannot resume an old authorized Join',
     (tester) async {
@@ -1347,6 +1414,7 @@ void main() {
             protocolDeviceId: 'member-orphan',
           ),
         ]
+        ..registry = _currentMemberRegistry('member-valid')
         ..localIdentityDeviceBindings.add((
           did: testDid,
           protocolDeviceId: 'member-valid',
@@ -2121,6 +2189,7 @@ DeviceJoinProgress _authorizedNewDeviceProgress({
   String joinSessionId = 'join-1',
   String did = testDid,
   String protocolDeviceId = 'member-new',
+  DateTime? expiresAt,
 }) {
   return DeviceJoinProgress(
     joinSessionId: joinSessionId,
@@ -2129,10 +2198,18 @@ DeviceJoinProgress _authorizedNewDeviceProgress({
     side: DeviceJoinSide.newDevice,
     phase: DeviceJoinPhase.authorized,
     remoteState: DeviceJoinRemoteState.consumed,
-    expiresAt: DateTime.utc(2030),
+    expiresAt: expiresAt ?? DateTime.utc(2030),
     authorizedDevice: authorizedDevice,
   );
 }
+
+DeviceRegistrySnapshot _currentMemberRegistry(String protocolDeviceId) =>
+    DeviceRegistrySnapshot(
+      did: testDid,
+      devices: <DeviceSummary>[
+        _device(id: protocolDeviceId, role: DeviceRole.member, isCurrent: true),
+      ],
+    );
 
 Widget _app(
   Widget home,

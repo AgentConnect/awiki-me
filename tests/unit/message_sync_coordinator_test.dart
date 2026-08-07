@@ -1784,7 +1784,7 @@ void main() {
   );
 
   test(
-    'failure count does not surface before the duration threshold',
+    'three immediate failures are counted in one continuous streak',
     () async {
       final sync = _FailingMessageSyncService();
       final container = _container(
@@ -1800,10 +1800,11 @@ void main() {
       );
       await coordinator.requestSync('foreground_periodic', immediate: true);
       await coordinator.requestSync('manual_refresh', immediate: true);
+      await coordinator.requestSync('realtime_hint', immediate: true);
 
       final state = container.read(messageSyncCoordinatorProvider);
       expect(state.status, MessageSyncCoordinatorStatus.retryableFailure);
-      expect(state.consecutiveRetryableFailures, 2);
+      expect(state.consecutiveRetryableFailures, 3);
       expect(state.shouldSurfaceRetryableFailure, isFalse);
       expect(state.lastError, isA<StateError>());
     },
