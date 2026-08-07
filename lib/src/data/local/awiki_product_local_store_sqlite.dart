@@ -121,49 +121,6 @@ class AwikiProductLocalStoreSqlite implements ProductLocalStore {
     if (database != null) await database.close();
   }
 
-  @override
-  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
-    required String localIdentityId,
-  }) async {
-    final rows = await (await _db).query(
-      'handle_recovery_locator',
-      where: 'local_identity_id = ?',
-      whereArgs: <Object?>[localIdentityId],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    final row = rows.single;
-    return ProductHandleRecoveryLocator(
-      localIdentityId: row['local_identity_id']?.toString() ?? '',
-      operationId: row['operation_id']?.toString() ?? '',
-      fullHandle: row['full_handle']?.toString() ?? '',
-      recoveryId: row['recovery_id']?.toString(),
-    );
-  }
-
-  @override
-  Future<void> saveHandleRecoveryLocator(
-    ProductHandleRecoveryLocator locator,
-  ) async {
-    await (await _db).insert('handle_recovery_locator', <String, Object?>{
-      'local_identity_id': locator.localIdentityId,
-      'operation_id': locator.operationId,
-      'full_handle': locator.fullHandle,
-      'recovery_id': locator.recoveryId,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  @override
-  Future<void> deleteHandleRecoveryLocator({
-    required String localIdentityId,
-  }) async {
-    await (await _db).delete(
-      'handle_recovery_locator',
-      where: 'local_identity_id = ?',
-      whereArgs: <Object?>[localIdentityId],
-    );
-  }
-
   /// Atomically rewrites App-owned conversation overlays and drafts using the
   /// Core-owned alias projection. A verified SQLite snapshot is created before
   /// the first mutation; each mapping is journaled in the same transaction as

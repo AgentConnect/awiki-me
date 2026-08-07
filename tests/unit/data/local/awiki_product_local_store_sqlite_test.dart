@@ -161,67 +161,31 @@ void main() {
     );
   });
 
-  test('persists only the secret-free Handle Recovery host locator', () async {
-    final store = _store(databaseDir);
-    const beforePrepare = ProductHandleRecoveryLocator(
-      localIdentityId: 'identity-alice',
-      operationId: 'recovery-operation-1',
-      fullHandle: 'alice.awiki.info',
-    );
+  test(
+    'retains the legacy Handle Recovery locator table as inert schema',
+    () async {
+      final store = _store(databaseDir);
+      await store.warmUp();
 
-    await store.saveHandleRecoveryLocator(beforePrepare);
-    final restoredBeforePrepare = await store.loadHandleRecoveryLocator(
-      localIdentityId: 'identity-alice',
-    );
-    expect(restoredBeforePrepare?.localIdentityId, 'identity-alice');
-    expect(restoredBeforePrepare?.operationId, 'recovery-operation-1');
-    expect(restoredBeforePrepare?.fullHandle, 'alice.awiki.info');
-    expect(restoredBeforePrepare?.recoveryId, isNull);
-
-    const afterPrepare = ProductHandleRecoveryLocator(
-      localIdentityId: 'identity-alice',
-      operationId: 'recovery-operation-1',
-      fullHandle: 'alice.awiki.info',
-      recoveryId: 'recovery-1',
-    );
-    await store.saveHandleRecoveryLocator(afterPrepare);
-    final restoredAfterPrepare = await store.loadHandleRecoveryLocator(
-      localIdentityId: 'identity-alice',
-    );
-    expect(restoredAfterPrepare?.localIdentityId, 'identity-alice');
-    expect(restoredAfterPrepare?.operationId, 'recovery-operation-1');
-    expect(restoredAfterPrepare?.fullHandle, 'alice.awiki.info');
-    expect(restoredAfterPrepare?.recoveryId, 'recovery-1');
-
-    final database = await databaseFactory.openDatabase(
-      _databasePath(databaseDir),
-      options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
-    );
-    final columnNames = (await database.rawQuery(
-      'PRAGMA table_info(handle_recovery_locator)',
-    )).map((column) => column['name']).toSet();
-    final rows = await database.query('handle_recovery_locator');
-    await database.close();
-    expect(columnNames, <Object?>{
-      'local_identity_id',
-      'operation_id',
-      'full_handle',
-      'recovery_id',
-    });
-    expect(rows.single, <String, Object?>{
-      'local_identity_id': 'identity-alice',
-      'operation_id': 'recovery-operation-1',
-      'full_handle': 'alice.awiki.info',
-      'recovery_id': 'recovery-1',
-    });
-
-    await store.deleteHandleRecoveryLocator(localIdentityId: 'identity-alice');
-    expect(
-      await store.loadHandleRecoveryLocator(localIdentityId: 'identity-alice'),
-      isNull,
-    );
-    await store.close();
-  });
+      final database = await databaseFactory.openDatabase(
+        _databasePath(databaseDir),
+        options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
+      );
+      final columnNames = (await database.rawQuery(
+        'PRAGMA table_info(handle_recovery_locator)',
+      )).map((column) => column['name']).toSet();
+      final rows = await database.query('handle_recovery_locator');
+      await database.close();
+      expect(columnNames, <Object?>{
+        'local_identity_id',
+        'operation_id',
+        'full_handle',
+        'recovery_id',
+      });
+      expect(rows, isEmpty);
+      await store.close();
+    },
+  );
 
   test('stores agent states by owner sorted by latest update', () async {
     final store = _store(databaseDir);
@@ -512,13 +476,6 @@ void main() {
 
       final store = _store(databaseDir);
       await store.warmUp();
-      await store.saveHandleRecoveryLocator(
-        const ProductHandleRecoveryLocator(
-          localIdentityId: 'identity-alice',
-          operationId: 'operation-1',
-          fullHandle: 'alice.awiki.info',
-        ),
-      );
       await store.close();
 
       final upgraded = await databaseFactory.openDatabase(

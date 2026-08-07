@@ -1,12 +1,13 @@
-// [INPUT]: Optional local identity hint, Handle-owned phone/OTP input, and UI intent.
+// [INPUT]: Explicit local identity scope, transient phone/OTP input, and UI intent.
 // [OUTPUT]: Risk-gated, coarse Handle Recovery presentation.
-// [POS]: App-only V1 surface; Core owns credentials, keys, proof, and state transitions.
+// [POS]: App-only V4.0 surface; Core owns credentials, keys, proof, and state transitions.
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
+import '../app_shell/providers/app_runtime_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
@@ -14,9 +15,13 @@ import '../shared/widgets/app_widgets.dart';
 import 'handle_recovery_provider.dart';
 
 class HandleRecoveryPage extends ConsumerStatefulWidget {
-  const HandleRecoveryPage({super.key, this.identityScope, this.initialHandle});
+  const HandleRecoveryPage({
+    super.key,
+    required this.identityScope,
+    this.initialHandle,
+  });
 
-  final HandleRecoveryIdentityScope? identityScope;
+  final HandleRecoveryIdentityScope identityScope;
   final String? initialHandle;
 
   @override
@@ -33,16 +38,17 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     super.initState();
     _handleController = TextEditingController(text: widget.initialHandle);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final identityScope = widget.identityScope;
-      if (identityScope == null) return;
+      final initialHandle = widget.initialHandle?.trim();
+      if (initialHandle == null || initialHandle.isEmpty) return;
       await ref
           .read(handleRecoveryProvider.notifier)
-          .restoreForIdentity(identityScope.localIdentityId);
+          .restoreForOwner(scope: widget.identityScope, handle: initialHandle);
       if (!mounted) return;
       final restoredHandle = ref.read(handleRecoveryProvider).otpHandle;
       if (restoredHandle != null) {
         _handleController.text = restoredHandle;
       }
+      await _activateRecoveredIdentityIfCompleted();
     });
   }
 
@@ -81,11 +87,10 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                     ),
                     const SizedBox(height: 16),
                     AppTextField(
-                      key: const Key('handle-recovery-handle'),
                       controller: _handleController,
                       label: context.l10n.handleRecoveryHandle,
                       placeholder: 'alice.awiki.info',
-                      enabled: progress == null && state.otpOperationId == null,
+                      enabled: progress == null,
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
@@ -94,7 +99,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                       label: context.l10n.handleRecoveryPhone,
                       placeholder: '+8613800138000',
                       keyboardType: TextInputType.phone,
-                      enabled: progress == null && state.otpPhone == null,
+                      enabled: state.canRequestOtp,
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
@@ -103,7 +108,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                       label: context.l10n.handleRecoveryOtp,
                       placeholder: '123456',
                       keyboardType: TextInputType.number,
-                      enabled: progress == null,
+                      enabled: state.otpRequested,
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -119,8 +124,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                             semanticsIdentifier: 'handle-recovery-send-otp',
                             onPressed:
                                 state.isBusy ||
-                                    progress != null ||
-                                    state.otpRequested ||
+                                    !state.canRequestOtp ||
                                     !otpCooldown.canSend
                                 ? null
                                 : _requestOtp,
@@ -132,18 +136,14 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                             key: const Key('handle-recovery-verify'),
                             label: context.l10n.handleRecoveryVerify,
                             semanticsIdentifier: 'handle-recovery-verify',
-                            onPressed:
-                                state.isBusy ||
-                                    progress != null ||
-                                    !state.otpRequested
+                            onPressed: state.isBusy || !state.otpRequested
                                 ? null
                                 : _prepare,
                           ),
                         ),
                       ],
                     ),
-                    if (progress == null &&
-                        state.otpOperationId != null) ...<Widget>[
+                    if (progress?.canDiscard ?? false) ...<Widget>[
                       const SizedBox(height: 10),
                       AppSecondaryButton(
                         key: const Key('handle-recovery-cancel-otp'),
@@ -152,13 +152,15 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                             ? null
                             : () => ref
                                   .read(handleRecoveryProvider.notifier)
-                                  .cancelPendingOtp(),
+                                  .discardPreAttempt(),
                       ),
                     ],
                   ],
                 ),
               ),
-              if (progress != null) ...<Widget>[
+              if (progress != null &&
+                  progress.phase !=
+                      HandleRecoveryProgressPhase.otpRequested) ...<Widget>[
                 const SizedBox(height: 14),
                 _RecoveryRiskCard(
                   state: state,
@@ -176,6 +178,13 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                         _phaseLabel(context, progress.phase),
                         key: const Key('handle-recovery-progress'),
                       ),
+                      if (progress.isStillConfirming) ...<Widget>[
+                        const SizedBox(height: 10),
+                        Text(
+                          context.l10n.handleRecoveryStillConfirming,
+                          key: const Key('handle-recovery-still-confirming'),
+                        ),
+                      ],
                       const SizedBox(height: 14),
                       AppPrimaryButton(
                         key: const Key('handle-recovery-activate'),
@@ -184,8 +193,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                         onPressed:
                             state.isBusy ||
                                 !state.riskConfirmed ||
-                                progress.phase !=
-                                    HandleRecoveryProgressPhase.prepared
+                                !progress.canActivate
                             ? null
                             : _activate,
                       ),
@@ -196,6 +204,51 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                           label: context.l10n.handleRecoveryResume,
                           semanticsIdentifier: 'handle-recovery-resume',
                           onPressed: state.isBusy ? null : _resume,
+                        ),
+                      ],
+                      if ((progress.keyState ==
+                                  HandleRecoveryKeyState
+                                      .permanentlyUnavailable ||
+                              state.error ==
+                                  HandleRecoveryUiError.keyUnavailable) &&
+                          progress.lifecycleClass !=
+                              HandleRecoveryLifecycleClass
+                                  .quarantinedKeyUnavailable) ...<Widget>[
+                        const SizedBox(height: 10),
+                        Text(context.l10n.handleRecoveryKeyUnavailable),
+                        const SizedBox(height: 10),
+                        AppSecondaryButton(
+                          key: const Key(
+                            'handle-recovery-quarantine-key-unavailable',
+                          ),
+                          label: context.l10n.handleRecoveryQuarantine,
+                          onPressed: state.isBusy
+                              ? null
+                              : () => ref
+                                    .read(handleRecoveryProvider.notifier)
+                                    .quarantineKeyUnavailable(
+                                      presenceReason: context
+                                          .l10n
+                                          .handleRecoveryQuarantineReason,
+                                    ),
+                        ),
+                      ],
+                      if (progress.lifecycleClass ==
+                          HandleRecoveryLifecycleClass
+                              .quarantinedKeyUnavailable) ...<Widget>[
+                        const SizedBox(height: 10),
+                        Text(context.l10n.handleRecoveryQuarantined),
+                        const SizedBox(height: 10),
+                        AppSecondaryButton(
+                          key: const Key(
+                            'handle-recovery-start-after-quarantine',
+                          ),
+                          label: context.l10n.handleRecoveryStartNew,
+                          onPressed: state.isBusy
+                              ? null
+                              : () => ref
+                                    .read(handleRecoveryProvider.notifier)
+                                    .startAfterQuarantine(),
                         ),
                       ],
                     ],
@@ -231,19 +284,28 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     _otpController.clear();
     await ref
         .read(handleRecoveryProvider.notifier)
-        .prepare(
-          scope: widget.identityScope,
-          handle: _handleController.text,
-          phone: _phoneController.text,
-          otp: otp,
-        );
+        .prepare(phone: _phoneController.text, otp: otp);
   }
 
-  Future<void> _activate() => ref
-      .read(handleRecoveryProvider.notifier)
-      .activate(presenceReason: context.l10n.handleRecoveryPresenceReason);
+  Future<void> _activate() async {
+    await ref
+        .read(handleRecoveryProvider.notifier)
+        .activate(presenceReason: context.l10n.handleRecoveryPresenceReason);
+    await _activateRecoveredIdentityIfCompleted();
+  }
 
-  Future<void> _resume() => ref.read(handleRecoveryProvider.notifier).resume();
+  Future<void> _resume() async {
+    await ref.read(handleRecoveryProvider.notifier).resume();
+    await _activateRecoveredIdentityIfCompleted();
+  }
+
+  Future<void> _activateRecoveredIdentityIfCompleted() async {
+    final progress = ref.read(handleRecoveryProvider).progress;
+    if (progress == null || !progress.isCompleted) return;
+    await ref
+        .read(appRuntimeProvider.notifier)
+        .loginWithLocalCredential(progress.ownerIdentityId);
+  }
 }
 
 class _RecoveryRiskCard extends StatelessWidget {
@@ -269,10 +331,8 @@ class _RecoveryRiskCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(context.l10n.handleRecoveryOtherDevicesRejoin),
           const SizedBox(height: 8),
-          if (progress.impact.localOrdinaryDataWillMigrate) ...<Widget>[
-            Text(context.l10n.handleRecoveryLocalOrdinaryMigration),
-            const SizedBox(height: 8),
-          ],
+          Text(context.l10n.handleRecoveryLocalOrdinaryMigration),
+          const SizedBox(height: 8),
           Text(context.l10n.handleRecoveryOldE2eeUnavailable),
           const SizedBox(height: 8),
           Text(context.l10n.handleRecoverySingletonRisk),
@@ -312,10 +372,16 @@ String _errorLabel(
     context.l10n.handleRecoveryErrorTransitionChainUnsupported,
   HandleRecoveryUiError.remoteStateChanged =>
     context.l10n.handleRecoveryErrorRemoteStateChanged,
+  HandleRecoveryUiError.resultAbsent =>
+    context.l10n.handleRecoveryStillConfirming,
   HandleRecoveryUiError.outcomeUnknown =>
     context.l10n.handleRecoveryErrorOutcomeUnknown,
   HandleRecoveryUiError.localStateUnavailable =>
     context.l10n.handleRecoveryErrorLocalStateUnavailable,
+  HandleRecoveryUiError.keyUnavailable =>
+    context.l10n.handleRecoveryKeyUnavailable,
+  HandleRecoveryUiError.migrationUnsupported =>
+    context.l10n.handleRecoveryMigrationUnsupported,
   HandleRecoveryUiError.blocked => context.l10n.handleRecoveryErrorBlocked,
   HandleRecoveryUiError.rateLimited =>
     otpCooldown.isCoolingDown
@@ -328,6 +394,8 @@ String _phaseLabel(
   BuildContext context,
   HandleRecoveryProgressPhase phase,
 ) => switch (phase) {
+  HandleRecoveryProgressPhase.otpRequested =>
+    context.l10n.handleRecoveryOtpRequested,
   HandleRecoveryProgressPhase.prepared => context.l10n.handleRecoveryPrepared,
   HandleRecoveryProgressPhase.remoteCommitPending =>
     context.l10n.handleRecoveryRemotePending,

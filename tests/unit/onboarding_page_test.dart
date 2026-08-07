@@ -10,7 +10,6 @@ import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
-import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
@@ -20,8 +19,6 @@ import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
-import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
-import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
@@ -95,11 +92,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('handle-recovery-entry')), findsOneWidget);
-      expect(
-        find.byKey(const Key('temporary-handle-recovery-entry')),
-        findsOneWidget,
-      );
-      expect(find.text('恢复 Handle'), findsNWidgets(2));
+      expect(find.text('恢复 Handle'), findsOneWidget);
       expect(find.textContaining('CLI'), findsNothing);
       expect(find.textContaining('Daemon'), findsNothing);
     },
@@ -153,7 +146,7 @@ void main() {
     expect(find.byKey(const Key('handle-recovery-entry')), findsNothing);
     expect(
       find.byKey(const Key('temporary-handle-recovery-entry')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -183,62 +176,6 @@ void main() {
       expect(
         find.byKey(const Key('temporary-handle-recovery-entry')),
         findsNothing,
-      );
-    },
-  );
-
-  testWidgets(
-    'temporary Handle Recovery entry accepts a Handle without a local identity selector',
-    (tester) async {
-      final defaultInfo = OnboardingServerInfo.userServiceDefault();
-      final gateway = FakeAwikiGateway()
-        ..serverInfo = OnboardingServerInfo(
-          schemaVersion: defaultInfo.schemaVersion,
-          service: defaultInfo.service,
-          identity: OnboardingIdentityCapabilities(
-            handleRegistration: defaultInfo.identity.handleRegistration,
-            handleRecovery: const OnboardingHandleRecoveryCapabilities(
-              enabled: true,
-              methods: <OnboardingIdentityMethod>[
-                OnboardingIdentityMethod(
-                  id: OnboardingIdentityMethodId.phone,
-                  enabled: true,
-                  verification: OnboardingVerificationRequirement(
-                    required: true,
-                    type: OnboardingVerificationType.smsOtp,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-
-      await tester.pumpWidget(
-        buildLocalizedTestApp(
-          home: const OnboardingPage(),
-          gateway: gateway,
-          providerOverrides: <Override>[
-            multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
-            handleRecoveryCorePortProvider.overrideWithValue(
-              _UnusedHandleRecoveryCore(),
-            ),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      final entry = find.byKey(const Key('temporary-handle-recovery-entry'));
-      await tester.ensureVisible(entry);
-      await tester.pumpAndSettle();
-      await tester.tap(entry);
-      await tester.pumpAndSettle();
-
-      expect(find.byType(HandleRecoveryPage), findsOneWidget);
-      expect(
-        tester
-            .widget<HandleRecoveryPage>(find.byType(HandleRecoveryPage))
-            .identityScope,
-        isNull,
       );
     },
   );
@@ -1865,11 +1802,6 @@ void main() {
     expect(gateway.lastEmailRegisteredNickName, 'alice');
     expect(gateway.lastEmailRegisteredProfileMarkdown, '# alice\n\n');
   });
-}
-
-class _UnusedHandleRecoveryCore implements HandleRecoveryCorePort {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _LegacyUpgradeOnboardingService implements OnboardingService {

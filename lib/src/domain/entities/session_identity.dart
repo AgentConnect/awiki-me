@@ -33,11 +33,12 @@ class SessionIdentity {
 
   final String did;
 
-  /// Exact Core local identity ID. This must not be inferred from
-  /// [credentialName], which is normally the user-facing local alias.
-  final String? localIdentityId;
   final String credentialName;
   final String displayName;
+
+  /// Exact Core local identity ID. Unlike [credentialName], this is never a
+  /// user-facing local alias and is safe for stable-owner operation lookup.
+  final String? localIdentityId;
   final String? handle;
   final String? jwtToken;
 

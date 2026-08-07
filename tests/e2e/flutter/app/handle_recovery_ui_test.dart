@@ -1,7 +1,7 @@
 // [INPUT]: Audited awiki.info endpoints, one dedicated SMS account and OTP
 //          resolver, a fresh production AppBootstrap/native Core root, and an
 //          E2E-only user-presence decision.
-// [OUTPUT]: Secret-free proof that the visible Handle Recovery V1 flow keeps
+// [OUTPUT]: Secret-free proof that the visible Handle Recovery V4 flow keeps
 //           the Handle, replaces the DID, and fences the old local identity.
 // [POS]: Remote product UI acceptance; setup may register through the
 //        production application service, but Recovery itself is UI-driven.
@@ -50,7 +50,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'Handle Recovery V1 replaces the DID through the visible App flow',
+    'Handle Recovery V4 replaces the DID through the visible App flow',
     (tester) async {
       final startedAt = DateTime.now().toUtc();
       final config = _RemoteRecoveryRunConfig.load();
@@ -133,22 +133,21 @@ void main() {
         timeout: const Duration(seconds: 45),
         failure: 'Logout did not return to the real onboarding surface.',
       );
+      final recoveryEntry = find.bySemanticsIdentifier(
+        'handle-recovery-entry:$stableCredentialName',
+      );
       await _pumpUntil(
         tester,
-        () =>
-            find
-                .bySemanticsIdentifier('temporary-handle-recovery-entry')
-                .evaluate()
-                .length ==
-            1,
+        () => recoveryEntry.evaluate().length == 1,
         timeout: const Duration(seconds: 45),
         failure:
-            'The server-advertised global Handle Recovery entry did not become visible.',
+            'The identity-scoped Handle Recovery entry did not become visible.',
       );
       await _tapOne(
         tester,
-        find.bySemanticsIdentifier('temporary-handle-recovery-entry'),
-        failure: 'The visible global Handle Recovery entry was unavailable.',
+        recoveryEntry,
+        failure:
+            'The visible identity-scoped Handle Recovery entry was unavailable.',
       );
       await _pumpUntil(
         tester,
@@ -219,8 +218,9 @@ void main() {
         timeout: const Duration(minutes: 2),
         failure: 'The UI did not reach the prepared Recovery phase.',
       );
-      if (recordingRecoveryCore.preparedLocalIdentityId != null) {
-        fail('Global Handle Recovery unexpectedly used the active identity.');
+      if (recordingRecoveryCore.requestedLocalIdentityId !=
+          oldSession.identityId) {
+        fail('Handle Recovery did not preserve the exact local identity ID.');
       }
       if (find.byKey(const Key('handle-recovery-progress')).evaluate().length !=
               1 ||
@@ -354,7 +354,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
 
   final HandleRecoveryCorePort _delegate;
   String? lastSafeFailure;
-  String? preparedLocalIdentityId;
+  String? requestedLocalIdentityId;
 
   Future<T> _record<T>(Future<T> Function() action) async {
     try {
@@ -374,57 +374,66 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   }
 
   @override
-  Future<HandleRecoveryOtpResult> requestHandleRecoveryOtp({
-    required String handle,
+  Future<HandleRecoveryOtpResult> requestOtp({
+    required HandleRecoveryOwner owner,
     required String phone,
-    required String operationId,
-  }) => _record(
-    () => _delegate.requestHandleRecoveryOtp(
-      handle: handle,
-      phone: phone,
-      operationId: operationId,
-    ),
-  );
-
-  @override
-  Future<HandleRecoveryProgress> prepareHandleRecovery({
-    HandleRecoveryIdentityScope? scope,
-    required String handle,
-    required String phone,
-    required String otp,
-    required String operationId,
   }) {
-    preparedLocalIdentityId = scope?.localIdentityId;
-    return _record(
-      () => _delegate.prepareHandleRecovery(
-        scope: scope,
-        handle: handle,
-        phone: phone,
-        otp: otp,
-        operationId: operationId,
-      ),
-    );
+    requestedLocalIdentityId = owner.localIdentityId;
+    return _record(() => _delegate.requestOtp(owner: owner, phone: phone));
   }
 
   @override
-  Future<HandleRecoveryProgress> activateHandleRecovery({
-    required String recoveryId,
+  Future<HandleRecoveryProgress> prepare({
+    required String operationId,
+    required String phone,
+    required String otp,
+  }) => _record(
+    () => _delegate.prepare(operationId: operationId, phone: phone, otp: otp),
+  );
+
+  @override
+  Future<List<HandleRecoveryProgress>> listOperations(
+    HandleRecoveryOwner owner,
+  ) => _record(() => _delegate.listOperations(owner));
+
+  @override
+  Future<HandleRecoveryProgress> getStatus(String operationId) =>
+      _record(() => _delegate.getStatus(operationId));
+
+  @override
+  Future<HandleRecoveryProgress> activate({
+    required String operationId,
     required bool userPresenceConfirmed,
   }) => _record(
-    () => _delegate.activateHandleRecovery(
-      recoveryId: recoveryId,
+    () => _delegate.activate(
+      operationId: operationId,
       userPresenceConfirmed: userPresenceConfirmed,
     ),
   );
 
   @override
-  Future<HandleRecoveryProgress> resumeHandleRecovery({
-    required String recoveryId,
-  }) => _record(() => _delegate.resumeHandleRecovery(recoveryId: recoveryId));
+  Future<HandleRecoveryProgress> reconcile(String operationId) =>
+      _record(() => _delegate.reconcile(operationId));
 
   @override
-  Future<HandleRecoveryProgress> handleRecoveryStatus(String recoveryId) =>
-      _record(() => _delegate.handleRecoveryStatus(recoveryId));
+  Future<void> discardPreAttempt(String operationId) =>
+      _record(() => _delegate.discardPreAttempt(operationId));
+
+  @override
+  Future<HandleRecoveryProgress> quarantineKeyUnavailable({
+    required String operationId,
+    required bool confirmed,
+  }) => _record(
+    () => _delegate.quarantineKeyUnavailable(
+      operationId: operationId,
+      confirmed: confirmed,
+    ),
+  );
+
+  @override
+  Future<HandleRecoveryRegistryEpochReset?> authorizedEpochReceipt(
+    HandleRecoveryOwner owner,
+  ) => _record(() => _delegate.authorizedEpochReceipt(owner));
 
   @override
   Future<HandleRecoveryAuthorizedJoinProgress> activateAuthorizedJoin({

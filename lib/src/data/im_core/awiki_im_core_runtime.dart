@@ -44,6 +44,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     this.multiDeviceDirectE2eeEnabled = false,
     this.multiDeviceGroupE2eeEnabled = false,
     this.multiDeviceHandleRecoveryEnabled = false,
+    String? multiDeviceAudience,
     AwikiImCoreOpen? openCore,
     AwikiImCoreInspectLocalStateUpgrade? inspectLocalStateUpgrade,
     AwikiImCoreUpgradeLocalState? upgradeLocalState,
@@ -52,6 +53,10 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
        _paths = paths,
        _scopeId = scopeId,
        _vaultSecretProvider = vaultSecretProvider,
+       multiDeviceAudience = _validatedMultiDeviceAudience(
+         multiDeviceAudience,
+         requiredForRecovery: multiDeviceHandleRecoveryEnabled,
+       ),
        _openCore = openCore ?? core.AwikiImCore.open,
        _inspectLocalStateUpgrade =
            inspectLocalStateUpgrade ?? _inspectLocalStateUpgradeWithSdk,
@@ -66,6 +71,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
   final bool multiDeviceDirectE2eeEnabled;
   final bool multiDeviceGroupE2eeEnabled;
   final bool multiDeviceHandleRecoveryEnabled;
+  final String? multiDeviceAudience;
   final AwikiImCoreOpen _openCore;
   final AwikiImCoreInspectLocalStateUpgrade _inspectLocalStateUpgrade;
   final AwikiImCoreUpgradeLocalState _upgradeLocalState;
@@ -138,6 +144,7 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
         multiDeviceDirectE2eeEnabled: multiDeviceDirectE2eeEnabled,
         multiDeviceGroupE2eeEnabled: multiDeviceGroupE2eeEnabled,
         multiDeviceHandleRecoveryEnabled: multiDeviceHandleRecoveryEnabled,
+        multiDeviceAudience: multiDeviceAudience,
         identitySecretVault: core.ImCoreSecretVaultOptions(
           rootKey: vaultSecrets.rootKey,
           vaultDir: _paths.vaultDir,
@@ -290,6 +297,30 @@ class AwikiImCoreRuntime implements ImCoreRuntimePort {
     final idle = _clientOperationsIdle ??= Completer<void>();
     await idle.future;
   }
+}
+
+String? _validatedMultiDeviceAudience(
+  String? value, {
+  required bool requiredForRecovery,
+}) {
+  if (value == null || value.isEmpty) {
+    if (requiredForRecovery) {
+      throw ArgumentError.value(
+        value,
+        'multiDeviceAudience',
+        'must be configured when Handle Recovery is enabled',
+      );
+    }
+    return null;
+  }
+  if (value.trim() != value || value.runes.length > 255) {
+    throw ArgumentError.value(
+      value,
+      'multiDeviceAudience',
+      'must have no surrounding whitespace and be at most 255 characters',
+    );
+  }
+  return value;
 }
 
 Future<core.LocalStateUpgradeInspection> _inspectLocalStateUpgradeWithSdk(

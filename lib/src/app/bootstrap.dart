@@ -15,6 +15,7 @@ import '../application/desktop_shell_service.dart';
 import '../application/agent/agent_control_service.dart';
 import '../application/agent/agent_control_status_store.dart';
 import '../application/auth/auth_session_coordinator.dart';
+import '../application/app_bootstrap_epoch_barrier.dart';
 import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
@@ -291,6 +292,7 @@ class AppBootstrap {
           effectiveEnvironment.multiDeviceGroupE2eeEnabled,
       multiDeviceHandleRecoveryEnabled:
           effectiveEnvironment.multiDeviceHandleRecoveryEnabled,
+      multiDeviceAudience: effectiveEnvironment.multiDeviceAudience,
       onProgress: (progress) {
         if (progress == AwikiImCoreRuntimeProgress.upgradingLocalState) {
           onProgress?.call(AppBootstrapProgress.upgradingLocalState);
@@ -414,6 +416,10 @@ class AppBootstrap {
         activeSessionStore: activeSessionStore,
         expectedDidDomain: effectiveEnvironment.didDomain,
         realtime: realtimeAdapter,
+        bootstrapEpochBarrier: AppBootstrapEpochBarrier(
+          recovery: handleRecoveryAdapter,
+          local: productLocalStore,
+        ),
       );
       final onboardingService = ImCoreOnboardingService(
         identities: identityAdapter,

@@ -24,6 +24,9 @@ const bool defaultMultiDeviceHandleRecoveryEnabled = bool.fromEnvironment(
   'AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED',
   defaultValue: false,
 );
+const String defaultMultiDeviceAudience = String.fromEnvironment(
+  'AWIKI_MULTI_DEVICE_AUDIENCE',
+);
 const bool defaultMessageSyncV2ReadEnabled = bool.fromEnvironment(
   'AWIKI_SYNC_V2_READ',
   defaultValue: true,
@@ -52,6 +55,7 @@ class AwikiEnvironmentConfig {
     bool? multiDeviceDirectE2eeEnabled,
     bool? multiDeviceGroupE2eeEnabled,
     bool? multiDeviceHandleRecoveryEnabled,
+    String? multiDeviceAudience,
     bool? messageSyncV2ReadEnabled,
   }) {
     final normalizedBase = _normalizeBaseUrl(
@@ -107,6 +111,10 @@ class AwikiEnvironmentConfig {
     this.multiDeviceHandleRecoveryEnabled =
         multiDeviceHandleRecoveryEnabled ??
         defaultMultiDeviceHandleRecoveryEnabled;
+    this.multiDeviceAudience = _validatedMultiDeviceAudience(
+      multiDeviceAudience ?? defaultMultiDeviceAudience,
+      requiredForRecovery: this.multiDeviceHandleRecoveryEnabled,
+    );
     this.messageSyncV2ReadEnabled =
         messageSyncV2ReadEnabled ?? defaultMessageSyncV2ReadEnabled;
   }
@@ -130,7 +138,32 @@ class AwikiEnvironmentConfig {
   late final bool multiDeviceDirectE2eeEnabled;
   late final bool multiDeviceGroupE2eeEnabled;
   late final bool multiDeviceHandleRecoveryEnabled;
+  late final String? multiDeviceAudience;
   late final bool messageSyncV2ReadEnabled;
+}
+
+String? _validatedMultiDeviceAudience(
+  String? value, {
+  required bool requiredForRecovery,
+}) {
+  if (value == null || value.isEmpty) {
+    if (requiredForRecovery) {
+      throw ArgumentError.value(
+        value,
+        'multiDeviceAudience',
+        'must be configured when Handle Recovery is enabled',
+      );
+    }
+    return null;
+  }
+  if (value.trim() != value || value.runes.length > 255) {
+    throw ArgumentError.value(
+      value,
+      'multiDeviceAudience',
+      'must have no surrounding whitespace and be at most 255 characters',
+    );
+  }
+  return value;
 }
 
 bool isAgentDaemonTenantRealmAllowed({

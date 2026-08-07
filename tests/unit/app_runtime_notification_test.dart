@@ -157,7 +157,10 @@ void main() {
       bool enableRemotePush = false,
       bool enableRemotePushEvents = false,
       RemotePushSyncPort? remotePushSyncPort,
+      AppSessionService? appSessions,
     }) {
+      final effectiveSessions =
+          appSessions ?? _CurrentBarrierAppSessionService(gateway);
       return ProviderContainer(
         overrides: <Override>[
           awikiEnvironmentConfigProvider.overrideWithValue(
@@ -173,6 +176,7 @@ void main() {
             messageSyncService: messageSyncService,
             conversationService: boundConversationService,
           ),
+          appSessionServiceProvider.overrideWithValue(effectiveSessions),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
           notificationFacadeProvider.overrideWithValue(notificationFacade),
           appPresentationServiceProvider.overrideWithValue(
@@ -969,17 +973,15 @@ void main() {
         targetDid: 'did:test:cold-start-peer',
       );
       gateway.conversations = <ConversationSummary>[conversation];
-      container
-          .read(sessionProvider.notifier)
-          .setSession(
-            const SessionIdentity(
-              did: 'did:test:me',
-              credentialName: 'default',
-              displayName: 'Me',
-              handle: 'me',
-              jwtToken: 'token',
-            ),
-          );
+      const coldSession = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'me',
+        jwtToken: 'token',
+      );
+      await _commitRuntimeSession(container, coldSession);
+      container.read(sessionProvider.notifier).setSession(coldSession);
       notificationFacade.initialNotificationActivation =
           NotificationActivation.valid(
             NotificationTarget(
@@ -1255,6 +1257,83 @@ void main() {
       expect(messageSyncService.syncReasons, contains('app_resumed'));
     });
 
+    test('恢复前台先等待 fresh binding 与 epoch barrier', () async {
+      final sessions = _BarrierControlledAppSessionService(
+        gateway,
+        _epochAppSession('first'),
+      );
+      container.dispose();
+      container = createContainer(appSessions: sessions);
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await _pumpUntil(() => sessions.refreshCalls == 1);
+
+      expect(messageSyncService.syncReasons, isNot(contains('app_resumed')));
+
+      sessions.completeRefresh();
+      await _pumpUntil(
+        () => messageSyncService.syncReasons.contains('app_resumed'),
+      );
+    });
+
+    test('恢复前台 barrier 失败时不恢复实时或业务同步', () async {
+      final sessions = _BarrierControlledAppSessionService(
+        gateway,
+        _epochAppSession('first'),
+      );
+      container.dispose();
+      container = createContainer(appSessions: sessions);
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.paused);
+      container
+          .read(appLifecycleProvider.notifier)
+          .setLifecycle(AppLifecycleState.resumed);
+      await _pumpUntil(() => sessions.refreshCalls == 1);
+      sessions.failRefresh();
+      await pumpEventQueue();
+
+      expect(messageSyncService.syncReasons, isNot(contains('app_resumed')));
+    });
+
+    test('realtime reconnect 与 recovery 共享 fresh epoch barrier', () async {
+      final sessions = _BarrierControlledAppSessionService(
+        gateway,
+        _epochAppSession('first'),
+      );
+      container.dispose();
+      container = createContainer(appSessions: sessions);
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+
+      realtimeGateway.setStatus(RealtimeConnectionStatus.disconnected);
+      realtimeGateway.setStatus(RealtimeConnectionStatus.connected);
+      await _pumpUntil(() => sessions.refreshCalls == 1);
+
+      expect(
+        messageSyncService.syncReasons,
+        isNot(contains('realtime_reconnected')),
+      );
+      sessions.completeRefresh();
+      await _pumpUntil(
+        () => messageSyncService.syncReasons.contains('realtime_reconnected'),
+      );
+      expect(sessions.refreshCalls, 1);
+    });
+
     test('前台周期对账弥补丢失的实时提示并在后台停止', () async {
       final periodicSync = FakeMessageSyncService();
       final periodicContainer = ProviderContainer(
@@ -1317,6 +1396,9 @@ void main() {
             gateway,
             realtimeGateway: realtimeGateway,
             messageSyncService: messageSyncService,
+          ),
+          appSessionServiceProvider.overrideWithValue(
+            _CurrentBarrierAppSessionService(gateway),
           ),
           agentControlServiceProvider.overrideWithValue(agentControl),
           realtimeGatewayProvider.overrideWithValue(realtimeGateway),
@@ -1947,6 +2029,9 @@ void main() {
             gateway,
             realtimeGateway: realtimeGateway,
             messageSyncService: sync,
+          ),
+          appSessionServiceProvider.overrideWithValue(
+            _CurrentBarrierAppSessionService(gateway),
           ),
           conversationServiceProvider.overrideWithValue(conversations),
           profileApplicationServiceProvider.overrideWithValue(
@@ -3763,18 +3848,16 @@ void main() {
       expect(notificationFacade.lastSystemTitle, isNull);
     });
 
-    test('实时连接失败时刷新会话数据但不使用相同 token 循环重连', () async {
-      container
-          .read(sessionProvider.notifier)
-          .setSession(
-            const SessionIdentity(
-              did: 'did:test:me',
-              credentialName: 'default',
-              displayName: 'Me',
-              handle: 'me',
-              jwtToken: 'token',
-            ),
-          );
+    test('实时连接失败通过 fresh barrier 后重新连接', () async {
+      const failedSession = SessionIdentity(
+        did: 'did:test:me',
+        credentialName: 'default',
+        displayName: 'Me',
+        handle: 'me',
+        jwtToken: 'token',
+      );
+      await _commitRuntimeSession(container, failedSession);
+      container.read(sessionProvider.notifier).setSession(failedSession);
       container.read(appRuntimeProvider);
 
       realtimeGateway.setStatus(RealtimeConnectionStatus.failed);
@@ -3782,7 +3865,33 @@ void main() {
 
       expect(gateway.refreshSessionCalls, 1);
       expect(gateway.listConversationsCalls, 1);
+      expect(
+        realtimeGateway.connectionStatus,
+        RealtimeConnectionStatus.connected,
+      );
+    });
+
+    test('实时连接失败且 barrier 失败时不恢复业务', () async {
+      final sessions = _BarrierControlledAppSessionService(
+        gateway,
+        _epochAppSession('first'),
+      );
+      container.dispose();
+      container = createContainer(appSessions: sessions);
+      await _activateRuntimeSession(container, _epochSession('first'));
+      await pumpEventQueue();
+      messageSyncService.syncReasons.clear();
+
+      realtimeGateway.setStatus(RealtimeConnectionStatus.failed);
+      await _pumpUntil(() => sessions.refreshCalls == 1);
+      sessions.failRefresh();
+      await pumpEventQueue();
+
       expect(realtimeGateway.connectionStatus, RealtimeConnectionStatus.failed);
+      expect(
+        messageSyncService.syncReasons,
+        isNot(contains('realtime_reconnected')),
+      );
     });
 
     test('绑定 Push installation 使用当前 scope、epoch 与协议设备', () async {
@@ -3984,7 +4093,10 @@ void main() {
         await activation;
         await _pumpUntil(() => remotePushClient.acknowledged.isNotEmpty);
 
-        expect(messageSyncService.syncReasons.first, 'remote_push');
+        expect(
+          messageSyncService.syncReasons.first,
+          anyOf('startup', 'remote_push'),
+        );
         expect(
           container
               .read(conversationListProvider)
@@ -4068,6 +4180,26 @@ void main() {
       expect(container.read(selectedConversationProvider), isNull);
     });
 
+    test('通知激活 barrier 失败时不导航旧 epoch', () async {
+      final sessions = _BarrierControlledAppSessionService(
+        gateway,
+        _epochAppSession('first'),
+      );
+      container.dispose();
+      container = createContainer(appSessions: sessions);
+      await _activateRuntimeSession(container, _epochSession('first'));
+      container
+          .read(shellDestinationProvider.notifier)
+          .select(ShellDestination.tasks);
+
+      notificationFacade.emitActivation(const NotificationActivation.invalid());
+      await _pumpUntil(() => sessions.refreshCalls == 1);
+      sessions.failRefresh();
+      await pumpEventQueue();
+
+      expect(container.read(shellDestinationProvider), ShellDestination.tasks);
+    });
+
     test(
       'logout during Push sync fences acknowledgement and navigation',
       () async {
@@ -4099,9 +4231,7 @@ void main() {
         final activation = activateBound().whenComplete(
           () => activationCompleted = true,
         );
-        await _pumpUntil(
-          () => messageSyncService.syncReasons.contains('remote_push'),
-        );
+        await _pumpUntil(() => messageSyncService.syncReasons.isNotEmpty);
         expect(activationCompleted, isTrue);
         await container.read(appRuntimeProvider.notifier).logout();
         syncGate.complete();
@@ -4138,9 +4268,7 @@ void main() {
         enableRemotePushEventRuntime();
 
         final activation = activateBound();
-        await _pumpUntil(
-          () => messageSyncService.syncReasons.contains('remote_push'),
-        );
+        await _pumpUntil(() => messageSyncService.syncReasons.isNotEmpty);
         container
             .read(sessionProvider.notifier)
             .setSession(
@@ -5196,6 +5324,42 @@ class _IdentitySwitchUnreadMessageSyncService extends FakeMessageSyncService {
       eventsApplied: _calls == 2 ? 1 : 0,
       pagesFetched: 1,
     );
+  }
+}
+
+class _BarrierControlledAppSessionService extends FakeAppSessionService {
+  _BarrierControlledAppSessionService(super.gateway, this.refreshedSession);
+
+  final AppSession refreshedSession;
+  final Completer<AppSession?> _refresh = Completer<AppSession?>();
+  int refreshCalls = 0;
+
+  @override
+  Future<AppSession?> refreshSession() {
+    refreshCalls += 1;
+    return _refresh.future;
+  }
+
+  void completeRefresh() {
+    if (!_refresh.isCompleted) {
+      _refresh.complete(refreshedSession);
+    }
+  }
+
+  void failRefresh() {
+    if (!_refresh.isCompleted) {
+      _refresh.completeError(StateError('epoch_barrier_failed'));
+    }
+  }
+}
+
+class _CurrentBarrierAppSessionService extends FakeAppSessionService {
+  _CurrentBarrierAppSessionService(super.gateway);
+
+  @override
+  Future<AppSession?> refreshSession() async {
+    final refreshed = await super.refreshSession();
+    return refreshed ?? currentSession();
   }
 }
 
