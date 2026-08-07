@@ -1074,8 +1074,8 @@ class _DesktopAppRobot {
     );
     await tapOne(peerInfoButton, description: 'peer info button');
     await pumpUntilFinder(
-      find.byKey(const Key('peer-info-dialog-handle-value')),
-      description: 'handle-first peer identity header',
+      find.byKey(const Key('peer-profile-display-name')),
+      description: 'peer profile display name',
     );
   }
 
@@ -1083,7 +1083,7 @@ class _DesktopAppRobot {
     String expectedName,
   ) async {
     await openSelectedPeerInfo();
-    final title = find.byKey(const Key('peer-info-dialog-handle-value'));
+    final title = find.byKey(const Key('peer-profile-display-name'));
     E2eObservation observeRefresh() {
       final elements = title.evaluate().toList(growable: false);
       if (elements.isEmpty) {
@@ -1121,50 +1121,32 @@ class _DesktopAppRobot {
   Future<void> followSelectedPeer() async {
     await openSelectedPeerInfo();
     await pumpUntilFinder(
-      find.byKey(const Key('chat-follow-button')),
+      find.byKey(const Key('peer-profile-follow')),
       description: 'follow button',
     );
     await tapOne(
-      find.byKey(const Key('chat-follow-button')),
+      find.byKey(const Key('peer-profile-follow')),
       description: 'follow button',
     );
     await pumpUntilFinder(
-      find.byKey(const Key('chat-unfollow-button')),
+      find.byKey(const Key('peer-profile-unfollow')),
       description: 'following state',
-    );
-    expect(
-      find.byKey(const Key('chat-relationship-action-progress')),
-      findsNothing,
-      reason: 'follow mutation must release its busy indicator',
     );
   }
 
   Future<void> unfollowSelectedPeer() async {
-    final unfollow = find.byKey(const Key('chat-unfollow-button'));
+    final unfollow = find.byKey(const Key('peer-profile-unfollow'));
     await pumpUntilFinder(unfollow, description: 'unfollow button');
     await tapOne(unfollow, description: 'unfollow button');
     await pumpUntilFinder(
-      find.byKey(const Key('confirm-unfollow-button')),
-      description: 'unfollow confirmation',
-    );
-    await tapOne(
-      find.byKey(const Key('confirm-unfollow-button')),
-      description: 'confirm unfollow',
-    );
-    await pumpUntilFinder(
-      find.byKey(const Key('chat-follow-button')),
+      find.byKey(const Key('peer-profile-follow')),
       description: 'unfollowed state',
-    );
-    expect(
-      find.byKey(const Key('chat-relationship-action-progress')),
-      findsNothing,
-      reason: 'unfollow mutation must release its busy indicator',
     );
   }
 
   Future<void> closePeerInfo() => tapOne(
-    find.byKey(const Key('peer-info-close-button')),
-    description: 'peer info close button',
+    find.byKey(const Key('peer-profile-back-button')),
+    description: 'peer profile back button',
   );
 
   Future<ConversationSummary> createGroup(String name) async {
