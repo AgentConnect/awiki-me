@@ -71,8 +71,7 @@ void main() {
       ];
       addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
 
-      await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await tester.pump();
+      await _pumpDesktopOnboarding(tester, AwikiMeApp(bootstrap: bootstrap));
 
       expect(find.text('Phone'), findsWidgets);
       expect(find.text('Email'), findsWidgets);
@@ -87,8 +86,7 @@ void main() {
       ];
       addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
 
-      await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await tester.pump();
+      await _pumpDesktopOnboarding(tester, AwikiMeApp(bootstrap: bootstrap));
 
       expect(find.text('手机号'), findsWidgets);
       expect(find.text('邮箱'), findsWidgets);
@@ -129,7 +127,8 @@ void main() {
       ];
       addTearDown(tester.binding.platformDispatcher.clearLocalesTestValue);
 
-      await tester.pumpWidget(
+      await _pumpDesktopOnboarding(
+        tester,
         AwikiMeApp(
           bootstrap: bootstrap,
           providerOverrides: <Override>[
@@ -137,7 +136,6 @@ void main() {
           ],
         ),
       );
-      await tester.pump();
 
       expect(find.text('Phone'), findsWidgets);
       expect(find.text('Email'), findsWidgets);
@@ -268,7 +266,8 @@ void main() {
     testWidgets(
       'keyboard shortcuts adjust display scale while input is focused',
       (tester) async {
-        await tester.pumpWidget(
+        await _pumpDesktopOnboarding(
+          tester,
           AwikiMeApp(
             bootstrap: bootstrap,
             providerOverrides: <Override>[
@@ -278,7 +277,6 @@ void main() {
             ],
           ),
         );
-        await tester.pump();
 
         BuildContext appContext() => tester.element(find.byType(AppShell));
         expect(
@@ -503,6 +501,30 @@ void main() {
       );
     });
   });
+}
+
+Future<void> _pumpDesktopOnboarding(WidgetTester tester, Widget app) async {
+  tester.view
+    ..devicePixelRatio = 1
+    ..physicalSize = const Size(1024, 768);
+  addTearDown(() {
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+  });
+
+  await tester.pumpWidget(app);
+  final phoneMethod = find.byKey(const Key('auth-mode-phone'));
+  final emailMethod = find.byKey(const Key('auth-mode-email'));
+  final input = find.byType(CupertinoTextField);
+  for (var attempt = 0; attempt < 50; attempt += 1) {
+    await tester.pump(const Duration(milliseconds: 10));
+    if (phoneMethod.evaluate().isNotEmpty &&
+        emailMethod.evaluate().isNotEmpty &&
+        input.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  fail('Desktop onboarding did not become ready within 500 ms.');
 }
 
 class _StaticConversationCore implements ConversationCorePort {

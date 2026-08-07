@@ -124,11 +124,13 @@ the Persona or canonical conversation.
 `--case display-name-fallback` is the focused App-visible fallback gate. Its
 ignored local config must select a dedicated `awiki.info` CLI peer with no
 nickname and one stable full Handle. The runner deliberately does not update
-that peer's Profile. It requires the exact full Handle in identity lookup,
-Direct row/header, Contacts, group member/event, and sender-label surfaces;
-generated user names, bare local names, DID, `Unknown`, mixed surfaces, or a
-later self-healing title fail. CLI is only the remote identity/traffic stimulus,
-not the product assertion surface.
+that peer's Profile. Identity lookup, Direct row/header, Contacts, and group
+member rows require the compact Handle as their primary name while preserving
+the exact full Handle in identity metadata. Group member-added events and
+sender labels are single-line public identity surfaces and require the exact
+full Handle. Generated user names, DID, `Unknown`, missing full identity
+metadata, mixed context policy, or a later self-healing title fail. CLI is only
+the remote identity/traffic stimulus, not the product assertion surface.
 
 `--case multi-device-remote-join` is the explicitly activated, unattended
 `DEVICE-JOIN-E2E-001/002` product-security suite. In one direction a real AWiki

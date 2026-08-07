@@ -1656,14 +1656,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('bob.awiki.ai'), findsOneWidget);
+    expect(find.text('bob'), findsOneWidget);
+    expect(find.text('@bob.awiki.ai'), findsOneWidget);
 
     final removeButton = find.bySemanticsLabel('移除成员').last;
     await tester.tap(removeButton);
     await tester.pumpAndSettle();
 
     expect(find.text('移除成员'), findsNWidgets(2));
-    expect(find.text('移除 bob.awiki.ai 后，对方将不能继续在这个群里发送消息。'), findsOneWidget);
+    expect(
+      find.text('移除 bob (@bob.awiki.ai) 后，对方将不能继续在这个群里发送消息。'),
+      findsOneWidget,
+    );
     await tester.tap(
       find.byKey(const Key('group-remove-member-confirm-button')),
     );
@@ -1671,7 +1675,8 @@ void main() {
 
     expect(gateway.lastRemovedGroupId, groupDid);
     expect(gateway.lastRemovedMemberRef, 'bob.awiki.ai');
-    expect(find.text('bob.awiki.ai'), findsNothing);
+    expect(find.text('bob'), findsNothing);
+    expect(find.text('@bob.awiki.ai'), findsNothing);
     expect(find.text('1 人'), findsOneWidget);
   });
 

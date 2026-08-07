@@ -520,10 +520,10 @@ dart run tests/e2e/runner.dart --case display-name-fallback \
 ```
 
 `display-name-fallback` 使用独立的无 nickname 远端 peer。runner 故意不执行
-Profile nickname 更新，并以该 actor 的完整 Handle 作为身份查找、Direct、
-Contacts、群成员、群系统事件和 sender label 的唯一 App 主显示名预期。这个
-suite 不能与普通 nickname fixture 共用同一个 peer，也不能用 CLI 输出代替
-App 可见标题断言。
+Profile nickname 更新。身份查找、Direct、Contacts 和群成员行以短 Handle 作为
+主名称，同时验证完整 Handle 身份信息仍存在；群系统事件和 sender label 作为
+单行公共身份场景使用完整 Handle。这个 suite 不能与普通 nickname fixture 共用
+同一个 peer，也不能用 CLI 输出代替 App 可见标题断言。
 
 Remote product suites do not start a backend. Generic App + CLI product suites
 may target the audited `awiki.info`, `agentwiki.info`, or Singapore staging
@@ -797,14 +797,14 @@ out-of-order report IDs and, for passed cases, missing, duplicate, unstable or
 out-of-order assertion evidence. The catalog also records planned gaps without
 adding them to an executable suite. `DISPLAY-NAME-E2E-002` is active in
 `display-name-fallback` and requires a real no-nickname peer with a stable full
-Handle. A recorded `awiki.info` run currently fails closed because the App
-shows the remote generated user name instead of that full Handle. The separate
+Handle. It verifies compact primary names, preserved full identity metadata,
+and exact full Handle fallback on single-line public identity surfaces. The separate
 DID-only case `DISPLAY-NAME-E2E-003` remains planned until an actor without both
 nickname and Handle is available. The release
 `restart` suite now runs `PROCESS-RESTART-E2E-001` through two distinct Flutter
 processes against one isolated state root. Deterministic
-Widget coverage already locks identity lookup and group system events to the
-public display order nickname, full Handle, then DID; it is not a substitute
+Widget coverage already locks identity lookup and group system events to their
+context-specific primary/identity policy; it is not a substitute
 for the remaining DID-only remote case.
 
 Suite `timeoutMinutes` must be greater than or equal to `estimatedMinutes`.

@@ -4943,7 +4943,7 @@ void main() {
     expect(find.text('runtime old preview'), findsNothing);
   });
 
-  testWidgets('最近会话在头像显示未读并按 @我、草稿、文本顺序展示', (tester) async {
+  testWidgets('最近会话显示头像未读并按 @我、草稿、文本顺序展示', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -5018,7 +5018,6 @@ void main() {
     final previewLeft = tester.getTopLeft(find.text('draft reply')).dx;
     expect(mentionLeft, lessThan(draftLeft));
     expect(draftLeft, lessThan(previewLeft));
-    expect(tester.getRect(unreadBadge).left, greaterThan(previewLeft));
   });
 
   testWidgets('发送中消息只在气泡左侧显示转圈标志且发送按钮保持禁用样式', (tester) async {

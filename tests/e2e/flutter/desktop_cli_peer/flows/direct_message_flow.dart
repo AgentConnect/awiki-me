@@ -37,6 +37,9 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   final conversation = await robot.startDirectConversation(
     config.cliHandle,
     expectedPrimaryDisplayName: config.expectedCliPeerDisplayName,
+    expectedFullHandle: config.e2eCase.runsDisplayNameFallback
+        ? config.cliPeerFullHandle
+        : null,
   );
   final conversationId = conversation.conversationId;
   expect(
@@ -457,6 +460,9 @@ Future<_DirectRegressionResult> _verifyDirectTextRegression({
   final restartedConversation = await robot.startDirectConversation(
     config.cliHandle,
     expectedPrimaryDisplayName: config.expectedCliPeerDisplayName,
+    expectedFullHandle: config.e2eCase.runsDisplayNameFallback
+        ? config.cliPeerFullHandle
+        : null,
   );
   expect(restartedConversation.conversationId, conversationId);
   expect(

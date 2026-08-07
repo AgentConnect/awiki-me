@@ -212,7 +212,7 @@ void main() {
     expect(state.forDid('did:test:alice-old'), isNull);
   });
 
-  test('远端 profile 没有昵称时保留 Handle 作为展示回退', () {
+  test('远端 profile 没有昵称时主名称压缩 Handle 并保留完整身份', () {
     final container = ProviderContainer(
       overrides: <Override>[
         directoryApplicationServiceProvider.overrideWithValue(
@@ -245,7 +245,14 @@ void main() {
           ),
         ),
       ),
-      'bob.awiki.ai',
+      'bob',
+    );
+    expect(
+      container
+          .read(peerDisplayProfileProvider)
+          .forDid('did:wba:awiki.ai:user:bob:e1_key')
+          ?.handle,
+      '@bob.awiki.ai',
     );
   });
 

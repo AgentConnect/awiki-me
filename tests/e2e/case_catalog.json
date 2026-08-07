@@ -749,16 +749,16 @@
     },
     {
       "caseId": "DISPLAY-NAME-E2E-002",
-      "feature": "Full-Handle fallback consistency across App surfaces",
+      "feature": "Compact Handle primary names with full identity preservation",
       "layer": "product_ui",
       "preconditions": "A dedicated awiki.info CLI peer has no nickname and has one stable full Handle distinct from its DID and generated user name.",
       "action": "Resolve the peer and exercise identity lookup, Direct, Contacts, group member, group system-event, and sender-label surfaces through the App.",
       "exactOracles": [
-        "Identity lookup, Direct row/header, and Contact row use the exact full Handle when nickname is unavailable.",
-        "Group member, member-added system event, and incoming sender label use the same exact full Handle."
+        "Identity lookup, Direct row/header, and Contact row use the compact Handle as the primary name while identity lookup preserves the exact full Handle.",
+        "Group member rows use the compact Handle plus the exact full Handle identity; single-line member-added events and incoming sender labels use the exact full Handle."
       ],
       "negativeChecks": [
-        "A bare local name, generated user name, compact/full DID, Unknown, mixed fallback, transient wrong first title, or later self-healing fails."
+        "A generated user name, compact/full DID, Unknown, missing full identity metadata, wrong context policy, transient wrong first title, or later self-healing fails."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "fixed_account_pool_residual_ledger",
@@ -772,21 +772,21 @@
       "catalogStatus": "active",
       "assertionContract": {
         "assertionIds": [
-          "DISPLAY-NAME-E2E-002:lookup_direct_and_contact_exact_full_handle",
-          "DISPLAY-NAME-E2E-002:group_member_event_and_sender_exact_full_handle",
-          "DISPLAY-NAME-E2E-002:bare_name_did_unknown_or_mixed_fallback_rejected"
+          "DISPLAY-NAME-E2E-002:compact_primary_name_with_full_identity_preserved",
+          "DISPLAY-NAME-E2E-002:group_primary_and_public_identity_contexts_exact",
+          "DISPLAY-NAME-E2E-002:generated_name_did_unknown_or_missing_identity_rejected"
         ],
         "exactOracleAssertions": [
           [
-            "DISPLAY-NAME-E2E-002:lookup_direct_and_contact_exact_full_handle"
+            "DISPLAY-NAME-E2E-002:compact_primary_name_with_full_identity_preserved"
           ],
           [
-            "DISPLAY-NAME-E2E-002:group_member_event_and_sender_exact_full_handle"
+            "DISPLAY-NAME-E2E-002:group_primary_and_public_identity_contexts_exact"
           ]
         ],
         "negativeCheckAssertions": [
           [
-            "DISPLAY-NAME-E2E-002:bare_name_did_unknown_or_mixed_fallback_rejected"
+            "DISPLAY-NAME-E2E-002:generated_name_did_unknown_or_missing_identity_rejected"
           ]
         ]
       }

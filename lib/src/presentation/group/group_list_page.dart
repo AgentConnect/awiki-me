@@ -11,6 +11,7 @@ import '../../app/ui_feedback.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_identity.dart';
 import '../../domain/entities/group_summary.dart';
+import '../../domain/services/peer_display_name_resolver.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../shared/awiki_me_design.dart';
@@ -990,11 +991,12 @@ Future<void> showRemoveGroupMemberDialog({
   final memberTitle = ref.read(
     peerDisplayNameProvider(_memberDisplayNameRequest(member)),
   );
+  final actionLabel = _memberDestructiveActionLabel(member, memberTitle);
   await AppNavigator.showDialog<void>(
     context,
     (dialogContext) => AppConfirmationDialog(
       title: context.l10n.groupRemoveMember,
-      message: context.l10n.groupRemoveMemberContent(memberTitle),
+      message: context.l10n.groupRemoveMemberContent(actionLabel),
       confirmLabel: context.l10n.groupRemoveMember,
       confirmButtonKey: const Key('group-remove-member-confirm-button'),
       destructive: true,
@@ -1034,6 +1036,24 @@ String? _memberIdentityLabel(GroupMemberSummary member) {
     return null;
   }
   return '@$handle';
+}
+
+String _memberDestructiveActionLabel(
+  GroupMemberSummary member,
+  String displayName,
+) {
+  final title = displayName.trim();
+  final handle = member.handle.trim();
+  final identity = handle.isNotEmpty ? '@$handle' : member.did.trim();
+  if (identity.isEmpty ||
+      PeerDisplayNameResolver.cleanHandle(identity).toLowerCase() ==
+          PeerDisplayNameResolver.cleanHandle(title).toLowerCase()) {
+    return title;
+  }
+  if (title.isEmpty) {
+    return identity;
+  }
+  return '$title ($identity)';
 }
 
 String _memberProtocolRef(GroupMemberSummary member) {

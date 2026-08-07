@@ -116,15 +116,21 @@ class _DesktopCliPeerSmokeConfig {
   final String? processRestartHandoffPath;
   final _DesktopPerformanceRunConfig performance;
 
-  String get expectedCliPeerDisplayName {
-    if (!e2eCase.runsDisplayNameFallback) {
-      return _nicknameFixtureDisplayName;
-    }
+  String get cliPeerFullHandle {
     final normalized = normalizeDidOrHandleInput(cliHandle).toLowerCase();
     return normalized.contains('.')
         ? normalized
         : '$normalized.${environment.didDomain.toLowerCase()}';
   }
+
+  String get expectedCliPeerDisplayName => e2eCase.runsDisplayNameFallback
+      ? PeerDisplayNameResolver.compactHandle(cliPeerFullHandle)
+      : _nicknameFixtureDisplayName;
+
+  String get expectedCliPeerPublicIdentityName =>
+      e2eCase.runsDisplayNameFallback
+      ? cliPeerFullHandle
+      : expectedCliPeerDisplayName;
 
   List<String> get secrets => <String>[
     otpPhone,

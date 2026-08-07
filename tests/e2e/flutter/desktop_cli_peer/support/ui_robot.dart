@@ -73,6 +73,7 @@ class _DesktopAppRobot {
   Future<ConversationSummary> startDirectConversation(
     String peerHandle, {
     String expectedPrimaryDisplayName = _nicknameFixtureDisplayName,
+    String? expectedFullHandle,
   }) async {
     final macQuickActionsButton = find.byKey(
       const Key('conversation-quick-actions-button'),
@@ -149,6 +150,22 @@ class _DesktopAppRobot {
       timeout: const Duration(seconds: 90),
       observe: observeIdentityPreviewTitle,
     );
+    final fullHandle = expectedFullHandle?.trim() ?? '';
+    if (fullHandle.isNotEmpty) {
+      final expectedHandle = '@${normalizeDidOrHandleInput(fullHandle)}';
+      final handle = find.byKey(const Key('identity-preview-handle-value'));
+      await pumpUntilObservation(
+        description: 'identity preview full Handle',
+        timeout: const Duration(seconds: 90),
+        observe: () => observeExactScopedText(
+          widgets: handle.evaluate().map((element) => element.widget),
+          expectedText: expectedHandle,
+          pendingCode: 'identity_preview_full_handle_pending',
+          exactOneCode: 'identity_preview_full_handle_not_exact_one',
+          mismatchCode: 'identity_preview_full_handle_mismatch',
+        ),
+      );
+    }
     await pumpUntilFinder(
       find.byKey(const Key('identity-start-chat-button')),
       description: 'resolved start-chat action',
@@ -1020,6 +1037,7 @@ class _DesktopAppRobot {
   Future<void> expectGroupMemberDisplayName({
     required GroupMemberSummary member,
     required String expectedName,
+    String? expectedFullHandle,
   }) async {
     await tapOne(
       find.byKey(const Key('chat-peer-info-avatar-button')),
@@ -1058,6 +1076,18 @@ class _DesktopAppRobot {
       description: 'group member display title',
       observe: observeTitle,
     );
+    final fullHandle = expectedFullHandle?.trim() ?? '';
+    if (fullHandle.isNotEmpty) {
+      final identity = find.descendant(
+        of: dialog,
+        matching: find.text('@${normalizeDidOrHandleInput(fullHandle)}'),
+      );
+      await pumpUntilFinder(
+        identity,
+        description: 'group member full Handle identity',
+      );
+      expect(identity, findsOneWidget);
+    }
     await tapOne(
       find.byKey(const Key('peer-info-close-button')),
       description: 'group info close button',

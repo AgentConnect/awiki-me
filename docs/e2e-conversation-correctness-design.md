@@ -38,7 +38,7 @@
 | 入站首消息创建 canonical Direct | 已通过 `awiki.info` focused remote | `INBOUND-FIRST-CONV-E2E-001`；run `20260715211223-hkff635twu` |
 | Direct/Group/Contact/列表/未读/顺序/昵称组合 | v6 24-case strict full 通过；v7 加入隐藏态三消息 burst 后捕获 App 可见错序 | v6 run `20260716022319-hkfnqm6sau`（24/24 passed）；v7 run `20260716031319-hkfp48kim6` 失败于 `MSG-SEQUENCE-E2E-001` 的 `wrong_message_id_or_order`；更早 run `20260716000225-hkfjut3j6i` 还捕获过 `CONV-LIST-E2E-001` 会话相对顺序未更新 |
 | 群连续消息 sender label | 已按可见消息簇验证 | 同一远端发送人的连续气泡只在消息簇首条显示一次昵称；群信息弹窗另行验证真实成员行，不能用 Provider 代替 |
-| 无 nickname、具备完整 Handle 的 fallback actor | 已注册独立远端 suite，并捕获真实 App 显示错误 | `DISPLAY-NAME-E2E-002`；最新 run `20260716034018-hkfpv0cxix` 在身份查找首个主标题失败于 `visible_ui / identity_preview_primary_name_mismatch`，证明 App 使用了服务端 generated user name，而不是完整 Handle |
+| 无 nickname、具备完整 Handle 的 fallback actor | 已注册独立远端 suite；已按短主名称与完整身份信息拆分 Oracle | `DISPLAY-NAME-E2E-002`；历史 run `20260716034018-hkfpv0cxix` 曾按旧“完整 Handle 作为所有主标题”契约失败，当前契约要求主标题使用短 Handle，并在身份信息和单行公共身份场景保留完整 Handle |
 | nickname/Handle 均不可用的 DID-only actor | 确定性 UI contract 已落地；真实远端 fixture 未落地 | `DISPLAY-NAME-E2E-003` 保持 planned，不以普通 Handle actor 伪造通过 |
 | 真实第二 Flutter 进程冷启动 | 已落地并通过 `awiki.info` remote | runner 顺序启动两个不同 PID 的 Flutter integration-test 进程，复用同一隔离 state root；最新 v7 run `20260716033433-hkfpparzyc` |
 | Runtime Agent 卡片入口 | 未落地到 required gate | 生产入口只对已安装 daemon 下的 Runtime Agent 可达，需要独立 daemon fixture；不伪装成普通联系人入口覆盖 |
@@ -69,12 +69,11 @@ canonical ID/正文顺序及无跨会话泄漏。run `20260716031319-hkfp48kim6`
 与相邻消息的毫秒时间发生反序风险。这是新严格用例发现的 App 展示/投影问题，
 不是 CLI 产品断言，也不能通过等待“最终都包含”来降级成通过。
 
-独立 `display-name-fallback` 远端运行还捕获到一个新的 App 侧问题：测试
-fixture 没有 nickname，但有稳定完整 Handle；服务端 Profile 把内部 generated
-user name 作为 `display_name` 返回后，App 的身份查找结果把它直接当成主标题，
-没有回退到完整 Handle。失败报告现在携带 `caseId`，所以该首失败被准确归属到
-`DISPLAY-NAME-E2E-002`，而不是误报为 `not_run`。CLI 在该 suite 中只提供身份和
-远端流量，不发布 nickname，也不作为显示名通过依据。
+独立 `display-name-fallback` 远端运行曾按旧契约捕获身份查找主标题不等于完整
+Handle。后续产品设计把可见主名称调整为短 Handle，同时要求身份查找和群成员行
+保留完整 Handle 第二身份信息，并要求群系统事件、sender label 等单行公共身份场景
+使用完整 Handle。`DISPLAY-NAME-E2E-002` 已据此拆分上下文 Oracle；CLI 在该 suite
+中只提供身份和远端流量，不发布 nickname，也不作为显示名通过依据。
 
 未完成项继续保留为明确边界；不得因为 focused flow 通过就宣称整个方案完成，也不得提前注册 `conversation-correctness` required suite。
 
@@ -246,12 +245,12 @@ preview 至少覆盖纯文本、群消息、Mention、附件和不应显示的 c
 
 ### 5.4 用户名一致性
 
-`requireConsistentPeerDisplayName` 按现有架构中的唯一优先级计算预期：
+`requireConsistentPeerDisplayName` 按现有架构中的主名称优先级计算预期：
 
 ```text
 local note
   > nickname
-  > full Handle
+  > compact Handle
   > historical sender snapshot (only unresolved/missing)
   > compact DID
   > unknown
@@ -272,9 +271,9 @@ local note
 Oracle。尤其 Agent 当前允许使用稳定 Handle 作为 `@handle` token；本轮只验证
 候选身份唯一、可点击且结构化 target 正确，不用 nickname 断言改写协议寻址语义。
 
-当 nickname 存在时，相同 scope 内还要明确断言 Handle、DID 和 `Unknown` 没有被当作主显示名。当 nickname 不存在时，所有显示面统一 fallback 到 full Handle。
+当 nickname 存在时，相同 scope 内还要明确断言 Handle、DID 和 `Unknown` 没有被当作主显示名。当 nickname 不存在时，普通主名称统一 fallback 到短 Handle；身份查找、群成员和用户资料必须同时保留完整 Handle 身份信息。
 
-身份查找结果和群系统事件的产品契约已明确为“昵称 > 完整 Handle > DID”。DID 是最后 fallback，在 UI 中可使用 compact formatter 缩略显示；不得在 nickname 或 Handle 已知时优先显示 DID。这两类显示仍必须从同一 Persona Profile 投影解析，不能由 Widget 自行拼接。
+身份查找结果的主名称使用“昵称 > 短 Handle > DID”，并在第二身份行保留完整 Handle；群系统事件和 sender label 等无法承载第二身份行的单行公共身份场景使用“昵称 > 完整 Handle > DID”。DID 是最后 fallback，在 UI 中可使用 compact formatter 缩略显示；不得在 nickname 或 Handle 已知时优先显示 DID。这些显示仍必须从同一 Persona Profile 投影解析，不能由 Widget 自行拼接。
 
 ### 5.5 首帧和过程稳定性
 
@@ -297,7 +296,7 @@ Oracle。尤其 Agent 当前允许使用稳定 Handle 作为 `@handle` token；�
 | P0 | `UNREAD-MULTI-E2E-001` | A/B 分别收到 2/1 条，打开 A，再 reconnect | 行数不准、总数不准、清 A 误清 B、未读回弹 |
 | P0 | `MSG-SEQUENCE-E2E-001` | App/CLI 交错 + CLI burst + reconnect/backfill | 重复、缺失、额外、错序、跨会话泄漏 |
 | P0 | `DISPLAY-NAME-E2E-001` | nickname 与 Handle/DID 明显不同，比对所有展示面，包括身份查找结果和群系统事件 | 页面间 nickname/Handle/DID 不一致 |
-| P0 | `DISPLAY-NAME-E2E-002` | 无 nickname 但有稳定完整 Handle 的独立 actor，比对身份查找、Direct、Contacts、群成员、群事件和 sender label | generated user name、bare Handle、DID、Unknown 或不同展示面混用，而不是统一完整 Handle |
+| P0 | `DISPLAY-NAME-E2E-002` | 无 nickname 但有稳定完整 Handle 的独立 actor，比对身份查找、Direct、Contacts、群成员、群事件和 sender label | 主名称未使用短 Handle、完整身份信息丢失、单行公共身份未使用完整 Handle，或 generated user name、DID、Unknown 等错误 fallback |
 | P0 | `DISPLAY-NAME-E2E-003` | nickname/Handle 都不可用的 DID-only actor | 未在仅有 DID 时统一使用 DID fallback；真实 fixture 未提供前保持 planned |
 | P0 | `DISPLAY-NAME-REG-001` | 已缓存 nickname 后重开会话，逐帧观测 | `Unknown/Handle -> nickname` 闪烁 |
 | P1 | `PROCESS-RESTART-E2E-001` | 同一隔离 state root 下分两个 Flutter 进程创建与恢复 | 真实重启后重复、丢行、未读或 nickname 丢失 |

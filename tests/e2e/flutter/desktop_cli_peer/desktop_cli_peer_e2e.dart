@@ -542,9 +542,9 @@ void runDesktopCliPeerE2e({
       if (selectedCase.runsDisplayNameFallback) {
         await _attestPassedCases(<String, List<String>>{
           'DISPLAY-NAME-E2E-002': const <String>[
-            'lookup_direct_and_contact_exact_full_handle',
-            'group_member_event_and_sender_exact_full_handle',
-            'bare_name_did_unknown_or_mixed_fallback_rejected',
+            'compact_primary_name_with_full_identity_preserved',
+            'group_primary_and_public_identity_contexts_exact',
+            'generated_name_did_unknown_or_missing_identity_rejected',
           ],
         });
       }

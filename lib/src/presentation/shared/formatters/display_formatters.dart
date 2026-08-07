@@ -72,9 +72,8 @@ class DidDisplayFormatter {
     return name;
   }
 
-  /// Identity lookup is a person-finding surface: nickname is primary, then
-  /// full Handle, then DID. The Handle remains useful as secondary identity
-  /// metadata only when it differs from the primary title.
+  /// Identity lookup uses the compact visible name as its title while keeping
+  /// the complete Handle as secondary identity metadata.
   static String identityLookupTitle(UserProfile profile) =>
       profileName(profile);
 

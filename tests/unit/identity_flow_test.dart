@@ -125,7 +125,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('身份查找主标题在无昵称时依次回退到 Handle 和 DID', (tester) async {
+  testWidgets('身份查找无昵称时显示短 Handle 并保留完整身份', (tester) async {
     const handleOnly = UserProfile(
       did: 'did:wba:awiki.info:user:handle-only:e1_key',
       displayName: '',
@@ -146,6 +146,7 @@ void main() {
       required UserProfile profile,
       required String query,
       required String expectedTitle,
+      String? expectedSecondaryHandle,
     }) async {
       final gateway = FakeAwikiGateway()
         ..publicProfilesByQuery = <String, UserProfile>{query: profile};
@@ -174,10 +175,18 @@ void main() {
             .data,
         expectedTitle,
       );
-      expect(
-        find.byKey(const Key('identity-preview-handle-value')),
-        findsNothing,
+      final secondaryHandle = find.byKey(
+        const Key('identity-preview-handle-value'),
       );
+      if (expectedSecondaryHandle == null) {
+        expect(secondaryHandle, findsNothing);
+      } else {
+        expect(secondaryHandle, findsOneWidget);
+        expect(
+          tester.widget<Text>(secondaryHandle).data,
+          expectedSecondaryHandle,
+        );
+      }
       expect(find.text(profile.did), findsWidgets);
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
@@ -186,7 +195,8 @@ void main() {
     await expectLookupTitle(
       profile: handleOnly,
       query: 'handle-only.awiki.info',
-      expectedTitle: 'handle-only.awiki.info',
+      expectedTitle: 'handle-only',
+      expectedSecondaryHandle: '@handle-only.awiki.info',
     );
     await expectLookupTitle(
       profile: didOnly,

@@ -39,10 +39,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   if (appFullHandle == null) {
     fail('App Handle cannot be qualified from its authenticated DID.');
   }
-  final cliHandle = config.cliHandle.trim().toLowerCase();
-  final cliFullHandle = cliHandle.contains('.')
-      ? cliHandle
-      : '$cliHandle.${config.environment.didDomain}';
+  final cliFullHandle = config.cliPeerFullHandle;
   final groupName = 'AWiki E2E ${config.runId} $nonce';
   final conversation = await robot.createGroup(groupName);
   final groupDid = conversation.groupId!.trim();
@@ -100,6 +97,8 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
       .read(peerDisplayProfileProvider)
       .forDid(cliMemberDid);
   final expectedCliMemberName = config.expectedCliPeerDisplayName;
+  final expectedCliPublicIdentityName =
+      config.expectedCliPeerPublicIdentityName;
   if (!config.e2eCase.runsDisplayNameFallback) {
     final cliMemberNickname = cliProfile?.displayName?.trim() ?? '';
     final compactCliDid = PeerDisplayNameResolver.compactDid(cliMemberDid);
@@ -112,17 +111,25 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
         'configured for the product-name oracle.',
       );
     }
-  } else if (expectedCliMemberName != cliFullHandle) {
-    fail('The Handle fallback oracle must use the exact full Handle.');
+  } else if (expectedCliMemberName !=
+          PeerDisplayNameResolver.compactHandle(cliFullHandle) ||
+      expectedCliPublicIdentityName != cliFullHandle) {
+    fail(
+      'The Handle fallback oracle must use a compact primary name and retain '
+      'the exact full Handle for public identity surfaces.',
+    );
   }
   await robot.expectGroupMemberDisplayName(
     member: cliMember,
     expectedName: expectedCliMemberName,
+    expectedFullHandle: config.e2eCase.runsDisplayNameFallback
+        ? cliFullHandle
+        : null,
   );
   await robot.expectMemberAddedSystemEvent(
     conversationId: conversation.conversationId,
     subjectDid: cliMemberDid,
-    expectedMemberName: expectedCliMemberName,
+    expectedMemberName: expectedCliPublicIdentityName,
   );
 
   final appGroupText = 'e2e app group ${config.runId} $nonce';
@@ -263,7 +270,7 @@ Future<_GroupRegressionResult> _verifyGroupTextRegression({
   await robot.expectMessageSenderIdentityProjection(
     conversationId: conversation.conversationId,
     message: cliGroupMessage,
-    expectedName: expectedCliMemberName,
+    expectedName: expectedCliPublicIdentityName,
   );
   await _waitForUiConversationUnread(
     robot: robot,
