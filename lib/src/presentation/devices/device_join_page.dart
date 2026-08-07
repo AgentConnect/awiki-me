@@ -407,6 +407,12 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
         if (mounted) {
           setState(() => _recoveryActivationProgress = recoveryProgress);
         }
+        if (recoveryProgress.phase == DeviceJoinPhase.authorized &&
+            recoveryProgress.remoteState == DeviceJoinRemoteState.consumed) {
+          await ref
+              .read(appRuntimeProvider.notifier)
+              .activateJoinedMember(recoveryProgress.did);
+        }
       } else {
         await ref
             .read(appRuntimeProvider.notifier)
@@ -439,6 +445,12 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
           );
       if (mounted) {
         setState(() => _recoveryActivationProgress = recoveryProgress);
+      }
+      if (recoveryProgress.phase == DeviceJoinPhase.authorized &&
+          recoveryProgress.remoteState == DeviceJoinRemoteState.consumed) {
+        await ref
+            .read(appRuntimeProvider.notifier)
+            .activateJoinedMember(recoveryProgress.did);
       }
     } catch (_) {
       if (mounted) setState(() => _activationFailed = true);

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'active_session_store.dart';
+import 'app_bootstrap_epoch_barrier.dart';
 import 'models/app_session.dart';
 import 'ports/auth_core_port.dart';
 import 'ports/identity_core_port.dart';
@@ -145,6 +146,8 @@ class ImCoreAppSessionService
     ActiveSessionStore? activeSessionStore,
     String? expectedDidDomain,
     RealtimeCorePort? realtime,
+    AppBootstrapEpochBarrierPort bootstrapEpochBarrier =
+        const NoopAppBootstrapEpochBarrier(),
     Duration realtimeCleanupTimeout = _defaultRealtimeCleanupTimeout,
   }) : _runtime = runtime,
        _identities = identities,
@@ -153,6 +156,7 @@ class ImCoreAppSessionService
        _activeSessionStore = activeSessionStore,
        _expectedDidDomain = _normalizeDidDomain(expectedDidDomain),
        _realtime = realtime,
+       _bootstrapEpochBarrier = bootstrapEpochBarrier,
        _realtimeCleanupTimeout = realtimeCleanupTimeout;
 
   final ImCoreRuntimePort _runtime;
@@ -162,6 +166,7 @@ class ImCoreAppSessionService
   final ActiveSessionStore? _activeSessionStore;
   final String? _expectedDidDomain;
   final RealtimeCorePort? _realtime;
+  final AppBootstrapEpochBarrierPort _bootstrapEpochBarrier;
   final Duration _realtimeCleanupTimeout;
 
   AppSession? _current;
@@ -178,9 +183,12 @@ class ImCoreAppSessionService
 
   Future<AppSession?> _restoreSession(AppSessionTransition transition) async {
     _requireCurrentTransition(transition);
-    if (_current != null) {
+    final current = _current;
+    if (current != null) {
+      final ready = await _revalidateCurrentSessionEpoch(current, transition);
+      _current = ready.session;
       markSessionTransitionCommitted(transition);
-      return _current;
+      return ready.session;
     }
     await _runtime.open();
     _requireCurrentTransition(transition);
@@ -373,6 +381,17 @@ class ImCoreAppSessionService
       Error.throwWithStackTrace(error, stackTrace);
     }
     final boundIdentity = identity.copyWith(accountBinding: accountBinding);
+    try {
+      await _bootstrapEpochBarrier.ensureReady(
+        identity: boundIdentity,
+        binding: accountBinding,
+      );
+      _requireCurrentTransition(transition);
+    } catch (error, stackTrace) {
+      _requireCurrentTransition(transition);
+      await _clearFailedActivationState();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
     late final AppSession candidate;
     try {
       final auth = await _auth.ensureSession();
@@ -435,11 +454,16 @@ class ImCoreAppSessionService
   }
 
   Future<AppSession?> _refreshSession(AppSessionTransition? transition) async {
-    final session = _current;
+    var session = _current;
     if (session == null ||
         transition == null ||
         !isSessionTransitionCurrent(transition)) {
       return null;
+    }
+    final ready = await _revalidateCurrentSessionEpoch(session, transition);
+    session = ready.session;
+    if (ready.reactivated) {
+      return session;
     }
     final auth = await _auth.refreshSession();
     if (!isSessionTransitionCurrent(transition) ||
@@ -453,6 +477,52 @@ class ImCoreAppSessionService
     );
     _current = refreshed;
     return refreshed;
+  }
+
+  Future<({AppSession session, bool reactivated})>
+  _revalidateCurrentSessionEpoch(
+    AppSession session,
+    AppSessionTransition transition,
+  ) async {
+    _requireCurrentTransition(transition);
+    try {
+      final binding = await _identities.activeSyncAccountBinding();
+      _requireCurrentTransition(transition);
+      if (binding.ownerIdentityId != session.identityId) {
+        throw StateError('active_sync_account_binding_identity_mismatch');
+      }
+      if (binding.currentDid != session.did) {
+        final latest = await _localIdentityFor(
+          session.identityId,
+          allowResolve: false,
+        );
+        _requireCurrentTransition(transition);
+        if (latest == null) {
+          throw StateError('active_sync_account_binding_identity_missing');
+        }
+        _assertActiveSyncAccountBinding(latest, binding);
+        final activated = await _activateIdentity(
+          latest,
+          transition: transition,
+        );
+        return (session: activated, reactivated: true);
+      }
+      _assertActiveSyncAccountBinding(session, binding);
+      final bound = session.copyWith(accountBinding: binding);
+      await _bootstrapEpochBarrier.ensureReady(
+        identity: bound,
+        binding: binding,
+      );
+      _requireCurrentTransition(transition);
+      _current = bound;
+      return (session: bound, reactivated: false);
+    } catch (error, stackTrace) {
+      if (!isSessionTransitionCurrent(transition)) {
+        throw const AppSessionTransitionSuperseded();
+      }
+      await _failClosedCurrentSession();
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   @override
@@ -692,6 +762,19 @@ class ImCoreAppSessionService
       await _activeSessionStore?.clearActiveIdentityId();
     } catch (_) {
       // The activation failure remains authoritative.
+    }
+  }
+
+  Future<void> _failClosedCurrentSession() async {
+    _current = null;
+    clearCommittedSessionTransition();
+    try {
+      await _activeSessionStore?.clearActiveIdentityId();
+    } catch (_) {
+      // Preserve the epoch validation failure.
+    }
+    if (_realtime?.isRunning ?? false) {
+      await _stopRealtimeBestEffort();
     }
   }
 }

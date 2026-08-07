@@ -65,6 +65,7 @@ extension AppSessionLegacyIdentity on AppSession {
       did: did,
       credentialName: localAlias ?? identityId,
       displayName: displayName,
+      localIdentityId: identityId,
       handle: handle,
       jwtToken: jwtToken,
       accountBinding: accountBinding,

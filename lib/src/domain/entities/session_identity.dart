@@ -21,6 +21,7 @@ class SessionIdentity {
     required this.did,
     required this.credentialName,
     required this.displayName,
+    this.localIdentityId,
     this.handle,
     this.jwtToken,
     this.accountBinding,
@@ -29,6 +30,10 @@ class SessionIdentity {
   final String did;
   final String credentialName;
   final String displayName;
+
+  /// Exact Core owner identity ID. Unlike [credentialName], this is never a
+  /// user-facing local alias and is safe for stable-owner operation lookup.
+  final String? localIdentityId;
   final String? handle;
   final String? jwtToken;
 

@@ -165,6 +165,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   Future<void>? _authRevocationFenceOperation;
   _SessionEpochOperation? _authenticatedRefreshOperation;
   _SessionEpochOperation? _realtimeRecoveryOperation;
+  _SessionEpochBarrierOperation? _sessionEpochBarrierOperation;
   int _busyOperationCount = 0;
   Future<void> _e2eeInitializationTail = Future<void>.value();
   SessionEpoch? _lastAuthenticatedRefreshEpoch;
@@ -905,12 +906,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (epoch == null) {
       return;
     }
-    _startForegroundCatchUp();
-    _ensureRealtimeConnected(epoch);
-    unawaited(_refreshRemotePushBestEffort(epoch));
-    unawaited(_resumeRemotePushMessageSyncBestEffort(epoch));
-    _scheduleReliableSync('app_resumed');
-    unawaited(_refreshAuthenticatedDataInBackground());
+    unawaited(_resumeForegroundAfterBarrier(epoch));
   }
 
   void _handleRealtimeStatusChanged(
@@ -944,8 +940,35 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     if (_syncAuthRevoked) {
       return;
     }
+    final epoch = ref.read(sessionProvider).activeEpoch;
+    if (epoch != null) {
+      unawaited(_resumeRealtimeAfterBarrier(epoch));
+    }
+  }
+
+  Future<void> _resumeForegroundAfterBarrier(SessionEpoch epoch) async {
+    if (!await _refreshSessionEpochBarrier(epoch) ||
+        !_isSessionEpochActive(epoch) ||
+        ref.read(appLifecycleProvider) != AppLifecycleState.resumed) {
+      return;
+    }
+    _startForegroundCatchUp();
+    _ensureRealtimeConnected(epoch);
+    unawaited(_refreshRemotePushBestEffort(epoch));
+    unawaited(_resumeRemotePushMessageSyncBestEffort(epoch));
+    _scheduleReliableSync('app_resumed');
+    unawaited(_refreshAuthenticatedDataInBackground(epoch: epoch));
+  }
+
+  Future<void> _resumeRealtimeAfterBarrier(SessionEpoch epoch) async {
+    if (!await _refreshSessionEpochBarrier(epoch) ||
+        !_isSessionEpochActive(epoch) ||
+        ref.read(realtimeConnectionStatusProvider).valueOrNull !=
+            RealtimeConnectionStatus.connected) {
+      return;
+    }
     _scheduleReliableSync('realtime_reconnected');
-    unawaited(_refreshAuthenticatedDataInBackground());
+    unawaited(_refreshAuthenticatedDataInBackground(epoch: epoch));
   }
 
   void _ensureRealtimeConnected(SessionEpoch epoch) {
@@ -1015,38 +1038,53 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   }
 
   Future<void> _runRealtimeRecovery(SessionEpoch epoch) async {
-    try {
-      if (!_isSessionEpochActive(epoch)) {
-        return;
-      }
-      final refreshed = await ref
-          .read(appSessionServiceProvider)
-          .refreshSession();
-      if (!_isSessionEpochActive(epoch)) {
-        return;
-      }
-      if (refreshed != null) {
-        ref
-            .read(sessionProvider.notifier)
-            .updateSessionMetadataIfCurrent(
-              _legacySessionFromAppSession(refreshed),
-            );
-        if (!_isSessionEpochActive(epoch)) {
-          return;
-        }
-      }
-      await _refreshAuthenticatedDataInBackground(epoch: epoch);
-      if (!_isSessionEpochActive(epoch)) {
-        return;
-      }
-      if (refreshed != null) {
-        _ensureRealtimeConnected(epoch);
-      }
-    } catch (_) {
-      if (_isSessionEpochActive(epoch)) {
-        await _refreshAuthenticatedDataInBackground(epoch: epoch);
-      }
+    if (!await _refreshSessionEpochBarrier(epoch) ||
+        !_isSessionEpochActive(epoch)) {
+      return;
     }
+    await _refreshAuthenticatedDataInBackground(epoch: epoch);
+    if (_isSessionEpochActive(epoch)) {
+      _ensureRealtimeConnected(epoch);
+    }
+  }
+
+  Future<bool> _refreshSessionEpochBarrier(SessionEpoch epoch) {
+    if (!_isSessionEpochActive(epoch)) {
+      return Future<bool>.value(false);
+    }
+    final active = _sessionEpochBarrierOperation;
+    if (active != null && active.epoch == epoch) {
+      return active.operation;
+    }
+    late final Future<bool> operation;
+    operation =
+        (() async {
+          try {
+            final refreshed = await ref
+                .read(appSessionServiceProvider)
+                .refreshSession();
+            if (refreshed == null || !_isSessionEpochActive(epoch)) {
+              return false;
+            }
+            final updated = ref
+                .read(sessionProvider.notifier)
+                .updateSessionMetadataIfCurrent(
+                  _legacySessionFromAppSession(refreshed),
+                );
+            return updated && _isSessionEpochActive(epoch);
+          } on Object {
+            return false;
+          }
+        })().whenComplete(() {
+          if (identical(_sessionEpochBarrierOperation?.operation, operation)) {
+            _sessionEpochBarrierOperation = null;
+          }
+        });
+    _sessionEpochBarrierOperation = _SessionEpochBarrierOperation(
+      epoch: epoch,
+      operation: operation,
+    );
+    return operation;
   }
 
   bool _isSessionEpochActive(SessionEpoch epoch) {
@@ -1476,7 +1514,9 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     } on Object {
       // Routing remains available even when a platform shell is absent.
     }
-    if (!_isNotificationEpochCurrent(epoch)) {
+    if (epoch == null ||
+        !await _refreshSessionEpochBarrier(epoch) ||
+        !_isNotificationEpochCurrent(epoch)) {
       return;
     }
     ref
@@ -1484,8 +1524,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
         .select(ShellDestination.messages);
     ref.read(selectedConversationProvider.notifier).clearSelection();
     final target = activation.target;
-    if (epoch == null ||
-        target == null ||
+    if (target == null ||
         target.storageScopeId !=
             ref.read(activeAppTenantProvider).storageScopeId ||
         target.ownerDid != epoch.ownerDid) {
@@ -1892,6 +1931,16 @@ class _SessionEpochOperation {
 
   final SessionEpoch epoch;
   final Future<void> operation;
+}
+
+class _SessionEpochBarrierOperation {
+  const _SessionEpochBarrierOperation({
+    required this.epoch,
+    required this.operation,
+  });
+
+  final SessionEpoch epoch;
+  final Future<bool> operation;
 }
 
 class _RealtimeSyncSessionFence {

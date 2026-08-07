@@ -358,31 +358,6 @@ class ProductDeviceRegistryEpochResetReceipt {
       authorization.reference;
 }
 
-/// Secret-free host locator for reopening the Core-owned Handle Recovery
-/// state machine. Phone numbers, OTPs, grants, proofs, phases, and key
-/// material must never be added to this projection.
-class ProductHandleRecoveryLocator {
-  const ProductHandleRecoveryLocator({
-    required this.localIdentityId,
-    required this.operationId,
-    required this.fullHandle,
-    this.recoveryId,
-  });
-
-  final String localIdentityId;
-  final String operationId;
-  final String fullHandle;
-  final String? recoveryId;
-
-  ProductHandleRecoveryLocator withRecoveryId(String value) =>
-      ProductHandleRecoveryLocator(
-        localIdentityId: localIdentityId,
-        operationId: operationId,
-        fullHandle: fullHandle,
-        recoveryId: value,
-      );
-}
-
 /// Core-certified proof that a pre-v5 Registry checkpoint belongs to the
 /// currently active ordinary identity binding and has no Recovery transition.
 class LegacyRegistryEpochAdoptionAuthority {

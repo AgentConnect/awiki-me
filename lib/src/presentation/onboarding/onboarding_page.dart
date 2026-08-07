@@ -479,11 +479,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     BuildContext context,
     SessionIdentity identity,
   ) {
+    final localIdentityId = identity.localIdentityId;
+    if (localIdentityId == null || localIdentityId.isEmpty) {
+      return Future<void>.error(
+        StateError('handle_recovery_owner_identity_unavailable'),
+      );
+    }
     return AppNavigator.push<void>(
       context,
       (_) => HandleRecoveryPage(
         identityScope: HandleRecoveryIdentityScope(
-          localIdentityId: identity.credentialName,
+          localIdentityId: localIdentityId,
         ),
         initialHandle: identity.handle,
       ),

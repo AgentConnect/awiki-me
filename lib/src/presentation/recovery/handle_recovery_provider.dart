@@ -1,6 +1,6 @@
-// [INPUT]: Recovery UI intents plus App-owned Core/user-presence/local-store ports.
-// [OUTPUT]: Secret-free coarse Recovery UI state.
-// [POS]: Presentation controller; OTP is passed transiently and never stored.
+// [INPUT]: Recovery UI intents plus the Core-owned operation service.
+// [OUTPUT]: Secret-free V4.0 Recovery UI state.
+// [POS]: Presentation controller; it never persists an operation locator or phase.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +20,6 @@ final handleRecoveryServiceProvider = Provider<HandleRecoveryService>(
   (ref) => HandleRecoveryService(
     core: ref.watch(handleRecoveryCorePortProvider),
     userPresence: ref.watch(userPresencePortProvider),
-    local: ref.watch(productLocalStoreProvider),
   ),
 );
 
@@ -33,8 +32,11 @@ enum HandleRecoveryUiError {
   transitionMismatch,
   transitionChainUnsupported,
   remoteStateChanged,
+  resultAbsent,
   outcomeUnknown,
   localStateUnavailable,
+  keyUnavailable,
+  migrationUnsupported,
   blocked,
   rateLimited,
   failed,
@@ -51,10 +53,16 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
       HandleRecoveryFailureCode.transitionChainUnsupported,
     HandleRecoveryUiError.remoteStateChanged =>
       HandleRecoveryFailureCode.remoteStateChanged,
+    HandleRecoveryUiError.resultAbsent =>
+      HandleRecoveryFailureCode.resultAbsent,
     HandleRecoveryUiError.outcomeUnknown =>
       HandleRecoveryFailureCode.outcomeUnknown,
     HandleRecoveryUiError.localStateUnavailable =>
       HandleRecoveryFailureCode.localStateUnavailable,
+    HandleRecoveryUiError.keyUnavailable =>
+      HandleRecoveryFailureCode.localKeyUnavailable,
+    HandleRecoveryUiError.migrationUnsupported =>
+      HandleRecoveryFailureCode.localMigrationUnsupported,
     HandleRecoveryUiError.blocked => HandleRecoveryFailureCode.blocked,
     HandleRecoveryUiError.riskConfirmationRequired ||
     HandleRecoveryUiError.rateLimited ||
@@ -64,12 +72,15 @@ extension HandleRecoveryUiErrorDetails on HandleRecoveryUiError {
   HandleRecoveryUiAction get action => switch (this) {
     HandleRecoveryUiError.notPrepared ||
     HandleRecoveryUiError.transitionMismatch ||
-    HandleRecoveryUiError.transitionChainUnsupported =>
-      HandleRecoveryUiAction.terminal,
+    HandleRecoveryUiError.transitionChainUnsupported ||
     HandleRecoveryUiError.remoteStateChanged ||
+    HandleRecoveryUiError.migrationUnsupported =>
+      HandleRecoveryUiAction.terminal,
+    HandleRecoveryUiError.resultAbsent ||
     HandleRecoveryUiError.outcomeUnknown => HandleRecoveryUiAction.exactResume,
     HandleRecoveryUiError.riskConfirmationRequired ||
     HandleRecoveryUiError.userPresenceRequired ||
+    HandleRecoveryUiError.keyUnavailable ||
     HandleRecoveryUiError.rateLimited => HandleRecoveryUiAction.userAction,
     HandleRecoveryUiError.localStateUnavailable ||
     HandleRecoveryUiError.blocked ||
@@ -94,9 +105,21 @@ HandleRecoveryUiError handleRecoveryUiErrorFrom(Object error) {
       HandleRecoveryUiError.transitionChainUnsupported,
     HandleRecoveryFailureCode.remoteStateChanged =>
       HandleRecoveryUiError.remoteStateChanged,
+    HandleRecoveryFailureCode.resultAbsent =>
+      HandleRecoveryUiError.resultAbsent,
     HandleRecoveryFailureCode.outcomeUnknown =>
       HandleRecoveryUiError.outcomeUnknown,
     HandleRecoveryFailureCode.localStateUnavailable =>
+      HandleRecoveryUiError.localStateUnavailable,
+    HandleRecoveryFailureCode.localKeyUnavailable =>
+      HandleRecoveryUiError.keyUnavailable,
+    HandleRecoveryFailureCode.localMigrationUnsupported =>
+      HandleRecoveryUiError.migrationUnsupported,
+    HandleRecoveryFailureCode.factorRetryRequired =>
+      HandleRecoveryUiError.failed,
+    HandleRecoveryFailureCode.localTransitionPending =>
+      HandleRecoveryUiError.outcomeUnknown,
+    HandleRecoveryFailureCode.unknownEpoch =>
       HandleRecoveryUiError.localStateUnavailable,
     HandleRecoveryFailureCode.blocked => HandleRecoveryUiError.blocked,
   };
@@ -104,48 +127,55 @@ HandleRecoveryUiError handleRecoveryUiErrorFrom(Object error) {
 
 class HandleRecoveryState {
   const HandleRecoveryState({
-    this.otpRequested = false,
     this.riskConfirmed = false,
     this.isBusy = false,
-    this.otpOperationId,
-    this.otpHandle,
     this.otpPhone,
-    this.localIdentityId,
+    this.owner,
     this.progress,
     this.error,
   });
 
-  final bool otpRequested;
   final bool riskConfirmed;
   final bool isBusy;
-  final String? otpOperationId;
-  final String? otpHandle;
   final String? otpPhone;
-  final String? localIdentityId;
+  final HandleRecoveryOwner? owner;
   final HandleRecoveryProgress? progress;
   final HandleRecoveryUiError? error;
 
+  bool get canRequestOtp {
+    final current = progress;
+    return current == null ||
+        current.phase == HandleRecoveryProgressPhase.otpRequested ||
+        (current.lifecycleClass ==
+                HandleRecoveryLifecycleClass.remoteUnresolved &&
+            current.commitAttempted &&
+            current.keyState == HandleRecoveryKeyState.available);
+  }
+
+  bool get otpRequested =>
+      otpPhone != null && progress != null && canRequestOtp;
+
+  String? get otpOperationId => progress?.operationId;
+  String? get otpHandle => owner?.handle ?? progress?.handle;
+  String? get localIdentityId => owner?.localIdentityId;
+
   HandleRecoveryState copyWith({
-    bool? otpRequested,
     bool? riskConfirmed,
     bool? isBusy,
-    String? otpOperationId,
-    String? otpHandle,
     String? otpPhone,
-    String? localIdentityId,
+    HandleRecoveryOwner? owner,
     HandleRecoveryProgress? progress,
     HandleRecoveryUiError? error,
     bool clearError = false,
+    bool clearPhone = false,
+    bool clearOperation = false,
   }) {
     return HandleRecoveryState(
-      otpRequested: otpRequested ?? this.otpRequested,
       riskConfirmed: riskConfirmed ?? this.riskConfirmed,
       isBusy: isBusy ?? this.isBusy,
-      otpOperationId: otpOperationId ?? this.otpOperationId,
-      otpHandle: otpHandle ?? this.otpHandle,
-      otpPhone: otpPhone ?? this.otpPhone,
-      localIdentityId: localIdentityId ?? this.localIdentityId,
-      progress: progress ?? this.progress,
+      otpPhone: clearPhone ? null : (otpPhone ?? this.otpPhone),
+      owner: clearOperation ? null : (owner ?? this.owner),
+      progress: clearOperation ? null : (progress ?? this.progress),
       error: clearError ? null : (error ?? this.error),
     );
   }
@@ -167,50 +197,24 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     required String handle,
     required String phone,
   }) async {
-    final normalizedHandle = handle.trim().toLowerCase();
-    final normalizedPhone = phone.trim();
-    final pendingOperationId = state.otpOperationId;
-    if (pendingOperationId != null &&
-        (state.localIdentityId != scope.localIdentityId ||
-            state.otpHandle != normalizedHandle ||
-            (state.otpPhone != null && state.otpPhone != normalizedPhone))) {
-      state = state.copyWith(error: HandleRecoveryUiError.transitionMismatch);
-      return;
-    }
     if (!await _otpCooldown.beginSend()) return;
-    late final String operationId;
-    try {
-      final locator = await _service.beginOrRestoreLocator(
-        scope: scope,
-        handle: normalizedHandle,
-      );
-      operationId = locator.operationId;
-    } catch (error) {
-      _otpCooldown.completeFailed();
-      state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
-      return;
-    }
-    state = state.copyWith(
-      isBusy: true,
-      clearError: true,
-      otpOperationId: operationId,
-      otpHandle: normalizedHandle,
-      otpPhone: normalizedPhone,
-      localIdentityId: scope.localIdentityId,
-    );
+    state = state.copyWith(isBusy: true, clearError: true);
     try {
       final receipt = await _service.requestOtp(
-        handle: normalizedHandle,
-        phone: normalizedPhone,
-        operationId: operationId,
+        scope: scope,
+        handle: handle,
+        phone: phone,
+        expectedOperationId: state.progress?.operationId,
       );
       await _otpCooldown.completeAcceptedAt(receipt.retryAt);
       if (mounted) {
         state = state.copyWith(
-          otpRequested: true,
-          otpOperationId: receipt.operationId,
-          otpHandle: receipt.handle,
-          otpPhone: normalizedPhone,
+          owner: HandleRecoveryOwner(
+            localIdentityId: receipt.operation.ownerIdentityId,
+            handle: receipt.operation.handle,
+          ),
+          progress: receipt.operation,
+          otpPhone: phone.trim(),
         );
       }
     } catch (error) {
@@ -226,28 +230,19 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     }
   }
 
-  Future<void> prepare({
-    required HandleRecoveryIdentityScope scope,
-    required String handle,
-    required String phone,
-    required String otp,
-  }) async {
+  Future<void> prepare({required String phone, required String otp}) async {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
-      final operationId = state.otpOperationId;
-      if (operationId == null ||
-          state.otpHandle != handle.trim().toLowerCase() ||
-          state.otpPhone != phone.trim()) {
+      final operationId = state.progress?.operationId;
+      if (operationId == null || state.otpPhone != phone.trim()) {
         throw const HandleRecoveryFailure(
           HandleRecoveryFailureCode.transitionMismatch,
         );
       }
       final progress = await _service.prepare(
-        scope: scope,
-        handle: handle,
+        operationId: operationId,
         phone: phone,
         otp: otp,
-        operationId: operationId,
       );
       if (mounted) state = state.copyWith(progress: progress);
     } catch (error) {
@@ -271,12 +266,9 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
       final next = await _service.activate(
-        recoveryId: progress.recoveryId,
+        operationId: progress.operationId,
         presenceReason: presenceReason,
       );
-      if (next.isCompleted && state.localIdentityId != null) {
-        await _service.clearLocator(state.localIdentityId!);
-      }
       if (mounted) state = state.copyWith(progress: next);
     } catch (error) {
       if (mounted) {
@@ -292,10 +284,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     if (progress == null) return;
     state = state.copyWith(isBusy: true, clearError: true);
     try {
-      final next = await _service.resume(progress.recoveryId);
-      if (next.isCompleted && state.localIdentityId != null) {
-        await _service.clearLocator(state.localIdentityId!);
-      }
+      final next = await _service.resume(progress.operationId);
       if (mounted) state = state.copyWith(progress: next);
     } catch (error) {
       if (mounted) {
@@ -306,19 +295,26 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     }
   }
 
-  Future<void> restoreForIdentity(String localIdentityId) async {
+  Future<void> restoreForOwner({
+    required HandleRecoveryIdentityScope scope,
+    required String handle,
+  }) async {
     state = state.copyWith(isBusy: true, clearError: true);
     try {
-      final restored = await _service.restoreForIdentity(localIdentityId);
+      final restored = await _service.restoreForOwner(
+        scope: scope,
+        handle: handle,
+      );
       if (!mounted) return;
       if (restored == null) {
         state = const HandleRecoveryState();
       } else {
         state = state.copyWith(
-          localIdentityId: restored.locator.localIdentityId,
-          otpOperationId: restored.locator.operationId,
-          otpHandle: restored.locator.fullHandle,
-          progress: restored.progress,
+          owner: HandleRecoveryOwner(
+            localIdentityId: restored.ownerIdentityId,
+            handle: restored.handle,
+          ),
+          progress: restored,
         );
       }
     } catch (error) {
@@ -330,11 +326,54 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
     }
   }
 
-  Future<void> cancelPendingOtp() async {
-    if (state.progress != null || state.isBusy) return;
-    final localIdentityId = state.localIdentityId;
-    if (localIdentityId != null) {
-      await _service.clearLocator(localIdentityId);
+  Future<void> discardPreAttempt() async {
+    final progress = state.progress;
+    if (progress == null || !progress.canDiscard || state.isBusy) return;
+    state = state.copyWith(isBusy: true, clearError: true);
+    try {
+      await _service.discardPreAttempt(progress.operationId);
+      if (mounted) {
+        state = HandleRecoveryState(riskConfirmed: state.riskConfirmed);
+      }
+    } catch (error) {
+      if (mounted) {
+        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
+      }
+    } finally {
+      if (mounted) state = state.copyWith(isBusy: false);
+    }
+  }
+
+  Future<void> quarantineKeyUnavailable({
+    required String presenceReason,
+  }) async {
+    final progress = state.progress;
+    if (progress == null ||
+        (progress.keyState != HandleRecoveryKeyState.permanentlyUnavailable &&
+            state.error != HandleRecoveryUiError.keyUnavailable) ||
+        state.isBusy) {
+      return;
+    }
+    state = state.copyWith(isBusy: true, clearError: true);
+    try {
+      final next = await _service.quarantineKeyUnavailable(
+        operationId: progress.operationId,
+        presenceReason: presenceReason,
+      );
+      if (mounted) state = state.copyWith(progress: next);
+    } catch (error) {
+      if (mounted) {
+        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
+      }
+    } finally {
+      if (mounted) state = state.copyWith(isBusy: false);
+    }
+  }
+
+  void startAfterQuarantine() {
+    if (state.progress?.lifecycleClass !=
+        HandleRecoveryLifecycleClass.quarantinedKeyUnavailable) {
+      return;
     }
     state = HandleRecoveryState(riskConfirmed: state.riskConfirmed);
   }

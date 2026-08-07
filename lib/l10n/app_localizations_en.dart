@@ -3226,7 +3226,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryDidOnlyUnsupported =>
-      'V1 does not automatically restore any E2EE or DID-only group.';
+      'This version does not automatically restore any E2EE or DID-only group.';
 
   @override
   String get handleRecoveryRiskConfirm => 'I understand these effects';
@@ -3246,6 +3246,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get handleRecoveryFailed => 'Recovery failed. Try again later.';
+
+  @override
+  String get handleRecoveryOtpRequested =>
+      'The recovery operation is saved in Core. Enter the SMS code to continue.';
+
+  @override
+  String get handleRecoveryStillConfirming =>
+      'The remote result is still being confirmed. Keep this operation and resume it; do not start over or discard its key.';
+
+  @override
+  String get handleRecoveryKeyUnavailable =>
+      'The recovery key is no longer available on this device. Quarantine this operation before starting a new recovery.';
+
+  @override
+  String get handleRecoveryQuarantine => 'Quarantine unavailable operation';
+
+  @override
+  String get handleRecoveryQuarantineReason =>
+      'Confirm that this recovery key is permanently unavailable';
+
+  @override
+  String get handleRecoveryQuarantined =>
+      'The unavailable operation is quarantined and retained in Core for audit. You may now start a new recovery.';
+
+  @override
+  String get handleRecoveryStartNew => 'Start a new recovery';
+
+  @override
+  String get handleRecoveryMigrationUnsupported =>
+      'This local identity cannot be migrated safely in V4.0. No remote commit was attempted; use a fresh start or ordinary Device Join.';
 
   @override
   String get handleRecoveryErrorNotPrepared =>

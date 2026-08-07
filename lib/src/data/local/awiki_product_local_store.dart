@@ -4,8 +4,6 @@ import '../../application/models/product_local_models.dart';
 import '../../application/product_local_store.dart';
 
 class InMemoryAwikiProductLocalStore implements ProductLocalStore {
-  final Map<String, ProductHandleRecoveryLocator> _handleRecoveryLocators =
-      <String, ProductHandleRecoveryLocator>{};
   final Map<String, ProductConversationOverlay> _overlays =
       <String, ProductConversationOverlay>{};
   final Map<String, MessageDraft> _drafts = <String, MessageDraft>{};
@@ -32,25 +30,6 @@ class InMemoryAwikiProductLocalStore implements ProductLocalStore {
 
   @override
   Future<void> warmUp() async {}
-
-  @override
-  Future<ProductHandleRecoveryLocator?> loadHandleRecoveryLocator({
-    required String localIdentityId,
-  }) async => _handleRecoveryLocators[localIdentityId];
-
-  @override
-  Future<void> saveHandleRecoveryLocator(
-    ProductHandleRecoveryLocator locator,
-  ) async {
-    _handleRecoveryLocators[locator.localIdentityId] = locator;
-  }
-
-  @override
-  Future<void> deleteHandleRecoveryLocator({
-    required String localIdentityId,
-  }) async {
-    _handleRecoveryLocators.remove(localIdentityId);
-  }
 
   @override
   Future<ProductConversationOverlay?> loadConversationOverlay({

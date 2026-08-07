@@ -5745,7 +5745,7 @@ abstract class AppLocalizations {
   /// No description provided for @handleRecoveryDidOnlyUnsupported.
   ///
   /// In zh, this message translates to:
-  /// **'V1 不会自动恢复任何 E2EE 群或 DID-only 群。'**
+  /// **'当前版本不会自动恢复任何 E2EE 群或 DID-only 群。'**
   String get handleRecoveryDidOnlyUnsupported;
 
   /// No description provided for @handleRecoveryRiskConfirm.
@@ -5783,6 +5783,54 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'恢复操作失败，请稍后重试。'**
   String get handleRecoveryFailed;
+
+  /// No description provided for @handleRecoveryOtpRequested.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复操作已由 Core 保存。请输入短信验证码继续。'**
+  String get handleRecoveryOtpRequested;
+
+  /// No description provided for @handleRecoveryStillConfirming.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端结果仍在确认中。请保留并继续同一操作，不要重新开始或销毁其密钥。'**
+  String get handleRecoveryStillConfirming;
+
+  /// No description provided for @handleRecoveryKeyUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机已无法读取此恢复操作的密钥。开始新的恢复前，需要先隔离这个操作。'**
+  String get handleRecoveryKeyUnavailable;
+
+  /// No description provided for @handleRecoveryQuarantine.
+  ///
+  /// In zh, this message translates to:
+  /// **'隔离密钥不可用的操作'**
+  String get handleRecoveryQuarantine;
+
+  /// No description provided for @handleRecoveryQuarantineReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认此恢复操作的密钥已永久不可用'**
+  String get handleRecoveryQuarantineReason;
+
+  /// No description provided for @handleRecoveryQuarantined.
+  ///
+  /// In zh, this message translates to:
+  /// **'密钥不可用的操作已隔离，并由 Core 保留用于审计。现在可以开始新的恢复。'**
+  String get handleRecoveryQuarantined;
+
+  /// No description provided for @handleRecoveryStartNew.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始新的恢复'**
+  String get handleRecoveryStartNew;
+
+  /// No description provided for @handleRecoveryMigrationUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'V4.0 无法安全迁移当前本地身份。尚未发起远端提交，请选择 fresh start 或普通设备加入。'**
+  String get handleRecoveryMigrationUnsupported;
 
   /// No description provided for @handleRecoveryErrorNotPrepared.
   ///
