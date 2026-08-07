@@ -329,9 +329,7 @@ HandleRecoveryProgress _operationFromCore(
     commitAttempted: summary.commitAttempted,
     keyState: _keyStateFromCore(summary.keyState),
     resultAbsent: failureCode == HandleRecoveryFailureCode.resultAbsent,
-    readyToCommit:
-        progress.phase == core.HandleRecoveryPhase.readyToCommit ||
-        progress.phase == core.HandleRecoveryPhase.prepared,
+    readyToCommit: progress.phase == core.HandleRecoveryPhase.readyToCommit,
     localMigration: _localMigration(
       failureCode: failureCode,
       lastErrorCode: summary.lastErrorCode,
@@ -467,26 +465,13 @@ HandleRecoveryFailureCode? _failureCodeFromStableString(String? value) =>
     switch (value) {
       'factor_retry_required' => HandleRecoveryFailureCode.factorRetryRequired,
       'result_absent' => HandleRecoveryFailureCode.resultAbsent,
-      'outcome_unknown' || 'handle_recovery_outcome_unknown' =>
-        HandleRecoveryFailureCode.outcomeUnknown,
+      'outcome_unknown' => HandleRecoveryFailureCode.outcomeUnknown,
       'local_key_unavailable' => HandleRecoveryFailureCode.localKeyUnavailable,
       'local_transition_pending' =>
         HandleRecoveryFailureCode.localTransitionPending,
       'local_migration_unsupported' =>
         HandleRecoveryFailureCode.localMigrationUnsupported,
       'unknown_epoch' => HandleRecoveryFailureCode.unknownEpoch,
-      'handle_recovery_not_prepared' => HandleRecoveryFailureCode.notPrepared,
-      'handle_recovery_user_presence_required' =>
-        HandleRecoveryFailureCode.userPresenceRequired,
-      'handle_recovery_transition_mismatch' =>
-        HandleRecoveryFailureCode.transitionMismatch,
-      'handle_recovery_transition_chain_unsupported' =>
-        HandleRecoveryFailureCode.transitionChainUnsupported,
-      'handle_recovery_remote_state_changed' =>
-        HandleRecoveryFailureCode.remoteStateChanged,
-      'handle_recovery_local_state_unavailable' =>
-        HandleRecoveryFailureCode.localStateUnavailable,
-      'handle_recovery_blocked' => HandleRecoveryFailureCode.blocked,
       _ => null,
     };
 
@@ -632,17 +617,4 @@ HandleRecoveryFailureCode handleRecoveryFailureCodeFromCore(
     HandleRecoveryFailureCode.localMigrationUnsupported,
   core.HandleRecoveryFailureCode.unknownEpoch =>
     HandleRecoveryFailureCode.unknownEpoch,
-  core.HandleRecoveryFailureCode.notPrepared =>
-    HandleRecoveryFailureCode.notPrepared,
-  core.HandleRecoveryFailureCode.userPresenceRequired =>
-    HandleRecoveryFailureCode.userPresenceRequired,
-  core.HandleRecoveryFailureCode.transitionMismatch =>
-    HandleRecoveryFailureCode.transitionMismatch,
-  core.HandleRecoveryFailureCode.transitionChainUnsupported =>
-    HandleRecoveryFailureCode.transitionChainUnsupported,
-  core.HandleRecoveryFailureCode.remoteStateChanged =>
-    HandleRecoveryFailureCode.remoteStateChanged,
-  core.HandleRecoveryFailureCode.localStateUnavailable =>
-    HandleRecoveryFailureCode.localStateUnavailable,
-  core.HandleRecoveryFailureCode.blocked => HandleRecoveryFailureCode.blocked,
 };

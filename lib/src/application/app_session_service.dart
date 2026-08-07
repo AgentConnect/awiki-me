@@ -146,8 +146,7 @@ class ImCoreAppSessionService
     ActiveSessionStore? activeSessionStore,
     String? expectedDidDomain,
     RealtimeCorePort? realtime,
-    AppBootstrapEpochBarrierPort bootstrapEpochBarrier =
-        const NoopAppBootstrapEpochBarrier(),
+    required AppBootstrapEpochBarrierPort bootstrapEpochBarrier,
     Duration realtimeCleanupTimeout = _defaultRealtimeCleanupTimeout,
   }) : _runtime = runtime,
        _identities = identities,

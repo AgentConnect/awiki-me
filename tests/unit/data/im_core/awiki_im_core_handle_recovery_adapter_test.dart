@@ -161,13 +161,6 @@ void main() {
       core.HandleRecoveryFailureCode.localKeyUnavailable: false,
       core.HandleRecoveryFailureCode.localMigrationUnsupported: false,
       core.HandleRecoveryFailureCode.unknownEpoch: false,
-      core.HandleRecoveryFailureCode.notPrepared: false,
-      core.HandleRecoveryFailureCode.userPresenceRequired: false,
-      core.HandleRecoveryFailureCode.transitionMismatch: false,
-      core.HandleRecoveryFailureCode.transitionChainUnsupported: false,
-      core.HandleRecoveryFailureCode.remoteStateChanged: false,
-      core.HandleRecoveryFailureCode.localStateUnavailable: false,
-      core.HandleRecoveryFailureCode.blocked: false,
     };
     for (final entry in cases.entries) {
       sdk.error = core.AwikiImCoreException(
