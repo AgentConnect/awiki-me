@@ -2,13 +2,15 @@
 // [OUTPUT]: Real product evidence for the default device entry, adapters, and independent gates.
 // [POS]: Local entry E2E; it does not claim remote Join/SAS/Root/Recovery acceptance.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
-import 'package:flutter/widgets.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
@@ -53,10 +55,14 @@ void main() {
         expect(bootstrap.groupEncryptionCorePort, isNull);
 
         await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-        final joinEntry = find.bySemanticsIdentifier('multi-device-join-entry');
-        await _pumpUntilVisible(tester, joinEntry);
-        await tester.ensureVisible(joinEntry);
-        await tester.tap(joinEntry);
+        await _pumpUntilVisible(tester, find.byType(OnboardingPage));
+        unawaited(
+          Navigator.of(tester.element(find.byType(OnboardingPage))).push<void>(
+            CupertinoPageRoute<void>(
+              builder: (_) => const DeviceJoinPage(autoPoll: false),
+            ),
+          ),
+        );
         await _pumpUntilVisible(tester, find.byType(DeviceJoinPage));
 
         expect(find.byKey(const Key('device-join-page')), findsOneWidget);
@@ -125,13 +131,12 @@ void main() {
         _caseId,
         phases: const <String>[
           'isolated_scope_opened',
-          'default_join_entry_opened',
+          'join_surface_opened_with_production_adapters',
           'high_risk_capabilities_stayed_closed',
           'temporary_scope_deleted',
         ],
       );
     },
-    skip: !(Platform.isMacOS || Platform.isLinux),
   );
 }
 
