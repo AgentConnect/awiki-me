@@ -224,6 +224,7 @@ void main() {
       expect(hyphen.e2eCase.caseIds, <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
+        'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
       ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 22));
       expect(
@@ -246,9 +247,13 @@ void main() {
 
       expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteRecovery);
       expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteRecovery);
-      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
+      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
       expect(hyphen.e2eCase.scenario, 'multi-device-handle-recovery-v1');
-      expect(hyphen.e2eCase.caseIds, <String>['HANDLE-RECOVERY-V1-E2E-001']);
+      expect(hyphen.e2eCase.caseIds, <String>[
+        'HANDLE-RECOVERY-V1-E2E-001',
+        'HANDLE-RECOVERY-V1-E2E-002',
+        'HANDLE-RECOVERY-V1-E2E-003',
+      ]);
       expect(hyphen.e2eCase.flutterTimeout, const Duration(minutes: 20));
       expect(
         hyphen.e2eCase.testFile,
@@ -600,8 +605,8 @@ void main() {
       platform: DesktopE2ePlatform.macos,
       serviceBaseUrl: 'https://awiki.info',
       didDomain: 'awiki.info',
-      otpPhone: 'must-not-be-used',
-      otpCode: 'must-not-be-used',
+      otpPhone: 'local-test-phone',
+      otpCode: '123456',
       cliBin: '/tmp/awiki-cli',
       cliSourceRef: sourceRef,
     );
@@ -610,10 +615,7 @@ void main() {
       expect(
         () => RemoteMultiDeviceJoinConfig.from(
           fileConfig: fileConfig,
-          environment: const <String, String>{
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
-          },
+          environment: const <String, String>{},
         ),
         throwsA(
           isA<E2eFailure>().having(
@@ -625,53 +627,46 @@ void main() {
       );
     });
 
-    test('uses dedicated env OTP inputs and never static YAML OTP values', () {
+    test('uses the protected ignored local OTP fixture', () {
       final config = RemoteMultiDeviceJoinConfig.from(
         fileConfig: fileConfig,
         environment: const <String, String>{
           'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
-              '["ssh","ali","resolve-otp"]',
           'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX': 'joinapp',
         },
       );
 
-      expect(config.phone, 'dedicated-phone');
-      expect(config.otpCommand, <String>['ssh', 'ali', 'resolve-otp']);
+      expect(config.phone, 'local-test-phone');
+      expect(config.fixedOtp, '123456');
       expect(config.handlePrefix, 'joinapp');
       expect(config.cliSourceRef, sourceRef);
-      expect(config.allowStagedOtpOnSmsError, isFalse);
-      expect(config.phone, isNot(fileConfig.otpPhone));
-      expect(config.otpCommandJson, isNot(contains(fileConfig.otpCode!)));
     });
 
-    test('rejects shell strings and unauditable CLI provenance', () {
-      const environment = <String, String>{
-        'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-        'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-        'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': 'ssh ali resolve-otp',
-      };
-      expect(
-        () => RemoteMultiDeviceJoinConfig.from(
-          fileConfig: fileConfig,
-          environment: environment,
+    test('supports the Linux Flutter desktop runner', () {
+      final config = RemoteMultiDeviceJoinConfig.from(
+        fileConfig: const DesktopE2eFileConfig(
+          path: '/tmp/e2e.local.yaml',
+          platform: DesktopE2ePlatform.linux,
+          serviceBaseUrl: 'https://awiki.info',
+          didDomain: 'awiki.info',
+          cliBin: '/tmp/awiki-cli',
+          cliSourceRef: sourceRef,
+          otpPhone: 'local-test-phone',
+          otpCode: '123456',
         ),
-        throwsA(isA<E2eFailure>()),
-      );
-      expect(
-        () => RemoteMultiDeviceJoinConfig.from(
-          fileConfig: fileConfig,
-          environment: const <String, String>{
-            'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
-                '["/bin/sh","-c","resolve-otp"]',
-          },
-        ),
-        throwsA(isA<E2eFailure>()),
+        environment: const <String, String>{
+          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
+        },
+        supportedPlatforms: const <DesktopE2ePlatform>{
+          DesktopE2ePlatform.macos,
+          DesktopE2ePlatform.linux,
+        },
       );
 
+      expect(config.platform, DesktopE2ePlatform.linux);
+    });
+
+    test('rejects unauditable CLI provenance', () {
       expect(
         () => RemoteMultiDeviceJoinConfig.from(
           fileConfig: const DesktopE2eFileConfig(
@@ -681,11 +676,11 @@ void main() {
             didDomain: 'awiki.info',
             cliBin: '/tmp/awiki-cli',
             cliSourceRef: '0000000000000000000000000000000000000000',
+            otpPhone: 'local-test-phone',
+            otpCode: '123456',
           ),
           environment: const <String, String>{
             'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["resolve-otp"]',
           },
         ),
         throwsA(
@@ -698,42 +693,19 @@ void main() {
       );
     });
 
-    test('staged OTP mode requires the exact reviewed resolver argv', () {
-      const fixedResolver =
-          '["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]';
-      final config = RemoteMultiDeviceJoinConfig.from(
-        fileConfig: fileConfig,
-        environment: const <String, String>{
-          'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': fixedResolver,
-          'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': '1',
-        },
-      );
-
-      expect(config.allowStagedOtpOnSmsError, isTrue);
-      expect(config.otpCommand, hasLength(12));
+    test('requires the protected local OTP fixture', () {
       expect(
         () => RemoteMultiDeviceJoinConfig.from(
-          fileConfig: fileConfig,
+          fileConfig: const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.macos,
+            serviceBaseUrl: 'https://awiki.info',
+            didDomain: 'awiki.info',
+            cliBin: '/tmp/awiki-cli',
+            cliSourceRef: sourceRef,
+          ),
           environment: const <String, String>{
             'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
-                '["ssh","ali","/safe/resolver","--apply"]',
-            'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': '1',
-          },
-        ),
-        throwsA(isA<E2eFailure>()),
-      );
-      expect(
-        () => RemoteMultiDeviceJoinConfig.from(
-          fileConfig: fileConfig,
-          environment: const <String, String>{
-            'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': fixedResolver,
-            'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': 'yes',
           },
         ),
         throwsA(isA<E2eFailure>()),
@@ -742,23 +714,23 @@ void main() {
   });
 
   group('RemoteHandleRecoveryConfig', () {
+    const sourceRef = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
     const fileConfig = DesktopE2eFileConfig(
       path: '/tmp/e2e.local.yaml',
       platform: DesktopE2ePlatform.macos,
       serviceBaseUrl: 'https://awiki.info',
       didDomain: 'awiki.info',
-      otpPhone: 'must-not-be-used',
-      otpCode: 'must-not-be-used',
+      otpPhone: 'local-test-phone',
+      otpCode: '123456',
+      cliBin: '/tmp/awiki-cli',
+      cliSourceRef: sourceRef,
     );
 
-    test('requires its own gate and dedicated resolver', () {
+    test('requires its own gate and protected fixed fixture', () {
       expect(
         () => RemoteHandleRecoveryConfig.from(
           fileConfig: fileConfig,
-          environment: const <String, String>{
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
-          },
+          environment: const <String, String>{},
         ),
         throwsA(
           isA<E2eFailure>().having(
@@ -773,37 +745,29 @@ void main() {
         fileConfig: fileConfig,
         environment: const <String, String>{
           'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
-          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
-              '["ssh","ali","resolve-otp"]',
           'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX': 'recovery',
         },
       );
 
-      expect(config.phone, 'dedicated-phone');
-      expect(config.otpCommand, <String>['ssh', 'ali', 'resolve-otp']);
+      expect(config.phone, 'local-test-phone');
+      expect(config.fixedOtp, '123456');
       expect(config.handlePrefix, 'recovery');
-      expect(config.phone, isNot(fileConfig.otpPhone));
     });
 
-    test('rejects staged OTP continuation', () {
+    test('rejects a missing protected OTP fixture', () {
       expect(
         () => RemoteHandleRecoveryConfig.from(
-          fileConfig: fileConfig,
+          fileConfig: const DesktopE2eFileConfig(
+            path: '/tmp/e2e.local.yaml',
+            platform: DesktopE2ePlatform.macos,
+            serviceBaseUrl: 'https://awiki.info',
+            didDomain: 'awiki.info',
+          ),
           environment: const <String, String>{
             'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
-            'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-            'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON': '["otp-resolver"]',
-            'AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR': '1',
           },
         ),
-        throwsA(
-          isA<E2eFailure>().having(
-            (error) => error.message,
-            'message',
-            contains('requires real SMS'),
-          ),
-        ),
+        throwsA(isA<E2eFailure>()),
       );
     });
 
@@ -816,6 +780,8 @@ void main() {
           didDomain: 'awiki.info',
           otpPhone: 'local-test-phone',
           otpCode: '123456',
+          cliBin: '/tmp/awiki-cli',
+          cliSourceRef: sourceRef,
         ),
         environment: const <String, String>{
           'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
@@ -824,8 +790,6 @@ void main() {
 
       expect(config.phone, 'local-test-phone');
       expect(config.fixedOtp, '123456');
-      expect(config.usesFixedLocalOtp, isTrue);
-      expect(config.otpCommand, isEmpty);
     });
 
     test('supports the Linux Flutter desktop runner', () {
@@ -837,6 +801,8 @@ void main() {
           didDomain: 'awiki.info',
           otpPhone: 'local-test-phone',
           otpCode: '123456',
+          cliBin: '/tmp/awiki-cli',
+          cliSourceRef: sourceRef,
         ),
         environment: const <String, String>{
           'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED': '1',
@@ -854,6 +820,8 @@ void main() {
       platform: DesktopE2ePlatform.macos,
       serviceBaseUrl: 'https://awiki.info',
       didDomain: 'awiki.info',
+      otpPhone: 'local-test-phone',
+      otpCode: '123456',
     );
 
     test('uses the audited remote contract without requiring a CLI binary', () {
@@ -861,18 +829,15 @@ void main() {
         fileConfig: fileConfig,
         environment: const <String, String>{
           'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
-              '["ssh","ali","resolve-otp"]',
           'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX': 'apppair',
         },
       );
 
       expect(config.platform, DesktopE2ePlatform.macos);
       expect(config.serviceBaseUrl, 'https://awiki.info');
-      expect(config.phone, 'dedicated-phone');
+      expect(config.phone, 'local-test-phone');
+      expect(config.fixedOtp, '123456');
       expect(config.handlePrefix, 'apppair');
-      expect(config.allowStagedOtpOnSmsError, isFalse);
       expect(config.functional, isFalse);
     });
 
@@ -882,6 +847,8 @@ void main() {
         platform: DesktopE2ePlatform.macos,
         serviceBaseUrl: 'https://awiki.info',
         didDomain: 'awiki.info',
+        otpPhone: 'local-test-phone',
+        otpCode: '123456',
         cliBin: '/tmp/awiki-cli',
         cliSourceRef: '1111111111111111111111111111111111111111',
         daemonBinary: '/tmp/awiki-deamon',
@@ -891,9 +858,6 @@ void main() {
         fileConfig: functionalConfig,
         environment: const <String, String>{
           'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED': '1',
-          'AWIKI_MULTI_DEVICE_E2E_PHONE': 'dedicated-phone',
-          'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON':
-              '["ssh","ali","resolve-otp"]',
         },
         functional: true,
       );

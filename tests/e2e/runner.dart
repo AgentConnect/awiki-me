@@ -48,9 +48,6 @@ const String _multiDeviceRemoteJoinGateEnv =
     'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
 const String _multiDeviceRemoteRecoveryGateEnv =
     'AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED';
-const String _multiDeviceRemotePhoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
-const String _multiDeviceRemoteOtpCommandEnv =
-    'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
 const String _multiDeviceRemoteHandlePrefixEnv =
     'AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX';
 const String _syncRecoveryEnableEnv = 'AWIKI_MESSAGE_SYNC_V2_RECOVERY_E2E';
@@ -113,9 +110,12 @@ const List<String> _multiDeviceCapabilityGateCaseIds = <String>[
 const List<String> _multiDeviceRemoteJoinCaseIds = <String>[
   'DEVICE-JOIN-E2E-001',
   'DEVICE-JOIN-E2E-002',
+  'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
 ];
 const List<String> _multiDeviceRemoteRecoveryCaseIds = <String>[
   'HANDLE-RECOVERY-V1-E2E-001',
+  'HANDLE-RECOVERY-V1-E2E-002',
+  'HANDLE-RECOVERY-V1-E2E-003',
 ];
 const List<String> _multiDeviceAppPairCaseIds = <String>[
   'DEVICE-JOIN-E2E-004',
@@ -494,6 +494,7 @@ class DesktopE2eRunner {
       cliWorkspaceDir.createSync(recursive: true);
       cliHomeDir.createSync(recursive: true);
       if (options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin ||
+          options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecovery ||
           options.e2eCase == DesktopE2eCase.step4RevokeMls) {
         multiDeviceCliAdminWorkspaceDir.createSync(recursive: true);
         multiDeviceCliAdminHomeDir.createSync(recursive: true);
@@ -577,6 +578,13 @@ class DesktopE2eRunner {
       rethrow;
     } finally {
       totalStopwatch.stop();
+      if (processRestartHandoffFile.existsSync()) {
+        processRestartHandoffFile.deleteSync();
+      }
+      final handoffTemporary = File('${processRestartHandoffFile.path}.tmp');
+      if (handoffTemporary.existsSync()) {
+        handoffTemporary.deleteSync();
+      }
       _writeResourceLedger();
       _writeTimingReport(
         orchestrationSucceeded: orchestrationSucceeded,
@@ -663,10 +671,17 @@ class DesktopE2eRunner {
     final joinConfig = RemoteMultiDeviceJoinConfig.from(
       fileConfig: fileConfig,
       environment: Platform.environment,
+      supportedPlatforms:
+          options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin
+          ? const <DesktopE2ePlatform>{
+              DesktopE2ePlatform.macos,
+              DesktopE2ePlatform.linux,
+            }
+          : const <DesktopE2ePlatform>{DesktopE2ePlatform.macos},
     );
     remoteMultiDeviceJoinConfig = joinConfig;
     _addRuntimeSecret(joinConfig.phone);
-    _addRuntimeSecret(joinConfig.otpCommandJson);
+    _addRuntimeSecret(joinConfig.fixedOtp);
     _addRuntimeSecret(joinConfig.cliBin);
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
@@ -694,6 +709,10 @@ class DesktopE2eRunner {
 
     await _timed('Checking remote Join tooling and source', () async {
       await commands.requireExecutable('flutter');
+      await commands.requireExecutable('script');
+      if (joinConfig.platform == DesktopE2ePlatform.linux) {
+        await commands.requireExecutable('xvfb-run');
+      }
       await commands.requireFile(joinConfig.cliBin);
       final version = await commands.captureResult(
         joinConfig.cliBin,
@@ -724,12 +743,35 @@ class DesktopE2eRunner {
       return;
     }
     _resourceSideEffectsPossible = true;
-    await _timed('Flutter App + CLI multi-device lifecycle', () {
-      return _runFlutterTest(
-        'integration_test/multi_device_join_ui_test.dart',
-        caseIds: caseIds ?? options.e2eCase.caseIds,
-      );
-    });
+    final requestedCaseIds = caseIds ?? options.e2eCase.caseIds;
+    const joiningAppCaseIds = <String>{
+      'DEVICE-JOIN-E2E-001',
+      'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
+    };
+    final joiningAppCases = requestedCaseIds
+        .where(joiningAppCaseIds.contains)
+        .toList(growable: false);
+    final adminAppCases = requestedCaseIds
+        .where((caseId) => !joiningAppCaseIds.contains(caseId))
+        .toList(growable: false);
+    if (joiningAppCases.isNotEmpty) {
+      await _timed('Flutter joining App + CLI admin lifecycle', () {
+        return _runFlutterTest(
+          'integration_test/multi_device_join_ui_test.dart',
+          caseIds: joiningAppCases,
+          appStateRoot: multiDeviceAppJoiningStateRootDir,
+        );
+      });
+    }
+    if (adminAppCases.isNotEmpty) {
+      await _timed('Flutter admin App + CLI joining lifecycle', () {
+        return _runFlutterTest(
+          'integration_test/multi_device_join_ui_test.dart',
+          caseIds: adminAppCases,
+          appStateRoot: appStateRootDir,
+        );
+      });
+    }
   }
 
   Future<void> _runRemoteHandleRecovery() async {
@@ -739,8 +781,8 @@ class DesktopE2eRunner {
     );
     remoteHandleRecoveryConfig = recoveryConfig;
     _addRuntimeSecret(recoveryConfig.phone);
-    _addRuntimeSecret(recoveryConfig.otpCommandJson);
-    _addRuntimeSecret(recoveryConfig.fixedOtp ?? '');
+    _addRuntimeSecret(recoveryConfig.fixedOtp);
+    _addRuntimeSecret(recoveryConfig.cliBin);
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
         didDomain: recoveryConfig.didDomain,
@@ -763,15 +805,31 @@ class DesktopE2eRunner {
 
     await _timed('Checking remote Handle Recovery tooling', () async {
       await commands.requireExecutable('flutter');
+      await commands.requireExecutable('script');
+      if (recoveryConfig.platform == DesktopE2ePlatform.linux) {
+        await commands.requireExecutable('xvfb-run');
+      }
+      await commands.requireFile(recoveryConfig.cliBin);
+      final version = await commands.captureResult(
+        recoveryConfig.cliBin,
+        const <String>['--format', 'json', 'version'],
+      );
+      if (!options.dryRun && !commands.dryRun) {
+        final binaryCommit = cliBuildCommitFromVersionJson(version.output);
+        if (binaryCommit != recoveryConfig.cliSourceRef) {
+          throw E2eFailure(
+            'cliPeer.sourceRef does not match the commit embedded in the CLI binary.',
+          );
+        }
+      }
       _identityPreflight = <String, Object?>{
         'status': options.dryRun ? 'dry_run' : 'passed',
         'auditedRemoteTarget': true,
         'automatedUserPresence': true,
         'realUserPresenceAttested': false,
         'productSmsRequestRequired': true,
-        'otpMode': recoveryConfig.usesFixedLocalOtp
-            ? 'ignored_local_fixture'
-            : 'resolver',
+        'otpMode': 'ignored_local_fixture',
+        'cliSourceVerified': !options.dryRun,
         'containsRawDids': false,
       };
     });
@@ -785,7 +843,52 @@ class DesktopE2eRunner {
     await _timed('Flutter visible Handle Recovery V1 lifecycle', () {
       return _runFlutterTest(
         'integration_test/handle_recovery_ui_test.dart',
-        caseIds: options.e2eCase.caseIds,
+        caseIds: const <String>[
+          'HANDLE-RECOVERY-V1-E2E-001',
+          'HANDLE-RECOVERY-V1-E2E-003',
+        ],
+      );
+    });
+    await _timed('Flutter Recovery committed/reset crash-cut phase A', () {
+      return _runFlutterArgs(
+        <String>[
+          'test',
+          '--dart-define=AWIKI_E2E=true',
+          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+          '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_a',
+          '--dart-define=AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET=true',
+          'integration_test/handle_recovery_ui_test.dart',
+          '-d',
+          platform.name,
+          ..._caseAttestationDartDefines(const <String>[
+            'HANDLE-RECOVERY-V1-E2E-002',
+          ]),
+        ],
+        platform: platform,
+        timeout: suiteDefinition.timeout,
+      );
+    });
+    if (!options.dryRun && !processRestartHandoffFile.existsSync()) {
+      throw E2eFailure(
+        'Handle Recovery crash-cut phase A did not write its handoff evidence.',
+      );
+    }
+    await _timed('Flutter Recovery committed/reset crash-cut phase B', () {
+      return _runFlutterArgs(
+        <String>[
+          'test',
+          '--dart-define=AWIKI_E2E=true',
+          '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+          '--dart-define=AWIKI_HANDLE_RECOVERY_E2E_PHASE=crash_b',
+          'integration_test/handle_recovery_ui_test.dart',
+          '-d',
+          platform.name,
+          ..._caseAttestationDartDefines(const <String>[
+            'HANDLE-RECOVERY-V1-E2E-002',
+          ]),
+        ],
+        platform: platform,
+        timeout: suiteDefinition.timeout,
       );
     });
   }
@@ -803,7 +906,7 @@ class DesktopE2eRunner {
     );
     remoteMultiDeviceAppPairConfig = pairConfig;
     _addRuntimeSecret(pairConfig.phone);
-    _addRuntimeSecret(pairConfig.otpCommandJson);
+    _addRuntimeSecret(pairConfig.fixedOtp);
     _addRuntimeSecret(pairConfig.cliBin ?? '');
     _addRuntimeSecret(pairConfig.daemonBinary ?? '');
     _addRuntimeSecret(pairConfig.daemonEnvFile ?? '');
@@ -933,16 +1036,11 @@ class DesktopE2eRunner {
           }
           final productEnvironment = <String, String>{
             _multiDeviceRemoteJoinGateEnv: '1',
-            _multiDeviceRemotePhoneEnv: pairConfig.phone,
-            _multiDeviceRemoteOtpCommandEnv: pairConfig.otpCommandJson,
             'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG': appPairRunConfigFile.path,
             e2eCaseAttestationPathDefine: caseAttestationFile.path,
             e2eCaseScenarioDefine: options.e2eCase.scenario,
             e2eCaseRunIdDefine: runId,
             e2eCaseIdsDefine: options.e2eCase.caseIds.join(','),
-            remoteMultiDeviceStagedOtpFlag: pairConfig.allowStagedOtpOnSmsError
-                ? '1'
-                : '0',
             if (pairConfig.functional) ...<String, String>{
               _syncRecoveryEnableEnv:
                   Platform.environment[_syncRecoveryEnableEnv]!,
@@ -1004,7 +1102,7 @@ class DesktopE2eRunner {
     String token,
   ) async {
     final payload = <String, Object?>{
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'enabled': true,
       'runId': runId,
       'service': <String, Object?>{
@@ -1018,7 +1116,8 @@ class DesktopE2eRunner {
       },
       'account': <String, Object?>{
         'handlePrefix': pairConfig.handlePrefix,
-        'allowStagedOtpOnSmsError': pairConfig.allowStagedOtpOnSmsError,
+        'otpMode': 'ignored_local_fixture',
+        'localConfigPath': fileConfig.path,
       },
       'testControl': <String, Object?>{'automatedUserPresence': true},
       'coordinator': <String, Object?>{
@@ -1204,7 +1303,8 @@ class DesktopE2eRunner {
       },
       'account': <String, Object?>{
         'handlePrefix': joinConfig.handlePrefix,
-        'allowStagedOtpOnSmsError': joinConfig.allowStagedOtpOnSmsError,
+        'otpMode': 'ignored_local_fixture',
+        'localConfigPath': fileConfig.path,
       },
       'testControl': <String, Object?>{'automatedUserPresence': true},
       'cliJoiningDevice': <String, Object?>{
@@ -1270,7 +1370,7 @@ class DesktopE2eRunner {
     RemoteHandleRecoveryConfig recoveryConfig,
   ) async {
     final payload = <String, Object?>{
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'enabled': true,
       'runId': runId,
       'platform': recoveryConfig.platform.name,
@@ -1285,17 +1385,29 @@ class DesktopE2eRunner {
       },
       'account': <String, Object?>{
         'handlePrefix': recoveryConfig.handlePrefix,
-        'otpMode': recoveryConfig.usesFixedLocalOtp
-            ? 'ignored_local_fixture'
-            : 'resolver',
-        if (recoveryConfig.usesFixedLocalOtp)
-          'localConfigPath': fileConfig.path,
+        'otpMode': 'ignored_local_fixture',
+        'localConfigPath': fileConfig.path,
       },
       'testControl': <String, Object?>{
         'automatedUserPresence': true,
         'productSmsRequestRequired': true,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
+      'cliPeer': <String, Object?>{
+        'binary': recoveryConfig.cliBin,
+        'sourceRef': recoveryConfig.cliSourceRef,
+        'workspace': cliWorkspaceDir.path,
+        'home': cliHomeDir.path,
+      },
+      'externalCliPeer': <String, Object?>{
+        'binary': recoveryConfig.cliBin,
+        'sourceRef': recoveryConfig.cliSourceRef,
+        'workspace': multiDeviceCliAdminWorkspaceDir.path,
+        'home': multiDeviceCliAdminHomeDir.path,
+      },
+      'crashCut': <String, Object?>{
+        'handoffPath': processRestartHandoffFile.path,
+      },
       'suite': <String, Object?>{
         'manifestRevision': suiteManifest.sourceRevision,
         'tier': suiteDefinition.tier,
@@ -1894,12 +2006,13 @@ class DesktopE2eRunner {
   Future<void> _runFlutterTest(
     String testFile, {
     required List<String> caseIds,
+    Directory? appStateRoot,
   }) {
     return _runFlutterArgs(
       <String>[
         'test',
         '--dart-define=AWIKI_E2E=true',
-        '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${appStateRootDir.path}',
+        '--dart-define=AWIKI_E2E_APP_STATE_ROOT=${(appStateRoot ?? appStateRootDir).path}',
         testFile,
         '-d',
         platform.name,
@@ -2491,7 +2604,9 @@ class DesktopE2eRunner {
         remoteMultiDeviceAppPairConfig?.serviceBaseUrl;
     final targetHost = targetUrl == null ? null : Uri.tryParse(targetUrl)?.host;
     final sourceRef =
-        config?.cliSourceRef ?? remoteMultiDeviceJoinConfig?.cliSourceRef;
+        config?.cliSourceRef ??
+        remoteMultiDeviceJoinConfig?.cliSourceRef ??
+        remoteHandleRecoveryConfig?.cliSourceRef;
     resourceLedgerFile.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(<String, Object?>{
         'schemaVersion': 1,
@@ -2510,7 +2625,7 @@ class DesktopE2eRunner {
               : remoteMultiDeviceJoinConfig != null
               ? 1
               : remoteHandleRecoveryConfig != null
-              ? 1
+              ? 2
               : 0,
           'createdIdentities': _resourceSideEffectsPossible ? 'unknown' : 0,
           'messages': _resourceSideEffectsPossible ? 'unknown' : 0,
@@ -3872,7 +3987,8 @@ Options:
                                is unchanged and not attested.
                                multi-device-remote-recovery drives the visible
                                Handle Recovery V1 flow against awiki.info with
-                               real SMS and E2E-only user presence.
+                               the protected fixed test OTP and E2E-only user
+                               presence on Linux or macOS.
                                multi-device-app-pair builds and drives two
                                isolated real macOS App processes on one host;
                                it currently runs only the remote member Join
@@ -3886,7 +4002,7 @@ Options:
                                full runs the audited App+CLI peer flow and then
                                one real App-admin/CLI-member Join + root
                                completion lifecycle; it therefore also requires
-                               the remote Join gate and dedicated OTP resolver.
+                               the remote Join gate and protected OTP fixture.
                                The other cases run real App+CLI peer flows. The
                                performance case records product-level startup,
                                conversation, and send-to-visible timings and
@@ -3915,10 +4031,7 @@ class _RemoteMultiDeviceBaseConfig {
     required this.anpServiceUrl,
     required this.anpServiceDid,
     required this.phone,
-    required this.otpCommandJson,
-    required this.otpCommand,
     required this.fixedOtp,
-    required this.allowStagedOtpOnSmsError,
     required this.handlePrefix,
   });
 
@@ -3931,10 +4044,7 @@ class _RemoteMultiDeviceBaseConfig {
   final String anpServiceUrl;
   final String anpServiceDid;
   final String phone;
-  final String otpCommandJson;
-  final List<String> otpCommand;
-  final String? fixedOtp;
-  final bool allowStagedOtpOnSmsError;
+  final String fixedOtp;
   final String handlePrefix;
 
   static _RemoteMultiDeviceBaseConfig from({
@@ -3942,8 +4052,6 @@ class _RemoteMultiDeviceBaseConfig {
     required Map<String, String> environment,
     String activationGate = _multiDeviceRemoteJoinGateEnv,
     String flowLabel = 'Join',
-    bool requireRealSms = false,
-    bool allowFixedLocalOtp = false,
     Set<DesktopE2ePlatform> supportedPlatforms = const <DesktopE2ePlatform>{
       DesktopE2ePlatform.macos,
     },
@@ -3978,50 +4086,13 @@ class _RemoteMultiDeviceBaseConfig {
       'service.didDomain',
       sourcePath,
     );
-    final envPhone = environment[_multiDeviceRemotePhoneEnv]?.trim() ?? '';
-    final otpCommandJson =
-        environment[_multiDeviceRemoteOtpCommandEnv]?.trim() ?? '';
     final localPhone = fileConfig.otpPhone?.trim() ?? '';
     final localOtp = fileConfig.otpCode?.trim() ?? '';
-    final useFixedLocalOtp =
-        allowFixedLocalOtp && envPhone.isEmpty && otpCommandJson.isEmpty;
-    final phone = useFixedLocalOtp ? localPhone : envPhone;
-    if (phone.isEmpty ||
-        (useFixedLocalOtp
-            ? !isSixDigitAsciiOtp(localOtp)
-            : otpCommandJson.isEmpty)) {
+    if (localPhone.isEmpty || !isSixDigitAsciiOtp(localOtp)) {
       throw E2eFailure(
-        'Remote multi-device App $flowLabel requires either the dedicated '
-        'account variables $_multiDeviceRemotePhoneEnv and '
-        '$_multiDeviceRemoteOtpCommandEnv or an ignored local YAML with one '
-        'six-digit test OTP.',
+        'Remote multi-device App $flowLabel requires otp.phone and one '
+        'six-digit otp.code in the protected ignored local YAML.',
       );
-    }
-    final bool allowStagedOtpOnSmsError;
-    try {
-      allowStagedOtpOnSmsError = parseRemoteMultiDeviceStagedOtpFlag(
-        environment,
-      );
-    } on FormatException {
-      throw E2eFailure('$remoteMultiDeviceStagedOtpFlag must be 0 or 1.');
-    }
-    if (requireRealSms && allowStagedOtpOnSmsError) {
-      throw E2eFailure(
-        'Remote multi-device App $flowLabel requires real SMS and rejects staged OTP continuation.',
-      );
-    }
-    var otpCommand = const <String>[];
-    if (!useFixedLocalOtp) {
-      try {
-        otpCommand = parseRemoteMultiDeviceOtpCommand(
-          otpCommandJson,
-          requireReviewedStagedResolver: allowStagedOtpOnSmsError,
-        );
-      } on FormatException {
-        throw E2eFailure(
-          'Dedicated multi-device OTP resolver command is invalid.',
-        );
-      }
     }
     final handlePrefix =
         (environment[_multiDeviceRemoteHandlePrefixEnv] ?? 'appmd')
@@ -4044,20 +4115,23 @@ class _RemoteMultiDeviceBaseConfig {
       didDomain: didDomain,
       anpServiceUrl: fileConfig.anpServiceUrl ?? '$serviceBaseUrl/anp-im/rpc',
       anpServiceDid: fileConfig.anpServiceDid ?? 'did:wba:$didDomain',
-      phone: phone,
-      otpCommandJson: otpCommandJson,
-      otpCommand: List<String>.unmodifiable(otpCommand),
-      fixedOtp: useFixedLocalOtp ? localOtp : null,
-      allowStagedOtpOnSmsError: allowStagedOtpOnSmsError,
+      phone: localPhone,
+      fixedOtp: localOtp,
       handlePrefix: handlePrefix,
     );
   }
 }
 
 class RemoteHandleRecoveryConfig {
-  const RemoteHandleRecoveryConfig._(this._base);
+  const RemoteHandleRecoveryConfig._(
+    this._base, {
+    required this.cliBin,
+    required this.cliSourceRef,
+  });
 
   final _RemoteMultiDeviceBaseConfig _base;
+  final String cliBin;
+  final String cliSourceRef;
 
   DesktopE2ePlatform get platform => _base.platform;
   String get serviceBaseUrl => _base.serviceBaseUrl;
@@ -4068,29 +4142,43 @@ class RemoteHandleRecoveryConfig {
   String get anpServiceUrl => _base.anpServiceUrl;
   String get anpServiceDid => _base.anpServiceDid;
   String get phone => _base.phone;
-  String get otpCommandJson => _base.otpCommandJson;
-  List<String> get otpCommand => _base.otpCommand;
-  String? get fixedOtp => _base.fixedOtp;
-  bool get usesFixedLocalOtp => fixedOtp != null;
+  String get fixedOtp => _base.fixedOtp;
   String get handlePrefix => _base.handlePrefix;
 
   static RemoteHandleRecoveryConfig from({
     required DesktopE2eFileConfig fileConfig,
     required Map<String, String> environment,
   }) {
+    final base = _RemoteMultiDeviceBaseConfig.from(
+      fileConfig: fileConfig,
+      environment: environment,
+      activationGate: _multiDeviceRemoteRecoveryGateEnv,
+      flowLabel: 'Handle Recovery',
+      supportedPlatforms: const <DesktopE2ePlatform>{
+        DesktopE2ePlatform.macos,
+        DesktopE2ePlatform.linux,
+      },
+    );
+    final sourcePath = fileConfig.path ?? '<missing-config>';
+    final cliBin = _requiredConfig(
+      fileConfig.cliBin,
+      'cliPeer.binary',
+      sourcePath,
+    );
+    final cliSourceRef = _requiredConfig(
+      fileConfig.cliSourceRef,
+      'cliPeer.sourceRef',
+      sourcePath,
+    );
+    if (!isAuditableGitSha(cliSourceRef)) {
+      throw E2eFailure(
+        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA embedded in the CLI binary.',
+      );
+    }
     return RemoteHandleRecoveryConfig._(
-      _RemoteMultiDeviceBaseConfig.from(
-        fileConfig: fileConfig,
-        environment: environment,
-        activationGate: _multiDeviceRemoteRecoveryGateEnv,
-        flowLabel: 'Handle Recovery',
-        requireRealSms: true,
-        allowFixedLocalOtp: true,
-        supportedPlatforms: const <DesktopE2ePlatform>{
-          DesktopE2ePlatform.macos,
-          DesktopE2ePlatform.linux,
-        },
-      ),
+      base,
+      cliBin: cliBin,
+      cliSourceRef: cliSourceRef.toLowerCase(),
     );
   }
 }
@@ -4123,8 +4211,7 @@ class RemoteMultiDeviceAppPairConfig {
   String get anpServiceUrl => _base.anpServiceUrl;
   String get anpServiceDid => _base.anpServiceDid;
   String get phone => _base.phone;
-  String get otpCommandJson => _base.otpCommandJson;
-  bool get allowStagedOtpOnSmsError => _base.allowStagedOtpOnSmsError;
+  String get fixedOtp => _base.fixedOtp;
   String get handlePrefix => _base.handlePrefix;
 
   static RemoteMultiDeviceAppPairConfig from({
@@ -4186,9 +4273,7 @@ class RemoteMultiDeviceJoinConfig {
     required this.anpServiceUrl,
     required this.anpServiceDid,
     required this.phone,
-    required this.otpCommandJson,
-    required this.otpCommand,
-    required this.allowStagedOtpOnSmsError,
+    required this.fixedOtp,
     required this.handlePrefix,
     required this.cliBin,
     required this.cliSourceRef,
@@ -4203,9 +4288,7 @@ class RemoteMultiDeviceJoinConfig {
   final String anpServiceUrl;
   final String anpServiceDid;
   final String phone;
-  final String otpCommandJson;
-  final List<String> otpCommand;
-  final bool allowStagedOtpOnSmsError;
+  final String fixedOtp;
   final String handlePrefix;
   final String cliBin;
   final String cliSourceRef;
@@ -4213,10 +4296,14 @@ class RemoteMultiDeviceJoinConfig {
   static RemoteMultiDeviceJoinConfig from({
     required DesktopE2eFileConfig fileConfig,
     required Map<String, String> environment,
+    Set<DesktopE2ePlatform> supportedPlatforms = const <DesktopE2ePlatform>{
+      DesktopE2ePlatform.macos,
+    },
   }) {
     final base = _RemoteMultiDeviceBaseConfig.from(
       fileConfig: fileConfig,
       environment: environment,
+      supportedPlatforms: supportedPlatforms,
     );
     final sourcePath = fileConfig.path ?? '<missing-config>';
     final cliBin = _requiredConfig(
@@ -4244,9 +4331,7 @@ class RemoteMultiDeviceJoinConfig {
       anpServiceUrl: base.anpServiceUrl,
       anpServiceDid: base.anpServiceDid,
       phone: base.phone,
-      otpCommandJson: base.otpCommandJson,
-      otpCommand: base.otpCommand,
-      allowStagedOtpOnSmsError: base.allowStagedOtpOnSmsError,
+      fixedOtp: base.fixedOtp,
       handlePrefix: base.handlePrefix,
       cliBin: cliBin,
       cliSourceRef: cliSourceRef.toLowerCase(),
@@ -5213,7 +5298,6 @@ enum DesktopE2eCase {
   bool get requiresCliPeer =>
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
-      this != DesktopE2eCase.multiDeviceRemoteRecovery &&
       this != DesktopE2eCase.multiDeviceAppPair;
 
   bool get publishesNicknameFixture =>
