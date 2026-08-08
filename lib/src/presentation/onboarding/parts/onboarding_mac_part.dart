@@ -875,6 +875,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 18),
           _MacOutlinedField(
             controller: phoneController,
+            semanticsIdentifier: 'e2e-phone-input',
             label: context.l10n.onboardingPhone,
             placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
@@ -883,6 +884,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 16),
           _MacOutlinedField(
             controller: handleController,
+            semanticsIdentifier: 'e2e-handle-input',
             label: context.l10n.onboardingHandle,
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
@@ -902,6 +904,7 @@ class _MacRegisterForm extends StatelessWidget {
         children: <Widget>[
           _MacOutlinedField(
             controller: phoneController,
+            semanticsIdentifier: 'e2e-phone-input',
             label: context.l10n.onboardingPhone,
             placeholder: context.l10n.onboardingPhonePlaceholder,
             keyboardType: TextInputType.phone,
@@ -910,6 +913,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 16),
           _MacOutlinedField(
             controller: handleController,
+            semanticsIdentifier: 'e2e-handle-input',
             label: context.l10n.onboardingHandle,
             placeholder: context.l10n.onboardingHandlePlaceholder,
             icon: CupertinoIcons.at,
@@ -917,6 +921,7 @@ class _MacRegisterForm extends StatelessWidget {
           const SizedBox(height: 16),
           _MacOutlinedField(
             controller: otpController,
+            semanticsIdentifier: 'e2e-otp-input',
             label: context.l10n.onboardingOtp,
             placeholder: context.l10n.onboardingOtpPlaceholder,
             keyboardType: TextInputType.number,
@@ -933,6 +938,8 @@ class _MacRegisterForm extends StatelessWidget {
                   : onRequestOtp,
             ),
           ),
+          if (otpCooldown.isCoolingDown) const E2eMarker('e2e-otp-sent'),
+          _OtpCompleteMarker(controller: otpController),
           const SizedBox(height: 22),
           SizedBox(
             key: const Key('onboarding-mac-phone-submit-action'),
@@ -951,6 +958,7 @@ class _MacRegisterForm extends StatelessWidget {
       children: <Widget>[
         _MacOutlinedField(
           controller: handleController,
+          semanticsIdentifier: 'e2e-handle-input',
           label: context.l10n.onboardingHandle,
           placeholder: context.l10n.onboardingHandlePlaceholder,
           icon: CupertinoIcons.at,
@@ -958,6 +966,7 @@ class _MacRegisterForm extends StatelessWidget {
         const SizedBox(height: 16),
         _MacOutlinedField(
           controller: emailController,
+          semanticsIdentifier: 'e2e-email-input',
           label: context.l10n.onboardingEmail,
           placeholder: context.l10n.onboardingEmailPlaceholder,
           icon: CupertinoIcons.mail,
@@ -1016,6 +1025,7 @@ class _MacOutlinedField extends StatelessWidget {
     required this.controller,
     required this.label,
     required this.placeholder,
+    this.semanticsIdentifier,
     this.icon,
     this.keyboardType,
     this.prefix,
@@ -1025,6 +1035,7 @@ class _MacOutlinedField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String placeholder;
+  final String? semanticsIdentifier;
   final IconData? icon;
   final TextInputType? keyboardType;
   final Widget? prefix;
@@ -1053,22 +1064,25 @@ class _MacOutlinedField extends StatelessWidget {
                 const SizedBox(width: 11),
               ],
               Expanded(
-                child: CupertinoTextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  placeholder: placeholder,
-                  decoration: null,
-                  padding: EdgeInsets.zero,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: const TextStyle(
-                    color: AwikiMePalette.inkNeutral,
-                    fontSize: 14,
-                    height: 1.2,
-                  ),
-                  placeholderStyle: const TextStyle(
-                    color: AwikiMePalette.messagePreview,
-                    fontSize: 14,
-                    height: 1.2,
+                child: Semantics(
+                  identifier: semanticsIdentifier,
+                  child: CupertinoTextField(
+                    controller: controller,
+                    keyboardType: keyboardType,
+                    placeholder: placeholder,
+                    decoration: null,
+                    padding: EdgeInsets.zero,
+                    textAlignVertical: TextAlignVertical.center,
+                    style: const TextStyle(
+                      color: AwikiMePalette.inkNeutral,
+                      fontSize: 14,
+                      height: 1.2,
+                    ),
+                    placeholderStyle: const TextStyle(
+                      color: AwikiMePalette.messagePreview,
+                      fontSize: 14,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ),

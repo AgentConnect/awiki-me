@@ -1,4 +1,4 @@
-// [INPUT]: Audited awiki.info endpoints, a dedicated account/SSH OTP resolver,
+// [INPUT]: Audited awiki.info endpoints and a protected fixed test OTP fixture,
 //          production AppBootstrap/native Core, independent CLI/App or App/App
 //          roots, explicit E2E-only user-presence control, foreground CLI TTY
 //          where used, and loopback App-pair phases.
@@ -60,10 +60,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
+import 'package:yaml/yaml.dart';
 
 import '../../account_state_operator_contract.dart';
 import '../../app_pair_protocol.dart';
 import '../../case_attestation.dart';
+import '../../desktop_process_host.dart';
 import '../../e2e_user_presence_port.dart';
 import '../../remote_multi_device_join_contract.dart';
 import '../../sync_recovery_operator_contract.dart';
@@ -72,6 +74,7 @@ part 'multi_device_app_pair_ui_test.part.dart';
 
 const String _newDeviceCaseId = 'DEVICE-JOIN-E2E-001';
 const String _adminApprovalCaseId = 'DEVICE-JOIN-E2E-002';
+const String _joinMessageCoreCaseId = 'DEVICE-JOIN-MESSAGE-CORE-E2E-001';
 const String _appPairCaseId = 'DEVICE-JOIN-E2E-004';
 const String _appPairCredentialResetCaseId = 'DEVICE-JOIN-E2E-005';
 const String _appPairAgentSyncCaseId = 'DEVICE-AGENT-SYNC-E2E-001';
@@ -116,8 +119,6 @@ const String _compiledAppPairConfigPath = String.fromEnvironment(
   'AWIKI_MULTI_DEVICE_APP_PAIR_CONFIG',
 );
 const String _activationGate = 'AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED';
-const String _phoneEnv = 'AWIKI_MULTI_DEVICE_E2E_PHONE';
-const String _otpCommandEnv = 'AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON';
 const String _registrationPurpose = 'awiki.identity.register.v1';
 const String _joinPurpose = 'awiki.device.join.v1';
 const Duration _remoteTimeout = Duration(seconds: 30);
@@ -129,11 +130,10 @@ void main() {
     'App new device joins after CLI listener emits a host wake',
     (tester) async {
       final config = _RemoteJoinRunConfig.load();
-      final account = _DedicatedAccount.fromEnvironment(
-        allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
-      );
+      final account = _DedicatedAccount.fromConfig(config);
       final httpClient = http.Client();
       final cli = _JoinCli.admin(config);
+      _JoinCli? directPeer;
       AppBootstrap? bootstrap;
       await tester.binding.setSurfaceSize(const Size(1440, 900));
       _requireIndependentEmptyPaths(<String>[
@@ -147,15 +147,13 @@ void main() {
         await tester.pump();
         await bootstrap?.dispose();
         await cli.deleteLocalState();
+        await directPeer?.deleteLocalState();
         await _deleteDirectory(config.appJoiningStateRoot);
         await tester.binding.setSurfaceSize(null);
       });
 
-      if (!Platform.isMacOS || !File('/usr/bin/script').existsSync()) {
-        fail(
-          'The remote App-new-device Join gate requires a foreground macOS '
-          'pseudo-terminal.',
-        );
+      if (!DesktopProcessHost.current().isAvailable) {
+        fail('The remote App-new-device Join gate requires a pseudo-terminal.');
       }
       await cli.initialize();
       final handle = _uniqueHandle(config.handlePrefix);
@@ -165,6 +163,9 @@ void main() {
         account: account,
         purpose: _registrationPurpose,
         handle: handle,
+      );
+      final registrationRetryAt = DateTime.now().add(
+        const Duration(seconds: 61),
       );
       final did = await cli.registerReadyAdmin(
         handle: handle,
@@ -178,26 +179,77 @@ void main() {
       await cli.startRealtimeListener();
 
       bootstrap = await AppBootstrap.create(
-        environment: _joinOnlyEnvironment(config),
+        environment: _joinOnlyEnvironment(
+          config,
+          enableMessageSyncCore: _invocationExpects(_joinMessageCoreCaseId),
+        ),
         appStateRoot: config.appJoiningStateRoot,
       );
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await _openNewDeviceJoin(tester);
-
-      final joinOtp = await _requestAndResolveOtp(
-        client: httpClient,
-        config: config,
-        account: account,
-        purpose: _joinPurpose,
-        handle: handle,
+      await _pumpUntil(
+        tester,
+        () => find.byType(OnboardingPage).evaluate().length == 1,
+        timeout: const Duration(seconds: 45),
+        failure: 'The joining App did not open unified onboarding.',
       );
-      await _enterText(tester, 'multi-device-join-handle', handle);
-      await _enterText(tester, 'multi-device-join-phone', account.phone);
-      await _enterText(tester, 'multi-device-join-otp', joinOtp);
+      await _pumpUntil(
+        tester,
+        () => find.bySemanticsIdentifier('e2e-otp-input').evaluate().isNotEmpty,
+        timeout: const Duration(seconds: 45),
+        failure: 'The unified phone onboarding form was unavailable.',
+      );
+      await _enterText(tester, 'e2e-phone-input', account.phone);
+      await _enterText(tester, 'e2e-handle-input', handle);
+      await _waitUntil(registrationRetryAt);
       await _tapOne(
         tester,
-        find.bySemanticsIdentifier('multi-device-start-join'),
-        failure: 'The new-device Join action was unavailable.',
+        find.bySemanticsIdentifier('e2e-send-otp-button'),
+        failure: 'The onboarding OTP request was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().isNotEmpty,
+        timeout: const Duration(seconds: 45),
+        failure: 'The onboarding OTP request did not complete.',
+      );
+      await _enterText(tester, 'e2e-otp-input', account.fixedOtp);
+      await _pumpUntil(
+        tester,
+        () => find
+            .bySemanticsIdentifier('e2e-otp-complete')
+            .evaluate()
+            .isNotEmpty,
+        failure: 'The onboarding OTP field did not contain six digits.',
+      );
+      final macSubmit = find.byKey(
+        const Key('onboarding-mac-phone-submit-action'),
+      );
+      await _tapOne(
+        tester,
+        macSubmit.evaluate().isNotEmpty
+            ? macSubmit
+            : find.byKey(const Key('onboarding-phone-submit-action')),
+        failure: 'The unified login/register action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const Key('existing-handle-join-action'))
+            .evaluate()
+            .isNotEmpty,
+        timeout: const Duration(seconds: 45),
+        failure: 'The existing Handle did not expose the Join choice.',
+      );
+      await _tapOne(
+        tester,
+        find.byKey(const Key('existing-handle-join-action')),
+        failure: 'The Existing Handle Join choice was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () => find.byType(DeviceJoinPage).evaluate().length == 1,
+        timeout: const Duration(seconds: 45),
+        failure: 'The onboarding continuation did not open Device Join.',
       );
       var container = ProviderScope.containerOf(
         tester.element(find.byType(DeviceJoinPage)),
@@ -225,7 +277,10 @@ void main() {
       await tester.pump();
       await bootstrap.dispose();
       bootstrap = await AppBootstrap.create(
-        environment: _joinOnlyEnvironment(config),
+        environment: _joinOnlyEnvironment(
+          config,
+          enableMessageSyncCore: _invocationExpects(_joinMessageCoreCaseId),
+        ),
         appStateRoot: config.appJoiningStateRoot,
       );
       final restoredSessions = await bootstrap.deviceManagementCorePort!
@@ -245,7 +300,7 @@ void main() {
       }
 
       await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
-      await _openNewDeviceJoin(tester);
+      await _openRestoredNewDeviceJoin(tester);
       container = ProviderScope.containerOf(
         tester.element(find.byType(DeviceJoinPage)),
       );
@@ -339,11 +394,112 @@ void main() {
         joinedDeviceId: initialPending.protocolDeviceId,
       );
 
+      if (_invocationExpects(_joinMessageCoreCaseId)) {
+        await cli.stopRealtimeListener();
+        directPeer = _JoinCli.joining(config);
+        await directPeer.initialize();
+        final peerHandle = _uniqueHandle('${config.handlePrefix}peer');
+        final peerOtp = await _requestAndResolveOtp(
+          client: httpClient,
+          config: config,
+          account: account,
+          purpose: _registrationPurpose,
+          handle: peerHandle,
+        );
+        final peerDid = await directPeer.registerReadyAdmin(
+          handle: peerHandle,
+          phone: account.phone,
+          otp: peerOtp,
+        );
+        await directPeer.startRealtimeListener();
+        final peerResolution = await bootstrap.directoryApplicationService!
+            .resolvePeer(peerDid);
+        final conversationId = peerResolution.conversationId?.trim() ?? '';
+        if (peerResolution.did != peerDid ||
+            !conversationId.startsWith('dm:peer-scope:v1:')) {
+          fail('The joined App did not resolve the Direct peer canonically.');
+        }
+        final outboundText = 'join-core-${_safeId(config.runId, 20)}-outbound';
+        final outbound = await bootstrap.messagingService!.sendConversationText(
+          conversation: AppConversationReadRef.fromConversationId(
+            conversationId,
+          ),
+          content: outboundText,
+        );
+        final outboundId = outbound.remoteId?.trim() ?? '';
+        if (outboundId.isEmpty ||
+            outbound.conversationId != conversationId ||
+            outbound.sendState != MessageSendState.sent ||
+            !outbound.isMine ||
+            outbound.senderDid != did) {
+          fail('The joined App did not commit the minimal Direct message.');
+        }
+        await directPeer.waitForDirectNotification(
+          messageId: outboundId,
+          content: outboundText,
+        );
+        await directPeer.stopRealtimeListener();
+        await _waitForAppPairMessage(
+          container: container,
+          messaging: bootstrap.messagingService!,
+          conversationId: conversationId,
+          content: outboundText,
+          messageId: outboundId,
+          senderDid: did,
+          receiverDid: peerDid,
+          isMine: true,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bootstrap.dispose();
+        final offlineText = 'join-core-${_safeId(config.runId, 20)}-offline';
+        final offlineId = await directPeer.sendDirectText(
+          to: did,
+          text: offlineText,
+        );
+        bootstrap = await AppBootstrap.create(
+          environment: _joinOnlyEnvironment(
+            config,
+            enableMessageSyncCore: true,
+          ),
+          appStateRoot: config.appJoiningStateRoot,
+        );
+        await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+        container = await _waitForAuthenticatedApp(tester, expectedDid: did);
+        await _waitForAppPairMessage(
+          container: container,
+          messaging: bootstrap.messagingService!,
+          conversationId: conversationId,
+          content: offlineText,
+          messageId: offlineId,
+          senderDid: peerDid,
+          receiverDid: did,
+          isMine: false,
+        );
+        await _openAppPairConversation(
+          tester: tester,
+          conversationId: conversationId,
+          content: offlineText,
+        );
+        await _waitForAppPairUnreadCount(
+          tester: tester,
+          container: container,
+          conversationId: conversationId,
+          matches: (count) => count == 0,
+          failure: 'The restarted App did not commit the visible read state.',
+        );
+        await _waitForSafeAppPairSyncDiagnostics(
+          tester: tester,
+          container: container,
+          priorSuccessSequence: 0,
+        );
+      }
+
       await E2eCaseAttestationWriter.markPassed(
         _newDeviceCaseId,
         phases: const <String>[
           'independent_native_devices_bootstrapped',
-          'app_otp_left_join_pending',
+          'existing_handle_onboarding_continuation_left_join_pending',
           'app_restart_restored_pending_without_sas',
           'cli_listener_join_wake_received',
           'sas_matched_without_secret_evidence',
@@ -351,11 +507,22 @@ void main() {
           'app_joined_after_authority_reresolution',
         ],
       );
+      if (_invocationExpects(_joinMessageCoreCaseId)) {
+        await E2eCaseAttestationWriter.markPassed(
+          _joinMessageCoreCaseId,
+          phases: const <String>[
+            'joined_app_direct_committed',
+            'peer_cli_observed_exact_incoming',
+            'app_went_offline_before_peer_send',
+            'same_root_restart_converged_exact_incoming_once',
+            'visible_read_committed',
+            'core_directed_sync_chain_returned_idle',
+          ],
+        );
+      }
     },
     skip:
-        !Platform.isMacOS ||
-        !_RemoteJoinRunConfig.exists() ||
-        !_invocationExpects(_newDeviceCaseId),
+        !_RemoteJoinRunConfig.exists() || !_invocationExpects(_newDeviceCaseId),
     timeout: const Timeout(Duration(minutes: 14)),
   );
 
@@ -363,9 +530,7 @@ void main() {
     'App admin reviews a listener-delivered CLI Join from the global entry',
     (tester) async {
       final config = _RemoteJoinRunConfig.load();
-      final account = _DedicatedAccount.fromEnvironment(
-        allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
-      );
+      final account = _DedicatedAccount.fromConfig(config);
       final httpClient = http.Client();
       final presence = E2eUserPresencePort();
       final cli = _JoinCli.joining(config);
@@ -679,7 +844,9 @@ void main() {
       }
     },
     skip:
-        !Platform.isMacOS ||
+        (!Platform.isMacOS &&
+            (_invocationExpects(_rootTransferCaseId) ||
+                _invocationExpects(_deviceRevokeCaseId))) ||
         !_RemoteJoinRunConfig.exists() ||
         (!_invocationExpects(_adminApprovalCaseId) &&
             !_invocationExpects(_rootTransferCaseId) &&
@@ -1221,7 +1388,6 @@ abstract interface class _RemoteJoinEndpointConfig {
   String get anpServiceUrl;
   String get anpServiceDid;
   String get handlePrefix;
-  bool get allowStagedOtpOnSmsError;
 }
 
 abstract interface class _CliEndpointConfig
@@ -1244,7 +1410,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
     required this.anpServiceUrl,
     required this.anpServiceDid,
     required this.handlePrefix,
-    required this.allowStagedOtpOnSmsError,
+    required this.localConfigPath,
     required this.adminStateRoot,
     required this.joinerStateRoot,
     required this.coordinator,
@@ -1280,8 +1446,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
   final String anpServiceDid;
   @override
   final String handlePrefix;
-  @override
-  final bool allowStagedOtpOnSmsError;
+  final String localConfigPath;
   final String adminStateRoot;
   final String joinerStateRoot;
   final AppPairCoordinatorClient coordinator;
@@ -1358,10 +1523,7 @@ class _AppPairRunConfig implements _CliEndpointConfig {
       anpServiceUrl: _required(service, 'anpServiceUrl'),
       anpServiceDid: _required(service, 'anpServiceDid'),
       handlePrefix: _required(account, 'handlePrefix'),
-      allowStagedOtpOnSmsError: _requiredBool(
-        account,
-        'allowStagedOtpOnSmsError',
-      ),
+      localConfigPath: _required(account, 'localConfigPath'),
       adminStateRoot: _required(admin, 'stateRoot'),
       joinerStateRoot: _required(joiner, 'stateRoot'),
       coordinator: AppPairCoordinatorClient(
@@ -1450,7 +1612,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
     required this.anpServiceUrl,
     required this.anpServiceDid,
     required this.handlePrefix,
-    required this.allowStagedOtpOnSmsError,
+    required this.otpMode,
+    required this.localConfigPath,
     required this.automatedUserPresence,
     required this.cliBin,
     required this.cliSourceRef,
@@ -1480,8 +1643,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
   final String anpServiceDid;
   @override
   final String handlePrefix;
-  @override
-  final bool allowStagedOtpOnSmsError;
+  final String otpMode;
+  final String localConfigPath;
   final bool automatedUserPresence;
   @override
   final String cliBin;
@@ -1531,10 +1694,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
       anpServiceUrl: _required(service, 'anpServiceUrl'),
       anpServiceDid: _required(service, 'anpServiceDid'),
       handlePrefix: _required(account, 'handlePrefix'),
-      allowStagedOtpOnSmsError: _requiredBool(
-        account,
-        'allowStagedOtpOnSmsError',
-      ),
+      otpMode: _required(account, 'otpMode'),
+      localConfigPath: _required(account, 'localConfigPath'),
       automatedUserPresence: _requiredBool(
         testControl,
         'automatedUserPresence',
@@ -1548,7 +1709,8 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
       appStateRoot: _required(app, 'stateRoot'),
       appJoiningStateRoot: _required(joiningApp, 'stateRoot'),
     );
-    if (config.didDomain != 'awiki.info') {
+    if (config.didDomain != 'awiki.info' ||
+        config.otpMode != 'ignored_local_fixture') {
       throw StateError('Remote multi-device Join DID domain is not audited.');
     }
     if (!config.automatedUserPresence) {
@@ -1580,43 +1742,35 @@ class _RemoteJoinRunConfig implements _CliEndpointConfig {
 }
 
 class _DedicatedAccount {
-  const _DedicatedAccount({required this.phone, required this.otpCommand});
+  const _DedicatedAccount({required this.phone, required this.fixedOtp});
 
   final String phone;
-  final List<String> otpCommand;
+  final String fixedOtp;
 
-  static _DedicatedAccount fromEnvironment({
-    required bool allowStagedOtpOnSmsError,
-  }) {
-    final phone = Platform.environment[_phoneEnv]?.trim() ?? '';
-    final encodedCommand = Platform.environment[_otpCommandEnv]?.trim() ?? '';
-    if (phone.isEmpty || encodedCommand.isEmpty) {
-      throw StateError('Dedicated multi-device account is missing.');
+  static _DedicatedAccount fromConfig(_RemoteJoinRunConfig config) =>
+      fromProtectedConfig(config.localConfigPath);
+
+  static _DedicatedAccount fromProtectedConfig(String configPath) {
+    final file = File(configPath);
+    if (!file.existsSync()) {
+      throw StateError('The protected local OTP fixture is missing.');
     }
-    final bool stagedOtpEnabled;
+    final Object? decoded;
     try {
-      stagedOtpEnabled = parseRemoteMultiDeviceStagedOtpFlag(
-        Platform.environment,
-      );
-    } on FormatException {
-      throw StateError('Dedicated staged OTP mode is invalid.');
+      decoded = loadYaml(file.readAsStringSync());
+    } on Object {
+      throw StateError('The protected local OTP fixture is invalid.');
     }
-    if (stagedOtpEnabled != allowStagedOtpOnSmsError) {
-      throw StateError('Dedicated staged OTP mode does not match the runner.');
+    if (decoded is! Map) {
+      throw StateError('The protected local OTP fixture is invalid.');
     }
-    final List<String> command;
-    try {
-      command = parseRemoteMultiDeviceOtpCommand(
-        encodedCommand,
-        requireReviewedStagedResolver: allowStagedOtpOnSmsError,
-      );
-    } on FormatException {
-      throw StateError('Dedicated OTP resolver is invalid.');
+    final otp = _map(_stringMap(decoded), 'otp');
+    final phone = _required(otp, 'phone');
+    final code = _required(otp, 'code');
+    if (!isSixDigitAsciiOtp(code)) {
+      throw StateError('The protected local test OTP is invalid.');
     }
-    return _DedicatedAccount(
-      phone: phone,
-      otpCommand: List<String>.unmodifiable(command),
-    );
+    return _DedicatedAccount(phone: phone, fixedOtp: code);
   }
 }
 
@@ -1653,6 +1807,7 @@ class _JoinCli {
   final String workspace;
   final String home;
   final String _tenantName;
+  final DesktopProcessHost _processHost = DesktopProcessHost.current();
   Process? _joinRequestListener;
   String? _hostNotificationPath;
 
@@ -1725,6 +1880,40 @@ class _JoinCli {
     return _required(_stringMap(message), 'id');
   }
 
+  Future<void> waitForDirectNotification({
+    required String messageId,
+    required String content,
+  }) async {
+    final path = _hostNotificationPath;
+    if (path == null || _joinRequestListener == null) {
+      fail('The CLI Direct-message listener was not active.');
+    }
+    final deadline = DateTime.now().add(const Duration(seconds: 45));
+    while (DateTime.now().isBefore(deadline)) {
+      final file = File(path);
+      if (await file.exists()) {
+        final lines = await file.readAsLines();
+        final matches = lines.where((line) {
+          final decoded = jsonDecode(line);
+          if (decoded is! Map || decoded['topic'] != 'im.message.received') {
+            return false;
+          }
+          final data = decoded['data'];
+          return data is Map &&
+              data['channel'] == 'direct' &&
+              data['message_id'] == messageId &&
+              data['text'] == content;
+        }).length;
+        if (matches == 1) return;
+        if (matches > 1) {
+          fail('The CLI listener duplicated the exact Direct notification.');
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 750));
+    }
+    fail('The CLI listener did not observe the exact Direct notification.');
+  }
+
   Future<void> startRealtimeListener() async {
     if (_joinRequestListener != null) {
       fail('The CLI realtime listener was started more than once.');
@@ -1739,16 +1928,19 @@ class _JoinCli {
       '--enabled=true',
       '--auto-install=false',
       '--auto-start=false',
-    ]);
-    await _run(const <String>[
+    ], safeAction: 'runtime_listener_config_set');
+    final mode = await _run(const <String>[
       '--format',
       'json',
       'runtime',
       'mode',
-      'set',
-      'websocket',
-    ]);
-    await _run(const <String>[
+      'get',
+    ], safeAction: 'runtime_mode_get');
+    final runtime = _data(mode, action: null)['runtime'];
+    if (runtime is! Map || runtime['mode'] != 'websocket') {
+      fail('The CLI foreground listener requires websocket runtime mode.');
+    }
+    final configured = await _run(const <String>[
       '--format',
       'json',
       'runtime',
@@ -1757,15 +1949,8 @@ class _JoinCli {
       'set',
       '--sink',
       'file',
-    ]);
-    final enabled = await _run(const <String>[
-      '--format',
-      'json',
-      'runtime',
-      'host-notify',
-      'enable',
-    ]);
-    final hostNotify = _data(enabled, action: null)['host_notify'];
+    ], safeAction: 'runtime_host_notify_config_set');
+    final hostNotify = _data(configured, action: null)['host_notify'];
     if (hostNotify is! Map) {
       fail('The CLI returned no host-notification configuration.');
     }
@@ -2008,25 +2193,16 @@ class _JoinCli {
     var invalidOutput = false;
     var exitCode = -1;
     try {
-      process = await Process.start(
-        '/usr/bin/script',
-        <String>[
-          '-q',
-          '/dev/null',
-          config.cliBin,
-          '--format',
-          'json',
-          'id',
-          'device',
-          'join',
-          'poll',
-          '--session',
-          sessionId,
-        ],
-        environment: _environment(),
-        includeParentEnvironment: false,
-        runInShell: false,
-      );
+      process = await _processHost.startForeground(config.cliBin, <String>[
+        '--format',
+        'json',
+        'id',
+        'device',
+        'join',
+        'poll',
+        '--session',
+        sessionId,
+      ], environment: _environment());
 
       void consume(List<int> bytes) {
         if (invalidOutput) return;
@@ -2088,25 +2264,16 @@ class _JoinCli {
     var invalidOutput = false;
     var exitCode = -1;
     try {
-      process = await Process.start(
-        '/usr/bin/script',
-        <String>[
-          '-q',
-          '/dev/null',
-          config.cliBin,
-          '--format',
-          'json',
-          'id',
-          'device',
-          'join',
-          'approve',
-          '--session',
-          joinSessionId,
-        ],
-        environment: _environment(),
-        includeParentEnvironment: false,
-        runInShell: false,
-      );
+      process = await _processHost.startForeground(config.cliBin, <String>[
+        '--format',
+        'json',
+        'id',
+        'device',
+        'join',
+        'approve',
+        '--session',
+        joinSessionId,
+      ], environment: _environment());
 
       void consume(List<int> bytes) {
         if (invalidOutput) return;
@@ -2507,6 +2674,7 @@ class _JoinCli {
   Future<Map<String, Object?>> _run(
     List<String> args, {
     String? accountVerificationToken,
+    String? safeAction,
   }) async {
     final ProcessResult result;
     try {
@@ -2525,7 +2693,8 @@ class _JoinCli {
     if (result.exitCode != 0) {
       fail(
         'The independent CLI command failed '
-        '(${safeCliFailureDiagnostic(exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr)}).',
+        '(action=${safeAction ?? 'unspecified'}, '
+        '${safeCliFailureDiagnostic(exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr)}).',
       );
     }
     Object? decoded;
@@ -2569,6 +2738,12 @@ class _JoinCli {
   }
 
   Future<void> deleteLocalState() async {
+    await stopRealtimeListener();
+    await _deleteDirectory(workspace);
+    await _deleteDirectory(home);
+  }
+
+  Future<void> stopRealtimeListener() async {
     final listener = _joinRequestListener;
     _joinRequestListener = null;
     if (listener != null && !await _processExited(listener)) {
@@ -2580,8 +2755,6 @@ class _JoinCli {
         await listener.exitCode;
       }
     }
-    await _deleteDirectory(workspace);
-    await _deleteDirectory(home);
   }
 }
 
@@ -2700,6 +2873,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   bool enableRootTransfer = false,
   bool enableStep4 = false,
   bool enableAppPairFunctional = false,
+  bool enableMessageSyncCore = false,
 }) => AwikiEnvironmentConfig(
   baseUrl: config.baseUrl,
   userServiceUrl: config.userServiceUrl,
@@ -2709,7 +2883,7 @@ AwikiEnvironmentConfig _joinOnlyEnvironment(
   anpServiceUrl: config.anpServiceUrl,
   anpServiceDid: config.anpServiceDid,
   agentImEnabled: enableAppPairFunctional,
-  messageSyncV2ReadEnabled: enableAppPairFunctional,
+  messageSyncV2ReadEnabled: enableAppPairFunctional || enableMessageSyncCore,
   multiDeviceDeviceRevokeEnabled: enableStep4 || enableAppPairFunctional,
   multiDeviceDirectE2eeEnabled: enableRootTransfer,
   multiDeviceGroupE2eeEnabled: enableStep4,
@@ -2730,6 +2904,21 @@ Future<void> _openNewDeviceJoin(WidgetTester tester) async {
     tester,
     () => find.byType(DeviceJoinPage).evaluate().length == 1,
     failure: 'The public new-device Join page did not open.',
+  );
+}
+
+Future<void> _openRestoredNewDeviceJoin(WidgetTester tester) async {
+  await _pumpUntil(
+    tester,
+    () => find.byType(OnboardingPage).evaluate().length == 1,
+    failure: 'The restarted App did not return to onboarding.',
+  );
+  final context = tester.element(find.byType(OnboardingPage));
+  unawaited(openDeviceJoinPage(context));
+  await _pumpUntil(
+    tester,
+    () => find.byType(DeviceJoinPage).evaluate().length == 1,
+    failure: 'The restored new-device Join page did not open.',
   );
 }
 
@@ -2806,7 +2995,7 @@ Future<String> _requestAndResolveOtp({
               'purpose': purpose,
               'target_handle': handle,
               'target_handle_domain': config.didDomain,
-              'rate_limit_seconds': 30,
+              'rate_limit_seconds': 60,
               'code_expire_minutes': 5,
             }),
           )
@@ -2827,77 +3016,10 @@ Future<String> _requestAndResolveOtp({
   if (response == null) {
     fail('The purpose-bound OTP request was rejected.');
   }
-  try {
-    return continueRemoteMultiDeviceOtpAfterSmsResponse(
-      statusCode: response.statusCode,
-      contentType: response.headers['content-type'],
-      body: response.body,
-      allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
-      resolveOtp: () => _resolveOtp(
-        account: account,
-        purpose: purpose,
-        handle: handle,
-        didDomain: config.didDomain,
-      ),
-    );
-  } on FormatException {
-    fail('The purpose-bound OTP response was invalid.');
+  if (response.statusCode != 200) {
+    fail('The purpose-bound OTP request was rejected.');
   }
-}
-
-Future<String> _resolveOtp({
-  required _DedicatedAccount account,
-  required String purpose,
-  required String handle,
-  required String didDomain,
-}) async {
-  final Process process;
-  try {
-    process = await Process.start(
-      account.otpCommand.first,
-      account.otpCommand.skip(1).toList(growable: false),
-      runInShell: false,
-    );
-  } on Object {
-    fail('The dedicated OTP resolver transport failed safely.');
-  }
-  process.stdin.write(
-    jsonEncode(<String, Object?>{
-      'phone': account.phone,
-      'purpose': purpose,
-      'target_handle': handle,
-      'target_handle_domain': didDomain,
-      'recovery_session_id': null,
-    }),
-  );
-  await process.stdin.close();
-  final stdoutFuture = process.stdout.transform(utf8.decoder).join();
-  final stderrFuture = process.stderr.drain<void>();
-  int exitCode;
-  try {
-    exitCode = await process.exitCode.timeout(_remoteTimeout);
-  } on TimeoutException {
-    process.kill(ProcessSignal.sigkill);
-    fail('The dedicated OTP resolver timed out.');
-  }
-  final stdout = await stdoutFuture;
-  await stderrFuture;
-  if (exitCode != 0 || stdout.length > 1024) {
-    fail('The dedicated OTP resolver failed without exposing output.');
-  }
-  Object? decoded;
-  try {
-    decoded = jsonDecode(stdout);
-  } on Object {
-    fail('The dedicated OTP resolver returned invalid JSON.');
-  }
-  if (decoded is! Map ||
-      decoded.length != 1 ||
-      decoded['otp'] is! String ||
-      !isSixDigitAsciiOtp(decoded['otp'] as String)) {
-    fail('The dedicated OTP resolver returned an invalid response.');
-  }
-  return decoded['otp'] as String;
+  return account.fixedOtp;
 }
 
 Future<String> _exchangeJoinGrant({
@@ -3167,6 +3289,13 @@ Future<void> _deleteDirectory(String path) async {
   final directory = Directory(path);
   if (await directory.exists()) {
     await directory.delete(recursive: true);
+  }
+}
+
+Future<void> _waitUntil(DateTime boundary) async {
+  final remaining = boundary.toUtc().difference(DateTime.now().toUtc());
+  if (remaining > Duration.zero) {
+    await Future<void>.delayed(remaining);
   }
 }
 
