@@ -247,7 +247,7 @@ void main() {
 
       expect(hyphen.e2eCase, DesktopE2eCase.multiDeviceRemoteRecovery);
       expect(underscore.e2eCase, DesktopE2eCase.multiDeviceRemoteRecovery);
-      expect(hyphen.e2eCase.requiresCliPeer, isTrue);
+      expect(hyphen.e2eCase.requiresCliPeer, isFalse);
       expect(hyphen.e2eCase.scenario, 'multi-device-handle-recovery-v1');
       expect(hyphen.e2eCase.caseIds, <String>[
         'HANDLE-RECOVERY-V1-E2E-001',

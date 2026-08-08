@@ -280,7 +280,7 @@ Future<void> main(List<String> args) async {
     final runner = DesktopE2eRunner(root: Directory.current, options: options);
     await runner.run();
   } on E2eFailure catch (error) {
-    stderr.writeln('\nDesktop CLI peer E2E failed: ${error.message}');
+    stderr.writeln('\nDesktop E2E failed: ${error.message}');
     exitCode = 1;
   }
 }
@@ -510,6 +510,7 @@ class DesktopE2eRunner {
     if (!options.dryRun &&
         options.e2eCase == DesktopE2eCase.multiDeviceRemoteRecovery) {
       appStateRootDir.createSync(recursive: true);
+      multiDeviceAppJoiningStateRootDir.createSync(recursive: true);
     }
     if (!options.dryRun &&
         (options.e2eCase == DesktopE2eCase.multiDeviceAppPair ||
@@ -787,7 +788,6 @@ class DesktopE2eRunner {
     remoteHandleRecoveryConfig = recoveryConfig;
     _addRuntimeSecret(recoveryConfig.phone);
     _addRuntimeSecret(recoveryConfig.fixedOtp);
-    _addRuntimeSecret(recoveryConfig.cliBin);
     if (!options.dryRun && !commands.dryRun) {
       suiteDefinition.validateRemoteTargetValues(
         didDomain: recoveryConfig.didDomain,
@@ -814,19 +814,6 @@ class DesktopE2eRunner {
       if (recoveryConfig.platform == DesktopE2ePlatform.linux) {
         await commands.requireExecutable('xvfb-run');
       }
-      await commands.requireFile(recoveryConfig.cliBin);
-      final version = await commands.captureResult(
-        recoveryConfig.cliBin,
-        const <String>['--format', 'json', 'version'],
-      );
-      if (!options.dryRun && !commands.dryRun) {
-        final binaryCommit = cliBuildCommitFromVersionJson(version.output);
-        if (binaryCommit != recoveryConfig.cliSourceRef) {
-          throw E2eFailure(
-            'cliPeer.sourceRef does not match the commit embedded in the CLI binary.',
-          );
-        }
-      }
       _identityPreflight = <String, Object?>{
         'status': options.dryRun ? 'dry_run' : 'passed',
         'auditedRemoteTarget': true,
@@ -834,7 +821,7 @@ class DesktopE2eRunner {
         'realUserPresenceAttested': false,
         'productSmsRequestRequired': true,
         'otpMode': 'ignored_local_fixture',
-        'cliSourceVerified': !options.dryRun,
+        'twoIsolatedAppRoots': true,
         'containsRawDids': false,
       };
     });
@@ -854,6 +841,9 @@ class DesktopE2eRunner {
         ],
       );
     });
+    if (!options.dryRun && !commands.dryRun) {
+      appStateRootDir.createSync(recursive: true);
+    }
     await _timed('Flutter Recovery committed/reset crash-cut phase A', () {
       return _runFlutterArgs(
         <String>[
@@ -1398,17 +1388,8 @@ class DesktopE2eRunner {
         'productSmsRequestRequired': true,
       },
       'app': <String, Object?>{'stateRoot': appStateRootDir.path},
-      'cliPeer': <String, Object?>{
-        'binary': recoveryConfig.cliBin,
-        'sourceRef': recoveryConfig.cliSourceRef,
-        'workspace': cliWorkspaceDir.path,
-        'home': cliHomeDir.path,
-      },
-      'externalCliPeer': <String, Object?>{
-        'binary': recoveryConfig.cliBin,
-        'sourceRef': recoveryConfig.cliSourceRef,
-        'workspace': multiDeviceCliAdminWorkspaceDir.path,
-        'home': multiDeviceCliAdminHomeDir.path,
+      'peerApp': <String, Object?>{
+        'stateRoot': multiDeviceAppJoiningStateRootDir.path,
       },
       'crashCut': <String, Object?>{
         'handoffPath': processRestartHandoffFile.path,
@@ -2609,9 +2590,7 @@ class DesktopE2eRunner {
         remoteMultiDeviceAppPairConfig?.serviceBaseUrl;
     final targetHost = targetUrl == null ? null : Uri.tryParse(targetUrl)?.host;
     final sourceRef =
-        config?.cliSourceRef ??
-        remoteMultiDeviceJoinConfig?.cliSourceRef ??
-        remoteHandleRecoveryConfig?.cliSourceRef;
+        config?.cliSourceRef ?? remoteMultiDeviceJoinConfig?.cliSourceRef;
     resourceLedgerFile.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert(<String, Object?>{
         'schemaVersion': 1,
@@ -4128,15 +4107,9 @@ class _RemoteMultiDeviceBaseConfig {
 }
 
 class RemoteHandleRecoveryConfig {
-  const RemoteHandleRecoveryConfig._(
-    this._base, {
-    required this.cliBin,
-    required this.cliSourceRef,
-  });
+  const RemoteHandleRecoveryConfig._(this._base);
 
   final _RemoteMultiDeviceBaseConfig _base;
-  final String cliBin;
-  final String cliSourceRef;
 
   DesktopE2ePlatform get platform => _base.platform;
   String get serviceBaseUrl => _base.serviceBaseUrl;
@@ -4164,27 +4137,7 @@ class RemoteHandleRecoveryConfig {
         DesktopE2ePlatform.linux,
       },
     );
-    final sourcePath = fileConfig.path ?? '<missing-config>';
-    final cliBin = _requiredConfig(
-      fileConfig.cliBin,
-      'cliPeer.binary',
-      sourcePath,
-    );
-    final cliSourceRef = _requiredConfig(
-      fileConfig.cliSourceRef,
-      'cliPeer.sourceRef',
-      sourcePath,
-    );
-    if (!isAuditableGitSha(cliSourceRef)) {
-      throw E2eFailure(
-        'cliPeer.sourceRef must be the exact non-zero 40-character commit SHA embedded in the CLI binary.',
-      );
-    }
-    return RemoteHandleRecoveryConfig._(
-      base,
-      cliBin: cliBin,
-      cliSourceRef: cliSourceRef.toLowerCase(),
-    );
+    return RemoteHandleRecoveryConfig._(base);
   }
 }
 
@@ -5303,6 +5256,7 @@ enum DesktopE2eCase {
   bool get requiresCliPeer =>
       this != DesktopE2eCase.smoke &&
       this != DesktopE2eCase.multiDevice &&
+      this != DesktopE2eCase.multiDeviceRemoteRecovery &&
       this != DesktopE2eCase.multiDeviceAppPair;
 
   bool get publishesNicknameFixture =>
