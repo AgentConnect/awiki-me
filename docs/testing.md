@@ -279,7 +279,8 @@ dart run tests/e2e/runner.dart --case multi-device \
 
 This suite launches the real production bootstrap/native Core with an
 independent temporary Storage Scope and deletes that root after the run. It
-checks the default device-management composition and public Join entry while
+checks the default device-management composition and mounts the Join surface in
+the production provider tree while
 the independent root-transfer, revoke, Direct, and Group security gates remain
 closed. It uses no backend, OTP, CLI peer, copied secret state, or fake
 providers. The remote Join case remains separate and is not included in this
@@ -290,26 +291,30 @@ after the dedicated ali deployment and account have been reviewed:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='["ssh","ali","--","sudo","-n","/usr/bin/env","PYTHONDONTWRITEBYTECODE=1","/opt/awiki/services/user-service/current/.venv/bin/python","/opt/awiki/services/user-service/current/scripts/issue_multi_device_test_otp.py","--env-file","/etc/awiki/user-service.env","--apply"]' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=appmd \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-join \
   --config <local-awiki-info-config.yaml>
 ```
 
-The local YAML supplies only the reviewed `awiki.info` service endpoints, the
-CLI binary, and its exact 40-character source revision. The dedicated phone and
-JSON-argv OTP resolver are environment-only inputs; `otp.code`, a static OTP,
-or a command whose local executable is a shell is never accepted by this suite.
-Every argv item rejects whitespace, newlines, shell metacharacters and
-multi-command strings; a nested `bash`/`sh -c` after `ssh` is also rejected.
-The ali-side services must allow the dedicated phone hash and support the
-message-driven member Join contract. The CLI must be built from exactly the
-configured revision. The runner installs an E2E-only UserPresencePort and
-requires exactly one successful decision, so this suite is unattended.
-Production continues to use LocalAuthentication, which this suite does not
-attest.
+The ignored, mode-`0600` local YAML supplies the reviewed `awiki.info` service
+endpoints, `otp.phone`, six-digit `otp.code`, the CLI binary, and its exact
+40-character source revision. Join and registration still call the real
+purpose-bound SMS endpoint; the protected test account makes the configured
+code valid without sending a real SMS. The code is loaded only by the App test
+process, registered with the runner redactor, and is never copied to run config,
+attestation, diagnostics, or reports. The runner installs an E2E-only
+UserPresencePort and requires exactly one successful decision. Production
+continues to use LocalAuthentication, which this suite does not attest.
+
+The same platform-neutral suite requires
+`DEVICE-JOIN-MESSAGE-CORE-E2E-001`: after `DEVICE-JOIN-E2E-001`, the joined App
+sends one ordinary Direct message, the sibling CLI admin observes the exact
+own-sync, then the App is stopped while an independent CLI peer replies. A
+same-root App restart must render that reply exactly once, commit the visible
+read state, and return the Core-directed sync coordinator to current idle
+diagnostics. This is the first-stage App+CLI core subset; the larger two-App
+functional matrix remains separate.
 
 Handle Recovery V1 has a separate visible UI suite and must not be inferred
 from the local capability gate or Join suite. This focused suite supports the
@@ -317,61 +322,35 @@ Linux Flutter desktop runner in addition to macOS:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-recovery \
   --config <local-awiki-info-config.yaml>
 ```
 
-This gate uses current purpose `awiki.identity.handle-recovery.v1`, rejects
-staged SMS-error continuation, and drives prepare/risk confirmation/activate/
-resume through visible Flutter controls. One ignored local YAML phone/code pair
-may be reused for fixture registration and Recovery; resolver mode additionally
-receives the opaque operation ID. See [handle-recovery-ui.md](handle-recovery-ui.md).
-
-By default the purpose-bound `/user-service/v1/auth/sms-codes` request remains
-strictly 200-only. For the user-authorized synthetic test number, an explicit
-operator-only mode may be added to the command above:
-
-```bash
-AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1
-```
-
-An HTTP 429 remains a real rate-limit response, not a staged-SMS condition.
-The runner honors the bounded `Retry-After` header before retrying the HTTP
-request and never invokes the OTP resolver merely because it was rate-limited.
-This flag is accepted only with the exact reviewed resolver argv shown above.
-It permits one non-retried HTTP 503 only when the response media type is
-`application/problem+json` and its object contains exactly `type`, `title`,
-`status`, `detail`, and `instance`: `type=about:blank`,
-`title="SMS Service Error"`, integer `status=503`,
-`instance=/user-service/v1/auth/sms-codes`, and `detail` matching the deployed
-`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` shape. The two
-fixed markers must appear exactly once; another channel prefix, provider code,
-additional marker, secret-related word, or standalone six-digit value fails
-before the scoped resolver is invoked. A valid resolver response must contain
-exactly six ASCII digits. Any other status, content type, key, value, resolver
-output, or malformed flag fails closed without recording the response body.
-The normal HTTP 200 delivery path is unchanged and does not require staged mode.
+This gate uses current purpose `awiki.identity.handle-recovery.v1` and drives
+prepare/risk confirmation/activate/resume through visible Flutter controls.
+It also keeps one independently rooted old App member across Recovery, proves
+the old principal is fenced, ordinarily re-Joins that App to the replacement
+DID, and requires both App Registry/session views to converge. It then uses an
+independent identity in the second App for bidirectional Direct messages while
+checking sibling own-sync exact-one. The same case IDs and oracles run on Linux
+and macOS.
+It uses the same ignored YAML phone/code fixture and still requires a successful
+purpose-bound SMS request. HTTP 429 honors the bounded `Retry-After`; any other
+non-success response fails closed without recording its body. See
+[handle-recovery-ui.md](handle-recovery-ui.md).
 
 Run the unattended one-host App + App member Join with the same reviewed
 remote account inputs:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=apppair \
 dart run tests/e2e/runner.dart \
   --case multi-device-app-pair \
   --config <local-awiki-info-macos-config.yaml>
 ```
-
-When this mode uses the explicitly authorized synthetic test number, add
-`AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`; the same exact
-problem-response and reviewed-resolver restrictions above apply.
 
 Unlike `multi-device-remote-join`, the YAML for this mode does not require a CLI
 binary or source revision. `tool/build_isolated_e2e_app.dart` owns reusable

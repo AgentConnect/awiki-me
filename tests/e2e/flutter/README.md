@@ -140,22 +140,25 @@ receives the system notification, starts verification explicitly, and approves
 an independent CLI requester through exactly one E2E-only user-presence
 decision. Production continues to use macOS LocalAuthentication, which this
 suite does not attest. Both directions use fresh independent native Core
-roots, dynamically resolve purpose-bound OTPs, compare the independently
+roots, load the protected fixed OTP only in process, compare the independently
 derived SAS without recording it, and require the new device to converge as a
 non-admin member in both Registries. The App-new-device direction also restarts
 from the same pending Core session and rejects persisted SAS. The suite fails
-closed unless the dedicated server-side test-phone authorization, JSON-argv OTP resolver, exact
-CLI source revision are explicit. The
+closed unless the protected ignored YAML contains the authorized test phone,
+six-digit test code, and exact CLI source revision. The OTP is redacted and is
+never written into the run config, attestation, diagnostics, or reports. The
 joining CLI exposes its SAS only through the foreground TTY prompt; JSON remains
 redacted and is used only for the public `response_verified` state. The
-optional synthetic-number staged-OTP mode is an explicit operator test path
-with fixed resolver argv and an exact deployed
-`[SMS_ERROR] Globe SMS send failed: [MOBILE_NUMBER_ILLEGAL] ...` RFC7807 gate;
-provider/channel drift, additional markers, and secret-like detail are rejected
-before resolver execution. It does not prove SMS delivery or change product
-behavior. See
+test account still exercises the real purpose-bound SMS request, but does not
+prove external SMS delivery or change production behavior. See
 [../../../docs/testing.md](../../../docs/testing.md) for the environment
 contract and command.
+
+That suite also carries the required platform-neutral
+`DEVICE-JOIN-MESSAGE-CORE-E2E-001` App+CLI subset: exact Direct commit, sibling
+CLI own-sync, App-offline peer delivery, same-root online convergence, visible
+read commit, and current idle sync diagnostics. It does not use or claim the
+two-App functional matrix.
 
 `--case multi-device-remote-recovery` is the independent visible Manifest
 Handle Recovery V1 gate. It creates one ready-admin fixture in a fresh native
@@ -164,8 +167,12 @@ visible Recovery entry, operation-bound OTP, irreversible-risk confirmation,
 activation, and bounded resume UI. Registration and Recovery may reuse the
 same ignored-local test phone and fixed six-digit code. It requires Handle
 preservation, DID replacement, one ready current admin, and old-local-DID
-fencing. This focused case supports the Linux Flutter desktop runner as well as
-macOS. Staged OTP continuation and the legacy recovery.begin/finalize
+fencing. `HANDLE-RECOVERY-V1-E2E-003` additionally keeps one old member in a
+second isolated App root, requires its old remote principal to be rejected,
+ordinarily re-Joins that App to the replacement DID, and verifies both App
+Registry/session views plus one exact Direct in each direction against an
+independent identity in the second App, including sibling own-sync. These focused cases support the Linux Flutter
+desktop runner as well as macOS. Non-success SMS requests and the legacy recovery.begin/finalize
 purposes are rejected. Its E2E-only user-presence decision does not attest
 production LocalAuthentication. See
 [../../../docs/handle-recovery-ui.md](../../../docs/handle-recovery-ui.md).

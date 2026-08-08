@@ -46,21 +46,25 @@ OTP 输入框，并且 Core 恰好收到一次同一 Handle/手机号且不带�
 ready current admin，并且旧 DID 不出现在 fresh root 的 identity projection。该专项支持
 Linux Flutter desktop runner，也可在 macOS runner 上执行。
 
+同一 suite 的 `HANDLE-RECOVERY-V1-E2E-003` 在 Recovery 前用第二套独立 App root 建立旧 member。
+Recovery 完成后先要求该旧 principal 的远端消息操作被拒绝，再使用 fresh ordinary Join
+OTP/Grant 和 SAS 将同一旧 App 加入新 DID。最终两套 App 的 Registry 与 session 必须收敛，
+并与第二个 App 中独立注册的外部 identity 双向各完成一条 Direct exact-one；恢复 App 发出的
+消息还必须在 rejoined sibling 上形成 exact own-sync。该业务 case 在 Linux/macOS 使用相同
+case ID、动作和 oracle，不包含双发起端、连续第二次 Recovery、revoke 或 MLS 完整矩阵。
+
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=recovery \
 dart run tests/e2e/runner.dart \
   --case multi-device-remote-recovery \
   --config <local-awiki-info-config.yaml>
 ```
 
-该 suite 只允许受审计的 `https://awiki.info` 配置。注册和 Recovery 可以复用 ignored
-local YAML 中同一个测试手机号和六位固定验证码；也可以使用 JSON-argv resolver。resolver
-从 stdin 接收 phone、purpose、裸 Handle、Handle domain 以及 Recovery operation ID，
-stdout 只能返回 `{"otp":"123456"}` 形状。shell command string、staged SMS-error
-continuation、把 OTP 写入受版本控制文件或报告都被拒绝。
+该 suite 只允许受审计的 `https://awiki.info` 配置。注册和 Recovery 复用 ignored、
+权限受限的 local YAML 中同一个测试手机号和六位固定验证码；仍须先调用真实、精确绑定
+purpose/Handle/operation ID 的短信接口。OTP 只在测试进程内读取并注册到 redactor，不能
+写入 run config、版本控制文件、attestation、诊断或报告。
 
-缺少专用账号、resolver、远端 capability 或真实短信成功时，只能报告未执行/失败，
+缺少专用账号、固定 OTP 配置、远端 capability 或短信请求成功时，只能报告未执行/失败，
 不能把编译通过当作远端 Recovery 已通过。

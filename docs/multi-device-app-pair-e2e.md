@@ -89,20 +89,16 @@ security suite does not need `cliPeer.binary` or `cliPeer.sourceRef`:
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_JOIN_E2E_ENABLED=1 \
-AWIKI_MULTI_DEVICE_E2E_PHONE=<dedicated-test-phone> \
-AWIKI_MULTI_DEVICE_E2E_OTP_COMMAND_JSON='<reviewed-json-argv-resolver>' \
 AWIKI_MULTI_DEVICE_E2E_HANDLE_PREFIX=apppair \
 dart run tests/e2e/runner.dart \
   --case multi-device-app-pair \
   --config <local-awiki-info-macos-config.yaml>
 ```
 
-For the explicitly authorized synthetic test number, also set
-`AWIKI_MULTI_DEVICE_E2E_ALLOW_STAGED_OTP_ON_SMS_ERROR=1`. This keeps the same
-strict response-shape and exact reviewed-resolver checks documented in
-[testing.md](testing.md); it does not convert arbitrary SMS failures into
-success. HTTP 429 uses the service's bounded `Retry-After` contract and does
-not enter staged-OTP resolution.
+The ignored local YAML contains the authorized test phone and six-digit fixed
+code. The real purpose-bound SMS request must still succeed; HTTP 429 uses the
+service's bounded `Retry-After` contract. The runner redacts both values and
+does not copy the code into generated run configuration or evidence.
 
 The operator must complete the real macOS user-presence prompt in the admin
 App. `--prepare-only` validates prerequisites but intentionally does not build

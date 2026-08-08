@@ -75,33 +75,35 @@ dart run tests/e2e/runner.dart --case multi-device-remote-join --config <local-a
 dart run tests/e2e/runner.dart --case multi-device-app-pair --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-app-pair-functional --config <local-awiki-info-config.yaml>
 dart run tests/e2e/runner.dart --case multi-device-remote-recovery --config <local-awiki-info-config.yaml>
-dart run tests/e2e/runner.dart --case multi-device-remote-mls --config <local-awiki-info-config.yaml>
 ```
 
-`multi-device` 当前只证明默认关闭与 Join-only 公共入口，不代表远端 Join/SAS/Root/Recovery
+`multi-device` 当前只证明生产 provider 树可挂载本地 Join surface 且高风险 gate 默认关闭，不代表远端 Join/SAS/Root/Recovery
 通过。`multi-device-remote-join` 是另一个显式激活、fail-closed 的双向真实 Join suite：
 覆盖 App 新设备 + CLI 管理设备、App 管理设备 + CLI 新设备；根导入、永久 revoke 与 MLS
-由各自独立 suite 承担，不属于 Join suite 的通过结论。两个方向均使用独立 native Core root、动态
-OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高风险操作在 E2E 中使用
+由各自独立 suite 承担，不属于 Join suite 的通过结论。两个方向均使用独立 native Core root、
+受保护配置中的固定测试 OTP 和最终 Registry oracle；CLI 批准走生产前台 TTY，App 批准及高风险操作在 E2E 中使用
 明确配置、仅测试可见的 `UserPresencePort`，正式 App 仍使用 macOS LocalAuthentication。
 Join 请求发现必须分别经过 CLI foreground listener 的专用 host event 与
 App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 Inbox hydration、
-`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
-只执行 Ali 不可变发布、显式受保护配置并禁止写入 Python bytecode，不证明短信送达。
+`requestSync()` 或 `refreshJoinInbox()` 代替唤醒。Join/Recovery 仍调用真实 purpose-bound
+短信接口，测试手机号和六位验证码只从 ignored、权限受限的 local YAML 读取，并由 runner
+redact，不能进入 run config、attestation、诊断或报告。
 `multi-device-remote-recovery` 先创建远端 ready-admin fixture，再销毁 setup root，并在没有
 任何本地身份的 fresh App/native Core root 上经统一登录/注册进入 Join/Recovery 选择；Recovery
 覆盖绑定 `awiki.identity.handle-recovery.v1` 与 operation ID 的专用发码、不可逆风险确认、
 activate/bounded resume、新本地 owner 安装、Handle 保留和 DID replacement。
-该 Recovery 专项可在 Linux Flutter desktop runner 或 macOS runner 执行；其他远端多设备 App suite
-仍保留各自的平台限制。
+该 suite 同时运行第二套独立 App root：旧 App member 的 principal 被 fence 后用 fresh ordinary
+Join 加入新 DID，两套 App 的 Registry 与 session 收敛，再与第二个 App 中的独立外部 identity
+双向完成 Direct exact-one，并验证 rejoined sibling own-sync。
+Join 与 Recovery 专项均可在 Linux Flutter desktop runner 或 macOS runner 执行；完整双 App
+Join/re-Join、revoke 与 MLS 矩阵属于第二阶段，不能由本阶段结论外推。
+Join 专项还包含 `DEVICE-JOIN-MESSAGE-CORE-E2E-001`：复用已 Join 的 App、同账号 CLI
+sibling 和独立 CLI peer，验证 Direct、own-sync、App offline 后同 root 恢复、可见 read
+提交以及 Core-directed sync 回到 idle；不得用双 App functional suite 冒充。
 注册与 Recovery 可复用 ignored local YAML 中同一测试手机号和固定验证码；它使用仅测试可见的
-`UserPresencePort`，不证明真实系统认证，并明确拒绝 staged SMS error。远端 rollout/账号前置条件未就绪
+`UserPresencePort`，不证明真实系统认证。远端 rollout/账号前置条件未就绪
 时不得声称通过。其他真实
 backend/CLI peer/Personal Agent 使用对应 focused/full E2E，并按宿主平台选择本地 config。
-`multi-device-remote-mls` 复用同一受审计远端合同，但以真实 App owner 和独立 CLI Core
-root 覆盖 Add/Welcome、未来群文本/附件以及精确设备 Remove；实现可执行不代表已经取得
-远端 pass 证据。
-
 `multi-device-app-pair` 是独立的单机双进程模式：通过通用 Debug 构建脚本生成稳定且不同
 bundle ID、独立 Flutter build root 与独立 native Core state root 的管理端/加入端 App，
 再由两个 driver 并发操作真实 UI。loopback coordinator 只交换生命周期 checkpoint，并在
