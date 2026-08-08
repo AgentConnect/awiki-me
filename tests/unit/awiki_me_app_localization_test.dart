@@ -11,6 +11,7 @@ import 'package:awiki_me/src/application/models/app_thread_ref.dart';
 import 'package:awiki_me/src/application/models/app_thread_read_watermark.dart';
 import 'package:awiki_me/src/application/models/conversation_patch.dart';
 import 'package:awiki_me/src/application/ports/conversation_core_port.dart';
+import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
@@ -39,8 +40,17 @@ void main() {
     setUp(() {
       final gateway = FakeAwikiGateway();
       final realtimeGateway = FakeRealtimeGateway();
+      final tenant = defaultTenantProfile().copyWith(
+        backendBaseUrl: 'https://awiki.info',
+        didHost: 'awiki.info',
+      );
       bootstrap = AppBootstrap(
         environment: AwikiEnvironmentConfig(baseUrl: 'https://awiki.ai'),
+        tenantRegistry: AppTenantRegistry(
+          revision: 1,
+          activeTenantProfileId: tenant.tenantProfileId,
+          tenants: <AppTenantProfile>[tenant],
+        ),
         accountGateway: gateway,
         gateway: gateway,
         realtimeGateway: realtimeGateway,
@@ -63,6 +73,18 @@ void main() {
           realtimeGateway: realtimeGateway,
         ),
       );
+    });
+
+    testWidgets('uses the bootstrap tenant for onboarding scope', (
+      tester,
+    ) async {
+      await tester.pumpWidget(AwikiMeApp(bootstrap: bootstrap));
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
+      );
+      expect(container.read(activeAppTenantProvider).didHost, 'awiki.info');
     });
 
     testWidgets('uses English when system locale is English', (tester) async {

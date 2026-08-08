@@ -119,6 +119,7 @@ class AppBootstrap {
     required this.e2eeFacade,
     required this.localePreferenceService,
     required this.updateService,
+    this.tenantRegistry,
     this.displayScalePreferenceService =
         const NoopDisplayScalePreferenceService(),
     this.smsOtpCooldownService = const NoopSmsOtpCooldownService(),
@@ -164,6 +165,7 @@ class AppBootstrap {
   final E2eeFacade e2eeFacade;
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
+  final AppTenantRegistry? tenantRegistry;
   final DisplayScalePreferenceService displayScalePreferenceService;
   final SmsOtpCooldownService smsOtpCooldownService;
   final DesktopShellService desktopShellService;
@@ -487,6 +489,7 @@ class AppBootstrap {
         displayScalePreferenceService: displayScalePreferenceService,
         smsOtpCooldownService: smsOtpCooldownService,
         updateService: updateService,
+        tenantRegistry: registry,
         desktopShellService: shell,
         appSessionService: appSessionService,
         identityCorePort: identityAdapter,
@@ -589,6 +592,7 @@ class AppBootstrap {
       displayScalePreferenceService: displayScalePreferenceService,
       smsOtpCooldownService: smsOtpCooldownService,
       updateService: updateService,
+      tenantRegistry: tenantRegistry,
       desktopShellService: desktopShellService,
       appSessionService: appSessionService,
       identityCorePort: identityCorePort,

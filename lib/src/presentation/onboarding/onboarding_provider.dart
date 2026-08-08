@@ -223,13 +223,16 @@ class OnboardingController extends StateNotifier<OnboardingState> {
           .read(onboardingSupportServiceProvider)
           .loadServerInfo()
           .timeout(_requestTimeout);
+      if (!mounted) return;
       _applyServerInfo(info);
     } on TimeoutException {
+      if (!mounted) return;
       state = state.copyWith(
         serverInfoStatus: OnboardingServerInfoStatus.failed,
         serverInfoError: 'request_timeout_retry',
       );
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(
         serverInfoStatus: OnboardingServerInfoStatus.failed,
         serverInfoError: error.toString(),
