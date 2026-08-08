@@ -58,6 +58,8 @@ void main() {
     final applied = await adapter.reconcile(otp.operationId);
     expect(applied.lifecycleClass, HandleRecoveryLifecycleClass.applied);
     expect(applied.stateRootFingerprint, _stateRoot);
+    expect(applied.registryEpochReset?.sourceId, otp.operationId);
+    expect(applied.registryEpochReset?.stateRootFingerprint, _stateRoot);
 
     final listed = await adapter.listOperations(_owner);
     expect(listed.single.lifecycleClass, HandleRecoveryLifecycleClass.applied);
@@ -146,6 +148,27 @@ void main() {
     expect(progress.failureCode, HandleRecoveryFailureCode.resultAbsent);
     expect(progress.retryable, isTrue);
   });
+
+  test(
+    'applied progress rejects a mismatched authorized epoch receipt',
+    () async {
+      final sdk = _FakeRecoveryCore()..receiptSourceId = 'different-operation';
+      final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
+        coreInstance: () async => sdk,
+      );
+
+      await expectLater(
+        adapter.reconcile('recover-op-1'),
+        throwsA(
+          isA<HandleRecoveryFailure>().having(
+            (error) => error.code,
+            'code',
+            HandleRecoveryFailureCode.transitionMismatch,
+          ),
+        ),
+      );
+    },
+  );
 
   test('adapter maps the exact closed retryability table', () async {
     final sdk = _FakeRecoveryCore();
@@ -248,6 +271,7 @@ class _FakeRecoveryCore implements core.AwikiImCore {
   final List<String> calls = <String>[];
   core.IdentitySelector? selector;
   Object? error;
+  String receiptSourceId = 'recover-op-1';
   core.HandleRecoveryPhase phase = core.HandleRecoveryPhase.awaitingFactor;
   late core.HandleRecoveryOperationSummary summary = _summary();
 
@@ -383,7 +407,7 @@ class _FakeRecoveryCore implements core.AwikiImCore {
     return core.HandleRecoveryAccountEpochReceipt(
       receiptSchemaVersion: '4',
       sourceKind: core.HandleRecoveryTransitionSourceKind.initiator,
-      sourceId: 'recover-op-1',
+      sourceId: receiptSourceId,
       accountUserId: 'account-1',
       ownerIdentityId: _owner.localIdentityId,
       fullHandle: _owner.handle,
@@ -416,6 +440,18 @@ class _FakeRecoveryCore implements core.AwikiImCore {
           unsupportedE2eeGroupCount: 2,
           unsupportedDidOnlyGroupCount: 1,
         ),
+        registryEpochReset: phase == core.HandleRecoveryPhase.applied
+            ? const core.HandleRecoveryRegistryEpochReset(
+                accountUserId: 'account-1',
+                ownerIdentityId: 'identity-alice',
+                handle: 'alice.awiki.info',
+                previousDid: 'did:wba:awiki.info:users:alice-old',
+                currentDid: 'did:wba:awiki.info:users:alice-new',
+                bindingGeneration: '8',
+                sourceKind: core.HandleRecoveryTransitionSourceKind.initiator,
+                sourceId: 'recover-op-1',
+              )
+            : null,
       );
 
   @override

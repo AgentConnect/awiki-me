@@ -113,7 +113,7 @@ class AwikiImCoreHandleRecoveryAdapter
             final progress = await instance.handleRecoveryStatus(
               summary.operationId,
             );
-            return _operationFromCore(progress, summary);
+            return _operationFromCoreWithReceipt(instance, progress, summary);
           } on core.AwikiImCoreException catch (error) {
             if (error.handleRecoveryFailureCode !=
                 core.HandleRecoveryFailureCode.localKeyUnavailable) {
@@ -295,13 +295,47 @@ Future<HandleRecoveryProgress> _mergeOperation(
       HandleRecoveryFailureCode.transitionMismatch,
     );
   }
-  return _operationFromCore(progress, matches.single);
+  return _operationFromCoreWithReceipt(instance, progress, matches.single);
+}
+
+Future<HandleRecoveryProgress> _operationFromCoreWithReceipt(
+  core.AwikiImCore instance,
+  core.HandleRecoveryProgress progress,
+  core.HandleRecoveryOperationSummary summary,
+) async {
+  final reset = progress.registryEpochReset;
+  if (reset == null) return _operationFromCore(progress, summary);
+  final rawReceipt = await instance.authorizedHandleRecoveryReceipt(
+    core.IdentitySelector.id(progress.ownerIdentityId),
+  );
+  if (rawReceipt == null) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  final receipt = _epochReceiptFromCore(rawReceipt);
+  if (reset.accountUserId != receipt.accountUserId ||
+      reset.ownerIdentityId != receipt.ownerIdentityId ||
+      reset.handle != receipt.handle ||
+      reset.previousDid != receipt.previousDid ||
+      reset.currentDid != receipt.currentDid ||
+      reset.bindingGeneration != receipt.bindingGeneration ||
+      reset.sourceKind.name != receipt.sourceKind.name ||
+      reset.sourceId != receipt.sourceId ||
+      receipt.ownerIdentityId != progress.ownerIdentityId ||
+      receipt.stateRootFingerprint != progress.stateRootFingerprint) {
+    throw const HandleRecoveryFailure(
+      HandleRecoveryFailureCode.transitionMismatch,
+    );
+  }
+  return _operationFromCore(progress, summary, registryEpochReset: receipt);
 }
 
 HandleRecoveryProgress _operationFromCore(
   core.HandleRecoveryProgress progress,
-  core.HandleRecoveryOperationSummary summary,
-) {
+  core.HandleRecoveryOperationSummary summary, {
+  HandleRecoveryRegistryEpochReset? registryEpochReset,
+}) {
   final stateRoot = _consistentOptionalValue(
     progress.stateRootFingerprint,
     summary.stateRootFingerprint,
@@ -345,6 +379,7 @@ HandleRecoveryProgress _operationFromCore(
     lastErrorCode: summary.lastErrorCode,
     createdAt: summary.createdAt,
     updatedAt: summary.updatedAt,
+    registryEpochReset: registryEpochReset,
     failureCode: failureCode,
     retryable: _isRetryableFailure(failureCode),
   );
