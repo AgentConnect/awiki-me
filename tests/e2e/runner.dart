@@ -764,6 +764,11 @@ class DesktopE2eRunner {
       });
     }
     if (adminAppCases.isNotEmpty) {
+      if (!options.dryRun && !commands.dryRun) {
+        appStateRootDir.createSync(recursive: true);
+        cliWorkspaceDir.createSync(recursive: true);
+        cliHomeDir.createSync(recursive: true);
+      }
       await _timed('Flutter admin App + CLI joining lifecycle', () {
         return _runFlutterTest(
           'integration_test/multi_device_join_ui_test.dart',
