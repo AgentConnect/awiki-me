@@ -11,7 +11,7 @@ void main() {
     () {
       final catalog = AppTestCatalog.load(Directory.current);
 
-      expect(catalog.cases, hasLength(99));
+      expect(catalog.cases, hasLength(102));
       expect(
         catalog.caseById.keys,
         containsAll(<String>[
@@ -19,6 +19,7 @@ void main() {
           'ROOT-TRANSFER-E2E-002',
           'DEVICE-JOIN-E2E-001',
           'DEVICE-JOIN-E2E-002',
+          'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
           'DEVICE-JOIN-E2E-004',
           'DEVICE-AGENT-SYNC-E2E-001',
           'DEVICE-MESSAGE-SYNC-E2E-001',
@@ -35,6 +36,8 @@ void main() {
           'MLS-MULTI-DEVICE-E2E-002',
           'MULTI-DEVICE-CAPABILITY-GATE-E2E-001',
           'HANDLE-RECOVERY-V1-E2E-001',
+          'HANDLE-RECOVERY-V1-E2E-002',
+          'HANDLE-RECOVERY-V1-E2E-003',
           'IDENTITY-DELETE-E2E-001',
           'ANDROID-PUSH-PRODUCT-E2E-001',
           'ANDROID-PUSH-NATIVE-E2E-001',
@@ -69,9 +72,12 @@ void main() {
       expect(catalog.suiteCaseIds['multi-device-remote-join'], <String>[
         'DEVICE-JOIN-E2E-001',
         'DEVICE-JOIN-E2E-002',
+        'DEVICE-JOIN-MESSAGE-CORE-E2E-001',
       ]);
       expect(catalog.suiteCaseIds['multi-device-remote-recovery'], <String>[
         'HANDLE-RECOVERY-V1-E2E-001',
+        'HANDLE-RECOVERY-V1-E2E-002',
+        'HANDLE-RECOVERY-V1-E2E-003',
       ]);
       expect(catalog.suiteCaseIds['multi-device-app-pair'], <String>[
         'DEVICE-JOIN-E2E-004',

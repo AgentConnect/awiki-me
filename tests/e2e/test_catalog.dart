@@ -331,7 +331,8 @@ class AppTestCatalog {
       ..writeln(
         '- `multi-device` is currently a no-service device-entry E2E only. '
         'It opens an isolated production AppBootstrap/native Core scope, '
-        'checks the default device-management composition, and opens the public Join form. '
+        'checks the default device-management composition, and mounts the Join surface '
+        'inside the production provider tree without a backend fixture. '
         'It does not claim OTP, SAS, approval, root import, revoke, MLS, or '
         'Handle Recovery acceptance.',
       )
@@ -339,7 +340,7 @@ class AppTestCatalog {
         '- `multi-device-remote-join` is a separate, explicitly activated '
         '`awiki.info` suite for `DEVICE-JOIN-E2E-001/002` only. It runs both '
         'App-new-device/CLI-admin and App-admin/CLI-new-device directions '
-        'with independent native roots, dynamically resolved one-time OTPs, '
+        'with independent native roots, protected fixed test OTPs, '
         'SAS comparison, pending-session App restart coverage, the production '
         'CLI foreground contract, fixed member authorization, CLI listener '
         'host wake, App global review entry, and exactly one E2E-only '
@@ -347,10 +348,14 @@ class AppTestCatalog {
         'to use macOS LocalAuthentication and is not attested by this suite. '
         'The tests do not directly call Message Inbox '
         'hydration, requestSync(), or refreshJoinInbox() to discover Join. '
+        'The same platform-neutral suite requires one minimal App+CLI Direct, '
+        'peer realtime receipt, offline/same-root online convergence, visible read, '
+        'and idle Core-directed sync case. '
         'It does not execute root transfer, revoke, or MLS; the root lifecycle '
         'is registered by `full`. A checked-in '
-        'implementation is not evidence of a remote pass while the dedicated '
-        'test-phone authorization or operator prerequisites are unavailable.',
+        'implementation is not evidence of a remote pass while the protected '
+        'test-phone fixture or operator prerequisites are unavailable. The '
+        'focused Join suite supports Linux and macOS desktop hosts.',
       )
       ..writeln(
         '- `multi-device-remote-recovery` is the separately activated '
@@ -359,8 +364,13 @@ class AppTestCatalog {
         'then drives the visible risk confirmation, activation, and bounded '
         'resume controls. Its E2E-only UserPresencePort makes the run '
         'unattended and does not attest production LocalAuthentication. The '
-        'suite proves Handle preservation, DID replacement, ready-admin '
-        'Registry projection, and old-local-DID fencing; it does not revive '
+        'suite also exercises a committed-before-Product-reset process crash '
+        'and same-root bootstrap barrier. One independently rooted old App '
+        'peer is fenced and then ordinarily re-Joins the replacement DID; '
+        'the two Apps must converge Registry/session state and bidirectional '
+        'Direct exact-one. It proves Handle preservation, DID '
+        'replacement, ready-admin Registry projection, stable-account data '
+        'preservation, and old epoch/session/Registry cleanup; it does not revive '
         'legacy recovery.begin/finalize protocols.',
       )
       ..writeln(
