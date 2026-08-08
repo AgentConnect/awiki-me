@@ -409,6 +409,12 @@ void main() {
       );
 
       await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('handle-recovery-handle')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('handle-recovery-phone')), findsOneWidget);
+      expect(find.byKey(const Key('handle-recovery-otp')), findsOneWidget);
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
       await tester.pumpAndSettle();
 

@@ -87,6 +87,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                     ),
                     const SizedBox(height: 16),
                     AppTextField(
+                      key: const Key('handle-recovery-handle'),
                       controller: _handleController,
                       label: context.l10n.handleRecoveryHandle,
                       placeholder: 'alice.awiki.info',
