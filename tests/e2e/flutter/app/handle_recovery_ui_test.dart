@@ -301,7 +301,7 @@ void main() {
       );
     },
     skip:
-        !Platform.isMacOS ||
+        !(Platform.isMacOS || Platform.isLinux) ||
         !_RemoteRecoveryRunConfig.exists() ||
         !_invocationExpects(_caseId),
     timeout: const Timeout(Duration(minutes: 15)),
