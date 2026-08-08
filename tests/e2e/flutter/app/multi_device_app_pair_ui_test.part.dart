@@ -14,8 +14,8 @@ void appPairAdminMain() {
     'isolated admin App approves an isolated joining App',
     (tester) async {
       final config = _AppPairRunConfig.load();
-      final account = _DedicatedAccount.fromEnvironment(
-        allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
+      final account = _DedicatedAccount.fromProtectedConfig(
+        config.localConfigPath,
       );
       final coordinator = config.coordinator;
       final httpClient = http.Client();
@@ -372,8 +372,8 @@ void appPairJoinerMain() {
     'isolated joining App completes member Join through visible UI',
     (tester) async {
       final config = _AppPairRunConfig.load();
-      final account = _DedicatedAccount.fromEnvironment(
-        allowStagedOtpOnSmsError: config.allowStagedOtpOnSmsError,
+      final account = _DedicatedAccount.fromProtectedConfig(
+        config.localConfigPath,
       );
       final coordinator = config.coordinator;
       final httpClient = http.Client();
