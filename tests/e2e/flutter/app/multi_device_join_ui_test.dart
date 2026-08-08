@@ -1847,11 +1847,8 @@ class _JoinCli {
       'register',
       '--handle',
       handle,
-      '--phone',
-      phone,
-      '--otp',
-      otp,
-    ]);
+      '--verification-stdin',
+    ], stdinText: jsonEncode(<String, String>{'phone': phone, 'otp': otp}));
     final identity = _data(payload, action: 'register_handle')['identity'];
     if (identity is! Map) {
       fail('The CLI registration returned no safe identity projection.');
@@ -2675,18 +2672,46 @@ class _JoinCli {
     List<String> args, {
     String? accountVerificationToken,
     String? safeAction,
+    String? stdinText,
   }) async {
     final ProcessResult result;
     try {
-      result = await Process.run(
-        config.cliBin,
-        args,
-        environment: _environment(
-          accountVerificationToken: accountVerificationToken,
-        ),
-        includeParentEnvironment: false,
-        runInShell: false,
-      ).timeout(_remoteTimeout);
+      final environment = _environment(
+        accountVerificationToken: accountVerificationToken,
+      );
+      if (stdinText == null) {
+        result = await Process.run(
+          config.cliBin,
+          args,
+          environment: environment,
+          includeParentEnvironment: false,
+          runInShell: false,
+        ).timeout(_remoteTimeout);
+      } else {
+        final process = await Process.start(
+          config.cliBin,
+          args,
+          environment: environment,
+          includeParentEnvironment: false,
+          runInShell: false,
+        );
+        final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+        final stderrFuture = process.stderr.transform(utf8.decoder).join();
+        try {
+          process.stdin.write(stdinText);
+          await process.stdin.close();
+          final exitCode = await process.exitCode.timeout(_remoteTimeout);
+          result = ProcessResult(
+            process.pid,
+            exitCode,
+            await stdoutFuture,
+            await stderrFuture,
+          );
+        } on Object {
+          process.kill();
+          rethrow;
+        }
+      }
     } on Object {
       fail('The independent CLI process did not complete safely.');
     }

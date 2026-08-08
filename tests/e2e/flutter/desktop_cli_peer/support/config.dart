@@ -45,6 +45,9 @@ class _DesktopCliPeerSmokeConfig {
     final map = _stringKeyMap(raw, path: _desktopCliPeerRunConfigPath);
     final service = _mapAt(map, 'service');
     final otp = _mapAt(map, 'otp');
+    final protectedOtp = ProtectedOtpConfig.load(
+      _requiredConfig(otp, 'localConfigPath', 'otp.localConfigPath'),
+    );
     final accounts = _mapAt(map, 'accounts');
     final appUser = _mapAt(accounts, 'appUser');
     final secondaryAppUser = _mapAt(
@@ -89,8 +92,8 @@ class _DesktopCliPeerSmokeConfig {
         'handle',
         'accounts.cliPeer.handle',
       ),
-      otpPhone: _requiredConfig(otp, 'phone', 'otp.phone'),
-      otpCode: _requiredConfig(otp, 'code', 'otp.code'),
+      otpPhone: protectedOtp.phone,
+      otpCode: protectedOtp.code,
       cliBin: _requiredConfig(cliPeer, 'binary', 'cliPeer.binary'),
       cliWorkspace: _requiredConfig(cliPeer, 'workspace', 'cliPeer.workspace'),
       cliHome: _requiredConfig(cliPeer, 'home', 'cliPeer.home'),

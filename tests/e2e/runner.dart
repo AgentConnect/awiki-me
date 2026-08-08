@@ -1656,21 +1656,24 @@ class DesktopE2eRunner {
         'register',
         '--handle',
         peerConfig.cliHandle,
-        '--phone',
-        peerConfig.otpPhone,
-      ]);
-      final register = await _cli(<String>[
-        '--format',
-        'json',
-        'id',
-        'register',
-        '--handle',
-        peerConfig.cliHandle,
-        '--phone',
-        peerConfig.otpPhone,
-        '--otp',
-        peerConfig.otpCode,
-      ], allowFailure: true);
+        '--verification-stdin',
+      ], stdinText: jsonEncode(<String, String>{'phone': peerConfig.otpPhone}));
+      final register = await _cli(
+        <String>[
+          '--format',
+          'json',
+          'id',
+          'register',
+          '--handle',
+          peerConfig.cliHandle,
+          '--verification-stdin',
+        ],
+        allowFailure: true,
+        stdinText: jsonEncode(<String, String>{
+          'phone': peerConfig.otpPhone,
+          'otp': peerConfig.otpCode,
+        }),
+      );
       if (register.exitCode != 0 && !options.dryRun) {
         throw E2eFailure(
           'CLI peer register failed: ${redactor.redact(register.output)}',
@@ -1908,8 +1911,8 @@ class DesktopE2eRunner {
         'anpServiceDid': peerConfig.anpServiceDid,
       },
       'otp': <String, Object?>{
-        'phone': peerConfig.otpPhone,
-        'code': peerConfig.otpCode,
+        'mode': 'ignored_local_fixture',
+        'localConfigPath': fileConfig.path,
       },
       'accounts': <String, Object?>{
         'appUser': <String, Object?>{'handle': peerConfig.appHandle},
@@ -2065,12 +2068,14 @@ class DesktopE2eRunner {
   Future<DesktopCommandResult> _cli(
     List<String> args, {
     bool allowFailure = false,
+    String? stdinText,
   }) {
     return _cliForWorkspace(
       workspaceDir: cliWorkspaceDir,
       homeDir: cliHomeDir,
       args: args,
       allowFailure: allowFailure,
+      stdinText: stdinText,
     );
   }
 
@@ -2079,6 +2084,7 @@ class DesktopE2eRunner {
     required Directory homeDir,
     required List<String> args,
     bool allowFailure = false,
+    String? stdinText,
   }) {
     final environment = <String, String>{
       'HOME': homeDir.path,
@@ -2107,6 +2113,7 @@ class DesktopE2eRunner {
       environment: environment,
       includeParentEnvironment: false,
       allowFailure: allowFailure,
+      stdinText: stdinText,
     );
   }
 
@@ -2348,6 +2355,7 @@ class DesktopE2eRunner {
         },
         'failureObservation': _readFailureObservationSummary(),
         'runId': runId,
+        'awikiMeSourceRef': _repositorySourceRef(),
         'platform': platform.name,
         'case': (config?.e2eCase ?? options.e2eCase).caseName,
         'suiteManifest': <String, Object?>{
@@ -2619,6 +2627,7 @@ class DesktopE2eRunner {
         'identityPreflightStatus': _identityPreflight['status'],
         'containsRawDids': false,
         'containsSecrets': false,
+        'awikiMeSourceRef': _repositorySourceRef(),
         if (sourceRef != null) 'cliSourceRef': sourceRef,
       }),
     );
@@ -2653,6 +2662,19 @@ class DesktopE2eRunner {
 
   void _line(String line) {
     commands.logLine(redactor.redact(line));
+  }
+
+  String _repositorySourceRef() {
+    final result = Process.runSync(
+      'git',
+      const <String>['rev-parse', 'HEAD'],
+      workingDirectory: root.path,
+      runInShell: false,
+    );
+    final sourceRef = result.stdout.toString().trim().toLowerCase();
+    return result.exitCode == 0 && isAuditableGitSha(sourceRef)
+        ? sourceRef
+        : 'unrecorded';
   }
 
   void _addRuntimeSecret(String value) {
@@ -3254,6 +3276,7 @@ class DesktopCommandRunner {
     bool includeParentEnvironment = true,
     bool allowFailure = false,
     Duration timeout = const Duration(minutes: 5),
+    String? stdinText,
   }) async {
     _command(executable, args);
     if (dryRun) {
@@ -3269,6 +3292,10 @@ class DesktopCommandRunner {
     );
     final stdoutFuture = process.stdout.transform(utf8.decoder).join();
     final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    if (stdinText != null) {
+      process.stdin.write(stdinText);
+      await process.stdin.close();
+    }
     final exitFuture = process.exitCode;
     final startedAt = DateTime.now().toUtc();
     int processExitCode;

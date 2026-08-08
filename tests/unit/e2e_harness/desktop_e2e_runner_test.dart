@@ -1976,7 +1976,7 @@ cliPeer:
       expect(
         log,
         contains(
-          r'$ <redacted> --format json id register --handle cli-from-file --phone <redacted> --otp <redacted>',
+          r'$ <redacted> --format json id register --handle cli-from-file --verification-stdin',
         ),
       );
       expect(
@@ -1995,6 +1995,7 @@ cliPeer:
       final decoded =
           jsonDecode(await timings.readAsString()) as Map<String, dynamic>;
       expect(decoded['case'], 'full');
+      expect(decoded['awikiMeSourceRef'], isNotEmpty);
       expect(decoded['platform'], 'linux');
       expect(decoded['appHandle'], 'app-from-file');
       expect(decoded['cliHandle'], 'cli-from-file');
@@ -2241,8 +2242,8 @@ cliPeer:
           'check file: <redacted>',
           r'$ <redacted> --format json init',
           r'$ <redacted> --format json config show',
-          r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted>',
-          r'$ <redacted> --format json id register --handle e2e-cli --phone <redacted> --otp <redacted>',
+          r'$ <redacted> --format json id register --handle e2e-cli --verification-stdin',
+          r'$ <redacted> --format json id register --handle e2e-cli --verification-stdin',
           r'$ <redacted> --format json id current',
           r'$ <redacted> --format json id status',
           r'$ <redacted> --format json msg inbox --limit 1',
@@ -2412,8 +2413,18 @@ cliPeer:
         expect(service['baseUrl'], 'https://service.example.test');
         expect(service['messageServiceUrl'], 'https://messages.example.test');
         final otp = decoded['otp'] as Map<String, dynamic>;
-        expect(otp['phone'], 'test-phone-secret');
-        expect(otp['code'], 'test-otp-secret');
+        expect(otp['mode'], 'ignored_local_fixture');
+        expect(otp['localConfigPath'], isNotEmpty);
+        expect(otp, isNot(contains('phone')));
+        expect(otp, isNot(contains('code')));
+        expect(
+          await runConfig.readAsString(),
+          isNot(contains('test-phone-secret')),
+        );
+        expect(
+          await runConfig.readAsString(),
+          isNot(contains('test-otp-secret')),
+        );
         final accounts = decoded['accounts'] as Map<String, dynamic>;
         expect(
           (accounts['appUser'] as Map<String, dynamic>)['handle'],
@@ -3903,6 +3914,7 @@ class _FailingFlutterCommandRunner extends DesktopCommandRunner {
     bool includeParentEnvironment = true,
     bool allowFailure = false,
     Duration timeout = const Duration(minutes: 5),
+    String? stdinText,
   }) async {
     if (executable == 'which') {
       return DesktopCommandResult(

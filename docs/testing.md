@@ -389,12 +389,11 @@ boundary: running Python without it can mutate bytecode beneath an otherwise
 immutable managed release and invalidate its artifact checksum. Local
 `/home/ecs-user/...` paths and environment-selected hosts/scripts are rejected.
 
-Staged-OTP mode proves only the explicitly reviewed operator test path; it does
-not prove SMS delivery, does not turn the 503 into a product-visible success,
-and changes no production service behavior. The ali SSH key is not yet limited
-by a server-side forced command, which remains tracked security debt. Do not
-replace this mode with an online DEV route, plaintext OTP, mock, or generic
-shell command.
+The protected preset-OTP path proves only the reviewed test account flow; it
+does not prove SMS delivery. Registration, Join, and Recovery still call the
+real send/exchange APIs and consume an expiring purpose/target-scoped row once.
+The phone and code stay in the ignored permission-restricted local config and
+must not enter argv, run config, attestation, diagnostics, or reports.
 
 The suite first bootstraps a CLI ready admin and joins a newly generated App
 device through the real onboarding UI and foreground CLI approval contract. It
@@ -964,7 +963,7 @@ backend credentials, OTP, and CLI peer configuration are prepared.
 | Release | Release candidate validation | Stable nightly environment plus release owner review. | P0/P1 regression subset for desktop smoke, native SDK smoke, App + CLI basics, mobile when available. | New feature cases that have not been promoted. |
 | Manual | Developer or QA runbook | Local or remote environment prepared by the runner. | Any focused case needed for debugging or evidence, with command, runId, platform, endpoints, and report path recorded. | Manual results presented as automatic PR gate evidence. |
 
-Real E2E reports must record `runId`, platform, scenario, case IDs,
+Real E2E reports must record the current `awiki-me` Git HEAD, `runId`, platform, scenario, case IDs,
 pass/fail/skipped status, skipped reason when applicable, and a redaction scan
 result. Keep `.e2e/`, `*.local.yaml`, OTP values, JWTs, private keys, CLI
 workspaces, App state roots, remote logs, screenshots, and device state out of
