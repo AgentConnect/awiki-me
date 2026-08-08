@@ -1,4 +1,4 @@
-// [INPUT]: Stable owner, transient OTP input, explicit presence, and Core projections.
+// [INPUT]: Canonical Handle, transient Recovery OTP input, explicit presence, and Core projections.
 // [OUTPUT]: Validated, secret-free Handle Recovery operations for presentation.
 // [POS]: Thin application orchestration; Core is the only durable state machine.
 
@@ -26,17 +26,28 @@ class HandleRecoveryService {
   );
 
   Future<HandleRecoveryOtpResult> requestOtp({
-    required HandleRecoveryIdentityScope scope,
     required String handle,
     required String phone,
+    String? localIdentityId,
     String? expectedOperationId,
   }) async {
-    final requestedOwner = owner(scope: scope, handle: handle);
+    final normalizedHandle = _normalizedHandle(handle);
+    final normalizedLocalIdentityId = localIdentityId == null
+        ? null
+        : _validatedOwnerReference(localIdentityId);
     final result = await _core.requestOtp(
-      owner: requestedOwner,
+      handle: normalizedHandle,
       phone: _normalizedRequired(phone),
+      localIdentityId: normalizedLocalIdentityId,
     );
-    _validateOperation(result.operation, expectedOwner: requestedOwner);
+    _validateOperation(result.operation);
+    if (result.operation.handle != normalizedHandle ||
+        (normalizedLocalIdentityId != null &&
+            result.operation.ownerIdentityId != normalizedLocalIdentityId)) {
+      throw const HandleRecoveryFailure(
+        HandleRecoveryFailureCode.transitionMismatch,
+      );
+    }
     final expected = expectedOperationId == null
         ? null
         : _validatedOperationId(expectedOperationId);
@@ -47,8 +58,7 @@ class HandleRecoveryService {
         operation.keyState == HandleRecoveryKeyState.available &&
         operation.phase == HandleRecoveryProgressPhase.otpRequested;
     final postAttemptFactorRetry =
-        expected != null &&
-        operation.operationId == expected &&
+        (expected == null || operation.operationId == expected) &&
         operation.lifecycleClass ==
             HandleRecoveryLifecycleClass.remoteUnresolved &&
         operation.commitAttempted &&

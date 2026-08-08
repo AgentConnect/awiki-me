@@ -193,17 +193,17 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
   }
 
   Future<void> requestOtp({
-    required HandleRecoveryIdentityScope scope,
     required String handle,
     required String phone,
+    String? localIdentityId,
   }) async {
     if (!await _otpCooldown.beginSend()) return;
     state = state.copyWith(isBusy: true, clearError: true);
     try {
       final receipt = await _service.requestOtp(
-        scope: scope,
         handle: handle,
         phone: phone,
+        localIdentityId: localIdentityId,
         expectedOperationId: state.progress?.operationId,
       );
       await _otpCooldown.completeAcceptedAt(receipt.retryAt);
@@ -383,6 +383,6 @@ final handleRecoveryProvider =
     StateNotifierProvider<HandleRecoveryController, HandleRecoveryState>(
       (ref) => HandleRecoveryController(
         ref.watch(handleRecoveryServiceProvider),
-        ref.watch(smsOtpCooldownProvider.notifier),
+        ref.watch(handleRecoverySmsOtpCooldownProvider.notifier),
       ),
     );

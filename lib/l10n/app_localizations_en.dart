@@ -939,6 +939,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'An existing admin device must verify the 6-digit code shown on both devices';
 
   @override
+  String get onboardingExistingHandleTitle => 'This Handle already exists';
+
+  @override
+  String get onboardingExistingHandleMessage =>
+      'Choose whether to add this device to the existing identity or recover the Handle with its bound phone and a dedicated recovery code.';
+
+  @override
   String get deviceJoinTitle => 'Add a new device';
 
   @override

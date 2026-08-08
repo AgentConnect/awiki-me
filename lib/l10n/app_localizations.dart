@@ -1806,6 +1806,18 @@ abstract class AppLocalizations {
   /// **'需要已有管理设备确认两端的 6 位验证码'**
   String get deviceJoinEntrySubtitle;
 
+  /// No description provided for @onboardingExistingHandleTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个 Handle 已经存在'**
+  String get onboardingExistingHandleTitle;
+
+  /// No description provided for @onboardingExistingHandleMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择将本设备加入现有身份，或使用绑定手机号和独立恢复验证码恢复 Handle。'**
+  String get onboardingExistingHandleMessage;
+
   /// No description provided for @deviceJoinTitle.
   ///
   /// In zh, this message translates to:

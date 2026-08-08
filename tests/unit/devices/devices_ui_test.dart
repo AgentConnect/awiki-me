@@ -226,7 +226,7 @@ void main() {
     expect(core.localSessionCalls, 1);
   });
 
-  testWidgets('onboarding exposes new-device Join by default', (tester) async {
+  testWidgets('onboarding hides standalone new-device Join', (tester) async {
     final core = FakeDeviceManagementCore();
     await tester.pumpWidget(
       buildLocalizedTestApp(
@@ -243,12 +243,11 @@ void main() {
 
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('将此设备加入已有账户'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
+    expect(find.text('将此设备加入已有账户'), findsNothing);
+    expect(find.byKey(const Key('device-join-page')), findsNothing);
   });
 
-  testWidgets('macOS onboarding exposes new-device Join by default', (
+  testWidgets('macOS onboarding hides standalone new-device Join', (
     tester,
   ) async {
     addTearDown(() {
@@ -271,12 +270,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final entry = find.text('将此设备加入已有账户');
-    expect(entry, findsOneWidget);
-    await tester.ensureVisible(entry);
-    await tester.tap(entry);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
+    expect(find.text('将此设备加入已有账户'), findsNothing);
+    expect(find.byKey(const Key('device-join-page')), findsNothing);
 
     debugDefaultTargetPlatformOverride = null;
     await tester.binding.setSurfaceSize(null);

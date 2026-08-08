@@ -9,16 +9,20 @@ import 'package:awiki_me/src/application/app_session_service.dart';
 import 'package:awiki_me/src/application/models/onboarding_server_info.dart';
 import 'package:awiki_me/src/application/onboarding_service.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
-import 'package:awiki_me/src/application/ports/device_management_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
+import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
+import 'package:awiki_me/src/domain/entities/device_management.dart';
+import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
+import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_feedback.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
@@ -30,7 +34,6 @@ import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'devices/device_test_support.dart';
 import 'test_support.dart';
 
 void _setTestViewSize(WidgetTester tester, Size size) {
@@ -45,67 +48,13 @@ void _resetTestViewSize(WidgetTester tester) {
 }
 
 void main() {
-  testWidgets(
-    'Handle Recovery entry requires both local gate and advertised phone capability',
-    (tester) async {
-      final defaultInfo = OnboardingServerInfo.userServiceDefault();
-      final gateway = FakeAwikiGateway()
-        ..localCredentials = const <SessionIdentity>[
-          SessionIdentity(
-            did: 'did:wba:awiki.ai:alice:e1_old',
-            localIdentityId: 'identity-alice',
-            credentialName: 'alice.awiki.ai',
-            displayName: 'Alice',
-            handle: 'alice.awiki.ai',
-          ),
-        ]
-        ..serverInfo = OnboardingServerInfo(
-          schemaVersion: defaultInfo.schemaVersion,
-          service: defaultInfo.service,
-          identity: OnboardingIdentityCapabilities(
-            handleRegistration: defaultInfo.identity.handleRegistration,
-            handleRecovery: const OnboardingHandleRecoveryCapabilities(
-              enabled: true,
-              methods: <OnboardingIdentityMethod>[
-                OnboardingIdentityMethod(
-                  id: OnboardingIdentityMethodId.phone,
-                  enabled: true,
-                  verification: OnboardingVerificationRequirement(
-                    required: true,
-                    type: OnboardingVerificationType.smsOtp,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-
-      await tester.pumpWidget(
-        buildLocalizedTestApp(
-          home: const OnboardingPage(),
-          gateway: gateway,
-          providerOverrides: <Override>[
-            multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('handle-recovery-entry')), findsOneWidget);
-      expect(find.text('恢复 Handle'), findsOneWidget);
-      expect(find.textContaining('CLI'), findsNothing);
-      expect(find.textContaining('Daemon'), findsNothing);
-    },
-  );
-
-  testWidgets('Handle Recovery entry requires an exact local identity id', (
-    tester,
-  ) async {
+  testWidgets('首页不展示独立的加入设备或恢复入口', (tester) async {
     final defaultInfo = OnboardingServerInfo.userServiceDefault();
     final gateway = FakeAwikiGateway()
       ..localCredentials = const <SessionIdentity>[
         SessionIdentity(
           did: 'did:wba:awiki.ai:alice:e1_old',
+          localIdentityId: 'identity-alice',
           credentialName: 'alice.awiki.ai',
           displayName: 'Alice',
           handle: 'alice.awiki.ai',
@@ -144,41 +93,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('handle-recovery-entry')), findsNothing);
-    expect(
-      find.byKey(const Key('temporary-handle-recovery-entry')),
-      findsNothing,
-    );
+    expect(find.byKey(const Key('multi-device-join-entry')), findsNothing);
+    expect(find.text('恢复 Handle'), findsNothing);
+    expect(find.text('将此设备加入已有账户'), findsNothing);
   });
-
-  testWidgets(
-    'Handle Recovery entry stays hidden when server omits the capability',
-    (tester) async {
-      await tester.pumpWidget(
-        buildLocalizedTestApp(
-          home: const OnboardingPage(),
-          gateway: FakeAwikiGateway()
-            ..localCredentials = const <SessionIdentity>[
-              SessionIdentity(
-                did: 'did:wba:awiki.ai:alice:e1_old',
-                credentialName: 'identity-alice',
-                displayName: 'Alice',
-                handle: 'alice.awiki.ai',
-              ),
-            ],
-          providerOverrides: <Override>[
-            multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
-          ],
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const Key('handle-recovery-entry')), findsNothing);
-      expect(
-        find.byKey(const Key('temporary-handle-recovery-entry')),
-        findsNothing,
-      );
-    },
-  );
 
   testWidgets(
     'Legacy upgrade blocks login, shows loading, and retries the same identity id',
@@ -1479,72 +1397,6 @@ void main() {
     expect(container.read(smsOtpCooldownProvider).remainingSeconds, 90);
   });
 
-  testWidgets('注册发码后的共享冷却会延续到设备加入页', (tester) async {
-    final gateway = FakeAwikiGateway()
-      ..registrationOtpCooldown = const Duration(seconds: 90);
-    await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
-    );
-    await tester.pumpAndSettle();
-
-    final fields = find.byType(CupertinoTextField);
-    await tester.enterText(fields.at(0), '13800138000');
-    await tester.enterText(fields.at(1), 'alice');
-    await _tapVisible(tester, find.text('发送验证码'));
-    await tester.pump();
-    await _tapVisible(tester, find.text('将此设备加入已有账户'));
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const Key('device-join-page')), findsOneWidget);
-    expect(find.text('重新发送（90秒）'), findsOneWidget);
-    expect(
-      tester
-          .widget<AppInlineActionButton>(find.byType(AppInlineActionButton))
-          .onPressed,
-      isNull,
-    );
-  });
-
-  testWidgets('设备加入发码后的共享冷却会延续回注册页', (tester) async {
-    final core = FakeDeviceManagementCore()
-      ..sendOtpReceipt = const DeviceJoinSmsOtpSendReceipt(
-        retryAfterSeconds: 90,
-      );
-    await tester.pumpWidget(
-      buildLocalizedTestApp(
-        home: const OnboardingPage(),
-        providerOverrides: <Override>[
-          deviceManagementCorePortProvider.overrideWithValue(core),
-        ],
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _tapVisible(tester, find.text('将此设备加入已有账户'));
-    await tester.pumpAndSettle();
-
-    final joinFields = find.byType(CupertinoTextField);
-    await tester.enterText(joinFields.at(0), '+8613800138000');
-    await tester.enterText(joinFields.at(1), 'alice');
-    await tester.tap(find.text('发送验证码'));
-    await tester.pump();
-    await tester.pump();
-    expect(core.sendOtpCalls, 1);
-    expect(find.text('重新发送（90秒）'), findsOneWidget);
-
-    Navigator.of(tester.element(find.byType(DeviceJoinPage))).pop();
-    await tester.pumpAndSettle();
-    expect(find.byType(OnboardingPage), findsOneWidget);
-    expect(find.textContaining('重新发送（'), findsOneWidget);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(OnboardingPage)),
-    );
-    expect(
-      container.read(smsOtpCooldownProvider).remainingSeconds,
-      inInclusiveRange(89, 90),
-    );
-    await tester.pump(const Duration(seconds: 2));
-  });
-
   testWidgets('手机号或 Handle 修改后已发送验证码不能继续提交', (tester) async {
     for (final mutation in <({int fieldIndex, String replacement})>[
       (fieldIndex: 0, replacement: '13900139000'),
@@ -1692,12 +1544,19 @@ void main() {
     _resetTestViewSize(tester);
   });
 
-  testWidgets('手机号注册返回 joinRequired 时进入设备加入页', (tester) async {
+  testWidgets('已有 Handle 由用户选择加入设备且不重复输入注册信息', (tester) async {
     final gateway = FakeAwikiGateway()
       ..registrationStatus = IdentityRegistrationStatus.joinRequired;
+    final identityPort = _ExistingHandleIdentityCorePort();
 
     await tester.pumpWidget(
-      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          identityCorePortProvider.overrideWithValue(identityPort),
+        ],
+      ),
     );
     await tester.pump();
 
@@ -1714,18 +1573,102 @@ void main() {
     await _tapVisible(tester, find.text('登录/注册'));
     await tester.pumpAndSettle();
 
-    expect(gateway.registerHandleCalls, 0);
+    expect(
+      find.byKey(const Key('existing-handle-join-action')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('existing-handle-recovery-action')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('device-join-page')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('existing-handle-join-action')));
+    await tester.pumpAndSettle();
+
+    expect(identityPort.lastContinuationId, 'existing-handle-test');
     expect(find.byKey(const Key('device-join-page')), findsOneWidget);
     final container = ProviderScope.containerOf(
       tester.element(find.byType(DeviceJoinPage)),
     );
     final join = container.read(devicesProvider).activeJoin;
     expect(join?.joinSessionId, 'registration-join-1');
+    expect(find.byType(CupertinoTextField), findsNothing);
     expect(join.toString(), isNot(contains('123456')));
     expect(
       container.read(onboardingProvider).toString(),
       isNot(contains('123456')),
     );
+  });
+
+  testWidgets('已有 Handle 可进入新机器恢复且复用已验证的 Handle 和手机号', (tester) async {
+    final defaultInfo = OnboardingServerInfo.userServiceDefault();
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired
+      ..serverInfo = OnboardingServerInfo(
+        schemaVersion: defaultInfo.schemaVersion,
+        service: defaultInfo.service,
+        identity: OnboardingIdentityCapabilities(
+          handleRegistration: defaultInfo.identity.handleRegistration,
+          handleRecovery: const OnboardingHandleRecoveryCapabilities(
+            enabled: true,
+            methods: <OnboardingIdentityMethod>[
+              OnboardingIdentityMethod(
+                id: OnboardingIdentityMethodId.phone,
+                enabled: true,
+                verification: OnboardingVerificationRequirement(
+                  required: true,
+                  type: OnboardingVerificationType.smsOtp,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    final identityPort = _ExistingHandleIdentityCorePort();
+    final recoveryCore = _RecordingHandleRecoveryCorePort();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          identityCorePortProvider.overrideWithValue(identityPort),
+          handleRecoveryCorePortProvider.overrideWithValue(recoveryCore),
+          multiDeviceHandleRecoveryEnabledProvider.overrideWithValue(true),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(CupertinoTextField);
+    await tester.enterText(fields.at(0), '13800138000');
+    await tester.enterText(fields.at(1), 'Alice');
+    await tester.enterText(fields.at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    final recoveryAction = find.byKey(
+      const Key('existing-handle-recovery-action'),
+    );
+    expect(recoveryAction, findsOneWidget);
+    expect(
+      tester.widget<CupertinoDialogAction>(recoveryAction).onPressed,
+      isNotNull,
+    );
+    await tester.tap(recoveryAction);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HandleRecoveryPage), findsOneWidget);
+    expect(find.text('alice.awiki.ai'), findsOneWidget);
+    expect(find.text('+8613800138000'), findsOneWidget);
+    expect(find.byType(CupertinoTextField), findsOneWidget);
+    expect(recoveryCore.handle, 'alice.awiki.ai');
+    expect(recoveryCore.phone, '+8613800138000');
+    expect(recoveryCore.localIdentityId, isNull);
+    expect(identityPort.discardedContinuationId, 'existing-handle-test');
   });
 
   testWidgets('OpenServer 注册页只展示手机号和 handle 并走无验证码注册', (tester) async {
@@ -1894,6 +1837,56 @@ class _RecordingOnboardingSupportService extends FakeOnboardingSupportService {
       retryAt: DateTime.now().toUtc().add(const Duration(seconds: 60)),
     );
   }
+}
+
+class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
+    implements ExistingHandleContinuationPort {
+  String? lastContinuationId;
+  String? discardedContinuationId;
+
+  @override
+  Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
+    String continuationId,
+  ) async {
+    lastContinuationId = continuationId;
+    return DeviceJoinProgress(
+      joinSessionId: 'registration-join-1',
+      did: 'did:wba:awiki.ai:alice:e1_registration',
+      protocolDeviceId: 'registration-device-1',
+      side: DeviceJoinSide.newDevice,
+      phase: DeviceJoinPhase.pending,
+      remoteState: DeviceJoinRemoteState.pending,
+      expiresAt: DateTime.utc(2030),
+    );
+  }
+
+  @override
+  Future<void> discardExistingHandleContinuation(String continuationId) async {
+    discardedContinuationId = continuationId;
+  }
+}
+
+class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
+  String? handle;
+  String? phone;
+  String? localIdentityId;
+
+  @override
+  Future<HandleRecoveryOtpResult> requestOtp({
+    required String handle,
+    required String phone,
+    String? localIdentityId,
+  }) {
+    this.handle = handle;
+    this.phone = phone;
+    this.localIdentityId = localIdentityId;
+    return Future<HandleRecoveryOtpResult>.error(
+      StateError('stop_after_recording_recovery_request'),
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 Future<void> _tapVisible(WidgetTester tester, Finder finder) async {

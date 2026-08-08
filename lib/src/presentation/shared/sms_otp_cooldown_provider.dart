@@ -1,5 +1,5 @@
-// [INPUT]: Persisted UTC retry boundary, serialized send intent, and wall clock.
-// [OUTPUT]: One reactive SMS resend cooldown shared by every tenant surface.
+// [INPUT]: Purpose-scoped UTC retry boundary, serialized send intent, and wall clock.
+// [OUTPUT]: Reactive registration/Join and Recovery resend cooldowns.
 // [POS]: Presentation coordinator; OTP values and target validity remain flow-owned.
 
 import 'dart:async';
@@ -54,10 +54,20 @@ final smsOtpCooldownProvider =
       );
     });
 
+final handleRecoverySmsOtpCooldownProvider =
+    StateNotifierProvider<SmsOtpCooldownController, SmsOtpCooldownState>((ref) {
+      return SmsOtpCooldownController(
+        service: ref.watch(smsOtpCooldownServiceProvider),
+        now: ref.watch(smsOtpCooldownClockProvider),
+        purpose: SmsOtpCooldownPurpose.handleRecovery,
+      );
+    });
+
 class SmsOtpCooldownController extends StateNotifier<SmsOtpCooldownState> {
   SmsOtpCooldownController({
     required SmsOtpCooldownService service,
     required DateTime Function() now,
+    this.purpose = SmsOtpCooldownPurpose.registrationAndJoin,
   }) : _service = service,
        _now = now,
        super(const SmsOtpCooldownState()) {
@@ -68,6 +78,7 @@ class SmsOtpCooldownController extends StateNotifier<SmsOtpCooldownState> {
 
   final SmsOtpCooldownService _service;
   final DateTime Function() _now;
+  final SmsOtpCooldownPurpose purpose;
   late final Future<void> _restoreFuture;
   Timer? _timer;
   bool _disposed = false;
@@ -103,7 +114,7 @@ class SmsOtpCooldownController extends StateNotifier<SmsOtpCooldownState> {
   Future<void> _restore() async {
     DateTime? retryAt;
     try {
-      retryAt = await _service.loadRetryAt();
+      retryAt = await _service.loadRetryAt(purpose: purpose);
     } on Object {
       retryAt = null;
     }
@@ -130,7 +141,7 @@ class SmsOtpCooldownController extends StateNotifier<SmsOtpCooldownState> {
         : boundary;
     _applyBoundary(effective, isSending: false);
     try {
-      await _service.saveRetryAt(effective);
+      await _service.saveRetryAt(effective, purpose: purpose);
     } on Object {
       // Keep the process-local boundary even when best-effort persistence fails.
     }
@@ -188,7 +199,7 @@ class SmsOtpCooldownController extends StateNotifier<SmsOtpCooldownState> {
 
   Future<void> _clearPersistedBoundary() async {
     try {
-      await _service.clearRetryAt();
+      await _service.clearRetryAt(purpose: purpose);
     } on Object {
       // Expired/corrupt state cannot block sending even when cleanup fails.
     }

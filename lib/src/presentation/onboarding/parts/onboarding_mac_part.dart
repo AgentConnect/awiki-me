@@ -1,6 +1,6 @@
 // [INPUT]: Onboarding page state and callbacks from the parent presentation surface.
-// [OUTPUT]: Desktop controls, including identity-scoped Handle Recovery.
-// [POS]: Part of onboarding_page.dart; it renders but does not resolve identity selectors.
+// [OUTPUT]: Desktop login, registration, and local-identity login controls.
+// [POS]: Part of onboarding_page.dart; existing Handle actions are chosen by the parent.
 
 part of '../onboarding_page.dart';
 
@@ -23,8 +23,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.localeMode,
     required this.onLanguagePressed,
     required this.onTenantPressed,
-    this.onJoinDevice,
-    this.onRecoverHandle,
   });
 
   final OnboardingState onboarding;
@@ -44,8 +42,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final AppLocaleMode localeMode;
   final VoidCallback onLanguagePressed;
   final VoidCallback onTenantPressed;
-  final VoidCallback? onJoinDevice;
-  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -74,8 +70,6 @@ class _MacOnboardingScaffold extends StatelessWidget {
             onRequestEmailActivation: onRequestEmailActivation,
             onCheckEmailActivation: onCheckEmailActivation,
             onSubmitRegister: onSubmitRegister,
-            onJoinDevice: onJoinDevice,
-            onRecoverHandle: onRecoverHandle,
           );
           if (useCompactLayout) {
             return DecoratedBox(
@@ -395,8 +389,6 @@ class _MacAuthCard extends StatelessWidget {
     required this.onRequestEmailActivation,
     required this.onCheckEmailActivation,
     required this.onSubmitRegister,
-    this.onJoinDevice,
-    this.onRecoverHandle,
   });
 
   final double maxHeight;
@@ -415,8 +407,6 @@ class _MacAuthCard extends StatelessWidget {
   final VoidCallback onRequestEmailActivation;
   final VoidCallback onCheckEmailActivation;
   final VoidCallback onSubmitRegister;
-  final VoidCallback? onJoinDevice;
-  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -490,20 +480,11 @@ class _MacAuthCard extends StatelessWidget {
                   onSubmitRegister: onSubmitRegister,
                 ),
               ),
-              if (onJoinDevice != null) ...<Widget>[
-                const SizedBox(height: 18),
-                AppSecondaryButton(
-                  label: context.l10n.deviceJoinEntry,
-                  semanticsIdentifier: 'multi-device-join-entry',
-                  onPressed: onJoinDevice,
-                ),
-              ],
               if (credentials.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 22),
                 _OnboardingLocalIdentitySection(
                   credentials: credentials,
                   onLogin: onLogin,
-                  onRecoverHandle: onRecoverHandle,
                 ),
               ],
             ],
@@ -692,12 +673,10 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
   const _OnboardingLocalIdentitySection({
     required this.credentials,
     required this.onLogin,
-    this.onRecoverHandle,
   });
 
   final List<SessionIdentity> credentials;
   final Future<void> Function(String credentialName) onLogin;
-  final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
   Widget build(BuildContext context) {
@@ -737,19 +716,6 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
                   identity: identity,
                   onTap: () => onLogin(identity.credentialName),
                 ),
-                if (onRecoverHandle != null &&
-                    identity.localIdentityId?.trim().isNotEmpty == true &&
-                    identity.localIdentityId?.trim() ==
-                        identity.localIdentityId) ...<Widget>[
-                  const SizedBox(height: 6),
-                  AppSecondaryButton(
-                    key: const Key('handle-recovery-entry'),
-                    label: context.l10n.handleRecoveryTitle,
-                    semanticsIdentifier:
-                        'handle-recovery-entry:${identity.credentialName}',
-                    onPressed: () => onRecoverHandle!(identity),
-                  ),
-                ],
               ],
             ),
           ),
@@ -956,6 +922,7 @@ class _MacRegisterForm extends StatelessWidget {
             keyboardType: TextInputType.number,
             icon: CupertinoIcons.number,
             suffix: _MacInlineAction(
+              semanticsIdentifier: 'e2e-send-otp-button',
               label: otpCooldown.isCoolingDown
                   ? context.l10n.onboardingResendOtpIn(
                       otpCooldown.remainingSeconds,
@@ -1154,9 +1121,14 @@ class _MacFieldLabel extends StatelessWidget {
 }
 
 class _MacInlineAction extends StatelessWidget {
-  const _MacInlineAction({required this.label, this.onPressed});
+  const _MacInlineAction({
+    required this.label,
+    this.semanticsIdentifier,
+    this.onPressed,
+  });
 
   final String label;
+  final String? semanticsIdentifier;
   final VoidCallback? onPressed;
 
   @override
@@ -1164,6 +1136,7 @@ class _MacInlineAction extends StatelessWidget {
     return AppPressable(
       onTap: onPressed,
       semanticLabel: label,
+      semanticsIdentifier: semanticsIdentifier,
       tooltip: label,
       enabled: onPressed != null,
       scaleOnPress: true,

@@ -3908,15 +3908,15 @@
       "caseId": "HANDLE-RECOVERY-V1-E2E-001",
       "feature": "AWiki Me visible Manifest Handle Recovery V1 replaces a lost identity DID",
       "layer": "remote_product_ui_security",
-      "preconditions": "The audited awiki.info target advertises phone Handle Recovery V1; one dedicated allowlisted SMS account is available with either the ignored local fixed test OTP fixture or a reviewed OTP resolver; AWiki Me starts with a fresh isolated production Core root and E2E-only user presence.",
-      "action": "Register one ready-admin fixture through the production onboarding service, log out while retaining its local credential, then use only the visible Handle Recovery entry, phone/OTP form, irreversible-risk confirmation, activation, and bounded resume controls to complete the current operation-bound Recovery flow.",
+      "preconditions": "The audited awiki.info target advertises phone Handle Recovery V1; one dedicated allowlisted SMS account is available with either the ignored local fixed test OTP fixture or a reviewed OTP resolver; setup and Recovery use separate fresh production Core roots and E2E-only user presence.",
+      "action": "Register one remote ready-admin fixture, destroy the setup root, then on a machine with no local identity use unified phone onboarding to verify the existing Handle, choose Recovery, and complete the dedicated OTP, irreversible-risk confirmation, activation, and bounded resume controls.",
       "exactOracles": [
-        "The logged-out App exposes Handle Recovery only after the local feature gate and server capability are both true, and the visible UI requests one OTP bound to purpose awiki.identity.handle-recovery.v1 plus the exact opaque operation ID; one ignored local test phone/code pair may be reused for registration and Recovery.",
+        "The fresh App has no local identity, unified onboarding exposes Join/Recovery only after existing-Handle verification, and Recovery reuses the exact verified Handle and phone as read-only context with only one OTP input before requesting one OTP bound to purpose awiki.identity.handle-recovery.v1 plus the exact opaque operation ID without supplying a local selector.",
         "The UI reaches prepared, visibly presents irreversible consequences, requires explicit confirmation, and uses exactly one test-only user-presence decision before activation; any intermediate Core phase completes only through the visible bounded resume action.",
-        "Completion preserves the canonical Handle and stable local identity selector, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and removes the old DID from the local identity projection."
+        "Completion preserves the canonical Handle, installs the Core-returned new local owner, replaces the old DID with the Core-authorized current DID, leaves one ready current admin Registry device, and keeps the old DID absent from the fresh local projection."
       ],
       "negativeChecks": [
-        "A fake Core/provider, copied state, checked-in or reported OTP, staged SMS-error continuation, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, surviving old local DID, secret-bearing evidence, or unaudited remote host prevents pass attestation."
+        "A fake Core/provider, retained or copied setup identity, checked-in or reported OTP, staged SMS-error continuation, supplied local selector, missing operation binding, legacy recovery purpose, direct activation/resume service call, bypassed risk UI, production LocalAuthentication claim, unchanged DID, changed Handle, non-ready replacement Registry, old DID in the fresh local projection, secret-bearing evidence, or unaudited remote host prevents pass attestation."
       ],
       "environment": "awiki_info_remote",
       "cleanupPolicy": "isolated_handle_recovery_residual_ledger",
@@ -3931,16 +3931,20 @@
       "assertionContract": {
         "assertionIds": [
           "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
-          "HANDLE-RECOVERY-V1-E2E-001:recovery_entry_advertised_and_opened",
+          "HANDLE-RECOVERY-V1-E2E-001:fresh_machine_has_no_local_identity",
+          "HANDLE-RECOVERY-V1-E2E-001:existing_handle_choice_opened_recovery",
+          "HANDLE-RECOVERY-V1-E2E-001:verified_context_reused_without_duplicate_inputs",
           "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
           "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
           "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
-          "HANDLE-RECOVERY-V1-E2E-001:stable_owner_handle_and_replacement_did_verified",
-          "HANDLE-RECOVERY-V1-E2E-001:old_identity_fenced_from_local_projection"
+          "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
+          "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
         ],
         "exactOracleAssertions": [
           [
-            "HANDLE-RECOVERY-V1-E2E-001:recovery_entry_advertised_and_opened",
+            "HANDLE-RECOVERY-V1-E2E-001:fresh_machine_has_no_local_identity",
+            "HANDLE-RECOVERY-V1-E2E-001:existing_handle_choice_opened_recovery",
+            "HANDLE-RECOVERY-V1-E2E-001:verified_context_reused_without_duplicate_inputs",
             "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui"
           ],
           [
@@ -3949,19 +3953,21 @@
           ],
           [
             "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
-            "HANDLE-RECOVERY-V1-E2E-001:stable_owner_handle_and_replacement_did_verified",
-            "HANDLE-RECOVERY-V1-E2E-001:old_identity_fenced_from_local_projection"
+            "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
+            "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
           ]
         ],
         "negativeCheckAssertions": [
           [
             "HANDLE-RECOVERY-V1-E2E-001:existing_ready_admin_created",
-            "HANDLE-RECOVERY-V1-E2E-001:recovery_entry_advertised_and_opened",
+            "HANDLE-RECOVERY-V1-E2E-001:fresh_machine_has_no_local_identity",
+            "HANDLE-RECOVERY-V1-E2E-001:existing_handle_choice_opened_recovery",
+            "HANDLE-RECOVERY-V1-E2E-001:verified_context_reused_without_duplicate_inputs",
             "HANDLE-RECOVERY-V1-E2E-001:operation_bound_otp_prepared_through_ui",
             "HANDLE-RECOVERY-V1-E2E-001:irreversible_risks_confirmed_through_ui",
             "HANDLE-RECOVERY-V1-E2E-001:recovery_completed_through_ui_resume",
-            "HANDLE-RECOVERY-V1-E2E-001:stable_owner_handle_and_replacement_did_verified",
-            "HANDLE-RECOVERY-V1-E2E-001:old_identity_fenced_from_local_projection"
+            "HANDLE-RECOVERY-V1-E2E-001:new_local_owner_handle_and_replacement_did_verified",
+            "HANDLE-RECOVERY-V1-E2E-001:old_did_absent_from_fresh_local_projection"
           ]
         ]
       }

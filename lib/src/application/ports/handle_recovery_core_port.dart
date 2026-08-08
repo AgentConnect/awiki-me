@@ -1,4 +1,4 @@
-// [INPUT]: Stable owner, transient phone/OTP input, explicit confirmation, and operation IDs.
+// [INPUT]: Canonical Handle, optional local owner, transient phone/OTP input, explicit confirmation, and operation IDs.
 // [OUTPUT]: Secret-free Core-owned Recovery operation and epoch projections.
 // [POS]: App-owned adapter seam; the App never creates or persists operation state.
 
@@ -17,8 +17,9 @@ class HandleRecoveryOtpRateLimited implements Exception {
 abstract interface class HandleRecoveryCorePort {
   /// Core creates and durably indexes the operation before sending the OTP.
   Future<HandleRecoveryOtpResult> requestOtp({
-    required HandleRecoveryOwner owner,
+    required String handle,
     required String phone,
+    String? localIdentityId,
   });
 
   Future<HandleRecoveryProgress> prepare({

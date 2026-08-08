@@ -1,4 +1,4 @@
-// [INPUT]: Frozen public AwikiImCore Handle Recovery facade and exact selectors.
+// [INPUT]: Public AwikiImCore Handle Recovery facade, canonical Handle, and optional local selector.
 // [OUTPUT]: App-owned V4 operation, receipt, and authorized-Join projections.
 // [POS]: Production boundary adapter; it never recreates or persists Core state.
 
@@ -49,14 +49,22 @@ class AwikiImCoreHandleRecoveryAdapter
 
   @override
   Future<HandleRecoveryOtpResult> requestOtp({
-    required HandleRecoveryOwner owner,
+    required String handle,
     required String phone,
+    String? localIdentityId,
   }) {
     return _runRecovery(() async {
       final instance = await _coreInstance();
       final result = await instance.requestHandleRecoveryOtp(
-        selector: _ownerSelector(owner),
+        selector: localIdentityId == null
+            ? null
+            : core.IdentitySelector.id(localIdentityId),
+        fullHandle: handle,
         phone: phone,
+      );
+      final owner = HandleRecoveryOwner(
+        localIdentityId: result.ownerIdentityId,
+        handle: result.fullHandle,
       );
       final operation = await _loadOperation(
         instance,

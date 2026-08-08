@@ -5,13 +5,17 @@ import '../../application/models/daemon_subkey_authorization_revoke_result.dart'
 import '../../application/ports/identity_core_port.dart';
 import '../../application/ports/legacy_identity_upgrade_port.dart';
 import '../../domain/entities/agent/agent_bootstrap.dart';
+import '../../domain/entities/device_management.dart';
 import '../../domain/entities/session_identity.dart';
 import 'awiki_im_core_mappers.dart';
 import 'awiki_im_core_device_management_adapter.dart';
 import 'awiki_im_core_runtime.dart';
 
 class AwikiImCoreIdentityAdapter
-    implements IdentityCorePort, LegacyIdentityUpgradePort {
+    implements
+        IdentityCorePort,
+        ExistingHandleContinuationPort,
+        LegacyIdentityUpgradePort {
   AwikiImCoreIdentityAdapter({
     required AwikiImCoreRuntime runtime,
     AwikiImCoreMappers mappers = const AwikiImCoreMappers(),
@@ -20,6 +24,9 @@ class AwikiImCoreIdentityAdapter
 
   final AwikiImCoreRuntime _runtime;
   final AwikiImCoreMappers _mappers;
+  final Map<String, _PendingExistingHandleRegistration>
+  _existingHandleContinuations = <String, _PendingExistingHandleRegistration>{};
+  int _continuationSequence = 0;
 
   @override
   Future<List<AppSession>> listLocalIdentities() async {
@@ -222,15 +229,17 @@ class AwikiImCoreIdentityAdapter
           'IM Core joinRequired registration did not include a continuation.',
         );
       }
-      final progress = await coreInstance.beginDeviceJoin(
-        did: continuation.did,
-        operationId:
-            'awiki-me-register-join-${DateTime.now().microsecondsSinceEpoch}',
-        accountVerificationGrant: continuation.accountVerificationGrant,
-      );
+      final continuationId =
+          'existing-handle-${DateTime.now().microsecondsSinceEpoch}-${_continuationSequence++}';
+      _existingHandleContinuations[continuationId] =
+          _PendingExistingHandleRegistration(
+            coreInstance: coreInstance,
+            did: continuation.did,
+            accountVerificationGrant: continuation.accountVerificationGrant,
+          );
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
-        joinProgress: deviceJoinProgressFromCore(progress),
+        existingHandleContinuationId: continuationId,
         warnings: List<String>.unmodifiable(result.warnings),
       );
     }
@@ -249,6 +258,41 @@ class AwikiImCoreIdentityAdapter
       warnings: List<String>.unmodifiable(result.warnings),
     );
   }
+
+  @override
+  Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
+    String continuationId,
+  ) async {
+    final pending = _existingHandleContinuations[continuationId];
+    if (pending == null || continuationId.trim() != continuationId) {
+      throw StateError('existing_handle_continuation_unavailable');
+    }
+    final progress = await pending.coreInstance.beginDeviceJoin(
+      did: pending.did,
+      operationId:
+          'awiki-me-register-join-${DateTime.now().microsecondsSinceEpoch}',
+      accountVerificationGrant: pending.accountVerificationGrant,
+    );
+    _existingHandleContinuations.remove(continuationId);
+    return deviceJoinProgressFromCore(progress);
+  }
+
+  @override
+  Future<void> discardExistingHandleContinuation(String continuationId) async {
+    _existingHandleContinuations.remove(continuationId);
+  }
+}
+
+class _PendingExistingHandleRegistration {
+  const _PendingExistingHandleRegistration({
+    required this.coreInstance,
+    required this.did,
+    required this.accountVerificationGrant,
+  });
+
+  final core.AwikiImCore coreInstance;
+  final String did;
+  final core.DeviceJoinAccountVerificationGrant accountVerificationGrant;
 }
 
 LegacyIdentityUpgradeStatus _legacyUpgradeStatus(

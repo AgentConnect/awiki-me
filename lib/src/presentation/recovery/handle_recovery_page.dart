@@ -1,4 +1,4 @@
-// [INPUT]: Explicit local identity scope, transient phone/OTP input, and UI intent.
+// [INPUT]: Verified onboarding Handle/phone, a dedicated Recovery OTP, and UI intent.
 // [OUTPUT]: Risk-gated, coarse Handle Recovery presentation.
 // [POS]: App-only V4.0 surface; Core owns credentials, keys, proof, and state transitions.
 
@@ -17,45 +17,32 @@ import 'handle_recovery_provider.dart';
 class HandleRecoveryPage extends ConsumerStatefulWidget {
   const HandleRecoveryPage({
     super.key,
-    required this.identityScope,
-    this.initialHandle,
+    required this.initialHandle,
+    required this.initialPhone,
+    this.autoRequestOtp = true,
   });
 
-  final HandleRecoveryIdentityScope identityScope;
-  final String? initialHandle;
+  final String initialHandle;
+  final String initialPhone;
+  final bool autoRequestOtp;
 
   @override
   ConsumerState<HandleRecoveryPage> createState() => _HandleRecoveryPageState();
 }
 
 class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
-  late final TextEditingController _handleController;
-  final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _handleController = TextEditingController(text: widget.initialHandle);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final initialHandle = widget.initialHandle?.trim();
-      if (initialHandle == null || initialHandle.isEmpty) return;
-      await ref
-          .read(handleRecoveryProvider.notifier)
-          .restoreForOwner(scope: widget.identityScope, handle: initialHandle);
-      if (!mounted) return;
-      final restoredHandle = ref.read(handleRecoveryProvider).otpHandle;
-      if (restoredHandle != null) {
-        _handleController.text = restoredHandle;
-      }
-      await _activateRecoveredIdentityIfCompleted();
+      if (widget.autoRequestOtp) await _requestOtp();
     });
   }
 
   @override
   void dispose() {
-    _handleController.dispose();
-    _phoneController.dispose();
     _otpController.dispose();
     super.dispose();
   }
@@ -63,7 +50,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(handleRecoveryProvider);
-    final otpCooldown = ref.watch(smsOtpCooldownProvider);
+    final otpCooldown = ref.watch(handleRecoverySmsOtpCooldownProvider);
     final progress = state.progress;
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
@@ -86,21 +73,16 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
                       style: TextStyle(color: context.awikiTheme.secondaryText),
                     ),
                     const SizedBox(height: 16),
-                    AppTextField(
+                    _RecoveryVerifiedValue(
                       key: const Key('handle-recovery-handle'),
-                      controller: _handleController,
                       label: context.l10n.handleRecoveryHandle,
-                      placeholder: 'alice.awiki.info',
-                      enabled: progress == null,
+                      value: widget.initialHandle,
                     ),
                     const SizedBox(height: 12),
-                    AppTextField(
+                    _RecoveryVerifiedValue(
                       key: const Key('handle-recovery-phone'),
-                      controller: _phoneController,
                       label: context.l10n.handleRecoveryPhone,
-                      placeholder: '+8613800138000',
-                      keyboardType: TextInputType.phone,
-                      enabled: state.canRequestOtp,
+                      value: widget.initialPhone,
                     ),
                     const SizedBox(height: 12),
                     AppTextField(
@@ -273,11 +255,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   Future<void> _requestOtp() {
     return ref
         .read(handleRecoveryProvider.notifier)
-        .requestOtp(
-          scope: widget.identityScope,
-          handle: _handleController.text,
-          phone: _phoneController.text,
-        );
+        .requestOtp(handle: widget.initialHandle, phone: widget.initialPhone);
   }
 
   Future<void> _prepare() async {
@@ -285,7 +263,7 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     _otpController.clear();
     await ref
         .read(handleRecoveryProvider.notifier)
-        .prepare(phone: _phoneController.text, otp: otp);
+        .prepare(phone: widget.initialPhone, otp: otp);
   }
 
   Future<void> _activate() async {
@@ -306,6 +284,40 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     await ref
         .read(appRuntimeProvider.notifier)
         .loginWithLocalCredential(progress.ownerIdentityId);
+  }
+}
+
+class _RecoveryVerifiedValue extends StatelessWidget {
+  const _RecoveryVerifiedValue({
+    super.key,
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      value: value,
+      readOnly: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              color: context.awikiTheme.secondaryText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(value),
+        ],
+      ),
+    );
   }
 }
 

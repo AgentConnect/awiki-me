@@ -1,24 +1,25 @@
 # Handle Recovery V1 UI
 
-Handle Recovery 是一个默认关闭的高风险身份恢复入口。AWiki Me 只有在本地
-`AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED` 为真，并且当前租户的 Server Info
-声明支持 phone Handle Recovery 时，才会在已登出但仍保留本地凭据的 onboarding
-页面显示该入口。
+Handle Recovery 是已有 Handle 登录/注册流程中的高风险分支，不再是首页独立入口。
+首页只保留统一的登录/注册动作；当已验证的手机号、验证码和 Handle 对应一个已存在
+Manifest 身份时，App 才让用户选择“加入新设备”或“恢复 Handle”。Recovery 选项仍要求
+`AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED` 和当前租户 Server Info 的 phone Recovery
+capability 同时开启。
 
-当前人工联调构建还会在登录/注册表单下方显示一个临时的全局“恢复 Handle”按钮。
-该按钮只在上述双重 capability 门禁通过时出现。全局入口不绑定当前激活身份：用户输入
-完整 Handle 后，Core 先在本地多身份索引中精确匹配；本地不存在时使用公开 WNS 当前
-binding，并在手机号验证成功后新增恢复身份。远端人工验证完成后必须删除该临时按钮。
+选择 Recovery 后，Handle 和手机号以只读方式沿用已验证的 onboarding 上下文，页面不会
+要求再次输入；注册授权会被丢弃，并立即请求 purpose 为
+`awiki.identity.handle-recovery.v1` 的独立 Recovery OTP。注册/Join 与 Recovery 的重发
+边界按 purpose 隔离，避免注册冷却阻止专用 Recovery OTP，同时仍分别遵守服务端返回的
+`retry_at`。Recovery 不绑定当前激活身份，也不要求本机曾保存目标 Handle。
 
 ## 当前协议边界
 
 - 当前 OTP purpose 固定为 `awiki.identity.handle-recovery.v1`。
-- App 先生成 opaque operation ID，再请求 OTP；OTP、Handle 和 operation ID 必须在
-  prepare 阶段保持同一绑定。身份卡入口可以提供精确本地 selector；全局入口不提供
-  selector，由 Core 按 Handle 精确匹配本地身份或创建新的本地身份。
-- App 的 session projection 必须同时保留 Core `identityId` 与用户可见的 local alias；
-  身份卡 Recovery 只传前者。全局 Recovery 传空 selector，禁止把当前身份、
-  `credentialName` 或 alias 当作目标猜测。
+- Core 在请求 Recovery OTP 前创建 opaque operation ID；OTP、Handle 和 operation ID 必须
+  在 prepare 阶段保持同一绑定。统一 onboarding Recovery 不提供 selector；Core 按 Handle
+  精确匹配本地身份，本地不存在时生成新的本地 owner 与身份材料。
+- App 禁止把当前身份、`credentialName` 或 alias 当作恢复目标猜测。Core 返回本次
+  operation 的 `ownerIdentityId`，后续 status/activate/resume 才按该 owner/operation 推进。
 - OTP 仅作为瞬时输入传给 Core，App 不持久化 OTP、grant、密钥或证明材料。
 - prepare 后 UI 必须展示 Handle 保留、其他设备重新加入、普通本地数据迁移以及
   E2EE/DID-only 限制等不可逆影响；用户明确确认后才允许 activate。
@@ -33,11 +34,17 @@ binding，并在手机号验证成功后新增恢复身份。远端人工验证�
 
 ## UI E2E
 
-`HANDLE-RECOVERY-V1-E2E-001` 使用一个 fresh App/native Core root 创建 ready-admin
-fixture，登出后从可见入口完成发码、OTP、风险确认、activate 和 bounded resume。
-最终 oracle 要求：Handle 和稳定本地 selector 不变、DID 被替换、Registry 只有一个
-ready current admin，并且旧 DID 不再出现在本地 identity projection。该专项支持 Linux
-Flutter desktop runner，也可在 macOS runner 上执行。
+`HANDLE-RECOVERY-V1-E2E-001` 先创建远端 ready-admin fixture，再销毁 setup root，并用一个
+没有任何本地身份的 fresh App/native Core root 打开统一 onboarding。用同一 Handle 和手机号
+完成登录/注册验证后选择 Recovery，再完成专用 OTP、风险确认、activate 和 bounded resume。
+fixture 注册与 UI 验证复用同一测试手机号时，用例必须先遵守首个注册 OTP receipt 的
+`retry_at`，并确认 UI 已把第二次 OTP 绑定到规范化 Handle/手机号后才允许提交，避免把
+服务端冷却或异步请求竞态误判为产品恢复失败。
+进入 Recovery 后还会断言已验证 Handle/手机号仅以只读上下文展示、页面只保留一个 Recovery
+OTP 输入框，并且 Core 恰好收到一次同一 Handle/手机号且不带本地 identity selector。
+最终 oracle 要求：Handle 保留、新的本地 owner 被安装、DID 被替换、Registry 只有一个
+ready current admin，并且旧 DID 不出现在 fresh root 的 identity projection。该专项支持
+Linux Flutter desktop runner，也可在 macOS runner 上执行。
 
 ```bash
 AWIKI_MULTI_DEVICE_REMOTE_RECOVERY_E2E_ENABLED=1 \

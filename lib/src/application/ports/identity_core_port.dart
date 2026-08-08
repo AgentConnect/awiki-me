@@ -10,13 +10,13 @@ class IdentityRegistrationResult {
   const IdentityRegistrationResult({
     required this.status,
     this.identity,
-    this.joinProgress,
+    this.existingHandleContinuationId,
     this.warnings = const <String>[],
   });
 
   final IdentityRegistrationStatus status;
   final AppSession? identity;
-  final DeviceJoinProgress? joinProgress;
+  final String? existingHandleContinuationId;
   final List<String> warnings;
 }
 
@@ -59,4 +59,12 @@ abstract interface class IdentityCorePort {
     String? inviteCode,
     String? displayName,
   });
+}
+
+abstract interface class ExistingHandleContinuationPort {
+  Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
+    String continuationId,
+  );
+
+  Future<void> discardExistingHandleContinuation(String continuationId);
 }

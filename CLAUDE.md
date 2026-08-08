@@ -8,7 +8,7 @@
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
-   - UI session projection 必须同时保留精确 Core identity ID 与 local alias；身份卡 Handle Recovery 使用精确 ID，全局 Handle Recovery 必须省略 selector 并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。
+   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。
@@ -88,9 +88,10 @@ Join 请求发现必须分别经过 CLI foreground listener 的专用 host event
 App runtime 的 system-notification 全局审批入口；E2E 不得直接调用 Inbox hydration、
 `requestSync()` 或 `refreshJoinInbox()` 代替唤醒。显式 staged-OTP operator 模式只接受固定 SSH argv 与闭合 RFC7807 503，且
 只执行 Ali 不可变发布、显式受保护配置并禁止写入 Python bytecode，不证明短信送达。
-`multi-device-remote-recovery` 使用一个 fresh App/native Core root，覆盖已登出本地
-凭据的可见 Recovery 入口、绑定 `awiki.identity.handle-recovery.v1` 与 operation ID 的
-产品发码请求与 operation-bound OTP、不可逆风险确认、activate/bounded resume、Handle 保留和 DID replacement。
+`multi-device-remote-recovery` 先创建远端 ready-admin fixture，再销毁 setup root，并在没有
+任何本地身份的 fresh App/native Core root 上经统一登录/注册进入 Join/Recovery 选择；Recovery
+覆盖绑定 `awiki.identity.handle-recovery.v1` 与 operation ID 的专用发码、不可逆风险确认、
+activate/bounded resume、新本地 owner 安装、Handle 保留和 DID replacement。
 该 Recovery 专项可在 Linux Flutter desktop runner 或 macOS runner 执行；其他远端多设备 App suite
 仍保留各自的平台限制。
 注册与 Recovery 可复用 ignored local YAML 中同一测试手机号和固定验证码；它使用仅测试可见的

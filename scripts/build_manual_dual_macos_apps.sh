@@ -13,6 +13,8 @@ Usage:
 
 Environment:
   FLUTTER_BIN                         Flutter executable (default: flutter)
+  AWIKI_IM_CORE_REPO_DIR              awiki-cli-rs2 checkout
+                                      (default: ../awiki-cli-rs2)
   AWIKI_PRIMARY_TENANT_DOMAIN         Shared tenant domain (default: awiki.info)
   AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED
                                       Handle Recovery gate (default: true)
@@ -33,6 +35,54 @@ command -v "$flutter_bin" >/dev/null 2>&1 || {
   echo "error: Flutter executable not found: $flutter_bin" >&2
   exit 2
 }
+flutter_bin="$(command -v "$flutter_bin")"
+
+im_core_repo_dir="${AWIKI_IM_CORE_REPO_DIR:-$ROOT_DIR/../awiki-cli-rs2}"
+im_core_repo_dir="$(cd "$im_core_repo_dir" 2>/dev/null && pwd)" || {
+  echo "error: awiki-cli-rs2 checkout is unavailable" >&2
+  exit 2
+}
+im_core_build_script="$im_core_repo_dir/scripts/flutter/build-sdk-native.sh"
+im_core_verify_script="$ROOT_DIR/scripts/verify_im_core_native_artifact.sh"
+im_core_library="$im_core_repo_dir/packages/awiki_im_core/macos/Frameworks/AwikiImCore.xcframework/macos-x86_64/libawiki_im_core.a"
+
+prepare_native_dependency() {
+  [[ -x "$im_core_build_script" ]] || {
+    echo "error: native Core build script is unavailable: $im_core_build_script" >&2
+    return 1
+  }
+  [[ -x "$im_core_verify_script" ]] || {
+    echo "error: native Core verifier is unavailable: $im_core_verify_script" >&2
+    return 1
+  }
+
+  local source_revision
+  source_revision="$(git -C "$im_core_repo_dir" rev-parse --verify HEAD)" || return 1
+  if AWIKI_IM_CORE_REPO_DIR="$im_core_repo_dir" \
+      "$im_core_verify_script" >/dev/null 2>&1 && \
+      [[ -f "$im_core_library" ]] && \
+      [[ "$(/usr/bin/lipo -archs "$im_core_library")" == "x86_64" ]]; then
+    echo "Using verified x86_64 awiki_im_core from source revision $source_revision"
+  else
+    echo "Rebuilding stale awiki_im_core from source revision $source_revision"
+    PATH="$(dirname "$flutter_bin"):$PATH" \
+      "$im_core_build_script" --macos-only --macos-arch x86_64
+  fi
+
+  AWIKI_IM_CORE_REPO_DIR="$im_core_repo_dir" \
+    "$im_core_verify_script" || {
+      echo "error: native Core provenance verification failed" >&2
+      return 1
+    }
+  [[ -f "$im_core_library" ]] || {
+    echo "error: native Core library is missing: $im_core_library" >&2
+    return 1
+  }
+  [[ "$(/usr/bin/lipo -archs "$im_core_library")" == "x86_64" ]] || {
+    echo "error: native Core library must be x86_64-only" >&2
+    return 1
+  }
+}
 
 tenant_domain="${AWIKI_PRIMARY_TENANT_DOMAIN:-awiki.info}"
 [[ "$tenant_domain" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$ ]] || {
@@ -52,6 +102,8 @@ joiner_build_rel="build/manual-multi-device/joiner-flutter-build"
 joiner_build="$ROOT_DIR/$joiner_build_rel"
 admin_app="$ROOT_DIR/build/macos/Build/Products/Debug/AWikiMe.app"
 joiner_app="$manual_root/AWikiMe-Joiner.app"
+
+prepare_native_dependency || exit 1
 
 mkdir -p \
   "$admin_cache/flutter-config" \
@@ -74,10 +126,13 @@ AWIKI_PRIMARY_TENANT_DOMAIN = $tenant_domain
 EOF
 
 lock_snapshot="$(mktemp)"
+pod_lock_snapshot="$(mktemp)"
 cp pubspec.lock "$lock_snapshot"
+cp macos/Podfile.lock "$pod_lock_snapshot"
 restore_lock() {
   cp "$lock_snapshot" pubspec.lock
-  rm -f "$lock_snapshot"
+  cp "$pod_lock_snapshot" macos/Podfile.lock
+  rm -f "$lock_snapshot" "$pod_lock_snapshot"
 }
 trap restore_lock EXIT
 
@@ -96,9 +151,43 @@ build_app() {
       --dart-define="AWIKI_MULTI_DEVICE_HANDLE_RECOVERY_ENABLED=$handle_recovery_enabled"
 }
 
+verify_native_intermediate() {
+  local flutter_build_root="$1"
+  local copied_library="$flutter_build_root/macos/Build/Products/Debug/XCFrameworkIntermediates/awiki_im_core/libawiki_im_core.a"
+  [[ -f "$copied_library" ]] || {
+    echo "error: Flutter build did not copy the native Core library: $copied_library" >&2
+    exit 1
+  }
+  /usr/bin/cmp -s "$im_core_library" "$copied_library" || {
+    echo "error: Flutter build used a stale native Core library: $copied_library" >&2
+    exit 1
+  }
+}
+
+prepare_native_intermediate() {
+  local flutter_build_root="$1"
+  local copied_dir="$flutter_build_root/macos/Build/Products/Debug/XCFrameworkIntermediates/awiki_im_core"
+  local copied_library="$copied_dir/libawiki_im_core.a"
+  if [[ -f "$copied_library" ]] && \
+      /usr/bin/cmp -s "$im_core_library" "$copied_library"; then
+    echo "Keeping verified Flutter native Core intermediate: $copied_library"
+    return
+  fi
+
+  echo "Invalidating stale Flutter native Core intermediate: $copied_dir"
+  rm -rf \
+    "$copied_dir" \
+    "$flutter_build_root/macos/Build/Intermediates.noindex/Pods.build/Debug/awiki_im_core.build"
+  # CocoaPods declares the XCFramework as an input. Updating its timestamp and
+  # removing the matching Pod target state forces Xcode to recopy the slice.
+  /usr/bin/touch "$im_core_library"
+}
+
+prepare_native_intermediate "$joiner_build"
 build_app \
   "$joiner_cache/flutter-config" \
   "$joiner_cache/ManualJoiner.xcconfig"
+verify_native_intermediate "$joiner_build"
 joiner_source="$joiner_build/macos/Build/Products/Debug/AWikiMe.app"
 [[ -d "$joiner_source" ]] || {
   echo "error: Joiner build did not produce an App" >&2
@@ -107,9 +196,11 @@ joiner_source="$joiner_build/macos/Build/Products/Debug/AWikiMe.app"
 rm -rf "$joiner_app"
 /usr/bin/ditto "$joiner_source" "$joiner_app"
 
+prepare_native_intermediate "$ROOT_DIR/build"
 build_app \
   "$admin_cache/flutter-config" \
   "$admin_cache/ManualAdmin.xcconfig"
+verify_native_intermediate "$ROOT_DIR/build"
 
 verify_app() {
   local app="$1"

@@ -19,7 +19,8 @@ void main() {
     );
 
     final otp = await adapter.requestOtp(
-      owner: _owner,
+      handle: _owner.handle,
+      localIdentityId: _owner.localIdentityId,
       phone: '+8613800138000',
     );
     expect(otp.operationId, 'recover-op-1');
@@ -96,7 +97,11 @@ void main() {
       final adapter = AwikiImCoreHandleRecoveryAdapter.withCoreInstance(
         coreInstance: () async => sdk,
       );
-      await adapter.requestOtp(owner: _owner, phone: '+8613800138000');
+      await adapter.requestOtp(
+        handle: _owner.handle,
+        localIdentityId: _owner.localIdentityId,
+        phone: '+8613800138000',
+      );
 
       await adapter.discardPreAttempt('recover-op-1');
       expect(
@@ -227,7 +232,11 @@ void main() {
     );
 
     await expectLater(
-      adapter.requestOtp(owner: _owner, phone: '+8613800138000'),
+      adapter.requestOtp(
+        handle: _owner.handle,
+        localIdentityId: _owner.localIdentityId,
+        phone: '+8613800138000',
+      ),
       throwsA(
         isA<HandleRecoveryOtpRateLimited>()
             .having((error) => error.retryAfterSeconds, 'seconds', 37)
@@ -290,7 +299,8 @@ class _FakeRecoveryCore implements core.AwikiImCore {
 
   @override
   Future<core.HandleRecoveryOtpResult> requestHandleRecoveryOtp({
-    required core.IdentitySelector selector,
+    core.IdentitySelector? selector,
+    required String fullHandle,
     required String phone,
   }) async {
     _checkError();
@@ -299,6 +309,7 @@ class _FakeRecoveryCore implements core.AwikiImCore {
     resetAwaitingFactor();
     return core.HandleRecoveryOtpResult(
       fullHandle: _owner.handle,
+      ownerIdentityId: _owner.localIdentityId,
       operationId: 'recover-op-1',
       accepted: true,
       retryAfterSeconds: 60,

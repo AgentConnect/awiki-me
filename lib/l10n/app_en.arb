@@ -342,6 +342,8 @@
   "deviceReviewAction": "Review and verify",
   "deviceJoinEntry": "Add this device to an existing account",
   "deviceJoinEntrySubtitle": "An existing admin device must verify the 6-digit code shown on both devices",
+  "onboardingExistingHandleTitle": "This Handle already exists",
+  "onboardingExistingHandleMessage": "Choose whether to add this device to the existing identity or recover the Handle with its bound phone and a dedicated recovery code.",
   "deviceJoinTitle": "Add a new device",
   "deviceJoinHandle": "Existing Handle",
   "deviceJoinPhone": "Linked phone number",

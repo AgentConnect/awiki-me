@@ -894,6 +894,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deviceJoinEntrySubtitle => '需要已有管理设备确认两端的 6 位验证码';
 
   @override
+  String get onboardingExistingHandleTitle => '这个 Handle 已经存在';
+
+  @override
+  String get onboardingExistingHandleMessage =>
+      '请选择将本设备加入现有身份，或使用绑定手机号和独立恢复验证码恢复 Handle。';
+
+  @override
   String get deviceJoinTitle => '添加新设备';
 
   @override

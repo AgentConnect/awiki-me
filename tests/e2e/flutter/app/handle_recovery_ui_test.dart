@@ -1,10 +1,10 @@
 // [INPUT]: Audited awiki.info endpoints, one dedicated SMS account and OTP
-//          resolver, a fresh production AppBootstrap/native Core root, and an
-//          E2E-only user-presence decision.
-// [OUTPUT]: Secret-free proof that the visible Handle Recovery V4 flow keeps
-//           the Handle, replaces the DID, and fences the old local identity.
-// [POS]: Remote product UI acceptance; setup may register through the
-//        production application service, but Recovery itself is UI-driven.
+//          resolver, server-issued SMS retry boundaries, a fresh production
+//          AppBootstrap/native Core root, and an E2E-only user-presence decision.
+// [OUTPUT]: Secret-free proof that unified onboarding can recover a Handle on
+//           a machine with no local identity, replace its DID, and install it.
+// [POS]: Remote product UI acceptance; setup creates only the remote fixture,
+//        while the tested registration choice and Recovery are UI-driven.
 
 import 'dart:async';
 import 'dart:convert';
@@ -14,17 +14,18 @@ import 'dart:math';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/app/awiki_me_app.dart';
 import 'package:awiki_me/src/app/bootstrap.dart';
+import 'package:awiki_me/src/app/ui_feedback.dart';
 import 'package:awiki_me/src/application/config/awiki_environment_config.dart';
 import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
-import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
-import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_provider.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
+import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
 import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,19 +72,12 @@ void main() {
         environment: _environment(config),
         appStateRoot: config.appStateRoot,
       );
-      final recoveryCore = bootstrap.handleRecoveryCorePort;
-      if (recoveryCore == null) {
-        fail('The production Handle Recovery Core port was unavailable.');
-      }
-      final recordingRecoveryCore = _RecordingHandleRecoveryCorePort(
-        recoveryCore,
-      );
       final bareHandle = _uniqueHandle(config.handlePrefix);
       final onboardingSupport = bootstrap.onboardingSupportService;
       if (onboardingSupport == null) {
         fail('The production onboarding support service was unavailable.');
       }
-      final registrationOtp = await _requestAndResolveRegistrationOtp(
+      final registrationFactor = await _requestAndResolveRegistrationOtp(
         onboardingSupport: onboardingSupport,
         config: config,
         account: account,
@@ -92,7 +86,7 @@ void main() {
       final registration = await bootstrap.onboardingService!
           .registerHandleWithPhone(
             phone: account.phone,
-            otp: registrationOtp,
+            otp: registrationFactor.otp,
             handle: bareHandle,
             nickName: 'AWiki Handle Recovery E2E',
           );
@@ -104,12 +98,29 @@ void main() {
         fail('The Recovery fixture did not create one authenticated identity.');
       }
       final oldDid = oldSession.did;
-      final stableCredentialName =
-          oldSession.localAlias ?? oldSession.identityId;
       final fullHandle = oldSession.handle!.trim().toLowerCase();
       final initialRegistry = await bootstrap.deviceManagementCorePort!
           .identityDeviceRegistry(oldDid);
       _requireReadyCurrentAdmin(initialRegistry, expectedDid: oldDid);
+
+      await bootstrap.dispose();
+      bootstrap = null;
+      await _deleteDirectory(config.appStateRoot);
+      bootstrap = await AppBootstrap.create(
+        environment: _environment(config),
+        appStateRoot: config.appStateRoot,
+      );
+      if ((await bootstrap.appSessionService!.listLocalIdentities())
+          .isNotEmpty) {
+        fail('The Recovery machine unexpectedly retained a local identity.');
+      }
+      final recoveryCore = bootstrap.handleRecoveryCorePort;
+      if (recoveryCore == null) {
+        fail('The production Handle Recovery Core port was unavailable.');
+      }
+      final recordingRecoveryCore = _RecordingHandleRecoveryCorePort(
+        recoveryCore,
+      );
 
       await tester.pumpWidget(
         AwikiMeApp(
@@ -122,54 +133,131 @@ void main() {
           ],
         ),
       );
-      final container = await _waitForAuthenticatedApp(
-        tester,
-        expectedDid: oldDid,
-      );
-      await container.read(appRuntimeProvider.notifier).logout();
       await _pumpUntil(
         tester,
         () => find.byType(OnboardingPage).evaluate().length == 1,
         timeout: const Duration(seconds: 45),
-        failure: 'Logout did not return to the real onboarding surface.',
+        failure: 'The fresh machine did not open the real onboarding surface.',
       );
-      final recoveryEntry = find.bySemanticsIdentifier(
-        'handle-recovery-entry:$stableCredentialName',
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(OnboardingPage)),
       );
+      final onboardingFields = find.byType(CupertinoTextField);
       await _pumpUntil(
         tester,
-        () => recoveryEntry.evaluate().length == 1,
+        () => onboardingFields.evaluate().length >= 3,
         timeout: const Duration(seconds: 45),
-        failure:
-            'The identity-scoped Handle Recovery entry did not become visible.',
+        failure: 'The unified phone onboarding form did not become available.',
+      );
+      await tester.enterText(onboardingFields.at(0), account.phone);
+      await tester.enterText(onboardingFields.at(1), bareHandle);
+      await _waitForRegistrationRetryBoundary(registrationFactor.retryAt);
+      await _pumpUntil(
+        tester,
+        () {
+          final onboarding = container.read(onboardingProvider);
+          final cooldown = container.read(smsOtpCooldownProvider);
+          return !onboarding.isBusy && cooldown.canSend;
+        },
+        timeout: const Duration(seconds: 45),
+        failure: 'The registration OTP action did not become enabled.',
       );
       await _tapOne(
         tester,
-        recoveryEntry,
-        failure:
-            'The visible identity-scoped Handle Recovery entry was unavailable.',
+        find.bySemanticsIdentifier('e2e-send-otp-button'),
+        failure: 'The registration OTP action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () {
+          _failOnDangerousUiFeedback(container, 'Registration OTP request');
+          final state = container.read(onboardingProvider);
+          return !state.isBusy &&
+              state.otpTargetFullHandle == fullHandle &&
+              state.otpTargetPhone != null;
+        },
+        timeout: const Duration(seconds: 45),
+        failure: 'The UI did not bind the registration OTP to the Handle.',
+        safeDiagnostic: () {
+          final onboarding = container.read(onboardingProvider);
+          final cooldown = container.read(smsOtpCooldownProvider);
+          final feedback = container.read(uiFeedbackProvider);
+          return <String>[
+            'busy=${onboarding.isBusy}',
+            'handle_target_present=${onboarding.otpTargetFullHandle != null}',
+            'handle_target_matches=${onboarding.otpTargetFullHandle == fullHandle}',
+            'phone_target_present=${onboarding.otpTargetPhone != null}',
+            'cooldown_ready=${cooldown.isReady}',
+            'cooldown_sending=${cooldown.isSending}',
+            'cooldown_remaining=${cooldown.remainingSeconds}',
+            'feedback=${_safeDiagnosticToken(feedback?.message.id)}',
+          ].join(',');
+        },
+      );
+      final onboardingOtp = await _resolveOtp(
+        account: account,
+        purpose: _registrationPurpose,
+        handle: bareHandle,
+        didDomain: config.didDomain,
+      );
+      await tester.enterText(onboardingFields.at(2), onboardingOtp);
+      await _tapOne(
+        tester,
+        find.byKey(const Key('onboarding-mac-phone-submit-action')),
+        failure: 'The unified login/register action was unavailable.',
+      );
+      await _pumpUntil(
+        tester,
+        () {
+          _failOnDangerousUiFeedback(container, 'Existing Handle verification');
+          return find
+                  .byKey(const Key('existing-handle-recovery-action'))
+                  .evaluate()
+                  .length ==
+              1;
+        },
+        timeout: const Duration(seconds: 45),
+        failure: 'Existing Handle did not expose the Join/Recovery choice.',
+      );
+      await _tapOne(
+        tester,
+        find.byKey(const Key('existing-handle-recovery-action')),
+        failure: 'The existing-Handle Recovery choice was unavailable.',
       );
       await _pumpUntil(
         tester,
         () => find.byType(HandleRecoveryPage).evaluate().length == 1,
-        failure: 'The visible Handle Recovery page did not open.',
+        failure: 'The unified onboarding flow did not open Recovery.',
       );
-
-      await _enterTextByKey(
-        tester,
-        const Key('handle-recovery-handle'),
-        fullHandle,
-      );
-      await _enterTextByKey(
-        tester,
-        const Key('handle-recovery-phone'),
-        account.phone,
-      );
-      await _tapOne(
-        tester,
-        find.bySemanticsIdentifier('handle-recovery-send-otp'),
-        failure: 'The Handle Recovery OTP action was unavailable.',
-      );
+      final recoveryPage = find.byType(HandleRecoveryPage);
+      if (find
+                  .descendant(
+                    of: find.byKey(const Key('handle-recovery-handle')),
+                    matching: find.text(fullHandle),
+                  )
+                  .evaluate()
+                  .length !=
+              1 ||
+          find
+                  .descendant(
+                    of: find.byKey(const Key('handle-recovery-phone')),
+                    matching: find.text(account.phone),
+                  )
+                  .evaluate()
+                  .length !=
+              1 ||
+          find
+                  .descendant(
+                    of: recoveryPage,
+                    matching: find.byType(CupertinoTextField),
+                  )
+                  .evaluate()
+                  .length !=
+              1) {
+        fail(
+          'Recovery did not reuse the verified Handle and phone as read-only context.',
+        );
+      }
       await _pumpUntil(
         tester,
         () {
@@ -185,6 +273,14 @@ void main() {
       final operationId = container
           .read(handleRecoveryProvider)
           .otpOperationId!;
+      if (recordingRecoveryCore.requestOtpCalls != 1 ||
+          recordingRecoveryCore.requestedHandle != fullHandle ||
+          recordingRecoveryCore.requestedPhone != account.phone ||
+          recordingRecoveryCore.requestedLocalIdentityId != null) {
+        fail(
+          'Recovery did not submit the exact verified context once without a local selector.',
+        );
+      }
       final recoveryOtp = await _resolveOtp(
         account: account,
         purpose: _recoveryPurpose,
@@ -218,9 +314,8 @@ void main() {
         timeout: const Duration(minutes: 2),
         failure: 'The UI did not reach the prepared Recovery phase.',
       );
-      if (recordingRecoveryCore.requestedLocalIdentityId !=
-          oldSession.identityId) {
-        fail('Handle Recovery did not preserve the exact local identity ID.');
+      if (recordingRecoveryCore.requestedLocalIdentityId != null) {
+        fail('Fresh-machine Recovery unexpectedly supplied a local identity.');
       }
       if (find.byKey(const Key('handle-recovery-progress')).evaluate().length !=
               1 ||
@@ -268,19 +363,15 @@ void main() {
       }
       final localIdentities = await bootstrap.appSessionService!
           .listLocalIdentities();
-      final replacement = localIdentities
-          .where(
-            (identity) =>
-                (identity.localAlias ?? identity.identityId) ==
-                stableCredentialName,
-          )
-          .toList(growable: false);
-      if (replacement.length != 1 ||
-          replacement.single.did != reset.currentDid ||
-          replacement.single.did == oldDid ||
-          replacement.single.handle?.trim().toLowerCase() != fullHandle ||
+      if (localIdentities.length != 1 ||
+          localIdentities.single.identityId != completed.ownerIdentityId ||
+          localIdentities.single.did != reset.currentDid ||
+          localIdentities.single.did == oldDid ||
+          localIdentities.single.handle?.trim().toLowerCase() != fullHandle ||
           localIdentities.any((identity) => identity.did == oldDid)) {
-        fail('The local identity inventory did not fence the replaced DID.');
+        fail(
+          'The fresh local identity inventory did not install the recovery.',
+        );
       }
       final finalRegistry = await bootstrap.deviceManagementCorePort!
           .identityDeviceRegistry(reset.currentDid);
@@ -291,12 +382,14 @@ void main() {
         startedAt: startedAt,
         phases: const <String>[
           'existing_ready_admin_created',
-          'recovery_entry_advertised_and_opened',
+          'fresh_machine_has_no_local_identity',
+          'existing_handle_choice_opened_recovery',
+          'verified_context_reused_without_duplicate_inputs',
           'operation_bound_otp_prepared_through_ui',
           'irreversible_risks_confirmed_through_ui',
           'recovery_completed_through_ui_resume',
-          'stable_owner_handle_and_replacement_did_verified',
-          'old_identity_fenced_from_local_projection',
+          'new_local_owner_handle_and_replacement_did_verified',
+          'old_did_absent_from_fresh_local_projection',
         ],
       );
     },
@@ -349,11 +442,24 @@ void _failOnRecoveryError(
   }
 }
 
+void _failOnDangerousUiFeedback(ProviderContainer container, String action) {
+  final feedback = container.read(uiFeedbackProvider);
+  if (feedback?.danger ?? false) {
+    fail(
+      '$action failed with safe UI message '
+      '${_safeDiagnosticToken(feedback!.message.id)}.',
+    );
+  }
+}
+
 class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   _RecordingHandleRecoveryCorePort(this._delegate);
 
   final HandleRecoveryCorePort _delegate;
   String? lastSafeFailure;
+  int requestOtpCalls = 0;
+  String? requestedHandle;
+  String? requestedPhone;
   String? requestedLocalIdentityId;
 
   Future<T> _record<T>(Future<T> Function() action) async {
@@ -375,11 +481,21 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryOtpResult> requestOtp({
-    required HandleRecoveryOwner owner,
+    required String handle,
     required String phone,
+    String? localIdentityId,
   }) {
-    requestedLocalIdentityId = owner.localIdentityId;
-    return _record(() => _delegate.requestOtp(owner: owner, phone: phone));
+    requestOtpCalls += 1;
+    requestedHandle = handle;
+    requestedPhone = phone;
+    requestedLocalIdentityId = localIdentityId;
+    return _record(
+      () => _delegate.requestOtp(
+        handle: handle,
+        phone: phone,
+        localIdentityId: localIdentityId,
+      ),
+    );
   }
 
   @override
@@ -491,33 +607,6 @@ void _requireReadyCurrentAdmin(
   }
 }
 
-Future<ProviderContainer> _waitForAuthenticatedApp(
-  WidgetTester tester, {
-  required String expectedDid,
-}) async {
-  await _pumpUntil(
-    tester,
-    () => find.byType(AppShell).evaluate().length == 1,
-    timeout: const Duration(seconds: 45),
-    failure: 'The authenticated App shell did not open.',
-  );
-  final container = ProviderScope.containerOf(
-    tester.element(find.byType(AppShell)),
-  );
-  await _pumpUntil(
-    tester,
-    () {
-      final runtime = container.read(appRuntimeProvider);
-      return runtime.isInitialized &&
-          !runtime.isBusy &&
-          runtime.activatedDid == expectedDid;
-    },
-    timeout: const Duration(seconds: 45),
-    failure: 'The expected authenticated identity did not become active.',
-  );
-  return container;
-}
-
 AwikiEnvironmentConfig _environment(_RemoteRecoveryRunConfig config) {
   return AwikiEnvironmentConfig(
     baseUrl: config.baseUrl,
@@ -531,7 +620,7 @@ AwikiEnvironmentConfig _environment(_RemoteRecoveryRunConfig config) {
   );
 }
 
-Future<String> _requestAndResolveRegistrationOtp({
+Future<({String otp, DateTime retryAt})> _requestAndResolveRegistrationOtp({
   required OnboardingSupportService onboardingSupport,
   required _RemoteRecoveryRunConfig config,
   required _DedicatedAccount account,
@@ -539,18 +628,19 @@ Future<String> _requestAndResolveRegistrationOtp({
 }) async {
   for (var attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await onboardingSupport.sendRegistrationOtp(
+      final receipt = await onboardingSupport.sendRegistrationOtp(
         phone: account.phone,
         handle: handle,
         domain: config.didDomain,
         fullHandle: '$handle.${config.didDomain}',
       );
-      return _resolveOtp(
+      final otp = await _resolveOtp(
         account: account,
         purpose: _registrationPurpose,
         handle: handle,
         didDomain: config.didDomain,
       );
+      return (otp: otp, retryAt: receipt.retryAt);
     } on RegistrationOtpRateLimited catch (error) {
       if (attempt == 2 || error.retryAfterSeconds > 120) {
         fail('The registration OTP request remained rate limited.');
@@ -563,6 +653,15 @@ Future<String> _requestAndResolveRegistrationOtp({
     }
   }
   fail('The registration OTP request exhausted its retry budget.');
+}
+
+Future<void> _waitForRegistrationRetryBoundary(DateTime retryAt) async {
+  final remaining = retryAt.toUtc().difference(DateTime.now().toUtc());
+  if (remaining <= Duration.zero) return;
+  if (remaining > const Duration(minutes: 2)) {
+    fail('The registration OTP retry boundary exceeded the E2E safety limit.');
+  }
+  await Future<void>.delayed(remaining + const Duration(seconds: 1));
 }
 
 Future<String> _resolveOtp({
@@ -841,12 +940,18 @@ Future<void> _pumpUntil(
   bool Function() condition, {
   required String failure,
   Duration timeout = const Duration(seconds: 15),
+  String Function()? safeDiagnostic,
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition() && DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 200));
   }
-  if (!condition()) fail(failure);
+  if (!condition()) {
+    final diagnostic = safeDiagnostic?.call();
+    fail(
+      diagnostic == null ? failure : '$failure Safe diagnostic: $diagnostic.',
+    );
+  }
 }
 
 Future<void> _tapOne(

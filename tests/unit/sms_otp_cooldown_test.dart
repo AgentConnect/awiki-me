@@ -52,6 +52,33 @@ void main() {
       expect(await second.loadRetryAt(), secondBoundary);
     });
 
+    test(
+      'isolates Handle Recovery from registration and Join cooldown',
+      () async {
+        final storage = _MemoryStore();
+        final service = KeyValueSmsOtpCooldownService(
+          storage: storage,
+          scopeId: 'tenant-awiki-ai',
+        );
+        final registrationBoundary = DateTime.utc(2026, 8, 8, 9, 1);
+        final recoveryBoundary = DateTime.utc(2026, 8, 8, 9, 2);
+
+        await service.saveRetryAt(registrationBoundary);
+        await service.saveRetryAt(
+          recoveryBoundary,
+          purpose: SmsOtpCooldownPurpose.handleRecovery,
+        );
+
+        expect(await service.loadRetryAt(), registrationBoundary);
+        expect(
+          await service.loadRetryAt(
+            purpose: SmsOtpCooldownPurpose.handleRecovery,
+          ),
+          recoveryBoundary,
+        );
+      },
+    );
+
     test('deletes malformed and non-UTC persisted values', () async {
       final storage = _MemoryStore();
       final service = KeyValueSmsOtpCooldownService(
@@ -233,17 +260,23 @@ final class _MemoryCooldownService implements SmsOtpCooldownService {
   int clearCalls = 0;
 
   @override
-  Future<void> clearRetryAt() async {
+  Future<void> clearRetryAt({
+    SmsOtpCooldownPurpose purpose = SmsOtpCooldownPurpose.registrationAndJoin,
+  }) async {
     clearCalls += 1;
     retryAt = null;
   }
 
   @override
-  Future<DateTime?> loadRetryAt() async =>
-      _loadResult == null ? retryAt : await _loadResult;
+  Future<DateTime?> loadRetryAt({
+    SmsOtpCooldownPurpose purpose = SmsOtpCooldownPurpose.registrationAndJoin,
+  }) async => _loadResult == null ? retryAt : await _loadResult;
 
   @override
-  Future<void> saveRetryAt(DateTime value) async {
+  Future<void> saveRetryAt(
+    DateTime value, {
+    SmsOtpCooldownPurpose purpose = SmsOtpCooldownPurpose.registrationAndJoin,
+  }) async {
     if (failSave) throw StateError('storage unavailable');
     retryAt = value;
   }

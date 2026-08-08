@@ -28,15 +28,34 @@ void main() {
         );
 
         final result = await service.requestOtp(
-          scope: const HandleRecoveryIdentityScope(
-            localIdentityId: 'identity-alice',
-          ),
+          localIdentityId: 'identity-alice',
           handle: ' Alice.AWIKI.info ',
           phone: ' +8613800138000 ',
         );
 
         expect(result.operationId, 'operation-core-1');
         expect(core.lastOwner?.localIdentityId, 'identity-alice');
+        expect(core.lastOwner?.handle, 'alice.awiki.info');
+        expect(core.lastPhone, '+8613800138000');
+      },
+    );
+
+    test(
+      'new machine requests recovery without a local identity selector',
+      () async {
+        final core = _FakeHandleRecoveryCore();
+        final service = HandleRecoveryService(
+          core: core,
+          userPresence: _FakeUserPresence(),
+        );
+
+        final result = await service.requestOtp(
+          handle: ' Alice.AWIKI.info ',
+          phone: ' +8613800138000 ',
+        );
+
+        expect(result.operationId, 'operation-core-1');
+        expect(core.lastLocalIdentityId, isNull);
         expect(core.lastOwner?.handle, 'alice.awiki.info');
         expect(core.lastPhone, '+8613800138000');
       },
@@ -60,9 +79,7 @@ void main() {
         );
 
         final result = await service.requestOtp(
-          scope: const HandleRecoveryIdentityScope(
-            localIdentityId: 'identity-alice',
-          ),
+          localIdentityId: 'identity-alice',
           handle: 'alice.awiki.info',
           phone: '+8613800138000',
           expectedOperationId: retryOperation.operationId,
@@ -101,9 +118,7 @@ void main() {
 
       await expectLater(
         service.requestOtp(
-          scope: const HandleRecoveryIdentityScope(
-            localIdentityId: 'identity-alice',
-          ),
+          localIdentityId: 'identity-alice',
           handle: 'alice.awiki.info',
           phone: '+8613800138000',
           expectedOperationId: current.operationId,
@@ -385,21 +400,21 @@ void main() {
   testWidgets(
     'result_absent is shown as still confirming and cannot be discarded',
     (tester) async {
+      final operation = _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
+        commitAttempted: true,
+        resultAbsent: true,
+      );
       final core = _FakeHandleRecoveryCore(
-        operation: _operation(
-          lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
-          commitAttempted: true,
-          resultAbsent: true,
-        ),
+        operation: operation,
+        otpResponseOperation: operation,
       );
       await tester.pumpWidget(
         buildLocalizedTestApp(
           locale: const Locale('en'),
           home: const HandleRecoveryPage(
-            identityScope: HandleRecoveryIdentityScope(
-              localIdentityId: 'identity-alice',
-            ),
             initialHandle: 'alice.awiki.info',
+            initialPhone: '+8613800138000',
           ),
           providerOverrides: <Override>[
             handleRecoveryCorePortProvider.overrideWithValue(core),
@@ -409,10 +424,7 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const Key('handle-recovery-handle')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const Key('handle-recovery-handle')), findsOneWidget);
       expect(find.byKey(const Key('handle-recovery-phone')), findsOneWidget);
       expect(find.byKey(const Key('handle-recovery-otp')), findsOneWidget);
       await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
@@ -431,11 +443,13 @@ void main() {
   testWidgets('local key failure exposes explicit quarantine confirmation', (
     tester,
   ) async {
+    final operation = _operation(
+      lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
+      commitAttempted: true,
+    );
     final core = _FakeHandleRecoveryCore(
-      operation: _operation(
-        lifecycleClass: HandleRecoveryLifecycleClass.remoteUnresolved,
-        commitAttempted: true,
-      ),
+      operation: operation,
+      otpResponseOperation: operation,
       reconcileError: const HandleRecoveryFailure(
         HandleRecoveryFailureCode.localKeyUnavailable,
       ),
@@ -445,10 +459,8 @@ void main() {
       buildLocalizedTestApp(
         locale: const Locale('en'),
         home: const HandleRecoveryPage(
-          identityScope: HandleRecoveryIdentityScope(
-            localIdentityId: 'identity-alice',
-          ),
           initialHandle: 'alice.awiki.info',
+          initialPhone: '+8613800138000',
         ),
         providerOverrides: <Override>[
           handleRecoveryCorePortProvider.overrideWithValue(core),
@@ -816,6 +828,8 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   final Object? statusError;
   final Object? reconcileError;
   HandleRecoveryOwner? lastOwner;
+  String? lastHandle;
+  String? lastLocalIdentityId;
   String? lastPhone;
   int listCalls = 0;
   int statusCalls = 0;
@@ -826,10 +840,16 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
 
   @override
   Future<HandleRecoveryOtpResult> requestOtp({
-    required HandleRecoveryOwner owner,
+    required String handle,
     required String phone,
+    String? localIdentityId,
   }) async {
-    lastOwner = owner;
+    lastHandle = handle;
+    lastLocalIdentityId = localIdentityId;
+    lastOwner = HandleRecoveryOwner(
+      localIdentityId: localIdentityId ?? operation.ownerIdentityId,
+      handle: handle,
+    );
     lastPhone = phone;
     operation =
         otpResponseOperation ??

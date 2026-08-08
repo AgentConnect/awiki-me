@@ -37,6 +37,12 @@ cd ../awiki-me
 flutter pub get
 ```
 
+在 Intel macOS 上构建两个本地 Debug App 时，使用
+`scripts/build_manual_dual_macos_apps.sh`。脚本会在 Flutter 构建前按
+`awiki-cli-rs2` 的精确源码 revision 和输入哈希校验 sibling Core 产物；发现过期后自动重编
+`x86_64` Core，同时失效过期的 CocoaPods XCFramework 副本及对应 Pod target 状态，并要求
+两个构建都使用已校验的静态库后才接受 App 产物。
+
 按平台替换：
 
 ```bash

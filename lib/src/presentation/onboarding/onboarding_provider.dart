@@ -29,6 +29,7 @@ class OnboardingState {
     this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
     this.otpTargetFullHandle,
     this.otpTargetPhone,
+    this.existingHandleContinuationId,
     this.serverInfoStatus = OnboardingServerInfoStatus.loading,
     this.serverInfo,
     this.serverInfoError,
@@ -42,6 +43,7 @@ class OnboardingState {
   final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
   final String? otpTargetFullHandle;
   final String? otpTargetPhone;
+  final String? existingHandleContinuationId;
   final OnboardingServerInfoStatus serverInfoStatus;
   final OnboardingServerInfo? serverInfo;
   final String? serverInfoError;
@@ -104,6 +106,7 @@ class OnboardingState {
     LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
     Object? otpTargetFullHandle = _unset,
     Object? otpTargetPhone = _unset,
+    Object? existingHandleContinuationId = _unset,
     OnboardingServerInfoStatus? serverInfoStatus,
     Object? serverInfo = _unset,
     Object? serverInfoError = _unset,
@@ -121,6 +124,10 @@ class OnboardingState {
       otpTargetPhone: identical(otpTargetPhone, _unset)
           ? this.otpTargetPhone
           : otpTargetPhone as String?,
+      existingHandleContinuationId:
+          identical(existingHandleContinuationId, _unset)
+          ? this.existingHandleContinuationId
+          : existingHandleContinuationId as String?,
       serverInfoStatus: serverInfoStatus ?? this.serverInfoStatus,
       serverInfo: identical(serverInfo, _unset)
           ? this.serverInfo
@@ -467,13 +474,13 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       if (!_sessionService.isLatestSessionTransition(transition)) {
         throw const AppSessionTransitionSuperseded();
       }
-      final progress = result.joinProgress;
-      if (progress == null) {
+      final continuationId = result.existingHandleContinuationId;
+      if (continuationId == null) {
         throw StateError(
-          'Join-required registration did not include Join progress.',
+          'Join-required registration did not include a continuation.',
         );
       }
-      ref.read(devicesProvider.notifier).resumeNewDevice(progress);
+      state = state.copyWith(existingHandleContinuationId: continuationId);
       return IdentityRegistrationStatus.joinRequired;
     }
     final session = result.identity;
@@ -487,6 +494,34 @@ class OnboardingController extends StateNotifier<OnboardingState> {
         .read(appRuntimeProvider.notifier)
         .activateCommittedSession(session, expectedTransition: transition);
     return IdentityRegistrationStatus.registered;
+  }
+
+  Future<void> beginExistingHandleDeviceJoin() async {
+    final continuationId = state.existingHandleContinuationId;
+    if (continuationId == null) {
+      throw StateError('existing_handle_continuation_unavailable');
+    }
+    final port = ref.read(identityCorePortProvider);
+    if (port is! ExistingHandleContinuationPort) {
+      throw StateError('existing_handle_continuation_unavailable');
+    }
+    final continuationPort = port as ExistingHandleContinuationPort;
+    final progress = await continuationPort.beginExistingHandleDeviceJoin(
+      continuationId,
+    );
+    ref.read(devicesProvider.notifier).resumeNewDevice(progress);
+    state = state.copyWith(existingHandleContinuationId: null);
+  }
+
+  Future<void> discardExistingHandleContinuation() async {
+    final continuationId = state.existingHandleContinuationId;
+    if (continuationId == null) return;
+    final port = ref.read(identityCorePortProvider);
+    if (port is ExistingHandleContinuationPort) {
+      final continuationPort = port as ExistingHandleContinuationPort;
+      await continuationPort.discardExistingHandleContinuation(continuationId);
+    }
+    state = state.copyWith(existingHandleContinuationId: null);
   }
 
   Future<void> loginWithLocalCredential(String identityIdOrAlias) {

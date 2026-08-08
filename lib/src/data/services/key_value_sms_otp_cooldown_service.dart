@@ -1,5 +1,5 @@
-// [INPUT]: Tenant storage scope and the shared preference key-value store.
-// [OUTPUT]: Strict UTC retry-boundary persistence without phone, Handle, or OTP data.
+// [INPUT]: Tenant storage scope, verification purpose, and the shared key-value store.
+// [OUTPUT]: Purpose-isolated UTC retry boundaries without phone, Handle, or OTP data.
 // [POS]: Data adapter for SmsOtpCooldownService.
 
 import 'dart:convert';
@@ -12,37 +12,52 @@ class KeyValueSmsOtpCooldownService implements SmsOtpCooldownService {
     required AppKeyValueStore storage,
     required String scopeId,
   }) : _storage = storage,
-       _key = _storageKey(scopeId);
+       _scopeId = scopeId;
 
   final AppKeyValueStore _storage;
-  final String _key;
+  final String _scopeId;
 
   @override
-  Future<DateTime?> loadRetryAt() async {
-    final raw = await _storage.read(key: _key);
+  Future<DateTime?> loadRetryAt({
+    SmsOtpCooldownPurpose purpose = SmsOtpCooldownPurpose.registrationAndJoin,
+  }) async {
+    final key = _storageKey(_scopeId, purpose);
+    final raw = await _storage.read(key: key);
     if (raw == null) return null;
     final parsed = DateTime.tryParse(raw);
     if (parsed == null || !parsed.isUtc || !raw.endsWith('Z')) {
-      await _storage.delete(key: _key);
+      await _storage.delete(key: key);
       return null;
     }
     return parsed;
   }
 
   @override
-  Future<void> saveRetryAt(DateTime retryAt) {
-    return _storage.write(key: _key, value: retryAt.toUtc().toIso8601String());
+  Future<void> saveRetryAt(
+    DateTime retryAt, {
+    SmsOtpCooldownPurpose purpose = SmsOtpCooldownPurpose.registrationAndJoin,
+  }) {
+    return _storage.write(
+      key: _storageKey(_scopeId, purpose),
+      value: retryAt.toUtc().toIso8601String(),
+    );
   }
 
   @override
-  Future<void> clearRetryAt() => _storage.delete(key: _key);
+  Future<void> clearRetryAt({
+    SmsOtpCooldownPurpose purpose = SmsOtpCooldownPurpose.registrationAndJoin,
+  }) => _storage.delete(key: _storageKey(_scopeId, purpose));
 }
 
-String _storageKey(String scopeId) {
+String _storageKey(String scopeId, SmsOtpCooldownPurpose purpose) {
   final normalized = scopeId.trim();
   if (normalized.isEmpty) {
     throw ArgumentError.value(scopeId, 'scopeId', 'must not be empty');
   }
   final encoded = base64Url.encode(utf8.encode(normalized)).replaceAll('=', '');
-  return 'sms_otp_cooldown_retry_at_v1.$encoded';
+  final purposeSegment = switch (purpose) {
+    SmsOtpCooldownPurpose.registrationAndJoin => '',
+    SmsOtpCooldownPurpose.handleRecovery => '.handle_recovery',
+  };
+  return 'sms_otp_cooldown_retry_at_v1$purposeSegment.$encoded';
 }
