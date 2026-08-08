@@ -3,10 +3,12 @@
 // [POS]: App-only V4.0 surface; Core owns credentials, keys, proof, and state transitions.
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
+import '../../app/e2e_semantics.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
@@ -281,11 +283,25 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
   Future<void> _activateRecoveredIdentityIfCompleted() async {
     final progress = ref.read(handleRecoveryProvider).progress;
     if (progress == null || !progress.isCompleted) return;
+    if (shouldStopHandleRecoveryBeforeProductReset(
+      e2eEnabled: awikiE2eEnabled,
+      crashCutEnabled: const bool.fromEnvironment(
+        'AWIKI_E2E_HANDLE_RECOVERY_CRASH_BEFORE_PRODUCT_RESET',
+      ),
+    )) {
+      return;
+    }
     await ref
         .read(appRuntimeProvider.notifier)
         .loginWithLocalCredential(progress.ownerIdentityId);
   }
 }
+
+bool shouldStopHandleRecoveryBeforeProductReset({
+  required bool e2eEnabled,
+  required bool crashCutEnabled,
+  bool releaseMode = kReleaseMode,
+}) => !releaseMode && e2eEnabled && crashCutEnabled;
 
 class _RecoveryVerifiedValue extends StatelessWidget {
   const _RecoveryVerifiedValue({
