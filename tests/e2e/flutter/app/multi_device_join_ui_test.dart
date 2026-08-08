@@ -2738,6 +2738,7 @@ class _JoinCli {
     final environment = <String, String>{
       'HOME': home,
       'AWIKI_CLI_WORKSPACE_HOME_DIR': workspace,
+      'AWIKI_CLI_UPDATE_CACHE_ONLY': '1',
       if (config.multiDeviceDirectE2eeEnabled)
         'AWIKI_MULTI_DEVICE_DIRECT_E2EE_ENABLED': '1',
       if (config.multiDeviceGroupE2eeEnabled)
