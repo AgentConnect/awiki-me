@@ -57,7 +57,7 @@ void main() {
     expect(normal.userDisplayScale, AwikiDisplayScale.normal);
     expect(
       normal.displayScale,
-      closeTo(AwikiDisplayScale.layoutBaseline, 0.0001),
+      closeTo(AwikiDisplayScale.effective(AwikiDisplayScale.normal), 0.0001),
     );
     expect(larger.userDisplayScale, 1.12);
     expect(
@@ -75,11 +75,14 @@ void main() {
     );
   });
 
-  test('用户 100% 映射到旧版 106% 的实际布局基准', () {
+  test('新的用户 100% 使用旧版 90% 的实际布局比例', () {
     final normal = AwikiResponsiveInfo.fromSize(const Size(1280, 800));
 
-    expect(normal.userDisplayScale, 1);
-    expect(normal.displayScaled(100), closeTo(106, 0.0001));
+    expect(normal.userDisplayScale, AwikiDisplayScale.normal);
+    expect(
+      normal.displayScaled(100),
+      closeTo(100 * AwikiDisplayScale.layoutBaseline, 0.0001),
+    );
   });
 
   test('显示缩放范围会被限制', () {

@@ -2057,9 +2057,10 @@ class _InlineImageEnvelope extends StatelessWidget {
     final minimumPreviewExtent = responsive.displayScaled(
       _minimumInlineImagePreviewExtent,
     );
-    final minimumInteractiveExtent = responsive.displayScaled(
-      _minimumInlineImageInteractiveExtent,
-    );
+    final minimumInteractiveExtent = responsive
+        .displayScaled(_minimumInlineImageInteractiveExtent)
+        .clamp(_minimumInlineImageInteractiveExtent, double.infinity)
+        .toDouble();
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {

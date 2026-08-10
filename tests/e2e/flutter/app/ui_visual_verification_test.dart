@@ -1365,7 +1365,7 @@ void _expectCompactSettingsGeometry(WidgetTester tester) {
   expect(app.top, closeTo(394, 0.1));
   expect(app.left, 0);
   expect(app.width, _compactSize.width);
-  expect(app.height, closeTo(264, 0.1));
+  expect(app.height, closeTo(183, 0.1));
   expect(
     tester
         .getSize(find.byKey(const Key('settings-current-version-row')))
@@ -1380,11 +1380,7 @@ void _expectCompactSettingsGeometry(WidgetTester tester) {
     tester.getSize(find.byKey(const Key('settings-language-row'))).height,
     closeTo(60, 0.1),
   );
-  expect(
-    tester.getSize(find.byKey(const Key('settings-font-size-row'))).height,
-    closeTo(80, 0.1),
-  );
-  expect(security.top, closeTo(698, 0.1));
+  expect(security.top, closeTo(617, 0.1));
   expect(security.left, 0);
   expect(security.width, _compactSize.width);
   expect(security.height, closeTo(223, 0.1));

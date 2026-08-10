@@ -27,7 +27,6 @@ import '../presentation/chat/chat_provider.dart';
 import '../presentation/recovery/handle_recovery_provider.dart';
 import '../presentation/shared/awiki_me_design.dart';
 import '../presentation/shared/display_scale.dart';
-import '../presentation/shared/font_size.dart';
 import '../presentation/shared/widgets/app_widgets.dart';
 import 'app_orientation.dart';
 import 'app_locale.dart';
@@ -39,14 +38,12 @@ class AwikiMeApp extends StatelessWidget {
     super.key,
     required this.bootstrap,
     this.initialDisplayScale = AwikiDisplayScale.normal,
-    this.initialFontSize = AwikiFontSize.standard,
     this.providerOverrides = const <Override>[],
     this.testFontFamily,
   });
 
   final AppBootstrap bootstrap;
   final double initialDisplayScale;
-  final double initialFontSize;
   final List<Override> providerOverrides;
   final String? testFontFamily;
 
@@ -83,14 +80,10 @@ class AwikiMeApp extends StatelessWidget {
         displayScalePreferenceServiceProvider.overrideWithValue(
           bootstrap.displayScalePreferenceService,
         ),
-        fontSizePreferenceServiceProvider.overrideWithValue(
-          bootstrap.fontSizePreferenceService,
-        ),
         smsOtpCooldownServiceProvider.overrideWithValue(
           bootstrap.smsOtpCooldownService,
         ),
         initialDisplayScaleProvider.overrideWithValue(initialDisplayScale),
-        initialFontSizeProvider.overrideWithValue(initialFontSize),
         updateServiceProvider.overrideWithValue(bootstrap.updateService),
         if (bootstrap.attachmentCacheService != null)
           attachmentCacheServiceProvider.overrideWithValue(
@@ -382,7 +375,6 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
   Widget build(BuildContext context) {
     final localeMode = ref.watch(appLocaleModeProvider);
     final displayScale = ref.watch(displayScaleProvider);
-    final fontSize = ref.watch(fontSizeProvider);
     final appTheme = AwikiMeTheme.forPlatform(
       defaultTargetPlatform,
       fontFamilyOverride: widget.testFontFamily,
@@ -422,27 +414,24 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
         builder: (context, child) {
           return AwikiDisplayScaleScope(
             scale: displayScale,
-            child: AwikiFontSizeScope(
-              fontSize: fontSize,
-              child: _DisplayScaleShortcuts(
-                onDecrease: () {
-                  ref.read(displayScaleProvider.notifier).decrease();
-                  return ref.read(displayScaleProvider);
-                },
-                onIncrease: () {
-                  ref.read(displayScaleProvider.notifier).increase();
-                  return ref.read(displayScaleProvider);
-                },
-                onReset: () {
-                  ref.read(displayScaleProvider.notifier).reset();
-                  return ref.read(displayScaleProvider);
-                },
-                child: _KeyboardDismissScope(
-                  child: material.Theme(
-                    data: appTheme.materialTheme,
-                    child: AppOrientationScope(
-                      child: child ?? const SizedBox.shrink(),
-                    ),
+            child: _DisplayScaleShortcuts(
+              onDecrease: () {
+                ref.read(displayScaleProvider.notifier).decrease();
+                return ref.read(displayScaleProvider);
+              },
+              onIncrease: () {
+                ref.read(displayScaleProvider.notifier).increase();
+                return ref.read(displayScaleProvider);
+              },
+              onReset: () {
+                ref.read(displayScaleProvider.notifier).reset();
+                return ref.read(displayScaleProvider);
+              },
+              child: _KeyboardDismissScope(
+                child: material.Theme(
+                  data: appTheme.materialTheme,
+                  child: AppOrientationScope(
+                    child: child ?? const SizedBox.shrink(),
                   ),
                 ),
               ),

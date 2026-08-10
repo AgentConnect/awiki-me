@@ -26,7 +26,7 @@ void main() {
       await service.saveScale(1.26);
       expect(storage.values['awiki_me_display_scale_v1'], '1.3');
 
-      await service.saveScale(1);
+      await service.saveScale(AwikiDisplayScale.normal);
       expect(storage.values, isEmpty);
     },
   );

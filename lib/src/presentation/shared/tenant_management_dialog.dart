@@ -432,7 +432,9 @@ class _TenantTileActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final theme = context.awikiTheme;
-    final buttonSize = responsive.displayScaled(responsive.isCompact ? 44 : 32);
+    final buttonSize = responsive.isCompact
+        ? responsive.displayScaled(44).clamp(46, double.infinity).toDouble()
+        : responsive.displayScaled(32);
     Widget actionButton({
       required String action,
       required String semanticLabel,

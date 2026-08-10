@@ -1105,9 +1105,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDisplayScaleReset => 'Reset to 100%';
 
   @override
-  String get settingsFontSize => 'Font size';
-
-  @override
   String get settingsWindowPlacementReset => 'Reset window size and position';
 
   @override

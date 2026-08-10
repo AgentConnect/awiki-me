@@ -22,7 +22,6 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
-import 'font_size_setting_row.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
@@ -150,8 +149,6 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
-          const AppSectionDivider(),
-          const FontSizeSettingRow(),
           if (isDesktopPlatform) ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
@@ -323,7 +320,6 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
-            FontSizeSettingRow(compact: true, height: optionRowHeight),
             if (isDesktopPlatform)
               _QuietSettingsRow(
                 key: const Key('settings-display-row'),
