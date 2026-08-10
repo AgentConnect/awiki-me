@@ -1357,7 +1357,7 @@ class _MentionCandidateTile extends StatelessWidget {
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
                               : responsive.bodyMd,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       SizedBox(height: responsive.displayScaled(2)),
@@ -1394,7 +1394,7 @@ class _MentionCandidateTile extends StatelessWidget {
                       fontSize: macStyle
                           ? responsive.displayScaled(10)
                           : responsive.displayScaled(11),
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -1440,7 +1440,7 @@ class _DisabledComposerNotice extends StatelessWidget {
           color: AwikiMePalette.mutedNeutral,
           fontSize: responsive.displayScaled(macStyle ? 12 : 13),
           height: 1.25,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -1590,7 +1590,7 @@ class _PendingAttachmentPreview extends ConsumerWidget {
                     fontSize: macStyle
                         ? responsive.displayScaled(12.5)
                         : responsive.bodySm,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 SizedBox(height: responsive.spacing(2)),

@@ -100,7 +100,7 @@ class _LanguageSwitcherButton extends StatelessWidget {
               style: TextStyle(
                 color: theme.secondaryText,
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w400,
                 height: 1.1,
               ),
             ),
@@ -160,7 +160,7 @@ class _TenantSwitcherButton extends StatelessWidget {
                 style: TextStyle(
                   color: theme.secondaryText,
                   fontSize: responsive.metaSm,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                   height: 1.1,
                 ),
               ),

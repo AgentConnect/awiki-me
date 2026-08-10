@@ -537,7 +537,7 @@ class _PeerProfileCompactSummary extends StatelessWidget {
                               style: TextStyle(
                                 color: theme.title,
                                 fontSize: 18,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w400,
                                 height: 1.25,
                               ),
                             ),
@@ -672,7 +672,7 @@ class _PeerProfileRelationshipButton extends StatelessWidget {
             style: TextStyle(
               color: color,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               height: 1,
             ),
           ),
@@ -846,7 +846,7 @@ class _PeerProfileDisclosureRow extends StatelessWidget {
                     style: TextStyle(
                       color: theme.title,
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -899,7 +899,7 @@ class _PeerProfileFullWidthActionRow extends StatelessWidget {
             style: TextStyle(
               color: color,
               fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -981,7 +981,7 @@ class _PeerProfileHero extends StatelessWidget {
                             fontSize: responsive.isCompact
                                 ? 20
                                 : responsive.titleXl,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w400,
                             height: 1.25,
                           ),
                         ),
@@ -1129,7 +1129,7 @@ class _PeerProfileCompactActionButton extends StatelessWidget {
               style: TextStyle(
                 color: emphasized ? theme.primaryForeground : theme.primary,
                 fontSize: responsive.isCompact ? 16 : responsive.bodyMd,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
                 height: 1,
               ),
             ),
@@ -1301,7 +1301,7 @@ class _PeerProfileDeleteButton extends StatelessWidget {
               style: TextStyle(
                 color: theme.danger,
                 fontSize: responsive.isCompact ? 16 : responsive.bodyMd,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
                 height: 1,
               ),
             ),

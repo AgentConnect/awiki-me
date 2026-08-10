@@ -136,7 +136,7 @@ class _AgentProcessingIndicator extends StatelessWidget {
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
                               : responsive.metaSm,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                           height: 1.3,
                         ),
                       ),
@@ -247,7 +247,7 @@ class _PersonalAgentProcessingStatus extends StatelessWidget {
                         fontSize: macStyle
                             ? responsive.displayScaled(11.5)
                             : responsive.metaSm,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                         height: 1.25,
                       ),
                     ),
@@ -465,7 +465,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
                               : responsive.metaSm,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w400,
                           height: 1.25,
                         ),
                       ),
@@ -489,7 +489,7 @@ class _PersonalAgentRecoveryCard extends StatelessWidget {
                       fontSize: macStyle
                           ? responsive.displayScaled(12)
                           : responsive.metaSm,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                       height: 1.35,
                     ),
                   ),
@@ -656,7 +656,7 @@ class _PersonalAgentActionButton extends StatelessWidget {
                   fontSize: macStyle
                       ? responsive.displayScaled(12)
                       : responsive.metaSm,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                   height: 1.2,
                 ),
               ),
@@ -882,7 +882,7 @@ class _NewMessagesButton extends StatelessWidget {
             fontSize: macStyle
                 ? responsive.displayScaled(12)
                 : responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
             letterSpacing: 0,
           ),
         ),
@@ -1131,7 +1131,7 @@ class _MessageBubble extends StatelessWidget {
         style: TextStyle(
           color: macStyle ? AwikiMePalette.mutedNeutral : theme.secondaryText,
           fontSize: metrics.fontSize,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           height: 1.2,
         ),
       ),
@@ -1181,7 +1181,8 @@ class _MessageBubble extends StatelessWidget {
     final attachment = message.attachment;
     final textStyle = TextStyle(
       color: isMine ? theme.onOutgoingMessage : theme.title,
-      fontSize: responsive.displayScaled(14),
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
       height: 1.45,
     );
     final child = message.attachment == null
@@ -1260,7 +1261,7 @@ class _MessageBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: responsive.displayScaled(12),
                     color: AwikiMePalette.dangerRed,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -1275,7 +1276,7 @@ class _MessageBubble extends StatelessWidget {
                     style: TextStyle(
                       fontSize: responsive.displayScaled(12),
                       color: AwikiMePalette.brandAccent,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -1339,7 +1340,8 @@ class _MessageBubble extends StatelessWidget {
     final attachment = message.attachment;
     final textStyle = TextStyle(
       color: isMine ? theme.onOutgoingMessage : theme.title,
-      fontSize: responsive.displayScaled(15),
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
       height: 1.45,
     );
     final content = attachment == null
@@ -1424,7 +1426,7 @@ class _MessageBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: responsive.metaSm,
                     color: theme.danger,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -1439,7 +1441,7 @@ class _MessageBubble extends StatelessWidget {
                     style: TextStyle(
                       fontSize: responsive.metaSm,
                       color: theme.primaryDark,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -1715,7 +1717,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final titleStyle = TextStyle(
       color: widget.macStyle ? AwikiMePalette.inkNeutral : theme.title,
       fontSize: responsive.displayScaled(13),
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w400,
       height: 1.25,
     );
     final metaStyle = TextStyle(
@@ -2740,7 +2742,7 @@ TextStyle _mentionHighlightStyle(
 ) {
   return baseStyle.copyWith(
     color: theme.primary,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w400,
     backgroundColor: theme.primary.withValues(alpha: 0.10),
   );
 }
@@ -2842,12 +2844,12 @@ MarkdownStyleSheet _chatMarkdownStyleSheet(
   return MarkdownStyleSheet(
     a: bodyStyle.copyWith(
       color: theme.primary,
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w400,
       decoration: TextDecoration.none,
     ),
     p: bodyStyle,
     pPadding: EdgeInsets.zero,
-    strong: bodyStyle.copyWith(fontWeight: FontWeight.w700),
+    strong: bodyStyle.copyWith(fontWeight: FontWeight.w400),
     em: bodyStyle.copyWith(fontStyle: FontStyle.italic),
     del: bodyStyle.copyWith(decoration: TextDecoration.lineThrough),
     code: bodyStyle.copyWith(
@@ -2855,17 +2857,17 @@ MarkdownStyleSheet _chatMarkdownStyleSheet(
       fontSize: fontSize * 0.92,
       backgroundColor: codeBackground,
     ),
-    h1: bodyStyle.copyWith(fontSize: fontSize + 2, fontWeight: FontWeight.w700),
+    h1: bodyStyle.copyWith(fontSize: fontSize + 2, fontWeight: FontWeight.w400),
     h1Padding: EdgeInsets.only(bottom: responsive.spacing(4)),
-    h2: bodyStyle.copyWith(fontSize: fontSize + 1, fontWeight: FontWeight.w700),
+    h2: bodyStyle.copyWith(fontSize: fontSize + 1, fontWeight: FontWeight.w400),
     h2Padding: EdgeInsets.only(bottom: responsive.spacing(4)),
-    h3: bodyStyle.copyWith(fontWeight: FontWeight.w700),
+    h3: bodyStyle.copyWith(fontWeight: FontWeight.w400),
     h3Padding: EdgeInsets.only(bottom: responsive.spacing(3)),
-    h4: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h4: bodyStyle.copyWith(fontWeight: FontWeight.w400),
     h4Padding: EdgeInsets.only(bottom: responsive.spacing(3)),
-    h5: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h5: bodyStyle.copyWith(fontWeight: FontWeight.w400),
     h5Padding: EdgeInsets.zero,
-    h6: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+    h6: bodyStyle.copyWith(fontWeight: FontWeight.w400),
     h6Padding: EdgeInsets.zero,
     blockSpacing: responsive.spacing(6),
     listIndent: responsive.spacing(18),

@@ -647,7 +647,7 @@ class _FriendsCategoryTabs extends StatelessWidget {
                               color: selected ? theme.primary : theme.title,
                               fontSize: 15,
                               fontWeight: selected
-                                  ? FontWeight.w600
+                                  ? FontWeight.w400
                                   : FontWeight.w400,
                             ),
                           ),
@@ -861,7 +861,7 @@ class _FriendsSection extends StatelessWidget {
                     style: TextStyle(
                       color: theme.secondaryText,
                       fontSize: responsive.metaSm,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -890,7 +890,7 @@ class _FriendsSection extends StatelessWidget {
                         style: TextStyle(
                           color: theme.primary,
                           fontSize: responsive.metaSm,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -1032,7 +1032,7 @@ class _FriendRow extends StatelessWidget {
                       Text(
                         title,
                         style: AwikiMeTextStyles.listTitle.copyWith(
-                          fontSize: responsive.bodyMd,
+                          fontSize: 14,
                           color: theme.title,
                         ),
                       ),
@@ -1043,7 +1043,7 @@ class _FriendRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AwikiMeTextStyles.cardSubtitle.copyWith(
-                            fontSize: responsive.bodySm,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -1192,7 +1192,7 @@ class _RelationshipActionButtonInnerState
                     style: TextStyle(
                       color: foreground,
                       fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
           ),

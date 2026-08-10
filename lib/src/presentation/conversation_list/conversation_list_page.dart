@@ -783,7 +783,7 @@ class _ConversationDeleteDialog extends StatelessWidget {
                       style: TextStyle(
                         color: theme.secondaryText,
                         fontSize: responsive.displayScaled(14),
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                         height: 1.25,
                       ),
                     ),
@@ -905,7 +905,7 @@ class _SwipeToDeleteConversationRowState
                           style: TextStyle(
                             color: CupertinoColors.white,
                             fontSize: responsive.displayScaled(13),
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
@@ -1132,7 +1132,7 @@ class _MacConversationRow extends StatelessWidget {
                               titleStyle: TextStyle(
                                 color: theme.title,
                                 fontSize: responsive.displayScaled(13.5),
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
                           ),
@@ -1332,7 +1332,7 @@ class _ConversationRow extends StatelessWidget {
                                 compact: false,
                                 titleStyle: TextStyle(
                                   fontSize: responsive.displayScaled(15.5),
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w400,
                                   color: theme.title,
                                   height: 1.25,
                                 ),
@@ -1821,7 +1821,7 @@ class _ConversationPreviewTagBadge extends StatelessWidget {
               ? responsive.displayScaled(10)
               : responsive.displayScaled(10.5),
           height: 1,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -1863,7 +1863,7 @@ class _ConversationUnreadBadge extends StatelessWidget {
         style: TextStyle(
           color: context.awikiTheme.surface,
           fontSize: responsive.displayScaled(count > 99 ? 9 : 10.5),
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1,
           fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
         ),
@@ -1968,7 +1968,7 @@ class _ConversationPeerBadge extends StatelessWidget {
         style: TextStyle(
           color: foreground,
           fontSize: responsive.displayScaled(compact ? 9 : 10.5),
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -2002,7 +2002,7 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
         style: TextStyle(
           color: AwikiMePalette.mutedNeutral,
           fontSize: responsive.displayScaled(compact ? 10 : 10.5),
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -2082,7 +2082,7 @@ class _EmptyState extends StatelessWidget {
                   style: AwikiMeTextStyles.sectionTitle.copyWith(
                     color: theme.secondaryText,
                     fontSize: responsive.displayScaled(18),
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 if (subtitle.trim().isNotEmpty) ...<Widget>[

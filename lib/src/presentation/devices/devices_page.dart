@@ -274,7 +274,7 @@ class _SectionLabel extends StatelessWidget {
       style: TextStyle(
         color: context.awikiTheme.secondaryText,
         fontSize: 13,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w400,
       ),
     );
   }

@@ -159,7 +159,7 @@ class AppDialogHeader extends StatelessWidget {
                 style: TextStyle(
                   color: theme.title,
                   fontSize: responsive.titleLg,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w400,
                   height: 1.2,
                 ),
               ),
@@ -265,7 +265,7 @@ class AppConfirmationDialog extends StatelessWidget {
                 style: TextStyle(
                   color: context.awikiTheme.title,
                   fontSize: responsive.displayScaled(18),
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w400,
                   height: 1.25,
                 ),
               )
@@ -306,7 +306,7 @@ class AppConfirmationDialog extends StatelessWidget {
                 style: TextStyle(
                   color: context.awikiTheme.danger,
                   fontSize: responsive.displayScaled(12),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   height: 1.35,
                 ),
               ),

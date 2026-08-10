@@ -22,6 +22,7 @@ import '../shared/sidebar_workspace.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
+import 'font_size_setting_row.dart';
 import '../shared/display_scale.dart';
 import '../shared/local_credential_delete_dialog.dart';
 
@@ -105,12 +106,13 @@ class SettingsPage extends ConsumerWidget {
               style: TextStyle(
                 color: theme.secondaryText,
                 fontSize: context.awikiResponsive.bodySm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
           const AppSectionDivider(),
           AppListTile(
+            key: const Key('settings-check-updates-row'),
             title: l10n.settingsCheckForUpdates,
             leading: leading(
               const _SettingsIcon(role: AwikiMeIconRole.refresh),
@@ -120,7 +122,7 @@ class SettingsPage extends ConsumerWidget {
               style: TextStyle(
                 color: theme.secondaryText,
                 fontSize: context.awikiResponsive.bodySm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
             onTap: updateState.status == AppUpdateStatus.checking
@@ -140,7 +142,7 @@ class SettingsPage extends ConsumerWidget {
               style: TextStyle(
                 color: theme.secondaryText,
                 fontSize: context.awikiResponsive.bodySm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
             onTap: () => AppNavigator.push<void>(
@@ -148,6 +150,8 @@ class SettingsPage extends ConsumerWidget {
               (_) => const LanguageSelectionPage(),
             ),
           ),
+          const AppSectionDivider(),
+          const FontSizeSettingRow(),
           if (isDesktopPlatform) ...<Widget>[
             const AppSectionDivider(),
             AppListTile(
@@ -162,7 +166,7 @@ class SettingsPage extends ConsumerWidget {
                 style: TextStyle(
                   color: theme.secondaryText,
                   fontSize: context.awikiResponsive.bodySm,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
               onTap: () => AppNavigator.push<void>(
@@ -319,6 +323,7 @@ class SettingsPage extends ConsumerWidget {
                 (_) => const LanguageSelectionPage(),
               ),
             ),
+            FontSizeSettingRow(compact: true, height: optionRowHeight),
             if (isDesktopPlatform)
               _QuietSettingsRow(
                 key: const Key('settings-display-row'),
@@ -385,7 +390,7 @@ class SettingsPage extends ConsumerWidget {
                 title: l10n.settingsTitle,
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 titleFontSize: 16,
-                titleFontWeight: FontWeight.w600,
+                titleFontWeight: FontWeight.w400,
                 leading: TopBarActionButton(
                   key: const Key('settings-back-button'),
                   onTap: onBack ?? () => Navigator.of(context).pop(),
@@ -581,7 +586,7 @@ class _QuietSettingsProfileRow extends StatelessWidget {
                           style: TextStyle(
                             color: theme.title,
                             fontSize: responsive.bodyMd + 1,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -591,7 +596,7 @@ class _QuietSettingsProfileRow extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: theme.secondaryText,
-                            fontSize: 13,
+                            fontSize: 12,
                           ),
                         ),
                       ],
@@ -638,8 +643,8 @@ class _QuietSettingsSectionTitle extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: context.awikiTheme.secondaryText,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -729,8 +734,8 @@ class _QuietSettingsRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: destructive ? theme.danger : theme.title,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ),
@@ -745,7 +750,7 @@ class _QuietSettingsRow extends StatelessWidget {
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: theme.secondaryText, fontSize: 13),
+                  style: TextStyle(color: theme.secondaryText, fontSize: 12),
                 ),
               ),
             if (onTap != null) ...<Widget>[

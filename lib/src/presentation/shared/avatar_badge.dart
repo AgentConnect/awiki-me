@@ -79,7 +79,7 @@ class _FallbackAvatarBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: label.length > 1 ? size / 3.1 : size / 2.4,
           color: theme.avatarForeground,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );

@@ -110,7 +110,7 @@ class AgentStatusPill extends StatelessWidget {
             style: TextStyle(
               color: color,
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],

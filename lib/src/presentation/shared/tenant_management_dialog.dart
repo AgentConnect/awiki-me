@@ -316,7 +316,7 @@ class _TenantListTile extends StatelessWidget {
                       style: TextStyle(
                         color: theme.title,
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
@@ -541,7 +541,7 @@ class _TenantManagedLabel extends StatelessWidget {
           style: TextStyle(
             color: theme.secondaryText,
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -572,7 +572,7 @@ class _TenantStatusPill extends StatelessWidget {
         style: TextStyle(
           color: theme.primaryForeground,
           fontSize: responsive.displayScaled(11),
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -945,7 +945,7 @@ class _TenantInlineMessage extends StatelessWidget {
             color: danger ? theme.danger : theme.secondaryText,
             fontSize: responsive.bodySm,
             height: 1.35,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ),

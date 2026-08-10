@@ -13,17 +13,154 @@ import 'package:awiki_me/src/presentation/settings/display_settings_page.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
 import 'package:awiki_me/src/presentation/shared/awiki_me_design.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:awiki_me/src/presentation/shared/font_size.dart';
 import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show SelectionArea;
+import 'package:flutter/material.dart'
+    show
+        RoundSliderThumbShape,
+        RoundSliderTickMarkShape,
+        SelectionArea,
+        Slider,
+        SliderTheme;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'test_support.dart';
 
 void main() {
+  testWidgets('font size slider defaults to 14 and updates shared typography', (
+    tester,
+  ) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(buildLocalizedTestApp(home: const SettingsPage()));
+    await tester.pumpAndSettle();
+
+    final slider = tester.widget<Slider>(
+      find.byKey(const Key('settings-font-size-slider')),
+    );
+    expect(slider.min, 12);
+    expect(slider.max, 22);
+    expect(slider.divisions, 10);
+    expect(slider.value, 14);
+    expect(slider.label, '14 px');
+    expect(
+      tester
+          .widget<Container>(find.byKey(const Key('settings-font-size-row')))
+          .color,
+      isNull,
+    );
+    expect(
+      find.byKey(const Key('settings-font-size-small-label')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('settings-font-size-standard-label')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('settings-font-size-large-label')),
+      findsNothing,
+    );
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SettingsPage)),
+    );
+    container.read(fontSizeProvider.notifier).setFontSize(18);
+    await tester.pump();
+
+    expect(container.read(fontSizeProvider), 18);
+    expect(
+      tester
+          .widget<Slider>(find.byKey(const Key('settings-font-size-slider')))
+          .label,
+      '18 px',
+    );
+    final title = tester.widget<Text>(find.text('字体大小'));
+    expect(title.style?.fontSize, 14);
+    expect(title.style?.fontWeight, FontWeight.w400);
+    expect(
+      tester.getRect(find.byKey(const Key('settings-font-size-row'))).height,
+      tester.getRect(find.byKey(const Key('settings-language-row'))).height,
+    );
+
+    final sliderTheme = tester.widget<SliderTheme>(
+      find.ancestor(
+        of: find.byKey(const Key('settings-font-size-slider')),
+        matching: find.byType(SliderTheme),
+      ),
+    );
+    final thumbShape = sliderTheme.data.thumbShape as RoundSliderThumbShape;
+    expect(thumbShape.enabledThumbRadius, 7);
+    final tickMarkShape =
+        sliderTheme.data.tickMarkShape as RoundSliderTickMarkShape;
+    expect(tickMarkShape.tickMarkRadius, 2.2);
+  });
+
+  testWidgets('font size scope scales every descendant text style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const CupertinoApp(
+        home: AwikiFontSizeScope(
+          fontSize: 18,
+          child: Text('全局字号', style: TextStyle(fontSize: 14)),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.text('全局字号'));
+    expect(MediaQuery.textScalerOf(context).scale(14), closeTo(18, 0.001));
+    expect(MediaQuery.textScalerOf(context).scale(16), closeTo(20.571, 0.001));
+  });
+
+  testWidgets('22 px desktop settings keeps update status inside the row', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(1200, 840));
+    final updateService = FakeUpdateService()
+      ..checkError = StateError('offline');
+
+    try {
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          updateService: updateService,
+          home: const AwikiFontSizeScope(
+            fontSize: 22,
+            child: SettingsPage(embedded: true),
+          ),
+        ),
+      );
+      await tester.tap(find.text('检查更新'));
+      await tester.pumpAndSettle();
+
+      final rowRect = tester.getRect(
+        find.byKey(const Key('settings-check-updates-row')),
+      );
+      final titleRect = tester.getRect(find.text('检查更新'));
+      final statusRect = tester.getRect(find.text('检查更新失败，请稍后重试'));
+      expect(updateService.checkForUpdatesCalls, 1);
+      expect(titleRect.width, greaterThan(0));
+      expect(statusRect.right, lessThanOrEqualTo(rowRect.right));
+      expect(
+        tester.getRect(find.text('字体大小')).left,
+        closeTo(tester.getRect(find.text('语言')).left, 0.01),
+      );
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
   testWidgets(
     'desktop display settings remain usable at the minimum compact width',
     (tester) async {
@@ -225,8 +362,8 @@ void main() {
     expect(profileRect, const Rect.fromLTWH(0, 64, 390, 104));
     expect(avatarRect, const Rect.fromLTWH(20, 87, 58, 58));
     expect(accountRect, const Rect.fromLTWH(0, 208, 390, 61));
-    expect(appRect, const Rect.fromLTWH(0, 309, 390, 183));
-    expect(securityRect, const Rect.fromLTWH(0, 532, 390, 183));
+    expect(appRect, const Rect.fromLTWH(0, 309, 390, 244));
+    expect(securityRect, const Rect.fromLTWH(0, 593, 390, 183));
 
     for (final titleKey in <String>[
       'settings-account-section-title',
@@ -239,7 +376,7 @@ void main() {
           matching: find.byType(Text),
         ),
       );
-      expect(title.style?.fontSize, 13);
+      expect(title.style?.fontSize, 12);
       expect(title.maxLines, 1);
       expect(title.overflow, TextOverflow.ellipsis);
     }

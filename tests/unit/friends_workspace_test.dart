@@ -885,6 +885,9 @@ void main() {
     expect(listRect.left, pageRect.left);
     expect(listRect.right, pageRect.right);
     expect(listRect.bottom, pageRect.bottom);
+    final contactTitle = tester.widget<Text>(find.text('Compact Contact'));
+    expect(contactTitle.style?.fontSize, 14);
+    expect(contactTitle.style?.fontWeight, FontWeight.w400);
     final listSurface = tester.widget<DecoratedBox>(
       find.byKey(const Key('friends-list-surface')),
     );
@@ -911,7 +914,7 @@ void main() {
       find.descendant(of: compactHeader, matching: find.text('联系人')),
     );
     expect(title.style?.fontSize, 16);
-    expect(title.style?.fontWeight, FontWeight.w600);
+    expect(title.style?.fontWeight, FontWeight.w400);
     expect(title.style?.height, 1.25);
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
     final actionVisual = find.byKey(const Key('relationship-action-visual'));

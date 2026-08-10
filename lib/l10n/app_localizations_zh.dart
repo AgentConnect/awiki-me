@@ -1049,6 +1049,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsDisplayScaleReset => '恢复 100%';
 
   @override
+  String get settingsFontSize => '字体大小';
+
+  @override
   String get settingsWindowPlacementReset => '重置窗口大小和位置';
 
   @override

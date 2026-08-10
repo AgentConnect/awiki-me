@@ -19,6 +19,7 @@ import '../application/app_session_service.dart';
 import '../application/conversation_service.dart';
 import '../application/directory_application_service.dart';
 import '../application/display_scale_preference_service.dart';
+import '../application/font_size_preference_service.dart';
 import '../application/group_application_service.dart';
 import '../application/messaging_service.dart';
 import '../application/message_sync_service.dart';
@@ -76,6 +77,7 @@ import '../data/services/awiki_onboarding_utility_client.dart';
 import '../data/services/user_service_account_state_sync_adapter.dart';
 import '../data/services/key_value_active_session_store.dart';
 import '../data/services/key_value_display_scale_preference_service.dart';
+import '../data/services/key_value_font_size_preference_service.dart';
 import '../data/services/key_value_sms_otp_cooldown_service.dart';
 import '../data/services/file_attachment_cache_service.dart';
 import '../data/services/locale_preference_service.dart';
@@ -120,6 +122,7 @@ class AppBootstrap {
     required this.updateService,
     this.displayScalePreferenceService =
         const NoopDisplayScalePreferenceService(),
+    this.fontSizePreferenceService = const NoopFontSizePreferenceService(),
     this.smsOtpCooldownService = const NoopSmsOtpCooldownService(),
     this.desktopShellService = const NoopDesktopShellService(),
     this.appSessionService,
@@ -164,6 +167,7 @@ class AppBootstrap {
   final LocalePreferenceService localePreferenceService;
   final UpdateService updateService;
   final DisplayScalePreferenceService displayScalePreferenceService;
+  final FontSizePreferenceService fontSizePreferenceService;
   final SmsOtpCooldownService smsOtpCooldownService;
   final DesktopShellService desktopShellService;
   final AppSessionService? appSessionService;
@@ -465,6 +469,9 @@ class AppBootstrap {
       );
       final displayScalePreferenceService =
           KeyValueDisplayScalePreferenceService(storage: preferenceStorage);
+      final fontSizePreferenceService = KeyValueFontSizePreferenceService(
+        storage: preferenceStorage,
+      );
       final smsOtpCooldownService = KeyValueSmsOtpCooldownService(
         storage: preferenceStorage,
         scopeId: registeredTenant.storageScopeId.value,
@@ -479,6 +486,7 @@ class AppBootstrap {
         e2eeFacade: e2eeFacade,
         localePreferenceService: localePreferenceService,
         displayScalePreferenceService: displayScalePreferenceService,
+        fontSizePreferenceService: fontSizePreferenceService,
         smsOtpCooldownService: smsOtpCooldownService,
         updateService: updateService,
         desktopShellService: shell,
@@ -581,6 +589,7 @@ class AppBootstrap {
       e2eeFacade: e2eeFacade,
       localePreferenceService: localePreferenceService,
       displayScalePreferenceService: displayScalePreferenceService,
+      fontSizePreferenceService: fontSizePreferenceService,
       smsOtpCooldownService: smsOtpCooldownService,
       updateService: updateService,
       desktopShellService: desktopShellService,

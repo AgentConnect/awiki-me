@@ -8,7 +8,7 @@ import 'widgets/app_widgets.dart';
 enum AwikiMeTopBarTitleLayout { centered, adaptive }
 
 const double awikiMeCompactTopBarTitleFontSize = 16;
-const FontWeight awikiMeCompactTopBarTitleFontWeight = FontWeight.w600;
+const FontWeight awikiMeCompactTopBarTitleFontWeight = FontWeight.w400;
 const double awikiMeCompactTopBarTitleHeight = 1.25;
 
 class AwikiMeTopBar extends StatelessWidget {
@@ -172,7 +172,7 @@ class AwikiMeShellTopBar extends StatelessWidget {
           : responsive.displayScaled(14),
       titleFontWeight: responsive.isPhone
           ? awikiMeCompactTopBarTitleFontWeight
-          : FontWeight.w600,
+          : FontWeight.w400,
       titleHeight: responsive.isPhone ? awikiMeCompactTopBarTitleHeight : null,
       leading: const SizedBox.shrink(),
       trailing: onQuickActionsTap == null

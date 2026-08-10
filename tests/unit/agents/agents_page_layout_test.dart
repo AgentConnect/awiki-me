@@ -198,7 +198,7 @@ void main() {
       find.descendant(of: header, matching: find.text('智能体')),
     );
     expect(compactTitle.style?.fontSize, 16);
-    expect(compactTitle.style?.fontWeight, FontWeight.w600);
+    expect(compactTitle.style?.fontWeight, FontWeight.w400);
     expect(compactTitle.style?.height, 1.25);
     expect(tester.getRect(section), const Rect.fromLTWH(0, 64, 390, 60));
     expect(listPane.color, AwikiMeColors.background);

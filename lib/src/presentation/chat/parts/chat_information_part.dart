@@ -329,7 +329,7 @@ class _ChatInformationHeader extends StatelessWidget {
               style: TextStyle(
                 color: theme.title,
                 fontSize: responsive.displayScaled(16),
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -390,7 +390,7 @@ class _ChatInformationIdentityRow extends StatelessWidget {
                     style: TextStyle(
                       color: theme.title,
                       fontSize: responsive.displayScaled(20),
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   if (handle.isNotEmpty) ...<Widget>[
@@ -472,7 +472,7 @@ class _ChatInformationActionRow extends StatelessWidget {
                 style: TextStyle(
                   color: labelColor ?? theme.title,
                   fontSize: responsive.displayScaled(16),
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ),
@@ -528,7 +528,7 @@ class _ChatInformationSwitchRow extends StatelessWidget {
                   style: TextStyle(
                     color: theme.title,
                     fontSize: responsive.displayScaled(16),
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -685,7 +685,7 @@ class _ChatHistorySearchPageState
                                               color: theme.title,
                                               fontSize: responsive
                                                   .displayScaled(14),
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.w400,
                                             ),
                                           ),
                                         ),

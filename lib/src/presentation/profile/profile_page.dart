@@ -215,7 +215,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                         style: TextStyle(
                           color: theme.title,
                           fontSize: responsive.bodyMd,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -535,7 +535,7 @@ class _CompactProfileSummary extends StatelessWidget {
                             style: TextStyle(
                               color: theme.title,
                               fontSize: 20,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w400,
                               height: 1.25,
                             ),
                           ),
@@ -632,7 +632,7 @@ class _CompactProfileTag extends StatelessWidget {
         style: TextStyle(
           color: theme.secondaryText,
           fontSize: 12,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -973,7 +973,7 @@ class _CompactProfileNavigationRow extends StatelessWidget {
                       style: TextStyle(
                         color: theme.title,
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                         height: 1.25,
                       ),
                     ),
@@ -1190,7 +1190,7 @@ class _ProfileStat extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: responsive.bodyMd + 2,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
             color: theme.title,
           ),
         ),
@@ -1267,7 +1267,7 @@ class _ProfileNavigationRow extends StatelessWidget {
                     style: TextStyle(
                       color: theme.title,
                       fontSize: responsive.bodyMd,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   if (subtitle.trim().isNotEmpty) ...<Widget>[

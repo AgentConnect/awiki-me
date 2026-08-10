@@ -420,7 +420,7 @@ class _AccessModeSegment extends StatelessWidget {
           style: TextStyle(
             color: selected ? color : theme.secondaryText,
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -487,7 +487,7 @@ class _AccessPolicyModule extends StatelessWidget {
                     style: TextStyle(
                       color: active ? theme.title : theme.secondaryText,
                       fontSize: responsive.bodySm,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -507,7 +507,7 @@ class _AccessPolicyModule extends StatelessWidget {
                     style: TextStyle(
                       color: statusColor,
                       fontSize: responsive.metaSm,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -711,7 +711,7 @@ class _AccessHandleRow extends StatelessWidget {
               style: TextStyle(
                 color: active ? theme.body : theme.secondaryText,
                 fontSize: responsive.bodySm,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
                 fontFamily: 'monospace',
               ),
             ),
@@ -948,7 +948,7 @@ class _AgentErrorBanner extends StatelessWidget {
                 style: TextStyle(
                   color: AwikiMeColors.danger,
                   fontSize: responsive.metaSm,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ),
@@ -1012,7 +1012,7 @@ class _DiagnosticInfoRow extends StatelessWidget {
               style: TextStyle(
                 color: theme.secondaryText,
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -1131,7 +1131,7 @@ class _DiagnosticMoreButton extends StatelessWidget {
               style: TextStyle(
                 color: theme.body,
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w400,
               ),
             ),
             SizedBox(width: responsive.spacing(5)),
@@ -1358,7 +1358,7 @@ class _SectionTitle extends StatelessWidget {
     final theme = context.awikiTheme;
     return Text(
       text,
-      style: TextStyle(color: theme.title, fontWeight: FontWeight.w600),
+      style: TextStyle(color: theme.title, fontWeight: FontWeight.w400),
     );
   }
 }
@@ -1380,7 +1380,7 @@ class _RunStatusPill extends StatelessWidget {
         style: TextStyle(
           color: _runStatusColor(status),
           fontSize: 12,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );

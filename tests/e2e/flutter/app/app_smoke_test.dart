@@ -28,6 +28,7 @@ import 'package:awiki_me/src/presentation/friends/friends_provider.dart';
 import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:awiki_me/src/presentation/profile/peer_display_profile_provider.dart';
 import 'package:awiki_me/src/presentation/settings/settings_page.dart';
+import 'package:awiki_me/src/presentation/shared/font_size.dart';
 import 'package:awiki_me/src/presentation/shared/startup_splash.dart';
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/foundation.dart';
@@ -35,6 +36,7 @@ import 'package:flutter/services.dart'
     show JSONMessageCodec, LogicalKeyboardKey, SystemChannels;
 import 'package:flutter/widgets.dart'
     show AppLifecycleState, Key, ListView, MediaQuery, Size, Text;
+import 'package:flutter/material.dart' show Slider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -841,7 +843,70 @@ void main() {
       expect(find.text('语言'), findsOneWidget);
       expect(find.text('导出身份凭证'), findsOneWidget);
       expect(find.text('检查更新'), findsOneWidget);
+      expect(
+        find.byKey(const Key('settings-font-size-slider')),
+        findsOneWidget,
+      );
+      final fontSizeSlider = tester.widget<Slider>(
+        find.byKey(const Key('settings-font-size-slider')),
+      );
+      expect(fontSizeSlider.value, 14);
+      expect(fontSizeSlider.min, 12);
+      expect(fontSizeSlider.max, 22);
+      fontSizeSlider.onChanged?.call(22);
+      await tester.pump();
+      final fontSizeContainer = ProviderScope.containerOf(
+        tester.element(find.byType(SettingsPage)),
+      );
+      expect(fontSizeContainer.read(fontSizeProvider), 22);
+      expect(
+        tester
+            .widget<Slider>(find.byKey(const Key('settings-font-size-slider')))
+            .value,
+        22,
+      );
     } finally {
+      await tester.binding.setSurfaceSize(null);
+    }
+  });
+
+  testWidgets('AwikiMeApp compact desktop rail fits when starting at 22 px', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await tester.binding.setSurfaceSize(const Size(796, 655));
+    const session = SessionIdentity(
+      did: 'did:test:max-font-rail',
+      credentialName: 'max-font-rail',
+      handle: 'max-font-rail',
+      displayName: 'Max Font Rail',
+      jwtToken: 'test-jwt',
+    );
+    final harness = createFakeAwikiMeAppHarness(session: session);
+
+    try {
+      await tester.pumpWidget(
+        AwikiMeApp(
+          bootstrap: harness.bootstrap,
+          initialFontSize: 22,
+          providerOverrides: harness.providerOverrides,
+        ),
+      );
+      await _pumpSmokeFrame(tester);
+
+      for (final key in <String>[
+        'desktop-rail-messages',
+        'desktop-rail-agents',
+        'desktop-rail-contacts',
+        'desktop-rail-tasks',
+        'desktop-rail-workbench',
+        'desktop-rail-settings',
+      ]) {
+        expect(find.byKey(Key(key)), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
       await tester.binding.setSurfaceSize(null);
     }
   });

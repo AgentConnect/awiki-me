@@ -211,11 +211,13 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
     final localeMode = await bootstrap.localePreferenceService.loadMode();
     final displayScale = await bootstrap.displayScalePreferenceService
         .loadScale();
+    final fontSize = await bootstrap.fontSizePreferenceService.loadFontSize();
     return _TenantRuntime(
       registry: registry,
       bootstrap: bootstrap,
       localeMode: localeMode,
       displayScale: displayScale,
+      fontSize: fontSize,
     );
   }
 
@@ -446,6 +448,7 @@ class _TenantAwareAwikiMeAppState extends State<TenantAwareAwikiMeApp>
           key: ValueKey<String>(runtime.registry.activeTenant.id),
           bootstrap: runtime.bootstrap,
           initialDisplayScale: runtime.displayScale,
+          initialFontSize: runtime.fontSize,
           providerOverrides: <Override>[
             appLocaleModeProvider.overrideWith((ref) => runtime.localeMode),
             appTenantRegistryProvider.overrideWithValue(runtime.registry),
@@ -502,7 +505,7 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
                     style: TextStyle(
                       color: AwikiMePalette.actionInk,
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -593,12 +596,14 @@ class _TenantRuntime {
     required this.bootstrap,
     required this.localeMode,
     required this.displayScale,
+    required this.fontSize,
   });
 
   final AppTenantRegistry registry;
   final AppBootstrap bootstrap;
   final AppLocaleMode localeMode;
   final double displayScale;
+  final double fontSize;
 
   _TenantRuntime copyWith({AppTenantRegistry? registry}) {
     return _TenantRuntime(
@@ -606,6 +611,7 @@ class _TenantRuntime {
       bootstrap: bootstrap,
       localeMode: localeMode,
       displayScale: displayScale,
+      fontSize: fontSize,
     );
   }
 }

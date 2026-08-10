@@ -81,7 +81,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                                       style: TextStyle(
                                         color: theme.title,
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w600,
+                                        fontWeight: FontWeight.w400,
                                       ),
                                     ),
                                   ),
@@ -91,7 +91,7 @@ class DisplaySettingsPage extends ConsumerWidget {
                                     style: const TextStyle(
                                       color: AwikiMePalette.actionBlue,
                                       fontSize: 15,
-                                      fontWeight: FontWeight.w600,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                 ],
@@ -216,7 +216,7 @@ class _DisplayActionRow extends StatelessWidget {
                       style: TextStyle(
                         color: theme.title,
                         fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),

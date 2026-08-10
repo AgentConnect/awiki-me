@@ -322,7 +322,7 @@ class _AgentListSectionHeader extends StatelessWidget {
                   style: TextStyle(
                     color: theme.title,
                     fontSize: responsive.bodyMd,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -382,7 +382,7 @@ class _AgentInstallDaemonRow extends StatelessWidget {
                 style: TextStyle(
                   color: theme.primary,
                   fontSize: responsive.bodySm,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ],
@@ -707,7 +707,7 @@ class _OrphanRuntimeGroup extends StatelessWidget {
             style: TextStyle(
               color: theme.secondaryText,
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -881,7 +881,7 @@ class _PendingRuntimeCreationTile extends StatelessWidget {
                 style: TextStyle(
                   color: theme.title,
                   fontSize: responsive.bodySm,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
               SizedBox(height: responsive.spacing(2)),
@@ -1104,7 +1104,7 @@ class _AgentListTile extends StatelessWidget {
                             style: TextStyle(
                               color: theme.title,
                               fontSize: responsive.bodySm,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                           SizedBox(height: responsive.spacing(2)),

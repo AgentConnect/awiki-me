@@ -146,7 +146,7 @@ class _ChatHeader extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: responsive.displayScaled(16),
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                     color: theme.title,
                   ),
                 ),
@@ -258,7 +258,7 @@ class _MacHeaderIdentityText extends StatelessWidget {
               style: TextStyle(
                 color: context.awikiTheme.title,
                 fontSize: responsive.displayScaled(14.5),
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

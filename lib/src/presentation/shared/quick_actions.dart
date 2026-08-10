@@ -322,7 +322,7 @@ class _CompactQuickActionRow extends StatelessWidget {
                             style: const TextStyle(
                               color: AwikiMePalette.inkNeutral,
                               fontSize: 15,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                               letterSpacing: 0,
                             ),
                           ),

@@ -181,7 +181,7 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
                                   ? AwikiMePalette.actionBlue
                                   : theme.tertiaryText,
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                   ),

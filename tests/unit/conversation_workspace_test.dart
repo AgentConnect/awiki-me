@@ -546,7 +546,7 @@ void main() {
       find.descendant(of: compactHeader, matching: find.text('消息')),
     );
     expect(title.style?.fontSize, 16);
-    expect(title.style?.fontWeight, FontWeight.w600);
+    expect(title.style?.fontWeight, FontWeight.w400);
     expect(title.style?.height, 1.25);
     expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
     expect(

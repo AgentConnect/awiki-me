@@ -246,7 +246,7 @@ class _AttachmentDropOverlay extends StatelessWidget {
                   context.l10n.chatAddAttachment,
                   style: TextStyle(
                     color: AwikiMePalette.inkNeutral,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                     fontSize: macStyle
                         ? responsive.displayScaled(14)
                         : responsive.bodyMd,

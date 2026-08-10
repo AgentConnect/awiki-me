@@ -247,7 +247,7 @@ class _MacOnboardingHero extends StatelessWidget {
                       style: TextStyle(
                         color: blue,
                         fontSize: 21,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
@@ -260,7 +260,7 @@ class _MacOnboardingHero extends StatelessWidget {
                 style: TextStyle(
                   color: ink,
                   fontSize: 36,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                   letterSpacing: 0,
                 ),
               ),
@@ -282,7 +282,7 @@ class _MacOnboardingHero extends StatelessWidget {
               color: ink,
               fontSize: 31,
               height: 1.22,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               letterSpacing: 0,
             ),
           ),
@@ -293,7 +293,7 @@ class _MacOnboardingHero extends StatelessWidget {
               color: AwikiMePalette.mutedNeutral,
               fontSize: 15,
               height: 1.55,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 34),
@@ -356,7 +356,7 @@ class _MacFeatureItem extends StatelessWidget {
                 style: const TextStyle(
                   color: AwikiMePalette.inkNeutral,
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
               const SizedBox(height: 4),
@@ -452,7 +452,7 @@ class _MacAuthCard extends StatelessWidget {
                   color: theme.title,
                   fontSize: framed ? 25 : 20,
                   height: 1.2,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                   letterSpacing: 0,
                 ),
               ),
@@ -464,7 +464,7 @@ class _MacAuthCard extends StatelessWidget {
                   color: theme.secondaryText,
                   fontSize: 13,
                   height: 1.45,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
               const SizedBox(height: 20),
@@ -547,7 +547,7 @@ class _MacCompactBrand extends StatelessWidget {
               style: TextStyle(
                 color: AwikiMePalette.brandAccent,
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -558,7 +558,7 @@ class _MacCompactBrand extends StatelessWidget {
           style: TextStyle(
             color: AwikiMePalette.inkNeutral,
             fontSize: 19,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -681,7 +681,7 @@ class _MacAuthMethodButton extends StatelessWidget {
                         : AwikiMePalette.inkNeutral,
                     fontSize: 14,
                     height: 1,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w400 : FontWeight.w400,
                   ),
                 ),
               ),
@@ -725,7 +725,7 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
                 style: const TextStyle(
                   color: AwikiMePalette.mutedNeutral,
                   fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ),
@@ -846,7 +846,7 @@ class _OnboardingCredentialTile extends StatelessWidget {
                                 style: const TextStyle(
                                   color: AwikiMePalette.inkNeutral,
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w400,
                                 ),
                               ),
                             ),
@@ -1129,7 +1129,7 @@ class _MacAuthHint extends StatelessWidget {
         color: AwikiMePalette.mutedNeutral,
         fontSize: 12,
         height: 1.4,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
     );
   }
@@ -1220,7 +1220,7 @@ class _MacPhonePrefix extends StatelessWidget {
       style: TextStyle(
         color: AwikiMePalette.inkNeutral,
         fontSize: 14,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
     );
   }
@@ -1238,7 +1238,7 @@ class _MacFieldLabel extends StatelessWidget {
       style: const TextStyle(
         color: AwikiMePalette.inkNeutral,
         fontSize: 13,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w400,
       ),
     );
   }
@@ -1279,7 +1279,7 @@ class _MacInlineAction extends StatelessWidget {
             style: const TextStyle(
               color: AwikiMePalette.brandAccent,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
               height: 1,
             ),
           ),
@@ -1339,7 +1339,7 @@ class _MacPrimaryAction extends StatelessWidget {
                   style: const TextStyle(
                     color: CupertinoColors.white,
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                     height: 1,
                   ),
                 ),
@@ -1397,7 +1397,7 @@ class _MacSecondaryAction extends StatelessWidget {
                   style: const TextStyle(
                     color: AwikiMePalette.inkNeutral,
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                     height: 1,
                   ),
                 ),
@@ -1508,7 +1508,7 @@ class _MacFooterButton extends StatelessWidget {
                   style: const TextStyle(
                     color: AwikiMePalette.mutedNeutral,
                     fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),

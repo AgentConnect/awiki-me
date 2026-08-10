@@ -34,7 +34,7 @@ class _CompactOnboardingCard extends StatelessWidget {
             style: TextStyle(
               color: theme.title,
               fontSize: responsive.bodyMd,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: responsive.spacing(14)),
@@ -79,7 +79,7 @@ class _CompactOnboardingBrand extends StatelessWidget {
                 style: TextStyle(
                   color: AwikiMePalette.actionBlue,
                   fontSize: responsive.titleLg,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                   height: 1,
                 ),
               ),
@@ -92,7 +92,7 @@ class _CompactOnboardingBrand extends StatelessWidget {
           style: TextStyle(
             color: theme.title,
             fontSize: responsive.titleXl,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
@@ -235,7 +235,7 @@ class _AuthModeOption extends StatelessWidget {
                 style: AwikiMeTextStyles.buttonLabel.copyWith(
                   color: foreground,
                   fontSize: responsive.bodySm,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: selected ? FontWeight.w400 : FontWeight.w400,
                   height: 1,
                 ),
               ),
@@ -331,7 +331,7 @@ class _OnboardingCapabilityPanel extends StatelessWidget {
                     color: theme.title,
                     fontSize: responsive.bodySm,
                     height: 1.35,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -387,7 +387,7 @@ class _PhoneFieldPrefix extends StatelessWidget {
           code,
           style: TextStyle(
             fontSize: responsive.bodyMd,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
             color: theme.title,
           ),
         ),

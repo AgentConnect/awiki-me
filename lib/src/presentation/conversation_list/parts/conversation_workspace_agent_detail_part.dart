@@ -50,7 +50,7 @@ class _MacAgentDetailPanel extends ConsumerWidget {
               style: const TextStyle(
                 color: AwikiMePalette.successGreen,
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -172,7 +172,7 @@ class _MacDetailRow extends StatelessWidget {
               style: const TextStyle(
                 color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -219,7 +219,7 @@ class _MacDetailCard extends StatelessWidget {
             style: const TextStyle(
               color: AwikiMePalette.inkNeutral,
               fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 10),
@@ -258,7 +258,7 @@ class _MacAbilityGridItem extends StatelessWidget {
               style: const TextStyle(
                 color: AwikiMePalette.mutedNeutral,
                 fontSize: 10.5,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -324,7 +324,7 @@ class _MacStatusLine extends StatelessWidget {
                 color: AwikiMePalette.inkNeutral,
                 fontSize: 12,
                 height: 1.35,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

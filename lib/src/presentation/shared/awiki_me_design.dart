@@ -593,28 +593,28 @@ class AwikiMeTheme {
       AwikiMeTypographyTokens(
         displayTitle: TextStyle(
           fontSize: 20,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.2,
           letterSpacing: 0,
         ),
         sectionTitle: TextStyle(
           fontSize: 15,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.25,
           letterSpacing: 0,
         ),
         navTitle: TextStyle(
           fontSize: 14.5,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.25,
           letterSpacing: 0,
         ),
         cardTitle: TextStyle(
           fontSize: 13.5,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.3,
           letterSpacing: 0,
@@ -635,7 +635,7 @@ class AwikiMeTheme {
         ),
         listTitle: TextStyle(
           fontSize: 13.5,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.3,
           letterSpacing: 0,
@@ -677,20 +677,20 @@ class AwikiMeTheme {
         ),
         fieldLabel: TextStyle(
           fontSize: 12.5,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.mutedNeutral,
           height: 1.25,
           letterSpacing: 0,
         ),
         buttonLabel: TextStyle(
           fontSize: 13.5,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1.2,
           letterSpacing: 0,
         ),
         pillLabel: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1.2,
           letterSpacing: 0,
         ),
@@ -707,28 +707,28 @@ class AwikiMeTheme {
       AwikiMeTypographyTokens(
         displayTitle: TextStyle(
           fontSize: 30,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.15,
           letterSpacing: 0,
         ),
         sectionTitle: TextStyle(
           fontSize: 20,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.2,
           letterSpacing: 0,
         ),
         navTitle: TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.25,
           letterSpacing: 0,
         ),
         cardTitle: TextStyle(
           fontSize: 14,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.3,
           letterSpacing: 0,
@@ -749,7 +749,7 @@ class AwikiMeTheme {
         ),
         listTitle: TextStyle(
           fontSize: 15.5,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.inkNeutral,
           height: 1.3,
           letterSpacing: 0,
@@ -791,20 +791,20 @@ class AwikiMeTheme {
         ),
         fieldLabel: TextStyle(
           fontSize: 12.5,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           color: AwikiMePalette.mutedNeutral,
           height: 1.25,
           letterSpacing: 0,
         ),
         buttonLabel: TextStyle(
           fontSize: 15,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1.2,
           letterSpacing: 0,
         ),
         pillLabel: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1.2,
           letterSpacing: 0,
         ),
@@ -933,6 +933,7 @@ class AwikiMeTheme {
         return style.copyWith(
           fontFamily: fontFamilyOverride,
           fontFamilyFallback: const <String>[],
+          fontWeight: FontWeight.w400,
           letterSpacing: 0,
         );
       }
@@ -940,10 +941,11 @@ class AwikiMeTheme {
         return style.copyWith(
           fontFamily: windowsFontFamily,
           fontFamilyFallback: windowsFontFamilyFallback,
+          fontWeight: FontWeight.w400,
           letterSpacing: 0,
         );
       }
-      return style.copyWith(letterSpacing: 0);
+      return style.copyWith(fontWeight: FontWeight.w400, letterSpacing: 0);
     }
 
     return base.copyWith(
@@ -982,6 +984,7 @@ class AwikiMeTheme {
         return style.copyWith(
           fontFamily: fontFamilyOverride,
           fontFamilyFallback: const <String>[],
+          fontWeight: FontWeight.w400,
           letterSpacing: 0,
         );
       }
@@ -989,9 +992,10 @@ class AwikiMeTheme {
           ? style.copyWith(
               fontFamily: windowsFontFamily,
               fontFamilyFallback: windowsFontFamilyFallback,
+              fontWeight: FontWeight.w400,
               letterSpacing: 0,
             )
-          : style.copyWith(letterSpacing: 0);
+          : style.copyWith(fontWeight: FontWeight.w400, letterSpacing: 0);
     }
 
     return CupertinoTextThemeData(

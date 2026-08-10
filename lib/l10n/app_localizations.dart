@@ -2094,6 +2094,12 @@ abstract class AppLocalizations {
   /// **'恢复 100%'**
   String get settingsDisplayScaleReset;
 
+  /// No description provided for @settingsFontSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'字体大小'**
+  String get settingsFontSize;
+
   /// No description provided for @settingsWindowPlacementReset.
   ///
   /// In zh, this message translates to:

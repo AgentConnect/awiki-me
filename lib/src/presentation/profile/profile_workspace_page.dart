@@ -211,7 +211,7 @@ class _ProfileSidebar extends ConsumerWidget {
                         style: TextStyle(
                           color: theme.title,
                           fontSize: responsive.titleLg,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       SizedBox(height: responsive.spacing(4)),
