@@ -26,6 +26,7 @@ class OnboardingState {
     this.emailVerified = false,
     this.emailResendCountdown = 0,
     this.isBusy = false,
+    this.deletingLocalIdentitySelector,
     this.legacyUpgradeStatus = const LegacyIdentityUpgradeStatus.idle(),
     this.otpTargetFullHandle,
     this.otpTargetPhone,
@@ -39,6 +40,7 @@ class OnboardingState {
   final bool emailVerified;
   final int emailResendCountdown;
   final bool isBusy;
+  final String? deletingLocalIdentitySelector;
   final LegacyIdentityUpgradeStatus legacyUpgradeStatus;
   final String? otpTargetFullHandle;
   final String? otpTargetPhone;
@@ -57,6 +59,8 @@ class OnboardingState {
       legacyUpgradeStatus.phase == LegacyIdentityUpgradePhase.running;
   bool get isLegacyUpgradeRetryRequired =>
       legacyUpgradeStatus.phase == LegacyIdentityUpgradePhase.retryRequired;
+  bool get isDeletingLocalIdentity =>
+      deletingLocalIdentitySelector?.isNotEmpty == true;
   bool get hasRegistrationMethods => registrationMethods.isNotEmpty;
 
   List<OnboardingIdentityMethod> get registrationMethods {
@@ -101,6 +105,7 @@ class OnboardingState {
     bool? emailVerified,
     int? emailResendCountdown,
     bool? isBusy,
+    Object? deletingLocalIdentitySelector = _unset,
     LegacyIdentityUpgradeStatus? legacyUpgradeStatus,
     Object? otpTargetFullHandle = _unset,
     Object? otpTargetPhone = _unset,
@@ -114,6 +119,10 @@ class OnboardingState {
       emailVerified: emailVerified ?? this.emailVerified,
       emailResendCountdown: emailResendCountdown ?? this.emailResendCountdown,
       isBusy: isBusy ?? this.isBusy,
+      deletingLocalIdentitySelector:
+          identical(deletingLocalIdentitySelector, _unset)
+          ? this.deletingLocalIdentitySelector
+          : deletingLocalIdentitySelector as String?,
       legacyUpgradeStatus: legacyUpgradeStatus ?? this.legacyUpgradeStatus,
       otpTargetFullHandle: identical(otpTargetFullHandle, _unset)
           ? this.otpTargetFullHandle
@@ -494,6 +503,33 @@ class OnboardingController extends StateNotifier<OnboardingState> {
       identityIdOrAlias,
       inspectBeforeUpgrade: true,
     );
+  }
+
+  Future<bool> deleteLocalCredential(SessionIdentity identity) async {
+    if (state.isBusy || state.isLegacyUpgradeRunning) {
+      return false;
+    }
+    final selector = identity.localIdentitySelector;
+    if (selector.isEmpty) {
+      return false;
+    }
+    final generation = ++_busyGeneration;
+    state = state.copyWith(
+      isBusy: true,
+      deletingLocalIdentitySelector: selector,
+    );
+    try {
+      return await ref
+          .read(appRuntimeProvider.notifier)
+          .deleteLocalCredential(identity);
+    } finally {
+      if (generation == _busyGeneration) {
+        state = state.copyWith(
+          isBusy: false,
+          deletingLocalIdentitySelector: null,
+        );
+      }
+    }
   }
 
   Future<void> retryLegacyUpgrade() async {

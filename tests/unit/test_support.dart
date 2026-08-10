@@ -51,6 +51,7 @@ import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_bootstrap.dart';
 import 'package:awiki_me/src/domain/entities/agent/personal_agent_binding.dart';
 import 'package:awiki_me/src/domain/entities/agent/install_command.dart';
+import 'package:awiki_me/src/domain/entities/agent/skill_group_membership_capability.dart';
 import 'package:awiki_me/src/domain/entities/agent/skill_onboarding_instruction.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
@@ -122,7 +123,10 @@ const Map<String, Object?> genericCliCapabilityDiagnostics = <String, Object?>{
   },
 };
 
-OnboardingServerInfo skillOnboardingTestServerInfo({bool enabled = true}) {
+OnboardingServerInfo skillOnboardingTestServerInfo({
+  bool enabled = true,
+  bool skillGroupMembershipEnabled = false,
+}) {
   final base = OnboardingServerInfo.userServiceDefault();
   return OnboardingServerInfo(
     schemaVersion: base.schemaVersion,
@@ -136,6 +140,13 @@ OnboardingServerInfo skillOnboardingTestServerInfo({bool enabled = true}) {
               onboardingPath: skillOnboardingDocumentPath,
             )
           : const SkillOnboardingCapability.disabled(),
+      skillGroupMembership: skillGroupMembershipEnabled
+          ? const SkillGroupMembershipCapability(
+              enabled: true,
+              protocolVersion: skillGroupMembershipProtocolVersion,
+              requiredCapability: skillGroupMembershipRequiredCapability,
+            )
+          : const SkillGroupMembershipCapability.disabled(),
     ),
   );
 }
@@ -792,6 +803,8 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   int deleteLocalThreadCalls = 0;
   String? lastDeletedLocalThreadId;
   int deleteLocalCredentialCalls = 0;
+  String? lastDeletedLocalCredentialSelector;
+  Object? deleteLocalCredentialError;
   Completer<void>? logoutCompleter;
   Completer<void>? deleteLocalCredentialCompleter;
 
@@ -812,14 +825,22 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   @override
   Future<void> deleteLocalCredential(String credentialName) async {
     deleteLocalCredentialCalls += 1;
+    lastDeletedLocalCredentialSelector = credentialName;
     final completer = deleteLocalCredentialCompleter;
     if (completer != null) {
       await completer.future;
     }
+    final error = deleteLocalCredentialError;
+    if (error != null) {
+      throw error;
+    }
     localCredentials = localCredentials
-        .where((credential) => credential.credentialName != credentialName)
+        .where(
+          (credential) => !_matchesLocalCredential(credential, credentialName),
+        )
         .toList();
-    if (loginResult?.credentialName == credentialName) {
+    if (loginResult case final current?
+        when _matchesLocalCredential(current, credentialName)) {
       loginResult = null;
     }
   }
@@ -1694,10 +1715,24 @@ class FakeAppSessionService
 
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
-    final deleted = _current;
+    final identities = await gateway.listLocalCredentials();
+    final deletedIdentity = identities.cast<SessionIdentity?>().firstWhere(
+      (identity) =>
+          identity != null &&
+          _matchesLocalCredential(identity, identityIdOrAlias),
+      orElse: () => null,
+    );
+    final deleted = deletedIdentity == null
+        ? null
+        : _appSessionFromLegacy(deletedIdentity);
     await gateway.deleteLocalCredential(identityIdOrAlias);
-    if (deleted != null) {
+    if (deleted != null &&
+        _current != null &&
+        (_current!.identityId == deleted.identityId ||
+            _current!.did == deleted.did)) {
       _current = null;
+    }
+    if (deleted != null) {
       return deleted;
     }
     final fallback = SessionIdentity(
@@ -4079,7 +4114,7 @@ class FakeIdentityCorePort implements IdentityCorePort {
 AppSession _appSessionFromLegacy(SessionIdentity session) {
   return AppSession(
     did: session.did,
-    identityId: session.credentialName,
+    identityId: session.identityId ?? session.credentialName,
     displayName: session.displayName,
     handle: session.handle,
     localAlias: session.credentialName,
@@ -4087,6 +4122,12 @@ AppSession _appSessionFromLegacy(SessionIdentity session) {
     jwtToken: session.jwtToken,
     accountBinding: session.accountBinding,
   );
+}
+
+bool _matchesLocalCredential(SessionIdentity identity, String selector) {
+  return identity.identityId == selector ||
+      identity.did == selector ||
+      identity.credentialName == selector;
 }
 
 String _threadIdForFakeGateway(AppThreadRef thread) {

@@ -1157,6 +1157,40 @@ void main() {
     );
 
     test(
+      'deleteLocalIdentity preserves the active session for another identity',
+      () async {
+        final runtime = _FakeRuntime();
+        final realtime = _FakeRealtime();
+        final active = _session('id-alice');
+        final other = _session(
+          'id-bob',
+        ).copyWith(localAlias: 'bob-local', handle: 'bob.awiki');
+        final identities = _FakeIdentities(
+          defaultIdentity: active,
+          extraIdentities: <AppSession>[other],
+        );
+        final activeStore = _FakeActiveSessionStore(active.identityId);
+        final service = ImCoreAppSessionService(
+          runtime: runtime,
+          identities: identities,
+          auth: _FakeAuth(),
+          activeSessionStore: activeStore,
+          realtime: realtime,
+        );
+
+        await service.restoreSession();
+        final deleted = await service.deleteLocalIdentity(other.identityId);
+
+        expect(deleted.identityId, other.identityId);
+        expect(identities.deletedSelectors, <String>[other.identityId]);
+        expect((await service.currentSession())?.identityId, active.identityId);
+        expect(await activeStore.readActiveIdentityId(), active.identityId);
+        expect(realtime.stopCount, 0);
+        expect(runtime.disposeCount, 0);
+      },
+    );
+
+    test(
       'listLocalIdentities filters identities from another DID domain',
       () async {
         final identities = _FakeIdentities(
@@ -1377,7 +1411,17 @@ class _FakeIdentities implements IdentityCorePort {
   @override
   Future<AppSession> deleteLocalIdentity(String identityIdOrAlias) async {
     deletedSelectors.add(identityIdOrAlias);
-    return _defaultIdentity ?? _session(identityIdOrAlias);
+    final identities = <AppSession>[
+      if (_defaultIdentity != null) _defaultIdentity,
+      ..._extraIdentities,
+    ];
+    return identities.firstWhere(
+      (identity) =>
+          identity.identityId == identityIdOrAlias ||
+          identity.did == identityIdOrAlias ||
+          identity.localAlias == identityIdOrAlias,
+      orElse: () => _session(identityIdOrAlias),
+    );
   }
 }
 

@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Tooltip;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/app_locale.dart';
@@ -20,6 +22,7 @@ import '../shared/app_language_menu.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/awiki_me_feedback.dart';
 import '../shared/avatar_badge.dart';
+import '../shared/local_credential_delete_dialog.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
 import '../shared/tenant_management_dialog.dart';
@@ -118,6 +121,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           emailController: emailController,
           handleController: handleController,
           onLogin: _loginWithLocalCredential,
+          onDeleteCredential: (identity) =>
+              _showDeleteCredentialDialog(context, identity),
           onAuthModeChanged: _setAuthMode,
           onRequestOtp: _requestOtp,
           onRequestEmailActivation: _requestEmailActivation,
@@ -196,6 +201,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                               credentials: credentials,
                                               onLogin:
                                                   _loginWithLocalCredential,
+                                              onDeleteCredential: (identity) =>
+                                                  _showDeleteCredentialDialog(
+                                                    context,
+                                                    identity,
+                                                  ),
+                                              actionsEnabled:
+                                                  !onboarding.isBusy,
+                                              deletingIdentitySelector: onboarding
+                                                  .deletingLocalIdentitySelector,
                                               onRecoverHandle:
                                                   handleRecoveryAvailable
                                                   ? (identity) =>
@@ -599,6 +613,27 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     return ref
         .read(onboardingProvider.notifier)
         .loginWithLocalCredential(credentialName);
+  }
+
+  void _showDeleteCredentialDialog(
+    BuildContext context,
+    SessionIdentity identity,
+  ) {
+    AppNavigator.showDialog<void>(
+      context,
+      (dialogContext) => LocalCredentialDeleteDialog(
+        identity: identity,
+        signsOut: false,
+        onConfirm: () {
+          Navigator.of(dialogContext).pop();
+          unawaited(
+            ref
+                .read(onboardingProvider.notifier)
+                .deleteLocalCredential(identity),
+          );
+        },
+      ),
+    );
   }
 
   Widget _withLegacyUpgradeProjection(

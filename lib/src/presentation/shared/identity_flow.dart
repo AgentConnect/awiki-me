@@ -27,6 +27,7 @@ import 'awiki_me_design.dart';
 import 'awiki_me_feedback.dart';
 import 'avatar_badge.dart';
 import 'formatters/display_formatters.dart';
+import 'identity_profile_surface.dart';
 import 'responsive_layout.dart';
 import 'semantic_pill.dart';
 import 'widgets/app_widgets.dart';
@@ -958,7 +959,10 @@ class _IdentityPreviewCard extends StatelessWidget {
           ),
           _IdentityMetaLine(
             label: context.l10n.identityTypeLabel,
-            value: _inferIdentityType(context.l10n, profile),
+            value: IdentityTypePresentation.label(
+              context,
+              profile.identityType,
+            ),
           ),
           if (showRelationship)
             _IdentityMetaLine(
@@ -990,20 +994,6 @@ class _IdentityPreviewCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _inferIdentityType(AppLocalizations l10n, UserProfile profile) {
-    final joined = <String>[
-      profile.subjectType ?? '',
-      profile.displayName,
-      profile.handle ?? '',
-      profile.bio,
-      ...profile.tags,
-    ].join(' ').toLowerCase();
-    if (joined.contains('agent') || joined.contains('智能体')) {
-      return l10n.identityTypeAgent;
-    }
-    return l10n.identityTypeUser;
   }
 }
 

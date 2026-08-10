@@ -289,6 +289,50 @@ void main() {
       );
     }
   });
+
+  test('Skill group membership is independent and fails closed', () {
+    final enabled = _serverInfoWithAgents(<String, Object?>{
+      'skill_onboarding': <String, Object?>{
+        'enabled': false,
+        'protocol_version': 1,
+        'onboarding_path': '/cli/onboarding.md',
+      },
+      'skill_group_membership': <String, Object?>{
+        'enabled': true,
+        'protocol_version': 1,
+        'required_capability': 'group_membership_v1',
+      },
+    });
+    expect(enabled.agents.skillOnboarding.supportsCurrentProtocol, isFalse);
+    expect(enabled.agents.skillGroupMembership.supportsCurrentProtocol, isTrue);
+
+    for (final malformed in <Object?>[
+      null,
+      <String, Object?>{'enabled': true},
+      <String, Object?>{
+        'enabled': true,
+        'protocol_version': 2,
+        'required_capability': 'group_membership_v1',
+      },
+      <String, Object?>{
+        'enabled': true,
+        'protocol_version': 1,
+        'required_capability': 'future_capability',
+      },
+      <String, Object?>{
+        'enabled': 'true',
+        'protocol_version': 1,
+        'required_capability': 'group_membership_v1',
+      },
+    ]) {
+      expect(
+        _serverInfoWithAgents(<String, Object?>{
+          if (malformed != null) 'skill_group_membership': malformed,
+        }).agents.skillGroupMembership.supportsCurrentProtocol,
+        isFalse,
+      );
+    }
+  });
 }
 
 OnboardingServerInfo _serverInfoWithAgents(Object? agents) {

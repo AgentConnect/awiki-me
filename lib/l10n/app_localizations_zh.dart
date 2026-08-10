@@ -119,6 +119,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get onboardingLogin => '切换身份';
 
   @override
+  String get localCredentialDeleteAction => '从此设备删除';
+
+  @override
+  String get localCredentialDeleteConfirmTitle => '从此设备删除身份？';
+
+  @override
+  String localCredentialDeleteConfirmContent(Object identity) {
+    return '确定要从此设备删除 $identity 的本地身份凭证吗？';
+  }
+
+  @override
+  String get localCredentialDeleteConfirmHint =>
+      '此操作会删除本机保存的凭证；不会注销线上身份或影响其他设备。之后如需继续使用，必须重新恢复身份或加入已有账户。';
+
+  @override
   String get onboardingRegister => '登录或注册';
 
   @override
@@ -1284,6 +1299,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get identityTypeUser => '用户';
 
   @override
+  String get identityTypeRuntimeAgent => 'Runtime Agent';
+
+  @override
+  String get identityTypeSkillAgent => 'Skill Agent';
+
+  @override
+  String get identityTypeDaemon => 'Daemon';
+
+  @override
+  String get identityTypeGroup => '群组';
+
+  @override
+  String get identityTypeUnknown => '身份';
+
+  @override
   String get identityAddGroupMemberTitle => '添加群成员';
 
   @override
@@ -1459,6 +1489,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groupInviteAdding => '添加中...';
 
   @override
+  String get groupInviteAddFailed => '添加失败，请稍后重试';
+
+  @override
   String groupInviteConfirmCount(int count) {
     return '确认添加 ($count)';
   }
@@ -1477,6 +1510,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get groupInviteIdentityUnavailable => '该身份已被删除或当前不可邀请。';
+
+  @override
+  String get groupInviteSkillAgentUnavailable => 'Skill Agent 暂不支持加入群聊';
+
+  @override
+  String get groupInviteSkillAgentCapabilityMissing =>
+      '该 Skill Agent 版本暂不支持加入群聊';
+
+  @override
+  String get groupInviteAgentKindUnavailable => '该类型的智能体暂不支持加入群聊';
 
   @override
   String get groupInviteNoMatches => '没有匹配的本地身份，可以尝试匹配 handle / DID。';
@@ -1532,6 +1575,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatGroupSendDisabled => '当前群聊暂时不能发送消息';
 
   @override
+  String get chatAgentAwaitingReceipt => '已发送，等待智能体接收...';
+
+  @override
+  String get chatAgentAwaitingOnline => '已发送，等待智能体上线...';
+
+  @override
+  String get chatAgentAwaitingResponse => '已发送，智能体暂未响应';
+
+  @override
   String get chatAgentProcessing => '智能体正在处理...';
 
   @override
@@ -1549,6 +1601,21 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String chatSubjectProcessing(Object subject) {
     return '$subject 正在处理...';
+  }
+
+  @override
+  String chatSubjectAwaitingReceipt(Object subject) {
+    return '已发送，等待 $subject 接收...';
+  }
+
+  @override
+  String chatSubjectAwaitingOnline(Object subject) {
+    return '已发送，等待 $subject 上线...';
+  }
+
+  @override
+  String chatSubjectAwaitingResponse(Object subject) {
+    return '已发送，$subject 暂未响应';
   }
 
   @override
@@ -1998,17 +2065,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentSkillExpired => '这条安装指令已过期或已清除，请重新生成。';
 
   @override
-  String get agentCleanupHostTitle => '清理宿主机';
+  String get agentCleanupHostTitle => '仅清理本机 Daemon';
 
   @override
-  String get agentCleanupHostToggle => '需要清理宿主机上的旧 Daemon？';
+  String get agentCleanupHostToggle => '需要清理当前电脑上的旧 Daemon 残留？';
 
   @override
   String get agentCleanupHostWarning =>
-      '这会停止宿主机上的 AWiki Daemon，并永久删除该宿主机上的所有 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的 Daemon 二进制。此操作不可恢复。';
+      '此命令只会停止并永久删除当前电脑上的 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的二进制；不会从 AWiki 账号中移除 Daemon 和它的智能体。执行后请回到 APP，在智能体页面将对应的离线 Daemon 从账号移除。此操作不可恢复。';
 
   @override
-  String get agentCopyCleanupCommand => '复制清理命令';
+  String get agentCopyCleanupCommand => '复制本机清理命令';
 
   @override
   String get agentCreateTitle => '创建 Agent';

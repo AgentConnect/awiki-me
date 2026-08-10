@@ -58,7 +58,32 @@ void main() {
     final identity = await service.resolveAgentIdentity('@agent.example');
 
     expect(identity.isAgent, isTrue);
-    expect(identity.agentKind, isNull);
+    expect(identity.agentKind, PeerAgentKind.unknown);
+  });
+
+  test('resolves Skill Agent kind and declared capabilities', () async {
+    final userClient = _FakeOnboardingUtilityClient(
+      responses: <String, Map<String, Object?>>{
+        'skill.awiki.ai': <String, Object?>{
+          'is_agent': true,
+          'agent_kind': 'skill',
+          'agent_capabilities': <String>[
+            'group_membership_v1',
+            'group_membership_v1',
+            '',
+          ],
+        },
+      },
+    );
+    final service = UserServicePeerIdentityService(
+      userServiceUrl: 'https://user.example',
+      userClient: userClient,
+    );
+
+    final identity = await service.resolveAgentIdentity('skill.awiki.ai');
+
+    expect(identity.agentKind, PeerAgentKind.skill);
+    expect(identity.capabilities, const <String>{'group_membership_v1'});
   });
 
   test('remote full handle is delegated to user service unchanged', () async {

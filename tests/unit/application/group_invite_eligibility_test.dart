@@ -2,7 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:awiki_me/src/application/group_invite_eligibility.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/skill_group_membership_capability.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
+import 'package:awiki_me/src/domain/entities/identity_type.dart';
 
 void main() {
   const activeRuntime = AgentSummary(
@@ -71,4 +73,77 @@ void main() {
       expect(policy.allowsIdentity(did: 'did:user:active'), isTrue);
     },
   );
+
+  test('group admission uses structured Agent kind and Skill capability', () {
+    final disabledPolicy = GroupInviteEligibilityPolicy.fromSources(
+      agents: const <AgentSummary>[],
+      pendingDeletionAgentDids: const <String>{},
+      conversations: const <ConversationSummary>[],
+    );
+    const skill = IdentityType.agent(agentKind: IdentityAgentKind.skill);
+
+    expect(
+      disabledPolicy
+          .evaluateIdentity(
+            did: 'did:agent:skill:disabled',
+            identityType: skill,
+            agentCapabilities: const <String>{
+              skillGroupMembershipRequiredCapability,
+            },
+          )
+          .denialReason,
+      GroupInviteDenialReason.skillGroupMembershipDisabled,
+    );
+
+    final enabledPolicy = GroupInviteEligibilityPolicy.fromSources(
+      agents: const <AgentSummary>[],
+      pendingDeletionAgentDids: const <String>{},
+      conversations: const <ConversationSummary>[],
+      skillGroupMembership: const SkillGroupMembershipCapability(
+        enabled: true,
+        protocolVersion: skillGroupMembershipProtocolVersion,
+        requiredCapability: skillGroupMembershipRequiredCapability,
+      ),
+    );
+    expect(
+      enabledPolicy
+          .evaluateIdentity(
+            did: 'did:agent:runtime:active',
+            identityType: const IdentityType.agent(
+              agentKind: IdentityAgentKind.runtime,
+            ),
+          )
+          .allowed,
+      isTrue,
+    );
+    expect(
+      enabledPolicy
+          .evaluateIdentity(did: 'did:agent:skill:old', identityType: skill)
+          .denialReason,
+      GroupInviteDenialReason.skillCapabilityMissing,
+    );
+    expect(
+      enabledPolicy
+          .evaluateIdentity(
+            did: 'did:agent:skill:current',
+            identityType: skill,
+            agentCapabilities: const <String>{
+              skillGroupMembershipRequiredCapability,
+            },
+          )
+          .allowed,
+      isTrue,
+    );
+    expect(
+      enabledPolicy
+          .evaluateIdentity(
+            did: 'did:agent:daemon:active',
+            identityType: const IdentityType.agent(
+              agentKind: IdentityAgentKind.daemon,
+            ),
+          )
+          .denialReason,
+      GroupInviteDenialReason.agentKindUnsupported,
+    );
+  });
 }

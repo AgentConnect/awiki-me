@@ -99,6 +99,11 @@ identity 指针并从 UI session 脱离，再调用 Core 的离线 identity-reti
 realtime stop 与 runtime dispose 只做 best-effort 尾部清理，不得阻塞或改变本地删除结果，
 也不得被通用 UI timeout 误报成网络超时。
 
+登录后的设置页和未登录的本地身份选择器复用同一个 application 删除入口。身份选择器以
+Core `identity_id` 为首选 selector，DID 只作为 Legacy host fallback；删除按钮与切换按钮
+必须是独立语义和独立点击区域。未登录删除不创建临时 session，删除默认身份后也不自动登录
+下一个身份；UI 只在 Core 成功返回并重新读取本地 registry 后移除对应条目。
+
 会话列表、timeline 等 presentation Patch subscription 的取消同样不是 identity-retirement
 事务前置条件。App 可以立即清空内存 UI 投影并在后台取消 subscription，但必须随即进入 Core
 删除；不得等待一个 idle native stream 的 `cancel()` 才开始删除身份。Core 删除成功后再刷新

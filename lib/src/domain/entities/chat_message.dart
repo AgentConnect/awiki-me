@@ -2,6 +2,7 @@ import 'chat_attachment.dart';
 import 'chat_mention.dart';
 import 'agent/agent_control_payloads.dart';
 import 'group_system_event.dart';
+import 'message_reply_reference.dart';
 
 enum MessageSendState { sending, sent, failed }
 
@@ -66,6 +67,9 @@ class ChatMessage {
 
   bool get isAgentControlPayload =>
       !isGroupSystemEvent && AgentControlPayloads.isControl(payloadJson);
+
+  String? get replyToMessageId =>
+      MessageReplyReference.tryParse(payloadJson)?.sourceMessageId;
 
   bool get hasRenderableContent =>
       !isAgentControlPayload &&

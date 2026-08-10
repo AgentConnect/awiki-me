@@ -1,19 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:awiki_me/l10n/app_localizations.dart';
 
 import '../../l10n/l10n.dart';
+import '../../app/app_services.dart';
 import '../../app/e2e_semantics.dart';
 import '../../application/group_invite_eligibility.dart';
 import '../../domain/entities/agent/agent_status.dart';
 import '../../domain/entities/agent/agent_summary.dart';
+import '../../domain/entities/agent/skill_group_membership_capability.dart';
 import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/entities/identity_type.dart';
 import '../../domain/services/peer_display_name_resolver.dart';
 import '../agents/agents_provider.dart';
 import '../app_shell/providers/session_provider.dart';
@@ -26,6 +31,7 @@ import '../shared/app_dialog.dart';
 import '../shared/avatar_badge.dart';
 import '../shared/formatters/display_formatters.dart';
 import '../shared/identity_flow.dart';
+import '../shared/identity_profile_surface.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/widgets/app_widgets.dart';
 import 'group_provider.dart';
@@ -63,6 +69,8 @@ class _GroupMemberInviteDialogState
   bool _isSubmitting = false;
   String _query = '';
   String? _errorText;
+  SkillGroupMembershipCapability _skillGroupMembership =
+      const SkillGroupMembershipCapability.disabled();
 
   @override
   void initState() {
@@ -116,6 +124,7 @@ class _GroupMemberInviteDialogState
           .read(conversationListProvider.notifier)
           .refreshFastLocal()
           .catchError((_) {}),
+      _loadSkillGroupMembership(),
     ], eagerError: false);
     if (!mounted) {
       return;
@@ -123,6 +132,22 @@ class _GroupMemberInviteDialogState
     setState(() {
       _isLoadingLocalCandidates = false;
     });
+  }
+
+  Future<void> _loadSkillGroupMembership() async {
+    try {
+      final serverInfo = await ref
+          .read(onboardingSupportServiceProvider)
+          .loadServerInfo();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _skillGroupMembership = serverInfo.agents.skillGroupMembership;
+      });
+    } catch (_) {
+      // Missing or malformed capability discovery is intentionally fail-closed.
+    }
   }
 
   Future<void> _resolveQuery() async {
@@ -182,9 +207,18 @@ class _GroupMemberInviteDialogState
       for (final candidate in _allCandidates(watch: false))
         candidate.selectionKey: candidate,
     };
+    final eligibility = _currentEligibilityPolicy();
     final selected = <GroupInviteCandidate>[
       for (final memberRef in _selectedRefs)
-        if (candidatesByRef[memberRef] != null) candidatesByRef[memberRef]!,
+        if (candidatesByRef[memberRef] case final candidate?)
+          if (eligibility
+              .evaluateIdentity(
+                did: candidate.did,
+                identityType: candidate.identityType,
+                agentCapabilities: candidate.agentCapabilities,
+              )
+              .allowed)
+            candidate,
     ];
     if (selected.isEmpty) {
       return;
@@ -206,7 +240,10 @@ class _GroupMemberInviteDialogState
             );
         _selectedRefs.remove(candidate.selectionKey);
       } catch (error) {
-        failed.add('${candidate.localizedDisplayName(l10n)}: $error');
+        failed.add(
+          '${candidate.localizedDisplayName(l10n)}: '
+          '${_groupInviteFailureText(l10n, candidate, error)}',
+        );
       }
     }
 
@@ -315,6 +352,7 @@ class _GroupMemberInviteDialogState
                 existingMemberRefs: _existingMemberRefs,
                 onToggle: _isSubmitting ? null : _toggleCandidate,
                 query: _normalizedQuery,
+                eligibility: _currentEligibilityPolicy(),
               ),
             ),
           ),
@@ -387,15 +425,32 @@ class _GroupMemberInviteDialogState
       ])
         candidate.selectionKey: candidate,
     };
+    final eligibility = _currentEligibilityPolicy();
     return <GroupInviteCandidate>[
       for (final memberRef in _selectedRefs)
-        if (all[memberRef] != null) all[memberRef]!,
+        if (all[memberRef] case final candidate?)
+          if (eligibility
+              .evaluateIdentity(
+                did: candidate.did,
+                identityType: candidate.identityType,
+                agentCapabilities: candidate.agentCapabilities,
+              )
+              .allowed)
+            candidate,
     ];
   }
 
   void _toggleCandidate(GroupInviteCandidate candidate) {
     final memberRef = candidate.selectionKey;
-    if (memberRef.isEmpty || _existingMemberRefs.contains(memberRef)) {
+    if (memberRef.isEmpty ||
+        _existingMemberRefs.contains(memberRef) ||
+        !_currentEligibilityPolicy()
+            .evaluateIdentity(
+              did: candidate.did,
+              identityType: candidate.identityType,
+              agentCapabilities: candidate.agentCapabilities,
+            )
+            .allowed) {
       return;
     }
     setState(() {
@@ -441,6 +496,7 @@ class _GroupMemberInviteDialogState
       agents: agentsState.agents,
       pendingDeletionAgentDids: agentsState.pendingDeletionAgentDids,
       conversations: conversations,
+      skillGroupMembership: _skillGroupMembership,
     );
     void add(GroupInviteCandidate? candidate) {
       if (candidate == null) {
@@ -525,36 +581,37 @@ class _GroupMemberInviteDialogState
       agents: agentsState.agents,
       pendingDeletionAgentDids: agentsState.pendingDeletionAgentDids,
       conversations: ref.read(conversationListProvider).conversations,
+      skillGroupMembership: _skillGroupMembership,
     );
   }
 }
 
 enum GroupInviteCandidateSource { agent, following, follower, recent, resolved }
 
-enum GroupInviteIdentityKind { human, agent }
-
 class GroupInviteCandidate {
   const GroupInviteCandidate({
     required this.did,
     required this.displayName,
-    required this.kind,
+    required this.identityType,
     required this.source,
     this.handle,
     this.peerPersonaId,
     this.avatarUri,
     this.avatarSeed,
     this.lastInteractedAt,
+    this.agentCapabilities = const <String>{},
   });
 
   final String did;
   final String displayName;
-  final GroupInviteIdentityKind kind;
+  final IdentityType identityType;
   final GroupInviteCandidateSource source;
   final String? handle;
   final String? peerPersonaId;
   final String? avatarUri;
   final String? avatarSeed;
   final DateTime? lastInteractedAt;
+  final Set<String> agentCapabilities;
 
   String get memberRef {
     final canonicalHandle = handle?.trim();
@@ -571,7 +628,7 @@ class GroupInviteCandidate {
       return const GroupInviteCandidate(
         did: '',
         displayName: '',
-        kind: GroupInviteIdentityKind.agent,
+        identityType: IdentityType.agent(agentKind: IdentityAgentKind.runtime),
         source: GroupInviteCandidateSource.agent,
       );
     }
@@ -581,7 +638,9 @@ class GroupInviteCandidate {
     return GroupInviteCandidate(
       did: agent.agentDid.trim(),
       displayName: displayName,
-      kind: GroupInviteIdentityKind.agent,
+      identityType: const IdentityType.agent(
+        agentKind: IdentityAgentKind.runtime,
+      ),
       source: GroupInviteCandidateSource.agent,
       handle: agent.handle,
       avatarSeed: displayName,
@@ -601,12 +660,7 @@ class GroupInviteCandidate {
     return GroupInviteCandidate(
       did: did,
       displayName: displayName,
-      kind: _kindFromIdentityText(
-        subjectType: null,
-        did: did,
-        displayName: displayName,
-        handle: relationship.handle,
-      ),
+      identityType: _identityTypeFromHints(subjectType: null, did: did),
       source: source,
       handle: relationship.handle,
       avatarUri: relationship.avatarUri,
@@ -621,7 +675,7 @@ class GroupInviteCandidate {
       return const GroupInviteCandidate(
         did: '',
         displayName: '',
-        kind: GroupInviteIdentityKind.human,
+        identityType: IdentityType.user(),
         source: GroupInviteCandidateSource.recent,
       );
     }
@@ -636,14 +690,9 @@ class GroupInviteCandidate {
     return GroupInviteCandidate(
       did: did,
       displayName: displayName,
-      kind: conversation.isDeletedAgentConversation
-          ? GroupInviteIdentityKind.agent
-          : _kindFromIdentityText(
-              subjectType: null,
-              did: did,
-              displayName: displayName,
-              handle: peer,
-            ),
+      identityType: conversation.isDeletedAgentConversation
+          ? const IdentityType.agent(agentKind: IdentityAgentKind.unknown)
+          : _identityTypeFromHints(subjectType: null, did: did),
       source: GroupInviteCandidateSource.recent,
       handle: _handleFromDirectPeer(peer),
       peerPersonaId: conversation.peerPersonaId,
@@ -665,18 +714,12 @@ class GroupInviteCandidate {
     return GroupInviteCandidate(
       did: profile.did.trim(),
       displayName: displayName,
-      kind: _kindFromIdentityText(
-        subjectType: profile.subjectType,
-        did: profile.did,
-        displayName: profile.displayName,
-        handle: profile.handle ?? profile.fullHandle,
-        bio: profile.bio,
-        tags: profile.tags,
-      ),
+      identityType: profile.identityType,
       source: source,
       handle: profile.fullHandle ?? profile.handle,
       avatarUri: profile.avatarUri,
       avatarSeed: profile.handle ?? displayName,
+      agentCapabilities: profile.agentCapabilities,
     );
   }
 
@@ -691,17 +734,17 @@ class GroupInviteCandidate {
     return GroupInviteCandidate(
       did: did,
       displayName: displayName.trim().isEmpty ? other.displayName : displayName,
-      kind:
-          kind == GroupInviteIdentityKind.human &&
-              other.kind == GroupInviteIdentityKind.agent
-          ? GroupInviteIdentityKind.agent
-          : kind,
+      identityType: identityType.merge(other.identityType),
       source: source,
       handle: _firstNonEmpty(handle, other.handle),
       peerPersonaId: _firstNonEmpty(peerPersonaId, other.peerPersonaId),
       avatarUri: _firstNonEmpty(avatarUri, other.avatarUri),
       avatarSeed: _firstNonEmpty(avatarSeed, other.avatarSeed),
       lastInteractedAt: lastInteractedAt ?? other.lastInteractedAt,
+      agentCapabilities: <String>{
+        ...agentCapabilities,
+        ...other.agentCapabilities,
+      },
     );
   }
 
@@ -732,13 +775,14 @@ class GroupInviteCandidate {
     return GroupInviteCandidate(
       did: did,
       displayName: projectedDisplayName,
-      kind: kind,
+      identityType: identityType,
       source: source,
       handle: projectedHandle.isEmpty ? handle : projectedHandle,
       peerPersonaId: peerPersonaId,
       avatarUri: projectedAvatarUri.isEmpty ? avatarUri : projectedAvatarUri,
       avatarSeed: projectedDisplayName,
       lastInteractedAt: lastInteractedAt,
+      agentCapabilities: agentCapabilities,
     );
   }
 
@@ -775,7 +819,8 @@ class GroupInviteCandidate {
       handle ?? '',
       did,
       source.name,
-      kind.name,
+      identityType.subjectKind.name,
+      identityType.agentKind?.name ?? '',
       sourceLabelZh,
       kindLabelZh,
       sourceLabelEn,
@@ -783,11 +828,9 @@ class GroupInviteCandidate {
     ].join(' '),
   );
 
-  String get kindLabelZh =>
-      kind == GroupInviteIdentityKind.agent ? '智能体' : '用户';
+  String get kindLabelZh => identityType.isAgent ? '智能体' : '用户';
 
-  String get kindLabelEn =>
-      kind == GroupInviteIdentityKind.agent ? 'agent' : 'user';
+  String get kindLabelEn => identityType.isAgent ? 'agent' : 'user';
 
   String get sourceLabelZh {
     switch (source) {
@@ -1111,6 +1154,7 @@ class _InviteCandidateList extends StatelessWidget {
     required this.existingMemberRefs,
     required this.onToggle,
     required this.query,
+    required this.eligibility,
   });
 
   final ScrollController controller;
@@ -1119,6 +1163,7 @@ class _InviteCandidateList extends StatelessWidget {
   final Set<String> existingMemberRefs;
   final ValueChanged<GroupInviteCandidate>? onToggle;
   final String query;
+  final GroupInviteEligibilityPolicy eligibility;
 
   @override
   Widget build(BuildContext context) {
@@ -1167,11 +1212,19 @@ class _InviteCandidateList extends StatelessWidget {
             final memberRef = candidate.selectionKey;
             final currentDid = _normalizeMemberRef(candidate.did);
             final isSelected = selectedRefs.contains(memberRef);
-            final disabledReason =
+            final lifecycleDisabledReason =
                 existingMemberRefs.contains(memberRef) ||
                     existingMemberRefs.contains(currentDid)
                 ? context.l10n.groupInviteAlreadyInGroup
                 : null;
+            final decision = eligibility.evaluateIdentity(
+              did: candidate.did,
+              identityType: candidate.identityType,
+              agentCapabilities: candidate.agentCapabilities,
+            );
+            final disabledReason =
+                lifecycleDisabledReason ??
+                _groupInviteDenialText(context, decision.denialReason);
             return _InviteCandidateTile(
               candidate: candidate,
               selected: isSelected,
@@ -1253,7 +1306,10 @@ class _InviteCandidateTile extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _IdentityKindBadge(kind: candidate.kind),
+                        IdentityTypeBadge(
+                          type: candidate.identityType,
+                          compact: true,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 5),
@@ -1285,39 +1341,6 @@ class _InviteCandidateTile extends StatelessWidget {
               _SelectionMark(selected: selected, disabled: isDisabled),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IdentityKindBadge extends StatelessWidget {
-  const _IdentityKindBadge({required this.kind});
-
-  final GroupInviteIdentityKind kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final isAgent = kind == GroupInviteIdentityKind.agent;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: isAgent
-            ? AwikiMePalette.brandAccentSoft
-            : const Color(0xFFE6F8EE),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        isAgent
-            ? context.l10n.identityTypeAgent
-            : context.l10n.identityTypeUser,
-        style: TextStyle(
-          color: isAgent
-              ? AwikiMePalette.brandAccent
-              : AwikiMePalette.successGreen,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          height: 1,
         ),
       ),
     );
@@ -1387,33 +1410,66 @@ class _SelectionMark extends StatelessWidget {
   }
 }
 
-GroupInviteIdentityKind _kindFromIdentityText({
+IdentityType _identityTypeFromHints({
   required String? subjectType,
   required String did,
-  required String displayName,
-  required String? handle,
-  String bio = '',
-  List<String> tags = const <String>[],
 }) {
   final subject = subjectType?.trim().toLowerCase();
   if (subject == 'agent' || subject == 'runtime_agent' || subject == 'bot') {
-    return GroupInviteIdentityKind.agent;
+    return IdentityType.agent(
+      agentKind: identityAgentKindFromDidHint(did) ?? IdentityAgentKind.unknown,
+    );
   }
-  final joined = <String>[
-    did,
-    displayName,
-    handle ?? '',
-    bio,
-    ...tags,
-  ].join(' ').toLowerCase();
-  if (joined.contains(':agent:') ||
-      joined.contains(':agents:') ||
-      joined.contains(':runtime_agent:') ||
-      joined.contains(' agent ') ||
-      joined.contains('智能体')) {
-    return GroupInviteIdentityKind.agent;
+  final normalizedDid = did.trim().toLowerCase();
+  if (normalizedDid.contains(':agent:') ||
+      normalizedDid.contains(':agents:') ||
+      normalizedDid.contains(':runtime_agent:')) {
+    return IdentityType.agent(
+      agentKind: identityAgentKindFromDidHint(did) ?? IdentityAgentKind.unknown,
+    );
   }
-  return GroupInviteIdentityKind.human;
+  return const IdentityType.user();
+}
+
+String? _groupInviteDenialText(
+  BuildContext context,
+  GroupInviteDenialReason? reason,
+) {
+  return switch (reason) {
+    GroupInviteDenialReason.identityUnavailable =>
+      context.l10n.groupInviteIdentityUnavailable,
+    GroupInviteDenialReason.skillGroupMembershipDisabled =>
+      context.l10n.groupInviteSkillAgentUnavailable,
+    GroupInviteDenialReason.skillCapabilityMissing =>
+      context.l10n.groupInviteSkillAgentCapabilityMissing,
+    GroupInviteDenialReason.agentKindUnsupported =>
+      context.l10n.groupInviteAgentKindUnavailable,
+    null => null,
+  };
+}
+
+String _groupInviteFailureText(
+  AppLocalizations l10n,
+  GroupInviteCandidate candidate,
+  Object error,
+) {
+  if (error is core.AwikiImCoreException &&
+      error.serviceCode == 'group.admission_not_allowed') {
+    final raw = error.serviceDataJson;
+    try {
+      final data = raw == null ? null : jsonDecode(raw);
+      if (data is Map &&
+          data['admission_reason'] == 'agent_not_group_invitable') {
+        return candidate.identityType.isSkillAgent
+            ? l10n.groupInviteSkillAgentUnavailable
+            : l10n.groupInviteAgentKindUnavailable;
+      }
+    } on FormatException {
+      // The stable service code is sufficient for a safe generic message.
+    }
+    return l10n.groupInviteAgentKindUnavailable;
+  }
+  return l10n.groupInviteAddFailed;
 }
 
 String? _handleFromDirectPeer(String? peer) {

@@ -22,6 +22,7 @@ import '../../domain/entities/realtime_update.dart';
 import '../../domain/entities/relationship_summary.dart';
 import '../../domain/entities/session_identity.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/entities/identity_type.dart';
 import '../../domain/services/realtime_gateway.dart';
 
 class AwikiImCoreMappers {
@@ -522,6 +523,8 @@ class AwikiImCoreMappers {
       avatarUri: _nonEmpty(profile.avatarUri) ?? _nonEmpty(profile.avatarUrl),
       profileUri: _nonEmpty(profile.profileUri),
       subjectType: _nonEmpty(profile.subjectType),
+      agentKind: parseIdentityAgentKind(profile.agentKind),
+      agentCapabilities: Set<String>.unmodifiable(profile.agentCapabilities),
       fullHandle: profile.fullHandle,
       profileVersion: _canonicalDecimal(profile.profileVersion),
     );

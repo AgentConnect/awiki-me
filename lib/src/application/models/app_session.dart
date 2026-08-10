@@ -63,6 +63,7 @@ extension AppSessionLegacyIdentity on AppSession {
   SessionIdentity toLegacySessionIdentity() {
     return SessionIdentity(
       did: did,
+      identityId: identityId,
       credentialName: localAlias ?? identityId,
       displayName: displayName,
       handle: handle,

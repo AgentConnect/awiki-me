@@ -23,6 +23,7 @@ import '../shared/widgets/app_widgets.dart';
 import 'language_selection_page.dart';
 import 'display_settings_page.dart';
 import '../shared/display_scale.dart';
+import '../shared/local_credential_delete_dialog.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({
@@ -201,11 +202,7 @@ class SettingsPage extends ConsumerWidget {
             ),
             onTap: session == null
                 ? null
-                : () => _showDeleteCredentialDialog(
-                    context,
-                    runtime,
-                    session.credentialName,
-                  ),
+                : () => _showDeleteCredentialDialog(context, runtime, session),
           ),
         ],
       ),
@@ -371,11 +368,8 @@ class SettingsPage extends ConsumerWidget {
               height: optionRowHeight,
               onTap: session == null
                   ? null
-                  : () => _showDeleteCredentialDialog(
-                      context,
-                      runtime,
-                      session.credentialName,
-                    ),
+                  : () =>
+                        _showDeleteCredentialDialog(context, runtime, session),
             ),
           ],
         ),
@@ -499,22 +493,13 @@ class SettingsPage extends ConsumerWidget {
   void _showDeleteCredentialDialog(
     BuildContext context,
     AppRuntimeController runtime,
-    String credentialName,
+    SessionIdentity identity,
   ) {
     AppNavigator.showDialog<void>(
       context,
-      (ctx) => AppConfirmationDialog(
-        title: context.l10n.settingsDeleteCredentialConfirmTitle,
-        message: context.l10n.settingsDeleteCredentialConfirmContent(
-          credentialName,
-        ),
-        helperMessage: context.l10n.settingsDeleteCredentialConfirmHint,
-        compactTitleTextAlign: TextAlign.center,
-        compactMessageTextAlign: TextAlign.center,
-        compactHorizontalPadding: 24,
-        compactSpacious: true,
-        confirmLabel: context.l10n.settingsDeleteCredentialConfirmAction,
-        destructive: true,
+      (ctx) => LocalCredentialDeleteDialog(
+        identity: identity,
+        signsOut: true,
         onConfirm: () async {
           Navigator.of(ctx).pop();
           await runtime.deleteCurrentCredential();

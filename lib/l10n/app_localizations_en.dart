@@ -121,6 +121,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingLogin => 'Switch identity';
 
   @override
+  String get localCredentialDeleteAction => 'Remove from this device';
+
+  @override
+  String get localCredentialDeleteConfirmTitle =>
+      'Remove identity from this device?';
+
+  @override
+  String localCredentialDeleteConfirmContent(Object identity) {
+    return 'Remove the local identity credential for $identity from this device?';
+  }
+
+  @override
+  String get localCredentialDeleteConfirmHint =>
+      'This removes the credential saved on this device. It does not delete the online identity or affect other devices. To use it here again, you must recover the identity or join the existing account.';
+
+  @override
   String get onboardingRegister => 'Log in or register';
 
   @override
@@ -1358,6 +1374,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get identityTypeUser => 'User';
 
   @override
+  String get identityTypeRuntimeAgent => 'Runtime Agent';
+
+  @override
+  String get identityTypeSkillAgent => 'Skill Agent';
+
+  @override
+  String get identityTypeDaemon => 'Daemon';
+
+  @override
+  String get identityTypeGroup => 'Group';
+
+  @override
+  String get identityTypeUnknown => 'Identity';
+
+  @override
   String get identityAddGroupMemberTitle => 'Add group members';
 
   @override
@@ -1542,6 +1573,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get groupInviteAdding => 'Adding...';
 
   @override
+  String get groupInviteAddFailed =>
+      'Could not add this identity. Try again later.';
+
+  @override
   String groupInviteConfirmCount(int count) {
     return 'Add ($count)';
   }
@@ -1563,6 +1598,18 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get groupInviteIdentityUnavailable =>
       'This identity has been deleted or is not currently invitable.';
+
+  @override
+  String get groupInviteSkillAgentUnavailable =>
+      'Skill Agents cannot join groups yet';
+
+  @override
+  String get groupInviteSkillAgentCapabilityMissing =>
+      'This Skill Agent version cannot join groups';
+
+  @override
+  String get groupInviteAgentKindUnavailable =>
+      'This type of agent cannot join groups yet';
 
   @override
   String get groupInviteNoMatches =>
@@ -1622,6 +1669,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'This group is temporarily unavailable for sending messages.';
 
   @override
+  String get chatAgentAwaitingReceipt =>
+      'Sent. Waiting for the agent to receive it...';
+
+  @override
+  String get chatAgentAwaitingOnline =>
+      'Sent. Waiting for the agent to come online...';
+
+  @override
+  String get chatAgentAwaitingResponse =>
+      'Sent. The agent has not responded yet.';
+
+  @override
   String get chatAgentProcessing => 'Agent is processing...';
 
   @override
@@ -1643,6 +1702,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String chatSubjectProcessing(Object subject) {
     return '$subject is processing...';
+  }
+
+  @override
+  String chatSubjectAwaitingReceipt(Object subject) {
+    return 'Sent. Waiting for $subject to receive it...';
+  }
+
+  @override
+  String chatSubjectAwaitingOnline(Object subject) {
+    return 'Sent. Waiting for $subject to come online...';
+  }
+
+  @override
+  String chatSubjectAwaitingResponse(Object subject) {
+    return 'Sent. $subject has not responded yet.';
   }
 
   @override
@@ -2107,18 +2181,18 @@ class AppLocalizationsEn extends AppLocalizations {
       'This instruction has expired or was cleared. Generate a new one.';
 
   @override
-  String get agentCleanupHostTitle => 'Clean up host';
+  String get agentCleanupHostTitle => 'Clean up this host only';
 
   @override
   String get agentCleanupHostToggle =>
-      'Need to clean up an old daemon on the host?';
+      'Need to remove old daemon data from this computer?';
 
   @override
   String get agentCleanupHostWarning =>
-      'This stops the AWiki daemon on the host and permanently deletes all daemon data on that host, including identity, databases, logs, archives, Runtime Profiles, and downloaded daemon binaries. This cannot be undone.';
+      'This command only stops the daemon and permanently deletes its data from this computer, including its identity, databases, logs, archives, Runtime Profiles, and downloaded binaries. It does not remove the daemon or its agents from your AWiki account. Afterward, return to the Agents page in the app and remove the corresponding offline daemon from your account. This cannot be undone.';
 
   @override
-  String get agentCopyCleanupCommand => 'Copy cleanup command';
+  String get agentCopyCleanupCommand => 'Copy local cleanup command';
 
   @override
   String get agentCreateTitle => 'Create Agent';

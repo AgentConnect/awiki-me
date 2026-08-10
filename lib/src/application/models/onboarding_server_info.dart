@@ -1,4 +1,5 @@
 import '../../domain/entities/agent/skill_onboarding_instruction.dart';
+import '../../domain/entities/agent/skill_group_membership_capability.dart';
 
 class OnboardingServerInfo {
   const OnboardingServerInfo({
@@ -156,12 +157,17 @@ class OnboardingServerInfo {
 }
 
 class OnboardingAgentCapabilities {
-  const OnboardingAgentCapabilities({required this.skillOnboarding});
+  const OnboardingAgentCapabilities({
+    required this.skillOnboarding,
+    this.skillGroupMembership = const SkillGroupMembershipCapability.disabled(),
+  });
 
   const OnboardingAgentCapabilities.disabled()
-    : skillOnboarding = const SkillOnboardingCapability.disabled();
+    : skillOnboarding = const SkillOnboardingCapability.disabled(),
+      skillGroupMembership = const SkillGroupMembershipCapability.disabled();
 
   final SkillOnboardingCapability skillOnboarding;
+  final SkillGroupMembershipCapability skillGroupMembership;
 
   factory OnboardingAgentCapabilities.fromJson(Object? raw) {
     if (raw is! Map) {
@@ -170,30 +176,65 @@ class OnboardingAgentCapabilities {
     final agents = raw.map<String, Object?>(
       (key, value) => MapEntry(key.toString(), value),
     );
-    final skillRaw = agents['skill_onboarding'];
-    if (skillRaw is! Map) {
-      return const OnboardingAgentCapabilities.disabled();
-    }
-    final skill = skillRaw.map<String, Object?>(
-      (key, value) => MapEntry(key.toString(), value),
+    return OnboardingAgentCapabilities(
+      skillOnboarding: _parseSkillOnboardingCapability(
+        agents['skill_onboarding'],
+      ),
+      skillGroupMembership: _parseSkillGroupMembershipCapability(
+        agents['skill_group_membership'],
+      ),
     );
-    if (skill['enabled'] != true) {
-      return const OnboardingAgentCapabilities.disabled();
-    }
-    final protocolVersion = skill['protocol_version'];
-    final onboardingPath = skill['onboarding_path'];
-    if (protocolVersion is! int || onboardingPath is! String) {
-      return const OnboardingAgentCapabilities.disabled();
-    }
-    final capability = SkillOnboardingCapability(
-      enabled: true,
-      protocolVersion: protocolVersion,
-      onboardingPath: onboardingPath,
-    );
-    return capability.supportsCurrentProtocol
-        ? OnboardingAgentCapabilities(skillOnboarding: capability)
-        : const OnboardingAgentCapabilities.disabled();
   }
+}
+
+SkillOnboardingCapability _parseSkillOnboardingCapability(Object? raw) {
+  if (raw is! Map) {
+    return const SkillOnboardingCapability.disabled();
+  }
+  final json = raw.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+  final protocolVersion = json['protocol_version'];
+  final onboardingPath = json['onboarding_path'];
+  if (json['enabled'] != true ||
+      protocolVersion is! int ||
+      onboardingPath is! String) {
+    return const SkillOnboardingCapability.disabled();
+  }
+  final capability = SkillOnboardingCapability(
+    enabled: true,
+    protocolVersion: protocolVersion,
+    onboardingPath: onboardingPath,
+  );
+  return capability.supportsCurrentProtocol
+      ? capability
+      : const SkillOnboardingCapability.disabled();
+}
+
+SkillGroupMembershipCapability _parseSkillGroupMembershipCapability(
+  Object? raw,
+) {
+  if (raw is! Map) {
+    return const SkillGroupMembershipCapability.disabled();
+  }
+  final json = raw.map<String, Object?>(
+    (key, value) => MapEntry(key.toString(), value),
+  );
+  final protocolVersion = json['protocol_version'];
+  final requiredCapability = json['required_capability'];
+  if (json['enabled'] != true ||
+      protocolVersion is! int ||
+      requiredCapability is! String) {
+    return const SkillGroupMembershipCapability.disabled();
+  }
+  final capability = SkillGroupMembershipCapability(
+    enabled: true,
+    protocolVersion: protocolVersion,
+    requiredCapability: requiredCapability,
+  );
+  return capability.supportsCurrentProtocol
+      ? capability
+      : const SkillGroupMembershipCapability.disabled();
 }
 
 class OnboardingServerServiceInfo {

@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
+import '../../domain/entities/identity_type.dart';
+import '../../l10n/l10n.dart';
 import 'avatar_badge.dart';
 import 'awiki_me_design.dart';
 import 'responsive_layout.dart';
@@ -219,10 +221,12 @@ class IdentityProfileBadge extends StatelessWidget {
     super.key,
     required this.label,
     this.tone = IdentityProfileBadgeTone.neutral,
+    this.compact = false,
   });
 
   final String label;
   final IdentityProfileBadgeTone tone;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -262,8 +266,8 @@ class IdentityProfileBadge extends StatelessWidget {
     };
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: responsive.displayScaled(10),
-        vertical: responsive.displayScaled(5),
+        horizontal: responsive.displayScaled(compact ? 7 : 10),
+        vertical: responsive.displayScaled(compact ? 3 : 5),
       ),
       decoration: BoxDecoration(
         color: colors.$1,
@@ -276,13 +280,67 @@ class IdentityProfileBadge extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: colors.$2,
-          fontSize: responsive.bodySm,
+          fontSize: compact ? 11 : responsive.bodySm,
           fontWeight: FontWeight.w500,
           height: 1,
         ),
       ),
     );
   }
+}
+
+class IdentityTypePresentation {
+  const IdentityTypePresentation._();
+
+  static String label(BuildContext context, IdentityType type) {
+    final l10n = context.l10n;
+    if (!type.isAgent) {
+      return switch (type.subjectKind) {
+        IdentitySubjectKind.user => l10n.identityTypeUser,
+        IdentitySubjectKind.group => l10n.identityTypeGroup,
+        IdentitySubjectKind.agent => l10n.identityTypeAgent,
+        IdentitySubjectKind.unknown => l10n.identityTypeUnknown,
+      };
+    }
+    return switch (type.agentKind ?? IdentityAgentKind.unknown) {
+      IdentityAgentKind.runtime => l10n.identityTypeRuntimeAgent,
+      IdentityAgentKind.skill => l10n.identityTypeSkillAgent,
+      IdentityAgentKind.daemon => l10n.identityTypeDaemon,
+      IdentityAgentKind.unknown => l10n.identityTypeAgent,
+    };
+  }
+
+  static IdentityProfileBadgeTone tone(IdentityType type) {
+    if (!type.isAgent) {
+      return type.subjectKind == IdentitySubjectKind.user
+          ? IdentityProfileBadgeTone.success
+          : IdentityProfileBadgeTone.outlined;
+    }
+    return switch (type.agentKind ?? IdentityAgentKind.unknown) {
+      IdentityAgentKind.runtime ||
+      IdentityAgentKind.skill => IdentityProfileBadgeTone.runtime,
+      IdentityAgentKind.daemon => IdentityProfileBadgeTone.muted,
+      IdentityAgentKind.unknown => IdentityProfileBadgeTone.neutral,
+    };
+  }
+}
+
+class IdentityTypeBadge extends StatelessWidget {
+  const IdentityTypeBadge({
+    super.key,
+    required this.type,
+    this.compact = false,
+  });
+
+  final IdentityType type;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) => IdentityProfileBadge(
+    label: IdentityTypePresentation.label(context, type),
+    tone: IdentityTypePresentation.tone(type),
+    compact: compact,
+  );
 }
 
 class IdentityProfileActionButton extends StatelessWidget {

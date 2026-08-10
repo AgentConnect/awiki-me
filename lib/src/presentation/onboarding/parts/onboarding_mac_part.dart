@@ -10,6 +10,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
     required this.emailController,
     required this.handleController,
     required this.onLogin,
+    required this.onDeleteCredential,
     required this.onAuthModeChanged,
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
@@ -31,6 +32,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
+  final ValueChanged<SessionIdentity> onDeleteCredential;
   final ValueChanged<String> onAuthModeChanged;
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
@@ -65,6 +67,7 @@ class _MacOnboardingScaffold extends StatelessWidget {
             emailController: emailController,
             handleController: handleController,
             onLogin: onLogin,
+            onDeleteCredential: onDeleteCredential,
             onAuthModeChanged: onAuthModeChanged,
             onRequestOtp: onRequestOtp,
             onRequestEmailActivation: onRequestEmailActivation,
@@ -386,6 +389,7 @@ class _MacAuthCard extends StatelessWidget {
     required this.emailController,
     required this.handleController,
     required this.onLogin,
+    required this.onDeleteCredential,
     required this.onAuthModeChanged,
     required this.onRequestOtp,
     required this.onRequestEmailActivation,
@@ -406,6 +410,7 @@ class _MacAuthCard extends StatelessWidget {
   final TextEditingController emailController;
   final TextEditingController handleController;
   final Future<void> Function(String credentialName) onLogin;
+  final ValueChanged<SessionIdentity> onDeleteCredential;
   final ValueChanged<String> onAuthModeChanged;
   final VoidCallback onRequestOtp;
   final VoidCallback onRequestEmailActivation;
@@ -499,6 +504,10 @@ class _MacAuthCard extends StatelessWidget {
                 _OnboardingLocalIdentitySection(
                   credentials: credentials,
                   onLogin: onLogin,
+                  onDeleteCredential: onDeleteCredential,
+                  actionsEnabled: !onboarding.isBusy,
+                  deletingIdentitySelector:
+                      onboarding.deletingLocalIdentitySelector,
                   onRecoverHandle: onRecoverHandle,
                 ),
               ],
@@ -688,11 +697,17 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
   const _OnboardingLocalIdentitySection({
     required this.credentials,
     required this.onLogin,
+    required this.onDeleteCredential,
+    required this.actionsEnabled,
+    this.deletingIdentitySelector,
     this.onRecoverHandle,
   });
 
   final List<SessionIdentity> credentials;
   final Future<void> Function(String credentialName) onLogin;
+  final ValueChanged<SessionIdentity> onDeleteCredential;
+  final bool actionsEnabled;
+  final String? deletingIdentitySelector;
   final Future<void> Function(SessionIdentity identity)? onRecoverHandle;
 
   @override
@@ -731,7 +746,12 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
                     'onboarding-local-credential:${identity.credentialName}',
                   ),
                   identity: identity,
-                  onTap: () => onLogin(identity.credentialName),
+                  actionsEnabled: actionsEnabled,
+                  isDeleting:
+                      deletingIdentitySelector ==
+                      identity.localIdentitySelector,
+                  onLogin: () => onLogin(identity.credentialName),
+                  onDelete: () => onDeleteCredential(identity),
                 ),
                 if (onRecoverHandle != null) ...<Widget>[
                   const SizedBox(height: 6),
@@ -740,7 +760,9 @@ class _OnboardingLocalIdentitySection extends StatelessWidget {
                     label: context.l10n.handleRecoveryTitle,
                     semanticsIdentifier:
                         'handle-recovery-entry:${identity.credentialName}',
-                    onPressed: () => onRecoverHandle!(identity),
+                    onPressed: actionsEnabled
+                        ? () => onRecoverHandle!(identity)
+                        : null,
                   ),
                 ],
               ],
@@ -764,75 +786,151 @@ class _OnboardingCredentialTile extends StatelessWidget {
   const _OnboardingCredentialTile({
     super.key,
     required this.identity,
-    required this.onTap,
+    required this.actionsEnabled,
+    required this.isDeleting,
+    required this.onLogin,
+    required this.onDelete,
   });
 
   final SessionIdentity identity;
-  final VoidCallback onTap;
+  final bool actionsEnabled;
+  final bool isDeleting;
+  final VoidCallback onLogin;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final theme = context.awikiTheme;
     final subtitle = (identity.handle?.trim().isNotEmpty == true)
         ? identity.handle!.trim()
         : identity.credentialName;
-    return AppPressableTile(
-      onTap: onTap,
-      semanticLabel: identity.displayName,
-      borderRadius: BorderRadius.circular(11),
-      backgroundColor: CupertinoColors.white,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 68),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-        decoration: _macFieldDecoration(),
+    final enabled = actionsEnabled && !isDeleting;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 68),
+      decoration: _macFieldDecoration(),
+      clipBehavior: Clip.antiAlias,
+      child: IntrinsicHeight(
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            AvatarBadge(seed: identity.displayName, size: 38),
-            const SizedBox(width: 13),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Text(
-                    identity.displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AwikiMePalette.inkNeutral,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+              child: AppPressable(
+                key: Key(
+                  'onboarding-local-credential-select:${identity.credentialName}',
+                ),
+                onTap: enabled ? onLogin : null,
+                semanticLabel:
+                    '${context.l10n.onboardingLogin}: ${identity.displayName}',
+                semanticsIdentifier:
+                    'onboarding-local-credential-select:${identity.credentialName}',
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(15, 11, 12, 11),
+                  child: Row(
+                    children: <Widget>[
+                      AvatarBadge(seed: identity.displayName, size: 38),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            _DesktopCredentialTooltip(
+                              message: identity.displayName,
+                              child: Text(
+                                identity.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AwikiMePalette.inkNeutral,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            _DesktopCredentialTooltip(
+                              message: subtitle,
+                              child: Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AwikiMePalette.mutedNeutral,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AwikiMePalette.mutedNeutral,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-            Text(
-              context.l10n.onboardingLogin,
-              style: const TextStyle(
-                color: AwikiMePalette.brandAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+            Container(
+              width: 1,
+              margin: const EdgeInsets.symmetric(vertical: 11),
+              color: theme.navigationBorder,
             ),
-            const SizedBox(width: 7),
-            const Icon(
-              CupertinoIcons.chevron_right,
-              color: AwikiMePalette.messagePreview,
-              size: 15,
+            AppPressable(
+              key: Key(
+                'onboarding-local-credential-delete:${identity.credentialName}',
+              ),
+              onTap: enabled ? onDelete : null,
+              semanticLabel:
+                  '${context.l10n.localCredentialDeleteAction}: ${identity.displayName}',
+              tooltip: context.l10n.localCredentialDeleteAction,
+              borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(10),
+              ),
+              hoverColor: theme.danger.withValues(alpha: 0.06),
+              pressedColor: theme.danger.withValues(alpha: 0.10),
+              focusColor: theme.danger.withValues(alpha: 0.28),
+              child: SizedBox(
+                width: 50,
+                child: Center(
+                  child: isDeleting
+                      ? const CupertinoActivityIndicator(radius: 7)
+                      : Icon(
+                          CupertinoIcons.delete,
+                          size: 17,
+                          color: enabled ? theme.danger : theme.tertiaryText,
+                        ),
+                ),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _DesktopCredentialTooltip extends StatelessWidget {
+  const _DesktopCredentialTooltip({required this.message, required this.child});
+
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktopPlatform =
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows;
+    final normalizedMessage = message.trim();
+    if (!isDesktopPlatform || normalizedMessage.isEmpty) {
+      return child;
+    }
+    return Tooltip(
+      message: normalizedMessage,
+      waitDuration: const Duration(milliseconds: 350),
+      ignorePointer: true,
+      excludeFromSemantics: true,
+      child: child,
     );
   }
 }

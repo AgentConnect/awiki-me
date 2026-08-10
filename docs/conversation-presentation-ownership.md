@@ -245,6 +245,14 @@ Agent / Personal Agent control payload 是控制面事件，不是普通聊天�
    Android direct-message Push 的 installation、同步与展示边界见下一节；它不把 daemon 终态
    payload 当作 Push 携带的 message truth，也不宣称 Coding Agent 终态已经具备真离线 Push。
 
+Coding Agent 的“正在处理”属于 session-scoped presentation overlay，必须按 Agent DID 与来源
+消息 ID 精确收敛。新版 Daemon 的普通最终回复在既有 `application/json` 文本 payload 中追加
+`annotations.awiki_reply_to_message_id`；`text` 和 `mentions` 结构保持不变，因此旧客户端仍可
+正常显示回复。App 在 domain entity 边界解析该 annotation：存在合法关联时只清理对应 turn；
+旧 Daemon 的无关联回复仅在同一 Agent 恰好只有一个 pending candidate 时允许兼容清理，有多个
+候选时不得按先后顺序猜测。最终回复或 terminal status 写入有界的 512 项完成 ledger，迟到的
+`running` 不得重新创建已完成 turn；ledger 在 session epoch 切换时清空。
+
 通用系统通知同样不是聊天消息。Core 只有在完成 P3 envelope、service DID/proof、
 audience、expiry 和业务 payload 验证并提交本地投影后，才向 App 发出
 `system_notification_changed`。`AwikiImCoreMappers` 将它映射为纯同步信号：
@@ -509,6 +517,7 @@ copy-on-read；迁移成功也保留旧行，直到单独清理策略获批。
 - `tests/unit/chat_mention_composer_test.dart`：验证 draft mention range 维护、编辑失效、候选插入，以及冷加载合并和连续 query 只使用一次群成员请求。
 - `tests/unit/chat_page_test.dart`：验证聊天窗口渲染、read ack 边界、header 行为、sending indicator 的 3 秒延迟与明确终态清理等关键 widget 行为。
 - `tests/unit/chat_provider_open_test.dart`：验证打开会话 local-first conversation timeline、conversation-after/remote fallback、conversation timeline patch version gap repair、stream closed repair/re-subscribe、read ack、文本 / payload / 附件 send intent 和附件 retry 都按 `conversationId` / `AppConversationReadRef` 走主路径；其中可见群聊必须在 Controller 自身建立持久 intent，不依赖 Widget 二次回调，并覆盖在途 `seq 5 -> seq 6` 串行合并和 Core `pendingRemoteAck` local-first 成功。
+  - Agent pending turn 必须覆盖精确 reply correlation、多个 legacy candidate 不猜测、单 candidate 旧回复兼容、final/terminal 后迟到 running 不复活，以及 session 切换清空完成 ledger。
   - 其中 `dm:peer-scope:*`、legacy direct、old Flutter direct alias 和 handle/DID rotation 必须由 core/SDK canonical identity 收敛；App 不因 raw thread history unsupported 而把错误暴露成可见 UI 报错。
   - 身份隔离还必须覆盖 A 的 delayed local history、patch repair 和 send completion 在快速 A→B→C 后被丢弃，同时切换当下即清空旧 thread window、patch subscription 和 composer draft。
 - `tests/unit/agents/agent_terminal_notification_test.dart`：用 fake time 验证三种业务终态、真实运行失败、严格 fail-closed、message-first / status-first、1 秒 timeout fallback、clear timer cleanup、有界 replay ledger 和普通最终回复关联。

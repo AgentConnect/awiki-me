@@ -2,6 +2,7 @@
 // [OUTPUT]: Canonical chat thread state, including settled sends and monotonic visible-read intents.
 // [POS]: Riverpod presentation controller for chat history, sending, realtime patches, serialized read commits, and retries.
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -215,6 +216,7 @@ class AgentPendingTurn {
     this.mentionId,
     this.agentHandle,
     this.progress,
+    this.hasAuthoritativeRunStatus = false,
     this.isOverdue = false,
   });
 
@@ -224,6 +226,7 @@ class AgentPendingTurn {
   final String? mentionId;
   final String? agentHandle;
   final AgentRunProgress? progress;
+  final bool hasAuthoritativeRunStatus;
   final DateTime startedAt;
   final bool isOverdue;
 
@@ -251,6 +254,7 @@ class AgentPendingTurn {
       mentionId: mentionId,
       agentHandle: agentHandle,
       progress: progress,
+      hasAuthoritativeRunStatus: hasAuthoritativeRunStatus,
       startedAt: startedAt,
       isOverdue: true,
     );
@@ -750,11 +754,13 @@ class ChatThreadsController
   );
   static const Duration agentProcessingOverdueAfter = Duration(seconds: 75);
   static const Duration _agentProcessingReplyClockSkew = Duration(seconds: 2);
+  static const int _maxCompletedAgentTurnKeys = 512;
   static const Duration _threadPatchStreamResubscribeCooldown = Duration(
     seconds: 2,
   );
 
   final Map<String, Timer> _agentProcessingTimers = <String, Timer>{};
+  final LinkedHashSet<String> _completedAgentTurnKeys = LinkedHashSet<String>();
   final Map<String, _PendingHistorySync> _pendingHistorySyncs =
       <String, _PendingHistorySync>{};
   final Map<String, _PendingVisibleThreadStaleGuard>
@@ -3909,6 +3915,7 @@ class ChatThreadsController
     _committedReadWatermarksByThreadId.clear();
     _activeLocalHistoryLoads.clear();
     _activeRemoteHistorySyncs.clear();
+    _completedAgentTurnKeys.clear();
     _clearMemoryCacheMetadata();
     state = const <String, ChatThreadState>{};
   }
@@ -5247,6 +5254,14 @@ class ChatThreadsController
     }
     final threadId = displayThreadId;
     final current = thread(threadId);
+    final existingByAgentDid = <String, AgentPendingTurn>{};
+    for (final turn in current.agentPendingTurns) {
+      if (turn.localMessageId == localMessageId ||
+          turn.remoteMessageId == remoteMessageId ||
+          turn.localMessageId == remoteMessageId) {
+        existingByAgentDid[turn.agentDid] = turn;
+      }
+    }
     final nextTurns = <AgentPendingTurn>[
       ...current.agentPendingTurns.where(
         (turn) =>
@@ -5258,9 +5273,20 @@ class ChatThreadsController
           agentDid: target.agentDid,
           localMessageId: localMessageId,
           remoteMessageId: remoteMessageId,
-          mentionId: target.mentionId,
-          agentHandle: target.agentHandle,
-          startedAt: deliveredMessage.createdAt,
+          mentionId:
+              target.mentionId ??
+              existingByAgentDid[target.agentDid]?.mentionId,
+          agentHandle:
+              target.agentHandle ??
+              existingByAgentDid[target.agentDid]?.agentHandle,
+          progress: existingByAgentDid[target.agentDid]?.progress,
+          hasAuthoritativeRunStatus:
+              existingByAgentDid[target.agentDid]?.hasAuthoritativeRunStatus ??
+              false,
+          startedAt:
+              existingByAgentDid[target.agentDid]?.startedAt ??
+              deliveredMessage.createdAt,
+          isOverdue: existingByAgentDid[target.agentDid]?.isOverdue ?? false,
         ),
     ];
     state = <String, ChatThreadState>{
@@ -5391,6 +5417,12 @@ class ChatThreadsController
         run['agent_handle']?.toString().trim().ifNotEmpty;
     final progress = AgentRunProgress.fromJson(run['progress']);
     if (_isActiveRunStatus(status)) {
+      if (sourceMessageId != null &&
+          _completedAgentTurnKeys.contains(
+            _agentTurnCompletionKey(agentDid, sourceMessageId),
+          )) {
+        return;
+      }
       _upsertAgentPendingTurnFromStatus(
         agentDid: agentDid,
         conversationId: conversationId,
@@ -5405,6 +5437,9 @@ class ChatThreadsController
     }
     if (!_isTerminalRunStatus(status)) {
       return;
+    }
+    if (sourceMessageId != null) {
+      _rememberCompletedAgentTurn(agentDid, sourceMessageId);
     }
     final nextState = Map<String, ChatThreadState>.from(state);
     var changed = false;
@@ -6035,6 +6070,7 @@ class ChatThreadsController
             mentionId: turn.mentionId ?? mentionId,
             agentHandle: turn.agentHandle ?? agentHandle,
             progress: progress ?? turn.progress,
+            hasAuthoritativeRunStatus: true,
             startedAt: turn.startedAt,
             isOverdue: turn.isOverdue,
           ),
@@ -6052,6 +6088,7 @@ class ChatThreadsController
           mentionId: mentionId,
           agentHandle: agentHandle,
           progress: progress,
+          hasAuthoritativeRunStatus: true,
           startedAt: startedAt,
         ),
       );
@@ -6185,6 +6222,16 @@ class ChatThreadsController
     List<ChatMessage> incoming, {
     required bool trustIncomingAgentReply,
   }) {
+    for (final message in incoming) {
+      final sourceMessageId = message.replyToMessageId;
+      final senderDid = message.senderDid.trim();
+      if (!message.isMine &&
+          message.hasRenderableContent &&
+          sourceMessageId != null &&
+          senderDid.isNotEmpty) {
+        _rememberCompletedAgentTurn(senderDid, sourceMessageId);
+      }
+    }
     if (current.isEmpty) {
       return current;
     }
@@ -6197,22 +6244,27 @@ class ChatThreadsController
       if (senderDid.isEmpty) {
         continue;
       }
-      final replyToMessageId = _replyToMessageId(message);
-      final index = next.indexWhere((turn) {
-        if (turn.agentDid.trim() != senderDid) {
-          return false;
-        }
-        if (replyToMessageId != null && replyToMessageId.isNotEmpty) {
-          return turn.remoteMessageId == replyToMessageId ||
-              turn.localMessageId == replyToMessageId;
-        }
-        if (trustIncomingAgentReply) {
-          return true;
-        }
-        return !message.createdAt.isBefore(
-          turn.startedAt.subtract(_agentProcessingReplyClockSkew),
-        );
-      });
+      final replyToMessageId = message.replyToMessageId;
+      final candidateIndexes = <int>[
+        for (var index = 0; index < next.length; index++)
+          if (next[index].agentDid.trim() == senderDid) index,
+      ];
+      final index = replyToMessageId != null
+          ? candidateIndexes.firstWhere(
+              (index) =>
+                  next[index].remoteMessageId == replyToMessageId ||
+                  next[index].localMessageId == replyToMessageId,
+              orElse: () => -1,
+            )
+          : candidateIndexes.length == 1 &&
+                (trustIncomingAgentReply ||
+                    !message.createdAt.isBefore(
+                      next[candidateIndexes.single].startedAt.subtract(
+                        _agentProcessingReplyClockSkew,
+                      ),
+                    ))
+          ? candidateIndexes.single
+          : -1;
       if (index >= 0) {
         next.removeAt(index);
       }
@@ -6220,26 +6272,19 @@ class ChatThreadsController
     return next;
   }
 
-  String? _replyToMessageId(ChatMessage message) {
-    final payloadJson = message.payloadJson?.trim();
-    if (payloadJson == null || payloadJson.isEmpty) {
-      return null;
+  String _agentTurnCompletionKey(String agentDid, String sourceMessageId) =>
+      '${agentDid.trim()}\u0000${sourceMessageId.trim()}';
+
+  void _rememberCompletedAgentTurn(String agentDid, String sourceMessageId) {
+    final key = _agentTurnCompletionKey(agentDid, sourceMessageId);
+    if (key.startsWith('\u0000') || key.endsWith('\u0000')) {
+      return;
     }
-    Object? decoded;
-    try {
-      decoded = jsonDecode(payloadJson);
-    } on Object {
-      return null;
+    _completedAgentTurnKeys.remove(key);
+    _completedAgentTurnKeys.add(key);
+    while (_completedAgentTurnKeys.length > _maxCompletedAgentTurnKeys) {
+      _completedAgentTurnKeys.remove(_completedAgentTurnKeys.first);
     }
-    if (decoded is! Map) {
-      return null;
-    }
-    final annotations = decoded['annotations'];
-    if (annotations is! Map) {
-      return null;
-    }
-    final value = annotations['awiki_reply_to_message_id']?.toString().trim();
-    return value == null || value.isEmpty ? null : value;
   }
 
   void _scheduleAgentProcessingOverdue(String threadId) {

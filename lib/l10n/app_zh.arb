@@ -43,6 +43,15 @@
   "realtimeStatusReconnecting": "消息连接中断，正在重连...",
   "realtimeStatusDisconnected": "消息服务已断开，正在尝试恢复",
   "onboardingLogin": "切换身份",
+  "localCredentialDeleteAction": "从此设备删除",
+  "localCredentialDeleteConfirmTitle": "从此设备删除身份？",
+  "localCredentialDeleteConfirmContent": "确定要从此设备删除 {identity} 的本地身份凭证吗？",
+  "@localCredentialDeleteConfirmContent": {
+    "placeholders": {
+      "identity": {}
+    }
+  },
+  "localCredentialDeleteConfirmHint": "此操作会删除本机保存的凭证；不会注销线上身份或影响其他设备。之后如需继续使用，必须重新恢复身份或加入已有账户。",
   "onboardingRegister": "登录或注册",
   "onboardingImportCredential": "导入身份凭证",
   "onboardingRefreshCredentials": "重新识别本地凭证",
@@ -524,6 +533,11 @@
   "identityBioLabel": "简介",
   "identityTypeAgent": "智能体",
   "identityTypeUser": "用户",
+  "identityTypeRuntimeAgent": "Runtime Agent",
+  "identityTypeSkillAgent": "Skill Agent",
+  "identityTypeDaemon": "Daemon",
+  "identityTypeGroup": "群组",
+  "identityTypeUnknown": "身份",
   "identityAddGroupMemberTitle": "添加群成员",
   "identityAddGroupMemberSubtitle": "输入普通用户或 Agent 的 handle / DID，确认身份后加入群聊。",
   "identityAddGroupMemberAction": "确认添加",
@@ -612,6 +626,7 @@
   "groupInviteDialogSubtitle": "搜索本地身份，或输入 handle / DID 匹配新身份。",
   "groupInviteShowMore": "查看更多",
   "groupInviteAdding": "添加中...",
+  "groupInviteAddFailed": "添加失败，请稍后重试",
   "groupInviteConfirmCount": "确认添加 ({count})",
   "@groupInviteConfirmCount": {
     "placeholders": {
@@ -625,6 +640,9 @@
   "groupInviteSelectHint": "选择一个或多个身份后，统一确认添加。",
   "groupInviteNoLocalCandidates": "暂无可邀请的本地身份。",
   "groupInviteIdentityUnavailable": "该身份已被删除或当前不可邀请。",
+  "groupInviteSkillAgentUnavailable": "Skill Agent 暂不支持加入群聊",
+  "groupInviteSkillAgentCapabilityMissing": "该 Skill Agent 版本暂不支持加入群聊",
+  "groupInviteAgentKindUnavailable": "该类型的智能体暂不支持加入群聊",
   "groupInviteNoMatches": "没有匹配的本地身份，可以尝试匹配 handle / DID。",
   "groupInviteAlreadyInGroup": "已在群中",
   "groupInviteUnnamedAgent": "未命名智能体",
@@ -647,6 +665,9 @@
   "chatDeletedAgentDisabled": "智能体已删除，无法继续发送消息",
   "chatGroupLeftDisabled": "你已不在这个群聊中，不能继续发送消息",
   "chatGroupSendDisabled": "当前群聊暂时不能发送消息",
+  "chatAgentAwaitingReceipt": "已发送，等待智能体接收...",
+  "chatAgentAwaitingOnline": "已发送，等待智能体上线...",
+  "chatAgentAwaitingResponse": "已发送，智能体暂未响应",
   "chatAgentProcessing": "智能体正在处理...",
   "chatAgentStillProcessing": "智能体仍在处理，稍后可刷新查看",
   "chatAgentExternalServiceWorking": "智能体正在访问外部服务...",
@@ -654,6 +675,24 @@
   "chatAgentExternalServiceResumed": "外部服务已恢复，智能体正在继续处理...",
   "chatSubjectProcessing": "{subject} 正在处理...",
   "@chatSubjectProcessing": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectAwaitingReceipt": "已发送，等待 {subject} 接收...",
+  "@chatSubjectAwaitingReceipt": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectAwaitingOnline": "已发送，等待 {subject} 上线...",
+  "@chatSubjectAwaitingOnline": {
+    "placeholders": {
+      "subject": {}
+    }
+  },
+  "chatSubjectAwaitingResponse": "已发送，{subject} 暂未响应",
+  "@chatSubjectAwaitingResponse": {
     "placeholders": {
       "subject": {}
     }
@@ -887,10 +926,10 @@
   "agentSkillRegenerate": "重新生成安装指令",
   "agentSkillSecretNotice": "有效期 30 分钟。复制内容包含一次性密钥，只发送给你要连接的 Agent。",
   "agentSkillExpired": "这条安装指令已过期或已清除，请重新生成。",
-  "agentCleanupHostTitle": "清理宿主机",
-  "agentCleanupHostToggle": "需要清理宿主机上的旧 Daemon？",
-  "agentCleanupHostWarning": "这会停止宿主机上的 AWiki Daemon，并永久删除该宿主机上的所有 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的 Daemon 二进制。此操作不可恢复。",
-  "agentCopyCleanupCommand": "复制清理命令",
+  "agentCleanupHostTitle": "仅清理本机 Daemon",
+  "agentCleanupHostToggle": "需要清理当前电脑上的旧 Daemon 残留？",
+  "agentCleanupHostWarning": "此命令只会停止并永久删除当前电脑上的 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的二进制；不会从 AWiki 账号中移除 Daemon 和它的智能体。执行后请回到 APP，在智能体页面将对应的离线 Daemon 从账号移除。此操作不可恢复。",
+  "agentCopyCleanupCommand": "复制本机清理命令",
   "agentCreateTitle": "创建 Agent",
   "agentCreateType": "Agent 类型",
   "agentCreateWorkspacePolicy": "工作目录策略",

@@ -5369,6 +5369,7 @@ void main() {
     expect(thread.messages.single.sendState, MessageSendState.sent);
     expect(thread.isAgentProcessing, isTrue);
     expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.agentPendingTurns.single.hasAuthoritativeRunStatus, isFalse);
   });
 
   test('发送给智能体成功后显示处理中，收到智能体回复后清除', () async {
@@ -5588,9 +5589,10 @@ void main() {
     expect(thread.isAgentProcessing, isTrue);
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.agentPendingTurns.single.remoteMessageId, 'sent-question');
+    expect(thread.agentPendingTurns.single.hasAuthoritativeRunStatus, isTrue);
   });
 
-  test('连续发给智能体时按回复数量递减处理中状态', () async {
+  test('连续发给智能体时只按精确关联清理，多候选旧回复不猜测', () async {
     final sendContainer = ProviderContainer(
       overrides: <Override>[
         awikiGatewayProvider.overrideWithValue(gateway),
@@ -5655,10 +5657,10 @@ void main() {
       chatThreadProvider(_timelineThreadId(conversation)),
     );
     expect(thread.isAgentProcessing, isTrue);
-    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentReplyCount, 2);
     expect(
       thread.agentPendingTurns.map((turn) => turn.localMessageId),
-      isNot(contains(firstTurn.localMessageId)),
+      contains(firstTurn.localMessageId),
     );
     expect(
       thread.agentPendingTurns.map((turn) => turn.localMessageId),
@@ -5685,7 +5687,7 @@ void main() {
       chatThreadProvider(_timelineThreadId(conversation)),
     );
     expect(thread.isAgentProcessing, isTrue);
-    expect(thread.pendingAgentReplyCount, 1);
+    expect(thread.pendingAgentReplyCount, 2);
     expect(
       thread.agentPendingTurns.map((turn) => turn.localMessageId),
       contains(secondTurn.localMessageId),
@@ -5701,6 +5703,87 @@ void main() {
             senderDid: 'did:peer',
             receiverDid: 'did:me',
             content: '第二个回答',
+            originalType: 'application/json',
+            payloadJson: jsonEncode(<String, Object?>{
+              'text': '第二个回答',
+              'mentions': <Object?>[],
+              'annotations': <String, Object?>{
+                'awiki_reply_to_message_id': secondTurn.remoteMessageId,
+              },
+            }),
+            createdAt: DateTime.now(),
+            isMine: false,
+            sendState: MessageSendState.sent,
+          ),
+        );
+
+    thread = sendContainer.read(
+      chatThreadProvider(_timelineThreadId(conversation)),
+    );
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(
+      thread.agentPendingTurns.single.localMessageId,
+      firstTurn.localMessageId,
+    );
+
+    sendContainer.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': _timelineThreadId(conversation),
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_second_delayed',
+            'runtime_agent_did': 'did:peer',
+            'source_message_id': secondTurn.remoteMessageId,
+            'status': 'running',
+          },
+        ],
+      },
+    );
+    thread = sendContainer.read(
+      chatThreadProvider(_timelineThreadId(conversation)),
+    );
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(
+      thread.agentPendingTurns.single.localMessageId,
+      firstTurn.localMessageId,
+    );
+
+    sendContainer.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'conversation_id': _timelineThreadId(conversation),
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_second_delayed',
+            'runtime_agent_did': 'did:peer',
+            'source_message_id': secondTurn.remoteMessageId,
+            'status': 'finished',
+          },
+        ],
+      },
+    );
+    thread = sendContainer.read(
+      chatThreadProvider(_timelineThreadId(conversation)),
+    );
+    expect(thread.pendingAgentReplyCount, 1);
+    expect(
+      thread.agentPendingTurns.single.localMessageId,
+      firstTurn.localMessageId,
+    );
+
+    sendContainer
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          ChatMessage(
+            localId: 'agent-reply-c',
+            remoteId: 'agent-reply-c',
+            threadId: _timelineThreadId(conversation),
+            senderDid: 'did:peer',
+            receiverDid: 'did:me',
+            content: '第一个回答',
             createdAt: DateTime.now(),
             isMine: false,
             sendState: MessageSendState.sent,

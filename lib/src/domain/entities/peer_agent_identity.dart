@@ -1,14 +1,27 @@
-enum PeerAgentKind { daemon, runtime, unknown }
+import 'identity_type.dart';
+
+export 'identity_type.dart' show IdentityAgentKind, PeerAgentKind;
 
 class PeerAgentIdentity {
-  const PeerAgentIdentity({required this.isAgent, this.agentKind});
+  const PeerAgentIdentity({
+    required this.isAgent,
+    this.agentKind,
+    this.capabilities = const <String>{},
+  });
 
-  const PeerAgentIdentity.human() : isAgent = false, agentKind = null;
+  const PeerAgentIdentity.human()
+    : isAgent = false,
+      agentKind = null,
+      capabilities = const <String>{};
 
-  const PeerAgentIdentity.agent({this.agentKind}) : isAgent = true;
+  const PeerAgentIdentity.agent({
+    this.agentKind = IdentityAgentKind.unknown,
+    this.capabilities = const <String>{},
+  }) : isAgent = true;
 
   final bool isAgent;
-  final PeerAgentKind? agentKind;
+  final IdentityAgentKind? agentKind;
+  final Set<String> capabilities;
 
   factory PeerAgentIdentity.fromJson(Map<String, Object?> json) {
     final isAgent = json['is_agent'] == true;
@@ -17,15 +30,18 @@ class PeerAgentIdentity {
     }
     return PeerAgentIdentity.agent(
       agentKind: _parseAgentKind(json['agent_kind']),
+      capabilities: _parseCapabilities(json['agent_capabilities']),
     );
   }
 }
 
-PeerAgentKind? _parseAgentKind(Object? value) {
-  final text = value?.toString().trim().toLowerCase();
-  return switch (text) {
-    'daemon' => PeerAgentKind.daemon,
-    'runtime' => PeerAgentKind.runtime,
-    _ => null,
-  };
-}
+IdentityAgentKind _parseAgentKind(Object? value) =>
+    parseIdentityAgentKind(value) ?? IdentityAgentKind.unknown;
+
+Set<String> _parseCapabilities(Object? value) => value is List
+    ? Set<String>.unmodifiable(
+        value
+            .map((item) => item.toString().trim())
+            .where((item) => item.isNotEmpty),
+      )
+    : const <String>{};

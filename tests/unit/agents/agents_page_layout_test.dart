@@ -2469,6 +2469,7 @@ void main() {
     expect(find.text('package'), findsNothing);
     expect(find.text('手动命令'), findsNothing);
     expect(find.byKey(const Key('agent-cleanup-host-toggle')), findsOneWidget);
+    expect(find.text('需要清理当前电脑上的旧 Daemon 残留？'), findsOneWidget);
     expect(find.byKey(const Key('agent-cleanup-host-warning')), findsNothing);
     expect(find.byKey(const Key('agent-cleanup-command-text')), findsNothing);
     expect(
@@ -2491,8 +2492,11 @@ void main() {
     await tester.tap(find.byKey(const Key('agent-cleanup-host-toggle')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('agent-cleanup-host-warning')), findsOneWidget);
+    expect(find.textContaining('不会从 AWiki 账号中移除'), findsOneWidget);
+    expect(find.textContaining('从账号移除'), findsOneWidget);
     expect(find.textContaining('此操作不可恢复'), findsOneWidget);
     expect(find.byKey(const Key('agent-cleanup-copy-button')), findsOneWidget);
+    expect(find.bySemanticsLabel('复制本机清理命令'), findsOneWidget);
     final cleanupText = tester.widget<CupertinoTextField>(
       find.byKey(const Key('agent-cleanup-command-text')),
     );

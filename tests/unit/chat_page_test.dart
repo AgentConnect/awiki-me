@@ -1735,7 +1735,7 @@ void main() {
     expect(find.text('智能体信息'), findsOneWidget);
     expect(find.text('本地智能体'), findsWidgets);
     expect(find.byKey(const Key('peer-info-dialog-did-value')), findsOneWidget);
-    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('Runtime Agent'), findsOneWidget);
     expect(find.text('资料加载中'), findsOneWidget);
     expect(find.text('正在加载资料…'), findsOneWidget);
     expect(find.text('profile 加载完成后的介绍'), findsNothing);
@@ -1919,7 +1919,7 @@ void main() {
     expect(tester.getRect(homepage), const Rect.fromLTWH(0, 484, 390, 60));
     expect(tester.getRect(sectionDivider), const Rect.fromLTWH(0, 544, 390, 1));
     expect(tester.getRect(identity), const Rect.fromLTWH(24, 570, 342, 104));
-    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('Skill Agent'), findsOneWidget);
     expect(find.text('未关注'), findsOneWidget);
     expect(
       find.byKey(const Key('peer-info-agent-rename-button')),
@@ -5158,7 +5158,7 @@ void main() {
     expect(find.text('发送失败'), findsNothing);
   });
 
-  testWidgets('发送给 Runtime Agent 时投递完成后才显示处理中提示', (tester) async {
+  testWidgets('发送给 Runtime Agent 时先等待接收，收到运行状态后才显示处理中', (tester) async {
     final gateway = FakeAwikiGateway()
       ..sendDelay = const Duration(milliseconds: 80);
     const session = SessionIdentity(
@@ -5193,6 +5193,18 @@ void main() {
             controller.state = const AgentsState(
               agents: <AgentSummary>[
                 AgentSummary(
+                  agentDid: 'did:agent:daemon',
+                  kind: AgentKind.daemon,
+                  displayName: '我的 Daemon',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                  daemonEffectiveStatus: DaemonEffectiveStatus(
+                    controlState: 'online',
+                    primaryStatus: 'ready',
+                    actionable: true,
+                  ),
+                ),
+                AgentSummary(
                   agentDid: 'did:agent:runtime',
                   kind: AgentKind.runtime,
                   daemonAgentDid: 'did:agent:daemon',
@@ -5217,6 +5229,7 @@ void main() {
     expect(find.text('发送中...'), findsNothing);
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
     expect(find.text('智能体正在处理...'), findsNothing);
+    expect(find.text('已发送，等待智能体接收...'), findsNothing);
 
     await tester.pump(const Duration(milliseconds: 100));
     final container = ProviderScope.containerOf(
@@ -5234,6 +5247,27 @@ void main() {
         );
     await tester.pump(const Duration(milliseconds: 50));
 
+    expect(find.text('已发送，等待智能体接收...'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsNothing);
+
+    container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
+      <String, Object?>{
+        'schema': 'awiki.agent.status.v1',
+        'status_scope': 'run',
+        'runs': <Object?>[
+          <String, Object?>{
+            'run_id': 'run_processing',
+            'runtime_agent_did': 'did:agent:runtime',
+            'conversation_id': conversation.conversationId,
+            'source_message_id': delivered.remoteId,
+            'status': 'running',
+          },
+        ],
+      },
+    );
+    await tester.pump();
+
+    expect(find.text('已发送，等待智能体接收...'), findsNothing);
     expect(find.text('智能体正在处理...'), findsOneWidget);
 
     container.read(chatThreadsProvider.notifier).applyAgentRunStatusPayload(
@@ -5288,7 +5322,87 @@ void main() {
     expect(find.text('外部服务已恢复，智能体正在继续处理...'), findsOneWidget);
   });
 
-  testWidgets('发送给远端 Agent 私聊时显示处理中提示', (tester) async {
+  testWidgets('发送给离线 Daemon 下的 Runtime Agent 时显示等待上线', (tester) async {
+    final gateway = FakeAwikiGateway();
+    const session = SessionIdentity(
+      did: 'did:test:me',
+      handle: 'me',
+      displayName: 'Me',
+      credentialName: 'default',
+    );
+    final conversation = ConversationSummary(
+      conversationId: 'dm:did:agent:offline-runtime',
+      threadId: 'dm:offline-agent-waiting',
+      displayName: '离线智能体',
+      lastMessagePreview: '',
+      lastMessageAt: DateTime(2026, 4, 5, 12, 0),
+      unreadCount: 0,
+      isGroup: false,
+      targetDid: 'did:agent:offline-runtime',
+    );
+    final messagingService = FakeMessagingService(gateway);
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: CupertinoPageScaffold(
+          child: ChatView(conversation: conversation, embedded: false),
+        ),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messagingServiceProvider.overrideWithValue(messagingService),
+          agentsProvider.overrideWith((ref) {
+            final controller = AgentsController(ref);
+            controller.state = const AgentsState(
+              agents: <AgentSummary>[
+                AgentSummary(
+                  agentDid: 'did:agent:offline-daemon',
+                  kind: AgentKind.daemon,
+                  displayName: '离线 Daemon',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                  daemonEffectiveStatus: DaemonEffectiveStatus(
+                    controlState: 'stale',
+                    primaryStatus: 'offline',
+                    actionable: false,
+                  ),
+                ),
+                AgentSummary(
+                  agentDid: 'did:agent:offline-runtime',
+                  kind: AgentKind.runtime,
+                  daemonAgentDid: 'did:agent:offline-daemon',
+                  runtime: 'hermes',
+                  displayName: '离线智能体',
+                  activeState: 'active',
+                  latest: AgentLatestStatus(status: 'ready'),
+                ),
+              ],
+            );
+            return controller;
+          }),
+        ],
+      ),
+    );
+
+    await tester.enterText(find.byType(CupertinoTextField), '离线任务');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ChatView)),
+    );
+    container
+        .read(chatThreadsProvider.notifier)
+        .debugSeedMessageForTesting(
+          _latestProjectedConversationMessage(messagingService, conversation),
+          threadId: conversation.conversationId,
+        );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('离线任务'), findsOneWidget);
+    expect(find.text('已发送，等待智能体上线...'), findsOneWidget);
+    expect(find.text('智能体正在处理...'), findsNothing);
+  });
+
+  testWidgets('发送给远端 Agent 私聊时先显示等待接收', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -5335,7 +5449,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('请处理'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待智能体接收...'), findsOneWidget);
 
     container
         .read(chatThreadsProvider.notifier)
@@ -5356,7 +5470,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('处理完成'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsNothing);
+    expect(find.text('已发送，等待智能体接收...'), findsNothing);
   });
 
   testWidgets('发送给普通用户私聊时不显示智能体处理中提示', (tester) async {
@@ -5407,6 +5521,7 @@ void main() {
 
     expect(find.text('你好'), findsOneWidget);
     expect(find.text('智能体正在处理...'), findsNothing);
+    expect(find.text('已发送，等待智能体接收...'), findsNothing);
   });
 
   testWidgets('文本消息内容支持系统原生选中复制', (tester) async {
@@ -5795,7 +5910,7 @@ void main() {
     );
   });
 
-  testWidgets('发送给 Runtime Agent 后在对应消息下显示处理中提示', (tester) async {
+  testWidgets('发送给 Runtime Agent 后在对应消息下显示等待接收', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -5859,7 +5974,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('请总结'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待智能体接收...'), findsOneWidget);
 
     container
         .read(chatThreadsProvider.notifier)
@@ -5880,10 +5995,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('总结完成'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsNothing);
+    expect(find.text('已发送，等待智能体接收...'), findsNothing);
   });
 
-  testWidgets('群聊 @Agent 后在对应消息下显示 handle 处理中提示', (tester) async {
+  testWidgets('群聊 @Agent 后在对应消息下显示 handle 等待接收提示', (tester) async {
     final gateway = FakeAwikiGateway()
       ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
         'did:test:group:agent-processing': const <GroupMemberSummary>[
@@ -5949,7 +6064,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('@hermes 请总结'), findsOneWidget);
-    expect(find.text('@hermes 正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待 @hermes 接收...'), findsOneWidget);
 
     container
         .read(chatThreadsProvider.notifier)
@@ -5979,10 +6094,10 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('@hermes 正在处理...'), findsNothing);
+    expect(find.text('已发送，等待 @hermes 接收...'), findsNothing);
   });
 
-  testWidgets('连续发送给 Runtime Agent 时每条消息独立显示处理中提示', (tester) async {
+  testWidgets('连续发送给 Runtime Agent 时每条消息独立显示等待接收提示', (tester) async {
     final gateway = FakeAwikiGateway();
     const session = SessionIdentity(
       did: 'did:test:me',
@@ -6037,10 +6152,14 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ChatView)),
     );
+    final firstDelivered = _latestProjectedConversationMessage(
+      messagingService,
+      conversation,
+    );
     container
         .read(chatThreadsProvider.notifier)
         .debugSeedMessageForTesting(
-          _latestProjectedConversationMessage(messagingService, conversation),
+          firstDelivered,
           threadId: conversation.conversationId,
         );
     await tester.pump(const Duration(milliseconds: 50));
@@ -6056,7 +6175,7 @@ void main() {
 
     expect(find.text('第一个问题'), findsOneWidget);
     expect(find.text('第二个问题'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsNWidgets(2));
+    expect(find.text('已发送，等待智能体接收...'), findsNWidgets(2));
 
     container
         .read(chatThreadsProvider.notifier)
@@ -6069,6 +6188,14 @@ void main() {
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第一个回答',
+            originalType: 'application/json',
+            payloadJson: jsonEncode(<String, Object?>{
+              'text': '第一个回答',
+              'mentions': <Object?>[],
+              'annotations': <String, Object?>{
+                'awiki_reply_to_message_id': firstDelivered.remoteId,
+              },
+            }),
             createdAt: DateTime.now(),
             isMine: false,
             sendState: MessageSendState.sent,
@@ -6077,7 +6204,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('第一个回答'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待智能体接收...'), findsOneWidget);
 
     container
         .read(chatThreadsProvider.notifier)
@@ -6090,6 +6217,14 @@ void main() {
             senderDid: 'did:agent:runtime',
             receiverDid: session.did,
             content: '第一个回答',
+            originalType: 'application/json',
+            payloadJson: jsonEncode(<String, Object?>{
+              'text': '第一个回答',
+              'mentions': <Object?>[],
+              'annotations': <String, Object?>{
+                'awiki_reply_to_message_id': firstDelivered.remoteId,
+              },
+            }),
             createdAt: DateTime.now(),
             isMine: false,
             sendState: MessageSendState.sent,
@@ -6097,7 +6232,7 @@ void main() {
         );
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('智能体正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待智能体接收...'), findsOneWidget);
 
     container
         .read(chatThreadsProvider.notifier)
@@ -6118,7 +6253,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('第二个回答'), findsOneWidget);
-    expect(find.text('智能体正在处理...'), findsNothing);
+    expect(find.text('已发送，等待智能体接收...'), findsNothing);
   });
 
   testWidgets('聊天窗口在会话列表刷新到新消息摘要时不清未读不补拉历史', (tester) async {
@@ -7543,7 +7678,7 @@ void main() {
     expect(gateway.lastSentAttachmentCaption, '看这个图');
   });
 
-  testWidgets('发送给 Runtime Agent 的暂存附件会显示处理中提示', (tester) async {
+  testWidgets('发送给 Runtime Agent 的暂存附件会显示等待接收提示', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()
       ..nextPick = AttachmentDraft(
@@ -7607,10 +7742,10 @@ void main() {
 
     expect(gateway.lastSentAttachment?.filename, 'brief.md');
     expect(gateway.lastSentAttachmentCaption, '请阅读附件');
-    expect(find.text('智能体正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待智能体接收...'), findsOneWidget);
   });
 
-  testWidgets('群聊暂存附件 caption 中 @智能体会发送结构化 mention 并显示处理中', (tester) async {
+  testWidgets('群聊暂存附件 caption 中 @智能体会发送结构化 mention 并显示等待接收', (tester) async {
     final gateway = FakeAwikiGateway();
     final picker = FakeAttachmentPickerService()
       ..nextPick = AttachmentDraft(
@@ -7689,7 +7824,7 @@ void main() {
     );
     expect(thread.pendingAgentReplyCount, 1);
     expect(thread.agentPendingTurns.single.agentDid, 'did:agent:codex');
-    expect(find.text('@codex 正在处理...'), findsOneWidget);
+    expect(find.text('已发送，等待 @codex 接收...'), findsOneWidget);
   });
 
   testWidgets('输入框支持 Shift+Enter 换行，Enter 发送', (tester) async {

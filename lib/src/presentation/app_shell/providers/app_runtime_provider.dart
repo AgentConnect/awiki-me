@@ -172,6 +172,7 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   _agentTerminalNotificationDeduplicator;
   Future<void>? _joinedMemberActivation;
   String? _joinedMemberActivationDid;
+  String? _deletingLocalIdentitySelector;
   DateTime? _lastAuthenticatedRefreshStartedAt;
   Timer? _foregroundCatchUpTimer;
   final Set<SyncDomain> _pendingRealtimeSyncDomains = <SyncDomain>{};
@@ -550,30 +551,50 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
     }
     state = state.copyWith(isBusy: true);
     try {
-      _isLoggingOut = true;
-      try {
+      await deleteLocalCredential(current);
+    } finally {
+      state = state.copyWith(isBusy: false);
+    }
+  }
+
+  /// Removes one exact local identity. It is valid both for the active session
+  /// and for a signed-out identity chooser; only the active case tears down
+  /// authenticated projections and remote push state.
+  Future<bool> deleteLocalCredential(SessionIdentity identity) async {
+    final selector = identity.localIdentitySelector;
+    if (selector.isEmpty || _deletingLocalIdentitySelector != null) {
+      return false;
+    }
+    _deletingLocalIdentitySelector = selector;
+    final current = ref.read(sessionProvider).session;
+    final deletingCurrent =
+        current != null && _sameLocalIdentity(current, identity);
+    try {
+      if (deletingCurrent) {
+        _isLoggingOut = true;
         _agentTerminalNotificationDeduplicator.clear();
         state = state.copyWith(activatedDid: null);
         final pushSession = _currentRemotePushInstallationSession();
         _deactivateRemotePushLocally(pushSession);
         await _disableRemotePushBestEffort(pushSession);
         _clearAuthenticatedUiState();
-        await ref
-            .read(appSessionServiceProvider)
-            .deleteLocalIdentity(current.credentialName);
-        final credentials = await _localCredentialsFor(ref);
-        ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
-      } finally {
-        _isLoggingOut = false;
       }
+      await ref.read(appSessionServiceProvider).deleteLocalIdentity(selector);
+      final credentials = await _localCredentialsFor(ref);
+      ref.read(sessionProvider.notifier).setLocalCredentials(credentials);
+      return true;
     } catch (error) {
       final message = AppMessage.fromError(error);
       ref.read(uiFeedbackProvider.notifier).showError(message);
       if (message == AppMessage.sessionExpiredRelogin()) {
         await logout();
       }
+      return false;
     } finally {
-      state = state.copyWith(isBusy: false);
+      if (deletingCurrent) {
+        _isLoggingOut = false;
+      }
+      _deletingLocalIdentitySelector = null;
     }
   }
 
@@ -2037,6 +2058,23 @@ List<SessionIdentity> _legacySessionsFromAppSessions(
 ) {
   return identities.map(_legacySessionFromAppSession).toList()
     ..sort((a, b) => a.credentialName.compareTo(b.credentialName));
+}
+
+bool _sameLocalIdentity(SessionIdentity first, SessionIdentity second) {
+  final firstId = first.identityId?.trim();
+  final secondId = second.identityId?.trim();
+  if (firstId != null &&
+      firstId.isNotEmpty &&
+      secondId != null &&
+      secondId.isNotEmpty) {
+    return firstId == secondId;
+  }
+  final firstDid = first.did.trim();
+  final secondDid = second.did.trim();
+  if (firstDid.isNotEmpty && secondDid.isNotEmpty) {
+    return firstDid == secondDid;
+  }
+  return first.credentialName.trim() == second.credentialName.trim();
 }
 
 const _imCoreCapabilities = BridgeCapabilities(

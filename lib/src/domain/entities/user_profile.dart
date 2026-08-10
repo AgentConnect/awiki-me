@@ -1,3 +1,5 @@
+import 'identity_type.dart';
+
 class UserProfile {
   const UserProfile({
     required this.did,
@@ -10,6 +12,8 @@ class UserProfile {
     this.avatarUri,
     this.profileUri,
     this.subjectType,
+    this.agentKind,
+    this.agentCapabilities = const <String>{},
     this.fullHandle,
     this.region,
     this.profileVersion,
@@ -24,9 +28,24 @@ class UserProfile {
   final String? avatarUri;
   final String? profileUri;
   final String? subjectType;
+  final IdentityAgentKind? agentKind;
+  final Set<String> agentCapabilities;
   final String? fullHandle;
   final String? region;
   final String? profileVersion;
+
+  IdentityType get identityType {
+    final resolved = IdentityType.fromWire(
+      subjectType: subjectType,
+      isAgent: agentKind != null,
+      agentKind: agentKind?.name,
+    );
+    // Public human profiles predate subject_type. Agent metadata is explicit,
+    // so an unclassified profile remains a user for backwards-compatible UI.
+    return resolved.subjectKind == IdentitySubjectKind.unknown
+        ? const IdentityType.user()
+        : resolved;
+  }
 
   String get nickName => displayName;
 
@@ -40,6 +59,8 @@ class UserProfile {
     String? avatarUri,
     String? profileUri,
     String? subjectType,
+    IdentityAgentKind? agentKind,
+    Set<String>? agentCapabilities,
     String? fullHandle,
     String? region,
     String? profileVersion,
@@ -54,6 +75,8 @@ class UserProfile {
       avatarUri: avatarUri ?? this.avatarUri,
       profileUri: profileUri ?? this.profileUri,
       subjectType: subjectType ?? this.subjectType,
+      agentKind: agentKind ?? this.agentKind,
+      agentCapabilities: agentCapabilities ?? this.agentCapabilities,
       fullHandle: fullHandle ?? this.fullHandle,
       region: region ?? this.region,
       profileVersion: profileVersion ?? this.profileVersion,

@@ -26,6 +26,7 @@ import 'package:awiki_me/src/presentation/shared/tenant_management_dialog.dart';
 import 'package:awiki_me/src/presentation/shared/widgets/app_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1147,6 +1148,189 @@ void main() {
     expect(gateway.loginCalls, 1);
     expect(gateway.lastLoginCredentialName, 'default');
   });
+
+  testWidgets('登录页身份卡二次确认后按稳定 ID 删除本地凭证', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+    final deleteCompleter = Completer<void>();
+    const session = SessionIdentity(
+      did: 'did:test:alice',
+      identityId: 'identity-alice',
+      credentialName: 'alice-local',
+      displayName: 'Alice',
+      handle: 'alice.awiki.ai',
+      jwtToken: 'token-alice',
+    );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[session]
+      ..deleteLocalCredentialCompleter = deleteCompleter;
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final identityTile = find.byKey(
+      const Key('onboarding-local-credential:alice-local'),
+    );
+    final identitySelectArea = find.byKey(
+      const Key('onboarding-local-credential-select:alice-local'),
+    );
+    final deleteButton = find.byKey(
+      const Key('onboarding-local-credential-delete:alice-local'),
+    );
+    expect(
+      find.byKey(const Key('onboarding-local-credential-switch:alice-local')),
+      findsNothing,
+    );
+    expect(identityTile, findsOneWidget);
+    expect(identitySelectArea, findsOneWidget);
+    expect(deleteButton, findsOneWidget);
+    final identityTileRect = tester.getRect(identityTile);
+    final identitySelectRect = tester.getRect(identitySelectArea);
+    final deleteButtonRect = tester.getRect(deleteButton);
+    expect(identitySelectRect.height, identityTileRect.height - 2);
+    expect(deleteButtonRect.height, identityTileRect.height - 2);
+    expect(identitySelectRect.left, identityTileRect.left + 1);
+    expect(deleteButtonRect.right, identityTileRect.right - 1);
+    expect(deleteButtonRect.left - identitySelectRect.right, 1);
+
+    await tester.ensureVisible(deleteButton);
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('从此设备删除身份？'), findsOneWidget);
+    expect(
+      find.text('确定要从此设备删除 Alice (@alice.awiki.ai) 的本地身份凭证吗？'),
+      findsOneWidget,
+    );
+    expect(gateway.deleteLocalCredentialCalls, 0);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(gateway.deleteLocalCredentialCalls, 0);
+
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从此设备删除'));
+    await tester.pump();
+
+    expect(gateway.deleteLocalCredentialCalls, 1);
+    expect(gateway.lastDeletedLocalCredentialSelector, 'identity-alice');
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const Key('onboarding-local-credential-delete:alice-local'),
+        ),
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsOneWidget,
+    );
+    expect(gateway.loginCalls, 0);
+
+    deleteCompleter.complete();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice'), findsNothing);
+    expect(
+      find.byKey(const Key('onboarding-local-credential-section')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('登录页本地凭证删除失败时保留身份并恢复删除操作', (tester) async {
+    addTearDown(() => _resetTestViewSize(tester));
+    _setTestViewSize(tester, const Size(390, 844));
+    const session = SessionIdentity(
+      did: 'did:test:alice',
+      identityId: 'identity-alice',
+      credentialName: 'alice-local',
+      displayName: 'Alice',
+      handle: 'alice.awiki.ai',
+    );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[session]
+      ..deleteLocalCredentialError = StateError('delete failed');
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+    );
+    await tester.pumpAndSettle();
+
+    final deleteButton = find.byKey(
+      const Key('onboarding-local-credential-delete:alice-local'),
+    );
+    await tester.ensureVisible(deleteButton);
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('从此设备删除'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.deleteLocalCredentialCalls, 1);
+    expect(find.text('Alice'), findsOneWidget);
+    expect(deleteButton, findsOneWidget);
+    expect(
+      find.descendant(
+        of: deleteButton,
+        matching: find.byType(CupertinoActivityIndicator),
+      ),
+      findsNothing,
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(OnboardingPage)),
+    );
+    expect(container.read(onboardingProvider).isBusy, isFalse);
+    expect(container.read(uiFeedbackProvider)?.danger, isTrue);
+  });
+
+  for (final platform in <TargetPlatform>[
+    TargetPlatform.macOS,
+    TargetPlatform.windows,
+  ]) {
+    testWidgets('桌面身份文本支持完整内容 hover 提示 - ${platform.name}', (tester) async {
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        _resetTestViewSize(tester);
+      });
+      debugDefaultTargetPlatformOverride = platform;
+      _setTestViewSize(tester, const Size(1280, 800));
+      const displayName = 'A very long saved identity display name';
+      const handle = 'a-very-long-handle-name.anpclaw.com';
+      final gateway = FakeAwikiGateway()
+        ..localCredentials = const <SessionIdentity>[
+          SessionIdentity(
+            did: 'did:test:tooltip',
+            identityId: 'identity-tooltip',
+            credentialName: 'tooltip-local',
+            displayName: displayName,
+            handle: handle,
+          ),
+        ];
+
+      await tester.pumpWidget(
+        buildLocalizedTestApp(home: const OnboardingPage(), gateway: gateway),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byTooltip(displayName), findsOneWidget);
+      expect(find.byTooltip(handle), findsOneWidget);
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(find.text(displayName)));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(displayName), findsNWidgets(2));
+
+      await mouse.moveTo(tester.getCenter(find.text(handle)));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text(handle), findsNWidgets(2));
+      expect(gateway.loginCalls, 0);
+
+      debugDefaultTargetPlatformOverride = null;
+      _resetTestViewSize(tester);
+    });
+  }
 
   testWidgets('展开宽度下登录页使用品牌与认证双栏布局', (tester) async {
     addTearDown(() => _resetTestViewSize(tester));

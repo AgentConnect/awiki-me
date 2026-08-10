@@ -183,6 +183,20 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         : AgentVisualStatus.fromAgent(runtimeAgent);
     final looksLikeAgent =
         runtimeAgent != null || conversationTargetDidLooksLikeAgent(targetDid);
+    final profileSubjectType = profile?.subjectType?.trim() ?? '';
+    final hasStructuredProfileType =
+        profile?.agentKind != null || profileSubjectType.isNotEmpty;
+    final fallbackIdentityType = looksLikeAgent
+        ? IdentityType.agent(
+            agentKind: runtimeAgent != null
+                ? IdentityAgentKind.runtime
+                : identityAgentKindFromDidHint(targetDid) ??
+                      IdentityAgentKind.unknown,
+          )
+        : const IdentityType.user();
+    final identityType = hasStructuredProfileType
+        ? profile!.identityType
+        : fallbackIdentityType;
     final canFollowProfile = profileDid.startsWith('did:');
     final inboxHeight = (maxDialogHeight * 0.48).clamp(320.0, 440.0).toDouble();
     if (widget.fullPage && responsive.isCompact && looksLikeAgent) {
@@ -203,6 +217,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         relationship: relationship,
         hasPositiveRelationship: hasPositiveRelationship,
         canFollowProfile: canFollowProfile,
+        identityType: identityType,
       );
     }
     if (widget.fullPage && responsive.isCompact) {
@@ -215,6 +230,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
         homepageUrl: homepageUrl,
         isFollowing: isFollowing,
         canFollowProfile: canFollowProfile,
+        identityType: identityType,
       );
     }
     return SingleChildScrollView(
@@ -247,11 +263,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                         onRename: _renameAgent,
                       ),
                 badges: <Widget>[
-                  IdentityProfileBadge(
-                    label: looksLikeAgent
-                        ? context.l10n.identityTypeAgent
-                        : context.l10n.identityTypeUser,
-                  ),
+                  IdentityTypeBadge(type: identityType),
                   if (profile == null && state.isLoading)
                     IdentityProfileBadge(
                       label: context.l10n.chatPeerInfoProfileLoading,
@@ -396,6 +408,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     required String homepageUrl,
     required bool isFollowing,
     required bool canFollowProfile,
+    required IdentityType identityType,
   }) {
     final theme = context.awikiTheme;
     final visibleTags = tags
@@ -475,6 +488,11 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                                     .toList(growable: false),
                               ),
                             ],
+                            const SizedBox(height: 10),
+                            IdentityTypeBadge(
+                              type: identityType,
+                              compact: true,
+                            ),
                           ],
                         ),
                       ),
@@ -585,6 +603,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
     required String relationship,
     required bool hasPositiveRelationship,
     required bool canFollowProfile,
+    required IdentityType identityType,
   }) {
     final theme = context.awikiTheme;
     final relationshipLabel = localizeRelationshipLabel(
@@ -669,10 +688,10 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                _CompactAgentInfoBadge(
+                IdentityTypeBadge(
                   key: const Key('peer-info-compact-agent-type-badge'),
-                  label: context.l10n.identityTypeAgent,
-                  emphasized: true,
+                  type: identityType,
+                  compact: true,
                 ),
                 const SizedBox(width: 8),
                 _CompactAgentInfoBadge(

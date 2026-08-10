@@ -1,14 +1,17 @@
 import 'dart:async';
 
+import 'package:awiki_im_core/awiki_im_core.dart' as core;
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/models/group_collection_page.dart';
 import 'package:awiki_me/src/application/profile_application_service.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_status.dart';
 import 'package:awiki_me/src/domain/entities/agent/agent_summary.dart';
+import 'package:awiki_me/src/domain/entities/agent/skill_group_membership_capability.dart';
 import 'package:awiki_me/src/domain/entities/conversation_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_member_summary.dart';
 import 'package:awiki_me/src/domain/entities/group_identity.dart';
 import 'package:awiki_me/src/domain/entities/group_summary.dart';
+import 'package:awiki_me/src/domain/entities/identity_type.dart';
 import 'package:awiki_me/src/domain/entities/profile_patch.dart';
 import 'package:awiki_me/src/domain/entities/relationship_summary.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
@@ -77,6 +80,29 @@ class _DelayedCreateGroupService extends FakeGroupApplicationService {
   }) {
     started.complete();
     return result.future;
+  }
+}
+
+class _AdmissionDeniedGroupService extends FakeGroupApplicationService {
+  _AdmissionDeniedGroupService(super.gateway);
+
+  @override
+  Future<GroupSummary> addMember({
+    required String groupDid,
+    required String memberRef,
+    String role = 'member',
+  }) {
+    throw const core.AwikiImCoreException(
+      code: 'service_error',
+      message: 'raw backend detail must not be shown',
+      serviceCode: 'group.admission_not_allowed',
+      serviceDataJson:
+          '{"admission_reason":"agent_not_group_invitable",'
+          '"agent_kind":"skill",'
+          '"policy_reason":"skill_group_membership_disabled",'
+          '"required_capability":"group_membership_v1",'
+          '"retryable":false}',
+    );
   }
 }
 
@@ -1232,7 +1258,7 @@ void main() {
     expect(find.text('不应该出现的群聊'), findsNothing);
     expect(find.text('不应该出现的 Daemon'), findsNothing);
     expect(find.text('用户'), findsWidgets);
-    expect(find.text('智能体'), findsOneWidget);
+    expect(find.text('Runtime Agent'), findsOneWidget);
     expect(find.text('已在群中'), findsOneWidget);
     expect(
       tester.getSize(
@@ -1274,6 +1300,224 @@ void main() {
       'agent-test.awiki.ai',
     ]);
     expect(find.text('4 人'), findsOneWidget);
+  });
+
+  testWidgets('Skill Agent 关闭时保留候选展示但不可选择', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:skill-disabled:e1_group';
+    const skillDid = 'did:wba:awiki.ai:agent:skill:test:e1_agent';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..serverInfo = skillOnboardingTestServerInfo(
+        skillGroupMembershipEnabled: false,
+      )
+      ..following = const <RelationshipSummary>[
+        RelationshipSummary(
+          did: skillDid,
+          displayName: 'Skill Assistant',
+          relationship: 'following',
+          handle: 'skill-assistant.awiki.ai',
+        ),
+      ]
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          conversationId: 'group:$groupDid',
+          name: 'Skill policy group',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 8, 10),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+    await tester.pumpAndSettle();
+
+    final candidate = find.byKey(const Key('group-invite-candidate:$skillDid'));
+    expect(candidate, findsOneWidget);
+    expect(
+      find.descendant(of: candidate, matching: find.text('Skill Agent')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: candidate,
+        matching: find.text('Skill Agent 暂不支持加入群聊'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Skill Assistant'));
+    await tester.pumpAndSettle();
+    final confirm = tester.widget<AppPrimaryButton>(
+      find.byKey(const Key('identity-add-group-member-button')),
+    );
+    expect(confirm.onPressed, isNull);
+    expect(gateway.lastAddedGroupId, isNull);
+  });
+
+  testWidgets('Skill Agent 开关和协议能力均满足时可以邀请', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:skill-enabled:e1_group';
+    const skillDid = 'did:wba:awiki.ai:agent:skill:current:e1_agent';
+    const skillHandle = 'skill-current.awiki.ai';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..serverInfo = skillOnboardingTestServerInfo(
+        skillGroupMembershipEnabled: true,
+      )
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        skillHandle: UserProfile(
+          did: skillDid,
+          displayName: 'Current Skill',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: skillHandle,
+          subjectType: 'agent',
+          agentKind: IdentityAgentKind.skill,
+          agentCapabilities: <String>{skillGroupMembershipRequiredCapability},
+        ),
+      }
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          conversationId: 'group:$groupDid',
+          name: 'Skill enabled group',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 8, 10),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      skillHandle,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Skill Agent'), findsOneWidget);
+    await tester.tap(find.text('Current Skill'));
+    await tester.pumpAndSettle();
+    expect(find.text('确认添加 (1)'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastAddedGroupId, groupDid);
+    expect(gateway.lastAddedMemberRef, skillHandle);
+  });
+
+  testWidgets('服务端竞态拒绝 Skill Agent 时显示稳定友好文案', (tester) async {
+    const groupDid = 'did:wba:awiki.ai:group:skill-race:e1_group';
+    const skillDid = 'did:wba:awiki.ai:agent:skill:race:e1_agent';
+    const skillHandle = 'skill-race.awiki.ai';
+    final gateway = FakeAwikiGateway()
+      ..loginResult = session
+      ..serverInfo = skillOnboardingTestServerInfo(
+        skillGroupMembershipEnabled: true,
+      )
+      ..publicProfilesByQuery = const <String, UserProfile>{
+        skillHandle: UserProfile(
+          did: skillDid,
+          displayName: 'Racing Skill',
+          bio: '',
+          tags: <String>[],
+          profileMarkdown: '',
+          fullHandle: skillHandle,
+          subjectType: 'agent',
+          agentKind: IdentityAgentKind.skill,
+          agentCapabilities: <String>{skillGroupMembershipRequiredCapability},
+        ),
+      }
+      ..groups = <GroupSummary>[
+        GroupSummary(
+          groupId: groupDid,
+          conversationId: 'group:$groupDid',
+          name: 'Skill race group',
+          description: '',
+          memberCount: 1,
+          lastMessageAt: DateTime(2026, 8, 10),
+          myRole: 'owner',
+        ),
+      ]
+      ..groupMembersByGroupId = <String, List<GroupMemberSummary>>{
+        groupDid: <GroupMemberSummary>[
+          GroupMemberSummary(
+            userId: session.did,
+            did: session.did,
+            handle: session.handle ?? session.did,
+            role: 'owner',
+          ),
+        ],
+      };
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: GroupDetailPage(initialGroup: gateway.groups.first),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          groupApplicationServiceProvider.overrideWithValue(
+            _AdmissionDeniedGroupService(gateway),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('group-detail-add-member-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('identity-lookup-input')),
+      skillHandle,
+    );
+    await tester.tap(find.byKey(const Key('identity-lookup-search-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Racing Skill'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('identity-add-group-member-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Racing Skill: Skill Agent 暂不支持加入群聊'), findsOneWidget);
+    expect(find.textContaining('raw backend detail'), findsNothing);
   });
 
   testWidgets('添加群成员候选复用会话的 Persona 昵称和头像投影', (tester) async {
@@ -1608,7 +1852,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('添加群成员'), findsOneWidget);
-    expect(find.textContaining('add member failed'), findsOneWidget);
+    expect(find.text('Bob: 添加失败，请稍后重试'), findsOneWidget);
     expect(gateway.lastAddedGroupId, isNull);
   });
 

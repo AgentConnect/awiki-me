@@ -47,6 +47,7 @@ import '../../domain/entities/conversation_summary.dart';
 import '../../domain/entities/group_member_summary.dart';
 import '../../domain/entities/group_summary.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/entities/identity_type.dart';
 import '../../l10n/app_message.dart';
 import '../../l10n/l10n.dart';
 import '../../app/ui_feedback.dart';
@@ -896,7 +897,8 @@ class _ChatViewState extends ConsumerState<ChatView> {
     final currentConversation = _currentConversationForTitle();
     final headerNickname = _headerNickname(currentConversation);
     _requestAgentsIfNeeded(currentConversation);
-    final agents = ref.watch(agentsProvider).agents;
+    final agentsState = ref.watch(agentsProvider);
+    final agents = agentsState.agents;
     final isDeletedAgentConversation =
         currentConversation.isDeletedAgentConversation;
     final runtimeAgent = _runtimeAgentForConversation(
@@ -1129,6 +1131,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                   label: _agentProcessingLabel(
                                     context,
                                     <AgentPendingTurn>[turn],
+                                    agentsState,
                                   ),
                                   avatarSeed: _agentProcessingAvatarSeed(
                                     context,
@@ -1294,6 +1297,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
                                         label: _agentProcessingLabel(
                                           context,
                                           pendingTurns,
+                                          agentsState,
                                         ),
                                         overdue: pendingTurns.any(
                                           (turn) => turn.isOverdue,
@@ -3149,6 +3153,7 @@ class _ChatViewState extends ConsumerState<ChatView> {
   String _agentProcessingLabel(
     BuildContext context,
     List<AgentPendingTurn> turns,
+    AgentsState agentsState,
   ) {
     if (turns.isEmpty) {
       return context.l10n.chatAgentProcessing;
@@ -3174,6 +3179,26 @@ class _ChatViewState extends ConsumerState<ChatView> {
           ? context.l10n.chatAgentExternalServiceWorking
           : context.l10n.chatSubjectExternalServiceWorking(subject);
     }
+    if (turns.every((turn) => !turn.hasAuthoritativeRunStatus)) {
+      final waitingForOnline = _allPendingTargetsHaveOfflineLocalDaemon(
+        turns,
+        agentsState,
+      );
+      if (subject == context.l10n.chatAgentSubject) {
+        if (waitingForOnline) {
+          return context.l10n.chatAgentAwaitingOnline;
+        }
+        return overdue
+            ? context.l10n.chatAgentAwaitingResponse
+            : context.l10n.chatAgentAwaitingReceipt;
+      }
+      if (waitingForOnline) {
+        return context.l10n.chatSubjectAwaitingOnline(subject);
+      }
+      return overdue
+          ? context.l10n.chatSubjectAwaitingResponse(subject)
+          : context.l10n.chatSubjectAwaitingReceipt(subject);
+    }
     if (subject == context.l10n.chatAgentSubject) {
       return overdue
           ? context.l10n.chatAgentStillProcessing
@@ -3182,6 +3207,38 @@ class _ChatViewState extends ConsumerState<ChatView> {
     return overdue
         ? context.l10n.chatSubjectStillProcessing(subject)
         : context.l10n.chatSubjectProcessing(subject);
+  }
+
+  bool _allPendingTargetsHaveOfflineLocalDaemon(
+    List<AgentPendingTurn> turns,
+    AgentsState agentsState,
+  ) {
+    for (final turn in turns) {
+      AgentSummary? runtime;
+      for (final agent in agentsState.agents) {
+        if (agent.isRuntime && agent.agentDid == turn.agentDid) {
+          runtime = agent;
+          break;
+        }
+      }
+      if (runtime == null) {
+        return false;
+      }
+      final daemon = agentsState.daemonForRuntime(runtime);
+      if (daemon == null) {
+        return false;
+      }
+      final status = AgentVisualStatus.fromAgent(
+        daemon,
+        hasStatusQueryError: agentsState.statusQueryErrors.containsKey(
+          daemon.agentDid,
+        ),
+      );
+      if (status.kind != AgentVisualStatusKind.offline) {
+        return false;
+      }
+    }
+    return turns.isNotEmpty;
   }
 
   String _agentProcessingSubject(

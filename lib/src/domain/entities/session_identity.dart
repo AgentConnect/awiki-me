@@ -21,12 +21,17 @@ class SessionIdentity {
     required this.did,
     required this.credentialName,
     required this.displayName,
+    this.identityId,
     this.handle,
     this.jwtToken,
     this.accountBinding,
   });
 
   final String did;
+
+  /// Stable Core identity identifier. Legacy hosts may omit it, in which case
+  /// exact local operations fall back to the current DID before the alias.
+  final String? identityId;
   final String credentialName;
   final String displayName;
   final String? handle;
@@ -41,4 +46,16 @@ class SessionIdentity {
   String? get accountId => accountBinding?.accountId;
 
   String? get protocolDeviceId => accountBinding?.protocolDeviceId;
+
+  String get localIdentitySelector {
+    final stableId = identityId?.trim();
+    if (stableId != null && stableId.isNotEmpty) {
+      return stableId;
+    }
+    final currentDid = did.trim();
+    if (currentDid.isNotEmpty) {
+      return currentDid;
+    }
+    return credentialName.trim();
+  }
 }

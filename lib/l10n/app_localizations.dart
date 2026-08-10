@@ -314,6 +314,30 @@ abstract class AppLocalizations {
   /// **'切换身份'**
   String get onboardingLogin;
 
+  /// No description provided for @localCredentialDeleteAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'从此设备删除'**
+  String get localCredentialDeleteAction;
+
+  /// No description provided for @localCredentialDeleteConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'从此设备删除身份？'**
+  String get localCredentialDeleteConfirmTitle;
+
+  /// No description provided for @localCredentialDeleteConfirmContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定要从此设备删除 {identity} 的本地身份凭证吗？'**
+  String localCredentialDeleteConfirmContent(Object identity);
+
+  /// No description provided for @localCredentialDeleteConfirmHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'此操作会删除本机保存的凭证；不会注销线上身份或影响其他设备。之后如需继续使用，必须重新恢复身份或加入已有账户。'**
+  String get localCredentialDeleteConfirmHint;
+
   /// No description provided for @onboardingRegister.
   ///
   /// In zh, this message translates to:
@@ -2532,6 +2556,36 @@ abstract class AppLocalizations {
   /// **'用户'**
   String get identityTypeUser;
 
+  /// No description provided for @identityTypeRuntimeAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'Runtime Agent'**
+  String get identityTypeRuntimeAgent;
+
+  /// No description provided for @identityTypeSkillAgent.
+  ///
+  /// In zh, this message translates to:
+  /// **'Skill Agent'**
+  String get identityTypeSkillAgent;
+
+  /// No description provided for @identityTypeDaemon.
+  ///
+  /// In zh, this message translates to:
+  /// **'Daemon'**
+  String get identityTypeDaemon;
+
+  /// No description provided for @identityTypeGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'群组'**
+  String get identityTypeGroup;
+
+  /// No description provided for @identityTypeUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'身份'**
+  String get identityTypeUnknown;
+
   /// No description provided for @identityAddGroupMemberTitle.
   ///
   /// In zh, this message translates to:
@@ -2856,6 +2910,12 @@ abstract class AppLocalizations {
   /// **'添加中...'**
   String get groupInviteAdding;
 
+  /// No description provided for @groupInviteAddFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加失败，请稍后重试'**
+  String get groupInviteAddFailed;
+
   /// No description provided for @groupInviteConfirmCount.
   ///
   /// In zh, this message translates to:
@@ -2891,6 +2951,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'该身份已被删除或当前不可邀请。'**
   String get groupInviteIdentityUnavailable;
+
+  /// No description provided for @groupInviteSkillAgentUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'Skill Agent 暂不支持加入群聊'**
+  String get groupInviteSkillAgentUnavailable;
+
+  /// No description provided for @groupInviteSkillAgentCapabilityMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'该 Skill Agent 版本暂不支持加入群聊'**
+  String get groupInviteSkillAgentCapabilityMissing;
+
+  /// No description provided for @groupInviteAgentKindUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'该类型的智能体暂不支持加入群聊'**
+  String get groupInviteAgentKindUnavailable;
 
   /// No description provided for @groupInviteNoMatches.
   ///
@@ -2994,6 +3072,24 @@ abstract class AppLocalizations {
   /// **'当前群聊暂时不能发送消息'**
   String get chatGroupSendDisabled;
 
+  /// No description provided for @chatAgentAwaitingReceipt.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送，等待智能体接收...'**
+  String get chatAgentAwaitingReceipt;
+
+  /// No description provided for @chatAgentAwaitingOnline.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送，等待智能体上线...'**
+  String get chatAgentAwaitingOnline;
+
+  /// No description provided for @chatAgentAwaitingResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送，智能体暂未响应'**
+  String get chatAgentAwaitingResponse;
+
   /// No description provided for @chatAgentProcessing.
   ///
   /// In zh, this message translates to:
@@ -3029,6 +3125,24 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'{subject} 正在处理...'**
   String chatSubjectProcessing(Object subject);
+
+  /// No description provided for @chatSubjectAwaitingReceipt.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送，等待 {subject} 接收...'**
+  String chatSubjectAwaitingReceipt(Object subject);
+
+  /// No description provided for @chatSubjectAwaitingOnline.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送，等待 {subject} 上线...'**
+  String chatSubjectAwaitingOnline(Object subject);
+
+  /// No description provided for @chatSubjectAwaitingResponse.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送，{subject} 暂未响应'**
+  String chatSubjectAwaitingResponse(Object subject);
 
   /// No description provided for @chatSubjectExternalServiceWorking.
   ///
@@ -3849,25 +3963,25 @@ abstract class AppLocalizations {
   /// No description provided for @agentCleanupHostTitle.
   ///
   /// In zh, this message translates to:
-  /// **'清理宿主机'**
+  /// **'仅清理本机 Daemon'**
   String get agentCleanupHostTitle;
 
   /// No description provided for @agentCleanupHostToggle.
   ///
   /// In zh, this message translates to:
-  /// **'需要清理宿主机上的旧 Daemon？'**
+  /// **'需要清理当前电脑上的旧 Daemon 残留？'**
   String get agentCleanupHostToggle;
 
   /// No description provided for @agentCleanupHostWarning.
   ///
   /// In zh, this message translates to:
-  /// **'这会停止宿主机上的 AWiki Daemon，并永久删除该宿主机上的所有 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的 Daemon 二进制。此操作不可恢复。'**
+  /// **'此命令只会停止并永久删除当前电脑上的 Daemon 数据，包括身份、数据库、日志、归档、Runtime Profile 和已下载的二进制；不会从 AWiki 账号中移除 Daemon 和它的智能体。执行后请回到 APP，在智能体页面将对应的离线 Daemon 从账号移除。此操作不可恢复。'**
   String get agentCleanupHostWarning;
 
   /// No description provided for @agentCopyCleanupCommand.
   ///
   /// In zh, this message translates to:
-  /// **'复制清理命令'**
+  /// **'复制本机清理命令'**
   String get agentCopyCleanupCommand;
 
   /// No description provided for @agentCreateTitle.

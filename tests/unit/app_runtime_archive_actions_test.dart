@@ -162,6 +162,48 @@ void main() {
       expect(isolatedContainer.read(appRuntimeProvider).isBusy, isFalse);
     });
 
+    test('删除非当前本地身份使用稳定 ID 且保留当前会话', () async {
+      const current = SessionIdentity(
+        did: 'did:test:alice',
+        identityId: 'identity-alice',
+        credentialName: 'alice-local',
+        displayName: 'Alice',
+        handle: 'alice',
+        jwtToken: 'token-alice',
+      );
+      const other = SessionIdentity(
+        did: 'did:test:bob',
+        identityId: 'identity-bob',
+        credentialName: 'bob-local',
+        displayName: 'Bob',
+        handle: 'bob',
+        jwtToken: 'token-bob',
+      );
+      gateway.localCredentials = const <SessionIdentity>[current, other];
+      container.read(sessionProvider.notifier).setSession(current);
+      container.read(sessionProvider.notifier).setLocalCredentials([
+        current,
+        other,
+      ]);
+
+      final deleted = await container
+          .read(appRuntimeProvider.notifier)
+          .deleteLocalCredential(other);
+
+      expect(deleted, isTrue);
+      expect(gateway.lastDeletedLocalCredentialSelector, 'identity-bob');
+      expect(container.read(sessionProvider).session?.did, current.did);
+      expect(
+        container
+            .read(sessionProvider)
+            .localCredentials
+            .map((identity) => identity.identityId),
+        <String?>['identity-alice'],
+      );
+      expect(gateway.logoutCalls, 0);
+      expect(container.read(uiFeedbackProvider), isNull);
+    });
+
     test('重新识别本地凭证会刷新列表并写入反馈', () async {
       gateway.localCredentials = const <SessionIdentity>[
         SessionIdentity(
