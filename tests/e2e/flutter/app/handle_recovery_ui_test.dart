@@ -375,6 +375,11 @@ void main() {
           'Recovery did not submit the exact verified context once without a local selector.',
         );
       }
+      final recoveryOtpRetryAt = recordingRecoveryCore.requestedRetryAt;
+      if (recoveryOtpRetryAt == null) {
+        fail('Recovery OTP omitted its structured retry boundary.');
+      }
+      latestOtpRetryAt = recoveryOtpRetryAt;
       final recoveryOtp = await _resolveOtp(
         account: account,
         purpose: _recoveryPurpose,
@@ -1079,8 +1084,13 @@ void _failOnRecoveryError(
   }
 }
 
-void _failOnDangerousUiFeedback(ProviderContainer container, String action) {
+void _failOnDangerousUiFeedback(
+  ProviderContainer container,
+  String action, {
+  int? existingEventId,
+}) {
   final feedback = container.read(uiFeedbackProvider);
+  if (feedback?.id == existingEventId) return;
   if (feedback?.danger ?? false) {
     fail(
       '$action failed with safe UI message '
@@ -1098,6 +1108,7 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
   String? requestedHandle;
   String? requestedPhone;
   String? requestedLocalIdentityId;
+  DateTime? requestedRetryAt;
 
   Future<T> _record<T>(Future<T> Function() action) async {
     try {
@@ -1141,18 +1152,20 @@ class _RecordingHandleRecoveryCorePort implements HandleRecoveryCorePort {
     required String handle,
     required String phone,
     String? localIdentityId,
-  }) {
+  }) async {
     requestOtpCalls += 1;
     requestedHandle = handle;
     requestedPhone = phone;
     requestedLocalIdentityId = localIdentityId;
-    return _record(
+    final result = await _record(
       () => _delegate.requestOtp(
         handle: handle,
         phone: phone,
         localIdentityId: localIdentityId,
       ),
     );
+    requestedRetryAt = result.retryAt;
+    return result;
   }
 
   @override
@@ -1499,6 +1512,7 @@ _startAppPeerRegistrationJoin({
     timeout: const Duration(seconds: 90),
     failure: 'Registration re-Join OTP action did not become available.',
   );
+  final existingFeedbackId = container.read(uiFeedbackProvider)?.id;
   await _tapOne(
     tester,
     find.descendant(
@@ -1510,7 +1524,11 @@ _startAppPeerRegistrationJoin({
   await _pumpUntil(
     tester,
     () {
-      _failOnDangerousUiFeedback(container, 'Registration re-Join OTP request');
+      _failOnDangerousUiFeedback(
+        container,
+        'Registration re-Join OTP request',
+        existingEventId: existingFeedbackId,
+      );
       final state = container.read(onboardingProvider);
       return !state.isBusy &&
           state.otpTargetFullHandle == fullHandle &&
