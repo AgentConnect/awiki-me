@@ -588,6 +588,7 @@ void main() {
             'Unsupported E2E case "unknown". '
                 'Use smoke, multi-device, multi-device-remote-join, '
                 'multi-device-remote-recovery, '
+                'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
                 'multi-device-app-pair, multi-device-app-pair-functional, step4-revoke-mls, full, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '
