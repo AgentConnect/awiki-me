@@ -105,6 +105,10 @@ onboarding 注册流程不在发送 OTP 或提交注册前用未认证的 public
 - `registered` 携带已持久化身份，App 才激活会话并更新资料；
 - `joinRequired` 不携带身份或秘密材料，只携带 App 内 opaque continuation ID；App 显示
   Join/Recovery 选择，只有用户选择 Join 后才创建 Join 并打开进度页；
+- 用户完成本地凭证删除后，Core 可以保留消息 binding；当唯一 binding 与 completed
+  identity-retirement marker 的 identity ID、DID、`protocol_device_id` 精确闭合且 registry
+  已无 live 凭证时，再提交同 Handle 仍返回 ordinary `joinRequired` 并显示上述选择，而不是
+  `handle_recovery.transition_missing`。App 不读取 SQLite/marker，也不自行放宽该判定；
 - 任何未知状态都失败关闭，App 不猜测、不回退到旧 Recovery，也不在本地保存中间密钥。
 
 新注册的 P5 PreKey Bundle 生成和发布仍由 Core 注册事务在本地提交后继续负责。AWiki Me

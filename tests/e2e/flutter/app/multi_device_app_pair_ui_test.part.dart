@@ -538,6 +538,8 @@ void appPairJoinerMain() {
         await _deleteJoinedCredentialAndOpenFreshJoin(
           tester: tester,
           bootstrap: bootstrap,
+          account: account,
+          handle: handle,
           completedJoinSessionId: pending.joinSessionId,
         );
         await E2eCaseAttestationWriter.markPassed(
@@ -545,6 +547,7 @@ void appPairJoinerMain() {
           phases: const <String>[
             'joined_device_credential_deleted',
             'completed_join_retired_from_local_core',
+            'same_handle_join_or_recovery_choice_visible',
             'fresh_join_form_visible_without_activation_error',
           ],
         );
@@ -557,6 +560,8 @@ void appPairJoinerMain() {
 Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
   required WidgetTester tester,
   required AppBootstrap bootstrap,
+  required _DedicatedAccount account,
+  required String handle,
   required String completedJoinSessionId,
 }) async {
   await _tapOne(
@@ -608,6 +613,12 @@ Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
     fail('The completed New Device Join survived local identity retirement.');
   }
 
+  await _requireRetiredIdentityOnboardingChoice(
+    tester: tester,
+    account: account,
+    handle: handle,
+  );
+
   await _openNewDeviceJoin(tester);
   final joinL10n = tester.element(find.byType(DeviceJoinPage)).l10n;
   final container = ProviderScope.containerOf(
@@ -650,6 +661,73 @@ Future<void> _deleteJoinedCredentialAndOpenFreshJoin({
       find.text(joinL10n.deviceJoinActivationRetry).evaluate().isNotEmpty) {
     fail('The fresh Join page retained a terminal activation failure.');
   }
+}
+
+Future<void> _requireRetiredIdentityOnboardingChoice({
+  required WidgetTester tester,
+  required _DedicatedAccount account,
+  required String handle,
+}) async {
+  final phoneInput = find.bySemanticsIdentifier('e2e-phone-input');
+  final handleInput = find.bySemanticsIdentifier('e2e-handle-input');
+  final sendOtp = find.bySemanticsIdentifier('e2e-send-otp-button');
+  await _pumpUntil(
+    tester,
+    () =>
+        phoneInput.evaluate().length == 1 &&
+        handleInput.evaluate().length == 1 &&
+        sendOtp.hitTestable().evaluate().length == 1,
+    timeout: const Duration(minutes: 2),
+    failure:
+        'The retired identity did not expose a ready onboarding registration form.',
+  );
+  await _enterText(tester, 'e2e-phone-input', account.phone);
+  await _enterText(tester, 'e2e-handle-input', handle);
+  await _tapOne(
+    tester,
+    sendOtp,
+    failure: 'The retired identity registration OTP action was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () => find.bySemanticsIdentifier('e2e-otp-sent').evaluate().length == 1,
+    timeout: const Duration(minutes: 2),
+    failure: 'The retired identity registration OTP was not accepted.',
+  );
+  await _enterText(tester, 'e2e-otp-input', account.fixedOtp);
+  await _tapOne(
+    tester,
+    find.bySemanticsIdentifier('e2e-complete-login-button'),
+    failure: 'The retired identity registration action was unavailable.',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        find
+                .byKey(const Key('existing-handle-join-action'))
+                .evaluate()
+                .length ==
+            1 &&
+        find
+                .byKey(const Key('existing-handle-recovery-action'))
+                .evaluate()
+                .length ==
+            1,
+    timeout: const Duration(seconds: 60),
+    failure:
+        'The retired identity did not route the same Handle to Join or Recovery.',
+  );
+  await _tapOne(
+    tester,
+    find.byKey(const Key('existing-handle-cancel-action')),
+    failure: 'The retired identity Join-or-Recovery dialog could not close.',
+  );
+  await _pumpUntil(
+    tester,
+    () =>
+        find.byKey(const Key('existing-handle-join-action')).evaluate().isEmpty,
+    failure: 'The retired identity Join-or-Recovery dialog remained open.',
+  );
 }
 
 void _requireAppPairModeMatchesInvocation(_AppPairRunConfig config) {
