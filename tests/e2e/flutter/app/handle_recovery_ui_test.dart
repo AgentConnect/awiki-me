@@ -1,8 +1,8 @@
 // [INPUT]: Audited awiki.info endpoints, one protected fixed test SMS account,
 //          server-issued SMS retry boundaries, a fresh production
 //          AppBootstrap/native Core root, and an E2E-only user-presence decision.
-// [OUTPUT]: Secret-free proof that unified onboarding can recover a Handle on
-//           a machine with no local identity, replace its DID, and install it.
+// [OUTPUT]: Secret-free proof that Recovery replaces the DID, opens Messages,
+//           and sends a fenced old App back to acknowledged onboarding.
 // [POS]: Remote product UI acceptance; setup creates only the remote fixture,
 //        while the tested registration choice and Recovery are UI-driven.
 
@@ -34,7 +34,9 @@ import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/app_runtime_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/devices/device_join_page.dart';
 import 'package:awiki_me/src/presentation/devices/devices_provider.dart';
 import 'package:awiki_me/src/presentation/shared/sms_otp_cooldown_provider.dart';
@@ -499,30 +501,32 @@ void main() {
           .identityDeviceRegistry(reset.currentDid);
       _requireReadyCurrentAdmin(finalRegistry, expectedDid: reset.currentDid);
 
+      await _pumpUntil(
+        tester,
+        () =>
+            container.read(sessionProvider).session?.did == reset.currentDid &&
+            container.read(appRuntimeProvider).activatedDid ==
+                reset.currentDid &&
+            container.read(shellDestinationProvider) ==
+                ShellDestination.messages &&
+            find.byType(HandleRecoveryPage).evaluate().isEmpty &&
+            find.byType(ConversationWorkspacePage).evaluate().length == 1,
+        timeout: const Duration(seconds: 45),
+        failure:
+            'The recovered identity did not open the message workspace automatically.',
+        safeDiagnostic: () {
+          final session = container.read(sessionProvider).session;
+          final runtime = container.read(appRuntimeProvider);
+          return 'session_present=${session != null}, '
+              'session_is_recovered=${session?.did == reset.currentDid}, '
+              'runtime_is_recovered=${runtime.activatedDid == reset.currentDid}, '
+              'runtime_busy=${runtime.isBusy}, '
+              'recovery_page_visible=${find.byType(HandleRecoveryPage).evaluate().isNotEmpty}, '
+              'message_workspace_visible=${find.byType(ConversationWorkspacePage).evaluate().isNotEmpty}';
+        },
+      );
+
       if (rejoinRequired) {
-        await _pumpUntil(
-          tester,
-          () =>
-              container.read(sessionProvider).session?.did ==
-                  reset.currentDid &&
-              container.read(appRuntimeProvider).activatedDid ==
-                  reset.currentDid,
-          timeout: const Duration(seconds: 45),
-          failure:
-              'The App did not activate the recovered identity before re-Join.',
-          safeDiagnostic: () {
-            final feedback = container.read(uiFeedbackProvider);
-            final session = container.read(sessionProvider).session;
-            final runtime = container.read(appRuntimeProvider);
-            return 'feedback=${feedback?.message.id ?? 'none'}, '
-                'failure=${_safeRecoveryActivationFailure(feedback?.message.detail)}, '
-                'barrier=${appBootstrapEpochBarrierMetrics.snapshot()}, '
-                'session=${session == null ? 'none' : 'present'}, '
-                'session_is_recovered=${session?.did == reset.currentDid}, '
-                'runtime_is_recovered=${runtime.activatedDid == reset.currentDid}, '
-                'runtime_busy=${runtime.isBusy}';
-          },
-        );
         if (peerBootstrap == null || oldPeerDeviceId == null) {
           fail('The isolated old App peer fixture was unavailable.');
         }
@@ -668,6 +672,7 @@ void main() {
             'operation_bound_otp_prepared_through_ui',
             'irreversible_risks_confirmed_through_ui',
             'recovery_completed_through_ui_resume',
+            'recovery_opened_message_workspace',
             'new_local_owner_handle_and_replacement_did_verified',
             'old_did_absent_from_fresh_local_projection',
           ],
@@ -680,6 +685,7 @@ void main() {
           phases: const <String>[
             'old_app_peer_joined_before_recovery',
             'old_principal_remote_action_fenced',
+            'old_app_returned_to_login_after_auth_fence',
             'fresh_ordinary_rejoin_authorized_to_recovery_did',
             'two_app_registry_session_converged',
             'app_to_external_direct_exact_one',
@@ -694,6 +700,7 @@ void main() {
           phases: const <String>[
             'old_app_peer_joined_before_recovery',
             'old_principal_remote_action_fenced',
+            'old_app_returned_to_login_after_auth_fence',
             'registration_returned_opaque_recovery_join_continuation',
             'registration_continuation_rejoined_recovery_did',
             'two_app_registry_session_converged',
@@ -1260,24 +1267,6 @@ String _safeDiagnosticToken(String? value) {
       : 'none';
 }
 
-String _safeRecoveryActivationFailure(String? detail) {
-  final value = detail ?? '';
-  for (final code in AppBootstrapEpochBarrierFailureCode.values) {
-    if (value.contains('AppBootstrapEpochBarrierFailure(${code.name})')) {
-      return 'epoch_barrier_${code.name}';
-    }
-  }
-  const knownCodes = <String>{
-    'active_sync_account_binding_identity_mismatch',
-    'local_identity_not_found',
-    'session_transition_superseded',
-  };
-  for (final code in knownCodes) {
-    if (value.contains(code)) return code;
-  }
-  return value.isEmpty ? 'none' : 'unclassified';
-}
-
 List<String> _receiptMismatchFields(
   HandleRecoveryRegistryEpochReset receipt, {
   required AppSession identity,
@@ -1452,32 +1441,10 @@ _startAppPeerRegistrationJoin({
     ),
   );
   final peerRoot = find.byKey(_recoveryPeerAppKey);
-  final peerShell = find.descendant(
-    of: peerRoot,
-    matching: find.byType(AppShell),
-  );
-  await _pumpUntil(
+  final container = await _confirmFencedPeerReturnedToOnboarding(
     tester,
-    () => peerShell.evaluate().length == 1,
-    timeout: const Duration(seconds: 45),
-    failure: 'The fenced peer App did not restore before registration re-Join.',
+    peerRoot: peerRoot,
   );
-  unawaited(
-    Navigator.of(tester.element(peerShell)).push<void>(
-      CupertinoPageRoute<void>(builder: (_) => const OnboardingPage()),
-    ),
-  );
-  final onboardingPage = find.descendant(
-    of: peerRoot,
-    matching: find.byType(OnboardingPage),
-  );
-  await _pumpUntil(
-    tester,
-    () => onboardingPage.evaluate().length == 1,
-    timeout: const Duration(seconds: 45),
-    failure: 'The fenced peer App did not open registration onboarding.',
-  );
-  final container = ProviderScope.containerOf(tester.element(onboardingPage));
   await _pumpUntil(
     tester,
     () => container.read(onboardingProvider).supportsPhoneOtpRegistration,
@@ -1771,24 +1738,8 @@ _startAppPeerJoin({
   );
   final peerRoot = find.byKey(_recoveryPeerAppKey);
   if (recoveryAware) {
-    await _pumpUntil(
-      tester,
-      () =>
-          find
-              .descendant(of: peerRoot, matching: find.byType(AppShell))
-              .evaluate()
-              .length ==
-          1,
-      timeout: const Duration(seconds: 45),
-      failure: 'The old peer App did not restore its local session.',
-    );
-    unawaited(
-      openDeviceJoinPage(
-        tester.element(
-          find.descendant(of: peerRoot, matching: find.byType(AppShell)),
-        ),
-      ),
-    );
+    await _confirmFencedPeerReturnedToOnboarding(tester, peerRoot: peerRoot);
+    await _openAppPeerJoinFromOnboarding(tester, peerRoot: peerRoot);
   } else {
     await _openAppPeerJoinFromOnboarding(tester, peerRoot: peerRoot);
   }
@@ -2038,6 +1989,46 @@ Future<void> _openAppPeerJoinFromOnboarding(
     failure: 'The isolated peer App onboarding surface was unavailable.',
   );
   unawaited(openDeviceJoinPage(tester.element(onboarding)));
+}
+
+Future<ProviderContainer> _confirmFencedPeerReturnedToOnboarding(
+  WidgetTester tester, {
+  required Finder peerRoot,
+}) async {
+  final onboarding = find.descendant(
+    of: peerRoot,
+    matching: find.byType(OnboardingPage),
+  );
+  final confirm = find.descendant(
+    of: peerRoot,
+    matching: find.byKey(const Key('auth-revoked-dialog-confirm')),
+  );
+  await _pumpUntil(
+    tester,
+    () {
+      if (onboarding.evaluate().length != 1 || confirm.evaluate().length != 1) {
+        return false;
+      }
+      final container = ProviderScope.containerOf(tester.element(onboarding));
+      return container.read(sessionProvider).session == null &&
+          container.read(appRuntimeProvider).authRevoked;
+    },
+    timeout: const Duration(seconds: 45),
+    failure:
+        'The fenced peer App did not return to onboarding with an auth notice.',
+  );
+  final container = ProviderScope.containerOf(tester.element(onboarding));
+  await _tapOne(
+    tester,
+    confirm,
+    failure: 'The fenced peer App auth notice could not be confirmed.',
+  );
+  await _pumpUntil(
+    tester,
+    () => confirm.evaluate().isEmpty,
+    failure: 'The fenced peer App auth notice did not close.',
+  );
+  return container;
 }
 
 Future<void> _enterJoinText(

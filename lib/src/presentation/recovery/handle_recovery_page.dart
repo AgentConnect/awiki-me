@@ -1,5 +1,5 @@
 // [INPUT]: Verified onboarding Handle/phone, a dedicated Recovery OTP, and UI intent.
-// [OUTPUT]: Risk-gated, coarse Handle Recovery presentation.
+// [OUTPUT]: Risk-gated Recovery presentation that opens Messages after activation.
 // [POS]: App-only V4.0 surface; Core owns credentials, keys, proof, and state transitions.
 
 import 'package:flutter/cupertino.dart';
@@ -10,6 +10,7 @@ import '../../domain/entities/handle_recovery.dart';
 import '../../l10n/l10n.dart';
 import '../../app/e2e_semantics.dart';
 import '../app_shell/providers/app_runtime_provider.dart';
+import '../app_shell/providers/navigation_provider.dart';
 import '../shared/awiki_me_design.dart';
 import '../shared/responsive_layout.dart';
 import '../shared/sms_otp_cooldown_provider.dart';
@@ -294,6 +295,11 @@ class _HandleRecoveryPageState extends ConsumerState<HandleRecoveryPage> {
     await ref
         .read(appRuntimeProvider.notifier)
         .loginWithLocalCredential(progress.ownerIdentityId);
+    if (!mounted) return;
+    ref
+        .read(shellDestinationProvider.notifier)
+        .select(ShellDestination.messages);
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 }
 

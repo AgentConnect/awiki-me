@@ -1,3 +1,7 @@
+// [INPUT]: Session, lifecycle, realtime, reliable-sync, push, and projection providers.
+// [OUTPUT]: One fenced authenticated runtime plus navigation-ready App state.
+// [POS]: App-wide orchestration boundary; Core remains the message and identity truth.
+
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -639,9 +643,6 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
       activatedDid: null,
       authRevoked: true,
     );
-    ref
-        .read(uiFeedbackProvider.notifier)
-        .showError(AppMessage.sessionExpiredRelogin());
     try {
       await ref.read(realtimeApplicationServiceProvider).stop();
     } catch (_) {
@@ -915,6 +916,16 @@ class AppRuntimeController extends StateNotifier<AppRuntimeState> {
   ) {
     final status = next.valueOrNull;
     final previousStatus = previous?.valueOrNull;
+    if (status == RealtimeConnectionStatus.reconnecting ||
+        status == RealtimeConnectionStatus.failed ||
+        status == RealtimeConnectionStatus.disconnected) {
+      if (!_isLoggingOut && !_syncAuthRevoked) {
+        _scheduleReliableSync(
+          'realtime_connection_interrupted',
+          immediate: true,
+        );
+      }
+    }
     if (status == RealtimeConnectionStatus.failed ||
         status == RealtimeConnectionStatus.disconnected) {
       if (_isLoggingOut || _syncAuthRevoked) {

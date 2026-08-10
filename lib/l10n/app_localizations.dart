@@ -2274,6 +2274,18 @@ abstract class AppLocalizations {
   /// **'登录状态已失效或此设备已被取消授权，请重新登录。'**
   String get messageSyncStatusAuthRevoked;
 
+  /// No description provided for @authRevokedDialogTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'账号登录状态已失效'**
+  String get authRevokedDialogTitle;
+
+  /// No description provided for @authRevokedDialogMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'此账号可能已在其他设备完成重置，请重新登录。'**
+  String get authRevokedDialogMessage;
+
   /// No description provided for @messageSyncRetryAction.
   ///
   /// In zh, this message translates to:

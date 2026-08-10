@@ -1144,6 +1144,35 @@ void main() {
       },
     );
 
+    test(
+      'realtime interruption immediately probes and fences a revoked session',
+      () async {
+        await activateBound();
+        await pumpEventQueue();
+        messageSyncService.syncReasons.clear();
+        messageSyncService.deltaResult = const MessageSyncOutcome(
+          status: MessageSyncStatus.authRevoked,
+          eventsApplied: 0,
+          pagesFetched: 1,
+          errorCode: 'SYNC_AUTH_GENERATION_MISMATCH',
+        );
+
+        realtimeGateway.setStatus(RealtimeConnectionStatus.reconnecting);
+        await _pumpUntil(
+          () => container.read(sessionProvider).session == null,
+          reason: 'realtime interruption did not fence the revoked session',
+        );
+
+        expect(
+          messageSyncService.syncReasons,
+          contains('realtime_connection_interrupted'),
+        );
+        expect(container.read(appRuntimeProvider).authRevoked, isTrue);
+        expect(gateway.logoutCalls, 1);
+        expect(realtimeGateway.isConnected, isFalse);
+      },
+    );
+
     test('系统通知变化独立刷新可信 Join 收件箱，不依赖消息同步成功', () async {
       await activate();
       await pumpEventQueue();
@@ -3864,7 +3893,11 @@ void main() {
       await pumpEventQueue();
 
       expect(gateway.refreshSessionCalls, 1);
-      expect(gateway.listConversationsCalls, 1);
+      expect(gateway.listConversationsCalls, 2);
+      expect(
+        messageSyncService.syncReasons,
+        contains('realtime_connection_interrupted'),
+      );
       expect(
         realtimeGateway.connectionStatus,
         RealtimeConnectionStatus.connected,

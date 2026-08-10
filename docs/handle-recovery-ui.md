@@ -28,7 +28,12 @@ capability 同时开启。
 - activate 需要 user presence。正式 App 使用平台 LocalAuthentication；自动化 E2E
   只能覆盖测试专用 `UserPresencePort`，不能声称验证了真实系统认证。
 - Core 是唯一恢复状态机。App 只展示粗粒度 phase，并在 Core 标记可恢复时提供精确
-  resume；完成时持久化 Core 授权的 Registry epoch reset，并清理本地 locator。
+  resume；完成时持久化 Core 授权的 Registry epoch reset、激活恢复身份并直接收束到消息
+  主界面，不把用户留在 Recovery 页面。
+- Recovery 不新增身份通知。其他 App 在 realtime 连接中断时立即用 Reliable Sync 复核现有
+  授权；Core 返回终止性 `authRevoked` 后，App 先隔离旧会话和投影、回到统一登录页，再展示
+  一次“账号登录状态已失效”的确认提示。该提示使用中性文案，因为同一终止状态也可能来自
+  单设备撤销或会话失效。
 - 当前 V1 不使用历史的 `awiki.device.recovery.begin.v1` /
   `awiki.device.recovery.finalize.v1`、旧管理设备通知或冷静期取消流程。
 
@@ -43,11 +48,13 @@ fixture 注册与 UI 验证复用同一测试手机号时，用例必须先遵�
 进入 Recovery 后还会断言已验证 Handle/手机号仅以只读上下文展示、页面只保留一个 Recovery
 OTP 输入框，并且 Core 恰好收到一次同一 Handle/手机号且不带本地 identity selector。
 最终 oracle 要求：Handle 保留、新的本地 owner 被安装、DID 被替换、Registry 只有一个
-ready current admin，并且旧 DID 不出现在 fresh root 的 identity projection。该专项支持
+ready current admin，恢复页自动退出到消息主界面，并且旧 DID 不出现在 fresh root 的
+identity projection。该专项支持
 Linux Flutter desktop runner，也可在 macOS runner 上执行。
 
 同一 suite 的 `HANDLE-RECOVERY-V1-E2E-003` 在 Recovery 前用第二套独立 App root 建立旧 member。
-Recovery 完成后先要求该旧 principal 的远端消息操作被拒绝，再使用 fresh ordinary Join
+Recovery 完成后先要求该旧 principal 的远端消息操作被拒绝，并要求旧 App 自动清除会话、
+显示一次失效确认并回到统一登录页，再使用 fresh ordinary Join
 OTP/Grant 和 SAS 将同一旧 App 加入新 DID。最终两套 App 的 Registry 与 session 必须收敛，
 并与第二个 App 中独立注册的外部 identity 双向各完成一条 Direct exact-one；恢复 App 发出的
 消息还必须在 rejoined sibling 上形成 exact own-sync。该业务 case 在 Linux/macOS 使用相同

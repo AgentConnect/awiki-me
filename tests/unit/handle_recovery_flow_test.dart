@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/application/app_bootstrap_epoch_barrier.dart';
 import 'package:awiki_me/src/application/handle_recovery_service.dart';
@@ -8,6 +10,10 @@ import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
+import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/navigation_provider.dart';
+import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.dart';
+import 'package:awiki_me/src/presentation/conversation_list/conversation_workspace_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_page.dart';
 import 'package:awiki_me/src/presentation/recovery/handle_recovery_provider.dart';
 import 'package:flutter/cupertino.dart';
@@ -493,6 +499,100 @@ void main() {
     );
   });
 
+  testWidgets('completed Recovery opens the authenticated message workspace', (
+    tester,
+  ) async {
+    const recoveredDid = 'did:wba:awiki.info:users:alice-new';
+    final core = _FakeHandleRecoveryCore(
+      activateResult: _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.applied,
+        commitAttempted: true,
+      ),
+    );
+    final gateway = FakeAwikiGateway()
+      ..localCredentials = const <SessionIdentity>[
+        SessionIdentity(
+          did: recoveredDid,
+          localIdentityId: 'identity-alice',
+          credentialName: 'identity-alice',
+          displayName: 'Alice',
+          handle: 'alice.awiki.info',
+        ),
+      ]
+      ..loginResult = const SessionIdentity(
+        did: recoveredDid,
+        localIdentityId: 'identity-alice',
+        credentialName: 'identity-alice',
+        displayName: 'Alice',
+        handle: 'alice.awiki.info',
+      );
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          handleRecoveryCorePortProvider.overrideWithValue(core),
+          userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AppShell)),
+    );
+    container
+        .read(shellDestinationProvider.notifier)
+        .select(ShellDestination.settings);
+    unawaited(
+      Navigator.of(tester.element(find.byType(AppShell))).push<void>(
+        CupertinoPageRoute<void>(
+          builder: (_) => const HandleRecoveryPage(
+            initialHandle: 'alice.awiki.info',
+            initialPhone: '+8613800138000',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('handle-recovery-otp')),
+        matching: find.byType(CupertinoTextField),
+      ),
+      '123456',
+    );
+    await tester.tap(find.byKey(const Key('handle-recovery-verify')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+    );
+    await tester.drag(
+      find.descendant(
+        of: find.byType(HandleRecoveryPage),
+        matching: find.byType(ListView),
+      ),
+      const Offset(0, -180),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const Key('handle-recovery-risk-confirmation')),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('handle-recovery-activate')),
+    );
+    await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HandleRecoveryPage), findsNothing);
+    expect(find.byType(ConversationWorkspacePage), findsOneWidget);
+    expect(container.read(shellDestinationProvider), ShellDestination.messages);
+    expect(container.read(sessionProvider).session?.did, recoveredDid);
+    expect(gateway.loginCalls, 1);
+  });
+
   group('AppBootstrapEpochBarrier', () {
     test('records bounded app_epoch_barrier_total results', () async {
       final observed = <String>[];
@@ -817,6 +917,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   _FakeHandleRecoveryCore({
     HandleRecoveryProgress? operation,
     this.otpResponseOperation,
+    this.activateResult,
     this.receipt,
     this.statusError,
     this.reconcileError,
@@ -824,6 +925,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
 
   HandleRecoveryProgress operation;
   final HandleRecoveryProgress? otpResponseOperation;
+  final HandleRecoveryProgress? activateResult;
   final HandleRecoveryRegistryEpochReset? receipt;
   final Object? statusError;
   final Object? reconcileError;
@@ -895,6 +997,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     required bool userPresenceConfirmed,
   }) async {
     activateCalls += 1;
+    operation = activateResult ?? operation;
     return operation;
   }
 

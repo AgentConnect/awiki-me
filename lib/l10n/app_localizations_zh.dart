@@ -1150,6 +1150,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get messageSyncStatusAuthRevoked => '登录状态已失效或此设备已被取消授权，请重新登录。';
 
   @override
+  String get authRevokedDialogTitle => '账号登录状态已失效';
+
+  @override
+  String get authRevokedDialogMessage => '此账号可能已在其他设备完成重置，请重新登录。';
+
+  @override
   String get messageSyncRetryAction => '重试';
 
   @override

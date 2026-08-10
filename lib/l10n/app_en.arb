@@ -471,6 +471,8 @@
   "messageSyncStatusRetryableFailure": "New messages cannot be synced right now. Check your network and retry.",
   "messageSyncStatusProjectionRefreshFailed": "Messages were synced, but the list could not refresh. Retry to reload it.",
   "messageSyncStatusAuthRevoked": "Your sign-in expired or this device is no longer authorized. Sign in again.",
+  "authRevokedDialogTitle": "Account sign-in expired",
+  "authRevokedDialogMessage": "This account may have been reset on another device. Sign in again.",
   "messageSyncRetryAction": "Retry",
   "messageSyncReloadAction": "Reload",
   "messageSyncReauthenticateAction": "Sign in again",

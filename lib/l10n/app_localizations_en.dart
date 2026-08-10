@@ -1214,6 +1214,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your sign-in expired or this device is no longer authorized. Sign in again.';
 
   @override
+  String get authRevokedDialogTitle => 'Account sign-in expired';
+
+  @override
+  String get authRevokedDialogMessage =>
+      'This account may have been reset on another device. Sign in again.';
+
+  @override
   String get messageSyncRetryAction => 'Retry';
 
   @override

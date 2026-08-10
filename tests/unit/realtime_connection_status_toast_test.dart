@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:awiki_me/src/domain/entities/session_identity.dart';
 import 'package:awiki_me/src/domain/entities/user_profile.dart';
 import 'package:awiki_me/src/domain/services/realtime_gateway.dart';
 import 'package:awiki_me/src/presentation/app_shell/app_shell.dart';
 import 'package:awiki_me/src/presentation/app_shell/providers/message_sync_coordinator_provider.dart';
+import 'package:awiki_me/src/presentation/onboarding/onboarding_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -92,6 +95,65 @@ void main() {
 
     expect(find.text('消息连接中断，正在重连...'), findsNothing);
     expect(find.text('消息服务已断开，正在尝试恢复'), findsNothing);
+  });
+
+  testWidgets('认证失效后回到登录页并只显示一次确认弹窗', (tester) async {
+    final gateway = gatewayWithProfile();
+    late _FixedMessageSyncCoordinator coordinator;
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const AppShell(),
+        gateway: gateway,
+        session: session,
+        providerOverrides: <Override>[
+          messageSyncCoordinatorProvider.overrideWith(
+            (ref) => coordinator = _FixedMessageSyncCoordinator(
+              ref,
+              const MessageSyncCoordinatorState(),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    unawaited(
+      Navigator.of(tester.element(find.byType(AppShell))).push<void>(
+        CupertinoPageRoute<void>(
+          builder: (_) => const CupertinoPageScaffold(
+            key: Key('authenticated-detail-route'),
+            child: SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    coordinator.publish(
+      const MessageSyncCoordinatorState(
+        status: MessageSyncCoordinatorStatus.authRevoked,
+        lastFailureCode: 'SYNC_AUTH_GENERATION_MISMATCH',
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingPage), findsOneWidget);
+    expect(find.byKey(const Key('authenticated-detail-route')), findsNothing);
+    expect(find.text('账号登录状态已失效'), findsOneWidget);
+    expect(find.text('此账号可能已在其他设备完成重置，请重新登录。'), findsOneWidget);
+    expect(
+      find.byKey(const Key('auth-revoked-dialog-confirm')),
+      findsOneWidget,
+    );
+    expect(find.text('消息连接中断，正在重连...'), findsNothing);
+    expect(gateway.logoutCalls, 1);
+
+    await tester.tap(find.byKey(const Key('auth-revoked-dialog-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('账号登录状态已失效'), findsNothing);
+    expect(find.byType(OnboardingPage), findsOneWidget);
+    await tester.pump();
+    expect(find.text('账号登录状态已失效'), findsNothing);
   });
 
   testWidgets('AppShell 恢复中显示全局同步进度', (tester) async {
@@ -255,4 +317,6 @@ class _FixedMessageSyncCoordinator extends MessageSyncCoordinator {
   ) {
     state = initialState;
   }
+
+  void publish(MessageSyncCoordinatorState next) => state = next;
 }
