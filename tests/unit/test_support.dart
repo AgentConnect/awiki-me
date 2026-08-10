@@ -711,6 +711,9 @@ class FakeAwikiGateway implements AwikiGateway, AwikiAccountGateway {
   bool handleAlreadyRegistered = false;
   IdentityRegistrationStatus registrationStatus =
       IdentityRegistrationStatus.registered;
+  ExistingHandleJoinMode existingHandleJoinMode =
+      ExistingHandleJoinMode.ordinary;
+  bool existingHandleJoinRequiresUserPresence = false;
   String? lastFollowedDidOrHandle;
   String? lastUnfollowedDidOrHandle;
   String? lastRegisteredNickName;
@@ -3762,6 +3765,7 @@ class FakeOnboardingService implements OnboardingService {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
         existingHandleContinuationId: 'existing-handle-test',
+        existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
     }
     final session = await _activate(
@@ -3793,9 +3797,12 @@ class FakeOnboardingService implements OnboardingService {
     AppSessionTransition? transition,
   }) async {
     if (gateway.registrationStatus == IdentityRegistrationStatus.joinRequired) {
-      return const IdentityRegistrationResult(
+      return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
         existingHandleContinuationId: 'existing-handle-test',
+        existingHandleJoinMode: gateway.existingHandleJoinMode,
+        existingHandleJoinRequiresUserPresence:
+            gateway.existingHandleJoinRequiresUserPresence,
       );
     }
     final session = await _activate(
@@ -3830,6 +3837,7 @@ class FakeOnboardingService implements OnboardingService {
       return const IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
         existingHandleContinuationId: 'existing-handle-test',
+        existingHandleJoinMode: ExistingHandleJoinMode.ordinary,
       );
     }
     final session = await _activate(

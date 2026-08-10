@@ -537,8 +537,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     final controller = ref.read(onboardingProvider.notifier);
     switch (action ?? _ExistingHandleAction.cancel) {
       case _ExistingHandleAction.joinDevice:
-        await controller.beginExistingHandleDeviceJoin();
-        if (context.mounted) await openDeviceJoinPage(context);
+        final started = await controller.beginExistingHandleDeviceJoin(
+          presenceReason: context.l10n.handleRecoveryPresenceReason,
+        );
+        if (started && context.mounted) await openDeviceJoinPage(context);
       case _ExistingHandleAction.recoverHandle:
         await controller.discardExistingHandleContinuation();
         if (context.mounted) {

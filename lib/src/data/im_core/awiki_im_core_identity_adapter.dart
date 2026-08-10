@@ -229,17 +229,26 @@ class AwikiImCoreIdentityAdapter
           'IM Core joinRequired registration did not include a continuation.',
         );
       }
+      final mode = existingHandleJoinModeFromCore(continuation.mode);
+      if (continuation.requiresUserPresence !=
+          (mode == ExistingHandleJoinMode.handleRecoveryRebind)) {
+        throw StateError('registration_join_preparation_invalid');
+      }
       final continuationId =
           'existing-handle-${DateTime.now().microsecondsSinceEpoch}-${_continuationSequence++}';
       _existingHandleContinuations[continuationId] =
           _PendingExistingHandleRegistration(
             coreInstance: coreInstance,
-            did: continuation.did,
-            accountVerificationGrant: continuation.accountVerificationGrant,
+            preparationId: continuation.preparationId,
+            mode: mode,
+            requiresUserPresence: continuation.requiresUserPresence,
           );
       return IdentityRegistrationResult(
         status: IdentityRegistrationStatus.joinRequired,
         existingHandleContinuationId: continuationId,
+        existingHandleJoinMode: mode,
+        existingHandleJoinRequiresUserPresence:
+            continuation.requiresUserPresence,
         warnings: List<String>.unmodifiable(result.warnings),
       );
     }
@@ -261,20 +270,28 @@ class AwikiImCoreIdentityAdapter
 
   @override
   Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
-    String continuationId,
-  ) async {
+    String continuationId, {
+    required bool userPresenceConfirmed,
+  }) async {
     final pending = _existingHandleContinuations[continuationId];
     if (pending == null || continuationId.trim() != continuationId) {
       throw StateError('existing_handle_continuation_unavailable');
     }
-    final progress = await pending.coreInstance.beginDeviceJoin(
-      did: pending.did,
-      operationId:
-          'awiki-me-register-join-${DateTime.now().microsecondsSinceEpoch}',
-      accountVerificationGrant: pending.accountVerificationGrant,
+    if (pending.requiresUserPresence && !userPresenceConfirmed) {
+      throw StateError('registration_join_user_presence_required');
+    }
+    final progress = await pending.coreInstance
+        .beginPreparedRegistrationDeviceJoin(
+          preparationId: pending.preparationId,
+          operationId: 'awiki-me-register-join-${pending.preparationId}',
+          userPresenceConfirmed: userPresenceConfirmed,
+        );
+    final mapped = preparedRegistrationJoinProgressFromCore(
+      progress,
+      pending.mode,
     );
     _existingHandleContinuations.remove(continuationId);
-    return deviceJoinProgressFromCore(progress);
+    return mapped;
   }
 
   @override
@@ -286,13 +303,62 @@ class AwikiImCoreIdentityAdapter
 class _PendingExistingHandleRegistration {
   const _PendingExistingHandleRegistration({
     required this.coreInstance,
-    required this.did,
-    required this.accountVerificationGrant,
+    required this.preparationId,
+    required this.mode,
+    required this.requiresUserPresence,
   });
 
   final core.AwikiImCore coreInstance;
-  final String did;
-  final core.DeviceJoinAccountVerificationGrant accountVerificationGrant;
+  final String preparationId;
+  final ExistingHandleJoinMode mode;
+  final bool requiresUserPresence;
+}
+
+ExistingHandleJoinMode existingHandleJoinModeFromCore(
+  core.HandleRegistrationJoinMode value,
+) => switch (value) {
+  core.HandleRegistrationJoinMode.ordinary => ExistingHandleJoinMode.ordinary,
+  core.HandleRegistrationJoinMode.handleRecoveryRebind =>
+    ExistingHandleJoinMode.handleRecoveryRebind,
+};
+
+DeviceJoinProgress preparedRegistrationJoinProgressFromCore(
+  core.AuthorizedJoinActivationProgress value,
+  ExistingHandleJoinMode mode,
+) {
+  final join = deviceJoinProgressFromCore(value.join);
+  final reset = value.registryEpochReset;
+  if (mode == ExistingHandleJoinMode.ordinary) {
+    if (reset != null) {
+      throw StateError('registration_join_transition_mismatch');
+    }
+    return join;
+  }
+  if (reset == null ||
+      reset.sourceKind !=
+          core.HandleRecoveryTransitionSourceKind.joinedDevice ||
+      reset.sourceId != join.joinSessionId ||
+      reset.currentDid != join.did ||
+      reset.handle.trim().isEmpty ||
+      reset.handle.trim() != reset.handle) {
+    throw StateError('registration_join_transition_mismatch');
+  }
+  return DeviceJoinProgress(
+    joinSessionId: join.joinSessionId,
+    did: join.did,
+    protocolDeviceId: join.protocolDeviceId,
+    side: join.side,
+    phase: join.phase,
+    remoteState: join.remoteState,
+    expiresAt: join.expiresAt,
+    sas: join.sas,
+    authorizedDevice: join.authorizedDevice,
+    cause: DeviceJoinCause.handleRecovery,
+    handleRecovery: DeviceJoinHandleRecoveryContext(
+      handle: reset.handle,
+      localOrdinaryDataWillMigrate: true,
+    ),
+  );
 }
 
 LegacyIdentityUpgradeStatus _legacyUpgradeStatus(

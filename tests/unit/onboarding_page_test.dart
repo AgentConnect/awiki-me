@@ -12,6 +12,7 @@ import 'package:awiki_me/src/application/onboarding_support_service.dart';
 import 'package:awiki_me/src/application/ports/identity_core_port.dart';
 import 'package:awiki_me/src/application/ports/handle_recovery_core_port.dart';
 import 'package:awiki_me/src/application/ports/legacy_identity_upgrade_port.dart';
+import 'package:awiki_me/src/application/ports/user_presence_port.dart';
 import 'package:awiki_me/src/application/tenant/app_tenant.dart';
 import 'package:awiki_me/src/domain/entities/device_management.dart';
 import 'package:awiki_me/src/domain/entities/handle_recovery.dart';
@@ -1601,6 +1602,57 @@ void main() {
     );
   });
 
+  testWidgets('registration_recovery_join 先完成系统验证并保留 Core 投影的恢复原因', (
+    tester,
+  ) async {
+    final gateway = FakeAwikiGateway()
+      ..registrationStatus = IdentityRegistrationStatus.joinRequired
+      ..existingHandleJoinMode = ExistingHandleJoinMode.handleRecoveryRebind
+      ..existingHandleJoinRequiresUserPresence = true;
+    final identityPort = _ExistingHandleIdentityCorePort(
+      cause: DeviceJoinCause.handleRecovery,
+    );
+    final userPresence = _RecordingUserPresence();
+
+    await tester.pumpWidget(
+      buildLocalizedTestApp(
+        home: const OnboardingPage(),
+        gateway: gateway,
+        providerOverrides: <Override>[
+          identityCorePortProvider.overrideWithValue(identityPort),
+          userPresencePortProvider.overrideWithValue(userPresence),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('登录或注册'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(CupertinoTextField).at(0),
+      '13800138000',
+    );
+    await tester.enterText(find.byType(CupertinoTextField).at(1), 'alice');
+    await tester.enterText(find.byType(CupertinoTextField).at(2), '123456');
+    await _tapVisible(tester, find.text('发送验证码'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('登录/注册'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('existing-handle-join-action')));
+    await tester.pumpAndSettle();
+
+    expect(userPresence.reasons, <String>['确认恢复 Handle 身份']);
+    expect(identityPort.lastUserPresenceConfirmed, isTrue);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(DeviceJoinPage)),
+    );
+    final join = container.read(devicesProvider).activeJoin;
+    expect(join?.cause, DeviceJoinCause.handleRecovery);
+    expect(join?.handleRecovery?.handle, 'alice.awiki.ai');
+    expect(join.toString(), isNot(contains('123456')));
+  });
+
   testWidgets('已有 Handle 可进入新机器恢复且复用已验证的 Handle 和手机号', (tester) async {
     final defaultInfo = OnboardingServerInfo.userServiceDefault();
     final gateway = FakeAwikiGateway()
@@ -1841,14 +1893,20 @@ class _RecordingOnboardingSupportService extends FakeOnboardingSupportService {
 
 class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
     implements ExistingHandleContinuationPort {
+  _ExistingHandleIdentityCorePort({this.cause = DeviceJoinCause.ordinary});
+
+  final DeviceJoinCause cause;
   String? lastContinuationId;
   String? discardedContinuationId;
+  bool? lastUserPresenceConfirmed;
 
   @override
   Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
-    String continuationId,
-  ) async {
+    String continuationId, {
+    required bool userPresenceConfirmed,
+  }) async {
     lastContinuationId = continuationId;
+    lastUserPresenceConfirmed = userPresenceConfirmed;
     return DeviceJoinProgress(
       joinSessionId: 'registration-join-1',
       did: 'did:wba:awiki.ai:alice:e1_registration',
@@ -1857,12 +1915,29 @@ class _ExistingHandleIdentityCorePort extends FakeIdentityCorePort
       phase: DeviceJoinPhase.pending,
       remoteState: DeviceJoinRemoteState.pending,
       expiresAt: DateTime.utc(2030),
+      cause: cause,
+      handleRecovery: cause == DeviceJoinCause.handleRecovery
+          ? const DeviceJoinHandleRecoveryContext(
+              handle: 'alice.awiki.ai',
+              localOrdinaryDataWillMigrate: true,
+            )
+          : null,
     );
   }
 
   @override
   Future<void> discardExistingHandleContinuation(String continuationId) async {
     discardedContinuationId = continuationId;
+  }
+}
+
+class _RecordingUserPresence implements UserPresencePort {
+  final List<String> reasons = <String>[];
+
+  @override
+  Future<bool> confirm({required String reason}) async {
+    reasons.add(reason);
+    return true;
   }
 }
 

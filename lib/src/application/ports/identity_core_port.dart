@@ -6,17 +6,23 @@ import '../../domain/entities/session_identity.dart';
 
 enum IdentityRegistrationStatus { registered, joinRequired }
 
+enum ExistingHandleJoinMode { ordinary, handleRecoveryRebind }
+
 class IdentityRegistrationResult {
   const IdentityRegistrationResult({
     required this.status,
     this.identity,
     this.existingHandleContinuationId,
+    this.existingHandleJoinMode,
+    this.existingHandleJoinRequiresUserPresence = false,
     this.warnings = const <String>[],
   });
 
   final IdentityRegistrationStatus status;
   final AppSession? identity;
   final String? existingHandleContinuationId;
+  final ExistingHandleJoinMode? existingHandleJoinMode;
+  final bool existingHandleJoinRequiresUserPresence;
   final List<String> warnings;
 }
 
@@ -63,8 +69,9 @@ abstract interface class IdentityCorePort {
 
 abstract interface class ExistingHandleContinuationPort {
   Future<DeviceJoinProgress> beginExistingHandleDeviceJoin(
-    String continuationId,
-  );
+    String continuationId, {
+    required bool userPresenceConfirmed,
+  });
 
   Future<void> discardExistingHandleContinuation(String continuationId);
 }
