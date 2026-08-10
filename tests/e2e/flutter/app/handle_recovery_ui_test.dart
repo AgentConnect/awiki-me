@@ -1355,7 +1355,6 @@ AwikiEnvironmentConfig _environment(_RemoteRecoveryRunConfig config) {
     anpServiceUrl: config.anpServiceUrl,
     anpServiceDid: config.anpServiceDid,
     multiDeviceHandleRecoveryEnabled: true,
-    multiDeviceDirectE2eeEnabled: true,
   );
 }
 
