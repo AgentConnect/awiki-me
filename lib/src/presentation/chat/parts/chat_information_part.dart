@@ -328,8 +328,8 @@ class _ChatInformationHeader extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: theme.title,
-                fontSize: responsive.displayScaled(16),
-                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -389,8 +389,8 @@ class _ChatInformationIdentityRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: theme.title,
-                      fontSize: responsive.displayScaled(20),
-                      fontWeight: FontWeight.w700,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   if (handle.isNotEmpty) ...<Widget>[
@@ -401,7 +401,7 @@ class _ChatInformationIdentityRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: theme.secondaryText,
-                        fontSize: responsive.displayScaled(14),
+                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -471,8 +471,8 @@ class _ChatInformationActionRow extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: labelColor ?? theme.title,
-                  fontSize: responsive.displayScaled(16),
-                  fontWeight: FontWeight.w500,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ),
@@ -527,8 +527,8 @@ class _ChatInformationSwitchRow extends StatelessWidget {
                   label,
                   style: TextStyle(
                     color: theme.title,
-                    fontSize: responsive.displayScaled(16),
-                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -619,10 +619,7 @@ class _ChatHistorySearchPageState
                 placeholder: context.l10n.chatSearchHistoryPlaceholder,
                 backgroundColor: theme.background,
                 itemColor: theme.secondaryText,
-                style: TextStyle(
-                  color: theme.title,
-                  fontSize: responsive.displayScaled(16),
-                ),
+                style: TextStyle(color: theme.title, fontSize: 16),
                 onChanged: (value) => setState(() => _query = value),
               ),
             ),
@@ -633,7 +630,7 @@ class _ChatHistorySearchPageState
                         context.l10n.chatSearchHistoryEmpty,
                         style: TextStyle(
                           color: theme.secondaryText,
-                          fontSize: responsive.displayScaled(15),
+                          fontSize: 15,
                         ),
                       ),
                     )
@@ -683,9 +680,8 @@ class _ChatHistorySearchPageState
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               color: theme.title,
-                                              fontSize: responsive
-                                                  .displayScaled(14),
-                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w400,
                                             ),
                                           ),
                                         ),
@@ -696,9 +692,7 @@ class _ChatHistorySearchPageState
                                           ),
                                           style: TextStyle(
                                             color: theme.tertiaryText,
-                                            fontSize: responsive.displayScaled(
-                                              12,
-                                            ),
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
@@ -713,7 +707,7 @@ class _ChatHistorySearchPageState
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                         color: theme.secondaryText,
-                                        fontSize: responsive.displayScaled(15),
+                                        fontSize: 15,
                                         height: 1.35,
                                       ),
                                     ),

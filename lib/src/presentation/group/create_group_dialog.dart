@@ -214,7 +214,7 @@ class _GroupNameInput extends StatelessWidget {
           style: TextStyle(
             color: theme.secondaryText,
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
         SizedBox(height: responsive.spacing(8)),
@@ -274,7 +274,7 @@ class _GroupNameInput extends StatelessWidget {
                       style: TextStyle(
                         color: theme.title,
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                       placeholderStyle: TextStyle(
                         color: theme.secondaryText,

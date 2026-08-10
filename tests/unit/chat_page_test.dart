@@ -580,6 +580,9 @@ void main() {
         outgoingBubbleWidget.decoration! as ShapeDecoration;
     expect(incomingDecoration.color, AwikiMePalette.content);
     expect(outgoingDecoration.color, AwikiMePalette.messageOutgoing);
+    final outgoingText = tester.widget<Text>(find.text('outgoing'));
+    expect(outgoingText.style?.fontSize, 14);
+    expect(outgoingText.style?.fontWeight, FontWeight.w400);
     for (final decoration in <ShapeDecoration>[
       incomingDecoration,
       outgoingDecoration,
@@ -9396,7 +9399,7 @@ bool _textSpanHasStyledMention(InlineSpan span, String mentionText) {
   }
   final style = span.style;
   if (span.text == mentionText &&
-      style?.fontWeight == FontWeight.w700 &&
+      style?.fontWeight == FontWeight.w400 &&
       style?.color != null &&
       style?.backgroundColor != null) {
     return true;

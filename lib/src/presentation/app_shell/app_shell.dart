@@ -525,7 +525,7 @@ class _DeviceJoinRequestBanner extends StatelessWidget {
                             style: TextStyle(
                               color: theme.title,
                               fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -547,7 +547,7 @@ class _DeviceJoinRequestBanner extends StatelessWidget {
                       style: const TextStyle(
                         color: AwikiMeColors.primary,
                         fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
@@ -844,7 +844,7 @@ class _DesktopRailItem extends StatelessWidget {
     final foreground = selected
         ? _desktopRailActiveColor
         : _desktopRailInactiveColor;
-    final height = responsive.displayScaled(compact ? 50.0 : 56.0);
+    final height = responsive.displayScaled(compact ? 56.0 : 58.0);
     final width = responsive.displayScaled(54);
     return AppPressable(
       onTap: onTap,
@@ -907,7 +907,7 @@ class _DesktopRailItem extends StatelessWidget {
                         ),
                       ),
                     ),
-                    SizedBox(height: responsive.displayScaled(compact ? 2 : 4)),
+                    SizedBox(height: responsive.displayScaled(1)),
                     SizedBox(
                       width: width - responsive.displayScaled(6),
                       child: FittedBox(
@@ -919,10 +919,10 @@ class _DesktopRailItem extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: responsive.displayScaled(10.5),
+                            fontSize: 10.5,
                             fontWeight: selected
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                                ? FontWeight.w400
+                                : FontWeight.w400,
                             height: 1,
                           ),
                         ),
@@ -950,10 +950,10 @@ class _DesktopRailItem extends StatelessWidget {
                     ),
                     child: Text(
                       badge!,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: CupertinoColors.white,
-                        fontSize: responsive.displayScaled(9),
-                        fontWeight: FontWeight.w600,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w400,
                         height: 1,
                       ),
                     ),
@@ -1045,8 +1045,8 @@ class _DesktopPlaceholderPage extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: theme.title,
-                  fontSize: responsive.displayScaled(18),
-                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
               SizedBox(height: responsive.displayScaled(8)),
@@ -1055,7 +1055,7 @@ class _DesktopPlaceholderPage extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: theme.secondaryText,
-                  fontSize: responsive.displayScaled(13),
+                  fontSize: 13,
                   height: 1.45,
                 ),
               ),
@@ -1236,7 +1236,7 @@ class _BottomNavItem extends StatelessWidget {
                       style: TextStyle(
                         color: foreground,
                         fontSize: labelFontSize,
-                        fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight: active ? FontWeight.w400 : FontWeight.w400,
                         height: 1,
                       ),
                     ),
@@ -1293,7 +1293,7 @@ class _NavUnreadBadge extends StatelessWidget {
         style: TextStyle(
           color: CupertinoColors.white,
           fontSize: responsive.scaled(9.5),
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),

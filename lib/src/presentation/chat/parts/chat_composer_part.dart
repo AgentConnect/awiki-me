@@ -639,12 +639,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                           placeholder: context.l10n.chatInputPlaceholder,
                           textStyle: TextStyle(
                             color: theme.title,
-                            fontSize: responsive.displayScaled(14),
+                            fontSize: 14,
                             height: 1.32,
                           ),
                           placeholderStyle: TextStyle(
                             color: theme.tertiaryText,
-                            fontSize: responsive.displayScaled(14),
+                            fontSize: 14,
                           ),
                           padding: EdgeInsets.symmetric(
                             horizontal: responsive.displayScaled(2),
@@ -862,12 +862,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                           onKeyEvent: _handleInputKeyEvent,
                           placeholder: context.l10n.chatInputPlaceholder,
                           textStyle: TextStyle(
-                            fontSize: responsive.displayScaled(15),
+                            fontSize: 15,
                             color: theme.title,
                             height: 1.3,
                           ),
                           placeholderStyle: TextStyle(
-                            fontSize: responsive.displayScaled(15),
+                            fontSize: 15,
                             color: theme.tertiaryText,
                           ),
                           padding: EdgeInsets.symmetric(
@@ -1357,7 +1357,7 @@ class _MentionCandidateTile extends StatelessWidget {
                           fontSize: macStyle
                               ? responsive.displayScaled(13)
                               : responsive.bodyMd,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       SizedBox(height: responsive.displayScaled(2)),
@@ -1394,7 +1394,7 @@ class _MentionCandidateTile extends StatelessWidget {
                       fontSize: macStyle
                           ? responsive.displayScaled(10)
                           : responsive.displayScaled(11),
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -1438,9 +1438,9 @@ class _DisabledComposerNotice extends StatelessWidget {
         textAlign: TextAlign.center,
         style: TextStyle(
           color: AwikiMePalette.mutedNeutral,
-          fontSize: responsive.displayScaled(macStyle ? 12 : 13),
+          fontSize: macStyle ? 12 : 13,
           height: 1.25,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -1590,7 +1590,7 @@ class _PendingAttachmentPreview extends ConsumerWidget {
                     fontSize: macStyle
                         ? responsive.displayScaled(12.5)
                         : responsive.bodySm,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 SizedBox(height: responsive.spacing(2)),

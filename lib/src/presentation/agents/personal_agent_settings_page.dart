@@ -151,7 +151,7 @@ class _PersonalAgentSettingsPageState
                     style: TextStyle(
                       color: const Color(0xFF66728A),
                       fontSize: responsive.metaSm,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -273,7 +273,7 @@ class _PersonalAgentHeroCard extends StatelessWidget {
                       style: TextStyle(
                         color: const Color(0xFF101B32),
                         fontSize: responsive.titleLg,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     SizedBox(height: responsive.spacing(4)),
@@ -430,7 +430,7 @@ class _PersonalAgentDaemonSelector extends StatelessWidget {
             style: TextStyle(
               color: const Color(0xFF101B32),
               fontSize: responsive.bodyMd,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: responsive.spacing(6)),
@@ -538,7 +538,7 @@ class _PersonalAgentDaemonOption extends StatelessWidget {
                     style: TextStyle(
                       color: const Color(0xFF101B32),
                       fontSize: responsive.bodySm,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   SizedBox(height: responsive.spacing(3)),
@@ -606,7 +606,7 @@ class _PersonalAgentReadinessNotice extends StatelessWidget {
           color: const Color(0xFF7A4E00),
           fontSize: responsive.bodySm,
           height: 1.35,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -632,7 +632,7 @@ class _PersonalAgentLimitsCard extends StatelessWidget {
             style: TextStyle(
               color: const Color(0xFF101B32),
               fontSize: responsive.bodyMd,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: responsive.spacing(10)),

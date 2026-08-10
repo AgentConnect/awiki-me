@@ -165,7 +165,7 @@ class _LanguageOptionRow extends StatelessWidget {
                                 : theme.title,
                             fontSize: 17,
                             fontWeight: selected
-                                ? FontWeight.w600
+                                ? FontWeight.w400
                                 : FontWeight.w400,
                             height: 24 / 17,
                           ),

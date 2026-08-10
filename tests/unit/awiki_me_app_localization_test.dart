@@ -285,7 +285,14 @@ void main() {
         );
         expect(
           appContext().awikiResponsive.displayScale,
-          closeTo(AwikiDisplayScale.layoutBaseline, 0.0001),
+          closeTo(
+            AwikiDisplayScale.effective(AwikiDisplayScale.normal),
+            0.0001,
+          ),
+        );
+        expect(
+          MediaQuery.textScalerOf(appContext()).scale(1),
+          closeTo(AwikiDisplayScale.effective(1), 0.0001),
         );
 
         await tester.tap(find.byType(CupertinoTextField).first);
@@ -299,9 +306,13 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.equal);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
         await tester.pump();
-        expect(AwikiDisplayScaleScope.of(appContext()), greaterThan(1));
+        expect(AwikiDisplayScaleScope.of(appContext()), 1.1);
         expect(
           appContext().awikiResponsive.displayScale,
+          closeTo(AwikiDisplayScale.effective(1.1), 0.0001),
+        );
+        expect(
+          MediaQuery.textScalerOf(appContext()).scale(1),
           closeTo(AwikiDisplayScale.effective(1.1), 0.0001),
         );
         expect(
@@ -320,7 +331,14 @@ void main() {
         );
         expect(
           appContext().awikiResponsive.displayScale,
-          closeTo(AwikiDisplayScale.layoutBaseline, 0.0001),
+          closeTo(
+            AwikiDisplayScale.effective(AwikiDisplayScale.normal),
+            0.0001,
+          ),
+        );
+        expect(
+          MediaQuery.textScalerOf(appContext()).scale(1),
+          closeTo(AwikiDisplayScale.effective(1), 0.0001),
         );
         expect(find.text('Display scale 100%'), findsOneWidget);
 

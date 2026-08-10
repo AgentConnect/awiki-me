@@ -493,7 +493,7 @@ class _AgentTypeSelector extends StatelessWidget {
           style: TextStyle(
             color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
         SizedBox(height: responsive.spacing(6)),
@@ -602,7 +602,7 @@ class _RuntimeKindTile extends StatelessWidget {
                                 ? AwikiMePalette.inkNeutral
                                 : AwikiMePalette.mutedNeutral,
                             fontSize: responsive.bodyMd,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -614,7 +614,7 @@ class _RuntimeKindTile extends StatelessWidget {
                           style: TextStyle(
                             color: AwikiMePalette.messagePreview,
                             fontSize: responsive.metaSm,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
@@ -792,7 +792,7 @@ class _RuntimePermissionSummary extends StatelessWidget {
                   style: TextStyle(
                     color: AwikiMePalette.inkNeutral,
                     fontSize: responsive.bodyMd,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 SizedBox(height: responsive.spacing(3)),
@@ -876,7 +876,7 @@ class _RuntimeOptionSelector extends StatelessWidget {
           style: TextStyle(
             color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
         SizedBox(height: responsive.spacing(6)),
@@ -956,7 +956,7 @@ class _RuntimeOptionTile extends StatelessWidget {
                     style: TextStyle(
                       color: AwikiMePalette.inkNeutral,
                       fontSize: responsive.bodySm,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   SizedBox(height: responsive.spacing(2)),
@@ -1015,7 +1015,7 @@ class _AgentDialogField extends StatelessWidget {
           style: TextStyle(
             color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.metaSm,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
         SizedBox(height: responsive.spacing(6)),
@@ -1032,7 +1032,7 @@ class _AgentDialogField extends StatelessWidget {
                     style: TextStyle(
                       color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.bodyMd,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                     child: prefix!,
                   ),
@@ -1068,7 +1068,7 @@ class _AgentDialogField extends StatelessWidget {
             style: TextStyle(
               color: AwikiMePalette.dangerRed,
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],
@@ -1134,7 +1134,7 @@ class _HandlePreview extends StatelessWidget {
                   ? AwikiMePalette.inkNeutral
                   : AwikiMePalette.mutedNeutral,
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           if (message != null) ...<Widget>[
@@ -1146,7 +1146,7 @@ class _HandlePreview extends StatelessWidget {
               style: TextStyle(
                 color: color,
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -1229,7 +1229,7 @@ class _DialogSecondaryButton extends StatelessWidget {
           style: TextStyle(
             color: AwikiMePalette.mutedNeutral,
             fontSize: responsive.bodyMd,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -1520,7 +1520,7 @@ class _SkillOnboardingDialogState
             style: TextStyle(
               color: const Color(0xFF66728A),
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: responsive.spacing(6)),
@@ -1561,7 +1561,7 @@ class _SkillOnboardingDialogState
                     ? const Color(0xFF66728A)
                     : AwikiMeColors.danger,
                 fontSize: responsive.bodySm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             )
           else
@@ -1666,7 +1666,7 @@ class _SkillGrantLine extends StatelessWidget {
             style: TextStyle(
               color: const Color(0xFF25324A),
               fontSize: responsive.bodySm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -1887,7 +1887,7 @@ class _CleanupHostDisclosure extends StatelessWidget {
                     style: TextStyle(
                       color: const Color(0xFF5F4714),
                       fontSize: responsive.metaSm,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                       height: 1.25,
                     ),
                   ),
@@ -1921,7 +1921,7 @@ class _CleanupHostDisclosure extends StatelessWidget {
                       color: const Color(0xFF73520B),
                       fontSize: responsive.metaSm,
                       height: 1.35,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   SizedBox(height: responsive.spacing(10)),
@@ -1978,7 +1978,7 @@ class _SupportedAgentTypeHint extends StatelessWidget {
                 color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
                 height: 1.35,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -2030,7 +2030,7 @@ class _TokenExpiryRow extends StatelessWidget {
                     ? AwikiMeColors.danger
                     : AwikiMePalette.mutedNeutral,
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

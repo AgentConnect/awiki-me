@@ -94,7 +94,7 @@ class _ToastContent extends StatelessWidget {
         style: TextStyle(
           color: theme.surface,
           fontSize: 14,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
         ),
       );
     }
@@ -108,7 +108,7 @@ class _ToastContent extends StatelessWidget {
             style: TextStyle(
               color: theme.surface,
               fontSize: 14,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 4),
@@ -138,7 +138,7 @@ class _ToastContent extends StatelessWidget {
             style: TextStyle(
               color: theme.surface,
               fontSize: 14,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -159,7 +159,7 @@ class _ToastContent extends StatelessWidget {
               style: TextStyle(
                 color: theme.surface,
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -267,7 +267,7 @@ class _AwikiMeErrorDetailDialogState extends State<_AwikiMeErrorDetailDialog> {
                   style: TextStyle(
                     color: theme.secondaryText,
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -295,7 +295,7 @@ class _AwikiMeErrorDetailDialogState extends State<_AwikiMeErrorDetailDialog> {
                   style: TextStyle(
                     color: theme.surface,
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -382,7 +382,7 @@ class AwikiMeErrorText extends StatelessWidget {
         color: theme.danger,
         fontSize: compact ? responsive.metaSm : responsive.bodySm,
         height: 1.35,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w400,
       ),
     );
     if (SelectionContainer.maybeOf(context) != null) {
@@ -434,7 +434,7 @@ class AwikiMePersistentToast extends StatelessWidget {
                   style: TextStyle(
                     color: theme.surface,
                     fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -485,7 +485,7 @@ class AwikiMeLoadingMask extends StatelessWidget {
                     style: TextStyle(
                       color: theme.title,
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],

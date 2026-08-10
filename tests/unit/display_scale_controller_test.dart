@@ -1,5 +1,6 @@
 import 'package:awiki_me/src/application/display_scale_preference_service.dart';
 import 'package:awiki_me/src/presentation/shared/display_scale.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -38,6 +39,41 @@ void main() {
 
     expect(controller.scale, AwikiDisplayScale.normal);
     expect(preferences.saved, <double>[AwikiDisplayScale.normal]);
+  });
+
+  testWidgets('fixed font sizes follow the shared display scale once', (
+    tester,
+  ) async {
+    Future<Size> pumpAt(double scale) async {
+      await tester.pumpWidget(
+        CupertinoApp(
+          builder: (context, child) => AwikiDisplayScaleTextMediaQuery(
+            scale: scale,
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: const Center(
+            child: Text(
+              '固定字号',
+              key: Key('fixed-font-sample'),
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final sample = find.byKey(const Key('fixed-font-sample'));
+      expect(
+        MediaQuery.textScalerOf(tester.element(sample)).scale(1),
+        closeTo(AwikiDisplayScale.effective(scale), 0.0001),
+      );
+      return tester.getSize(sample);
+    }
+
+    final normalSize = await pumpAt(1);
+    final largeSize = await pumpAt(1.3);
+
+    expect(largeSize.width, greaterThan(normalSize.width));
+    expect(largeSize.height, greaterThan(normalSize.height));
   });
 }
 

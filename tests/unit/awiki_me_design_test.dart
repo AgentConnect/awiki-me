@@ -60,6 +60,21 @@ void main() {
     );
   });
 
+  test('all platform themes and typography tokens use regular weight', () {
+    for (final platform in TargetPlatform.values) {
+      final theme = AwikiMeTheme.forPlatform(platform);
+      for (final style in <TextStyle>[
+        ..._materialStyles(theme.materialTheme.textTheme),
+        ..._materialStyles(theme.materialTheme.primaryTextTheme),
+        ..._cupertinoStyles(theme.cupertinoTheme.textTheme),
+        ...theme.tokens.compactTypography.styles,
+        ...theme.tokens.expandedTypography.styles,
+      ]) {
+        expect(style.fontWeight, FontWeight.w400);
+      }
+    }
+  });
+
   test('visual tests can opt into the deterministic repository CJK font', () {
     final theme = AwikiMeTheme.forPlatform(
       TargetPlatform.iOS,

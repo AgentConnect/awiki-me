@@ -930,7 +930,7 @@ class _IdentityPreviewCard extends StatelessWidget {
                       style: TextStyle(
                         color: theme.title,
                         fontSize: 17,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     if (secondaryHandle.isNotEmpty) ...<Widget>[
@@ -1024,7 +1024,7 @@ class _IdentityStatusPill extends StatelessWidget {
             style: const TextStyle(
               color: AwikiMePalette.successGreen,
               fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ],
@@ -1053,7 +1053,7 @@ class _IdentityMetaLine extends StatelessWidget {
               style: const TextStyle(
                 color: AwikiMePalette.mutedNeutral,
                 fontSize: 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

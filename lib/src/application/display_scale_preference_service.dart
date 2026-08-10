@@ -18,8 +18,8 @@ final class NoopDisplayScalePreferenceService
 class AwikiDisplayScale {
   const AwikiDisplayScale._();
 
-  // User-facing 100% uses the former 106% layout as the product baseline.
-  static const double layoutBaseline = 1.06;
+  // The former user-facing 90% size is the new product 100% baseline.
+  static const double layoutBaseline = 0.954;
   static const List<double> levels = <double>[0.8, 0.9, 1, 1.1, 1.2, 1.3];
   static const double min = 0.8;
   static const double max = 1.3;

@@ -322,7 +322,7 @@ class _CompactQuickActionRow extends StatelessWidget {
                             style: const TextStyle(
                               color: AwikiMePalette.inkNeutral,
                               fontSize: 15,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                               letterSpacing: 0,
                             ),
                           ),
@@ -509,7 +509,7 @@ class _QuickActionPopupMenuEntryState
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: theme.title,
-                      fontSize: responsive.displayScaled(13),
+                      fontSize: 13,
                       fontWeight: FontWeight.w400,
                       letterSpacing: 0,
                     ),

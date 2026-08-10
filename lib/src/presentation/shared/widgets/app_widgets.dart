@@ -860,7 +860,7 @@ class AppDropMenu extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: responsive.metaSm,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w400,
                 letterSpacing: 0,
                 color: theme.secondaryText,
               ),
@@ -943,7 +943,7 @@ class _AppDropMenuButton extends StatelessWidget {
                   style: TextStyle(
                     fontSize: responsive.titleLg,
                     fontWeight: item.highlighted || item.destructive
-                        ? FontWeight.w500
+                        ? FontWeight.w400
                         : FontWeight.w400,
                     color: foregroundColor,
                   ),
@@ -963,7 +963,7 @@ class _AppDropMenuButton extends StatelessWidget {
                       style: TextStyle(
                         fontSize: responsive.titleLg,
                         fontWeight: item.highlighted || item.destructive
-                            ? FontWeight.w500
+                            ? FontWeight.w400
                             : FontWeight.w400,
                         color: foregroundColor,
                       ),
@@ -1496,8 +1496,8 @@ class EmptyStateCard extends StatelessWidget {
             title,
             style: AwikiMeTextStyles.sectionTitle.copyWith(
               color: context.awikiTheme.secondaryText,
-              fontSize: context.awikiResponsive.displayScaled(18),
-              fontWeight: FontWeight.w500,
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: context.awikiResponsive.spacing(8)),
@@ -1539,6 +1539,31 @@ class AppListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.awikiTheme;
     final responsive = context.awikiResponsive;
+    final useLargeTextLayout =
+        trailing != null &&
+        MediaQuery.textScalerOf(context).scale(14) / 14 >= 1.3;
+    final titleContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          key: titleKey,
+          maxLines: useLargeTextLayout ? 2 : null,
+          overflow: useLargeTextLayout ? TextOverflow.ellipsis : null,
+          style: AwikiMeTextStyles.listTitle.copyWith(
+            fontSize: 14,
+            color: destructive ? theme.danger : theme.title,
+          ),
+        ),
+        if (subtitle != null) ...<Widget>[
+          SizedBox(height: responsive.spacing(2)),
+          Text(
+            subtitle!,
+            style: AwikiMeTextStyles.cardSubtitle.copyWith(fontSize: 12),
+          ),
+        ],
+      ],
+    );
     final content = Padding(
       padding: responsive.scaledInsets(
         EdgeInsets.symmetric(horizontal: horizontalPadding ?? 16, vertical: 16),
@@ -1549,37 +1574,26 @@ class AppListTile extends StatelessWidget {
             leading!,
             SizedBox(width: responsive.spacing(16)),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  key: titleKey,
-                  style: AwikiMeTextStyles.listTitle.copyWith(
-                    fontSize: responsive.bodyMd,
-                    color: destructive ? theme.danger : theme.title,
-                  ),
-                ),
-                if (subtitle != null) ...<Widget>[
-                  SizedBox(height: responsive.spacing(2)),
-                  Text(
-                    subtitle!,
-                    style: AwikiMeTextStyles.cardSubtitle.copyWith(
-                      fontSize: responsive.bodySm,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          Expanded(flex: useLargeTextLayout ? 2 : 1, child: titleContent),
           SizedBox(width: responsive.spacing(12)),
-          trailing ??
-              AwikiAssetIcon(
-                assetName: 'assets/icons/icon_right.svg',
-                size: responsive.iconSm,
-                color: onTap == null ? theme.border : theme.tertiaryText,
+          if (useLargeTextLayout)
+            Flexible(
+              flex: 3,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: DefaultTextStyle.merge(
+                  textAlign: TextAlign.end,
+                  child: trailing!,
+                ),
               ),
+            )
+          else
+            trailing ??
+                AwikiAssetIcon(
+                  assetName: 'assets/icons/icon_right.svg',
+                  size: responsive.iconSm,
+                  color: onTap == null ? theme.border : theme.tertiaryText,
+                ),
         ],
       ),
     );

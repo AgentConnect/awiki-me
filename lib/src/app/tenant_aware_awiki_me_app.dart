@@ -502,7 +502,7 @@ class _TenantBootstrapErrorApp extends StatelessWidget {
                     style: TextStyle(
                       color: AwikiMePalette.actionInk,
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 12),

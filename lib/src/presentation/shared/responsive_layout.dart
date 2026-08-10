@@ -96,7 +96,9 @@ class AwikiResponsiveInfo {
     return baseScale * displayScale;
   }
 
-  double get _fontScale => displayScale;
+  // Text scaling is applied once at the app MediaQuery boundary so fixed
+  // sizes and semantic typography tokens follow the same display setting.
+  double get _fontScale => 1;
 
   double get controlHeight {
     switch (breakpoint) {

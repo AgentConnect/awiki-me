@@ -198,7 +198,7 @@ void main() {
       find.descendant(of: header, matching: find.text('智能体')),
     );
     expect(compactTitle.style?.fontSize, 16);
-    expect(compactTitle.style?.fontWeight, FontWeight.w600);
+    expect(compactTitle.style?.fontWeight, FontWeight.w400);
     expect(compactTitle.style?.height, 1.25);
     expect(tester.getRect(section), const Rect.fromLTWH(0, 64, 390, 60));
     expect(listPane.color, AwikiMeColors.background);
@@ -266,7 +266,10 @@ void main() {
       of: daemonTile,
       matching: find.byIcon(CupertinoIcons.chevron_right),
     );
-    expect(390 - tester.getRect(daemonChevron).right, closeTo(24.7, 1));
+    expect(
+      390 - tester.getRect(daemonChevron).right,
+      closeTo(24.7 * AwikiDisplayScale.layoutBaseline, 1),
+    );
     expect(verticalRect.top, lessThan(runtimeCenters.first));
     expect(verticalRect.bottom, greaterThan(runtimeCenters.last));
   });
@@ -500,7 +503,13 @@ void main() {
       tester.getRect(skillAction).top,
       greaterThan(tester.getRect(menuButton).bottom),
     );
-    expect(tester.getRect(skillAction).width, inInclusiveRange(230, 250));
+    expect(
+      tester.getRect(skillAction).width,
+      inInclusiveRange(
+        230 * AwikiDisplayScale.layoutBaseline,
+        250 * AwikiDisplayScale.layoutBaseline,
+      ),
+    );
   });
 
   testWidgets('agents workspace re-entry reuses loaded inventory', (

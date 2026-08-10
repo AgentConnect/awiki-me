@@ -389,7 +389,7 @@ class _ScopeButton extends StatelessWidget {
                   ? AwikiMePalette.brandAccent
                   : AwikiMePalette.mutedNeutral,
               fontSize: 12,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: selected ? FontWeight.w400 : FontWeight.w400,
             ),
           ),
         ),
@@ -452,7 +452,7 @@ class _AgentInboxRow extends StatelessWidget {
                           style: const TextStyle(
                             color: AwikiMePalette.inkNeutral,
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
@@ -465,7 +465,7 @@ class _AgentInboxRow extends StatelessWidget {
                           style: const TextStyle(
                             color: AwikiMePalette.messagePreview,
                             fontSize: 11,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
@@ -518,7 +518,7 @@ class _AgentInboxRow extends StatelessWidget {
                   style: const TextStyle(
                     color: CupertinoColors.white,
                     fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -559,7 +559,7 @@ class _AgentInboxThreadView extends StatelessWidget {
                   style: const TextStyle(
                     color: AwikiMePalette.mutedNeutral,
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -661,7 +661,7 @@ class _AgentInboxMessageRow extends StatelessWidget {
                     style: const TextStyle(
                       color: AwikiMePalette.mutedNeutral,
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
@@ -674,7 +674,7 @@ class _AgentInboxMessageRow extends StatelessWidget {
                     style: const TextStyle(
                       color: AwikiMePalette.messagePreview,
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -749,7 +749,7 @@ class _AgentInboxAttachmentRow extends StatelessWidget {
                   style: const TextStyle(
                     color: AwikiMePalette.inkNeutral,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -799,7 +799,7 @@ class _LoadMoreButton extends StatelessWidget {
                 style: const TextStyle(
                   color: AwikiMePalette.brandAccent,
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
       ),
@@ -837,7 +837,7 @@ class _AgentInboxError extends StatelessWidget {
                 context.l10n.commonRetry,
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                 ),
               ),
             ),
@@ -871,7 +871,7 @@ class _AgentInboxInlineError extends StatelessWidget {
             style: const TextStyle(
               color: AwikiMePalette.brandAccent,
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -938,7 +938,7 @@ class _AgentInboxShell extends StatelessWidget {
                       style: const TextStyle(
                         color: AwikiMePalette.inkNeutral,
                         fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),

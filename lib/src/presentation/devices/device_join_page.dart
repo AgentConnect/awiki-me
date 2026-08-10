@@ -220,7 +220,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
             style: TextStyle(
               color: context.awikiTheme.title,
               fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 10),
@@ -243,7 +243,7 @@ class _DeviceJoinPageState extends ConsumerState<DeviceJoinPage> {
               style: TextStyle(
                 color: context.awikiTheme.title,
                 fontSize: 38,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w400,
                 letterSpacing: 8,
               ),
             ),

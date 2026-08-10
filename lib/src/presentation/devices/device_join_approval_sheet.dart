@@ -101,7 +101,7 @@ class _DeviceJoinApprovalSheetState
                     style: TextStyle(
                       color: context.awikiTheme.title,
                       fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -139,7 +139,7 @@ class _DeviceJoinApprovalSheetState
                       style: TextStyle(
                         color: context.awikiTheme.title,
                         fontSize: 38,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w400,
                         letterSpacing: 8,
                       ),
                     ),
@@ -414,7 +414,7 @@ class _ApprovalSwitchRow extends StatelessWidget {
             label,
             style: TextStyle(
               color: context.awikiTheme.title,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),

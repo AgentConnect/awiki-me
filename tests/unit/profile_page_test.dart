@@ -66,7 +66,7 @@ void main() {
     expect(headerDecoration.border, isNull);
     final compactTitle = tester.widget<Text>(find.text('我'));
     expect(compactTitle.style?.fontSize, 16);
-    expect(compactTitle.style?.fontWeight, FontWeight.w600);
+    expect(compactTitle.style?.fontWeight, FontWeight.w400);
     expect(compactTitle.style?.height, 1.25);
     expect(
       tester.getRect(find.byKey(const Key('profile-compact-header'))),
@@ -497,7 +497,7 @@ void main() {
           await tester.pumpAndSettle();
           final title = tester.widget<Text>(find.text(entry.title));
           expect(title.style?.fontSize, 16);
-          expect(title.style?.fontWeight, FontWeight.w600);
+          expect(title.style?.fontWeight, FontWeight.w400);
           expect(find.text(entry.contact), findsOneWidget);
         }
 

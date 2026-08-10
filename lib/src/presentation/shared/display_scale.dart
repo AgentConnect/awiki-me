@@ -83,3 +83,28 @@ class AwikiDisplayScaleScope extends InheritedWidget {
     return oldWidget.scale != scale;
   }
 }
+
+class AwikiDisplayScaleTextMediaQuery extends StatelessWidget {
+  const AwikiDisplayScaleTextMediaQuery({
+    super.key,
+    required this.scale,
+    required this.child,
+  });
+
+  final double scale;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final systemTextScale = mediaQuery.textScaler.scale(1);
+    final effectiveTextScale =
+        systemTextScale * AwikiDisplayScale.effective(scale);
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        textScaler: TextScaler.linear(effectiveTextScale),
+      ),
+      child: child,
+    );
+  }
+}

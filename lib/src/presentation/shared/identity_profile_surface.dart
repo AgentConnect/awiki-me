@@ -134,7 +134,7 @@ class IdentityProfileHeader extends StatelessWidget {
                           style: TextStyle(
                             color: theme.title,
                             fontSize: responsive.titleXl,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w400,
                             height: 1.22,
                           ),
                         ),
@@ -281,7 +281,7 @@ class IdentityProfileBadge extends StatelessWidget {
         style: TextStyle(
           color: colors.$2,
           fontSize: compact ? 11 : responsive.bodySm,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -427,7 +427,7 @@ class IdentityProfileActionButton extends StatelessWidget {
                 style: TextStyle(
                   color: foreground,
                   fontSize: responsive.bodyMd,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w400,
                   height: 1,
                 ),
               ),
@@ -521,7 +521,7 @@ class IdentityDocumentCard extends StatelessWidget {
             style: TextStyle(
               color: theme.title,
               fontSize: responsive.bodyMd,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w400,
               height: 1.25,
             ),
           ),
@@ -572,14 +572,14 @@ class IdentityDocumentContent extends StatelessWidget {
             selectable: false,
             styleSheet: MarkdownStyleSheet(
               p: bodyStyle,
-              strong: bodyStyle.copyWith(fontWeight: FontWeight.w600),
+              strong: bodyStyle.copyWith(fontWeight: FontWeight.w400),
               h1: bodyStyle.copyWith(
                 fontSize: responsive.titleXl,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w400,
               ),
               h2: bodyStyle.copyWith(
                 fontSize: responsive.titleLg,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),

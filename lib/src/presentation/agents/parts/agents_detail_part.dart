@@ -449,8 +449,8 @@ class _AgentDetailIdentity extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: theme.title,
-              fontSize: responsive.displayScaled(prominent ? 16 : 14.5),
-              fontWeight: FontWeight.w600,
+              fontSize: prominent ? 16 : 14.5,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -603,7 +603,7 @@ class _PersonalAgentSettingsEntryCard extends StatelessWidget {
                     style: TextStyle(
                       color: const Color(0xFF101B32),
                       fontSize: responsive.bodyMd,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   SizedBox(height: responsive.spacing(3)),
@@ -669,7 +669,7 @@ class _AgentDeletingNotice extends StatelessWidget {
                 color: theme.body,
                 fontSize: responsive.bodySm,
                 height: 1.35,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -751,7 +751,7 @@ class _PersonalAgentSettingsPanel extends StatelessWidget {
                       style: TextStyle(
                         color: AwikiMePalette.inkNeutral,
                         fontSize: responsive.bodyMd,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     SizedBox(height: responsive.spacing(2)),
@@ -902,7 +902,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                   style: TextStyle(
                     color: theme.title,
                     fontSize: responsive.bodySm,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -912,7 +912,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                   style: TextStyle(
                     color: theme.primary,
                     fontSize: responsive.metaSm,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               SizedBox(width: responsive.spacing(10)),
@@ -936,7 +936,7 @@ class _DaemonUpgradeProgressPanel extends StatelessWidget {
                   style: TextStyle(
                     color: isCancelling ? theme.tertiaryText : theme.danger,
                     fontSize: responsive.metaSm,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),
@@ -994,7 +994,7 @@ class _PersonalAgentStatePill extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 12,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -1049,7 +1049,7 @@ class _PersonalAgentFactGrid extends StatelessWidget {
                     style: TextStyle(
                       color: AwikiMePalette.mutedNeutral,
                       fontSize: responsive.metaSm,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   SizedBox(height: responsive.spacing(3)),
@@ -1060,7 +1060,7 @@ class _PersonalAgentFactGrid extends StatelessWidget {
                     style: TextStyle(
                       color: AwikiMePalette.inkNeutral,
                       fontSize: responsive.bodySm,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -1169,7 +1169,7 @@ class _RunStatusPanel extends StatelessWidget {
                   style: TextStyle(
                     color: theme.title,
                     fontFamily: 'monospace',
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ),

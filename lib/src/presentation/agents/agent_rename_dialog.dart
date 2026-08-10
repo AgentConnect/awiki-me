@@ -101,7 +101,7 @@ class _AgentRenameDialogState extends State<AgentRenameDialog> {
             style: TextStyle(
               color: theme.secondaryText,
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: responsive.spacing(6)),

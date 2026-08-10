@@ -691,7 +691,7 @@ bool _textSpanHasStyledMention(InlineSpan span, String mentionText) {
   }
   final style = span.style;
   if (span.text == mentionText &&
-      style?.fontWeight == FontWeight.w700 &&
+      style?.fontWeight == FontWeight.w400 &&
       style?.color != null &&
       style?.backgroundColor != null) {
     return true;

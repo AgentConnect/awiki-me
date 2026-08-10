@@ -289,12 +289,9 @@ class _MacConversationListState extends ConsumerState<_MacConversationList> {
                           _query = value;
                         });
                       },
-                      style: TextStyle(
-                        fontSize: responsive.displayScaled(13),
-                        color: theme.title,
-                      ),
+                      style: TextStyle(fontSize: 13, color: theme.title),
                       placeholderStyle: TextStyle(
-                        fontSize: responsive.displayScaled(13),
+                        fontSize: 13,
                         color: theme.tertiaryText,
                       ),
                       prefixIcon: Icon(
@@ -782,8 +779,8 @@ class _ConversationDeleteDialog extends StatelessWidget {
                       context.l10n.conversationsDeleteClearHistory,
                       style: TextStyle(
                         color: theme.secondaryText,
-                        fontSize: responsive.displayScaled(14),
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
                         height: 1.25,
                       ),
                     ),
@@ -792,7 +789,7 @@ class _ConversationDeleteDialog extends StatelessWidget {
                       context.l10n.conversationsDeleteClearHistoryUnavailable,
                       style: TextStyle(
                         color: theme.tertiaryText,
-                        fontSize: responsive.displayScaled(11),
+                        fontSize: 11,
                         height: 1.25,
                       ),
                     ),
@@ -902,10 +899,10 @@ class _SwipeToDeleteConversationRowState
                         SizedBox(height: responsive.spacing(4)),
                         Text(
                           context.l10n.conversationsSwipeDelete,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: CupertinoColors.white,
-                            fontSize: responsive.displayScaled(13),
-                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ],
@@ -958,12 +955,9 @@ class _CompactConversationSearchField extends StatelessWidget {
             controller: controller,
             placeholder: context.l10n.conversationsSearchPlaceholder,
             onChanged: onChanged,
-            style: TextStyle(
-              fontSize: responsive.displayScaled(15),
-              color: theme.title,
-            ),
+            style: TextStyle(fontSize: 15, color: theme.title),
             placeholderStyle: TextStyle(
-              fontSize: responsive.displayScaled(15),
+              fontSize: 15,
               color: theme.tertiaryText,
             ),
             prefixIcon: Icon(
@@ -1131,8 +1125,8 @@ class _MacConversationRow extends StatelessWidget {
                               compact: true,
                               titleStyle: TextStyle(
                                 color: theme.title,
-                                fontSize: responsive.displayScaled(13.5),
-                                fontWeight: FontWeight.w500,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w400,
                               ),
                             ),
                           ),
@@ -1154,7 +1148,7 @@ class _MacConversationRow extends StatelessWidget {
                             maxLines: 1,
                             style: TextStyle(
                               color: theme.tertiaryText,
-                              fontSize: responsive.displayScaled(11),
+                              fontSize: 11,
                               fontFeatures: const <FontFeature>[
                                 FontFeature.tabularFigures(),
                               ],
@@ -1201,9 +1195,9 @@ class _MacConversationEmptyState extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AwikiMePalette.mutedNeutral,
-                fontSize: responsive.displayScaled(14),
+                fontSize: 14,
               ),
             ),
             if (subtitle != null) ...<Widget>[
@@ -1211,9 +1205,9 @@ class _MacConversationEmptyState extends StatelessWidget {
               Text(
                 subtitle!,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: AwikiMePalette.messagePreview,
-                  fontSize: responsive.displayScaled(12),
+                  fontSize: 12,
                 ),
               ),
             ],
@@ -1331,8 +1325,8 @@ class _ConversationRow extends StatelessWidget {
                                     isDeletedAgentConversation,
                                 compact: false,
                                 titleStyle: TextStyle(
-                                  fontSize: responsive.displayScaled(15.5),
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w400,
                                   color: theme.title,
                                   height: 1.25,
                                 ),
@@ -1379,7 +1373,7 @@ class _ConversationRow extends StatelessWidget {
                           textAlign: TextAlign.right,
                           style: TextStyle(
                             color: theme.tertiaryText,
-                            fontSize: responsive.displayScaled(11.5),
+                            fontSize: 11.5,
                             fontFeatures: const <FontFeature>[
                               FontFeature.tabularFigures(),
                             ],
@@ -1821,7 +1815,7 @@ class _ConversationPreviewTagBadge extends StatelessWidget {
               ? responsive.displayScaled(10)
               : responsive.displayScaled(10.5),
           height: 1,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -1862,8 +1856,8 @@ class _ConversationUnreadBadge extends StatelessWidget {
         maxLines: 1,
         style: TextStyle(
           color: context.awikiTheme.surface,
-          fontSize: responsive.displayScaled(count > 99 ? 9 : 10.5),
-          fontWeight: FontWeight.w600,
+          fontSize: count > 99 ? 9 : 10.5,
+          fontWeight: FontWeight.w400,
           height: 1,
           fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
         ),
@@ -1967,8 +1961,8 @@ class _ConversationPeerBadge extends StatelessWidget {
         overflow: TextOverflow.clip,
         style: TextStyle(
           color: foreground,
-          fontSize: responsive.displayScaled(compact ? 9 : 10.5),
-          fontWeight: FontWeight.w600,
+          fontSize: compact ? 9 : 10.5,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -2001,8 +1995,8 @@ class _DeletedAgentConversationBadge extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: AwikiMePalette.mutedNeutral,
-          fontSize: responsive.displayScaled(compact ? 10 : 10.5),
-          fontWeight: FontWeight.w600,
+          fontSize: compact ? 10 : 10.5,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),
@@ -2028,9 +2022,9 @@ class _ConversationLoadErrorState extends StatelessWidget {
               context.l10n.operationFailedRetry,
               key: const Key('conversation-list-load-error'),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: AwikiMePalette.mutedNeutral,
-                fontSize: responsive.displayScaled(13),
+                fontSize: 13,
               ),
             ),
             SizedBox(height: responsive.displayScaled(10)),
@@ -2081,8 +2075,8 @@ class _EmptyState extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: AwikiMeTextStyles.sectionTitle.copyWith(
                     color: theme.secondaryText,
-                    fontSize: responsive.displayScaled(18),
-                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 if (subtitle.trim().isNotEmpty) ...<Widget>[

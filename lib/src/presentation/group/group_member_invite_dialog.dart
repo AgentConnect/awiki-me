@@ -1124,7 +1124,7 @@ class _SelectedInviteChip extends StatelessWidget {
             style: const TextStyle(
               color: AwikiMePalette.inkNeutral,
               fontSize: 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(width: 4),
@@ -1301,7 +1301,7 @@ class _InviteCandidateTile extends StatelessWidget {
                             style: const TextStyle(
                               color: AwikiMePalette.inkNeutral,
                               fontSize: 14,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                         ),
@@ -1368,7 +1368,7 @@ class _SourceBadge extends StatelessWidget {
               ? AwikiMePalette.messagePreview
               : const Color(0xFF7A4E00),
           fontSize: 11,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w400,
           height: 1,
         ),
       ),

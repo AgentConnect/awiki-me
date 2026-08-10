@@ -1143,7 +1143,7 @@ void _expectCompactAgentGeometry(
     ),
   );
   expect(title.style?.fontSize, 16);
-  expect(title.style?.fontWeight, FontWeight.w600);
+  expect(title.style?.fontWeight, FontWeight.w400);
   expect(title.style?.height, 1.25);
   expect(
     tester.widget<ColoredBox>(find.byKey(const Key('agents-list-pane'))).color,
@@ -1206,7 +1206,7 @@ void _expectCompactProfileGeometry(WidgetTester tester) {
     ),
   );
   expect(title.style?.fontSize, 16);
-  expect(title.style?.fontWeight, FontWeight.w600);
+  expect(title.style?.fontWeight, FontWeight.w400);
   expect(title.style?.height, 1.25);
   expect(
     tester
@@ -1281,7 +1281,7 @@ void _expectCompactProfileGeometry(WidgetTester tester) {
   for (final title in <String>['DID', '主页', '身份卡', '设置']) {
     final text = tester.widget<Text>(find.text(title));
     expect(text.style?.fontSize, 16);
-    expect(text.style?.fontWeight, FontWeight.w600);
+    expect(text.style?.fontWeight, FontWeight.w400);
     expect(text.style?.height, 1.25);
   }
   expect(find.byKey(const Key('profile-did-value')), findsNothing);
@@ -1297,7 +1297,7 @@ void _expectCompactProfileGeometry(WidgetTester tester) {
   expect(tester.getRect(find.text('身份卡')).left, closeTo(68, 0.1));
   final identityTitle = tester.widget<Text>(find.text('身份卡'));
   expect(identityTitle.style?.fontSize, 16);
-  expect(identityTitle.style?.fontWeight, FontWeight.w600);
+  expect(identityTitle.style?.fontWeight, FontWeight.w400);
   expect(identityTitle.style?.height, 1.25);
   expect(find.text('完整资料，让协作更可信'), findsNothing);
   expect(find.byKey(const Key('profile-identity-empty-state')), findsNothing);
@@ -1421,7 +1421,7 @@ void _expectCompactShellHeader(WidgetTester tester, {required String title}) {
     find.descendant(of: header, matching: find.text(title)),
   );
   expect(titleText.style?.fontSize, 16);
-  expect(titleText.style?.fontWeight, FontWeight.w600);
+  expect(titleText.style?.fontWeight, FontWeight.w400);
   expect(titleText.style?.height, 1.25);
   expect(find.byKey(const Key('awiki-me-brand-mark')), findsNothing);
 }

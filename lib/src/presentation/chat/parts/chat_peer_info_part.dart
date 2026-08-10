@@ -454,7 +454,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                               style: TextStyle(
                                 color: theme.title,
                                 fontSize: 20,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w400,
                                 height: 1.25,
                               ),
                             ),
@@ -520,7 +520,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                             style: TextStyle(
                               color: theme.primaryForeground,
                               fontSize: 15,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                         ),
@@ -641,7 +641,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                   style: TextStyle(
                     color: theme.title,
                     fontSize: 24,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w400,
                     height: 1.2,
                   ),
                 ),
@@ -759,7 +759,7 @@ class _PeerInfoDialogState extends ConsumerState<_PeerInfoDialog> {
                     style: TextStyle(
                       color: theme.title,
                       fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1189,7 +1189,7 @@ class _PeerInfoSection extends StatelessWidget {
             style: const TextStyle(
               color: AwikiMePalette.inkNeutral,
               fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 10),
@@ -1286,7 +1286,7 @@ class _GroupInfoDialogState extends ConsumerState<_GroupInfoDialog> {
                                     style: const TextStyle(
                                       color: AwikiMePalette.inkNeutral,
                                       fontSize: 20,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w400,
                                     ),
                                   ),
                                   const SizedBox(height: 7),
@@ -1613,8 +1613,8 @@ class _MacChatPill extends StatelessWidget {
         label,
         style: TextStyle(
           color: textColor,
-          fontSize: responsive.displayScaled(11.5),
-          fontWeight: FontWeight.w500,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w400,
         ),
       ),
     );
@@ -1682,7 +1682,7 @@ class _ChatFollowButtonState extends State<_ChatFollowButton> {
                         ? theme.secondaryText
                         : theme.primaryForeground,
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
         ),
