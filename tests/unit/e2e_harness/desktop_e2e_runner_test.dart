@@ -828,7 +828,7 @@ void main() {
       expect(config.fixedOtp, '123456');
     });
 
-    test('supports the Linux Flutter desktop runner', () {
+    test('supports the Linux runner used by recovery registration re-Join', () {
       final config = RemoteHandleRecoveryConfig.from(
         fileConfig: const DesktopE2eFileConfig(
           path: '/tmp/e2e.local.yaml',

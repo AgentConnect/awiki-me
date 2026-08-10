@@ -178,7 +178,7 @@ production LocalAuthentication. See
 [../../../docs/handle-recovery-ui.md](../../../docs/handle-recovery-ui.md).
 
 `--case multi-device-app-pair-recovery-registration-rejoin-management-transfer`
-selects one macOS-only `awiki.info` case from the same real App-pair Recovery
+selects one Linux/Xvfb-or-macOS `awiki.info` case from the same real App-pair Recovery
 implementation. The fenced old member re-enters through registration, while
 the App sees only Core's opaque continuation and one user-presence requirement.
 After exact Join approval, standard Root/P5 makes that peer management-ready;

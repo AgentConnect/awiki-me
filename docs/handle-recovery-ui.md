@@ -59,13 +59,13 @@ existing Handle registration，并选择 Core 返回的 opaque continuation。Ap
 `preparation_id/mode/requires_user_presence`，不接触 account verification token、Recovery
 transition 或 owner 选择；一次 user presence 后由 Core 在同一进程消费 preparation 并建立
 Recovery-aware Join。审批和激活后执行标准 Root/P5，要求 rejoined peer 成为
-management-ready admin，且 P5 不进入普通消息历史，随后双向 Direct 各精确一次。该 case 只在
-显式 macOS `awiki.info` 配置下运行：
+management-ready admin，且 P5 不进入普通消息历史，随后双向 Direct 各精确一次。该 case 在
+显式 Linux/Xvfb 或 macOS `awiki.info` 配置下运行：
 
 ```bash
 dart run tests/e2e/runner.dart \
   --case multi-device-app-pair-recovery-registration-rejoin-management-transfer \
-  --config <explicit-macos-awiki-info-config.yaml>
+  --config <explicit-awiki-info-config.yaml>
 ```
 
 ```bash

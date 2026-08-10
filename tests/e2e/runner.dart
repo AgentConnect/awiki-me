@@ -809,12 +809,7 @@ class DesktopE2eRunner {
       if (fileConfig.path == null || fileConfig.path!.trim().isEmpty) {
         throw E2eFailure(
           'The recovery registration App-pair case requires an explicit '
-          'macOS awiki.info config file.',
-        );
-      }
-      if (recoveryConfig.platform != DesktopE2ePlatform.macos) {
-        throw E2eFailure(
-          'The recovery registration App-pair case only runs on macOS.',
+          'awiki.info config file.',
         );
       }
     }
@@ -4090,9 +4085,10 @@ Options:
                                the protected fixed test OTP and E2E-only user
                                presence on Linux or macOS.
                                multi-device-app-pair-recovery-registration-
-                               rejoin-management-transfer runs only with an
-                               explicit macOS awiki.info config and covers the
-                               opaque registration continuation through P5.
+                               rejoin-management-transfer runs on Linux/Xvfb
+                               or macOS with an explicit awiki.info config and
+                               covers the opaque registration continuation
+                               through P5.
                                multi-device-app-pair builds and drives two
                                isolated real macOS App processes on one host;
                                it currently runs only the remote member Join
