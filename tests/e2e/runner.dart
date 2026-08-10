@@ -669,11 +669,18 @@ class DesktopE2eRunner {
   }
 
   Future<void> _runRemoteMultiDeviceJoin({List<String>? caseIds}) async {
+    final fullRootTransfer = options.e2eCase == DesktopE2eCase.full;
     final joinConfig = RemoteMultiDeviceJoinConfig.from(
       fileConfig: fileConfig,
-      environment: Platform.environment,
+      environment: fullRootTransfer
+          ? <String, String>{
+              ...Platform.environment,
+              _multiDeviceRemoteJoinGateEnv: '1',
+            }
+          : Platform.environment,
       supportedPlatforms:
-          options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin
+          options.e2eCase == DesktopE2eCase.multiDeviceRemoteJoin ||
+              fullRootTransfer
           ? const <DesktopE2ePlatform>{
               DesktopE2ePlatform.macos,
               DesktopE2ePlatform.linux,
@@ -1649,7 +1656,7 @@ class DesktopE2eRunner {
       }
     }
     if (!reuseReadyIdentity) {
-      await _cli(<String>[
+      final otpArgs = <String>[
         '--format',
         'json',
         'id',
@@ -1657,7 +1664,33 @@ class DesktopE2eRunner {
         '--handle',
         peerConfig.cliHandle,
         '--verification-stdin',
-      ], stdinText: jsonEncode(<String, String>{'phone': peerConfig.otpPhone}));
+      ];
+      final otpInput = jsonEncode(<String, String>{
+        'phone': peerConfig.otpPhone,
+      });
+      var otpRequest = await _cli(
+        otpArgs,
+        allowFailure: true,
+        stdinText: otpInput,
+      );
+      if (isRetryableCliRegistrationOtpServiceError(otpRequest)) {
+        _line(
+          'CLI registration OTP request was rate-limited; retrying once '
+          'after the remote window.',
+        );
+        await Future<void>.delayed(const Duration(seconds: 61));
+        otpRequest = await _cli(
+          otpArgs,
+          allowFailure: true,
+          stdinText: otpInput,
+        );
+      }
+      if (otpRequest.exitCode != 0 && !options.dryRun) {
+        throw E2eFailure(
+          'CLI peer registration OTP request failed: '
+          '${redactor.redact(otpRequest.output)}',
+        );
+      }
       final register = await _cli(
         <String>[
           '--format',
@@ -2044,6 +2077,7 @@ class DesktopE2eRunner {
         'LC_ALL': locale,
         ...flutterBuildIsolation.environment,
         if (config?.e2eCase == DesktopE2eCase.full) ...const <String, String>{
+          _multiDeviceRemoteJoinGateEnv: '1',
           'AWIKI_MULTI_DEVICE_DEVICE_REVOKE_ENABLED': '1',
         },
       };
@@ -3119,6 +3153,25 @@ String cliBuildCommitFromVersionJson(String output) {
     );
   }
   return commit.trim().toLowerCase();
+}
+
+bool isRetryableCliRegistrationOtpServiceError(DesktopCommandResult result) {
+  if (result.exitCode == 0) {
+    return false;
+  }
+  Object? decoded;
+  try {
+    decoded = jsonDecode(result.output);
+  } on Object {
+    return false;
+  }
+  final error = decoded is Map ? decoded['error'] : null;
+  if (error is! Map || error['code'] != 'service_error') {
+    return false;
+  }
+  final details = error['details'];
+  final serviceCode = details is Map ? details['service_code'] : null;
+  return serviceCode is! String || serviceCode.trim().isEmpty;
 }
 
 String _basename(String path) {

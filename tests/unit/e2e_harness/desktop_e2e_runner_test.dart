@@ -948,6 +948,64 @@ void main() {
     });
   });
 
+  group('CLI registration OTP retry', () {
+    test('retries only one opaque structured service error', () {
+      expect(
+        isRetryableCliRegistrationOtpServiceError(
+          DesktopCommandResult(
+            exitCode: 5,
+            output: jsonEncode(<String, Object?>{
+              'error': <String, Object?>{'code': 'service_error'},
+            }),
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        isRetryableCliRegistrationOtpServiceError(
+          DesktopCommandResult(
+            exitCode: 5,
+            output: jsonEncode(<String, Object?>{
+              'error': <String, Object?>{
+                'code': 'service_error',
+                'details': <String, Object?>{
+                  'service_code': 'registration.invalid_otp',
+                },
+              },
+            }),
+          ),
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not retry success, malformed output, or another error', () {
+      expect(
+        isRetryableCliRegistrationOtpServiceError(
+          const DesktopCommandResult(exitCode: 0, output: ''),
+        ),
+        isFalse,
+      );
+      expect(
+        isRetryableCliRegistrationOtpServiceError(
+          const DesktopCommandResult(exitCode: 5, output: 'not-json'),
+        ),
+        isFalse,
+      );
+      expect(
+        isRetryableCliRegistrationOtpServiceError(
+          DesktopCommandResult(
+            exitCode: 5,
+            output: jsonEncode(<String, Object?>{
+              'error': <String, Object?>{'code': 'invalid_input'},
+            }),
+          ),
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('CLI tenant preflight', () {
     test('returns an exact reusable target or no match', () {
       final tenant = cliTenantConfigFromListJson(
