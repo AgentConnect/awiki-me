@@ -1,5 +1,5 @@
 // [INPUT]: Recovery UI intents plus the Core-owned operation service.
-// [OUTPUT]: Secret-free V4.0 Recovery UI state.
+// [OUTPUT]: Secret-free V4.0 Recovery UI state with one post-commit auto-resume.
 // [POS]: Presentation controller; it never persists an operation locator or phase.
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -256,7 +256,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
 
   Future<void> activate({required String presenceReason}) async {
     final progress = state.progress;
-    if (progress == null) return;
+    if (progress == null || state.isBusy) return;
     if (!state.riskConfirmed) {
       state = state.copyWith(
         error: HandleRecoveryUiError.riskConfirmationRequired,
@@ -271,8 +271,34 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
       );
       if (mounted) state = state.copyWith(progress: next);
     } catch (error) {
+      Object? failure = error;
+      HandleRecoveryProgress? latest;
+      try {
+        latest = await _service.status(progress.operationId);
+        if (latest.isCompleted) {
+          failure = null;
+        } else if (latest.canResume) {
+          try {
+            latest = await _service.resume(progress.operationId);
+            failure = null;
+          } catch (resumeError) {
+            failure = resumeError;
+            try {
+              latest = await _service.status(progress.operationId);
+            } catch (_) {
+              // Keep the last readable Core projection and resume error.
+            }
+          }
+        }
+      } catch (_) {
+        // Keep the original activation error when Core status is unavailable.
+      }
       if (mounted) {
-        state = state.copyWith(error: handleRecoveryUiErrorFrom(error));
+        state = state.copyWith(
+          progress: latest,
+          error: failure == null ? null : handleRecoveryUiErrorFrom(failure),
+          clearError: failure == null,
+        );
       }
     } finally {
       if (mounted) state = state.copyWith(isBusy: false);
@@ -281,7 +307,7 @@ class HandleRecoveryController extends StateNotifier<HandleRecoveryState> {
 
   Future<void> resume() async {
     final progress = state.progress;
-    if (progress == null) return;
+    if (progress == null || state.isBusy) return;
     state = state.copyWith(isBusy: true, clearError: true);
     try {
       final next = await _service.resume(progress.operationId);

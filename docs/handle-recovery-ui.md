@@ -28,8 +28,11 @@ capability 同时开启。
 - activate 需要 user presence。正式 App 使用平台 LocalAuthentication；自动化 E2E
   只能覆盖测试专用 `UserPresencePort`，不能声称验证了真实系统认证。
 - Core 是唯一恢复状态机。App 只展示粗粒度 phase，并在 Core 标记可恢复时提供精确
-  resume；完成时持久化 Core 授权的 Registry epoch reset、激活恢复身份并直接收束到消息
-  主界面，不把用户留在 Recovery 页面。
+  resume。远端 Commit 已成功、本机 JWT 刷新或 P5 PreKey 发布暂时失败时，Core 必须
+  保留同一 operation 并投影 `local_transition_pending`；App 刷新精确 status 后自动续跑一次，
+  仍失败则保留“继续恢复”操作，不得降级为“未准备完成”或要求新建 Recovery。
+  完成时持久化 Core 授权的 Registry epoch reset、激活恢复身份并直接收束到消息主界面，
+  不把用户留在 Recovery 页面。
 - Recovery 不新增身份通知。其他 App 在 realtime 连接中断时立即用 Reliable Sync 复核现有
   授权；Core 返回终止性 `authRevoked` 后，App 先隔离旧会话和投影、回到统一登录页，再展示
   一次“账号登录状态已失效”的确认提示。该提示使用中性文案，因为同一终止状态也可能来自
@@ -42,6 +45,9 @@ capability 同时开启。
 `HANDLE-RECOVERY-V1-E2E-001` 先创建远端 ready-admin fixture，再销毁 setup root，并用一个
 没有任何本地身份的 fresh App/native Core root 打开统一 onboarding。用同一 Handle 和手机号
 完成登录/注册验证后选择 Recovery，再完成专用 OTP、风险确认、activate 和 bounded resume。
+activate 后若 Core 回报 post-commit `local_transition_pending`，用例允许 App 在同一
+operation 上自动续跑一次；如仍为可恢复状态，再通过可见的“继续恢复”按钮在有界
+预算内推进，终态或不可恢复错误仍 fail closed。
 fixture 注册与 UI 验证复用同一测试手机号时，用例必须先遵守首个注册 OTP receipt 的
 `retry_at`，并确认 UI 已把第二次 OTP 绑定到规范化 Handle/手机号后才允许提交，避免把
 服务端冷却或异步请求竞态误判为产品恢复失败。

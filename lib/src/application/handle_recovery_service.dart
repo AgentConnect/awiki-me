@@ -1,5 +1,5 @@
 // [INPUT]: Canonical Handle, transient Recovery OTP input, explicit presence, and Core projections.
-// [OUTPUT]: Validated, secret-free Handle Recovery operations for presentation.
+// [OUTPUT]: Validated, secret-free Handle Recovery operations with exact post-commit resume.
 // [POS]: Thin application orchestration; Core is the only durable state machine.
 
 import '../domain/entities/device_management.dart';
@@ -148,6 +148,12 @@ class HandleRecoveryService {
   }) async {
     final normalizedOperationId = _validatedOperationId(operationId);
     final current = await status(normalizedOperationId);
+    if (current.isCompleted) {
+      return current;
+    }
+    if (current.canResume) {
+      return _core.reconcile(normalizedOperationId);
+    }
     if (!current.canActivate) {
       throw HandleRecoveryFailure(
         current.localMigration ==

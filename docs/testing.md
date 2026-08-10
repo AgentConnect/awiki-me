@@ -330,6 +330,10 @@ dart run tests/e2e/runner.dart \
 
 This gate uses current purpose `awiki.identity.handle-recovery.v1` and drives
 prepare/risk confirmation/activate/resume through visible Flutter controls.
+After a remote Commit, a typed `local_transition_pending` result keeps the same
+operation: the App performs one automatic exact resume, then the E2E may use the
+visible resume control within its existing bounded budget. A terminal or
+non-resumable error still fails closed.
 It also keeps one independently rooted old App member across Recovery, proves
 the old principal is fenced, ordinarily re-Joins that App to the replacement
 DID, and requires both App Registry/session views to converge. It then uses an

@@ -1,8 +1,9 @@
 // [INPUT]: Audited awiki.info endpoints, one protected fixed test SMS account,
 //          server-issued SMS retry boundaries, a fresh production
 //          AppBootstrap/native Core root, and an E2E-only user-presence decision.
-// [OUTPUT]: Secret-free proof that Recovery replaces the DID, opens Messages,
-//           and sends a fenced old App back to acknowledged onboarding.
+// [OUTPUT]: Secret-free proof that Recovery replaces the DID, exactly resumes
+//           post-commit local transition, opens Messages, and sends a fenced
+//           old App back to acknowledged onboarding.
 // [POS]: Remote product UI acceptance; setup creates only the remote fixture,
 //        while the tested registration choice and Recovery are UI-driven.
 
@@ -1062,9 +1063,14 @@ Future<void> _waitForCompletedRecovery(
       failure: 'A Recovery transition did not return control to the UI.',
     );
     final state = container.read(handleRecoveryProvider);
-    _failOnRecoveryError(state, 'Recovery activation/resume');
     final progress = state.progress;
     if (progress?.isCompleted ?? false) return;
+    final error = state.error;
+    if (error != null &&
+        !(error.action == HandleRecoveryUiAction.exactResume &&
+            (progress?.canResume ?? false))) {
+      _failOnRecoveryError(state, 'Recovery activation/resume');
+    }
     if (progress == null || !progress.canResume) {
       fail('Recovery stopped in a non-resumable non-terminal phase.');
     }

@@ -8,7 +8,7 @@
    - 不直接拼 message-service wire、读 raw SQLite、写 reliable checkpoint 或持有 DID/E2EE 私钥。
    - `ProductLocalStore` 只保存 App overlay，不建立第二套 durable message truth。
    - tenant 切换必须先释放旧 runtime，并按不可变 Storage Scope 隔离 identity、conversation、cache 与 vault。
-   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。
+   - 首页只保留统一登录/注册；已验证 Handle 存在时才显示 Join/Recovery 选择。Join grant 只能留在 adapter 内存并由 opaque continuation 单次消费；Recovery 必须丢弃该 grant、发送 purpose 隔离的专用 OTP、省略 selector，并由 Core 按输入 Handle 匹配或新增身份，不能把当前身份、`credentialName`/alias 当作目标猜测。远端 Commit 后的 JWT/PreKey 本地收尾失败必须按 Core 的 `local_transition_pending` 保留同一 operation 精确续跑，不得改写为未准备或重新开始。
    - 设备管理等高风险操作通过 `UserPresencePort` 调用系统认证，设备不支持、用户取消或平台认证失败时必须 fail closed。
    - `system_notification_changed` 仅作为设备域因果失效信号：App 必须独立读取 Core typed Join inbox 并展示全局审批入口，不能等待通用 message sync 成功，也不能从 realtime payload 直接构造请求、自动验证/拒绝/批准。
    - Core reliable sync 必须把 v2 `system.notification` marker 作为 exact-device durable inbox hydration 门禁，在提交该页 cursor 前完成 typed notification 投影；因此 realtime hint 丢失时，前台 catch-up 仍能恢复 Join 请求。
@@ -54,7 +54,7 @@
 - [docs/multi-device-app-pair-e2e.md](docs/multi-device-app-pair-e2e.md)：单机双隔离 App 的构建、驱动、协调与秘密边界。
 - [docs/root-key-transfer-ui.md](docs/root-key-transfer-ui.md)：默认关闭的管理设备根导入、user-presence、management-ready 投影与控制消息过滤边界。
 - [docs/group-encryption-ui.md](docs/group-encryption-ui.md)：默认关闭的本设备群加密准备/重试/就绪投影与 P6 v2 Core 启用门禁。
-- [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Manifest Handle Recovery V1、operation-bound OTP、风险确认、Core-owned activate/resume 与 DID replacement 边界。
+- [docs/handle-recovery-ui.md](docs/handle-recovery-ui.md)：默认关闭的 Manifest Handle Recovery V1、operation-bound OTP、风险确认、post-commit 同 operation 精确续跑、Core-owned activate/resume 与 DID replacement 边界。
 - [docs/storage-scope-vault-contract.md](docs/storage-scope-vault-contract.md)：首发 UUID Storage Scope、稳定 Keychain locator 与 lifecycle 权威契约。
 - [docs/scope-secret-platform.md](docs/scope-secret-platform.md)：typed envelope、平台 provider、channel 隔离与 native/E2E gate。
 - [docs/pre-release-storage-cleanup.md](docs/pre-release-storage-cleanup.md)：首发前旧 namespace 目录/Keychain inventory、dry-run、archive 与显式删除 runbook。

@@ -310,6 +310,32 @@ void main() {
       expect(core.activateCalls, 0);
     });
 
+    test('activation resumes the same operation after remote commit', () async {
+      final applied = _operation(
+        lifecycleClass: HandleRecoveryLifecycleClass.applied,
+        commitAttempted: true,
+      );
+      final core = _FakeHandleRecoveryCore(
+        operation: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+        reconcileResult: applied,
+      );
+      final presence = _FakeUserPresence();
+      final service = HandleRecoveryService(core: core, userPresence: presence);
+
+      final result = await service.activate(
+        operationId: 'operation-core-1',
+        presenceReason: 'confirm',
+      );
+
+      expect(result.isCompleted, isTrue);
+      expect(core.activateCalls, 0);
+      expect(core.reconcileCalls, 1);
+      expect(presence.calls, 0);
+    });
+
     test('Group repair impact never changes an applied Recovery result', () {
       final applied = _operation(
         lifecycleClass: HandleRecoveryLifecycleClass.applied,
@@ -592,6 +618,105 @@ void main() {
     expect(container.read(sessionProvider).session?.did, recoveredDid);
     expect(gateway.loginCalls, 1);
   });
+
+  testWidgets(
+    'post-commit activation failure resumes and opens the message workspace',
+    (tester) async {
+      const recoveredDid = 'did:wba:awiki.info:users:alice-new';
+      final core = _FakeHandleRecoveryCore(
+        activateProgressOnError: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.localTransitionPending,
+          commitAttempted: true,
+        ),
+        activateError: StateError('post-commit transport interrupted'),
+        reconcileResult: _operation(
+          lifecycleClass: HandleRecoveryLifecycleClass.applied,
+          commitAttempted: true,
+        ),
+      );
+      final gateway = FakeAwikiGateway()
+        ..localCredentials = const <SessionIdentity>[
+          SessionIdentity(
+            did: recoveredDid,
+            localIdentityId: 'identity-alice',
+            credentialName: 'identity-alice',
+            displayName: 'Alice',
+            handle: 'alice.awiki.info',
+          ),
+        ]
+        ..loginResult = const SessionIdentity(
+          did: recoveredDid,
+          localIdentityId: 'identity-alice',
+          credentialName: 'identity-alice',
+          displayName: 'Alice',
+          handle: 'alice.awiki.info',
+        );
+      await tester.pumpWidget(
+        buildLocalizedTestApp(
+          locale: const Locale('zh'),
+          home: const AppShell(),
+          gateway: gateway,
+          providerOverrides: <Override>[
+            handleRecoveryCorePortProvider.overrideWithValue(core),
+            userPresencePortProvider.overrideWithValue(_FakeUserPresence()),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(AppShell)),
+      );
+      unawaited(
+        Navigator.of(tester.element(find.byType(AppShell))).push<void>(
+          CupertinoPageRoute<void>(
+            builder: (_) => const HandleRecoveryPage(
+              initialHandle: 'alice.awiki.info',
+              initialPhone: '+8613800138000',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('handle-recovery-otp')),
+          matching: find.byType(CupertinoTextField),
+        ),
+        '123456',
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-verify')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-risk-confirmation')),
+      );
+      await tester.drag(
+        find.descendant(
+          of: find.byType(HandleRecoveryPage),
+          matching: find.byType(ListView),
+        ),
+        const Offset(0, -180),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const Key('handle-recovery-risk-confirmation')),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const Key('handle-recovery-activate')),
+      );
+      await tester.tap(find.byKey(const Key('handle-recovery-activate')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HandleRecoveryPage), findsNothing);
+      expect(find.byType(ConversationWorkspacePage), findsOneWidget);
+      expect(container.read(sessionProvider).session?.did, recoveredDid);
+      expect(core.activateCalls, 1);
+      expect(core.reconcileCalls, 1);
+      expect(find.textContaining('恢复尚未准备完成'), findsNothing);
+    },
+  );
 
   group('AppBootstrapEpochBarrier', () {
     test('records bounded app_epoch_barrier_total results', () async {
@@ -918,6 +1043,9 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     HandleRecoveryProgress? operation,
     this.otpResponseOperation,
     this.activateResult,
+    this.activateProgressOnError,
+    this.activateError,
+    this.reconcileResult,
     this.receipt,
     this.statusError,
     this.reconcileError,
@@ -926,6 +1054,9 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   HandleRecoveryProgress operation;
   final HandleRecoveryProgress? otpResponseOperation;
   final HandleRecoveryProgress? activateResult;
+  final HandleRecoveryProgress? activateProgressOnError;
+  final Object? activateError;
+  final HandleRecoveryProgress? reconcileResult;
   final HandleRecoveryRegistryEpochReset? receipt;
   final Object? statusError;
   final Object? reconcileError;
@@ -938,6 +1069,7 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
   int discardCalls = 0;
   int quarantineCalls = 0;
   int activateCalls = 0;
+  int reconcileCalls = 0;
   int receiptCalls = 0;
 
   @override
@@ -997,14 +1129,20 @@ class _FakeHandleRecoveryCore implements HandleRecoveryCorePort {
     required bool userPresenceConfirmed,
   }) async {
     activateCalls += 1;
+    final progressOnError = activateProgressOnError;
+    if (progressOnError != null) operation = progressOnError;
+    final error = activateError;
+    if (error != null) throw error;
     operation = activateResult ?? operation;
     return operation;
   }
 
   @override
   Future<HandleRecoveryProgress> reconcile(String operationId) async {
+    reconcileCalls += 1;
     final error = reconcileError;
     if (error != null) throw error;
+    operation = reconcileResult ?? operation;
     return operation;
   }
 
