@@ -1439,24 +1439,49 @@ void _showInstallCommand(
 Future<void> _showSkillOnboardingDialog(BuildContext context, WidgetRef ref) {
   return AppNavigator.showDialog<void>(
     context,
-    (context) => _SkillOnboardingDialog(
-      onClose: () => Navigator.of(context).pop(),
-      onRegenerate: () => ref.read(skillOnboardingProvider.notifier).generate(),
-    ),
+    (context) =>
+        _SkillOnboardingDialog(onClose: () => Navigator.of(context).pop()),
   );
 }
 
-class _SkillOnboardingDialog extends ConsumerWidget {
-  const _SkillOnboardingDialog({
-    required this.onClose,
-    required this.onRegenerate,
-  });
+class _SkillOnboardingDialog extends ConsumerStatefulWidget {
+  const _SkillOnboardingDialog({required this.onClose});
 
   final VoidCallback onClose;
-  final VoidCallback onRegenerate;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SkillOnboardingDialog> createState() =>
+      _SkillOnboardingDialogState();
+}
+
+class _SkillOnboardingDialogState
+    extends ConsumerState<_SkillOnboardingDialog> {
+  late final TextEditingController _displayNameController;
+  bool _initializedName = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _displayNameController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initializedName) {
+      _displayNameController.text = context.l10n.agentSkillDefaultDisplayName;
+      _initializedName = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _displayNameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final responsive = context.awikiResponsive;
     final state = ref.watch(skillOnboardingProvider);
     final instruction = state.instruction;
@@ -1473,7 +1498,7 @@ class _SkillOnboardingDialog extends ConsumerWidget {
         children: <Widget>[
           AppDialogHeader(
             title: context.l10n.agentSkillInstallTitle,
-            onClose: onClose,
+            onClose: widget.onClose,
             leading: Container(
               width: responsive.displayScaled(34),
               height: responsive.displayScaled(34),
@@ -1490,14 +1515,51 @@ class _SkillOnboardingDialog extends ConsumerWidget {
             ),
           ),
           SizedBox(height: responsive.spacing(16)),
+          Text(
+            context.l10n.agentSkillDisplayName,
+            style: TextStyle(
+              color: const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: responsive.spacing(6)),
+          CupertinoTextField(
+            key: const Key('agent-skill-display-name-field'),
+            controller: _displayNameController,
+            enabled: !state.isLoading,
+            maxLength: 40,
+            placeholder: context.l10n.agentSkillDefaultDisplayName,
+            padding: EdgeInsets.symmetric(
+              horizontal: responsive.spacing(12),
+              vertical: responsive.spacing(10),
+            ),
+          ),
+          SizedBox(height: responsive.spacing(6)),
+          Text(
+            context.l10n.agentSkillDisplayNameHint,
+            style: TextStyle(
+              color: const Color(0xFF66728A),
+              fontSize: responsive.metaSm,
+            ),
+          ),
+          SizedBox(height: responsive.spacing(14)),
           if (state.isLoading)
             const Center(child: CupertinoActivityIndicator())
           else if (instruction == null)
             Text(
-              context.l10n.agentSkillExpired,
-              key: const Key('agent-skill-expired'),
+              state.error == null
+                  ? context.l10n.agentSkillReadyToGenerate
+                  : _skillOnboardingErrorText(context, state.error!),
+              key: Key(
+                state.error == null
+                    ? 'agent-skill-ready-to-generate'
+                    : 'agent-skill-expired',
+              ),
               style: TextStyle(
-                color: AwikiMeColors.danger,
+                color: state.error == null
+                    ? const Color(0xFF66728A)
+                    : AwikiMeColors.danger,
                 fontSize: responsive.bodySm,
                 fontWeight: FontWeight.w400,
               ),
@@ -1537,12 +1599,37 @@ class _SkillOnboardingDialog extends ConsumerWidget {
                 ),
               ),
             ),
+          if (instruction != null) ...<Widget>[
+            SizedBox(height: responsive.spacing(14)),
+            CupertinoButton.filled(
+              key: const Key('agent-skill-copy-button'),
+              onPressed: () =>
+                  _copySkillOnboardingInstruction(context, instruction.prompt),
+              padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  const Icon(CupertinoIcons.doc_on_doc),
+                  SizedBox(width: responsive.spacing(8)),
+                  Flexible(child: Text(context.l10n.agentSkillCopyInstruction)),
+                ],
+              ),
+            ),
+          ],
           SizedBox(height: responsive.spacing(14)),
           CupertinoButton(
             key: const Key('agent-skill-regenerate-button'),
-            onPressed: state.isLoading ? null : onRegenerate,
+            onPressed: state.isLoading
+                ? null
+                : () => ref
+                      .read(skillOnboardingProvider.notifier)
+                      .generate(displayName: _displayNameController.text),
             padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
-            child: Text(context.l10n.agentSkillRegenerate),
+            child: Text(
+              instruction == null
+                  ? context.l10n.agentSkillGenerate
+                  : context.l10n.agentSkillRegenerate,
+            ),
           ),
         ],
       ),
@@ -1625,28 +1712,19 @@ class _SkillPromptText extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(height: responsive.spacing(10)),
-          CupertinoButton.filled(
-            key: const Key('agent-skill-copy-button'),
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: instruction.prompt));
-              if (context.mounted) {
-                AwikiMeToast.show(context, context.l10n.commonCopied);
-              }
-            },
-            padding: EdgeInsets.symmetric(vertical: responsive.spacing(10)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                const Icon(CupertinoIcons.doc_on_doc),
-                SizedBox(width: responsive.spacing(8)),
-                Flexible(child: Text(context.l10n.agentSkillCopyInstruction)),
-              ],
-            ),
-          ),
         ],
       ),
     );
+  }
+}
+
+Future<void> _copySkillOnboardingInstruction(
+  BuildContext context,
+  String prompt,
+) async {
+  await Clipboard.setData(ClipboardData(text: prompt));
+  if (context.mounted) {
+    AwikiMeToast.show(context, context.l10n.commonCopied);
   }
 }
 
@@ -1658,6 +1736,13 @@ String _skillOnboardingErrorText(
     SkillOnboardingError.loginRequired => context.l10n.agentErrorLoginRequired,
     SkillOnboardingError.handleRequired =>
       context.l10n.agentErrorHandleUnavailable,
+    SkillOnboardingError.invalidDisplayName =>
+      context.l10n.agentSkillInvalidDisplayName,
+    SkillOnboardingError.activeTokenLimit =>
+      context.l10n.agentSkillActiveTokenLimit,
+    SkillOnboardingError.rateLimited => context.l10n.agentSkillRateLimited,
+    SkillOnboardingError.serverUpgradeRequired =>
+      context.l10n.agentSkillServerUpgradeRequired,
     SkillOnboardingError.unsupportedTenant =>
       context.l10n.agentSkillUnsupportedTenant,
     SkillOnboardingError.invalidResponse =>

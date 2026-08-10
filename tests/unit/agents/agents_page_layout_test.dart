@@ -2575,9 +2575,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('连接 Skill Agent'), findsOneWidget);
+      final nameField = find.byKey(const Key('agent-skill-display-name-field'));
+      expect(nameField, findsOneWidget);
+      await tester.enterText(nameField, 'Research Copilot');
+      await tester.tap(find.byKey(const Key('agent-skill-regenerate-button')));
+      await tester.pumpAndSettle();
+
       expect(find.text('alice.awiki.info'), findsOneWidget);
       expect(find.text('skill-widget.awiki.info'), findsOneWidget);
       expect(find.byKey(const Key('agent-skill-copy-button')), findsOneWidget);
+      expect(
+        find.byKey(const Key('agent-skill-copy-button')).hitTestable(),
+        findsOneWidget,
+      );
       final prompt = tester
           .widget<Text>(find.byKey(const Key('agent-skill-instruction-text')))
           .data!;
@@ -2585,10 +2595,9 @@ void main() {
       expect(prompt, contains('awsk1_widget_secret_value'));
       expect(prompt, isNot(contains('did:wba:awiki.info:user:alice')));
       expect(control.lastInstallCommand, isNull);
+      expect(skillPort.displayNames, <String>['Research Copilot']);
 
       final copyButton = find.byKey(const Key('agent-skill-copy-button'));
-      await tester.ensureVisible(copyButton);
-      await tester.pumpAndSettle();
       await tester.tap(copyButton);
       await tester.pump();
       expect(clipboardText, prompt);
@@ -2840,19 +2849,23 @@ void main() {
 
 class _SkillOnboardingPortStub implements SkillOnboardingPort {
   int calls = 0;
+  final List<String> displayNames = <String>[];
 
   @override
   Future<SkillOnboardingGrant> issueSkillToken({
     required String controllerDid,
     required String controllerHandle,
+    required String displayName,
     required String clientPlatform,
   }) async {
     calls += 1;
+    displayNames.add(displayName);
     return SkillOnboardingGrant(
       token: 'awsk1_widget_secret_value',
       tokenId: 'agtok_widget_$calls',
       controllerHandle: controllerHandle,
       agentHandle: 'skill-widget.awiki.info',
+      displayName: displayName,
       serviceOrigin: 'https://awiki.info',
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );

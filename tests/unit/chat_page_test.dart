@@ -1196,7 +1196,7 @@ void main() {
 
     expect(find.text('融资协作群'), findsOneWidget);
     expect(find.text('我的智能体'), findsNothing);
-    expect(find.text('安全协作中'), findsOneWidget);
+    expect(find.text('安全协作中'), findsNothing);
     expect(find.text('群聊信息'), findsNothing);
     expect(find.text('身份卡'), findsNothing);
     expect(find.byKey(const Key('chat-identity-card-button')), findsNothing);

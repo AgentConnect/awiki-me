@@ -37,13 +37,18 @@ class UserServiceSkillOnboardingAdapter implements SkillOnboardingPort {
   Future<SkillOnboardingGrant> issueSkillToken({
     required String controllerDid,
     required String controllerHandle,
+    required String displayName,
     required String clientPlatform,
   }) async {
     final normalizedControllerHandle = controllerHandle
         .trim()
         .replaceFirst(RegExp(r'^@+'), '')
         .toLowerCase();
-    if (controllerDid.trim().isEmpty || normalizedControllerHandle.isEmpty) {
+    final normalizedDisplayName = displayName.trim();
+    if (controllerDid.trim().isEmpty ||
+        normalizedControllerHandle.isEmpty ||
+        normalizedDisplayName.isEmpty ||
+        normalizedDisplayName.length > 40) {
       throw const FormatException('skill_onboarding_controller_required');
     }
     final result = await _rpcCall(
@@ -51,6 +56,7 @@ class UserServiceSkillOnboardingAdapter implements SkillOnboardingPort {
         'agent_kind': 'skill',
         'controller_did': controllerDid.trim(),
         'controller_handle': normalizedControllerHandle,
+        'display_name': normalizedDisplayName,
         'one_time': true,
         'metadata': <String, Object?>{
           'client': 'awiki-me',
@@ -63,6 +69,10 @@ class UserServiceSkillOnboardingAdapter implements SkillOnboardingPort {
     final serviceOrigin = scope is Map
         ? scope['service_origin']?.toString().trim() ?? ''
         : '';
+    final metadata = scope is Map ? scope['metadata'] : null;
+    final responseDisplayName = metadata is Map
+        ? metadata['default_display_name']?.toString().trim() ?? ''
+        : '';
     final token = result['token']?.toString() ?? '';
     final tokenId = result['token_id']?.toString() ?? '';
     final responseControllerHandle =
@@ -73,6 +83,7 @@ class UserServiceSkillOnboardingAdapter implements SkillOnboardingPort {
         tokenId.isEmpty ||
         responseControllerHandle.isEmpty ||
         agentHandle.isEmpty ||
+        responseDisplayName != normalizedDisplayName ||
         serviceOrigin.isEmpty ||
         expiresAt == null) {
       throw const FormatException('invalid_skill_onboarding_response');
@@ -82,6 +93,7 @@ class UserServiceSkillOnboardingAdapter implements SkillOnboardingPort {
       tokenId: tokenId,
       controllerHandle: responseControllerHandle,
       agentHandle: agentHandle,
+      displayName: responseDisplayName,
       serviceOrigin: serviceOrigin,
       expiresAt: expiresAt.toUtc(),
     );

@@ -731,7 +731,6 @@
       }
     }
   },
-  "chatSafeCollaboration": "安全协作中",
   "chatAddAttachment": "添加附件",
   "chatAddEmoji": "选择表情",
   "chatCaptureScreenshot": "截图",
@@ -923,6 +922,15 @@
   "agentSkillInstallTitle": "连接 Skill Agent",
   "agentSkillControllerHandle": "你的 Handle",
   "agentSkillAgentHandle": "Agent Handle",
+  "agentSkillDisplayName": "Agent 名称",
+  "agentSkillDefaultDisplayName": "Skill Agent",
+  "agentSkillDisplayNameHint": "将显示在会话和智能体列表中，请在生成安装指令前修改。",
+  "agentSkillInvalidDisplayName": "请输入 1–40 个字符的 Agent 名称。",
+  "agentSkillActiveTokenLimit": "已有 5 条尚未领取的 Skill Agent 指令仍然有效，请使用已有指令或等待其中一条过期。",
+  "agentSkillRateLimited": "近期生成 Skill Agent 指令的次数过多，请等待几分钟后再试。",
+  "agentSkillServerUpgradeRequired": "当前服务端暂不支持可编辑 Agent 名称，请先升级 User Service 再生成安装指令。",
+  "agentSkillReadyToGenerate": "设置一个易读名称，然后生成一次性安装指令。",
+  "agentSkillGenerate": "生成安装指令",
   "agentSkillCopyInstruction": "复制安装指令",
   "agentSkillRegenerate": "重新生成安装指令",
   "agentSkillSecretNotice": "有效期 30 分钟。复制内容包含一次性密钥，只发送给你要连接的 Agent。",

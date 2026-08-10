@@ -1751,9 +1751,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatSafeCollaboration => 'Secure collaboration';
-
-  @override
   String get chatAddAttachment => 'Add attachment';
 
   @override
@@ -2168,6 +2165,39 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentSkillAgentHandle => 'Agent Handle';
+
+  @override
+  String get agentSkillDisplayName => 'Agent name';
+
+  @override
+  String get agentSkillDefaultDisplayName => 'Skill Agent';
+
+  @override
+  String get agentSkillDisplayNameHint =>
+      'Shown in conversations and the Agent list. Edit it before generating the instruction.';
+
+  @override
+  String get agentSkillInvalidDisplayName =>
+      'Enter an Agent name between 1 and 40 characters.';
+
+  @override
+  String get agentSkillActiveTokenLimit =>
+      'Five unclaimed Skill Agent instructions are still active. Use an existing instruction or wait for one to expire.';
+
+  @override
+  String get agentSkillRateLimited =>
+      'Too many Skill Agent instructions were generated recently. Wait a few minutes before trying again.';
+
+  @override
+  String get agentSkillServerUpgradeRequired =>
+      'This server does not support editable Agent names yet. Upgrade User Service before generating an instruction.';
+
+  @override
+  String get agentSkillReadyToGenerate =>
+      'Choose a readable name, then generate the one-time installation instruction.';
+
+  @override
+  String get agentSkillGenerate => 'Generate installation instruction';
 
   @override
   String get agentSkillCopyInstruction => 'Copy installation instruction';

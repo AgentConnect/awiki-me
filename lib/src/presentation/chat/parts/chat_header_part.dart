@@ -64,7 +64,6 @@ class _ChatHeader extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final showSecurityPill = width >= 620;
             final avatarSize = responsive.displayScaled(30);
 
             return Row(
@@ -87,7 +86,6 @@ class _ChatHeader extends StatelessWidget {
                     agentBadgeLabel: agentBadgeLabel,
                     isDeletedAgentConversation: isDeletedAgentConversation,
                     showAgentBadge: width >= 500,
-                    showSecurityPill: showSecurityPill,
                     semanticLabel: openInfoLabel,
                     onNameTap: onPeerInfoTap,
                   ),
@@ -228,7 +226,6 @@ class _MacHeaderIdentityText extends StatelessWidget {
     required this.agentBadgeLabel,
     required this.isDeletedAgentConversation,
     required this.showAgentBadge,
-    required this.showSecurityPill,
     required this.semanticLabel,
     required this.onNameTap,
   });
@@ -237,7 +234,6 @@ class _MacHeaderIdentityText extends StatelessWidget {
   final String? agentBadgeLabel;
   final bool isDeletedAgentConversation;
   final bool showAgentBadge;
-  final bool showSecurityPill;
   final String semanticLabel;
   final VoidCallback onNameTap;
 
@@ -273,14 +269,6 @@ class _MacHeaderIdentityText extends StatelessWidget {
             textColor: isDeletedAgentConversation
                 ? AwikiMePalette.mutedNeutral
                 : AwikiMePalette.brandAccent,
-          ),
-        ],
-        if (showSecurityPill) ...<Widget>[
-          SizedBox(width: responsive.displayScaled(6)),
-          _MacChatPill(
-            label: context.l10n.chatSafeCollaboration,
-            color: const Color(0xFFE6F8EE),
-            textColor: AwikiMePalette.successGreen,
           ),
         ],
       ],
