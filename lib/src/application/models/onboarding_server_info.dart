@@ -196,6 +196,7 @@ SkillOnboardingCapability _parseSkillOnboardingCapability(Object? raw) {
   );
   final protocolVersion = json['protocol_version'];
   final onboardingPath = json['onboarding_path'];
+  final displayNameBinding = json['display_name_binding'];
   if (json['enabled'] != true ||
       protocolVersion is! int ||
       onboardingPath is! String) {
@@ -205,6 +206,7 @@ SkillOnboardingCapability _parseSkillOnboardingCapability(Object? raw) {
     enabled: true,
     protocolVersion: protocolVersion,
     onboardingPath: onboardingPath,
+    displayNameBinding: displayNameBinding is String ? displayNameBinding : '',
   );
   return capability.supportsCurrentProtocol
       ? capability

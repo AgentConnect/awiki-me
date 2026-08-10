@@ -18,6 +18,7 @@ const _enabledCapability = SkillOnboardingCapability(
   enabled: true,
   protocolVersion: skillOnboardingProtocolVersion,
   onboardingPath: skillOnboardingDocumentPath,
+  displayNameBinding: skillOnboardingDisplayNameBinding,
 );
 
 void main() {
@@ -31,6 +32,7 @@ void main() {
           tokenId: 'agtok_skill_1',
           controllerHandle: 'alice.awiki.info',
           agentHandle: 'skill-test.awiki.info',
+          displayName: 'Research Copilot',
           serviceOrigin: 'https://awiki.info',
           expiresAt: DateTime.utc(2026, 7, 21, 12, 30),
         ),
@@ -62,6 +64,11 @@ void main() {
       );
       expect(instruction.prompt, isNot(contains('user_id')));
       expect(instruction.prompt, isNot(contains('--token')));
+      expect(instruction.displayName, 'Research Copilot');
+      expect(
+        instruction.prompt,
+        contains('automatic follow of its controller'),
+      );
       expect(instruction.toString(), isNot(contains(rawToken)));
     },
   );
@@ -77,6 +84,7 @@ void main() {
         tokenId: 'agtok_skill_1',
         controllerHandle: controller,
         agentHandle: 'skill-test.awiki.info',
+        displayName: 'Research Copilot',
         serviceOrigin: origin,
         expiresAt: DateTime.utc(2026, 7, 21, 12, 30),
       );
@@ -107,6 +115,7 @@ void main() {
         tokenId: 'agtok_skill_anpclaw',
         controllerHandle: 'newhandle1.anpclaw.com',
         agentHandle: 'skill-test.anpclaw.com',
+        displayName: 'Research Copilot',
         serviceOrigin: 'https://anpclaw.com',
         expiresAt: DateTime.utc(2026, 7, 30, 13),
       ),
@@ -135,6 +144,7 @@ void main() {
       tokenId: 'agtok_skill_1',
       controllerHandle: 'alice.awiki.info',
       agentHandle: 'skill-test.awiki.info',
+      displayName: 'Research Copilot',
       serviceOrigin: 'https://awiki.info',
       expiresAt: DateTime.utc(2026, 7, 21, 12, 30),
     );
@@ -150,6 +160,11 @@ void main() {
         enabled: true,
         protocolVersion: skillOnboardingProtocolVersion,
         onboardingPath: 'https://example.com/onboarding.md',
+      ),
+      const SkillOnboardingCapability(
+        enabled: true,
+        protocolVersion: skillOnboardingProtocolVersion,
+        onboardingPath: skillOnboardingDocumentPath,
       ),
     ]) {
       expect(
@@ -197,11 +212,14 @@ void main() {
             ),
           );
 
-      await container.read(skillOnboardingProvider.notifier).generate();
+      await container
+          .read(skillOnboardingProvider.notifier)
+          .generate(displayName: 'Research Copilot');
 
       expect(port.calls, 1);
       expect(port.controllerDid, 'did:wba:awiki.info:user:alice');
       expect(port.controllerHandle, 'alice.awiki.info');
+      expect(port.displayName, 'Research Copilot');
       expect(container.read(skillOnboardingProvider).instruction, isNotNull);
 
       container.read(sessionProvider.notifier).clear();
@@ -240,10 +258,56 @@ void main() {
             ),
           );
 
-      await container.read(skillOnboardingProvider.notifier).generate();
+      await container
+          .read(skillOnboardingProvider.notifier)
+          .generate(displayName: 'Research Copilot');
 
       expect(container.read(skillOnboardingProvider).error, isNull);
       expect(container.read(skillOnboardingProvider).instruction, isNotNull);
+    },
+  );
+
+  test(
+    'controller rejects a server without display-name binding before issue',
+    () async {
+      final port = _FakeSkillOnboardingPort();
+      final gateway = FakeAwikiGateway()
+        ..serverInfo = _skillServerInfo(displayNameBinding: false);
+      final container = ProviderContainer(
+        overrides: <Override>[
+          awikiEnvironmentConfigProvider.overrideWithValue(
+            AwikiEnvironmentConfig(
+              baseUrl: 'https://awiki.info',
+              didDomain: 'awiki.info',
+            ),
+          ),
+          onboardingSupportServiceProvider.overrideWithValue(
+            FakeOnboardingSupportService(gateway),
+          ),
+          skillOnboardingPortProvider.overrideWithValue(port),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .setSession(
+            const SessionIdentity(
+              did: 'did:wba:awiki.info:user:alice',
+              credentialName: 'alice',
+              displayName: 'Alice',
+              handle: 'alice.awiki.info',
+            ),
+          );
+
+      await container
+          .read(skillOnboardingProvider.notifier)
+          .generate(displayName: 'Research Copilot');
+
+      expect(port.calls, 0);
+      expect(
+        container.read(skillOnboardingProvider).error,
+        SkillOnboardingError.serverUpgradeRequired,
+      );
     },
   );
 
@@ -278,7 +342,9 @@ void main() {
             ),
           );
 
-      await container.read(skillOnboardingProvider.notifier).generate();
+      await container
+          .read(skillOnboardingProvider.notifier)
+          .generate(displayName: 'Research Copilot');
 
       expect(port.calls, 0);
       expect(gateway.loadServerInfoCalls, 0);
@@ -318,7 +384,9 @@ void main() {
             ),
           );
 
-      await container.read(skillOnboardingProvider.notifier).generate();
+      await container
+          .read(skillOnboardingProvider.notifier)
+          .generate(displayName: 'Research Copilot');
 
       expect(gateway.loadServerInfoCalls, 1);
       expect(port.calls, 0);
@@ -356,7 +424,9 @@ void main() {
           ),
         );
 
-    final pending = container.read(skillOnboardingProvider.notifier).generate();
+    final pending = container
+        .read(skillOnboardingProvider.notifier)
+        .generate(displayName: 'Research Copilot');
     await Future<void>.delayed(Duration.zero);
     container.read(sessionProvider.notifier).clear();
     capability.complete(_skillServerInfo());
@@ -402,16 +472,68 @@ void main() {
           ),
         );
 
-    await container.read(skillOnboardingProvider.notifier).generate();
+    await container
+        .read(skillOnboardingProvider.notifier)
+        .generate(displayName: 'Research Copilot');
 
     expect(
       container.read(skillOnboardingProvider).error,
       SkillOnboardingError.unsupportedTenant,
     );
   });
+
+  test('regeneration limit preserves the current usable instruction', () async {
+    final port = _FakeSkillOnboardingPort(domain: 'anpclaw.com');
+    final gateway = FakeAwikiGateway()..serverInfo = _skillServerInfo();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        awikiEnvironmentConfigProvider.overrideWithValue(
+          AwikiEnvironmentConfig(baseUrl: 'https://anpclaw.com'),
+        ),
+        onboardingSupportServiceProvider.overrideWithValue(
+          FakeOnboardingSupportService(gateway),
+        ),
+        skillOnboardingPortProvider.overrideWithValue(port),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .setSession(
+          const SessionIdentity(
+            did: 'did:wba:anpclaw.com:user:alice',
+            credentialName: 'alice',
+            displayName: 'Alice',
+            handle: 'alice.anpclaw.com',
+          ),
+        );
+
+    await container
+        .read(skillOnboardingProvider.notifier)
+        .generate(displayName: 'Research Copilot');
+    final original = container.read(skillOnboardingProvider).instruction;
+    expect(original, isNotNull);
+
+    port.error = const AwikiOnboardingUtilityError(
+      rpcCode: -32004,
+      message: 'active token limit',
+      data: <String, Object?>{'reason': 'skill_onboarding_active_token_limit'},
+    );
+    await container
+        .read(skillOnboardingProvider.notifier)
+        .generate(displayName: 'Research Copilot');
+
+    final state = container.read(skillOnboardingProvider);
+    expect(state.error, SkillOnboardingError.activeTokenLimit);
+    expect(state.instruction, same(original));
+    expect(port.calls, 2);
+  });
 }
 
-OnboardingServerInfo _skillServerInfo({bool enabled = true}) {
+OnboardingServerInfo _skillServerInfo({
+  bool enabled = true,
+  bool displayNameBinding = true,
+}) {
   final base = OnboardingServerInfo.userServiceDefault();
   return OnboardingServerInfo(
     schemaVersion: base.schemaVersion,
@@ -419,7 +541,14 @@ OnboardingServerInfo _skillServerInfo({bool enabled = true}) {
     identity: base.identity,
     agents: OnboardingAgentCapabilities(
       skillOnboarding: enabled
-          ? _enabledCapability
+          ? SkillOnboardingCapability(
+              enabled: true,
+              protocolVersion: skillOnboardingProtocolVersion,
+              onboardingPath: skillOnboardingDocumentPath,
+              displayNameBinding: displayNameBinding
+                  ? skillOnboardingDisplayNameBinding
+                  : '',
+            )
           : const SkillOnboardingCapability.disabled(),
     ),
   );
@@ -429,15 +558,17 @@ class _FakeSkillOnboardingPort implements SkillOnboardingPort {
   _FakeSkillOnboardingPort({this.domain = 'awiki.info', this.error});
 
   final String domain;
-  final Object? error;
+  Object? error;
   int calls = 0;
   String? controllerDid;
   String? controllerHandle;
+  String? displayName;
 
   @override
   Future<SkillOnboardingGrant> issueSkillToken({
     required String controllerDid,
     required String controllerHandle,
+    required String displayName,
     required String clientPlatform,
   }) async {
     calls += 1;
@@ -446,11 +577,13 @@ class _FakeSkillOnboardingPort implements SkillOnboardingPort {
     }
     this.controllerDid = controllerDid;
     this.controllerHandle = controllerHandle;
+    this.displayName = displayName;
     return SkillOnboardingGrant(
       token: 'awsk1_unit_test_secret_value',
       tokenId: 'agtok_skill_$calls',
       controllerHandle: controllerHandle,
       agentHandle: 'skill-test-$calls.$domain',
+      displayName: displayName,
       serviceOrigin: 'https://$domain',
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );

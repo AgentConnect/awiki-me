@@ -138,6 +138,7 @@ OnboardingServerInfo skillOnboardingTestServerInfo({
               enabled: true,
               protocolVersion: skillOnboardingProtocolVersion,
               onboardingPath: skillOnboardingDocumentPath,
+              displayNameBinding: skillOnboardingDisplayNameBinding,
             )
           : const SkillOnboardingCapability.disabled(),
       skillGroupMembership: skillGroupMembershipEnabled

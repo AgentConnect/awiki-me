@@ -247,10 +247,20 @@ void main() {
           'enabled': true,
           'protocol_version': 1,
           'onboarding_path': '/cli/onboarding.md',
+          'display_name_binding': 'token_scope_v1',
         },
-      }).agents.skillOnboarding.supportsCurrentProtocol,
+      }).agents.skillOnboarding.supportsDisplayNameBinding,
       isTrue,
     );
+    final legacyCapability = _serverInfoWithAgents(<String, Object?>{
+      'skill_onboarding': <String, Object?>{
+        'enabled': true,
+        'protocol_version': 1,
+        'onboarding_path': '/cli/onboarding.md',
+      },
+    }).agents.skillOnboarding;
+    expect(legacyCapability.supportsCurrentProtocol, isTrue);
+    expect(legacyCapability.supportsDisplayNameBinding, isFalse);
     for (final malformed in <Object?>[
       <String, Object?>{
         'skill_onboarding': <String, Object?>{

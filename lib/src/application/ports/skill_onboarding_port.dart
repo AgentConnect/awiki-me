@@ -4,6 +4,7 @@ abstract interface class SkillOnboardingPort {
   Future<SkillOnboardingGrant> issueSkillToken({
     required String controllerDid,
     required String controllerHandle,
+    required String displayName,
     required String clientPlatform,
   });
 }

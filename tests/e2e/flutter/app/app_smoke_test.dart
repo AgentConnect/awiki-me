@@ -1050,6 +1050,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('agent-skill-onboarding-button')));
       await tester.pumpAndSettle();
+      final nameField = find.byKey(const Key('agent-skill-display-name-field'));
+      await tester.enterText(nameField, 'Build Copilot');
+      await tester.tap(find.byKey(const Key('agent-skill-regenerate-button')));
+      await tester.pumpAndSettle();
 
       final copyButton = find.byKey(const Key('agent-skill-copy-button'));
       await tester.ensureVisible(copyButton);
@@ -1058,7 +1062,9 @@ void main() {
       await tester.pump();
 
       expect(skillPort.calls, 1);
+      expect(skillPort.displayNames, <String>['Build Copilot']);
       expect(clipboardText, contains('AWIKI_SKILL_ONBOARDING_V1'));
+      expect(clipboardText, contains('automatic follow of its controller'));
       expect(clipboardText, contains('token=awsk1_smoke_secret_value'));
       expect(clipboardText, isNot(contains(session.did)));
       expect(control.lastInstallCommand, isNull);
@@ -1561,19 +1567,23 @@ void main() {
 
 class _SmokeSkillOnboardingPort implements SkillOnboardingPort {
   int calls = 0;
+  final List<String> displayNames = <String>[];
 
   @override
   Future<SkillOnboardingGrant> issueSkillToken({
     required String controllerDid,
     required String controllerHandle,
+    required String displayName,
     required String clientPlatform,
   }) async {
     calls += 1;
+    displayNames.add(displayName);
     return SkillOnboardingGrant(
       token: 'awsk1_smoke_secret_value',
       tokenId: 'agtok_smoke_$calls',
       controllerHandle: controllerHandle,
       agentHandle: 'skill-smoke.awiki.info',
+      displayName: displayName,
       serviceOrigin: 'https://awiki.info',
       expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
     );

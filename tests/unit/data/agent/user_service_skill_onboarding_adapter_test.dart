@@ -24,12 +24,14 @@ void main() {
       final grant = await adapter.issueSkillToken(
         controllerDid: 'did:wba:awiki.info:user:alice',
         controllerHandle: '@Alice.AWIKI.INFO',
+        displayName: 'Research Copilot',
         clientPlatform: 'android',
       );
 
       expect(grant.token, 'awsk1_adapter_secret_value');
       expect(grant.agentHandle, 'skill-test.awiki.info');
       expect(grant.serviceOrigin, 'https://awiki.info');
+      expect(grant.displayName, 'Research Copilot');
       expect(grant.toString(), isNot(contains('awsk1_adapter_secret_value')));
       expect(httpClient.requests, hasLength(1));
       expect(
@@ -60,6 +62,7 @@ void main() {
       expect(params['agent_kind'], 'skill');
       expect(params['controller_did'], 'did:wba:awiki.info:user:alice');
       expect(params['controller_handle'], 'alice.awiki.info');
+      expect(params['display_name'], 'Research Copilot');
       expect(params['one_time'], true);
       expect(params.containsKey('controller_user_id'), isFalse);
       expect(params.containsKey('handle'), isFalse);
@@ -93,7 +96,8 @@ class _CapturingHttpClient extends http.BaseClient {
           '"controller_full_handle":"alice.awiki.info",'
           '"handle":"skill-test.awiki.info",'
           '"expires_at":"2026-07-21T12:30:00Z",'
-          '"scope":{"service_origin":"https://awiki.info"}'
+          '"scope":{"service_origin":"https://awiki.info",'
+          '"metadata":{"default_display_name":"Research Copilot"}}'
           '},"id":"req-1"}',
         ),
       ]),

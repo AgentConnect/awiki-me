@@ -2053,6 +2053,35 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentSkillAgentHandle => 'Agent Handle';
 
   @override
+  String get agentSkillDisplayName => 'Agent 名称';
+
+  @override
+  String get agentSkillDefaultDisplayName => 'Skill Agent';
+
+  @override
+  String get agentSkillDisplayNameHint => '将显示在会话和智能体列表中，请在生成安装指令前修改。';
+
+  @override
+  String get agentSkillInvalidDisplayName => '请输入 1–40 个字符的 Agent 名称。';
+
+  @override
+  String get agentSkillActiveTokenLimit =>
+      '已有 5 条尚未领取的 Skill Agent 指令仍然有效，请使用已有指令或等待其中一条过期。';
+
+  @override
+  String get agentSkillRateLimited => '近期生成 Skill Agent 指令的次数过多，请等待几分钟后再试。';
+
+  @override
+  String get agentSkillServerUpgradeRequired =>
+      '当前服务端暂不支持可编辑 Agent 名称，请先升级 User Service 再生成安装指令。';
+
+  @override
+  String get agentSkillReadyToGenerate => '设置一个易读名称，然后生成一次性安装指令。';
+
+  @override
+  String get agentSkillGenerate => '生成安装指令';
+
+  @override
   String get agentSkillCopyInstruction => '复制安装指令';
 
   @override

@@ -17,6 +17,10 @@ import '../app_shell/providers/session_provider.dart';
 enum SkillOnboardingError {
   loginRequired,
   handleRequired,
+  invalidDisplayName,
+  activeTokenLimit,
+  rateLimited,
+  serverUpgradeRequired,
   unsupportedTenant,
   invalidResponse,
   requestFailed,
@@ -77,7 +81,7 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
   int _generation = 0;
   static const _capabilityTimeout = Duration(seconds: 10);
 
-  Future<void> generate() async {
+  Future<void> generate({required String displayName}) async {
     final session = ref.read(sessionProvider).session;
     if (session == null) {
       state = const SkillOnboardingState(
@@ -86,9 +90,16 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
       return;
     }
     final handle = session.handle?.trim();
+    final normalizedDisplayName = displayName.trim();
     if (handle == null || handle.isEmpty) {
       state = const SkillOnboardingState(
         error: SkillOnboardingError.handleRequired,
+      );
+      return;
+    }
+    if (normalizedDisplayName.isEmpty || normalizedDisplayName.length > 40) {
+      state = const SkillOnboardingState(
+        error: SkillOnboardingError.invalidDisplayName,
       );
       return;
     }
@@ -103,9 +114,12 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
       return;
     }
 
-    _expiryTimer?.cancel();
+    final fallbackInstruction = state.instruction;
     final generation = ++_generation;
-    state = const SkillOnboardingState(isLoading: true);
+    state = SkillOnboardingState(
+      instruction: fallbackInstruction,
+      isLoading: true,
+    );
     try {
       final serverInfo = await ref
           .read(onboardingSupportServiceProvider)
@@ -113,7 +127,19 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
           .timeout(_capabilityTimeout);
       final capability = serverInfo.agents.skillOnboarding;
       if (!capability.supportsCurrentProtocol) {
-        _setError(generation, SkillOnboardingError.unsupportedTenant);
+        _setError(
+          generation,
+          SkillOnboardingError.unsupportedTenant,
+          fallbackInstruction: fallbackInstruction,
+        );
+        return;
+      }
+      if (!capability.supportsDisplayNameBinding) {
+        _setError(
+          generation,
+          SkillOnboardingError.serverUpgradeRequired,
+          fallbackInstruction: fallbackInstruction,
+        );
         return;
       }
       if (!_isCurrent(generation, session.did, handle)) {
@@ -124,6 +150,7 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
           .issueSkillToken(
             controllerDid: session.did,
             controllerHandle: handle,
+            displayName: normalizedDisplayName,
             clientPlatform: awikiClientPlatform(),
           );
       final instruction = buildSkillOnboardingInstruction(
@@ -137,26 +164,47 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
         return;
       }
       state = SkillOnboardingState(instruction: instruction);
-      _expiryTimer = Timer(
-        instruction.expiresAt.difference(DateTime.now()),
-        () {
-          if (mounted && generation == _generation) {
-            state = const SkillOnboardingState();
-          }
-        },
-      );
+      _scheduleExpiry(instruction, generation);
     } on FormatException {
-      _setError(generation, SkillOnboardingError.invalidResponse);
+      _setError(
+        generation,
+        SkillOnboardingError.invalidResponse,
+        fallbackInstruction: fallbackInstruction,
+      );
     } on AwikiOnboardingUtilityError catch (error) {
       final data = error.data;
       final reason = data is Map ? data['reason']?.toString() : null;
       if (reason == 'skill_onboarding_capability_disabled') {
-        _setError(generation, SkillOnboardingError.unsupportedTenant);
+        _setError(
+          generation,
+          SkillOnboardingError.unsupportedTenant,
+          fallbackInstruction: fallbackInstruction,
+        );
+      } else if (reason == 'skill_onboarding_active_token_limit') {
+        _setError(
+          generation,
+          SkillOnboardingError.activeTokenLimit,
+          fallbackInstruction: fallbackInstruction,
+        );
+      } else if (reason == 'skill_onboarding_rate_limited') {
+        _setError(
+          generation,
+          SkillOnboardingError.rateLimited,
+          fallbackInstruction: fallbackInstruction,
+        );
       } else {
-        _setError(generation, SkillOnboardingError.requestFailed);
+        _setError(
+          generation,
+          SkillOnboardingError.requestFailed,
+          fallbackInstruction: fallbackInstruction,
+        );
       }
     } on Object {
-      _setError(generation, SkillOnboardingError.requestFailed);
+      _setError(
+        generation,
+        SkillOnboardingError.requestFailed,
+        fallbackInstruction: fallbackInstruction,
+      );
     }
   }
 
@@ -168,10 +216,34 @@ class SkillOnboardingController extends StateNotifier<SkillOnboardingState> {
         current?.handle?.trim() == handle;
   }
 
-  void _setError(int generation, SkillOnboardingError error) {
+  void _setError(
+    int generation,
+    SkillOnboardingError error, {
+    SkillOnboardingInstruction? fallbackInstruction,
+  }) {
     if (mounted && generation == _generation) {
-      state = SkillOnboardingState(error: error);
+      final reusableInstruction =
+          fallbackInstruction != null &&
+              !fallbackInstruction.isExpired(DateTime.now())
+          ? fallbackInstruction
+          : null;
+      state = SkillOnboardingState(
+        instruction: reusableInstruction,
+        error: error,
+      );
+      if (reusableInstruction != null) {
+        _scheduleExpiry(reusableInstruction, generation);
+      }
     }
+  }
+
+  void _scheduleExpiry(SkillOnboardingInstruction instruction, int generation) {
+    _expiryTimer?.cancel();
+    _expiryTimer = Timer(instruction.expiresAt.difference(DateTime.now()), () {
+      if (mounted && generation == _generation) {
+        state = const SkillOnboardingState();
+      }
+    });
   }
 
   void clear() {
