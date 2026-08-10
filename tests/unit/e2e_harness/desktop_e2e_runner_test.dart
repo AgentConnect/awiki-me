@@ -264,12 +264,12 @@ void main() {
     test('parses recovery registration App-pair case aliases', () {
       final hyphen = DesktopE2eOptions.parse(const <String>[
         '--case',
-        'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+        'multi-device-app-pair-recovery-registration-rejoin',
         '--dry-run',
       ]);
       final underscore = DesktopE2eOptions.parse(const <String>[
         '--case',
-        'multi_device_app_pair_recovery_registration_rejoin_management_transfer',
+        'multi_device_app_pair_recovery_registration_rejoin',
         '--dry-run',
       ]);
 
@@ -284,7 +284,7 @@ void main() {
       expect(hyphen.e2eCase.requiresCliPeer, isFalse);
       expect(
         hyphen.e2eCase.scenario,
-        'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+        'multi-device-app-pair-recovery-registration-rejoin',
       );
       expect(hyphen.e2eCase.caseIds, <String>[
         'HANDLE-RECOVERY-REGISTRATION-REJOIN-E2E-001',
@@ -588,7 +588,7 @@ void main() {
             'Unsupported E2E case "unknown". '
                 'Use smoke, multi-device, multi-device-remote-join, '
                 'multi-device-remote-recovery, '
-                'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
+                'multi-device-app-pair-recovery-registration-rejoin, '
                 'multi-device-app-pair, multi-device-app-pair-functional, step4-revoke-mls, full, performance, direct, '
                 'group, attachment, contacts, inbound, identity-switch, restart, '
                 'display-name-fallback, '

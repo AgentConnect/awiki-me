@@ -64,7 +64,7 @@ management-ready admin，且 P5 不进入普通消息历史，随后双向 Direc
 
 ```bash
 dart run tests/e2e/runner.dart \
-  --case multi-device-app-pair-recovery-registration-rejoin-management-transfer \
+  --case multi-device-app-pair-recovery-registration-rejoin \
   --config <explicit-awiki-info-config.yaml>
 ```
 

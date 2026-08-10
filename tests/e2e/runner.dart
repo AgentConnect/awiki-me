@@ -35,7 +35,7 @@ const String _multiDeviceRemoteJoinRunConfigPath =
 const String _multiDeviceRemoteRecoveryScenario =
     'multi-device-handle-recovery-v1';
 const String _multiDeviceAppPairRecoveryRegistrationScenario =
-    'multi-device-app-pair-recovery-registration-rejoin-management-transfer';
+    'multi-device-app-pair-recovery-registration-rejoin';
 const String _multiDeviceRemoteRecoveryRunConfigPath =
     '.e2e/multi-device-remote-recovery/current/run_config.json';
 const String _multiDeviceAppPairScenario =
@@ -861,7 +861,7 @@ class DesktopE2eRunner {
     _resourceSideEffectsPossible = true;
     if (registrationRejoin) {
       await _timed(
-        'Flutter registration re-Join and management transfer lifecycle',
+        'Flutter registration re-Join lifecycle',
         () => _runFlutterTest(
           'integration_test/handle_recovery_ui_test.dart',
           caseIds: _multiDeviceAppPairRecoveryRegistrationCaseIds,
@@ -4055,7 +4055,7 @@ Usage:
   dart run tests/e2e/runner.dart --case multi-device
   dart run tests/e2e/runner.dart --case multi-device-remote-join
   dart run tests/e2e/runner.dart --case multi-device-remote-recovery
-  dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin-management-transfer
+  dart run tests/e2e/runner.dart --case multi-device-app-pair-recovery-registration-rejoin
   dart run tests/e2e/runner.dart --case multi-device-app-pair
   dart run tests/e2e/runner.dart --case multi-device-app-pair-functional
   dart run tests/e2e/runner.dart --case step4-revoke-mls
@@ -4072,7 +4072,7 @@ Usage:
 Options:
   --config PATH                Local YAML config. Defaults to $_defaultDesktopE2eConfigPath.
   --run-id ID                  Stable run id for repeatable local debugging.
-  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-app-pair-recovery-registration-rejoin-management-transfer|multi-device-app-pair|multi-device-app-pair-functional|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
+  --case smoke|multi-device|multi-device-remote-join|multi-device-remote-recovery|multi-device-app-pair-recovery-registration-rejoin|multi-device-app-pair|multi-device-app-pair-functional|step4-revoke-mls|full|performance|direct|group|attachment|contacts|inbound|identity-switch|restart|display-name-fallback|personal-agent|codex-agent|claude-code-agent
                                smoke and multi-device run local App/native
                                checks. multi-device-remote-join is the explicit,
                                unattended real App/CLI message-driven
@@ -5367,7 +5367,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
-        'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+        'multi-device-app-pair-recovery-registration-rejoin',
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         'multi-device-app-pair-functional',
@@ -5395,7 +5395,7 @@ enum DesktopE2eCase {
       DesktopE2eCase.multiDeviceRemoteRecovery =>
         'multi-device-remote-recovery',
       DesktopE2eCase.multiDeviceAppPairRecoveryRegistration =>
-        'multi-device-app-pair-recovery-registration-rejoin-management-transfer',
+        'multi-device-app-pair-recovery-registration-rejoin',
       DesktopE2eCase.multiDeviceAppPair => 'multi-device-app-pair',
       DesktopE2eCase.multiDeviceAppPairFunctional =>
         'multi-device-app-pair-functional',
@@ -5485,8 +5485,8 @@ enum DesktopE2eCase {
       'remote-multi-device-recovery' ||
       'remote_multi_device_recovery' =>
         DesktopE2eCase.multiDeviceRemoteRecovery,
-      'multi-device-app-pair-recovery-registration-rejoin-management-transfer' ||
-      'multi_device_app_pair_recovery_registration_rejoin_management_transfer' =>
+      'multi-device-app-pair-recovery-registration-rejoin' ||
+      'multi_device_app_pair_recovery_registration_rejoin' =>
         DesktopE2eCase.multiDeviceAppPairRecoveryRegistration,
       'multi-device-app-pair' ||
       'multi_device_app_pair' => DesktopE2eCase.multiDeviceAppPair,
@@ -5557,7 +5557,7 @@ enum DesktopE2eCase {
         'Unsupported E2E case "$value". '
         'Use smoke, multi-device, multi-device-remote-join, '
         'multi-device-remote-recovery, '
-        'multi-device-app-pair-recovery-registration-rejoin-management-transfer, '
+        'multi-device-app-pair-recovery-registration-rejoin, '
         'multi-device-app-pair, multi-device-app-pair-functional, '
         'step4-revoke-mls, full, performance, direct, '
         'group, attachment, contacts, inbound, identity-switch, restart, '
