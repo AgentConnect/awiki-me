@@ -509,7 +509,7 @@ class _QuickActionPopupMenuEntryState
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: theme.title,
-                      fontSize: responsive.displayScaled(13),
+                      fontSize: 13,
                       fontWeight: FontWeight.w400,
                       letterSpacing: 0,
                     ),

@@ -66,8 +66,8 @@ void main() {
     );
     expect(larger.controlHeight, greaterThan(normal.controlHeight));
     expect(larger.avatarSizeMd, greaterThan(normal.avatarSizeMd));
-    expect(larger.titleLg, greaterThan(normal.titleLg));
-    expect(larger.bodyMd, greaterThan(normal.bodyMd));
+    expect(larger.titleLg, normal.titleLg);
+    expect(larger.bodyMd, normal.bodyMd);
     expect(larger.spacing(16), greaterThan(normal.spacing(16)));
     expect(
       larger.displayScaled(100),

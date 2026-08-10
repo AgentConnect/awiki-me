@@ -795,14 +795,8 @@ class _FriendsSearchField extends StatelessWidget {
           key: const Key('friends-search-field'),
           placeholder: placeholder ?? context.l10n.friendsSearchPlaceholder,
           onChanged: onChanged,
-          style: TextStyle(
-            color: theme.title,
-            fontSize: responsive.displayScaled(15),
-          ),
-          placeholderStyle: TextStyle(
-            color: theme.tertiaryText,
-            fontSize: responsive.displayScaled(15),
-          ),
+          style: TextStyle(color: theme.title, fontSize: 15),
+          placeholderStyle: TextStyle(color: theme.tertiaryText, fontSize: 15),
           prefixIcon: Icon(
             CupertinoIcons.search,
             color: theme.secondaryText,

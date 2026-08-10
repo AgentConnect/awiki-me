@@ -21,7 +21,7 @@ class _DateDivider extends StatelessWidget {
           label,
           style: TextStyle(
             color: theme.secondaryText,
-            fontSize: responsive.displayScaled(11),
+            fontSize: 11,
             fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
           ),
         ),
@@ -1258,8 +1258,8 @@ class _MessageBubble extends StatelessWidget {
               SelectionArea(
                 child: Text(
                   context.l10n.chatSendFailed,
-                  style: TextStyle(
-                    fontSize: responsive.displayScaled(12),
+                  style: const TextStyle(
+                    fontSize: 12,
                     color: AwikiMePalette.dangerRed,
                     fontWeight: FontWeight.w400,
                   ),
@@ -1273,8 +1273,8 @@ class _MessageBubble extends StatelessWidget {
                   semanticLabel: context.l10n.chatRetrySend,
                   child: Text(
                     context.l10n.commonRetry,
-                    style: TextStyle(
-                      fontSize: responsive.displayScaled(12),
+                    style: const TextStyle(
+                      fontSize: 12,
                       color: AwikiMePalette.brandAccent,
                       fontWeight: FontWeight.w400,
                     ),
@@ -1716,7 +1716,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
     final caption = attachment.caption?.trim() ?? '';
     final titleStyle = TextStyle(
       color: widget.macStyle ? AwikiMePalette.inkNeutral : theme.title,
-      fontSize: responsive.displayScaled(13),
+      fontSize: 13,
       fontWeight: FontWeight.w400,
       height: 1.25,
     );
@@ -1724,7 +1724,7 @@ class _AttachmentContentState extends ConsumerState<_AttachmentContent> {
       color: widget.macStyle
           ? AwikiMePalette.mutedNeutral
           : theme.secondaryText,
-      fontSize: responsive.displayScaled(11),
+      fontSize: 11,
       fontWeight: FontWeight.w400,
       height: 1.25,
     );
@@ -2429,7 +2429,7 @@ class _InlineImageInteractionRegionState
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: theme.title,
-                fontSize: responsive.displayScaled(13),
+                fontSize: 13,
                 fontWeight: FontWeight.w400,
                 letterSpacing: 0,
               ),

@@ -449,7 +449,7 @@ class _AgentDetailIdentity extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: theme.title,
-              fontSize: responsive.displayScaled(prominent ? 16 : 14.5),
+              fontSize: prominent ? 16 : 14.5,
               fontWeight: FontWeight.w400,
             ),
           ),

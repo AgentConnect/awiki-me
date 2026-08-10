@@ -414,24 +414,27 @@ class _AwikiMeRootState extends ConsumerState<_AwikiMeRoot>
         builder: (context, child) {
           return AwikiDisplayScaleScope(
             scale: displayScale,
-            child: _DisplayScaleShortcuts(
-              onDecrease: () {
-                ref.read(displayScaleProvider.notifier).decrease();
-                return ref.read(displayScaleProvider);
-              },
-              onIncrease: () {
-                ref.read(displayScaleProvider.notifier).increase();
-                return ref.read(displayScaleProvider);
-              },
-              onReset: () {
-                ref.read(displayScaleProvider.notifier).reset();
-                return ref.read(displayScaleProvider);
-              },
-              child: _KeyboardDismissScope(
-                child: material.Theme(
-                  data: appTheme.materialTheme,
-                  child: AppOrientationScope(
-                    child: child ?? const SizedBox.shrink(),
+            child: AwikiDisplayScaleTextMediaQuery(
+              scale: displayScale,
+              child: _DisplayScaleShortcuts(
+                onDecrease: () {
+                  ref.read(displayScaleProvider.notifier).decrease();
+                  return ref.read(displayScaleProvider);
+                },
+                onIncrease: () {
+                  ref.read(displayScaleProvider.notifier).increase();
+                  return ref.read(displayScaleProvider);
+                },
+                onReset: () {
+                  ref.read(displayScaleProvider.notifier).reset();
+                  return ref.read(displayScaleProvider);
+                },
+                child: _KeyboardDismissScope(
+                  child: material.Theme(
+                    data: appTheme.materialTheme,
+                    child: AppOrientationScope(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
                   ),
                 ),
               ),

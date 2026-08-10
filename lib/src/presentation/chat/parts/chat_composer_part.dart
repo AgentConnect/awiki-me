@@ -639,12 +639,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                           placeholder: context.l10n.chatInputPlaceholder,
                           textStyle: TextStyle(
                             color: theme.title,
-                            fontSize: responsive.displayScaled(14),
+                            fontSize: 14,
                             height: 1.32,
                           ),
                           placeholderStyle: TextStyle(
                             color: theme.tertiaryText,
-                            fontSize: responsive.displayScaled(14),
+                            fontSize: 14,
                           ),
                           padding: EdgeInsets.symmetric(
                             horizontal: responsive.displayScaled(2),
@@ -862,12 +862,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                           onKeyEvent: _handleInputKeyEvent,
                           placeholder: context.l10n.chatInputPlaceholder,
                           textStyle: TextStyle(
-                            fontSize: responsive.displayScaled(15),
+                            fontSize: 15,
                             color: theme.title,
                             height: 1.3,
                           ),
                           placeholderStyle: TextStyle(
-                            fontSize: responsive.displayScaled(15),
+                            fontSize: 15,
                             color: theme.tertiaryText,
                           ),
                           padding: EdgeInsets.symmetric(
@@ -1438,7 +1438,7 @@ class _DisabledComposerNotice extends StatelessWidget {
         textAlign: TextAlign.center,
         style: TextStyle(
           color: AwikiMePalette.mutedNeutral,
-          fontSize: responsive.displayScaled(macStyle ? 12 : 13),
+          fontSize: macStyle ? 12 : 13,
           height: 1.25,
           fontWeight: FontWeight.w400,
         ),

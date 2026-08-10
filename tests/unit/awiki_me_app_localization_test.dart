@@ -290,6 +290,10 @@ void main() {
             0.0001,
           ),
         );
+        expect(
+          MediaQuery.textScalerOf(appContext()).scale(1),
+          closeTo(AwikiDisplayScale.effective(1), 0.0001),
+        );
 
         await tester.tap(find.byType(CupertinoTextField).first);
         await tester.pump();
@@ -305,6 +309,10 @@ void main() {
         expect(AwikiDisplayScaleScope.of(appContext()), 1.1);
         expect(
           appContext().awikiResponsive.displayScale,
+          closeTo(AwikiDisplayScale.effective(1.1), 0.0001),
+        );
+        expect(
+          MediaQuery.textScalerOf(appContext()).scale(1),
           closeTo(AwikiDisplayScale.effective(1.1), 0.0001),
         );
         expect(
@@ -327,6 +335,10 @@ void main() {
             AwikiDisplayScale.effective(AwikiDisplayScale.normal),
             0.0001,
           ),
+        );
+        expect(
+          MediaQuery.textScalerOf(appContext()).scale(1),
+          closeTo(AwikiDisplayScale.effective(1), 0.0001),
         );
         expect(find.text('Display scale 100%'), findsOneWidget);
 

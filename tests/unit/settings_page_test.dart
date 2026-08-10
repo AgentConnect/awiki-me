@@ -35,6 +35,7 @@ void main() {
       await tester.pumpWidget(
         buildLocalizedTestApp(
           home: const _DisplayScaleTestHost(),
+          applyDisplayScale: true,
           providerOverrides: <Override>[
             desktopWindowPlacementServiceProvider.overrideWithValue(placement),
           ],
@@ -50,6 +51,12 @@ void main() {
       expect(find.byType(DisplaySettingsPage), findsOneWidget);
       expect(find.byKey(const Key('display-scale-slider')), findsOneWidget);
       expect(find.text('100%'), findsWidgets);
+      expect(
+        MediaQuery.textScalerOf(
+          tester.element(find.byType(DisplaySettingsPage)),
+        ).scale(1),
+        closeTo(AwikiDisplayScale.effective(1), 0.0001),
+      );
       expect(tester.takeException(), isNull);
 
       final container = ProviderScope.containerOf(
@@ -58,6 +65,12 @@ void main() {
       container.read(displayScaleProvider.notifier).setScale(1.3);
       await tester.pump();
       expect(find.text('130%'), findsWidgets);
+      expect(
+        MediaQuery.textScalerOf(
+          tester.element(find.byType(DisplaySettingsPage)),
+        ).scale(1),
+        closeTo(AwikiDisplayScale.effective(1.3), 0.0001),
+      );
       expect(tester.takeException(), isNull);
 
       await tester.tap(find.byKey(const Key('display-scale-reset-row')));
@@ -1413,10 +1426,7 @@ final class _DisplayScaleTestHost extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return AwikiDisplayScaleScope(
-      scale: ref.watch(displayScaleProvider),
-      child: const SettingsPage(),
-    );
+    return const SettingsPage();
   }
 }
 

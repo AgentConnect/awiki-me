@@ -1496,7 +1496,7 @@ class EmptyStateCard extends StatelessWidget {
             title,
             style: AwikiMeTextStyles.sectionTitle.copyWith(
               color: context.awikiTheme.secondaryText,
-              fontSize: context.awikiResponsive.displayScaled(18),
+              fontSize: 18,
               fontWeight: FontWeight.w400,
             ),
           ),

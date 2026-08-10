@@ -573,7 +573,7 @@ class _TenantStatusPill extends StatelessWidget {
         label,
         style: TextStyle(
           color: theme.primaryForeground,
-          fontSize: responsive.displayScaled(11),
+          fontSize: 11,
           fontWeight: FontWeight.w400,
           height: 1,
         ),

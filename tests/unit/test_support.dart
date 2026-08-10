@@ -78,6 +78,7 @@ import 'package:awiki_me/src/presentation/app_shell/providers/session_provider.d
 import 'package:awiki_me/src/presentation/chat/chat_page.dart';
 import 'package:awiki_me/src/presentation/conversation_list/conversation_provider.dart';
 import 'package:awiki_me/src/presentation/profile/profile_provider.dart';
+import 'package:awiki_me/src/presentation/shared/display_scale.dart';
 import 'package:awiki_me/src/app/app_services.dart';
 import 'package:awiki_me/src/data/services/locale_preference_service.dart';
 import 'package:awiki_me/src/data/local/awiki_product_local_store.dart';
@@ -244,6 +245,7 @@ Widget buildLocalizedTestApp({
   AppLocaleMode localeMode = AppLocaleMode.system,
   Future<String?> Function(String url)? homepageMarkdownLoader,
   List<Override> providerOverrides = const <Override>[],
+  bool applyDisplayScale = false,
 }) {
   final resolvedGateway = gateway ?? FakeAwikiGateway();
   final resolvedRealtime = realtimeGateway ?? FakeRealtimeGateway();
@@ -318,6 +320,9 @@ Widget buildLocalizedTestApp({
     child: Consumer(
       builder: (context, ref, _) {
         final localeMode = ref.watch(appLocaleModeProvider);
+        final displayScale = applyDisplayScale
+            ? ref.watch(displayScaleProvider)
+            : AwikiDisplayScale.normal;
         return CupertinoApp(
           locale: localeMode.locale ?? locale,
           localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
@@ -327,6 +332,15 @@ Widget buildLocalizedTestApp({
             GlobalWidgetsLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
+          builder: applyDisplayScale
+              ? (context, child) => AwikiDisplayScaleScope(
+                  scale: displayScale,
+                  child: AwikiDisplayScaleTextMediaQuery(
+                    scale: displayScale,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                )
+              : null,
           home: home,
         );
       },

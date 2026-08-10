@@ -919,7 +919,7 @@ class _DesktopRailItem extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: responsive.displayScaled(10.5),
+                            fontSize: 10.5,
                             fontWeight: selected
                                 ? FontWeight.w400
                                 : FontWeight.w400,
@@ -950,9 +950,9 @@ class _DesktopRailItem extends StatelessWidget {
                     ),
                     child: Text(
                       badge!,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: CupertinoColors.white,
-                        fontSize: responsive.displayScaled(9),
+                        fontSize: 9,
                         fontWeight: FontWeight.w400,
                         height: 1,
                       ),
@@ -1045,7 +1045,7 @@ class _DesktopPlaceholderPage extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: theme.title,
-                  fontSize: responsive.displayScaled(18),
+                  fontSize: 18,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -1055,7 +1055,7 @@ class _DesktopPlaceholderPage extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: theme.secondaryText,
-                  fontSize: responsive.displayScaled(13),
+                  fontSize: 13,
                   height: 1.45,
                 ),
               ),

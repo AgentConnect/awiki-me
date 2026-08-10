@@ -264,7 +264,7 @@ class AppConfirmationDialog extends StatelessWidget {
                 textAlign: compactTitleTextAlign,
                 style: TextStyle(
                   color: context.awikiTheme.title,
-                  fontSize: responsive.displayScaled(18),
+                  fontSize: 18,
                   fontWeight: FontWeight.w400,
                   height: 1.25,
                 ),
@@ -305,7 +305,7 @@ class AppConfirmationDialog extends StatelessWidget {
                     : TextAlign.start,
                 style: TextStyle(
                   color: context.awikiTheme.danger,
-                  fontSize: responsive.displayScaled(12),
+                  fontSize: 12,
                   fontWeight: FontWeight.w400,
                   height: 1.35,
                 ),

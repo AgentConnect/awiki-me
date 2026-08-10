@@ -1613,7 +1613,7 @@ class _MacChatPill extends StatelessWidget {
         label,
         style: TextStyle(
           color: textColor,
-          fontSize: responsive.displayScaled(11.5),
+          fontSize: 11.5,
           fontWeight: FontWeight.w400,
         ),
       ),
