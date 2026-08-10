@@ -1520,7 +1520,7 @@ class _SkillOnboardingDialogState
             style: TextStyle(
               color: const Color(0xFF66728A),
               fontSize: responsive.metaSm,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w400,
             ),
           ),
           SizedBox(height: responsive.spacing(6)),
