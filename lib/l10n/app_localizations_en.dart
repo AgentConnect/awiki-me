@@ -1748,9 +1748,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatSafeCollaboration => 'Secure collaboration';
-
-  @override
   String get chatAddAttachment => 'Add attachment';
 
   @override

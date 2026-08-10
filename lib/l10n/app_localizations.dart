@@ -3180,12 +3180,6 @@ abstract class AppLocalizations {
   /// **'{count} 个智能体'**
   String chatAgentCountSubject(int count);
 
-  /// No description provided for @chatSafeCollaboration.
-  ///
-  /// In zh, this message translates to:
-  /// **'安全协作中'**
-  String get chatSafeCollaboration;
-
   /// No description provided for @chatAddAttachment.
   ///
   /// In zh, this message translates to:

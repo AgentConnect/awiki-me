@@ -1647,9 +1647,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get chatSafeCollaboration => '安全协作中';
-
-  @override
   String get chatAddAttachment => '添加附件';
 
   @override
